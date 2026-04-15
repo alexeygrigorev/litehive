@@ -1,11 +1,17 @@
 """Recovery evidence, task discussion comments, and report helpers."""
 
+import json
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Iterable
 
+from pydantic import ValidationError
 import yaml
 
+from litehive.agents.session_store import load_subagent_artifacts
+from litehive.db.schema import connect_workspace_db
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
+from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction, RecoveryEvidenceItem, RecoveryReport
 from litehive.domain.task import TaskRecord
 
@@ -15,7 +21,6 @@ from .paths import (
     latest_subagent_base,
     resolve_artifact_path,
     status_entry_paths,
-    task_comments_file,
     task_dir,
     task_file,
     task_recovery_dir,
@@ -39,7 +44,6 @@ def collect_recovery_evidence(
 
     evidence: list[RecoveryEvidenceItem] = []
     task_path = task_file(root, task)
-    comments_path = task_comments_file(root, task)
     events_path = task_dir(root, task) / "events.jsonl"
     latest_report_path = latest_path(sorted((task_dir(root, task) / "reports").glob("*.yaml")))
     latest_run_log = latest_run_all_log_path(root)
@@ -69,7 +73,7 @@ def collect_recovery_evidence(
             kind="runtime",
             label="runtime state",
             summary=(
-                f"execution_status={task.runtime.execution_status} current_stage={task.runtime.current_stage.step} "
+                f"execution_status={task.runtime.execution_status} current_stage={task.runtime.current_stage.stage} "
                 f"last_outcome={task.runtime.last_outcome.kind or 'none'}"
             ),
         )
@@ -77,9 +81,9 @@ def collect_recovery_evidence(
     evidence.append(
         RecoveryEvidenceItem(
             kind="thread",
-            label="comments.yaml",
-            path=str(comments_path.relative_to(root)),
-            exists=comments_path.exists(),
+            label="task activity",
+            path=None,
+            exists=True,
             summary=f"discussion entries={len(load_task_thread(root, task))}",
         )
     )
@@ -103,22 +107,30 @@ def collect_recovery_evidence(
             )
         )
     if subagent_base is not None:
-        for name, label in (
-            ("session.yaml", "latest subagent session"),
-            ("report.yaml", "latest subagent report"),
+        rel_subagent_path = str(subagent_base.relative_to(task_dir(root, task)))
+        subagent_ref = next((ref for ref in task.subagents if ref.path == rel_subagent_path), None)
+        artifacts = (
+            {}
+            if subagent_ref is None
+            else load_subagent_artifacts(root, task.id, subagent_ref.id)
+        )
+        for key, label in (
+            ("session", "latest subagent session"),
+            ("report", "latest subagent report"),
             ("transcript.md", "latest subagent transcript"),
             ("stdout.txt", "latest subagent stdout"),
             ("stderr.txt", "latest subagent stderr"),
-            ("timeline.yaml", "latest subagent events timeline"),
+            ("timeline", "latest subagent events timeline"),
         ):
-            path = resolve_artifact_path(subagent_base, name)
-            display_path = path if path is not None else subagent_base / name
+            path = None if key in {"session", "report", "timeline"} else resolve_artifact_path(subagent_base, key)
+            exists = key in {"session", "report", "timeline"} and key in artifacts
+            display_path = path if path is not None else subagent_base / key
             evidence.append(
                 RecoveryEvidenceItem(
                     kind="subagent_artifact",
                     label=label,
                     path=str(display_path.relative_to(root)),
-                    exists=path is not None,
+                    exists=exists or path is not None,
                     summary=f"artifact from {subagent_base.name}",
                 )
             )
@@ -202,7 +214,7 @@ def write_recovery_report(root: Path, task: TaskRecord, report: RecoveryReport) 
     ordinal = len(existing) + 1
     path = reports_dir / f"recovery-{ordinal:03d}.yaml"
     path.write_text(
-        yaml.safe_dump(report.model_dump(mode="python"), sort_keys=False), encoding="utf-8"
+        yaml.safe_dump(report.model_dump(mode="json"), sort_keys=False), encoding="utf-8"
     )
     return path
 
@@ -211,8 +223,8 @@ def record_recovery_report(
     root: Path,
     task: TaskRecord,
     *,
-    trigger: str,
-    stage: str | None,
+    trigger_event_kind: TriggerEventKind,
+    origin_stage: str | None,
     summary: str,
     runnable_state: str,
     actions: list[RecoveryAction] | None = None,
@@ -226,13 +238,13 @@ def record_recovery_report(
 
     report = RecoveryReport(
         task_id=task.id,
-        stage=stage,
-        trigger=trigger,
+        origin_stage=origin_stage,
+        trigger_event_kind=trigger_event_kind,
         summary=summary,
         failure_classification=failure_classification,
         runnable_state=runnable_state,  # type: ignore[arg-type]
         blocker=blocker,
-        evidence=collect_recovery_evidence(root, task, stage=stage),
+        evidence=collect_recovery_evidence(root, task, stage=origin_stage),
         actions=list(actions or []),
         warnings=list(warnings or []),
         recovery_subagent_id=recovery_subagent_id,
@@ -244,10 +256,10 @@ def record_recovery_report(
         task,
         TaskThreadComment(
             role="recovery",
-            step=stage or task.pipeline_status,
+            stage=origin_stage or task.pipeline_status,
             verdict="comment",
             message=(
-                f"Recovery trigger `{trigger}`: {summary}\n"
+                f"Recovery trigger `{trigger_event_kind.value}`: {summary}\n"
                 f"runnable_state: {runnable_state}\n"
                 f"report: {path.relative_to(root)}" + (f"\nblocker: {blocker}" if blocker else "")
             ),
@@ -257,10 +269,24 @@ def record_recovery_report(
 
 
 def append_thread_comment(root: Path, task: TaskRecord, comment: "TaskThreadComment") -> None:
-    path = task_comments_file(root, task)
-    existing = [entry.model_dump(mode="python") for entry in load_task_thread(root, task)]
-    existing.append(comment.model_dump(mode="python"))
-    path.write_text(yaml.safe_dump(existing, sort_keys=False), encoding="utf-8")
+    with connect_workspace_db(root) as connection:
+        row = connection.execute(
+            "SELECT COALESCE(MAX(entry_index), -1) + 1 AS next_index FROM task_activity WHERE task_id = ?",
+            (task.id,),
+        ).fetchone()
+        next_index = 0 if row is None else int(row["next_index"])
+        connection.execute(
+            """
+            INSERT INTO task_activity (task_id, entry_index, created_at, payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                task.id,
+                next_index,
+                comment.created_at,
+                json.dumps(comment.model_dump(mode="json"), sort_keys=True),
+            ),
+        )
 
 
 def normalized_files_changed(paths: Iterable[str]) -> list[str]:
@@ -284,7 +310,7 @@ def is_retracted_thread_comment(comment: "TaskThreadComment") -> bool:
 def is_retractable_pass_comment(comment: "TaskThreadComment") -> bool:
     return (
         comment.verdict == "pass"
-        and comment.step in _RETRACTABLE_STEPS
+        and comment.stage in _RETRACTABLE_STEPS
         and bool(normalized_files_changed(comment.files_changed))
     )
 
@@ -299,21 +325,45 @@ def retract_thread_comment(comment: "TaskThreadComment") -> bool:
 def load_task_thread(root: Path, task: TaskRecord) -> list["TaskThreadComment"]:
     from litehive.domain.reports import TaskThreadComment
 
-    path = task_comments_file(root, task)
-    if not path.exists():
-        return []
-    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(loaded, list):
-        return []
-    return [TaskThreadComment(**entry) for entry in loaded if isinstance(entry, dict)]
+    with connect_workspace_db(root) as connection:
+        rows = connection.execute(
+            """
+            SELECT payload
+            FROM task_activity
+            WHERE task_id = ?
+            ORDER BY entry_index
+            """,
+            (task.id,),
+        ).fetchall()
+    comments: list[TaskThreadComment] = []
+    for row in rows:
+        try:
+            payload = json.loads(row["payload"])
+            if isinstance(payload, dict):
+                comments.append(TaskThreadComment(**payload))
+        except (JSONDecodeError, ValidationError, TypeError):
+            continue
+    return comments
 
 
 def save_task_thread(root: Path, task: TaskRecord, thread: list["TaskThreadComment"]) -> None:
-    path = task_comments_file(root, task)
-    path.write_text(
-        yaml.safe_dump([comment.model_dump(mode="python") for comment in thread], sort_keys=False),
-        encoding="utf-8",
-    )
+    with connect_workspace_db(root) as connection:
+        connection.execute("DELETE FROM task_activity WHERE task_id = ?", (task.id,))
+        connection.executemany(
+            """
+            INSERT INTO task_activity (task_id, entry_index, created_at, payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                (
+                    task.id,
+                    index,
+                    comment.created_at,
+                    json.dumps(comment.model_dump(mode="json"), sort_keys=True),
+                )
+                for index, comment in enumerate(thread)
+            ],
+        )
 
 
 def render_task_thread(root: Path, task: TaskRecord, *, for_prompt: bool = False) -> str:
@@ -323,7 +373,7 @@ def render_task_thread(root: Path, task: TaskRecord, *, for_prompt: bool = False
     lines = ["Discussion thread:"]
     for c in thread:
         if for_prompt and is_retracted_thread_comment(c):
-            header = f"[{c.created_at}] {c.role} ({c.step}) - {c.verdict} {RETRACTED_FILESYSTEM_MARKER}"
+            header = f"[{c.created_at}] {c.role} ({c.stage}) - {c.verdict} {RETRACTED_FILESYSTEM_MARKER}"
             lines.append(f"\n--- {header} ---")
             lines.append(
                 "Prior pass report withheld from prompt context after requeue-time filesystem validation."
@@ -332,7 +382,7 @@ def render_task_thread(root: Path, task: TaskRecord, *, for_prompt: bool = False
             if claimed_files:
                 lines.append(f"Claimed files: {', '.join(claimed_files)}")
             continue
-        header = f"[{c.created_at}] {c.role} ({c.step}) — {c.verdict}"
+        header = f"[{c.created_at}] {c.role} ({c.stage}) — {c.verdict}"
         lines.append(f"\n--- {header} ---")
         lines.append(c.message)
         if c.files_changed:

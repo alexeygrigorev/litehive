@@ -114,7 +114,7 @@ def test_latest_verdict_after_rejects_empty_implementing_pass(tmp_path, monkeypa
         task,
         TaskThreadComment(
             role="swe",
-            step="implementing",
+            stage="implementing",
             verdict="pass",
             message="implemented nothing",
         ),
@@ -145,7 +145,7 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
         task,
         TaskThreadComment(
             role="swe",
-            step="implementing",
+            stage="implementing",
             verdict="pass",
             message="implemented change",
         ),
@@ -164,3 +164,30 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
 
     assert verdict is not None
     assert verdict.outcome == "pass"
+
+
+def test_latest_verdict_after_accepts_recovery_resume(tmp_path) -> None:
+    from litehive.state.records import create_task
+
+    task = create_task(tmp_path, title="recovery resume")
+    append_thread_comment(
+        tmp_path,
+        task,
+        TaskThreadComment(
+            role="recovery",
+            stage="recovering",
+            verdict="resume",
+            message="fixed the runner bug",
+        ),
+    )
+
+    verdict = _latest_verdict_after(
+        tmp_path,
+        task.id,
+        "recovering",
+        datetime.now(UTC) - timedelta(minutes=1),
+    )
+
+    assert verdict is not None
+    assert verdict.outcome == "resume"
+    assert verdict.reason == "fixed the runner bug"

@@ -5,8 +5,8 @@ import gzip
 from pathlib import Path
 
 import pytest
-import yaml
 
+from litehive.agents.session_store import save_subagent_artifacts
 from heru.types import SubagentRef
 
 from litehive.config.workspace import ensure_workspace
@@ -44,10 +44,10 @@ def _make_task_with_subagent(tmp_path, *, engine="codex", role="swe", sa_id="SA-
     return task, sa_dir
 
 
-def _write_session_yaml(sa_dir, *, sa_id="SA-implementing", role="swe", engine="codex",
-                        status="completed", exit_code=0):
-    """Write a session.yaml into a subagent artifact directory."""
-    session_data = {
+def _write_session_record(root: Path, task_id: str, *, sa_id="SA-implementing", role="swe", engine="codex",
+                          status="completed", exit_code=0):
+    """Write a subagent session record into SQLite storage."""
+    save_subagent_artifacts(root, task_id, sa_id, session={
         "id": sa_id,
         "role": role,
         "engine": engine,
@@ -55,10 +55,7 @@ def _write_session_yaml(sa_dir, *, sa_id="SA-implementing", role="swe", engine="
         "exit_code": exit_code,
         "created_at": "2026-04-09T10:00:00Z",
         "updated_at": "2026-04-09T10:05:00Z",
-    }
-    (sa_dir / "session.yaml").write_text(
-        yaml.safe_dump(session_data, sort_keys=False), encoding="utf-8"
-    )
+    })
 
 
 def _init_git_repo(root: Path) -> None:
@@ -125,7 +122,7 @@ def test_debug_shows_verdict(tmp_path: Path, capsys: pytest.CaptureFixture[str])
     append_thread_comment(
         tmp_path,
         task,
-        TaskThreadComment(role="swe", step="implementing", verdict="pass", message="All good"),
+        TaskThreadComment(role="swe", stage="implementing", verdict="pass", message="All good"),
     )
 
     exit_code = _cmd_debug(_ns(tmp_path, task.id))
@@ -133,7 +130,7 @@ def test_debug_shows_verdict(tmp_path: Path, capsys: pytest.CaptureFixture[str])
 
     assert exit_code == 0
     assert "verdict: pass" in output
-    assert "verdict_step: implementing" in output
+    assert "verdict_stage: implementing" in output
     assert "verdict_message: All good" in output
 
 
@@ -230,13 +227,13 @@ def test_debug_missing_artifacts_graceful(
     assert "transcript: (not found)" in output
 
 
-# -- Session.yaml fallback for exit_code --
+# -- Session record fallback for exit_code --
 
 
 def test_debug_session_yaml_fallback(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """When no runtime state exists, fall back to session.yaml for exit_code and timing."""
+    """When no runtime state exists, fall back to stored session data for exit_code and timing."""
     task, sa_dir = _make_task_with_subagent(tmp_path)
-    _write_session_yaml(sa_dir, exit_code=0)
+    _write_session_record(tmp_path, task.id, exit_code=0)
 
     exit_code = _cmd_debug(_ns(tmp_path, task.id))
     output = capsys.readouterr().out
@@ -271,7 +268,7 @@ def test_debug_all_subagents(tmp_path: Path, capsys: pytest.CaptureFixture[str])
     ]
     save_task(tmp_path, task)
 
-    # Write session.yaml with exit_code for each to test exit_code display in --all
+    # Write subagent session records with exit_code for each to test display in --all
     td = task_dir(tmp_path, task)
     for sa_path, sa_id, role, engine, ec in [
         (sa_path_1, "SA-grooming", "planner", "gemini", 0),
@@ -280,7 +277,7 @@ def test_debug_all_subagents(tmp_path: Path, capsys: pytest.CaptureFixture[str])
     ]:
         d = td / sa_path
         d.mkdir(parents=True, exist_ok=True)
-        _write_session_yaml(d, sa_id=sa_id, role=role, engine=engine, exit_code=ec)
+        _write_session_record(tmp_path, task.id, sa_id=sa_id, role=role, engine=engine, exit_code=ec)
 
     exit_code = _cmd_debug(_ns(tmp_path, task.id, all_flag=True))
     output = capsys.readouterr().out

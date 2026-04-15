@@ -1,9 +1,12 @@
 """Tests for the v2 prompt serializer."""
 
+import json
 from pathlib import Path
 
 import pytest
 
+from litehive.db.schema import connect_workspace_db
+from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.roles.planner import PlannerAgent
 from litehive.roles.recovery import RecoveryAgent
 from litehive.roles.swe import SWEAgent
@@ -14,7 +17,6 @@ from litehive.lifecycle.persistence import LastRejection, TaskState
 from litehive.lifecycle.prompt_serializer import serialize_prompt
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task, save_task
-from litehive.tasks.paths import task_comments_file
 
 
 @pytest.fixture
@@ -97,33 +99,62 @@ def test_serialize_includes_role_instructions(workspace: Path) -> None:
     assert "You are the SWE" in text  # from the swe.py INSTRUCTIONS
 
 
-def test_serialize_recovery_includes_failure_context(workspace: Path) -> None:
+def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
     state = make_state(
         task.id,
         stage="recovering",
-        origin_stage="implementing",
-        failure_context={
-            "trigger_event": "Crash",
-            "source": None,
-            "reason": "AllEnginesExhausted",
-            "raised_at_phase": "implementing",
-        },
+        active_recovery_trigger=RecoveryTrigger(
+            origin_stage="implementing",
+            trigger_event_kind=TriggerEventKind.CRASH,
+            failure_fingerprint=FailureFingerprint(
+                fingerprint="AllEnginesExhausted",
+                classification="engine_exhausted",
+            ),
+            reason_code="all_engines_exhausted",
+            message="AllEnginesExhausted",
+        ),
     )
     text = serialize_prompt(agent.build_prompt(state), task_record=task)
 
-    assert "Failure context" in text
-    assert "trigger_event: Crash" in text
+    assert "Recovery trigger" in text
+    assert "trigger_event_kind: crash" in text
     assert "origin_stage: implementing" in text
     assert "## Recovery startup guidance" in text  # the four built-in recovery bullets
     assert "litehive pipeline journal <task_id>" in text
     assert "litehive task logs <task_id> --agent" in text
 
 
-def test_serialize_ignores_corrupt_task_comments_file(workspace: Path) -> None:
+def test_serialize_ignores_corrupt_task_activity_payload(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
-    task_comments_file(workspace, task).write_text("[\n", encoding="utf-8")
+    with connect_workspace_db(workspace) as connection:
+        connection.execute(
+            """
+            INSERT INTO task_activity (task_id, entry_index, created_at, payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            (task.id, 0, "2026-01-01T00:00:00+00:00", "{not-json"),
+        )
+        connection.execute(
+            """
+            INSERT INTO task_activity (task_id, entry_index, created_at, payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                task.id,
+                1,
+                "2026-01-01T00:00:01+00:00",
+                json.dumps(
+                    {
+                        "role": "planner",
+                        "stage": "grooming",
+                        "verdict": "pass",
+                        "message": "kept",
+                    }
+                ),
+            ),
+        )
 
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
     text = serialize_prompt(
@@ -132,7 +163,8 @@ def test_serialize_ignores_corrupt_task_comments_file(workspace: Path) -> None:
         workspace_root=workspace,
     )
 
-    assert "Discussion thread:" not in text
+    assert "Discussion thread:" in text
+    assert "kept" in text
 
 
 def test_serialize_includes_last_rejection(workspace: Path) -> None:
@@ -185,6 +217,29 @@ def test_serialize_verdict_instructions_match_role_and_stage(workspace: Path) ->
     assert "litehive agent report --verdict <pass|reject|blocked>" in text
 
 
+def test_recovery_prompt_uses_recovery_verdict_contract(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+    state = make_state(
+        task.id,
+        stage="recovering",
+        active_recovery_trigger=RecoveryTrigger(
+            origin_stage="implementing",
+            trigger_event_kind=TriggerEventKind.CRASH,
+            failure_fingerprint=FailureFingerprint(
+                fingerprint="AllEnginesExhausted",
+                classification="engine_exhausted",
+            ),
+            reason_code="all_engines_exhausted",
+            message="AllEnginesExhausted",
+        ),
+    )
+
+    text = serialize_prompt(agent.build_prompt(state), task_record=task)
+
+    assert "litehive agent report --verdict <resume|advance|done|budget_hit|reject>" in text
+
+
 def test_serialize_includes_nudge_message_when_present(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
@@ -212,11 +267,11 @@ def test_implementing_retry_thread_keeps_only_grooming_and_dedups_last_rejection
     )
     prompt = agent.build_prompt(state)
     prompt["thread"] = [
-        {"role": "planner", "step": "grooming", "verdict": "pass", "message": "scope " + ("x" * 600)},
-        {"role": "recovery", "step": "recovering", "verdict": "comment", "message": "bookkeeping"},
-        {"role": "swe", "step": "implementing", "verdict": "pass", "message": "old swe pass"},
-        {"role": "qa", "step": "testing", "verdict": "reject", "message": "older reject"},
-        {"role": "qa", "step": "testing", "verdict": "reject", "message": "tests fail"},
+        {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope " + ("x" * 600)},
+        {"role": "recovery", "stage": "recovering", "verdict": "comment", "message": "bookkeeping"},
+        {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "old swe pass"},
+        {"role": "qa", "stage": "testing", "verdict": "reject", "message": "older reject"},
+        {"role": "qa", "stage": "testing", "verdict": "reject", "message": "tests fail"},
     ]
 
     text = serialize_prompt(prompt, task_record=task)
@@ -245,8 +300,8 @@ def test_thread_does_not_dedup_reject_when_source_differs(workspace: Path) -> No
             "raised_at_phase": "testing",
         },
         "thread": [
-            {"role": "planner", "step": "grooming", "verdict": "pass", "message": "scope"},
-            {"role": "reviewer", "step": "accepting", "verdict": "reject", "message": "same reason"},
+            {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
+            {"role": "reviewer", "stage": "accepting", "verdict": "reject", "message": "same reason"},
         ],
     }
 
@@ -267,10 +322,10 @@ def test_testing_thread_keeps_only_last_implementing_pass(workspace: Path) -> No
         "pipeline_mode": PipelineMode.FULL.value,
         "instruction_layers": [],
         "thread": [
-            {"role": "planner", "step": "grooming", "verdict": "pass", "message": "scope"},
-            {"role": "swe", "step": "implementing", "verdict": "pass", "message": "first impl"},
-            {"role": "qa", "step": "testing", "verdict": "reject", "message": "old reject"},
-            {"role": "swe", "step": "implementing", "verdict": "pass", "message": "latest impl"},
+            {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
+            {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "first impl"},
+            {"role": "qa", "stage": "testing", "verdict": "reject", "message": "old reject"},
+            {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "latest impl"},
         ],
     }
 
@@ -290,12 +345,12 @@ def test_accepting_thread_keeps_only_last_implementing_and_testing_passes(worksp
         "pipeline_mode": PipelineMode.FULL.value,
         "instruction_layers": [],
         "thread": [
-            {"role": "planner", "step": "grooming", "verdict": "pass", "message": "scope"},
-            {"role": "swe", "step": "implementing", "verdict": "pass", "message": "first impl"},
-            {"role": "qa", "step": "testing", "verdict": "pass", "message": "first qa"},
-            {"role": "qa", "step": "testing", "verdict": "reject", "message": "old reject"},
-            {"role": "swe", "step": "implementing", "verdict": "pass", "message": "latest impl"},
-            {"role": "qa", "step": "testing", "verdict": "pass", "message": "latest qa"},
+            {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
+            {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "first impl"},
+            {"role": "qa", "stage": "testing", "verdict": "pass", "message": "first qa"},
+            {"role": "qa", "stage": "testing", "verdict": "reject", "message": "old reject"},
+            {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "latest impl"},
+            {"role": "qa", "stage": "testing", "verdict": "pass", "message": "latest qa"},
         ],
     }
 

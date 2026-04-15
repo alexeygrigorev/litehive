@@ -45,6 +45,12 @@ class _MissingThreadComment(Exception):
     """Internal: agent finished without producing a fresh thread comment."""
 
 
+def _allowed_verdicts_for_stage(stage: str) -> set[str]:
+    if stage == "recovering":
+        return {"resume", "advance", "done", "budget_hit", "reject"}
+    return {"pass", "reject", "blocked"}
+
+
 def _execution_checkout_has_changes(workspace_root: Path, task_id: str) -> bool:
     task = get_task(workspace_root, task_id)
     if task is None:
@@ -70,10 +76,10 @@ def _execution_checkout_has_changes(workspace_root: Path, task_id: str) -> bool:
 def _latest_verdict_after(
     workspace_root: Path,
     task_id: str,
-    step: str,
+    stage: str,
     after_ts: datetime,
 ) -> AgentVerdict | None:
-    """Return the most recent thread comment for ``(task_id, step)`` whose
+    """Return the most recent thread comment for ``(task_id, stage)`` whose
     ``created_at`` is newer than ``after_ts``, mapped to an ``AgentVerdict``.
 
     Returns ``None`` when nothing newer landed — caller raises ``NudgeRequired``.
@@ -84,17 +90,18 @@ def _latest_verdict_after(
     if task is None:
         return None
     comments = load_task_thread(workspace_root, task)
+    allowed_verdicts = _allowed_verdicts_for_stage(stage)
     fresh = [
         c for c in comments
-        if c.step == step
-        and c.verdict in {"pass", "reject", "blocked"}
+        if c.stage == stage
+        and c.verdict in allowed_verdicts
         and _parse_iso(c.created_at) > after_ts
     ]
     if not fresh:
         return None
     latest = fresh[-1]
     if (
-        step == "implementing"
+        stage == "implementing"
         and latest.verdict == "pass"
         and not _execution_checkout_has_changes(workspace_root, task_id)
     ):
@@ -140,7 +147,7 @@ class HeruEngineAdapter:
         if task is None:
             raise UnrecoverableError(f"task {state.task_id} not found in workspace")
 
-        step = prompt["stage"]
+        stage = prompt["stage"]
         role = prompt["role"]
         prompt_text = serialize_prompt(prompt, task_record=task, workspace_root=self.workspace_root)
         execution_root = (
@@ -172,10 +179,10 @@ class HeruEngineAdapter:
         session.turn_count = (session.turn_count or 0) + 1
 
         # Did the agent submit a verdict during this turn?
-        verdict = _latest_verdict_after(self.workspace_root, state.task_id, step, before_turn)
+        verdict = _latest_verdict_after(self.workspace_root, state.task_id, stage, before_turn)
         if verdict is None:
             raise NudgeRequired(
-                f"{self.name} finished {step} without a litehive report submission"
+                f"{self.name} finished {stage} without a litehive report submission"
             )
 
         return verdict

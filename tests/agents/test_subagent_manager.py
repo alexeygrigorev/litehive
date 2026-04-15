@@ -1,16 +1,21 @@
 from pathlib import Path
 
 import pytest
-import yaml
 
 from heru.base import CLIExecutionResult
 
 from litehive.agents.manager import SubagentManager
+from litehive.agents.session_store import (
+    load_subagent_report,
+    load_subagent_session,
+    load_subagent_timeline,
+)
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.agent import EngineFailure
+from litehive.domain.reports import TaskThreadComment
 from litehive.lifecycle.heru_factory import HeruEngineAdapter
 from litehive.state.records import create_task, get_task, save_task
-from litehive.tasks.paths import task_dir
+from litehive.tasks.reports import append_thread_comment
 
 
 def test_subagent_manager_passes_workspace_root_in_extra_env(
@@ -68,7 +73,7 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Use runtime stage for reports")
-    task.runtime.current_stage.step = "grooming"
+    task.runtime.current_stage.stage = "grooming"
     save_task(tmp_path, task)
     manager = SubagentManager(tmp_path)
 
@@ -87,21 +92,16 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
             *,
             extra_env: dict[str, str] | None = None,
         ) -> CLIExecutionResult:
-            comment_path = task_dir(tmp_path, task) / "comments.yaml"
-            comment_path.write_text(
-                yaml.safe_dump(
-                    [
-                        {
-                            "role": "planner",
-                            "step": "grooming",
-                            "verdict": "reject",
-                            "message": "REJECT\n\nregroom this task",
-                            "files_changed": [],
-                        }
-                    ],
-                    sort_keys=False,
+            append_thread_comment(
+                tmp_path,
+                task,
+                TaskThreadComment(
+                    role="planner",
+                    stage="grooming",
+                    verdict="reject",
+                    message="REJECT\n\nregroom this task",
+                    files_changed=[],
                 ),
-                encoding="utf-8",
             )
             return CLIExecutionResult(
                 adapter="codex",
@@ -118,12 +118,69 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
 
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
 
-    manager.run(task, role="planner", engine_name="codex", prompt="groom it")
+    result = manager.run(task, role="planner", engine_name="codex", prompt="groom it")
 
-    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-planner"
-    report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
+    report = load_subagent_report(tmp_path, task.id, result.ref.id)
 
     assert report["summary"] == "REJECT"
+    assert report["warnings"] == []
+
+
+def test_subagent_manager_uses_recovering_stage_for_recovery_cli_verdict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Use recovery stage for reports")
+    task.runtime.current_stage.stage = "recovering"
+    save_task(tmp_path, task)
+    manager = SubagentManager(tmp_path)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            extra_env: dict[str, str] | None = None,
+        ) -> CLIExecutionResult:
+            append_thread_comment(
+                tmp_path,
+                task,
+                TaskThreadComment(
+                    role="recovery",
+                    stage="recovering",
+                    verdict="resume",
+                    message="Resume from commit",
+                    files_changed=[],
+                ),
+            )
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="placeholder transcript",
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+
+    result = manager.run(task, role="recovery", engine_name="codex", prompt="recover it")
+
+    report = load_subagent_report(tmp_path, task.id, result.ref.id)
+
+    assert report["summary"] == "Resume from commit"
     assert report["warnings"] == []
 
 
@@ -182,10 +239,9 @@ def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
     assert captured["emit_unified"] is True
     assert result.transcript == "implemented via unified events"
 
-    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
-    report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
-    session = yaml.safe_load((base / "session.yaml").read_text(encoding="utf-8"))
-    timeline = yaml.safe_load((base / "timeline.yaml").read_text(encoding="utf-8"))
+    report = load_subagent_report(tmp_path, task.id, result.ref.id)
+    session = load_subagent_session(tmp_path, task.id, result.ref.id)
+    timeline = load_subagent_timeline(tmp_path, task.id, result.ref.id)
 
     assert "did not submit verdict" in report["summary"]
     assert session["continuation"]["session_id"] == "session-42"

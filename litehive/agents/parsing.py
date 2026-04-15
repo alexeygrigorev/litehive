@@ -11,7 +11,7 @@ from litehive.domain.agent import SubagentResult
 
 def stage_report_from_subagent(
     task: TaskRecord,
-    step: str,
+    stage: str,
     result: SubagentResult,
     *,
     root: Path | None = None,
@@ -21,16 +21,16 @@ def stage_report_from_subagent(
         from litehive.tasks.reports import load_task_thread
 
         thread = load_task_thread(root, task)
-        step_comments = [c for c in thread if c.step == step and c.verdict != "comment"]
-        if step_comments:
-            latest = step_comments[-1]
+        stage_comments = [c for c in thread if c.stage == stage and c.verdict != "comment"]
+        if stage_comments:
+            latest = stage_comments[-1]
             return StageReport(
                 task_id=task.id,
-                step=step,  # type: ignore[arg-type]
+                stage=stage,  # type: ignore[arg-type]
                 verdict=latest.verdict,  # type: ignore[arg-type]
                 summary=latest.message.splitlines()[0]
                 if latest.message
-                else f"{step} {latest.verdict}",
+                else f"{stage} {latest.verdict}",
                 feedback=latest.message,
                 submitted_via_cli=True,
                 files_changed=list(latest.files_changed),
@@ -45,9 +45,9 @@ def stage_report_from_subagent(
         event = result.failure.resource_limit_event
         return StageReport(
             task_id=task.id,
-            step=step,  # type: ignore[arg-type]
+            stage=stage,  # type: ignore[arg-type]
             verdict="blocked",
-            summary=f"{step} blocked: {event.reason}",
+            summary=f"{stage} blocked: {event.reason}",
             feedback=result.transcript,
             warnings=[event.reason],
             resource_limit_event=event,
@@ -56,9 +56,9 @@ def stage_report_from_subagent(
     # No CLI verdict submitted — treat agent non-completion as reject.
     return StageReport(
         task_id=task.id,
-        step=step,  # type: ignore[arg-type]
+        stage=stage,  # type: ignore[arg-type]
         verdict="reject",
-        summary=f"{step} rejected: agent did not submit verdict via litehive report CLI",
+        summary=f"{stage} rejected: agent did not submit verdict via litehive report CLI",
         feedback=cap_feedback(result.transcript),
         warnings=["Agent did not submit verdict via litehive report CLI."],
     )

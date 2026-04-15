@@ -11,7 +11,7 @@ The serializer:
     (the dict only carries task_id; the rest comes from task.yaml)
   - composes the four instruction layers from the dict
   - surfaces ``last_rejection`` so the next agent visit can act on it
-  - surfaces ``failure_context`` for recovery + merge agents
+  - surfaces ``recovery_trigger`` for recovery agents
   - finishes with the ``litehive report`` verdict instructions
 
 """
@@ -64,9 +64,9 @@ def serialize_prompt(
     if last_rejection:
         sections.append(_last_rejection_section(last_rejection))
 
-    failure_context = prompt.get("failure_context")
-    if failure_context:
-        sections.append(_failure_context_section(failure_context, prompt))
+    recovery_trigger = prompt.get("recovery_trigger")
+    if recovery_trigger:
+        sections.append(_recovery_trigger_section(recovery_trigger, prompt))
 
     conflict_files = prompt.get("conflict_files")
     if conflict_files:
@@ -103,7 +103,7 @@ def _load_task_thread_comments(
     return [
         {
             "role": c.role,
-            "step": c.step,
+            "stage": c.stage,
             "verdict": c.verdict,
             "message": c.message,
         }
@@ -179,18 +179,13 @@ def _last_rejection_section(rejection: dict[str, Any]) -> str:
     )
 
 
-def _failure_context_section(failure_context: dict[str, Any], prompt: dict[str, Any]) -> str:
-    lines = ["Failure context (what triggered recovery):"]
-    for key, value in failure_context.items():
-        if key in {"conflict_files", "merge_attempt"}:
-            continue  # rendered separately for merge agents
+def _recovery_trigger_section(recovery_trigger: dict[str, Any], prompt: dict[str, Any]) -> str:
+    lines = ["Recovery trigger (what sent the task into recovery):"]
+    for key, value in recovery_trigger.items():
         lines.append(f"- {key}: {value}")
-    origin = prompt.get("origin_stage")
-    if origin:
-        lines.append(f"- origin_stage: {origin}")
-    attempt = prompt.get("recovery_attempt")
-    if attempt is not None:
-        lines.append(f"- recovery_attempt: {attempt}")
+    explanation = prompt.get("recovery_failure_explanation")
+    if explanation:
+        lines.append(f"- recovery_failure_explanation: {explanation}")
     return "\n".join(lines)
 
 
@@ -241,7 +236,7 @@ def _trim_thread_for_prompt(
         testing:      last implementing pass (what SWE claims it did)
         accepting:    last implementing pass + last testing pass
         recovering:   last crash/rejection + last implementing pass
-        fallback:     grooming pass + last entry per (step, verdict)
+        fallback:     grooming pass + last entry per (stage, verdict)
     - Cap each individual message to 500 chars.
     """
     # Filter out recovery bookkeeping comments
@@ -278,34 +273,34 @@ def _trim_thread_for_prompt(
         pass  # no thread context needed
 
     elif current_stage == "implementing":
-        g = _last_where(step="grooming", verdict="pass")
+        g = _last_where(stage="grooming", verdict="pass")
         if g:
             kept.append(g)
         # On retry, the rejection is rendered in the dedicated last_rejection
         # section; do not repeat older reject entries in the thread.
         if not last_rejection:
             for e in reversed(thread):
-                if e.get("verdict") == "reject" and e.get("step") in (
+                if e.get("verdict") == "reject" and e.get("stage") in (
                     "testing", "accepting", "implementing",
                 ):
                     kept.append(e)
                     break
 
     elif current_stage == "testing":
-        p = _last_where(step="implementing", verdict="pass")
+        p = _last_where(stage="implementing", verdict="pass")
         if p:
             kept.append(p)
 
     elif current_stage == "accepting":
-        p = _last_where(step="implementing", verdict="pass")
+        p = _last_where(stage="implementing", verdict="pass")
         if p:
             kept.append(p)
-        t = _last_where(step="testing", verdict="pass")
+        t = _last_where(stage="testing", verdict="pass")
         if t:
             kept.append(t)
 
     elif current_stage == "recovering":
-        p = _last_where(step="implementing", verdict="pass")
+        p = _last_where(stage="implementing", verdict="pass")
         if p:
             kept.append(p)
         # The crash or rejection that triggered recovery
@@ -315,13 +310,13 @@ def _trim_thread_for_prompt(
                 break
 
     else:
-        # Fallback: grooming pass + last per (step, verdict)
-        g = _last_where(step="grooming", verdict="pass")
+        # Fallback: grooming pass + last per (stage, verdict)
+        g = _last_where(stage="grooming", verdict="pass")
         if g:
             kept.append(g)
         seen: set[tuple[str, str]] = set()
         for e in reversed(thread):
-            key = (e.get("step", "?"), e.get("verdict", "?"))
+            key = (e.get("stage", "?"), e.get("verdict", "?"))
             if key not in seen:
                 seen.add(key)
                 kept.append(e)
@@ -340,10 +335,10 @@ def _thread_section(
     blocks: list[str] = []
     for entry in trimmed:
         role = entry.get("role", "?")
-        step = entry.get("step", "?")
+        stage = entry.get("stage", "?")
         verdict = entry.get("verdict", "comment")
         message = entry.get("message", "")
-        blocks.append(f"[{step}] {role} ({verdict}): {message}")
+        blocks.append(f"[{stage}] {role} ({verdict}): {message}")
     return "Discussion thread:\n" + "\n".join(blocks)
 
 
@@ -361,10 +356,11 @@ def _rejecting_hooks_section(hooks: list[dict[str, Any]]) -> str:
 
 
 def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
+    verdicts = "<resume|advance|done|budget_hit|reject>" if prompt.get("role") == "recovery" else "<pass|reject|blocked>"
     return (
         "IMPORTANT: when you are done, submit your verdict by running:\n"
         "  echo 'your report text' > /tmp/verdict_msg.txt\n"
-        "  litehive agent report --verdict <pass|reject|blocked> --message-file /tmp/verdict_msg.txt\n\n"
+        f"  litehive agent report --verdict {verdicts} --message-file /tmp/verdict_msg.txt\n\n"
         "Always use --message-file to avoid shell quoting issues with backticks or special characters.\n"
         "Your message is the primary signal the next agent receives — write it as if it's the only thing they read.\n"
         "On reject: include EXPECTED behavior, OBSERVED behavior, reproduction steps, and which acceptance criteria are not met."

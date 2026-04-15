@@ -4,10 +4,14 @@ import yaml
 from typer.testing import CliRunner
 
 from litehive.cli.agent_cli import agent_app
+from litehive.cli.app import app as root_app
 from litehive.config.workspace import ensure_workspace
+from litehive.lifecycle.persistence import SqlitePersistence, TaskState
+from litehive.lifecycle.types import PipelineMode
 from litehive.domain.reports import TaskThreadComment
+from litehive.state.persist import load_state, save_state
 from litehive.state.records import get_task_record
-from litehive.tasks.paths import task_comments_file
+from litehive.state.records import create_task
 from litehive.tasks.reports import load_task_thread
 
 
@@ -38,12 +42,12 @@ def test_agent_report_uses_intent_record_when_runtime_row_is_missing(tmp_path: P
         [
             "report",
             "--verdict",
-            "pass",
+            "resume",
             "--message",
             "recovery completed",
             "--role",
             "recovery",
-            "--step",
+            "--stage",
             "grooming",
             "--task-id",
             "T-0001",
@@ -56,14 +60,12 @@ def test_agent_report_uses_intent_record_when_runtime_row_is_missing(tmp_path: P
     assert result.exit_code == 0, result.output
     task = get_task_record(tmp_path, "T-0001")
     assert task is not None
-    comments_path = task_comments_file(tmp_path, task)
-    assert comments_path.exists()
     comments = load_task_thread(tmp_path, task)
     assert comments == [
         TaskThreadComment(
             role="recovery",
-            step="grooming",
-            verdict="pass",
+            stage="grooming",
+            verdict="resume",
             message="recovery completed",
             files_changed=[],
         )
@@ -120,9 +122,191 @@ def test_agent_report_uses_env_stage_when_runtime_row_is_missing(
     assert comments == [
         TaskThreadComment(
             role="planner",
-            step="grooming",
+            stage="grooming",
             verdict="pass",
             message="planner completed",
+            files_changed=[],
+        )
+    ]
+
+
+def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(
+    tmp_path: Path, monkeypatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Prefer env stage")
+    SqlitePersistence(tmp_path).save(
+        TaskState(task_id=task.id, stage="implementing", pipeline_mode=PipelineMode.FULL)
+    )
+    monkeypatch.setenv("LITEHIVE_STAGE", "grooming")
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "report",
+            "--verdict",
+            "blocked",
+            "--message",
+            "planner blocked",
+            "--role",
+            "planner",
+            "--task-id",
+            task.id,
+            "--workspace",
+            str(tmp_path),
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    task = get_task_record(tmp_path, task.id)
+    assert task is not None
+    comments = load_task_thread(tmp_path, task)
+    assert comments == [
+        TaskThreadComment(
+            role="planner",
+            stage="grooming",
+            verdict="blocked",
+            message="planner blocked",
+            files_changed=[],
+        )
+    ]
+
+
+def test_agent_update_allows_planner_to_shape_active_task(
+    tmp_path: Path, monkeypatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Shape active task", goal="old goal")
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    save_state(tmp_path, state)
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
+    monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "update",
+            "--task-id",
+            task.id,
+            "--workspace",
+            str(tmp_path),
+            "--goal",
+            "new goal",
+            "--acceptance-criteria",
+            "one boundary",
+            "--plan-step",
+            "route prompt reads through activity service",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    assert updated.goal == "new goal"
+    assert updated.acceptance_criteria == ["one boundary"]
+    assert updated.plan == ["route prompt reads through activity service"]
+
+
+def test_agent_report_rejects_legacy_recovery_pass_verdict(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Recovery verdict contract")
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "report",
+            "--verdict",
+            "pass",
+            "--message",
+            "fixed it",
+            "--role",
+            "recovery",
+            "--task-id",
+            task.id,
+            "--workspace",
+            str(tmp_path),
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 1
+    assert "not authorized" in result.output
+
+
+def test_agent_report_accepts_recovery_resume_verdict(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Recovery resume verdict")
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "report",
+            "--verdict",
+            "resume",
+            "--message",
+            "fixed the runner; retry grooming",
+            "--role",
+            "recovery",
+            "--stage",
+            "recovering",
+            "--task-id",
+            task.id,
+            "--workspace",
+            str(tmp_path),
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    assert load_task_thread(tmp_path, updated) == [
+        TaskThreadComment(
+            role="recovery",
+            stage="recovering",
+            verdict="resume",
+            message="fixed the runner; retry grooming",
+            files_changed=[],
+        )
+    ]
+
+
+def test_root_report_accepts_hidden_step_alias(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Legacy step alias for root report")
+
+    result = CliRunner().invoke(
+        root_app,
+        [
+            "report",
+            "--workspace",
+            str(tmp_path),
+            "--task-id",
+            task.id,
+            "--role",
+            "recovery",
+            "--verdict",
+            "pass",
+            "--step",
+            "recovering",
+            "--message",
+            "recovery note",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    assert load_task_thread(tmp_path, updated) == [
+        TaskThreadComment(
+            role="recovery",
+            stage="recovering",
+            verdict="pass",
+            message="recovery note",
             files_changed=[],
         )
     ]

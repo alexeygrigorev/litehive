@@ -1,12 +1,10 @@
 from pathlib import Path
 
-import pytest
 import yaml
 
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.task import TaskRecord
 from litehive.state.records import (
-    TaskStateMissingError,
     create_task,
     get_task,
     list_tasks,
@@ -20,14 +18,14 @@ def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="DB runtime")
     task.runtime.execution_status = "running"
-    task.runtime.current_stage.step = "implementing"
+    task.runtime.current_stage.stage = "implementing"
     save_task_runtime(tmp_path, task)
 
     loaded = get_task(tmp_path, task.id)
 
     assert loaded is not None
     assert loaded.runtime.execution_status == "running"
-    assert loaded.runtime.current_stage.step == "implementing"
+    assert loaded.runtime.current_stage.stage == "implementing"
 
 
 def test_task_yaml_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path: Path) -> None:
@@ -39,7 +37,7 @@ def test_task_yaml_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path:
     task.flag_count = 2
     task.pipeline_status = "implementing"
     task.runtime.execution_status = "running"
-    task.runtime.current_stage.step = "implementing"
+    task.runtime.current_stage.stage = "implementing"
     task.git.commit_sha = "abc123"
     task.git.checkpoint_attempts = 3
     save_task(tmp_path, task)
@@ -75,10 +73,10 @@ def test_task_yaml_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path:
     assert loaded.git.commit_sha == "abc123"
     assert loaded.git.checkpoint_attempts == 3
     assert loaded.runtime.execution_status == "running"
-    assert loaded.runtime.current_stage.step == "implementing"
+    assert loaded.runtime.current_stage.stage == "implementing"
 
 
-def test_get_task_requires_sqlite_runtime_state_row(tmp_path: Path) -> None:
+def test_get_task_backfills_missing_sqlite_runtime_state_row(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-missing-runtime"
     task_dir.mkdir(parents=True)
@@ -100,8 +98,11 @@ def test_get_task_requires_sqlite_runtime_state_row(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(TaskStateMissingError, match="missing its SQLite runtime state row"):
-        get_task(tmp_path, "T-0001")
+    loaded = get_task(tmp_path, "T-0001")
+
+    assert loaded is not None
+    assert loaded.id == "T-0001"
+    assert loaded.runtime.execution_status == "idle"
 
 
 def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Path) -> None:
@@ -181,7 +182,7 @@ def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -
     task.git.checkpoint_attempts = 3
     task.git.merge_agent_attempts = 1
     task.runtime.execution_status = "running"
-    task.runtime.current_stage.step = "implementing"
+    task.runtime.current_stage.stage = "implementing"
 
     intent = task.to_intent_record()
     state = task.to_state_record()
@@ -196,4 +197,4 @@ def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -
     assert restored.git.checkpoint_attempts == 3
     assert restored.git.merge_agent_attempts == 1
     assert restored.runtime.execution_status == "running"
-    assert restored.runtime.current_stage.step == "implementing"
+    assert restored.runtime.current_stage.stage == "implementing"

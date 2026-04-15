@@ -45,6 +45,16 @@ from litehive.tasks.runtime import (
     mark_subagent_started,
 )
 
+_REPORTABLE_STAGES = {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
+_DEFAULT_STAGE_FOR_ROLE = {
+    "planner": "grooming",
+    "swe": "implementing",
+    "qa": "testing",
+    "reviewer": "accepting",
+    "merge-resolver": "merge_resolving",
+    "recovery": "recovering",
+}
+
 
 class SubagentManager(SessionMixin):
     """Run external CLI subagents inside a task-scoped folder."""
@@ -57,10 +67,24 @@ class SubagentManager(SessionMixin):
         self._stream_offsets: dict[str, int] = {}
 
     @staticmethod
-    def _report_step_for_task(task: TaskRecord) -> str:
-        stage = task.runtime.current_stage.step or task.pipeline_status
-        if stage in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}:
+    def _agent_stage_for_task(task: TaskRecord, role: str | None = None) -> str:
+        current_stage = task.runtime.current_stage.stage
+        if current_stage:
+            return current_stage
+        pipeline_stage = str(task.pipeline_status) if task.pipeline_status else ""
+        if pipeline_stage in _REPORTABLE_STAGES or pipeline_stage in {"merge_resolving", "recovering"}:
+            return pipeline_stage
+        if role and role in _DEFAULT_STAGE_FOR_ROLE:
+            return _DEFAULT_STAGE_FOR_ROLE[role]
+        return "implementing"
+
+    @classmethod
+    def _report_stage_for_task(cls, task: TaskRecord, role: str | None = None) -> str:
+        stage = cls._agent_stage_for_task(task, role)
+        if stage in _REPORTABLE_STAGES or stage == "recovering":
             return stage
+        if stage == "merge_resolving":
+            return "merge_resolving"
         return "implementing"
 
     def run(
@@ -112,7 +136,7 @@ class SubagentManager(SessionMixin):
                 "LITEHIVE_TASK_ID": task.id,
                 "LITEHIVE_WORKSPACE_ROOT": str(self.root),
                 "LITEHIVE_AGENT_ROLE": role,
-                "LITEHIVE_STAGE": self._report_step_for_task(task),
+                "LITEHIVE_STAGE": self._agent_stage_for_task(task, role),
             }
             if supports_live_execution(live_execution_probe):
                 run_live_callable = effective_engine_callable(execution_engine, "run_live")
@@ -321,13 +345,13 @@ class SubagentManager(SessionMixin):
         resource_limit_event: ResourceLimitEvent | None,
         continuation,
     ) -> None:
-        report_step = self._report_step_for_task(task)
+        report_stage = self._report_stage_for_task(task, ref.role)
         if resource_limit_event is not None:
             report = StageReport(
                 task_id=task.id,
-                step=report_step,  # type: ignore[arg-type]
+                stage=report_stage,  # type: ignore[arg-type]
                 verdict="blocked",
-                summary=f"{report_step} blocked: {resource_limit_event.reason}",
+                summary=f"{report_stage} blocked: {resource_limit_event.reason}",
                 feedback=cap_feedback(transcript),
                 warnings=[resource_limit_event.reason],
                 resource_limit_event=resource_limit_event,
@@ -335,12 +359,13 @@ class SubagentManager(SessionMixin):
         else:
             report = self._parse_execution_report(
                 task=task,
-                step=report_step,
+                stage=report_stage,
                 ref=ref,
                 execution=execution,
                 transcript=transcript,
             )
         self._write_session_snapshot(
+            task,
             base,
             ref,
             prompt=prompt,
@@ -426,6 +451,7 @@ class SubagentManager(SessionMixin):
             continuation=continuation,
         )
         self._write_session_metadata(
+            task,
             base,
             ref,
             exit_code=None,
@@ -448,7 +474,7 @@ class SubagentManager(SessionMixin):
                 "pid": execution.pid,
             },
         )
-        report_step = self._report_step_for_task(task)
+        report_stage = self._report_stage_for_task(task, ref.role)
         report_payload = {
             "status": ref.status,
             "summary": "",
@@ -462,7 +488,7 @@ class SubagentManager(SessionMixin):
         if transcript.strip():
             report = self._parse_execution_report(
                 task=task,
-                step=report_step,
+                stage=report_stage,
                 ref=ref,
                 execution=execution,
                 transcript=transcript,
@@ -484,6 +510,7 @@ class SubagentManager(SessionMixin):
                 else continuation.model_dump(mode="python"),
             }
         self._write_session_snapshot(
+            task,
             base,
             ref,
             prompt=prompt,
@@ -504,14 +531,14 @@ class SubagentManager(SessionMixin):
         self,
         *,
         task: TaskRecord,
-        step: str,
+        stage: str,
         ref: SubagentRef,
         execution: CLIExecutionResult | None,
         transcript: str,
     ) -> StageReport:
         return stage_report_from_subagent(
             task,
-            step,
+            stage,
             SubagentResult(
                 ref=ref,
                 execution=execution,

@@ -29,7 +29,7 @@ VERDICT_ALLOWLIST: dict[str, set[str]] = {
     "swe": {"pass", "blocked"},
     "qa": {"pass", "reject", "blocked"},
     "reviewer": {"pass", "reject", "blocked"},
-    "recovery": {"pass", "reject", "blocked"},
+    "recovery": {"resume", "advance", "done", "budget_hit", "reject"},
     "merge-resolver": {"pass", "reject", "blocked"},
 }
 
@@ -50,25 +50,29 @@ def _current_stage() -> str | None:
     return stage.strip() if stage else None
 
 
-def _resolve_report_step(*, explicit_step: str | None, task, pipeline_stage: str | None) -> str:
-    if explicit_step:
-        return explicit_step
-    if pipeline_stage:
-        return pipeline_stage
+def _resolve_report_stage(*, explicit_stage: str | None, task, pipeline_stage: str | None) -> str:
+    if explicit_stage:
+        return explicit_stage
     env_stage = _current_stage()
     if env_stage:
         return env_stage
-    runtime_stage = task.runtime.current_stage.step
+    if pipeline_stage:
+        return pipeline_stage
+    runtime_stage = task.runtime.current_stage.stage
     if runtime_stage:
         return runtime_stage
     return task.pipeline_status
+
+
+def _allowed_verdicts_for_role(role: str) -> set[str]:
+    return VERDICT_ALLOWLIST.get(role, {"pass", "reject", "blocked"})
 
 
 def block_if_agent() -> None:
     """Call at the top of any command agents should not use."""
     if _current_role() is not None:
         print("You are not authorized to perform this command.")
-        raise typer.Exit(1)
+        raise SystemExit(1)
 
 
 @agent_app.command("report", help="Submit your stage verdict")
@@ -77,7 +81,7 @@ def agent_report_command(
     message: Annotated[str, typer.Option("--message", help="Your report text (use - for stdin)")] = "",
     message_file: Annotated[Path | None, typer.Option("--message-file", help="Read message from file")] = None,
     role: Annotated[str | None, typer.Option("--role", help="Override role (default: from env)")] = None,
-    step: Annotated[str | None, typer.Option("--step", help="Override step (default: from task)")] = None,
+    stage: Annotated[str | None, typer.Option("--stage", help="Override stage (default: from task)")] = None,
     task_id: Annotated[str | None, typer.Option("--task-id", help="Override task id")] = None,
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
     files_changed: Annotated[list[str] | None, typer.Option("--files-changed", help="Changed file paths")] = None,
@@ -90,52 +94,52 @@ def agent_report_command(
     agent_role = role or _current_role()
     if not agent_role:
         print("report failed: LITEHIVE_AGENT_ROLE not set and --role not provided")
-        raise typer.Exit(1)
+        raise SystemExit(1)
 
-    normalized_verdict = "reject" if verdict == "fail" else verdict.strip().lower()
+    normalized_verdict = verdict.strip().lower()
 
-    allowed = VERDICT_ALLOWLIST.get(agent_role, {"pass", "reject", "blocked"})
+    allowed = _allowed_verdicts_for_role(agent_role)
     if normalized_verdict not in allowed:
         print("You are not authorized to perform this command.")
-        raise typer.Exit(1)
+        raise SystemExit(1)
 
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
     try:
         root = resolve_workspace(tid, workspace=workspace)
     except ValueError as exc:
         print(f"report failed: {exc}")
-        raise typer.Exit(1)
+        raise SystemExit(1)
     if not tid:
         state = load_state(root)
         tid = state.active_task_id
     if not tid:
         print("report failed: no task id")
-        raise typer.Exit(1)
+        raise SystemExit(1)
     task = get_task_record(root, tid)
     if task is None:
         print(f"report failed: task {tid} not found")
-        raise typer.Exit(1)
+        raise SystemExit(1)
 
     try:
         pipeline_state = SqlitePersistence(root).load(tid)
         pipeline_stage = pipeline_state.stage
     except TaskNotFound:
         pipeline_stage = None
-    actual_step = _resolve_report_step(
-        explicit_step=step,
+    actual_stage = _resolve_report_stage(
+        explicit_stage=stage,
         task=task,
         pipeline_stage=pipeline_stage,
     )
     comment = TaskThreadComment(
         role=agent_role,
-        step=actual_step,
+        stage=actual_stage,
         verdict=normalized_verdict,
         message=message,
         files_changed=list(files_changed or []),
     )
     append_thread_comment(root, task, comment)
     print(f"task: {task.id}")
-    print(f"step: {actual_step}")
+    print(f"stage: {actual_stage}")
     print(f"verdict: {normalized_verdict}")
     print(f"role: {agent_role}")
 
@@ -145,7 +149,7 @@ def _require_role(allowed: set[str]) -> str:
     role = _current_role()
     if role is None or role not in allowed:
         print("You are not authorized to perform this command.")
-        raise typer.Exit(1)
+        raise SystemExit(1)
     return role
 
 
@@ -165,11 +169,11 @@ def agent_update_command(
 
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
     if not tid:
-        raise typer.Exit(1)
+        raise SystemExit(1)
     try:
         root = resolve_workspace(tid, workspace=workspace)
     except ValueError:
-        raise typer.Exit(1)
+        raise SystemExit(1)
 
     sentinel = ...
     update_task(
@@ -180,6 +184,7 @@ def agent_update_command(
         plan=plan if plan is not None else sentinel,
         constraints=constraints if constraints is not None else sentinel,
         priority=priority if priority is not None else sentinel,
+        allow_active_agent_task_mutation=True,
     )
     print(f"task: {tid}")
     print("updated: ok")
@@ -198,11 +203,11 @@ def agent_close_command(
 
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
     if not tid:
-        raise typer.Exit(1)
+        raise SystemExit(1)
     try:
         root = resolve_workspace(tid, workspace=workspace)
     except ValueError:
-        raise typer.Exit(1)
+        raise SystemExit(1)
 
     close_task(root, tid, outcome=outcome, reason=reason)
     print(f"task: {tid}")

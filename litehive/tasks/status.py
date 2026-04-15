@@ -33,6 +33,12 @@ from litehive.tasks.paths import latest_subagent_base, task_dir
 from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
 
 
+def _reset_pipeline_state_for_requeue(root: Path, task_id: str) -> None:
+    from litehive.lifecycle.persistence import SqlitePersistence
+
+    SqlitePersistence(root).reset(task_id)
+
+
 def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
     from litehive.tasks.queue import validate_single_active_task, active_task_markers
 
@@ -60,7 +66,7 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
         task = require_task(root, task_id)
         if task.pipeline_status == "done":
             raise ValueError(f"Task {task.id} is already done")
-        stage = task.runtime.current_stage.step or task.pipeline_status
+        stage = task.runtime.current_stage.stage or task.pipeline_status
         prepare_interrupted_task(
             root,
             task,
@@ -223,7 +229,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
     mark_engine_switch(
         root,
         task,
-        step=task.pipeline_status,
+        stage=task.pipeline_status,
         from_engine=previous_engine,
         to_engine=engine,
         reason=reason.strip(),
@@ -248,7 +254,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
         task,
         TaskThreadComment(
             role="operator",
-            step=task.pipeline_status,
+            stage=task.pipeline_status,
             verdict="comment",
             message=_switch_thread_comment_message(
                 task,
@@ -339,6 +345,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
             pipeline_status=implementation_entry_stage(task),
             clear_last_outcome=task.status not in {"flagged", "merge_failed", "parked"},
         )
+        _reset_pipeline_state_for_requeue(root, task.id)
         _queue_task(state, task.id, front=front)
         persist_task_and_state_without_runner_guard(
             root,
@@ -376,6 +383,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             clear_last_outcome=task.status not in {"interrupted", "parked", "flagged", "merge_failed"},
             preserve_continuation_handoff=task.status in {"interrupted", "parked"},
         )
+        _reset_pipeline_state_for_requeue(root, task.id)
         _queue_task(state, task.id, front=front)
         persist_task_and_state_without_runner_guard(
             root,
@@ -584,6 +592,7 @@ def update_task(
     outcome: str | None | object = ...,
     outcome_reason: str | None | object = ...,
     action: str | None | object = ...,
+    allow_active_agent_task_mutation: bool = False,
     journal_message: str | None = None,
 ) -> TaskRecord:
     from litehive.state.records import get_task_record
@@ -604,7 +613,10 @@ def update_task(
         with RUNNER_LOCKS_MUTEX:
             runner_state = RUNNER_LOCKS.get(root.resolve())
         is_runner_thread = runner_state is not None and runner_state.owner_thread_id == owner_thread_id
-        if not is_runner_thread:
+        allow_active_task_mutation = (
+            allow_active_agent_task_mutation and state.active_task_id == task.id
+        )
+        if not is_runner_thread and not allow_active_task_mutation:
             ensure_future_task_mutation_allowed(root, [task.id], state=state)
 
         if outcome is not ... and outcome is not None:
@@ -658,6 +670,7 @@ def update_task(
                     pipeline_status=implementation_entry_stage(task),
                     clear_last_outcome=task.status not in {"flagged", "merge_failed", "parked"},
                 )
+                _reset_pipeline_state_for_requeue(root, task.id)
                 _queue_task(state, task.id)
                 persist_task_and_state_without_runner_guard(
                     root,

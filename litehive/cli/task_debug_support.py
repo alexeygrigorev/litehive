@@ -3,8 +3,7 @@
 from pathlib import Path
 import subprocess
 
-import yaml
-
+from litehive.agents.session_store import load_subagent_report, load_subagent_session
 from litehive.git.ops import current_head
 from litehive.state.records import get_task_worktree_path
 from litehive.tasks.paths import (
@@ -25,8 +24,7 @@ def _debug_all(root: Path, task):
     print(f"{task.id}: {len(task.subagents)} subagent(s)")
     print()
     for ref in task.subagents:
-        base = task_dir(root, task) / ref.path
-        exit_code = _read_exit_code(base)
+        exit_code = _read_exit_code(root, task.id, ref.id)
         exit_str = str(exit_code) if exit_code is not None else "-"
         print(f"  {ref.id}  role={ref.role}  engine={ref.engine}  status={ref.status}  exit_code={exit_str}")
     return 0
@@ -62,21 +60,14 @@ def _debug_latest(root: Path, task):
         if runtime_sa.completed_at:
             print(f"completed_at: {runtime_sa.completed_at}")
     else:
-        # Fall back to session.yaml if it exists
-        session_path = resolve_artifact_path(sa_base, "session.yaml") if sa_base.exists() else None
-        if session_path is not None:
-            try:
-                session_text = read_text_artifact(session_path)
-                session_data = yaml.safe_load(session_text)
-                if isinstance(session_data, dict):
-                    ec = session_data.get("exit_code")
-                    print(f"exit_code: {ec if ec is not None else '-'}")
-                    if "created_at" in session_data:
-                        print(f"created_at: {session_data['created_at']}")
-                    if "updated_at" in session_data:
-                        print(f"session_updated_at: {session_data['updated_at']}")
-            except Exception:
-                print("exit_code: -")
+        session_data = load_subagent_session(root, task.id, ref.id)
+        if session_data:
+            ec = session_data.get("exit_code")
+            print(f"exit_code: {ec if ec is not None else '-'}")
+            if "created_at" in session_data:
+                print(f"created_at: {session_data['created_at']}")
+            if "updated_at" in session_data:
+                print(f"session_updated_at: {session_data['updated_at']}")
         else:
             print("exit_code: -")
 
@@ -85,15 +76,9 @@ def _debug_latest(root: Path, task):
 
     # -- Report summary --
     if sa_base.exists():
-        report_path = resolve_artifact_path(sa_base, "report.yaml")
-        if report_path is not None:
-            try:
-                report_text = read_text_artifact(report_path)
-                report_data = yaml.safe_load(report_text)
-                if isinstance(report_data, dict) and report_data.get("verdict"):
-                    print(f"report_verdict: {report_data['verdict']}")
-            except Exception:
-                pass
+        report_data = load_subagent_report(root, task.id, ref.id)
+        if report_data.get("verdict"):
+            print(f"report_verdict: {report_data['verdict']}")
 
     # -- Transcript summary (first 200 chars) --
     if sa_base.exists():
@@ -135,17 +120,11 @@ def _debug_worktree(root: Path, task):
     return 0
 
 
-def _read_exit_code(base: Path) -> int | None:
-    """Read exit_code from session.yaml in a subagent artifact directory."""
-    session_path = resolve_artifact_path(base, "session.yaml") if base.exists() else None
-    if session_path is None:
-        return None
-    try:
-        text = read_text_artifact(session_path)
-        data = yaml.safe_load(text)
-        return data.get("exit_code") if isinstance(data, dict) else None
-    except Exception:
-        return None
+def _read_exit_code(root: Path, task_id: str, subagent_id: str) -> int | None:
+    """Read exit_code from runtime/session storage for a subagent."""
+    session = load_subagent_session(root, task_id, subagent_id)
+    value = session.get("exit_code")
+    return value if isinstance(value, int) else None
 
 
 def _print_verdict(root, task, role):
@@ -159,7 +138,7 @@ def _print_verdict(root, task, role):
 
     if verdict_entry is not None:
         print(f"verdict: {verdict_entry.verdict}")
-        print(f"verdict_step: {verdict_entry.step}")
+        print(f"verdict_stage: {verdict_entry.stage}")
         # Show first line of verdict message
         first_line = verdict_entry.message.split("\n", 1)[0][:120]
         print(f"verdict_message: {first_line}")

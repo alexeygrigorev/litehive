@@ -1,18 +1,24 @@
 """Stage, recovery, and reporting models (litehive-native)."""
 
-from typing import Literal
+from typing import Literal, TypeAlias
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from .common import (
     FEEDBACK_CAP,
     OutcomeKind,
     OutcomeReasonCode,
+    TaskStage,
     TRUNCATION_MARKER,
+    Verdict,
     cap_feedback,
     utcnow,
 )
+from .recovery import TriggerEventKind
 from .runtime import ResourceLimitEvent
+
+
+ReportStage: TypeAlias = TaskStage | Literal["merge_resolving", "recovering"]
 
 
 class StageReport(BaseModel):
@@ -25,8 +31,8 @@ class StageReport(BaseModel):
     """
 
     task_id: str
-    step: Literal["grooming", "implementing", "testing", "accepting", "commit_to_git"]
-    verdict: Literal["pass", "accept", "fail", "reject", "blocked"]
+    stage: ReportStage
+    verdict: Verdict
     source: Literal["agent", "hook"] = "agent"
     summary: str
     feedback: str = ""
@@ -78,8 +84,8 @@ class RecoveryAction(BaseModel):
 
 class RecoveryReport(BaseModel):
     task_id: str
-    stage: str | None = None
-    trigger: str
+    origin_stage: str | None = None
+    trigger_event_kind: TriggerEventKind
     summary: str
     failure_classification: str | None = None
     runnable_state: Literal["runnable", "parked", "blocked"] = "blocked"
@@ -104,23 +110,11 @@ class TaskThreadComment(BaseModel):
     """A single comment in the task discussion thread."""
 
     role: str
-    step: str
-    verdict: Literal["pass", "reject", "blocked", "comment"] = "comment"
+    stage: str
+    verdict: Verdict = Verdict.COMMENT
     message: str
     files_changed: list[str] = Field(default_factory=list)
     created_at: str = Field(default_factory=utcnow)
-
-    @field_validator("verdict", mode="before")
-    @classmethod
-    def _normalize_thread_verdict(cls, value: object) -> object:
-        if not isinstance(value, str):
-            return value
-        normalized = value.strip().lower()
-        if normalized in {"accept"}:
-            return "pass"
-        if normalized in {"fail"}:
-            return "reject"
-        return normalized
 
 
 __all__ = [

@@ -276,7 +276,7 @@ def rollback_command(
     print(f"rollback_of: {summary.rolled_back_sha}")
     print(f"rollback_commit: {summary.rollback_sha}")
     print("status: queued")
-    print(f"pipeline_status: {summary.task.pipeline_status}")
+    print(f"pipeline_stage: {summary.task.pipeline_status}")
     print("recovery_policy: rollback reverted the checkpoint and requeued the task")
     print(f"next_commit_message: {checkpoint_message(summary.task)}")
     missing_criteria_reason = missing_acceptance_criteria_reason(summary.task)
@@ -287,10 +287,11 @@ def rollback_command(
 
 def report_command(
     workspace: Annotated[Path | None, typer.Option("--workspace", help="Repository root containing .litehive/")] = None,
-    verdict: Annotated[str, typer.Option(click_type=choice(["pass", "fail", "reject", "comment"]))] = ...,
+    verdict: Annotated[str, typer.Option(click_type=choice(["pass", "reject", "comment"]))] = ...,
     message: Annotated[str, typer.Option(help="Detailed explanation")] = ...,
     role: Annotated[str, typer.Option(help="Role submitting the report")] = "swe",
-    step: Annotated[str | None, typer.Option(help="Stage name")] = None,
+    stage: Annotated[str | None, typer.Option(help="Stage name")] = None,
+    step: Annotated[str | None, typer.Option("--step", hidden=True)] = None,
     task_id: Annotated[str | None, typer.Option(help="Task ID")] = None,
     files_changed: Annotated[list[str] | None, typer.Option(help="Changed paths; repeat for multiple")] = None,
 ) -> int:
@@ -314,12 +315,17 @@ def report_command(
     if task is None:
         print(f"report failed: task {task_id} not found")
         return 1
-    step = step or task.pipeline_status
-    normalized_verdict = "reject" if verdict == "fail" else verdict
-    comment = TaskThreadComment(role=role, step=step, verdict=normalized_verdict, message=message, files_changed=list(files_changed or []))
+    stage = stage or step or task.pipeline_status
+    comment = TaskThreadComment(
+        role=role,
+        stage=stage,
+        verdict=verdict,
+        message=message,
+        files_changed=list(files_changed or []),
+    )
     append_thread_comment(root, task, comment)
     print(f"task: {task.id}")
-    print(f"step: {step}")
+    print(f"stage: {stage}")
     print(f"verdict: {comment.verdict}")
     print(f"role: {role}")
     return 0
