@@ -14,6 +14,27 @@ from litehive.domain.task import TaskStateRecord, WorkspaceState
 logger = logging.getLogger(__name__)
 
 
+# Map subagent statuses that earlier versions of the runtime wrote into SQLite
+# but which the current pydantic SubagentStatus literal no longer accepts.
+# Rewriting on load keeps old runtime rows readable without a DB migration.
+_LEGACY_SUBAGENT_STATUS_MAP = {
+    "blocked": "failed",
+    "created": "queued",
+}
+
+
+def _normalize_legacy_subagent_statuses(payload: dict) -> None:
+    subagents = payload.get("subagents")
+    if not isinstance(subagents, list):
+        return
+    for entry in subagents:
+        if not isinstance(entry, dict):
+            continue
+        status = entry.get("status")
+        if isinstance(status, str) and status in _LEGACY_SUBAGENT_STATUS_MAP:
+            entry["status"] = _LEGACY_SUBAGENT_STATUS_MAP[status]
+
+
 class RuntimeStore:
     """Small repository-style API over the workspace runtime database."""
 
@@ -54,7 +75,9 @@ class RuntimeStore:
             ).fetchone()
         if row is None:
             return None
-        return TaskStateRecord(**json.loads(row["payload"]))
+        payload = json.loads(row["payload"])
+        _normalize_legacy_subagent_statuses(payload)
+        return TaskStateRecord(**payload)
 
     def save_task_state(self, task_id: str, state: TaskStateRecord) -> None:
         with connect_workspace_db(self.root) as connection:
