@@ -126,3 +126,68 @@ def test_agent_report_uses_env_stage_when_runtime_row_is_missing(
             files_changed=[],
         )
     ]
+
+
+def test_agent_report_writes_through_activity_boundary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-missing-runtime"
+    task_dir.mkdir(parents=True)
+    (task_dir / "task.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "id": "T-0001",
+                "slug": "missing-runtime",
+                "title": "Missing runtime row",
+                "pipeline_mode": "full",
+                "priority": "medium",
+                "git": {
+                    "auto_commit": True,
+                    "commit_message": "missing runtime row",
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    calls: list[tuple[Path, str, TaskThreadComment]] = []
+
+    def fake_append_activity(root: Path, task, comment: TaskThreadComment) -> None:
+        calls.append((root, task.id, comment))
+
+    monkeypatch.setattr(
+        "litehive.cli.agent_cli.append_task_activity",
+        fake_append_activity,
+    )
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "report",
+            "--verdict",
+            "pass",
+            "--message",
+            "boundary write",
+            "--role",
+            "recovery",
+            "--step",
+            "grooming",
+            "--task-id",
+            "T-0001",
+            "--workspace",
+            str(tmp_path),
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert len(calls) == 1
+    root, task_id, comment = calls[0]
+    assert root == tmp_path
+    assert task_id == "T-0001"
+    assert comment.role == "recovery"
+    assert comment.step == "grooming"
+    assert comment.verdict == "pass"
+    assert comment.message == "boundary write"
+    assert comment.files_changed == []

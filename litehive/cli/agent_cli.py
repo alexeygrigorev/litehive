@@ -21,7 +21,7 @@ from litehive.config.workspace import resolve_workspace
 from litehive.domain.reports import TaskThreadComment
 from litehive.state.records import get_task_record
 from litehive.state.persist import load_state
-from litehive.tasks.reports import append_thread_comment
+from litehive.tasks.activity import append_task_activity
 
 
 VERDICT_ALLOWLIST: dict[str, set[str]] = {
@@ -133,7 +133,7 @@ def agent_report_command(
         message=message,
         files_changed=list(files_changed or []),
     )
-    append_thread_comment(root, task, comment)
+    append_task_activity(root, task, comment)
     print(f"task: {task.id}")
     print(f"step: {actual_step}")
     print(f"verdict: {normalized_verdict}")

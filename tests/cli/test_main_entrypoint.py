@@ -80,6 +80,7 @@ def test_main_dispatches_task_subcommands_without_full_root_app(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
 
     def fake_task_app(*, standalone_mode: bool = False):
         captured["argv"] = list(sys.argv)
@@ -100,6 +101,7 @@ def test_main_dispatches_pipeline_subcommands_without_full_root_app(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
 
     def fake_pipeline_app(*, standalone_mode: bool = False):
         captured["argv"] = list(sys.argv)
@@ -143,6 +145,7 @@ def test_main_dispatches_root_add_without_full_root_app(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
 
     def fake_task_app(*, standalone_mode: bool = False):
         captured["argv"] = list(sys.argv)

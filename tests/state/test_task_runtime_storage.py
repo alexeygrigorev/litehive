@@ -1,12 +1,10 @@
 from pathlib import Path
 
-import pytest
 import yaml
 
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.task import TaskRecord
 from litehive.state.records import (
-    TaskStateMissingError,
     create_task,
     get_task,
     list_tasks,
@@ -78,7 +76,7 @@ def test_task_yaml_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path:
     assert loaded.runtime.current_stage.step == "implementing"
 
 
-def test_get_task_requires_sqlite_runtime_state_row(tmp_path: Path) -> None:
+def test_get_task_backfills_missing_sqlite_runtime_state_row(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-missing-runtime"
     task_dir.mkdir(parents=True)
@@ -100,8 +98,16 @@ def test_get_task_requires_sqlite_runtime_state_row(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(TaskStateMissingError, match="missing its SQLite runtime state row"):
-        get_task(tmp_path, "T-0001")
+    loaded = get_task(tmp_path, "T-0001")
+
+    assert loaded is not None
+    assert loaded.id == "T-0001"
+    assert loaded.runtime.execution_status == "idle"
+    assert loaded.runtime.current_stage.step is None
+
+    reloaded = get_task(tmp_path, "T-0001")
+    assert reloaded is not None
+    assert reloaded.id == "T-0001"
 
 
 def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Path) -> None:

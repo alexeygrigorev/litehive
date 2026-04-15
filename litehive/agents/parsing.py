@@ -7,6 +7,7 @@ from litehive.domain.reports import StageReport
 from litehive.domain.task import TaskRecord
 
 from litehive.domain.agent import SubagentResult
+from litehive.tasks.activity import latest_task_activity_entry
 
 
 def stage_report_from_subagent(
@@ -18,12 +19,13 @@ def stage_report_from_subagent(
 ) -> StageReport:
     # Step 1: Check if agent submitted a verdict via `litehive report` CLI.
     if root is not None:
-        from litehive.tasks.reports import load_task_thread
-
-        thread = load_task_thread(root, task)
-        step_comments = [c for c in thread if c.step == step and c.verdict != "comment"]
-        if step_comments:
-            latest = step_comments[-1]
+        latest = latest_task_activity_entry(
+            root,
+            task,
+            step=step,
+            verdicts={"pass", "reject", "blocked"},
+        )
+        if latest is not None:
             return StageReport(
                 task_id=task.id,
                 step=step,  # type: ignore[arg-type]

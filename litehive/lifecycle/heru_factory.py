@@ -25,6 +25,7 @@ from litehive.agents.manager import SubagentManager
 from litehive.domain.agent import EngineFailure
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
 from litehive.state.records import get_task
+from litehive.tasks.activity import latest_task_activity_entry
 from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
 from .nodes.agent import (
@@ -78,21 +79,18 @@ def _latest_verdict_after(
 
     Returns ``None`` when nothing newer landed — caller raises ``NudgeRequired``.
     """
-    from litehive.tasks.reports import load_task_thread
-
     task = get_task(workspace_root, task_id)
     if task is None:
         return None
-    comments = load_task_thread(workspace_root, task)
-    fresh = [
-        c for c in comments
-        if c.step == step
-        and c.verdict in {"pass", "reject", "blocked"}
-        and _parse_iso(c.created_at) > after_ts
-    ]
-    if not fresh:
+    latest = latest_task_activity_entry(
+        workspace_root,
+        task,
+        step=step,
+        verdicts={"pass", "reject", "blocked"},
+        after=after_ts,
+    )
+    if latest is None:
         return None
-    latest = fresh[-1]
     if (
         step == "implementing"
         and latest.verdict == "pass"
@@ -112,15 +110,6 @@ def _latest_verdict_after(
             "files_changed": list(latest.files_changed),
         },
     )
-
-
-def _parse_iso(value: str) -> datetime:
-    if value.endswith("Z"):
-        value = value[:-1] + "+00:00"
-    dt = datetime.fromisoformat(value)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt
 
 
 class HeruEngineAdapter:

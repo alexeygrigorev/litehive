@@ -10,6 +10,7 @@ from litehive.roles.swe import SWEAgent
 from litehive.roles.base import PromptContext
 from litehive.config.workspace import ensure_workspace
 from litehive.config.paths import config_path
+from litehive.domain.reports import TaskThreadComment
 from litehive.lifecycle.persistence import LastRejection, TaskState
 from litehive.lifecycle.prompt_serializer import serialize_prompt
 from litehive.lifecycle.types import PipelineMode
@@ -133,6 +134,37 @@ def test_serialize_ignores_corrupt_task_comments_file(workspace: Path) -> None:
     )
 
     assert "Discussion thread:" not in text
+
+
+def test_serialize_reads_activity_through_boundary(workspace: Path, monkeypatch) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+    calls: list[tuple[Path, str]] = []
+
+    def fake_load_activity(root: Path, task_record) -> list[TaskThreadComment]:
+        calls.append((root, task_record.id))
+        return [
+            TaskThreadComment(
+                role="planner",
+                step="grooming",
+                verdict="pass",
+                message="scope ready",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "litehive.lifecycle.prompt_serializer.load_task_activity",
+        fake_load_activity,
+    )
+
+    text = serialize_prompt(
+        agent.build_prompt(make_state(task.id)),
+        task_record=task,
+        workspace_root=workspace,
+    )
+
+    assert calls == [(workspace, task.id)]
+    assert "[grooming] planner (pass): scope ready" in text
 
 
 def test_serialize_includes_last_rejection(workspace: Path) -> None:

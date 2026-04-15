@@ -9,13 +9,18 @@ from litehive.git.ops import GitError, current_head, is_git_repo, status_porcela
 from litehive.domain.reports import RecoveryAction, RecoveryEvidenceItem, RecoveryReport
 from litehive.domain.task import TaskRecord
 
+from .activity import (
+    append_task_activity,
+    load_task_activity,
+    save_task_activity,
+    task_activity_path,
+)
 from .paths import (
     latest_path,
     latest_run_all_log_path,
     latest_subagent_base,
     resolve_artifact_path,
     status_entry_paths,
-    task_comments_file,
     task_dir,
     task_file,
     task_recovery_dir,
@@ -39,7 +44,7 @@ def collect_recovery_evidence(
 
     evidence: list[RecoveryEvidenceItem] = []
     task_path = task_file(root, task)
-    comments_path = task_comments_file(root, task)
+    comments_path = task_activity_path(root, task)
     events_path = task_dir(root, task) / "events.jsonl"
     latest_report_path = latest_path(sorted((task_dir(root, task) / "reports").glob("*.yaml")))
     latest_run_log = latest_run_all_log_path(root)
@@ -80,7 +85,7 @@ def collect_recovery_evidence(
             label="comments.yaml",
             path=str(comments_path.relative_to(root)),
             exists=comments_path.exists(),
-            summary=f"discussion entries={len(load_task_thread(root, task))}",
+            summary=f"discussion entries={len(load_task_activity(root, task))}",
         )
     )
     evidence.append(
@@ -239,7 +244,7 @@ def record_recovery_report(
         recovery_subagent_path=recovery_subagent_path,
     )
     path = write_recovery_report(root, task, report)
-    append_thread_comment(
+    append_task_activity(
         root,
         task,
         TaskThreadComment(
@@ -257,10 +262,7 @@ def record_recovery_report(
 
 
 def append_thread_comment(root: Path, task: TaskRecord, comment: "TaskThreadComment") -> None:
-    path = task_comments_file(root, task)
-    existing = [entry.model_dump(mode="python") for entry in load_task_thread(root, task)]
-    existing.append(comment.model_dump(mode="python"))
-    path.write_text(yaml.safe_dump(existing, sort_keys=False), encoding="utf-8")
+    append_task_activity(root, task, comment)
 
 
 def normalized_files_changed(paths: Iterable[str]) -> list[str]:
@@ -297,27 +299,15 @@ def retract_thread_comment(comment: "TaskThreadComment") -> bool:
 
 
 def load_task_thread(root: Path, task: TaskRecord) -> list["TaskThreadComment"]:
-    from litehive.domain.reports import TaskThreadComment
-
-    path = task_comments_file(root, task)
-    if not path.exists():
-        return []
-    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(loaded, list):
-        return []
-    return [TaskThreadComment(**entry) for entry in loaded if isinstance(entry, dict)]
+    return load_task_activity(root, task)
 
 
 def save_task_thread(root: Path, task: TaskRecord, thread: list["TaskThreadComment"]) -> None:
-    path = task_comments_file(root, task)
-    path.write_text(
-        yaml.safe_dump([comment.model_dump(mode="python") for comment in thread], sort_keys=False),
-        encoding="utf-8",
-    )
+    save_task_activity(root, task, thread)
 
 
 def render_task_thread(root: Path, task: TaskRecord, *, for_prompt: bool = False) -> str:
-    thread = load_task_thread(root, task)
+    thread = load_task_activity(root, task)
     if not thread:
         return ""
     lines = ["Discussion thread:"]
