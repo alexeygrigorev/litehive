@@ -34,6 +34,8 @@ linked pages as reference once your workspace is running.
   what is tracked versus ignored.
 - [vocabulary.md](vocabulary.md): canonical terms for stages, statuses,
   reports, discussion entries, recovery, and runtime artifacts.
+- [vocabulary_specs.md](vocabulary_specs.md): the general template and review
+  rules for writing vocabulary documents.
 - [state-machine.md](state-machine.md): the exhaustive transition reference used
   by the codebase.
 - [contributing-back.md](contributing-back.md): filing upstream Litehive work

@@ -353,6 +353,10 @@ Follow-up actions:
 
 - Keep future vocabulary additions grouped into one of those domains rather than
   reintroducing cross-cutting scattered sections.
+- For each domain, keep three things together in the doc:
+  - the purpose of the domain
+  - the actors and actions that justify why the types exist
+  - the target Python types for the entities in that domain
 - Revisit the following still-open simplification questions in-place within
   their domains:
   - whether `PipelineStateView` should exist separately from `PipelineState`
