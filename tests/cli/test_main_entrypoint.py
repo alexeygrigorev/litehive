@@ -114,3 +114,46 @@ def test_main_dispatches_pipeline_subcommands_without_full_root_app(
     assert exit_code == 6
     assert captured["argv"] == ["litehive", "journal", "T-0001"]
     assert captured["standalone_mode"] is False
+
+
+def test_main_dispatches_agent_subcommands_for_agent_roles_without_full_root_app(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_agent_app(args=None, *, standalone_mode: bool = False):
+        captured["argv"] = list(sys.argv)
+        captured["standalone_mode"] = standalone_mode
+        captured["args"] = args
+        return 8
+
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
+    monkeypatch.setattr("litehive.cli.agent_cli.agent_app", fake_agent_app)
+    monkeypatch.setattr(sys, "argv", ["litehive", "agent", "update", "--task-id", "T-0001", "--goal", "x"])
+
+    exit_code = main_module.main()
+
+    assert exit_code == 8
+    assert captured["argv"] == ["litehive", "update", "--task-id", "T-0001", "--goal", "x"]
+    assert captured["standalone_mode"] is False
+    assert captured["args"] is None
+
+
+def test_main_dispatches_root_add_without_full_root_app(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_task_app(*, standalone_mode: bool = False):
+        captured["argv"] = list(sys.argv)
+        captured["standalone_mode"] = standalone_mode
+        return 10
+
+    monkeypatch.setattr("litehive.cli.task_cli.app", fake_task_app)
+    monkeypatch.setattr(sys, "argv", ["litehive", "add", "New task", "--goal", "scope it"])
+
+    exit_code = main_module.main()
+
+    assert exit_code == 10
+    assert captured["argv"] == ["litehive", "add", "New task", "--goal", "scope it"]
+    assert captured["standalone_mode"] is False

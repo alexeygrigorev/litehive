@@ -490,7 +490,7 @@ def close_task(
     reason: str | None = None,
     follow_up_task_id: str | None = None,
 ) -> TaskRecord:
-    from litehive.state.records import require_task
+    from litehive.state.records import get_task_record
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.state.persist import load_state
     from litehive.state.persist import persist_task_and_state_without_runner_guard
@@ -507,14 +507,17 @@ def close_task(
     if state.active_task_id == task_id:
         stop_current_task(root)
     with workspace_lock(root):
-        task = require_task(root, task_id)
+        task = get_task_record(root, task_id)
+        if task is None:
+            raise ValueError(f"Task {task_id} not found")
         if follow_up_task_id is not None:
             follow_up_task_id = follow_up_task_id.strip()
             if not follow_up_task_id:
                 raise ValueError("Follow-up task id must not be empty")
             if follow_up_task_id == task.id:
                 raise ValueError(f"Task {task.id} cannot reference itself as a follow-up task")
-            require_task(root, follow_up_task_id)
+            if get_task_record(root, follow_up_task_id) is None:
+                raise ValueError(f"Task {follow_up_task_id} not found")
         state = load_state(root)
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status == "done":
@@ -583,7 +586,7 @@ def update_task(
     action: str | None | object = ...,
     journal_message: str | None = None,
 ) -> TaskRecord:
-    from litehive.state.records import require_task
+    from litehive.state.records import get_task_record
     from litehive.state.locking import ensure_future_task_mutation_allowed, persist_future_task_update, workspace_lock
     from litehive.state.persist import load_state
     from litehive.tasks.queue import reset_task_for_recovery
@@ -592,7 +595,9 @@ def update_task(
 
     with workspace_lock(root):
         state = load_state(root)
-        task = require_task(root, task_id)
+        task = get_task_record(root, task_id)
+        if task is None:
+            raise ValueError(f"Task {task_id} not found")
         # Skip the conflict guard when the current thread is the runner
         # (e.g., apply_task_updates_from_report during grooming).
         owner_thread_id = threading.get_ident()

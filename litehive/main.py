@@ -108,6 +108,7 @@ def main() -> int:
 
     agent_role = os.environ.get("LITEHIVE_AGENT_ROLE")
     if agent_role:
+        route_via_root_cli = False
         cmd = argv[0] if argv else None
         if cmd is None or cmd in ("--help", "-h"):
             print("Usage: litehive agent [report|update|close]")
@@ -117,12 +118,16 @@ def main() -> int:
             argv = ["agent", *argv]
             sys.argv = [sys.argv[0], *argv]
             cmd = "agent"
-        if cmd != "agent" and not _agent_command_is_allowed(agent_role, argv):
-            print("You are not authorized to perform this command.")
-            return 1
-        from litehive.cli.app import main as cli_main
+            route_via_root_cli = True
+        elif cmd != "agent":
+            if not _agent_command_is_allowed(agent_role, argv):
+                print("You are not authorized to perform this command.")
+                return 1
+            route_via_root_cli = True
+        if route_via_root_cli:
+            from litehive.cli.app import main as cli_main
 
-        return cli_main()
+            return cli_main()
 
     if argv and argv[0] == "status" and "--full" not in argv:
         return _fast_status(argv[1:])
@@ -134,6 +139,21 @@ def main() -> int:
         sys.argv = [sys.argv[0], *argv[1:]]
         try:
             result = agent_app(standalone_mode=False)
+        except click.exceptions.Exit as exc:
+            return exc.exit_code
+        except click.ClickException as exc:
+            exc.show()
+            return exc.exit_code
+        except click.Abort:
+            return 1
+        return 0 if result is None else int(result)
+
+    if argv and argv[0] == "add":
+        import click
+        from litehive.cli.task_cli import app as task_app
+
+        try:
+            result = task_app(standalone_mode=False)
         except click.exceptions.Exit as exc:
             return exc.exit_code
         except click.ClickException as exc:

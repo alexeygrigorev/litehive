@@ -8,7 +8,7 @@ import yaml
 
 from litehive.config.paths import workspace_logs_dir
 from litehive.daemon.logs import latest_run_all_log_dir
-from litehive.state.records import list_tasks_state_first
+from litehive.state.records import get_task_record, list_tasks
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 
 _DEFAULT_TAIL_LINES = 40
@@ -276,9 +276,9 @@ def _format_duration(started_at: str | datetime | None, completed_at: str | date
 
 
 def _resolve_follow_task(root: Path, *, task_id: str | None) -> object | None:
-    tasks = list_tasks_state_first(root, include_runtime=True)
     if task_id is not None:
-        return next((task for task in tasks if task.id == task_id), None)
+        return get_task_record(root, task_id)
+    tasks = list_tasks(root, strict=False)
     active = next((task for task in tasks if task.runtime.active_subagent is not None), None)
     if active is not None:
         return active
@@ -286,7 +286,7 @@ def _resolve_follow_task(root: Path, *, task_id: str | None) -> object | None:
 
 
 def _load_task_with_runtime(root: Path, task_id: str):
-    return next((task for task in list_tasks_state_first(root, include_runtime=True) if task.id == task_id), None)
+    return get_task_record(root, task_id)
 
 
 def _coerce_datetime(value: str | datetime) -> datetime:
