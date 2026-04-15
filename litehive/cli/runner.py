@@ -118,7 +118,7 @@ def daemon_worker(workspace):
     return run_daemon_loop(workspace, output_stream=None)
 
 
-def _run_single_v2(workspace: Path) -> int:
+def _run_single(workspace: Path) -> int:
     try:
         task = dequeue_next_task(workspace)
     except WorkspaceConflictError as exc:
@@ -158,7 +158,7 @@ def run_command(
         if drain:
             return run_drain_dry_run(workspace, config=config, engine=engine, model=model, stop_on_failure=stop_on_failure, max_tasks=max_tasks, stop_on_dirty_git=stop_on_dirty_git)
         return run_single_dry_run(workspace, config=config, engine=engine, model=model, stop_on_failure=stop_on_failure, max_tasks=max_tasks, stop_on_dirty_git=stop_on_dirty_git)
-    return _run_single_v2(workspace)
+    return _run_single(workspace)
 
 
 def _dry_run_stop_conditions(
