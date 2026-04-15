@@ -3,11 +3,8 @@ slug: zero-change-shortcut-for-re-queued-tasks-already
 title: Zero-change shortcut for re-queued tasks already done on main
 created_at: '2026-04-13T07:23:33+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'When a task is re-queued (via requeue command or after a failed run), the pipeline
   should detect that its work is already on main and skip straight to done instead
@@ -27,10 +24,7 @@ acceptance_criteria:
 - 4. Existing zero_change_shortcut guard still works for single-mode tasks.
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0360 zero-change-shortcut-for-re-queued-tasks-already'
 created_from: null
-upstream_origin: null
-github_origin: null

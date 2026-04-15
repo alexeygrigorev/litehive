@@ -4,11 +4,8 @@ title: V2 pipeline ran cancelled/duplicate task T-0200, leaving orphan changes i
   main
 created_at: '2026-04-13T08:45:50+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: critical
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: "Three bugs conspire to re-run already-done tasks, lose their work, and wedge\
   \ the daemon. (1) v2 dequeue selector ignores runtime.execution_status \u2014 done/cancelled\
@@ -44,10 +41,7 @@ acceptance_criteria:
   in no tasks re-run and no orphan files in main worktree'
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0366 v2-pipeline-ran-cancelled-duplicate-task-t-0200'
 created_from: null
-upstream_origin: null
-github_origin: null

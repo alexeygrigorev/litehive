@@ -3,11 +3,8 @@ slug: eliminate-pool-state-state-yaml-split-brain-for
 title: Eliminate pool_state / state.yaml split-brain for active_task_id
 created_at: '2026-04-13T07:24:08+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: critical
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'Two sources of truth for active_task_id: .litehive/state.yaml and ~/.local/share/litehive/<workspace>/data.db:pool_state.
   When a task terminates, state.yaml gets updated but pool_state sqlite doesn''t,
@@ -24,10 +21,7 @@ acceptance_criteria:
   the same failed task.'
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0362 eliminate-pool-state-state-yaml-split-brain-for'
 created_from: null
-upstream_origin: null
-github_origin: null

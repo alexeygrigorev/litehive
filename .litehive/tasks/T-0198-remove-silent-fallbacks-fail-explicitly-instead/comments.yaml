@@ -168,3 +168,50 @@
     '
   files_changed: []
   created_at: '2026-04-13T08:00:16+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0198-remove-silent-fallbacks-fail-explicitly-instead/recovery/recovery-001.yaml'
+  files_changed: []
+  created_at: '2026-04-15T08:01:57+00:00'
+- role: planner
+  step: grooming
+  verdict: blocked
+  message: "Blocked by workspace/CLI infrastructure; task shaping could not be completed\
+    \ through the required Litehive mutation commands.\n\nEXPECTED behavior:\n- `litehive\
+    \ update --task-id T-0198 ...` should rewrite the task goal, acceptance criteria,\
+    \ constraints, and plan.\n- `litehive close --task-id T-0198 --outcome duplicate\
+    \ ...` should preserve the task as a duplicate umbrella if that remains the chosen\
+    \ shape.\n\nOBSERVED behavior on 2026-04-15:\n1. `litehive task show T-0198` fails\
+    \ immediately with `ModuleNotFoundError: No module named 'heru'` because `pyproject.toml`\
+    \ expects `heru` from `../heru`, but that directory does not exist in this checkout.\n\
+    2. The lightweight planner CLI exists (`litehive update`, `litehive close`, `litehive\
+    \ report`), but `litehive update` and `litehive close` still fail after providing\
+    \ `LITEHIVE_AGENT_ROLE=planner` because task loading requires runtime state from\
+    \ SQLite.\n3. With a temporary non-repo `/tmp/heru` shim added only to let the\
+    \ planner CLI import, `litehive update --task-id T-0198 ...` fails with:\n   `TaskStateMissingError:\
+    \ Task T-0002 is missing its SQLite runtime state row. This workspace no longer\
+    \ supports reconstructing runtime state from files.`\n\nReproduction:\n1. In `/home/alexey/git/litehive`,\
+    \ run `litehive task show T-0198`.\n2. Observe import failure for missing `heru`.\n\
+    3. Run `LITEHIVE_AGENT_ROLE=planner litehive update --task-id T-0198 --goal '...'`.\n\
+    4. Observe `ModuleNotFoundError: heru` unless a shim is supplied.\n5. With a temporary\
+    \ shim on `PYTHONPATH`, rerun step 3.\n6. Observe `TaskStateMissingError` for\
+    \ missing SQLite runtime state row `T-0002`.\n\nWhat I was going to shape once\
+    \ CLI mutation works:\n- Keep `T-0198` as an umbrella duplicate rather than reopening\
+    \ it as one broad implementation task.\n- Preserve focused child ownership under\
+    \ existing tasks `T-0197`, `T-0200`, and `T-0203`.\n- Call out that the duplicate\
+    \ journal references `T-0201` and `T-0202`, but those task records are absent\
+    \ under `.litehive/tasks` and need recreation or relinking.\n\nBlocking infrastructure\
+    \ to fix first:\n- Restore the expected `heru` dependency for this checkout, or\
+    \ otherwise make Litehive CLI imports independent of `heru` for planner/task-shaping\
+    \ commands.\n- Repair the workspace runtime DB so `list_tasks()` and `update_task()`\
+    \ no longer fail on missing SQLite runtime state rows (currently `T-0002`).\n\n\
+    Until those are fixed, I cannot satisfy the instruction to shape this task via\
+    \ Litehive CLI commands.\n"
+  files_changed: []
+  created_at: '2026-04-15T08:05:17+00:00'

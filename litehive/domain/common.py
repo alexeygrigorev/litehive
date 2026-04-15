@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Literal
 
-from heru.types import (
+from litehive.domain._heru_compat import (
     EngineLimitKind,
     EngineMonitoringSource,
     LiveEventKind,

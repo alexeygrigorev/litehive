@@ -3,11 +3,8 @@ slug: recovery-agent-only-handles-crash-timeout-not
 title: Recovery agent only handles Crash/Timeout, not semantic Reject
 created_at: '2026-04-13T07:24:39+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: The recovery agent currently runs for ANY reject in terminal stages. But it
   can only meaningfully fix infrastructure crashes (engine died, timeout, stale session).
@@ -24,10 +21,7 @@ acceptance_criteria:
 - 4. Integration test for both paths.
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0365 recovery-agent-only-handles-crash-timeout-not'
 created_from: null
-upstream_origin: null
-github_origin: null

@@ -3,11 +3,8 @@ slug: remove-keyword-based-task-type-auto
 title: Remove keyword-based task_type auto-classification and task_engine_routing
 created_at: '2026-04-06T20:15:51+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'Remove _task_routing_key which guesses task_type from title keywords (refactor,
   bugfix, research, etc.) and overrides default_engine. Remove task_engine_routing
@@ -22,10 +19,7 @@ acceptance_criteria:
 - All tests pass after removal
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0194 remove-keyword-based-task-type-auto'
 created_from: null
-upstream_origin: null
-github_origin: null

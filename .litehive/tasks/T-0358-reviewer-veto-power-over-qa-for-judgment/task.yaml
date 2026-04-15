@@ -3,11 +3,8 @@ slug: reviewer-veto-power-over-qa-for-judgment
 title: Reviewer veto power over QA for judgment disagreements
 created_at: '2026-04-13T06:42:58+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: "When QA rejects a task N times but the after_implementing hook (ruff + pytest)\
   \ passes, the pipeline should route directly to accepting and let the reviewer make\
@@ -29,10 +26,7 @@ acceptance_criteria:
   \ is new."
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0358 reviewer-veto-power-over-qa-for-judgment'
 created_from: null
-upstream_origin: null
-github_origin: null

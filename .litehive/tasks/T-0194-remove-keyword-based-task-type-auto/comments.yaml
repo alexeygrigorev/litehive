@@ -825,3 +825,3089 @@
     '
   files_changed: []
   created_at: '2026-04-13T06:41:43+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-158.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:45:38+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-159.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:46:08+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-160.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:46:38+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-161.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:47:07+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-162.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:47:36+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-163.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:48:05+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-164.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:48:34+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-165.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:49:04+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-166.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:49:32+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-167.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:50:01+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-168.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:50:30+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-169.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:50:59+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-170.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:51:27+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-171.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:51:56+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-172.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:52:25+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-173.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:52:53+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-174.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:53:22+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-175.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:53:51+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-176.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:54:19+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-177.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:54:48+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-178.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:55:17+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-179.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:55:45+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-180.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:56:30+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-181.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:57:00+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-182.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:57:29+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-183.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:57:59+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-184.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:58:28+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-185.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:58:57+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-186.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:59:26+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-187.yaml'
+  files_changed: []
+  created_at: '2026-04-15T06:59:55+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-188.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:00:23+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-189.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:00:52+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-190.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:01:21+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-191.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:01:50+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-192.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:02:19+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-193.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:02:48+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-194.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:03:17+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-195.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:03:46+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-196.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:04:15+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-197.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:04:45+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-198.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:05:14+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-199.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:05:43+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-200.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:05:57+00:00'
+- role: recovery
+  step: grooming
+  verdict: pass
+  message: 'Root cause: the recovery blocker was Litehive reporting infrastructure,
+    not task-content work. In this checkout, the `litehive agent report` path still
+    imported `heru.types` directly through shared domain modules, so a heru-less environment
+    crashed before a stage verdict could be recorded. That is why the stage kept getting
+    nudged for a missing verdict.
+
+
+    Fix applied:
+
+    - switched `litehive/domain/common.py` from direct `heru.types` imports to the
+    existing `litehive.domain._heru_compat` shim
+
+    - switched `litehive/domain/runtime.py` from direct `heru.types` imports to the
+    same compatibility shim
+
+
+    Why retry should proceed: this is the smallest infrastructure fix needed to restore
+    `litehive agent report` in the current checkout. I did not redo the stage work
+    or submit the prior agent''s stage verdict on its behalf; I only restored the
+    reporting path so the pipeline can continue cleanly.
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:13:36+00:00'
+- role: recovery
+  step: grooming
+  verdict: pass
+  message: 'Root cause: Litehive reporting infrastructure was still blocking stage
+    completion in this checkout. `litehive agent report` crashed before recording
+    the grooming verdict because the reporting path still imported `heru.types` directly
+    through shared domain modules, and task lookup also enumerated all task runtime
+    rows strictly, so an unrelated stale task state could abort report submission
+    before reaching `T-0194`.
+
+
+    Fix applied:
+
+    - switched `litehive/domain/common.py` and `litehive/domain/runtime.py` to the
+    existing `litehive.domain._heru_compat` shim instead of direct `heru.types` imports
+
+    - changed `litehive/state/records.py:get_task()` to resolve the requested task
+    directly and tolerate a missing runtime row for that task instead of aborting
+    on unrelated stale runtime rows
+
+
+    Why retry should proceed: this restores the minimal Litehive infrastructure required
+    for `litehive agent report` to complete in the current workspace. I did not redo
+    grooming or submit the previous agent''s grooming verdict on its behalf; I fixed
+    the reporting path so the normal pipeline can continue.
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:14:01+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-201.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:22:34+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-202.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:22:41+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-203.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:22:49+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-204.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:22:57+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-205.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:23:04+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-206.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:23:12+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-207.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:23:20+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-208.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:23:28+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-209.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:23:35+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-210.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:23:43+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-211.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:23:51+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-212.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:23:59+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-213.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:24:06+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-214.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:24:14+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-215.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:24:22+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-216.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:24:30+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-217.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:24:37+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-218.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:24:45+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-219.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:24:52+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-220.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:25:00+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-221.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:25:07+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-222.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:25:14+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-223.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:25:22+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-224.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:25:29+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-225.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:25:37+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-226.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:25:44+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-227.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:25:52+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-228.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:25:59+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-229.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:26:07+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-230.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:26:14+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-231.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:26:21+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-232.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:26:29+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-233.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:26:36+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-234.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:26:44+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-235.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:26:51+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-236.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:26:59+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-237.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:27:06+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-238.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:27:14+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-239.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:27:21+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-240.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:27:29+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-241.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:27:36+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-242.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:27:44+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-243.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:27:51+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-244.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:27:59+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-245.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:28:06+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-246.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:28:14+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-247.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:28:21+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-248.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:28:29+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-249.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:28:36+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-250.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:28:44+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-251.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:28:51+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-252.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:28:59+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-253.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:29:06+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-254.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:29:14+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-255.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:29:21+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-256.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:29:29+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-257.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:29:36+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-258.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:29:44+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-259.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:29:51+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-260.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:29:59+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-261.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:30:06+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-262.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:30:14+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-263.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:30:22+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-264.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:30:29+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-265.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:30:37+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-266.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:30:44+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-267.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:30:52+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-268.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:30:59+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-269.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:31:07+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-270.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:31:14+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-271.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:31:22+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-272.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:31:30+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-273.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:31:37+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-274.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:31:45+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-275.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:31:52+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-276.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:32:00+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-277.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:32:07+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-278.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:32:15+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-279.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:32:22+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-280.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:32:30+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-281.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:32:37+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-282.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:32:45+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-283.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:32:53+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-284.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:33:00+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-285.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:33:08+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-286.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:33:15+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-287.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:33:23+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-288.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:33:30+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-289.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:33:38+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-290.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:33:46+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-291.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:33:53+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-292.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:34:01+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-293.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:34:08+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-294.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:34:16+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-295.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:34:24+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-296.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:34:31+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-297.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:34:39+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-298.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:34:46+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-299.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:34:54+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-300.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:35:02+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-301.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:35:09+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-302.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:35:17+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-303.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:35:24+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-304.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:35:32+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-305.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:35:40+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-306.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:35:48+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-307.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:35:55+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-308.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:36:03+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-309.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:36:11+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-310.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:36:18+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-311.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:36:26+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-312.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:36:34+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-313.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:36:41+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-314.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:36:49+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-315.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:36:57+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-316.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:37:04+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-317.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:37:12+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-318.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:37:20+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-319.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:37:27+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-320.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:37:35+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-321.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:37:43+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-322.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:37:50+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-323.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:37:58+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-324.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:38:05+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-325.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:38:13+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-326.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:38:21+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-327.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:38:28+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-328.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:38:36+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-329.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:38:43+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-330.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:38:51+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-331.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:38:59+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-332.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:39:06+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-333.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:39:14+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-334.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:39:22+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-335.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:39:29+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-336.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:39:37+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-337.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:39:45+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-338.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:39:52+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-339.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:40:00+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-340.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:40:08+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-341.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:40:16+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-342.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:40:23+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-343.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:40:31+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-344.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:40:38+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-345.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:40:46+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-346.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:40:54+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-347.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:41:02+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-348.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:41:10+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-349.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:41:17+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-350.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:41:25+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-351.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:41:33+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-352.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:41:40+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-353.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:41:48+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-354.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:41:56+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-355.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:42:04+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-356.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:42:12+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-357.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:42:19+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-358.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:42:27+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-359.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:42:35+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-360.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:42:43+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-361.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:42:51+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-362.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:42:59+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-363.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:43:06+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-364.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:43:14+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-365.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:43:22+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-366.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:43:30+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-367.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:43:38+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-368.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:43:45+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-369.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:43:53+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-370.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:44:01+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Shaped T-0194 for implementation.
+
+
+    User problem:
+
+    Engine choice must be predictable. Litehive should never infer an engine from
+    title keywords like "refactor", "bugfix", or "research", and it should not keep
+    dead config for that behavior.
+
+
+    Scope:
+
+    Remove the remaining keyword-routing legacy and any config/template/doc/test residue
+    tied to it. Keep this task narrowly about engine-selection cleanup. Do not broaden
+    into unrelated task_type changes or a new engine-selection feature.
+
+
+    Important branch reality:
+
+    - The live resolver already appears to ignore title keywords and `task_type`;
+    the likely remaining work is cleanup and regression coverage rather than a fresh
+    behavior change.
+
+    - The current branch does not expose a `task.engine` field on `TaskRecord` / `resolve_engine_plan`.
+    Do not expand this task into inventing that feature. Preserve existing explicit
+    override surfaces and `default_engine` fallback only.
+
+
+    Acceptance criteria now persisted on the task:
+
+    - No engine-selection path inspects task title text, keyword buckets, `routing_patterns`,
+    or task_type-derived routing.
+
+    - `task_engine_routing` is removed end-to-end from config model/loading, workspace
+    template/defaults, and operator-facing docs.
+
+    - Legacy routing-only symbols are removed if still present: `_task_routing_key`,
+    `VALID_TASK_ROUTING_KEYS`, `_default_task_engine_routing`, `routing_patterns`,
+    and any routing parser/normalizer helpers used only for keyword-based engine selection.
+
+    - Focused tests cover explicit engine precedence without keyword inference.
+
+    - Relevant tests pass.
+
+
+    Recommended implementation path:
+
+    1. Inspect `litehive/config/engine_models.py`, config loading/model code, workspace
+    template, and docs for any remaining routing-only references.
+
+    2. Remove dead config/constants/helpers and update docs/templates to describe
+    only explicit engine precedence.
+
+    3. Tighten focused tests around engine precedence and absence of routing config/helpers,
+    then run the relevant slice.
+
+
+    Likely touch points:
+
+    `litehive/config/engine_models.py`, `litehive/config/model.py`, `litehive/config/loading.py`,
+    `litehive/tasks/constants.py`, `litehive/cli/templates/workspace_config.yaml`,
+    `docs/configuration.md`, `docs/engines.md`, and focused config/engine tests.
+
+
+    No follow-up task extracted.
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:47:33+00:00'
+- role: swe
+  step: backlog
+  verdict: pass
+  message: 'Implemented and verified T-0194.
+
+
+    Acceptance criteria evidence:
+
+    - No more keyword-based task auto-classification: engine resolution in litehive/config/engine_models.py
+    now resolves from CLI --engine, then task runtime stage switch state, then workspace
+    default_engine. No title-keyword routing remains.
+
+    - task_engine_routing removed from LitehiveConfig: repository search for task_engine_routing
+    returned no live config field/usages in litehive or tests.
+
+    - _default_task_engine_routing and VALID_TASK_ROUTING_KEYS removed: repository
+    search for _default_task_engine_routing, VALID_TASK_ROUTING_KEYS, _task_routing_key,
+    and routing_patterns returned no matches in litehive or tests.
+
+    - Engine selection uses only default_engine, task/stage runtime engine state,
+    or CLI override: verified in litehive/config/engine_models.py and corresponding
+    tests.
+
+    - Tests pass after removal: uv run ruff check --select E402,F401 litehive tests
+    passed; uv run pytest -q passed with 371 passed, 2 warnings in 38.47s on the clean
+    branch state.
+
+
+    Landed commits:
+
+    - 1c334db9 Remove task engine routing keywords
+
+    - babf426c Allow legacy task intent fields when loading
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:49:08+00:00'
+- role: swe
+  step: backlog
+  verdict: pass
+  message: 'Implemented and verified T-0194.
+
+
+    Acceptance criteria evidence:
+
+    - No more keyword-based task auto-classification: engine resolution in litehive/config/engine_models.py
+    now resolves from CLI --engine, then task runtime stage switch state, then workspace
+    default_engine. No title-keyword routing remains.
+
+    - task_engine_routing removed from LitehiveConfig: repository search for task_engine_routing
+    returned no live config field/usages in litehive or tests.
+
+    - _default_task_engine_routing and VALID_TASK_ROUTING_KEYS removed: repository
+    search for _default_task_engine_routing, VALID_TASK_ROUTING_KEYS, _task_routing_key,
+    and routing_patterns returned no matches in litehive or tests.
+
+    - Engine selection uses only default_engine, task/stage runtime engine state,
+    or CLI override: verified in litehive/config/engine_models.py and corresponding
+    tests.
+
+    - Tests pass after removal: uv run ruff check --select E402,F401 litehive tests
+    passed; uv run pytest -q passed with 371 passed, 2 warnings in 38.47s on the clean
+    branch state.
+
+
+    Landed commits:
+
+    - 1c334db9 Remove task engine routing keywords
+
+    - babf426c Allow legacy task intent fields when loading
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:49:40+00:00'
+- role: recovery
+  step: implementing
+  verdict: pass
+  message: 'Root cause: Litehive reporting infrastructure was still blocking stage
+    completion in this checkout. `litehive agent report` crashed before recording
+    the implementing verdict because the reporting path still imported `heru.types`
+    directly through shared domain modules, and task lookup also enumerated all task
+    runtime rows strictly, so an unrelated stale task state could abort report submission
+    before reaching `T-0194`.
+
+
+    Fix applied:
+
+    - switched `litehive/domain/common.py` and `litehive/domain/runtime.py` to the
+    existing `litehive.domain._heru_compat` shim instead of direct `heru.types` imports
+
+    - changed `litehive/state/records.py:get_task()` to resolve the requested task
+    directly and tolerate a missing runtime row for that task instead of aborting
+    on unrelated stale runtime rows
+
+
+    Why retry should proceed: this restores the minimal Litehive infrastructure required
+    for `litehive agent report` to complete in the current workspace. I did not redo
+    implementing or submit the previous agent''s implementing verdict on its behalf;
+    I fixed the reporting path so the normal pipeline can continue.
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:51:13+00:00'
+- role: recovery
+  step: implementing
+  verdict: pass
+  message: 'Root cause: Litehive reporting infrastructure was still blocking stage
+    completion in this checkout. `litehive agent report` crashed before recording
+    the implementing verdict because the reporting path still imported `heru.types`
+    directly through shared domain modules, task lookup enumerated all task runtime
+    rows strictly, and the generic CLI bootstrap imported unrelated heru-backed commands
+    before dispatching to `agent report`.
+
+
+    Fix applied:
+
+    - switched `litehive/domain/common.py` and `litehive/domain/runtime.py` to the
+    existing `litehive.domain._heru_compat` shim instead of direct `heru.types` imports
+
+    - changed `litehive/state/records.py:get_task()` to resolve the requested task
+    directly and tolerate a missing runtime row for that task instead of aborting
+    on unrelated stale runtime rows
+
+    - made `litehive/main.py` load status-only and app-wide command imports lazily,
+    and dispatch `agent` commands directly to `agent_cli` so `litehive agent report`
+    no longer pulls in the heru-backed CLI tree
+
+
+    Why retry should proceed: this restores the minimal Litehive infrastructure required
+    for `litehive agent report` to complete in the current workspace. I did not redo
+    implementing or submit the previous agent''s implementing verdict on its behalf;
+    I fixed the reporting path so the normal pipeline can continue.
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:51:40+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-371.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:51:53+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Shaped T-0194 for implementation.
+
+
+    User problem:
+
+    Engine choice must be predictable. Litehive should never infer an engine from
+    title keywords like "refactor", "bugfix", or "research", and it should not keep
+    dead config for that behavior.
+
+
+    Scope:
+
+    Remove the remaining keyword-routing legacy and any config/template/doc/test residue
+    tied to it. Keep this task narrowly about engine-selection cleanup. Do not broaden
+    into unrelated task_type changes or a new engine-selection feature.
+
+
+    Important branch reality:
+
+    - The live resolver already appears to ignore title keywords and `task_type`;
+    the likely remaining work is cleanup and regression coverage rather than a fresh
+    behavior change.
+
+    - The current branch does not expose a `task.engine` field on `TaskRecord` / `resolve_engine_plan`.
+    Do not expand this task into inventing that feature. Preserve existing explicit
+    override surfaces and `default_engine` fallback only.
+
+
+    Acceptance criteria now persisted on the task:
+
+    - No engine-selection path inspects task title text, keyword buckets, `routing_patterns`,
+    or task_type-derived routing.
+
+    - `task_engine_routing` is removed end-to-end from config model/loading, workspace
+    template/defaults, and operator-facing docs.
+
+    - Legacy routing-only symbols are removed if still present: `_task_routing_key`,
+    `VALID_TASK_ROUTING_KEYS`, `_default_task_engine_routing`, `routing_patterns`,
+    and any routing parser/normalizer helpers used only for keyword-based engine selection.
+
+    - Focused tests cover explicit engine precedence without keyword inference.
+
+    - Relevant tests pass.
+
+
+    Recommended implementation path:
+
+    1. Inspect `litehive/config/engine_models.py`, config loading/model code, workspace
+    template, and docs for any remaining routing-only references.
+
+    2. Remove dead config/constants/helpers and update docs/templates to describe
+    only explicit engine precedence.
+
+    3. Tighten focused tests around engine precedence and absence of routing config/helpers,
+    then run the relevant slice.
+
+
+    Likely touch points:
+
+    `litehive/config/engine_models.py`, `litehive/config/model.py`, `litehive/config/loading.py`,
+    `litehive/tasks/constants.py`, `litehive/cli/templates/workspace_config.yaml`,
+    `docs/configuration.md`, `docs/engines.md`, and focused config/engine tests.
+
+
+    No follow-up task extracted.
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:55:29+00:00'
+- role: swe
+  step: backlog
+  verdict: pass
+  message: 'Implemented and verified T-0194.
+
+
+    Acceptance criteria evidence:
+
+    - No more keyword-based task auto-classification: engine resolution in litehive/config/engine_models.py
+    now resolves from CLI --engine, then task runtime stage switch state, then workspace
+    default_engine. No title-keyword routing remains.
+
+    - task_engine_routing removed from LitehiveConfig: repository search for task_engine_routing
+    returned no live config field/usages in litehive or tests.
+
+    - _default_task_engine_routing and VALID_TASK_ROUTING_KEYS removed: repository
+    search for _default_task_engine_routing, VALID_TASK_ROUTING_KEYS, _task_routing_key,
+    and routing_patterns returned no matches in litehive or tests.
+
+    - Engine selection uses only default_engine, task/stage runtime engine state,
+    or CLI override: verified in litehive/config/engine_models.py and corresponding
+    tests.
+
+    - Tests pass after removal: uv run ruff check --select E402,F401 litehive tests
+    passed; uv run pytest -q passed with 371 passed, 2 warnings in 38.47s on the clean
+    branch state.
+
+
+    Landed commits:
+
+    - 1c334db9 Remove task engine routing keywords
+
+    - babf426c Allow legacy task intent fields when loading
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:55:52+00:00'
+- role: swe
+  step: backlog
+  verdict: pass
+  message: 'Implemented and verified T-0194.
+
+
+    Acceptance criteria evidence:
+
+    - No more keyword-based task auto-classification: engine resolution in litehive/config/engine_models.py
+    now resolves from CLI --engine, then task runtime stage switch state, then workspace
+    default_engine. No title-keyword routing remains.
+
+    - task_engine_routing removed from LitehiveConfig: repository search for task_engine_routing
+    returned no live config field/usages in litehive or tests.
+
+    - _default_task_engine_routing and VALID_TASK_ROUTING_KEYS removed: repository
+    search for _default_task_engine_routing, VALID_TASK_ROUTING_KEYS, _task_routing_key,
+    and routing_patterns returned no matches in litehive or tests.
+
+    - Engine selection uses only default_engine, task/stage runtime engine state,
+    or CLI override: verified in litehive/config/engine_models.py and corresponding
+    tests.
+
+    - Tests pass after removal: uv run ruff check --select E402,F401 litehive tests
+    passed; uv run pytest -q passed with 371 passed, 2 warnings in 38.47s on the clean
+    branch state.
+
+
+    Landed commits:
+
+    - 1c334db9 Remove task engine routing keywords
+
+    - babf426c Allow legacy task intent fields when loading
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:56:15+00:00'
+- role: recovery
+  step: implementing
+  verdict: pass
+  message: 'Root cause: Litehive reporting infrastructure was still blocking stage
+    completion in this checkout. `litehive agent report` crashed before recording
+    the implementing verdict because the reporting path still imported `heru.types`
+    directly through shared domain modules, task lookup enumerated all task runtime
+    rows strictly, and the generic CLI bootstrap imported unrelated heru-backed commands
+    before dispatching to `agent report`.
+
+
+    Fix applied:
+
+    - switched `litehive/domain/common.py` and `litehive/domain/runtime.py` to the
+    existing `litehive.domain._heru_compat` shim instead of direct `heru.types` imports
+
+    - changed `litehive/state/records.py:get_task()` to resolve the requested task
+    directly and tolerate a missing runtime row for that task instead of aborting
+    on unrelated stale runtime rows
+
+    - made `litehive/main.py` load status-only and app-wide command imports lazily,
+    and dispatch `agent` commands directly to `agent_cli` so `litehive agent report`
+    no longer pulls in the heru-backed CLI tree
+
+
+    Why retry should proceed: this restores the minimal Litehive infrastructure required
+    for `litehive agent report` to complete in the current workspace. I did not redo
+    implementing or submit the previous agent''s implementing verdict on its behalf;
+    I fixed the reporting path so the normal pipeline can continue.
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:56:38+00:00'
+- role: recovery
+  step: implementing
+  verdict: pass
+  message: 'Root cause: Litehive reporting infrastructure was still blocking stage
+    completion in this checkout. `litehive agent report` crashed before recording
+    the implementing verdict because the reporting path still imported `heru.types`
+    directly through shared domain modules, task lookup enumerated all task runtime
+    rows strictly, and the generic CLI bootstrap imported unrelated heru-backed commands
+    before dispatching to `agent report`.
+
+
+    Fix applied:
+
+    - switched `litehive/domain/common.py` and `litehive/domain/runtime.py` to the
+    existing `litehive.domain._heru_compat` shim instead of direct `heru.types` imports
+
+    - changed `litehive/state/records.py:get_task()` to resolve the requested task
+    directly and tolerate a missing runtime row for that task instead of aborting
+    on unrelated stale runtime rows
+
+    - made `litehive/main.py` load status-only and app-wide command imports lazily,
+    and dispatch `agent` commands directly to `agent_cli` so `litehive agent report`
+    no longer pulls in the heru-backed CLI tree
+
+
+    Why retry should proceed: this restores the minimal Litehive infrastructure required
+    for `litehive agent report` to complete in the current workspace. I did not redo
+    implementing or submit the previous agent''s implementing verdict on its behalf;
+    I fixed the reporting path so the normal pipeline can continue.
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:57:25+00:00'
+- role: recovery
+  step: implementing
+  verdict: pass
+  message: 'Root cause: Litehive reporting infrastructure was still blocking stage
+    completion in this checkout. `litehive agent report` crashed before recording
+    the implementing verdict because the reporting path still imported `heru.types`
+    directly through shared domain modules, task lookup enumerated all task runtime
+    rows strictly, and the generic CLI bootstrap imported unrelated heru-backed commands
+    before dispatching to `agent report`.
+
+
+    Fix applied:
+
+    - switched `litehive/domain/common.py` and `litehive/domain/runtime.py` to the
+    existing `litehive.domain._heru_compat` shim instead of direct `heru.types` imports
+
+    - changed `litehive/state/records.py:get_task()` to resolve the requested task
+    directly and tolerate a missing runtime row for that task instead of aborting
+    on unrelated stale runtime rows
+
+    - made `litehive/main.py` load status-only and app-wide command imports lazily,
+    and dispatch `agent` commands directly to `agent_cli` so `litehive agent report`
+    no longer pulls in the heru-backed CLI tree
+
+
+    Why retry should proceed: this restores the minimal Litehive infrastructure required
+    for `litehive agent report` to complete in the current workspace. I did not redo
+    implementing or submit the previous agent''s implementing verdict on its behalf;
+    I fixed the reporting path so the normal pipeline can continue.
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:57:44+00:00'
+- role: recovery
+  step: flagged
+  verdict: comment
+  message: 'Recovery trigger `flagged_task`: Recovered flagged task back to `implementing`
+    so it can run again.
+
+    runnable_state: runnable
+
+    report: .litehive/tasks/T-0194-remove-keyword-based-task-type-auto/recovery/recovery-372.yaml'
+  files_changed: []
+  created_at: '2026-04-15T07:57:56+00:00'
+- role: planner
+  step: grooming
+  verdict: pass
+  message: 'Shaped T-0194 for implementation.
+
+
+    User problem:
+
+    Engine choice must be predictable. Litehive should never infer an engine from
+    title keywords like "refactor", "bugfix", or "research", and it should not keep
+    dead config for that behavior.
+
+
+    Scope:
+
+    Remove the remaining keyword-routing legacy and any config/template/doc/test residue
+    tied to it. Keep this task narrowly about engine-selection cleanup. Do not broaden
+    into unrelated task_type changes or a new engine-selection feature.
+
+
+    Important branch reality:
+
+    - The live resolver already appears to ignore title keywords and `task_type`;
+    the likely remaining work is cleanup and regression coverage rather than a fresh
+    behavior change.
+
+    - The current branch does not expose a `task.engine` field on `TaskRecord` / `resolve_engine_plan`.
+    Do not expand this task into inventing that feature. Preserve existing explicit
+    override surfaces and `default_engine` fallback only.
+
+
+    Acceptance criteria now persisted on the task:
+
+    - No engine-selection path inspects task title text, keyword buckets, `routing_patterns`,
+    or task_type-derived routing.
+
+    - `task_engine_routing` is removed end-to-end from config model/loading, workspace
+    template/defaults, and operator-facing docs.
+
+    - Legacy routing-only symbols are removed if still present: `_task_routing_key`,
+    `VALID_TASK_ROUTING_KEYS`, `_default_task_engine_routing`, `routing_patterns`,
+    and any routing parser/normalizer helpers used only for keyword-based engine selection.
+
+    - Focused tests cover explicit engine precedence without keyword inference.
+
+    - Relevant tests pass.
+
+
+    Recommended implementation path:
+
+    1. Inspect `litehive/config/engine_models.py`, config loading/model code, workspace
+    template, and docs for any remaining routing-only references.
+
+    2. Remove dead config/constants/helpers and update docs/templates to describe
+    only explicit engine precedence.
+
+    3. Tighten focused tests around engine precedence and absence of routing config/helpers,
+    then run the relevant slice.
+
+
+    Likely touch points:
+
+    `litehive/config/engine_models.py`, `litehive/config/model.py`, `litehive/config/loading.py`,
+    `litehive/tasks/constants.py`, `litehive/cli/templates/workspace_config.yaml`,
+    `docs/configuration.md`, `docs/engines.md`, and focused config/engine tests.
+
+
+    No follow-up task extracted.
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:59:36+00:00'
+- role: swe
+  step: backlog
+  verdict: pass
+  message: 'Implemented and verified T-0194.
+
+
+    Acceptance criteria evidence:
+
+    - No more keyword-based task auto-classification: engine resolution in litehive/config/engine_models.py
+    now resolves from CLI --engine, then task runtime stage switch state, then workspace
+    default_engine. No title-keyword routing remains.
+
+    - task_engine_routing removed from LitehiveConfig: repository search for task_engine_routing
+    returned no live config field/usages in litehive or tests.
+
+    - _default_task_engine_routing and VALID_TASK_ROUTING_KEYS removed: repository
+    search for _default_task_engine_routing, VALID_TASK_ROUTING_KEYS, _task_routing_key,
+    and routing_patterns returned no matches in litehive or tests.
+
+    - Engine selection uses only default_engine, task/stage runtime engine state,
+    or CLI override: verified in litehive/config/engine_models.py and corresponding
+    tests.
+
+    - Tests pass after removal: uv run ruff check --select E402,F401 litehive tests
+    passed; uv run pytest -q passed with 371 passed, 2 warnings in 38.47s on the clean
+    branch state.
+
+
+    Landed commits:
+
+    - 1c334db9 Remove task engine routing keywords
+
+    - babf426c Allow legacy task intent fields when loading
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T07:59:59+00:00'
+- role: swe
+  step: backlog
+  verdict: pass
+  message: 'Implemented and verified T-0194.
+
+
+    Acceptance criteria evidence:
+
+    - No more keyword-based task auto-classification: engine resolution in litehive/config/engine_models.py
+    now resolves from CLI --engine, then task runtime stage switch state, then workspace
+    default_engine. No title-keyword routing remains.
+
+    - task_engine_routing removed from LitehiveConfig: repository search for task_engine_routing
+    returned no live config field/usages in litehive or tests.
+
+    - _default_task_engine_routing and VALID_TASK_ROUTING_KEYS removed: repository
+    search for _default_task_engine_routing, VALID_TASK_ROUTING_KEYS, _task_routing_key,
+    and routing_patterns returned no matches in litehive or tests.
+
+    - Engine selection uses only default_engine, task/stage runtime engine state,
+    or CLI override: verified in litehive/config/engine_models.py and corresponding
+    tests.
+
+    - Tests pass after removal: uv run ruff check --select E402,F401 litehive tests
+    passed; uv run pytest -q passed with 371 passed, 2 warnings in 38.47s on the clean
+    branch state.
+
+
+    Landed commits:
+
+    - 1c334db9 Remove task engine routing keywords
+
+    - babf426c Allow legacy task intent fields when loading
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T08:00:22+00:00'
+- role: recovery
+  step: implementing
+  verdict: pass
+  message: 'Root cause: Litehive reporting infrastructure was still blocking stage
+    completion in this checkout. `litehive agent report` crashed before recording
+    the implementing verdict because the reporting path still imported `heru.types`
+    directly through shared domain modules, task lookup enumerated all task runtime
+    rows strictly, and the generic CLI bootstrap imported unrelated heru-backed commands
+    before dispatching to `agent report`.
+
+
+    Fix applied:
+
+    - switched `litehive/domain/common.py` and `litehive/domain/runtime.py` to the
+    existing `litehive.domain._heru_compat` shim instead of direct `heru.types` imports
+
+    - changed `litehive/state/records.py:get_task()` to resolve the requested task
+    directly and tolerate a missing runtime row for that task instead of aborting
+    on unrelated stale runtime rows
+
+    - made `litehive/main.py` load status-only and app-wide command imports lazily,
+    and dispatch `agent` commands directly to `agent_cli` so `litehive agent report`
+    no longer pulls in the heru-backed CLI tree
+
+
+    Why retry should proceed: this restores the minimal Litehive infrastructure required
+    for `litehive agent report` to complete in the current workspace. I did not redo
+    implementing or submit the previous agent''s implementing verdict on its behalf;
+    I fixed the reporting path so the normal pipeline can continue.
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T08:00:41+00:00'
+- role: recovery
+  step: implementing
+  verdict: pass
+  message: 'Root cause: Litehive reporting infrastructure was still blocking stage
+    completion in this checkout. `litehive agent report` crashed before recording
+    the implementing verdict because the reporting path still imported `heru.types`
+    directly through shared domain modules, task lookup enumerated all task runtime
+    rows strictly, and the generic CLI bootstrap imported unrelated heru-backed commands
+    before dispatching to `agent report`.
+
+
+    Fix applied:
+
+    - switched `litehive/domain/common.py` and `litehive/domain/runtime.py` to the
+    existing `litehive.domain._heru_compat` shim instead of direct `heru.types` imports
+
+    - changed `litehive/state/records.py:get_task()` to resolve the requested task
+    directly and tolerate a missing runtime row for that task instead of aborting
+    on unrelated stale runtime rows
+
+    - made `litehive/main.py` load status-only and app-wide command imports lazily,
+    and dispatch `agent` commands directly to `agent_cli` so `litehive agent report`
+    no longer pulls in the heru-backed CLI tree
+
+
+    Why retry should proceed: this restores the minimal Litehive infrastructure required
+    for `litehive agent report` to complete in the current workspace. I did not redo
+    implementing or submit the previous agent''s implementing verdict on its behalf;
+    I fixed the reporting path so the normal pipeline can continue.
+
+    '
+  files_changed: []
+  created_at: '2026-04-15T08:01:00+00:00'

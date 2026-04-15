@@ -9,13 +9,6 @@ from litehive.attention import waiting_for_you_lines
 from litehive.config.paths import workspace_runner_lock_path
 from litehive.config.workspace import resolve_workspace
 from litehive.domain.runtime import RunnerStatusState
-from litehive.observability.engine_monitoring import render_engine_monitoring_lines
-from litehive.observability.status import render_active_task_detail_lines
-from litehive.observability.status_diagnostics import (
-    collect_status_snapshot,
-    render_issue_lines,
-    status_has_problems,
-)
 
 
 def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
@@ -51,6 +44,14 @@ def _workspace_override_from_argv(argv: list[str]) -> Path | None:
 
 
 def _fast_status(argv: list[str]) -> int:
+    from litehive.observability.engine_monitoring import render_engine_monitoring_lines
+    from litehive.observability.status import render_active_task_detail_lines
+    from litehive.observability.status_diagnostics import (
+        collect_status_snapshot,
+        render_issue_lines,
+        status_has_problems,
+    )
+
     try:
         workspace = resolve_workspace(None, workspace=_workspace_override_from_argv(argv))
     except ValueError as exc:
@@ -122,6 +123,22 @@ def main() -> int:
 
     if argv and argv[0] == "status" and "--full" not in argv:
         return _fast_status(argv[1:])
+
+    if argv and argv[0] == "agent":
+        import click
+        from litehive.cli.agent_cli import agent_app
+
+        sys.argv = [sys.argv[0], *argv[1:]]
+        try:
+            result = agent_app(standalone_mode=False)
+        except click.exceptions.Exit as exc:
+            return exc.exit_code
+        except click.ClickException as exc:
+            exc.show()
+            return exc.exit_code
+        except click.Abort:
+            return 1
+        return 0 if result is None else int(result)
 
     from litehive.cli.app import main as cli_main
 

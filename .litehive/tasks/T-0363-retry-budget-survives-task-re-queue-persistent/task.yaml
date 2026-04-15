@@ -3,11 +3,8 @@ slug: retry-budget-survives-task-re-queue-persistent
 title: Retry budget survives task re-queue (persistent failure memory)
 created_at: '2026-04-13T07:24:12+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: stage_retry counters reset when a task is re-queued after failure. So a task
   that failed at testing 3 times, got re-queued, fails the same way again. Infinite
@@ -22,10 +19,7 @@ acceptance_criteria:
   outcome=wont_do if the task is fundamentally unfixable.
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0363 retry-budget-survives-task-re-queue-persistent'
 created_from: null
-upstream_origin: null
-github_origin: null

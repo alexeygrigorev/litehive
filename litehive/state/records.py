@@ -418,8 +418,13 @@ def list_tasks_state_first(
 
 
 def get_task(root: Path, task_id: str) -> TaskRecord | None:
-    for task in _load_tasks_from_disk(root, strict=True):
-        if task.id == task_id:
+    for path in _task_record_paths(root):
+        task = load_task_record_file(path)
+        if task.id != task_id:
+            continue
+        try:
+            return _load_task_runtime(root, task)
+        except TaskStateMissingError:
             return task
     return None
 

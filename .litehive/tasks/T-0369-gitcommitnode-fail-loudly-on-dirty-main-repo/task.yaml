@@ -3,11 +3,8 @@ slug: gitcommitnode-fail-loudly-on-dirty-main-repo
 title: 'GitCommitNode: fail loudly on dirty main repo instead of crashing into recovery'
 created_at: '2026-04-13T14:17:39+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'T-0368 ran through implementing/testing/accepting successfully and produced
   232 lines of real SWE work, but GitCommitNode crashed at commit stage because the
@@ -29,10 +26,7 @@ acceptance_criteria:
 - No change to the clean-main fast path
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0369 gitcommitnode-fail-loudly-on-dirty-main-repo'
 created_from: null
-upstream_origin: null
-github_origin: null
