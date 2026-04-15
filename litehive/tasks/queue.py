@@ -132,6 +132,10 @@ def _is_hook_reject_loop_flagged(task: TaskRecord) -> bool:
     return task.status == "flagged" and task.flag_reason == "hook_reject_loop"
 
 
+def _is_crash_budget_exhausted(task: TaskRecord) -> bool:
+    return task.status == "flagged" and task.flag_reason == "crash_budget_exhausted"
+
+
 def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
     from litehive.state.records import require_task
     from litehive.state.locking import workspace_lock, workspace_mutation_guard
@@ -233,7 +237,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
             mutated = True
         if mutated:
             if next_task.status == "flagged":
-                if _is_hook_reject_loop_flagged(next_task):
+                if _is_hook_reject_loop_flagged(next_task) or _is_crash_budget_exhausted(next_task):
                     if state.active_task_id == next_task.id:
                         state.active_task_id = None
                     if mutated:
@@ -287,6 +291,8 @@ def is_task_eligible_for_execution(task: TaskRecord) -> bool:
     if task.pipeline_status == "done":
         return False
     if _is_hook_reject_loop_flagged(task):
+        return False
+    if _is_crash_budget_exhausted(task):
         return False
     if task.status in {"queued", "in_progress", "flagged"}:
         return True

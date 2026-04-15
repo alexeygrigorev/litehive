@@ -93,6 +93,15 @@ def _runtime_hook_reject_fingerprint(state: TaskState) -> RuntimeHookRejectFinge
     )
 
 
+_CRASH_BUDGET_FAILED_REASONS = {
+    "crash",
+    "recovery_crashed",
+    "recovery_exhausted",
+    "recovery_budget_hit",
+    "recovery_timeout",
+}
+
+
 def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
     task_record.runtime.consecutive_same_hook_rejects = state.consecutive_same_hook_rejects
     task_record.runtime.last_hook_reject_fingerprint = _runtime_hook_reject_fingerprint(state)
@@ -131,9 +140,26 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
             task_record.pipeline_status = "flagged"
             if state.failure_context.get("reason_code") == "hook_reject_loop":
                 task_record.flag_reason = "hook_reject_loop"
+            elif state.failed_reason in _CRASH_BUDGET_FAILED_REASONS:
+                # Crash-budget circuit breaker. If the same origin stage has
+                # already crashed once and recovery failed to clear it, the
+                # second crash in the same stage means recovery can't fix the
+                # class of bug — mark terminally flagged so dequeue_next_task
+                # won't re-queue it.
+                previously_crashed = task_record.runtime.last_crashed_stage
+                origin = state.origin_stage or state.failure_context.get("raised_at_phase")
+                if previously_crashed is not None and previously_crashed == origin:
+                    task_record.flag_reason = "crash_budget_exhausted"
+                elif origin:
+                    task_record.runtime.last_crashed_stage = origin
     else:
         task_record.status = "in_progress"
         task_record.pipeline_status = _STAGE_TO_PIPELINE_STATUS.get(state.stage, task_record.pipeline_status)
+        # Non-terminal outcome — the task advanced past (or at least out of)
+        # its prior crash. Clear the crash-budget marker so a later crash in
+        # a different stage gets its own fresh recovery attempt.
+        if task_record.runtime.last_crashed_stage is not None:
+            task_record.runtime.last_crashed_stage = None
     return journal_message
 
 

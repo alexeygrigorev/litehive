@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from heru.types import (
+from litehive.domain._heru_compat import (
     ResourceLimitEvent,
     RuntimeEngineContinuation,
     SubagentRef as HeruSubagentRef,
@@ -144,6 +144,13 @@ class TaskRuntime(BaseModel):
     consecutive_same_hook_rejects: int = 0
     last_hook_reject_fingerprint: RuntimeHookRejectFingerprint | None = None
     hook_reject_recovery_invoked: bool = False
+    # Name of the origin stage that most recently emitted a Crash event. If
+    # the NEXT failure happens in the same stage, that signals "recovery
+    # didn't actually fix anything" and the crash budget is exhausted — the
+    # task must be permanently flagged rather than re-queued for another
+    # futile cycle. A non-crash pipeline outcome (progressing past the stage)
+    # clears this field.
+    last_crashed_stage: str | None = None
     last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
     self_heal_traceback_fingerprints: list[str] = Field(default_factory=list)
 
