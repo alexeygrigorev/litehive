@@ -9,65 +9,10 @@ gemini_model: null
 copilot_model: null
 claude_model: claude-sonnet-4-20250514
 claude_max_turns: 30
-pool_usage_cap: null
-pool_cost_cap: null
-engine_usage_caps: {}
-engine_budget_caps: {}
-engine_costs:
-  codex: 1
-  opencode: 1
-  gemini: 1
-  copilot: 1
-  claude: 3
-  goz: 1
 default_retry_limit: 3
 default_stage_retry_limit: 2
-execution_retry_policies:
-  claude:
-    max_retries: 2
-    backoff_seconds: 0.25
-    backoff_multiplier: 2.0
-    retry_on:
-    - timeout
-    - network
-    - service
-  codex:
-    max_retries: 2
-    backoff_seconds: 0.25
-    backoff_multiplier: 2.0
-    retry_on:
-    - timeout
-    - network
-    - service
-  opencode:
-    max_retries: 2
-    backoff_seconds: 0.25
-    backoff_multiplier: 2.0
-    retry_on:
-    - timeout
-    - network
-    - service
-  gemini:
-    max_retries: 2
-    backoff_seconds: 0.25
-    backoff_multiplier: 2.0
-    retry_on:
-    - timeout
-    - network
-    - service
-  goz:
-    max_retries: 2
-    backoff_seconds: 0.25
-    backoff_multiplier: 2.0
-    retry_on:
-    - timeout
-    - network
-    - service
 pool_stop_on_failure: false
 pool_max_tasks: null
-pool_stop_on_execution_limit: false
-pool_quota_threshold: null
-pool_budget_threshold: null
 pool_stop_on_dirty_git: false
 pool_selection_policy: dependency_aware
 runner_hooks:
@@ -83,34 +28,23 @@ runner_hooks:
   - command: uv run pytest -q
     timeout_seconds: 300
     reject_on_failure: true
-    description: "Run full suite before QA; reject if > 5 minutes"
-    instructions_on_failure: |
-      The full test suite either failed OR exceeded the 5-minute budget.
-
-      If the suite TIMED OUT (exit code 124):
-      - The suite used to run in ~2 minutes; something slowed it down drastically.
-      - Run `uv run pytest -q --durations=20` to find the slowest tests.
-      - Likely culprits: tests doing real subprocess calls, real SQLite file I/O,
-        network calls, `time.sleep`, or expensive fixtures.
-      - The T-0291 SQLite migration is a recent change — suspect fixtures that
-        build a new workspace/DB per test. Share a session-scoped DB where safe.
-      - Do NOT mark tests with `@pytest.mark.skip` or delete tests to pass this hook.
-      - Do NOT raise the 300s budget — fix the root cause.
-
-      If the suite FAILED (non-zero exit, not timeout):
-      - Read the pytest stdout above for the failing tests and fix them.
-      - If the failures are unrelated to your change, still fix them —
-        you cannot leave the tree in a broken state.
-
-      After fixing, re-run `uv run pytest -q` locally and confirm it completes
-      in under 5 minutes before submitting.
+    description: Run full suite before QA; reject if > 5 minutes
+    instructions_on_failure: "The full test suite either failed OR exceeded the 5-minute\
+      \ budget.\n\nIf the suite TIMED OUT (exit code 124):\n- The suite used to run\
+      \ in ~2 minutes; something slowed it down drastically.\n- Run `uv run pytest\
+      \ -q --durations=20` to find the slowest tests.\n- Likely culprits: tests doing\
+      \ real subprocess calls, real SQLite file I/O,\n  network calls, `time.sleep`,\
+      \ or expensive fixtures.\n- The T-0291 SQLite migration is a recent change \u2014\
+      \ suspect fixtures that\n  build a new workspace/DB per test. Share a session-scoped\
+      \ DB where safe.\n- Do NOT mark tests with `@pytest.mark.skip` or delete tests\
+      \ to pass this hook.\n- Do NOT raise the 300s budget \u2014 fix the root cause.\n\
+      \nIf the suite FAILED (non-zero exit, not timeout):\n- Read the pytest stdout\
+      \ above for the failing tests and fix them.\n- If the failures are unrelated\
+      \ to your change, still fix them \u2014\n  you cannot leave the tree in a broken\
+      \ state.\n\nAfter fixing, re-run `uv run pytest -q` locally and confirm it completes\n\
+      in under 5 minutes before submitting.\n"
 subagent_inactivity_timeout_seconds: 360.0
 inactivity_timeout_seconds: null
-subagent_resource_limits:
-  enabled: false
-  memory_mb: null
-  cpu_count: null
-  process_limit: null
 external_engine_sandbox:
   enabled: true
   backend: bubblewrap
@@ -205,8 +139,6 @@ engine_preference:
 - copilot
 - goz
 agent_startup_guidance: {}
-parallel_capacity: 1
-parallel_integration_check: null
 auto_commit: true
 task_mode_name: tasks
 implementation_mode_name: implementation

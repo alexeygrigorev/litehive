@@ -193,7 +193,7 @@ class AgentNode(Node):
             nudged["nudge"] = True
             nudged["nudge_message"] = (
                 "You finished your last turn without submitting a verdict via "
-                "`litehive report --verdict <pass|reject|blocked>`. Please "
+                "`litehive agent report --verdict <pass|reject|blocked>`. Please "
                 "review your work and submit your verdict now."
             )
             return nudged

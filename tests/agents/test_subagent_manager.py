@@ -60,6 +60,7 @@ def test_subagent_manager_passes_workspace_root_in_extra_env(
     assert captured["cwd"] == execution_root
     assert captured["extra_env"]["LITEHIVE_TASK_ID"] == task.id
     assert captured["extra_env"]["LITEHIVE_WORKSPACE_ROOT"] == str(tmp_path)
+    assert captured["extra_env"]["LITEHIVE_STAGE"] == "implementing"
 
 
 def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
@@ -298,4 +299,3 @@ def test_subagent_manager_prefers_bound_instance_run_override_over_inherited_run
 
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
-

@@ -176,6 +176,7 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
             worktree = task_worktree_path(self.workspace_root, task)
             worktree.parent.mkdir(parents=True, exist_ok=True)
             branch = task_worktree_branch(task)
+            self._prune_stale_worktrees(self.workspace_root)
             created = subprocess.run(
                 ["git", "worktree", "add", "--force", "-B", branch, str(worktree), "HEAD"],
                 cwd=str(self.workspace_root),
@@ -260,6 +261,17 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
             text=True,
         )
         return proc.returncode == 0 and proc.stdout.strip() == "true"
+
+    @staticmethod
+    def _prune_stale_worktrees(root: Path) -> None:
+        proc = subprocess.run(
+            ["git", "worktree", "prune", "--expire", "now"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            raise GitError(f"git worktree prune failed: {proc.stderr.strip() or proc.stdout.strip()}")
 
     @staticmethod
     def _is_dirty(worktree: Path) -> bool:

@@ -112,6 +112,7 @@ class SubagentManager(SessionMixin):
                 "LITEHIVE_TASK_ID": task.id,
                 "LITEHIVE_WORKSPACE_ROOT": str(self.root),
                 "LITEHIVE_AGENT_ROLE": role,
+                "LITEHIVE_STAGE": self._report_step_for_task(task),
             }
             if supports_live_execution(live_execution_probe):
                 run_live_callable = effective_engine_callable(execution_engine, "run_live")

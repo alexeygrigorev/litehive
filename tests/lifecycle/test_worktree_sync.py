@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -118,3 +119,43 @@ def test_worktree_sync_skips_dirty_worktrees(tmp_path: Path) -> None:
     assert (worktree / "app.txt").read_text(encoding="utf-8") == "base\nlocal draft\n"
     assert _git_ok(worktree, "status", "--porcelain") == "M app.txt"
     assert _git_ok(worktree, "stash", "list") == ""
+
+
+def test_worktree_sync_prunes_stale_git_worktree_metadata_before_recreate(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _git_ok(workspace, "init", "-b", "main")
+    _configure_repo(workspace)
+    ensure_workspace(workspace)
+
+    (workspace / "app.txt").write_text("base\n", encoding="utf-8")
+    _git_ok(workspace, "add", "app.txt")
+    _git_ok(workspace, "commit", "-m", "initial")
+
+    task = create_task(workspace, title="QA verify venv symlink")
+    worktree = worktree_root(workspace) / f"{task.id}-{task.slug}"
+    worktree.parent.mkdir(parents=True, exist_ok=True)
+    _git_ok(
+        workspace,
+        "worktree",
+        "add",
+        "--force",
+        "-B",
+        task_worktree_branch(task),
+        str(worktree),
+        "HEAD",
+    )
+    task.runtime.git.worktree_path = None
+    save_task(workspace, task)
+
+    shutil.rmtree(worktree)
+
+    node = GitWorktreeSyncNode(
+        workspace_root=workspace,
+        worktree_resolver=lambda state: worktree,
+    )
+    changed = node._sync(_state(task.id))
+
+    assert changed is True
+    assert worktree.exists()
+    assert _git_ok(worktree, "branch", "--show-current") == task_worktree_branch(task)

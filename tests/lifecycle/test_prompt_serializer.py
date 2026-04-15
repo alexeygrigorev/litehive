@@ -195,6 +195,7 @@ def test_serialize_includes_nudge_message_when_present(workspace: Path) -> None:
     assert "this is a nudge" in text
     assert "without a verdict submission" in text
     assert "Please review your work and submit your verdict now." in text
+    assert "litehive agent report --verdict <pass|reject|blocked>" in text
 
 
 def test_implementing_retry_thread_keeps_only_grooming_and_dedups_last_rejection_by_source_and_reason(

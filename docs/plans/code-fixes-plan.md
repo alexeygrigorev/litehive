@@ -238,6 +238,103 @@ Concrete actions:
 - Remove remaining user-facing `v2` wording while touching CLI help so the new
   vocabulary lands together instead of mixing old and new labels.
 
+## Vocabulary Open Questions from Review
+
+Question:
+
+- The current draft still contains too many alternatives, unclear distinctions,
+  and unexplained domain words
+- The vocabulary doc should choose one name per concept and explain why
+
+Answer:
+
+- The review comments point to a few concrete gaps in the current draft:
+  - some entries still say `X or Y` instead of selecting one canonical term
+  - some domain words are introduced without defining what the underlying
+    object is, especially `record`, `runtime`, `engine`, `subagent`,
+    `transcript`, `timeline`, and `journal`
+  - `stage`, `phase`, `state`, and `pipeline` are still too easy to confuse
+  - verdict terminology is still unsettled, especially whether `pass` should
+    become `accept`, whether `blocked` is distinct from `reject`, and whether
+    `comment` belongs in the verdict enum at all
+  - the current doc lists enum names but does not yet show the actual canonical
+    values and short descriptions in a consistent format
+
+Concrete actions:
+
+- Revise `docs/vocabulary.md` so every concept chooses exactly one canonical
+  term. Remove unresolved `or` wording such as:
+  - `CoreStage` or `TaskStage`
+  - `DiscussionEntry` or `TaskDiscussionComment`
+  - other places where multiple alternatives are still shown
+- Add a dedicated section defining the relationship between:
+  - `engine`
+  - `subagent`
+  - `subagent run`
+  - `session`
+  so the execution model is explicit
+- Add a dedicated section defining the relationship between:
+  - `task`
+  - `task record`
+  - `task runtime`
+  - lifecycle `TaskState` / `PipelineState`
+  so `record`, `runtime`, and `state` stop overlapping
+- Add a dedicated section explaining the lifecycle naming stack end-to-end:
+  - `task stage`
+  - `lifecycle phase`
+  - `pipeline state`
+  - `lifecycle node`
+  and explicitly decide which of those should appear in CLI output
+- Standardize enum presentation in `docs/vocabulary.md`:
+  - show one canonical enum name
+  - list actual values
+  - add a one-line description for each value where ambiguity exists
+- Review whether `pipeline` and `lifecycle` should both remain public-facing.
+  If not, pick one umbrella word and demote the other to implementation-only
+  language.
+- Review verdict vocabulary and make a single explicit decision on:
+  - `pass` vs `accept`
+  - whether `blocked` is a real verdict distinct from `reject`
+  - whether `comment` is a verdict, an entry type, or a separate field
+- Review whether `discussion thread` is the right term at all for the task
+  append-only history. Compare alternatives such as:
+  - `task activity`
+  - `task feed`
+  - `task timeline`
+  - `task entries`
+- Define `FailureFingerprint` more concretely or rename it if another term is
+  clearer, for example:
+  - `FailureSignature`
+  - `FailureKey`
+  - `FailureClassifier`
+- Revisit artifact vocabulary:
+  - if `transcript` is too audio-oriented, choose a clearer term
+  - define exactly what `timeline` means and whether it should instead be
+    `event stream`
+  - define how `journal` differs from the task-entry history
+
+## Selected Vocabulary Decisions
+
+These are now chosen in `docs/vocabulary.md` and should be treated as the
+current target vocabulary unless explicitly revised again.
+
+- Use `TaskStage` for user-facing major work steps.
+- Use `StagePhase` for `before` / `active` / `after`.
+- Use `PipelineState` for the full machine-state enum.
+- Use `LifecycleNode` for the executable implementation object.
+- Use `LifecycleEvent` for transition-triggering event classes.
+- Use `RecoveryTrigger` and `trigger_event_kind` for persisted recovery-entry
+  context.
+- Use `TaskActivity` and `ActivityEntry` instead of `discussion thread` and
+  `discussion entry`.
+- Use `StageVerdict` with values `accept`, `reject`, and `blocked`.
+- Treat `comment` as an entry type or message, not a stage verdict.
+- Use `TaskCloseOutcome` for explicit close dispositions.
+- Use `ExecutionTrace` instead of `transcript` in new naming.
+- Use `EventStream` instead of `timeline` in new naming.
+- Use `LifecycleJournal` for machine-generated transition history and keep it
+  distinct from task activity.
+
 ## engine_models.py feedback
 
 Question:

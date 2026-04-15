@@ -45,6 +45,25 @@ def _current_role() -> str | None:
     return os.environ.get("LITEHIVE_AGENT_ROLE")
 
 
+def _current_stage() -> str | None:
+    stage = os.environ.get("LITEHIVE_STAGE")
+    return stage.strip() if stage else None
+
+
+def _resolve_report_step(*, explicit_step: str | None, task, pipeline_stage: str | None) -> str:
+    if explicit_step:
+        return explicit_step
+    if pipeline_stage:
+        return pipeline_stage
+    env_stage = _current_stage()
+    if env_stage:
+        return env_stage
+    runtime_stage = task.runtime.current_stage.step
+    if runtime_stage:
+        return runtime_stage
+    return task.pipeline_status
+
+
 def block_if_agent() -> None:
     """Call at the top of any command agents should not use."""
     if _current_role() is not None:
@@ -99,9 +118,14 @@ def agent_report_command(
 
     try:
         pipeline_state = SqlitePersistence(root).load(tid)
-        actual_step = step or pipeline_state.stage
+        pipeline_stage = pipeline_state.stage
     except TaskNotFound:
-        actual_step = step or task.pipeline_status
+        pipeline_stage = None
+    actual_step = _resolve_report_step(
+        explicit_step=step,
+        task=task,
+        pipeline_stage=pipeline_stage,
+    )
     comment = TaskThreadComment(
         role=agent_role,
         step=actual_step,
