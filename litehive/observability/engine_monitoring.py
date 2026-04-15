@@ -22,11 +22,34 @@ def engine_monitoring_file(root: Path) -> Path:
     return root / ".litehive" / "engine-monitoring.yaml"
 
 
+_LEGACY_ENGINE_LIMIT_KIND_MAP = {
+    # Earlier heru versions emitted "capacity" for provider rate-limit hits.
+    # The current literal uses "rate" / "quota" / "budget" / "resource" /
+    # "unknown"; rewrite legacy values to the closest match rather than
+    # crashing every daemon iteration with a pydantic ValidationError.
+    "capacity": "rate",
+}
+
+
+def _normalize_legacy_engine_monitoring(data: dict) -> None:
+    engines = data.get("engines")
+    if not isinstance(engines, dict):
+        return
+    for engine_name, entry in engines.items():
+        if not isinstance(entry, dict):
+            continue
+        kind = entry.get("last_limit_kind")
+        if isinstance(kind, str) and kind in _LEGACY_ENGINE_LIMIT_KIND_MAP:
+            entry["last_limit_kind"] = _LEGACY_ENGINE_LIMIT_KIND_MAP[kind]
+
+
 def load_engine_monitoring(root: Path) -> WorkspaceEngineMonitoring:
     path = engine_monitoring_file(root)
     if not path.exists():
         return WorkspaceEngineMonitoring()
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if isinstance(data, dict):
+        _normalize_legacy_engine_monitoring(data)
     return WorkspaceEngineMonitoring(**data)
 
 
