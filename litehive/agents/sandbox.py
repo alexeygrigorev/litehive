@@ -26,6 +26,32 @@ from heru.engine_detection import (
 from litehive.domain.runtime import ResourceLimitEvent
 
 
+def _sanitize_path_env(raw_path: str) -> str:
+    """Drop PATH segments that point at ephemeral codex arg0 dirs.
+
+    Codex injects a randomly-named directory under ``$CODEX_HOME/tmp/arg0``
+    into PATH when it starts, and removes it at exit. If the litehive daemon
+    inherited a PATH from a shell where codex had previously run, it may
+    carry a stale arg0 entry whose target no longer exists. Passing that
+    through to a fresh codex process inside the sandbox makes codex emit
+    "WARNING: proceeding, even though we could not update PATH: Read-only
+    file system" and in older codex builds bail out entirely.
+    """
+
+    if not raw_path:
+        return raw_path
+    kept: list[str] = []
+    for segment in raw_path.split(":"):
+        if not segment:
+            continue
+        if "codex-arg0" in segment:
+            continue
+        if "codex-linux-" in segment and segment.endswith("/path"):
+            continue
+        kept.append(segment)
+    return ":".join(kept)
+
+
 @dataclass(frozen=True, slots=True)
 class SandboxPolicySummary:
     enabled: bool
@@ -248,7 +274,9 @@ class SandboxLauncher:
         git_plan = self._prepare_git_filesystem(role)
         extra_ro_binds = self._resolved_extra_ro_binds(engine_name, policy)
         if git_plan.prepend_path:
-            existing_path = invocation.env.get("PATH", os.environ.get("PATH", ""))
+            existing_path = _sanitize_path_env(
+                invocation.env.get("PATH", os.environ.get("PATH", ""))
+            )
             segments = [*git_plan.prepend_path]
             if existing_path:
                 segments.append(existing_path)
@@ -399,6 +427,8 @@ class SandboxLauncher:
             if builtin_var not in allowed_env:
                 value = invocation.env.get(builtin_var, os.environ.get(builtin_var, ""))
                 if value:
+                    if builtin_var == "PATH":
+                        value = _sanitize_path_env(value)
                     allowed_env[builtin_var] = value
         # Policy-hardcoded env values (e.g. CODEX_HOME) override everything.
         if policy is not None:
