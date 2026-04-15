@@ -127,7 +127,7 @@ Answer:
 Concrete actions:
 
 - Add canonical domain types for the major vocabularies currently described in
-  `docs/vocabulary.md`, including:
+  `docs/domain.md`, including:
   - `TaskStage`
   - `LifecyclePhase`
   - `PipelineStatus`
@@ -262,7 +262,7 @@ Answer:
 
 Concrete actions:
 
-- Revise `docs/vocabulary.md` so every concept chooses exactly one canonical
+- Revise `docs/domain.md` so every concept chooses exactly one canonical
   term. Remove unresolved `or` wording such as:
   - `CoreStage` or `TaskStage`
   - `DiscussionEntry` or `TaskDiscussionComment`
@@ -285,7 +285,7 @@ Concrete actions:
   - `pipeline state`
   - `lifecycle node`
   and explicitly decide which of those should appear in CLI output
-- Standardize enum presentation in `docs/vocabulary.md`:
+- Standardize enum presentation in `docs/domain.md`:
   - show one canonical enum name
   - list actual values
   - add a one-line description for each value where ambiguity exists
@@ -315,7 +315,7 @@ Concrete actions:
 
 ## Selected Vocabulary Decisions
 
-These are now chosen in `docs/vocabulary.md` and should be treated as the
+These are now chosen in `docs/domain.md` and should be treated as the
 current target vocabulary unless explicitly revised again.
 
 - Use `TaskStage` for user-facing major work steps.
@@ -363,6 +363,25 @@ Follow-up actions:
   - whether `TaskStatus` should collapse further
   - whether `StagePhase` should exist at all
   - whether `RecoveryResult` is the final name
+
+## Domain Simplification Decisions
+
+These simplifications were chosen to make the target model easier to understand
+without adding new behavior.
+
+- Merge `RecoveryDiagnostics` into `FailureDiagnostics`.
+  Reason: recovery and reporting were carrying near-duplicate structured
+  failure data.
+- Split `TaskRuntime` into `PipelineRuntime` and `ExecutionRuntime`, then keep
+  `TaskRuntime` as the container holding those two slices.
+  Reason: one runtime record had grown to mix pipeline position and retry state
+  with subagent execution and resumability details.
+- Remove the dedicated `SessionToken` wrapper type and use a plain string for
+  engine continuation tokens.
+  Reason: a one-field wrapper added vocabulary without adding domain meaning.
+- Remove `files_changed` from the target `StageReport`.
+  Reason: changed files are derivable from git and do not need to be part of
+  the core report model.
 
 ## engine_models.py feedback
 
@@ -640,7 +659,7 @@ Concrete actions:
 - Migrate task discussion / verdict storage from YAML comments to SQLite, then
   update agent report resolution to read from SQLite instead of
   `comments.yaml`.
-- Add `docs/vocabulary.md` defining the canonical terms for:
+- Add `docs/domain.md` defining the canonical terms for:
   - task comments / discussion / verdict entries
   - report vs thread/comment entry
   - subagent session / transcript / timeline / continuation
@@ -906,7 +925,7 @@ Concrete actions:
     and `switch`
   - remove duplicate behaviors where one command can delegate to another
   - document the differences in help text
-- Add queue/task status vocabulary to `docs/vocabulary.md`, including:
+- Add queue/task status vocabulary to `docs/domain.md`, including:
   - `interrupted`
   - `parked`
   - `flagged`

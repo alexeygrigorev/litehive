@@ -32,10 +32,10 @@ linked pages as reference once your workspace is running.
   merge-conflict handling.
 - [workspace-layout.md](workspace-layout.md): what lives under `.litehive/` and
   what is tracked versus ignored.
-- [vocabulary.md](vocabulary.md): canonical terms for stages, statuses,
-  reports, discussion entries, recovery, and runtime artifacts.
-- [vocabulary_specs.md](vocabulary_specs.md): the general template and review
-  rules for writing vocabulary documents.
+- [domain.md](domain.md): the target Litehive domain model and canonical terms
+  for states, reports, recovery, and runtime artifacts.
+- [domain.spec.md](domain.spec.md): the general template and review
+  rules for writing domain documents.
 - [state-machine.md](state-machine.md): the exhaustive transition reference used
   by the codebase.
 - [contributing-back.md](contributing-back.md): filing upstream Litehive work
