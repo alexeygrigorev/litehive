@@ -26,6 +26,51 @@ from heru.engine_detection import (
 from litehive.domain.runtime import ResourceLimitEvent
 
 
+def _forced_engine_rw_state_dirs(
+    engine_name: str,
+    policy: "ExternalEngineSandboxPolicy | None",
+) -> frozenset[Path]:
+    """State dirs that an engine must be able to write into.
+
+    Each external engine keeps session/cache state under a known directory
+    (codex → ``$CODEX_HOME``, claude → ``~/.claude``, etc.). If the workspace
+    sandbox policy accidentally classifies that dir as read-only, the engine
+    crashes on startup with "Read-only file system" trying to record its
+    session rollout. This helper returns the absolute paths that the
+    SandboxLauncher must always mount read-write for the given engine, so
+    we can promote them out of ``extra_ro_binds`` and into ``extra_rw_binds``
+    regardless of how the workspace YAML is shaped.
+    """
+
+    setenv = {} if policy is None else dict(policy.setenv)
+    home_override = setenv.get("HOME")
+    home = Path(home_override).expanduser() if home_override else Path.home()
+
+    candidates: list[Path] = []
+    if engine_name == "codex":
+        codex_home = setenv.get("CODEX_HOME")
+        candidates.append(Path(codex_home).expanduser() if codex_home else home / ".codex")
+    elif engine_name == "claude":
+        candidates.append(home / ".claude")
+    elif engine_name == "copilot":
+        candidates.append(home / ".copilot")
+    elif engine_name == "gemini":
+        candidates.append(home / ".gemini")
+    elif engine_name == "opencode":
+        candidates.append(home / ".config" / "opencode")
+    elif engine_name == "goz":
+        candidates.append(home / ".goz")
+        candidates.append(home / ".config" / "goz")
+
+    resolved: set[Path] = set()
+    for candidate in candidates:
+        try:
+            resolved.add(candidate.resolve())
+        except OSError:
+            continue
+    return frozenset(resolved)
+
+
 def _sanitize_path_env(raw_path: str) -> str:
     """Drop PATH segments that point at ephemeral codex arg0 dirs.
 
@@ -461,6 +506,7 @@ class SandboxLauncher:
         engine_name: str,
         policy: ExternalEngineSandboxPolicy | None,
     ) -> tuple[Path, ...]:
+        forced_rw = _forced_engine_rw_state_dirs(engine_name, policy)
         resolved_paths: list[Path] = []
         for raw_path in () if policy is None else policy.extra_ro_binds:
             host_path = Path(raw_path).expanduser()
@@ -469,7 +515,14 @@ class SandboxLauncher:
                     f"Sandbox policy for engine '{engine_name}' requires read-only bind path "
                     f"'{host_path}', but it does not exist on the host."
                 )
-            resolved_paths.append(host_path.resolve())
+            resolved = host_path.resolve()
+            if resolved in forced_rw:
+                # Engine state dirs need write access (codex sessions, etc.) —
+                # if the workspace policy lists them under extra_ro_binds we
+                # promote them to extra_rw_binds in _resolved_extra_rw_binds
+                # rather than mounting them read-only here.
+                continue
+            resolved_paths.append(resolved)
         return tuple(resolved_paths)
 
     @staticmethod
@@ -477,7 +530,9 @@ class SandboxLauncher:
         engine_name: str,
         policy: ExternalEngineSandboxPolicy | None,
     ) -> tuple[Path, ...]:
+        forced_rw = _forced_engine_rw_state_dirs(engine_name, policy)
         resolved_paths: list[Path] = []
+        seen: set[Path] = set()
         for raw_path in () if policy is None else policy.extra_rw_binds:
             host_path = Path(raw_path).expanduser()
             if not host_path.exists():
@@ -485,7 +540,17 @@ class SandboxLauncher:
                     f"Sandbox policy for engine '{engine_name}' requires read-write bind path "
                     f"'{host_path}', but it does not exist on the host."
                 )
-            resolved_paths.append(host_path.resolve())
+            resolved = host_path.resolve()
+            if resolved not in seen:
+                resolved_paths.append(resolved)
+                seen.add(resolved)
+        # Promote any forced-rw engine state dirs that the workspace policy
+        # accidentally classified as ro (or omitted entirely) — e.g. codex
+        # needs write access to $CODEX_HOME/sessions to record rollouts.
+        for path in forced_rw:
+            if path.exists() and path not in seen:
+                resolved_paths.append(path)
+                seen.add(path)
         return tuple(resolved_paths)
 
     def classify_resource_limit_event(
