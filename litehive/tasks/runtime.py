@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-from heru.types import SubagentRef
 from litehive.domain.common import utcnow
 from litehive.domain.reports import StageReport
 from litehive.domain.runtime import (
@@ -11,6 +10,7 @@ from litehive.domain.runtime import (
     RuntimeEngineContinuation,
     RuntimeEngineSwitch,
     RuntimeStageState,
+    SubagentRef,
     RuntimeSubagentState,
     TaskOutcomeState,
 )

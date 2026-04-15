@@ -9,6 +9,7 @@ from litehive.state.records import (
     TaskStateMissingError,
     create_task,
     get_task,
+    list_tasks,
     load_task_record_file,
     save_task,
     save_task_runtime,
@@ -101,6 +102,35 @@ def test_get_task_requires_sqlite_runtime_state_row(tmp_path: Path) -> None:
 
     with pytest.raises(TaskStateMissingError, match="missing its SQLite runtime state row"):
         get_task(tmp_path, "T-0001")
+
+
+def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    present = create_task(tmp_path, title="Has runtime")
+
+    task_dir = tmp_path / ".litehive" / "tasks" / "T-0002-missing-runtime"
+    task_dir.mkdir(parents=True)
+    (task_dir / "task.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "id": "T-0002",
+                "slug": "missing-runtime",
+                "title": "Missing runtime row",
+                "pipeline_mode": "full",
+                "priority": "medium",
+                "git": {
+                    "auto_commit": True,
+                    "commit_message": "missing runtime row",
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    tasks = list_tasks(tmp_path, include_runtime=False)
+
+    assert [task.id for task in tasks] == [present.id, "T-0002"]
 
 
 def test_load_task_record_file_ignores_legacy_intent_fields(tmp_path: Path) -> None:

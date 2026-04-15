@@ -120,6 +120,9 @@ def main() -> int:
         if cmd != "agent" and not _agent_command_is_allowed(agent_role, argv):
             print("You are not authorized to perform this command.")
             return 1
+        from litehive.cli.app import main as cli_main
+
+        return cli_main()
 
     if argv and argv[0] == "status" and "--full" not in argv:
         return _fast_status(argv[1:])
@@ -131,6 +134,38 @@ def main() -> int:
         sys.argv = [sys.argv[0], *argv[1:]]
         try:
             result = agent_app(standalone_mode=False)
+        except click.exceptions.Exit as exc:
+            return exc.exit_code
+        except click.ClickException as exc:
+            exc.show()
+            return exc.exit_code
+        except click.Abort:
+            return 1
+        return 0 if result is None else int(result)
+
+    if argv and argv[0] == "task":
+        import click
+        from litehive.cli.task_cli import app as task_app
+
+        sys.argv = [sys.argv[0], *argv[1:]]
+        try:
+            result = task_app(standalone_mode=False)
+        except click.exceptions.Exit as exc:
+            return exc.exit_code
+        except click.ClickException as exc:
+            exc.show()
+            return exc.exit_code
+        except click.Abort:
+            return 1
+        return 0 if result is None else int(result)
+
+    if argv and argv[0] == "pipeline":
+        import click
+        from litehive.cli.pipeline_cli import app as pipeline_app
+
+        sys.argv = [sys.argv[0], *argv[1:]]
+        try:
+            result = pipeline_app(standalone_mode=False)
         except click.exceptions.Exit as exc:
             return exc.exit_code
         except click.ClickException as exc:

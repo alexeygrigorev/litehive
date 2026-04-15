@@ -83,7 +83,7 @@ def archive_done_tasks(
     on_skip: Callable[[str, Exception], None] | None = None,
 ) -> list[TaskRecord]:
     """Move all done tasks to the archive directory."""
-    tasks = list_tasks(root, include_runtime=False)
+    tasks = list_tasks(root, include_runtime=True, strict=False)
     archived: list[TaskRecord] = []
     for task in tasks:
         if task.status == "done" and task.pipeline_status == "done":

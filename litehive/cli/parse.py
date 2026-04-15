@@ -1,4 +1,7 @@
-from heru import ENGINE_CHOICES
+try:
+    from heru import ENGINE_CHOICES
+except ModuleNotFoundError:  # pragma: no cover - exercised in heru-less workspaces
+    ENGINE_CHOICES = ("claude", "codex", "copilot", "gemini", "goz", "opencode")
 from litehive.tasks.constants import VALID_TASK_TYPES
 from litehive.tasks.normalization import (
     normalize_acceptance_criteria,
@@ -132,5 +135,4 @@ def parse_text_list_option(
     if not normalized:
         raise ValueError(f"{option_name} must not be empty")
     return normalized
-
 

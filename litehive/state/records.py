@@ -367,12 +367,18 @@ def _task_record_paths(root: Path) -> list[Path]:
     return paths
 
 
-def _load_tasks_from_disk(root: Path, *, strict: bool) -> list[TaskRecord]:
+def _load_tasks_from_disk(
+    root: Path,
+    *,
+    include_runtime: bool,
+    strict: bool,
+) -> list[TaskRecord]:
     records: list[TaskRecord] = []
     for path in _task_record_paths(root):
         try:
             task = load_task_record_file(path)
-            task = _load_task_runtime(root, task)
+            if include_runtime:
+                task = _load_task_runtime(root, task)
         except (TaskStateMissingError, ValueError):
             if strict:
                 raise
@@ -387,7 +393,7 @@ def list_tasks(
     include_runtime: bool = True,
     strict: bool = True,
 ) -> list[TaskRecord]:
-    return _load_tasks_from_disk(root, strict=strict)
+    return _load_tasks_from_disk(root, include_runtime=include_runtime, strict=strict)
 
 
 def list_tasks_state_first(
@@ -396,7 +402,10 @@ def list_tasks_state_first(
     state: WorkspaceState | None = None,
     include_runtime: bool = False,
 ) -> list[TaskRecord]:
-    task_by_id = {task.id: task for task in _load_tasks_from_disk(root, strict=True)}
+    task_by_id = {
+        task.id: task
+        for task in _load_tasks_from_disk(root, include_runtime=include_runtime, strict=True)
+    }
 
     workspace_state = load_state(root) if state is None else state
     ordered_ids: list[str] = []
@@ -418,6 +427,16 @@ def list_tasks_state_first(
 
 
 def get_task(root: Path, task_id: str) -> TaskRecord | None:
+    for path in _task_record_paths(root):
+        task = load_task_record_file(path)
+        if task.id != task_id:
+            continue
+        return _load_task_runtime(root, task)
+    return None
+
+
+def get_task_record(root: Path, task_id: str) -> TaskRecord | None:
+    """Return the task record, tolerating missing runtime rows."""
     for path in _task_record_paths(root):
         task = load_task_record_file(path)
         if task.id != task_id:

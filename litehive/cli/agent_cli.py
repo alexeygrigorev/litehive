@@ -19,7 +19,7 @@ from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 
 from litehive.config.workspace import resolve_workspace
 from litehive.domain.reports import TaskThreadComment
-from litehive.state.records import get_task
+from litehive.state.records import get_task_record
 from litehive.state.persist import load_state
 from litehive.tasks.reports import append_thread_comment
 
@@ -92,7 +92,7 @@ def agent_report_command(
     if not tid:
         print("report failed: no task id")
         raise typer.Exit(1)
-    task = get_task(root, tid)
+    task = get_task_record(root, tid)
     if task is None:
         print(f"report failed: task {tid} not found")
         raise typer.Exit(1)

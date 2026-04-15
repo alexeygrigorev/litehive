@@ -74,3 +74,43 @@ def test_main_blocks_non_recovery_diagnostic_commands(
 
     assert exit_code == 1
     assert "You are not authorized to perform this command." in capsys.readouterr().out
+
+
+def test_main_dispatches_task_subcommands_without_full_root_app(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_task_app(*, standalone_mode: bool = False):
+        captured["argv"] = list(sys.argv)
+        captured["standalone_mode"] = standalone_mode
+        return 5
+
+    monkeypatch.setattr("litehive.cli.task_cli.app", fake_task_app)
+    monkeypatch.setattr(sys, "argv", ["litehive", "task", "show", "T-0001"])
+
+    exit_code = main_module.main()
+
+    assert exit_code == 5
+    assert captured["argv"] == ["litehive", "show", "T-0001"]
+    assert captured["standalone_mode"] is False
+
+
+def test_main_dispatches_pipeline_subcommands_without_full_root_app(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_pipeline_app(*, standalone_mode: bool = False):
+        captured["argv"] = list(sys.argv)
+        captured["standalone_mode"] = standalone_mode
+        return 6
+
+    monkeypatch.setattr("litehive.cli.pipeline_cli.app", fake_pipeline_app)
+    monkeypatch.setattr(sys, "argv", ["litehive", "pipeline", "journal", "T-0001"])
+
+    exit_code = main_module.main()
+
+    assert exit_code == 6
+    assert captured["argv"] == ["litehive", "journal", "T-0001"]
+    assert captured["standalone_mode"] is False

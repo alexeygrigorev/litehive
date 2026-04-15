@@ -630,7 +630,7 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
     current_state = state or load_state(root)
     if current_state.active_task_id is not None:
         markers.setdefault(current_state.active_task_id, []).append("workspace.active_task_id")
-    for task in list_tasks(root):
+    for task in list_tasks(root, strict=False):
         if task.runtime.execution_status == "running":
             markers.setdefault(task.id, []).append("runtime.execution_status=running")
     return markers

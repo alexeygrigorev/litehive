@@ -4,7 +4,14 @@ import os
 from pathlib import Path
 
 import pytest
-import heru.quota.codex_quota as _codex_quota_mod
+
+try:
+    import heru.quota.codex_quota as _codex_quota_mod
+except ModuleNotFoundError:  # pragma: no cover - exercised in heru-less checkouts
+    from heru_test_stub import install_heru_stub
+
+    install_heru_stub()
+    import heru.quota.codex_quota as _codex_quota_mod
 
 
 # Skip fsync in tests — saves ~70% of file write time

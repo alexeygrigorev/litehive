@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import yaml
+
 from litehive.config.workspace import ensure_workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, require_task, save_task
@@ -80,3 +82,33 @@ def test_update_task_abandons_task_with_structured_action(tmp_path: Path) -> Non
     assert refreshed.runtime.last_outcome.reason == "Task abandoned via structured report."
     assert state.active_task_id is None
     assert task.id not in state.queue
+
+
+def test_update_task_ignores_unrelated_missing_runtime_rows(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Target task")
+
+    missing_dir = tmp_path / ".litehive" / "tasks" / "T-0002-missing-runtime"
+    missing_dir.mkdir(parents=True)
+    (missing_dir / "task.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "id": "T-0002",
+                "slug": "missing-runtime",
+                "title": "Missing runtime row",
+                "pipeline_mode": "full",
+                "priority": "medium",
+                "git": {
+                    "auto_commit": True,
+                    "commit_message": "missing runtime row",
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    update_task(tmp_path, task.id, goal="Updated safely")
+
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.goal == "Updated safely"

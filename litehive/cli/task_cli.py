@@ -6,22 +6,7 @@ import typer
 
 from litehive.cli.common import WorkspaceOption, choice, make_typer
 from litehive.cli.display import task_dependencies_label, task_model_label
-from litehive.cli.parse import (
-    TASK_TYPE_CHOICES,
-    parse_acceptance_criteria,
-    parse_dependency_ids,
-    parse_text_list_option,
-)
-from litehive.cli.task_debug_support import _debug_all, _debug_latest, _debug_worktree
-from litehive.cli.task_logs_support import (
-    _follow_active_subagent,
-    _list_daemon_sessions,
-    _list_task_subagents,
-    _load_task_with_runtime,
-    _show_latest_daemon_log,
-    _show_latest_subagent,
-    _show_task_journal,
-)
+from litehive.cli.parse import TASK_TYPE_CHOICES, parse_acceptance_criteria, parse_dependency_ids, parse_text_list_option
 from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
 from litehive.tasks.archive import archive_root
@@ -44,7 +29,9 @@ def _show_dependency_label(root, task) -> str:
     if not task.depends_on:
         return "-"
 
-    active_statuses = {record.id: record.status for record in load_tasks(root, include_runtime=False)}
+    active_statuses = {
+        record.id: record.status for record in load_tasks(root, include_runtime=True, strict=False)
+    }
     index_path = archive_root(root) / "INDEX.csv"
     archived_ids: set[str] = set()
     if index_path.exists():
@@ -120,6 +107,8 @@ def debug(
     all_: Annotated[bool, typer.Option("--all", help="List all subagents")] = False,
     worktree: Annotated[bool, typer.Option(help="Show worktree details")] = False,
 ) -> int:
+    from litehive.cli.task_debug_support import _debug_all, _debug_latest, _debug_worktree
+
     ensure_workspace(workspace)
     try:
         task = require_task(workspace, task_id)
@@ -142,6 +131,16 @@ def logs(
     all_: Annotated[bool, typer.Option("--all", help="List all subagent runs")] = False,
     follow: Annotated[bool, typer.Option(help="Follow live stdout")] = False,
 ) -> int:
+    from litehive.cli.task_logs_support import (
+        _follow_active_subagent,
+        _list_daemon_sessions,
+        _list_task_subagents,
+        _load_task_with_runtime,
+        _show_latest_daemon_log,
+        _show_latest_subagent,
+        _show_task_journal,
+    )
+
     ensure_workspace(workspace)
     if follow:
         return _follow_active_subagent(workspace, task_id=task_id)
