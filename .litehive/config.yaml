@@ -47,8 +47,8 @@ subagent_inactivity_timeout_seconds: 360.0
 inactivity_timeout_seconds: null
 external_engine_sandbox:
   enabled: true
-  backend: bubblewrap
-  runtime_binary: bwrap
+  backend: docker
+  runtime_binary: docker
   image: litehive-external-engine:latest
   workspace_mount_path: /workspace
   binary_mount_root: /litehive/bin

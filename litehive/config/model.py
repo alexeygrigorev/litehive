@@ -16,7 +16,7 @@ VALID_AGENT_STARTUP_GUIDANCE_KEYS = frozenset(
 VALID_RETRY_ON_FAILURE_KINDS = frozenset({"execution_limit", "timeout", "network", "service"})
 VALID_SANDBOX_NETWORK_MODES = frozenset({"none", "bridge", "host"})
 VALID_SANDBOX_WORKSPACE_MODES = frozenset({"ro", "rw"})
-VALID_SANDBOX_BACKENDS = frozenset({"docker", "bubblewrap"})
+VALID_SANDBOX_BACKENDS = frozenset({"docker"})
 VALID_RUNNER_HOOK_POINTS = frozenset(
     {
         "before_grooming",
@@ -52,7 +52,7 @@ class ExternalEngineSandboxPolicy:
     environment: list[str] = field(default_factory=list)
     credential_inputs: list[SandboxCredentialInput] = field(default_factory=list)
     extra_ro_binds: list[str] = field(default_factory=list)
-    # Writable bind mounts (bwrap --bind). Required when the engine's CLI
+    # Writable bind mounts (docker -v :rw). Required when the engine's CLI
     # writes to a fixed host path outside the workspace — e.g. goz writes
     # session files to ~/.goz/sessions.
     extra_rw_binds: list[str] = field(default_factory=list)
@@ -374,9 +374,7 @@ def normalize_external_engine_sandbox_config(
         config = ExternalEngineSandboxConfig(
             enabled=bool(raw_config.get("enabled", False)),
             backend=backend,
-            runtime_binary=str(
-                raw_config.get("runtime_binary", "bwrap" if backend == "bubblewrap" else "docker")
-            ),
+            runtime_binary=str(raw_config.get("runtime_binary", "docker")),
             image=str(raw_config.get("image", "litehive-external-engine:latest")),
             workspace_mount_path=str(raw_config.get("workspace_mount_path", "/workspace")),
             binary_mount_root=str(raw_config.get("binary_mount_root", "/litehive/bin")),
