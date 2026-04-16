@@ -645,9 +645,19 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
 
     markers: dict[str, list[str]] = {}
     current_state = state or load_state(root)
-    if current_state.active_task_id is not None:
+    tasks = list_tasks(root, strict=False)
+    tasks_by_id = {task.id: task for task in tasks}
+    active_task = (
+        None
+        if current_state.active_task_id is None
+        else tasks_by_id.get(current_state.active_task_id)
+    )
+    if active_task is not None and (
+        is_task_eligible_for_execution(active_task)
+        or active_task.runtime.execution_status == "running"
+    ):
         markers.setdefault(current_state.active_task_id, []).append("workspace.active_task_id")
-    for task in list_tasks(root, strict=False):
+    for task in tasks:
         if task.status == "in_progress" and task.pipeline_status != "done":
             markers.setdefault(task.id, []).append("task.status=in_progress")
         if task.runtime.execution_status == "running":

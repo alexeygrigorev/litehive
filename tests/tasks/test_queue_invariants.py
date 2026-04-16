@@ -60,6 +60,44 @@ def test_dequeue_next_task_reclaims_missing_in_progress_task_before_handoff(
     assert repaired_state.queue == [later.id]
 
 
+@pytest.mark.parametrize("policy", sorted(VALID_POOL_SELECTION_POLICIES))
+def test_dequeue_next_task_ignores_stale_active_marker_when_reclaiming_missing_work(
+    tmp_path: Path,
+    policy: str,
+) -> None:
+    ensure_workspace(tmp_path)
+    _set_pool_selection_policy(tmp_path, policy)
+    stale = create_task(tmp_path, title="Stale active task")
+    unfinished = create_task(tmp_path, title="Unfinished active task")
+    later = create_task(tmp_path, title="Later queued task")
+    _persist_task_status(
+        tmp_path,
+        stale.id,
+        status="done",
+        pipeline_status="done",
+    )
+    _persist_task_status(
+        tmp_path,
+        unfinished.id,
+        status="in_progress",
+        pipeline_status="implementing",
+    )
+
+    state = load_state(tmp_path)
+    state.active_task_id = stale.id
+    state.queue = [later.id]
+    save_state(tmp_path, state)
+
+    selection = dequeue_next_task_selection(tmp_path)
+
+    assert selection.task is not None
+    assert selection.task.id == unfinished.id
+
+    repaired_state = load_state(tmp_path)
+    assert repaired_state.active_task_id == unfinished.id
+    assert repaired_state.queue == [later.id]
+
+
 @pytest.mark.parametrize(
     ("status", "pipeline_status"),
     [
