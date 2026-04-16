@@ -51,8 +51,19 @@ class RecoveryAgent(RoleAgent):
         trigger = state.active_recovery_trigger
         base.update(
             {
+<<<<<<< HEAD
                 "recovery_trigger": trigger.to_payload() if trigger is not None else None,
                 "recovery_failure_explanation": state.recovery_failure_explanation,
+=======
+                "origin_stage": origin,
+                "failure_context": state.failure_context,
+                "recovery_trigger": (
+                    None
+                    if state.active_recovery_trigger is None
+                    else state.active_recovery_trigger.model_dump(mode="json")
+                ),
+                "recovery_attempt": state.recovery_attempt.get(origin, 0),
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
             }
         )
         return base

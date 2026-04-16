@@ -2,6 +2,10 @@
 
 from datetime import UTC, datetime
 from enum import Enum
+<<<<<<< HEAD
+=======
+from typing import Literal
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
 
 from litehive.domain._heru_compat import (
     EngineLimitKind,
@@ -45,6 +49,7 @@ class OutcomeKind(StringEnum):
     DUPLICATE = "duplicate"
 
 
+<<<<<<< HEAD
 class OutcomeReasonCode(StringEnum):
     VERDICT_FAIL = "verdict_fail"
     VERDICT_REJECT = "verdict_reject"
@@ -70,12 +75,17 @@ class PipelineMode(StringEnum):
 
 
 class TaskStage(StringEnum):
+=======
+
+class TaskStage(str, Enum):
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
     GROOMING = "grooming"
     IMPLEMENTING = "implementing"
     TESTING = "testing"
     ACCEPTING = "accepting"
     COMMIT_TO_GIT = "commit_to_git"
 
+<<<<<<< HEAD
 
 class LifecyclePhase(StringEnum):
     READY = "ready"
@@ -139,6 +149,15 @@ class Verdict(StringEnum):
     PASS = "pass"
     ACCEPT = "accept"
     FAIL = "fail"
+=======
+    def __str__(self) -> str:
+        return self.value
+
+
+class Verdict(str, Enum):
+    PASS = "pass"
+    ACCEPT = "accept"
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
     REJECT = "reject"
     BLOCKED = "blocked"
     COMMENT = "comment"
@@ -146,10 +165,45 @@ class Verdict(StringEnum):
     ADVANCE = "advance"
     DONE = "done"
     BUDGET_HIT = "budget_hit"
+<<<<<<< HEAD
 
 
 RunnerExecutionStatus = RunnerStatus
 PipelineState = PipelineStatus
+=======
+    FAIL = "fail"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+PipelineMode = Literal["single", "full"]
+TaskStatus = Literal[
+    "queued",
+    "in_progress",
+    "interrupted",
+    "parked",
+    "done",
+    "flagged",
+    "merge_failed",
+    "cancelled",
+    "wont_do",
+    "deferred",
+    "duplicate",
+]
+PipelineStatus = Literal[
+    "backlog",
+    "grooming",
+    "implementing",
+    "testing",
+    "accepting",
+    "commit_to_git",
+    "done",
+    "merge_failed",
+    "flagged",
+]
+RunnerExecutionStatus = Literal["idle", "running", "late", "stale"]
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
 
 
 __all__ = [

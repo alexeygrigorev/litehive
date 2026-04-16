@@ -1,4 +1,8 @@
 """Recovery evidence, task discussion comments, and report helpers."""
+<<<<<<< HEAD
+=======
+
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
 from pathlib import Path
 from typing import Iterable
 

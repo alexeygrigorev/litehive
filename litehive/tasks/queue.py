@@ -7,6 +7,7 @@ from pathlib import Path
 from litehive.config.loading import load_config
 from litehive.config.model import VALID_POOL_SELECTION_POLICIES
 from litehive.domain.common import utcnow
+from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.runtime import TaskOutcomeState
@@ -229,6 +230,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
+        original_queue = list(state.queue)
         validate_single_active_task(root, state)
         next_task, blocked, mutated = _resolve_next_task_from_state(root, state)
         if next_task is None:
@@ -283,7 +285,13 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                 SqlitePersistence(root).reset(next_task.id)
             if next_task.status in {"queued", "interrupted"}:
                 next_task.status = "in_progress"
-            persist_task_and_state(root, task=next_task, state=state)
+            queue_additions = [task_id for task_id in state.queue if task_id not in original_queue]
+            persist_task_and_state(
+                root,
+                task=next_task,
+                state=state,
+                protected_task_ids=queue_additions,
+            )
         return TaskSelection(task=next_task, blocked=blocked)
 
 
@@ -420,7 +428,7 @@ def _task_selection_key(
     if policy == "fifo":
         return (interrupted_rank, queue_index, task.id)
     if policy == "priority_first":
-        return (TASK_PRIORITY_ORDER.get(task.priority, 2), queue_index, interrupted_rank, task.id)
+        return (interrupted_rank, TASK_PRIORITY_ORDER.get(task.priority, 2), queue_index, task.id)
     if policy == "dependency_aware":
         return (
             queue_index,
@@ -446,27 +454,32 @@ def _resolve_next_task_from_state(
     return next_task, blocked, snapshot_mutated
 
 
+def _should_restore_missing_task_to_front(task: TaskRecord) -> bool:
+    return task.status == "in_progress"
+
+
 def restore_missing_queued_tasks(
     state: WorkspaceState,
     tasks_by_id: dict[str, TaskRecord],
 ) -> list[str]:
-    restored: list[str] = []
+    restored_front: list[str] = []
+    restored_back: list[str] = []
     queued_ids = set(state.queue)
     for task_id, task in tasks_by_id.items():
-        if task.status not in {"queued", "interrupted", "flagged"}:
-            continue
-        if _is_hook_reject_loop_flagged(task):
-            continue
-        if task.pipeline_status == "done":
-            continue
-        if _is_parked_task(task):
+        if not is_task_eligible_for_execution(task):
             continue
         if task_id == state.active_task_id or task_id in queued_ids:
             continue
-        state.queue.append(task_id)
         queued_ids.add(task_id)
-        restored.append(task_id)
-    return restored
+        if _should_restore_missing_task_to_front(task):
+            restored_front.append(task_id)
+        else:
+            restored_back.append(task_id)
+    if restored_front:
+        state.queue = [*restored_front, *state.queue]
+    if restored_back:
+        state.queue.extend(restored_back)
+    return [*restored_front, *restored_back]
 
 
 
@@ -635,6 +648,8 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
     if current_state.active_task_id is not None:
         markers.setdefault(current_state.active_task_id, []).append("workspace.active_task_id")
     for task in list_tasks(root, strict=False):
+        if task.status == "in_progress" and task.pipeline_status != "done":
+            markers.setdefault(task.id, []).append("task.status=in_progress")
         if task.runtime.execution_status == "running":
             markers.setdefault(task.id, []).append("runtime.execution_status=running")
     return markers

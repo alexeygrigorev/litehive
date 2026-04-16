@@ -5,7 +5,11 @@ from typing import Any, Protocol
 
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
+<<<<<<< HEAD
 from litehive.domain.recovery import RecoveryOutcome, RecoveryTrigger
+=======
+from litehive.domain.recovery import RecoveryTrigger
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
 
 from .types import FailedReason, NodeName, PipelineMode
 
@@ -151,8 +155,14 @@ class TaskState:
     active_recovery_trigger: RecoveryTrigger | None = None
     recovery_history: list[RecoveryOutcome] = field(default_factory=list)
     pre_exec_recovery_attempt: int = 0
+<<<<<<< HEAD
     merge_context: MergeContext | None = None
     commit_result: CommitResult | None = None
+=======
+    origin_stage: NodeName | None = None
+    failure_context: dict[str, Any] = field(default_factory=dict)
+    active_recovery_trigger: RecoveryTrigger | None = None
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
     last_report: LastReport = field(default_factory=LastReport)
     last_rejection_by_stage: dict[NodeName, LastRejection] = field(default_factory=dict)
     consecutive_same_hook_rejects: int = 0
@@ -202,6 +212,7 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
         ),
         "recovery_history": [outcome.to_payload() for outcome in state.recovery_history],
         "pre_exec_recovery_attempt": state.pre_exec_recovery_attempt,
+<<<<<<< HEAD
         "merge_context": (
             state.merge_context.to_payload()
             if state.merge_context is not None
@@ -211,6 +222,14 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
             state.commit_result.to_payload()
             if state.commit_result is not None
             else None
+=======
+        "origin_stage": state.origin_stage,
+        "failure_context": dict(state.failure_context),
+        "active_recovery_trigger": (
+            None
+            if state.active_recovery_trigger is None
+            else state.active_recovery_trigger.model_dump(mode="json")
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
         ),
         "last_report": state.last_report.to_payload(),
         "last_rejection_by_stage": {
@@ -239,6 +258,7 @@ def _state_from_row(
 ) -> TaskState:
     last_report_data = payload.get("last_report") or {}
     last_rejections_data = payload.get("last_rejection_by_stage") or {}
+    active_recovery_trigger_data = payload.get("active_recovery_trigger") or None
     hook_fingerprint_data = payload.get("last_hook_reject_fingerprint") or None
     active_recovery_trigger = payload.get("active_recovery_trigger")
     recovery_history = payload.get("recovery_history")
@@ -260,6 +280,7 @@ def _state_from_row(
             if isinstance(item, dict)
         ],
         pre_exec_recovery_attempt=int(payload.get("pre_exec_recovery_attempt") or 0),
+<<<<<<< HEAD
         merge_context=(
             MergeContext.from_payload(dict(merge_context))
             if isinstance(merge_context, dict)
@@ -268,6 +289,13 @@ def _state_from_row(
         commit_result=(
             CommitResult.from_payload(dict(commit_result))
             if isinstance(commit_result, dict)
+=======
+        origin_stage=payload.get("origin_stage"),
+        failure_context=dict(payload.get("failure_context") or {}),
+        active_recovery_trigger=(
+            RecoveryTrigger.model_validate(active_recovery_trigger_data)
+            if active_recovery_trigger_data is not None
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
             else None
         ),
         last_report=LastReport.from_payload(last_report_data),

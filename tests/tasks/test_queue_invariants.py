@@ -1,0 +1,135 @@
+from pathlib import Path
+
+import pytest
+import yaml
+
+from litehive.config.model import VALID_POOL_SELECTION_POLICIES
+from litehive.config.workspace import ensure_workspace
+from litehive.state.persist import load_state, save_state
+from litehive.state.records import create_task, require_task, save_task
+from litehive.tasks.queue import dequeue_next_task_selection, peek_next_task_selection
+
+
+def _persist_task_status(root: Path, task_id: str, *, status: str, pipeline_status: str) -> None:
+    task = require_task(root, task_id)
+    task.status = status
+    task.pipeline_status = pipeline_status
+    if status == "interrupted":
+        task.runtime.execution_status = "interrupted"
+    save_task(root, task)
+
+
+def _set_pool_selection_policy(root: Path, policy: str) -> None:
+    config_path = root / ".litehive" / "config.yaml"
+    config_data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    config_data["pool_selection_policy"] = policy
+    config_path.write_text(yaml.safe_dump(config_data, sort_keys=False), encoding="utf-8")
+
+
+@pytest.mark.parametrize("policy", sorted(VALID_POOL_SELECTION_POLICIES))
+def test_dequeue_next_task_reclaims_missing_in_progress_task_before_handoff(
+    tmp_path: Path,
+    policy: str,
+) -> None:
+    ensure_workspace(tmp_path)
+    _set_pool_selection_policy(tmp_path, policy)
+    unfinished = create_task(tmp_path, title="Unfinished active task")
+    later = create_task(tmp_path, title="Later queued task")
+    _persist_task_status(
+        tmp_path,
+        unfinished.id,
+        status="in_progress",
+        pipeline_status="implementing",
+    )
+    later_task = require_task(tmp_path, later.id)
+    later_task.priority = "high"
+    save_task(tmp_path, later_task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = [later.id]
+    save_state(tmp_path, state)
+
+    selection = dequeue_next_task_selection(tmp_path)
+
+    assert selection.task is not None
+    assert selection.task.id == unfinished.id
+
+    repaired_state = load_state(tmp_path)
+    assert repaired_state.active_task_id == unfinished.id
+    assert repaired_state.queue == [later.id]
+
+
+@pytest.mark.parametrize(
+    ("status", "pipeline_status"),
+    [
+        ("queued", "implementing"),
+        ("interrupted", "testing"),
+    ],
+    ids=["resumed", "interrupted"],
+)
+def test_dequeue_next_task_preserves_missing_resumed_work_on_restart(
+    tmp_path: Path,
+    status: str,
+    pipeline_status: str,
+) -> None:
+    ensure_workspace(tmp_path)
+    _set_pool_selection_policy(tmp_path, "dependency_aware")
+    unfinished = create_task(tmp_path, title="Unfinished task")
+    later = create_task(tmp_path, title="Later queued task")
+    _persist_task_status(
+        tmp_path,
+        unfinished.id,
+        status=status,
+        pipeline_status=pipeline_status,
+    )
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = [later.id]
+    save_state(tmp_path, state)
+
+    selection = dequeue_next_task_selection(tmp_path)
+
+    assert selection.task is not None
+
+    repaired_state = load_state(tmp_path)
+    visible_task_ids = {repaired_state.active_task_id, *repaired_state.queue}
+    assert unfinished.id in visible_task_ids
+
+
+@pytest.mark.parametrize(
+    ("status", "pipeline_status"),
+    [
+        ("queued", "implementing"),
+        ("interrupted", "testing"),
+    ],
+    ids=["resumed", "interrupted"],
+)
+def test_peek_next_task_restores_missing_unfinished_tasks_to_queue_on_restart(
+    tmp_path: Path,
+    status: str,
+    pipeline_status: str,
+) -> None:
+    ensure_workspace(tmp_path)
+    unfinished = create_task(tmp_path, title="Unfinished task")
+    later = create_task(tmp_path, title="Later queued task")
+    _persist_task_status(
+        tmp_path,
+        unfinished.id,
+        status=status,
+        pipeline_status=pipeline_status,
+    )
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = [later.id]
+    save_state(tmp_path, state)
+
+    selection = peek_next_task_selection(tmp_path)
+
+    assert selection.task is not None
+
+    repaired_state = load_state(tmp_path)
+    assert repaired_state.active_task_id is None
+    assert repaired_state.queue == [later.id, unfinished.id]

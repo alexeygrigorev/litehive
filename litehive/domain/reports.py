@@ -2,7 +2,11 @@
 
 from typing import Literal, TypeAlias
 
+<<<<<<< HEAD
 from pydantic import BaseModel, Field, model_validator
+=======
+from pydantic import AliasChoices, BaseModel, Field
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
 
 from .common import (
     FEEDBACK_CAP,
@@ -31,7 +35,7 @@ class StageReport(BaseModel):
     """
 
     task_id: str
-    stage: ReportStage
+    stage: ReportStage = Field(validation_alias=AliasChoices("stage", "step"))
     verdict: Verdict
     source: Literal["agent", "hook"] = "agent"
     summary: str
@@ -55,6 +59,14 @@ class StageReport(BaseModel):
     duration_seconds: int = 0
     hook_results: list[dict[str, str | int | bool | None]] = Field(default_factory=list)
     created_at: str = Field(default_factory=utcnow)
+
+    @property
+    def step(self) -> ReportStage:
+        return self.stage
+
+    @step.setter
+    def step(self, value: ReportStage) -> None:
+        self.stage = value
 
 
 class FollowUpTaskSpec(BaseModel):
@@ -110,8 +122,12 @@ class TaskThreadComment(BaseModel):
     """A single comment in the task discussion thread."""
 
     role: str
+<<<<<<< HEAD
     stage: str
     target_stage: str | None = None
+=======
+    stage: str = Field(validation_alias=AliasChoices("stage", "step"))
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
     verdict: Verdict = Verdict.COMMENT
     message: str
     files_changed: list[str] = Field(default_factory=list)

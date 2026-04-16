@@ -197,12 +197,14 @@ def persist_task_and_state(
     task: TaskRecord,
     state: WorkspaceState,
     journal_message: str | None = None,
+    protected_task_ids: list[str] | tuple[str, ...] = (),
 ) -> None:
     persist_tasks_and_state(
         root,
         tasks=[task],
         state=state,
         journal_messages={task.id: journal_message} if journal_message is not None else None,
+        protected_task_ids=protected_task_ids,
     )
 
 
@@ -212,6 +214,7 @@ def persist_tasks_and_state(
     tasks: list[TaskRecord] | tuple[TaskRecord, ...],
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
+    protected_task_ids: list[str] | tuple[str, ...] = (),
 ) -> None:
     from litehive.state.locking import workspace_mutation_guard
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
@@ -228,7 +231,7 @@ def persist_tasks_and_state(
         merged_state = merged_state_for_runner_owned_write(
             root,
             state=state,
-            protected_task_ids=[task.id for task in tasks],
+            protected_task_ids=[*protected_task_ids, *[task.id for task in tasks]],
         )
         write_atomic_files_and_then(
             writes,
@@ -246,6 +249,7 @@ def persist_tasks_and_state_without_runner_guard(
     tasks: list[TaskRecord] | tuple[TaskRecord, ...],
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
+    protected_task_ids: list[str] | tuple[str, ...] = (),
 ) -> None:
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
 
@@ -260,7 +264,7 @@ def persist_tasks_and_state_without_runner_guard(
     merged_state = merged_state_for_runner_owned_write(
         root,
         state=state,
-        protected_task_ids=[task.id for task in tasks],
+        protected_task_ids=[*protected_task_ids, *[task.id for task in tasks]],
     )
     write_atomic_files_and_then(
         writes,
@@ -278,10 +282,12 @@ def persist_task_and_state_without_runner_guard(
     task: TaskRecord,
     state: WorkspaceState,
     journal_message: str | None = None,
+    protected_task_ids: list[str] | tuple[str, ...] = (),
 ) -> None:
     persist_tasks_and_state_without_runner_guard(
         root,
         tasks=[task],
         state=state,
         journal_messages={task.id: journal_message} if journal_message is not None else None,
+        protected_task_ids=protected_task_ids,
     )

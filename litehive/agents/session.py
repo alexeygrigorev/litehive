@@ -131,11 +131,31 @@ class SessionMixin:
             resource_limit_event=None,
         )
 
+    @staticmethod
+    def _coerce_session_args(
+        task_or_base: TaskRecord | Path,
+        base_or_ref: Path | SubagentRef,
+        ref: SubagentRef | None = None,
+    ) -> tuple[Path, SubagentRef]:
+        if isinstance(task_or_base, TaskRecord):
+            if not isinstance(base_or_ref, Path) or ref is None:
+                raise TypeError("expected (task, base, ref, ...) when task is provided")
+            return base_or_ref, ref
+        if not isinstance(base_or_ref, SubagentRef):
+            raise TypeError("expected (base, ref, ...) when task is omitted")
+        return task_or_base, base_or_ref
+
     def _write_session_metadata(
         self,
+<<<<<<< HEAD
         task: TaskRecord,
         base: Path,
         ref: SubagentRef,
+=======
+        task_or_base: TaskRecord | Path,
+        base_or_ref: Path | SubagentRef,
+        ref: SubagentRef | None = None,
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
         *,
         exit_code: int | None,
         pid: int | None,
@@ -143,6 +163,7 @@ class SessionMixin:
         resource_limit_event: ResourceLimitEvent | None = None,
         continuation=None,
     ) -> None:
+        base, ref = self._coerce_session_args(task_or_base, base_or_ref, ref)
         created_at = utcnow()
         resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
         existing = load_subagent_session(self.root, task.id, ref.id)
@@ -245,9 +266,15 @@ class SessionMixin:
 
     def _write_session_snapshot(
         self,
+<<<<<<< HEAD
         task: TaskRecord,
         base: Path,
         ref: SubagentRef,
+=======
+        task_or_base: TaskRecord | Path,
+        base_or_ref: Path | SubagentRef,
+        ref: SubagentRef | None = None,
+>>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
         *,
         prompt: str,
         transcript: str,
@@ -260,6 +287,7 @@ class SessionMixin:
         resource_limit_event: ResourceLimitEvent | None,
         continuation=None,
     ) -> None:
+        base, ref = self._coerce_session_args(task_or_base, base_or_ref, ref)
         created_at = utcnow()
         resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
         existing = load_subagent_session(self.root, task.id, ref.id)
