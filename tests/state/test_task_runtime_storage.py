@@ -103,6 +103,10 @@ def test_get_task_backfills_missing_sqlite_runtime_state_row(tmp_path: Path) -> 
     assert loaded is not None
     assert loaded.id == "T-0001"
     assert loaded.runtime.execution_status == "idle"
+    reloaded = get_task(tmp_path, "T-0001")
+    assert reloaded is not None
+    assert reloaded.id == "T-0001"
+    assert loaded.runtime.current_stage.stage is None
 
 
 def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Path) -> None:

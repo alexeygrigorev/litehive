@@ -11,7 +11,7 @@ from litehive.tasks.paths import (
     resolve_artifact_path,
     task_dir,
 )
-from litehive.tasks.reports import load_task_thread
+from litehive.tasks.activity import latest_task_activity_entry
 from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
 
@@ -129,12 +129,12 @@ def _read_exit_code(root: Path, task_id: str, subagent_id: str) -> int | None:
 
 def _print_verdict(root, task, role):
     """Cross-reference task comments for the latest non-comment verdict matching the role."""
-    thread = load_task_thread(root, task)
-    verdict_entry = None
-    for entry in reversed(thread):
-        if entry.role == role and entry.verdict != "comment":
-            verdict_entry = entry
-            break
+    verdict_entry = latest_task_activity_entry(
+        root,
+        task,
+        role=role,
+        verdicts={"pass", "reject", "blocked"},
+    )
 
     if verdict_entry is not None:
         print(f"verdict: {verdict_entry.verdict}")

@@ -1,20 +1,23 @@
 """Recovery evidence, task discussion comments, and report helpers."""
 
 import json
-from json import JSONDecodeError
 from pathlib import Path
 from typing import Iterable
 
-from pydantic import ValidationError
 import yaml
 
 from litehive.agents.session_store import load_subagent_artifacts
-from litehive.db.schema import connect_workspace_db
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction, RecoveryEvidenceItem, RecoveryReport
 from litehive.domain.task import TaskRecord
 
+from .activity import (
+    append_task_activity,
+    load_task_activity,
+    save_task_activity,
+    task_activity_path,
+)
 from .paths import (
     latest_path,
     latest_run_all_log_path,
@@ -44,6 +47,7 @@ def collect_recovery_evidence(
 
     evidence: list[RecoveryEvidenceItem] = []
     task_path = task_file(root, task)
+    comments_path = task_activity_path(root, task)
     events_path = task_dir(root, task) / "events.jsonl"
     latest_report_path = latest_path(sorted((task_dir(root, task) / "reports").glob("*.yaml")))
     latest_run_log = latest_run_all_log_path(root)
@@ -82,9 +86,9 @@ def collect_recovery_evidence(
         RecoveryEvidenceItem(
             kind="thread",
             label="task activity",
-            path=None,
-            exists=True,
-            summary=f"discussion entries={len(load_task_thread(root, task))}",
+            path=str(comments_path.relative_to(root)),
+            exists=comments_path.exists(),
+            summary=f"discussion entries={len(load_task_activity(root, task))}",
         )
     )
     evidence.append(
@@ -251,7 +255,7 @@ def record_recovery_report(
         recovery_subagent_path=recovery_subagent_path,
     )
     path = write_recovery_report(root, task, report)
-    append_thread_comment(
+    append_task_activity(
         root,
         task,
         TaskThreadComment(
@@ -269,24 +273,7 @@ def record_recovery_report(
 
 
 def append_thread_comment(root: Path, task: TaskRecord, comment: "TaskThreadComment") -> None:
-    with connect_workspace_db(root) as connection:
-        row = connection.execute(
-            "SELECT COALESCE(MAX(entry_index), -1) + 1 AS next_index FROM task_activity WHERE task_id = ?",
-            (task.id,),
-        ).fetchone()
-        next_index = 0 if row is None else int(row["next_index"])
-        connection.execute(
-            """
-            INSERT INTO task_activity (task_id, entry_index, created_at, payload)
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                task.id,
-                next_index,
-                comment.created_at,
-                json.dumps(comment.model_dump(mode="json"), sort_keys=True),
-            ),
-        )
+    append_task_activity(root, task, comment)
 
 
 def normalized_files_changed(paths: Iterable[str]) -> list[str]:
@@ -323,51 +310,15 @@ def retract_thread_comment(comment: "TaskThreadComment") -> bool:
 
 
 def load_task_thread(root: Path, task: TaskRecord) -> list["TaskThreadComment"]:
-    from litehive.domain.reports import TaskThreadComment
-
-    with connect_workspace_db(root) as connection:
-        rows = connection.execute(
-            """
-            SELECT payload
-            FROM task_activity
-            WHERE task_id = ?
-            ORDER BY entry_index
-            """,
-            (task.id,),
-        ).fetchall()
-    comments: list[TaskThreadComment] = []
-    for row in rows:
-        try:
-            payload = json.loads(row["payload"])
-            if isinstance(payload, dict):
-                comments.append(TaskThreadComment(**payload))
-        except (JSONDecodeError, ValidationError, TypeError):
-            continue
-    return comments
+    return load_task_activity(root, task)
 
 
 def save_task_thread(root: Path, task: TaskRecord, thread: list["TaskThreadComment"]) -> None:
-    with connect_workspace_db(root) as connection:
-        connection.execute("DELETE FROM task_activity WHERE task_id = ?", (task.id,))
-        connection.executemany(
-            """
-            INSERT INTO task_activity (task_id, entry_index, created_at, payload)
-            VALUES (?, ?, ?, ?)
-            """,
-            [
-                (
-                    task.id,
-                    index,
-                    comment.created_at,
-                    json.dumps(comment.model_dump(mode="json"), sort_keys=True),
-                )
-                for index, comment in enumerate(thread)
-            ],
-        )
+    save_task_activity(root, task, thread)
 
 
 def render_task_thread(root: Path, task: TaskRecord, *, for_prompt: bool = False) -> str:
-    thread = load_task_thread(root, task)
+    thread = load_task_activity(root, task)
     if not thread:
         return ""
     lines = ["Discussion thread:"]

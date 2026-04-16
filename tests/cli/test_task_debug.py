@@ -134,6 +134,32 @@ def test_debug_shows_verdict(tmp_path: Path, capsys: pytest.CaptureFixture[str])
     assert "verdict_message: All good" in output
 
 
+def test_debug_reads_verdict_through_activity_boundary(
+    tmp_path: Path,
+    monkeypatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    task, sa_dir = _make_task_with_subagent(tmp_path)
+
+    monkeypatch.setattr(
+        "litehive.cli.task_debug_support.latest_task_activity_entry",
+        lambda *args, **kwargs: TaskThreadComment(
+            role="swe",
+            stage="implementing",
+            verdict="pass",
+            message="Boundary verdict",
+        ),
+    )
+
+    exit_code = _cmd_debug(_ns(tmp_path, task.id))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "verdict: pass" in output
+    assert "verdict_stage: implementing" in output
+    assert "verdict_message: Boundary verdict" in output
+
+
 def test_debug_no_verdict(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     task, sa_dir = _make_task_with_subagent(tmp_path)
 

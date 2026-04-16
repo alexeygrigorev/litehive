@@ -129,7 +129,6 @@ def test_agent_report_uses_env_stage_when_runtime_row_is_missing(
         )
     ]
 
-
 def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -213,7 +212,6 @@ def test_agent_update_allows_planner_to_shape_active_task(
 def test_agent_report_rejects_legacy_recovery_pass_verdict(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery verdict contract")
-
     result = CliRunner().invoke(
         agent_app,
         [

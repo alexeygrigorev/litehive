@@ -24,6 +24,7 @@ import yaml
 
 from litehive.domain.task import TaskRecord
 from litehive.state.records import get_task
+from litehive.tasks.activity import load_task_activity
 
 
 SECTION_SEP = "\n"
@@ -50,7 +51,7 @@ def serialize_prompt(
 
     thread = prompt.get("thread") or []
     if not thread and workspace_root is not None and task_record is not None:
-        thread = _load_task_thread_comments(workspace_root, task_record)
+        thread = _load_task_activity_history(workspace_root, task_record)
 
     sections: list[str] = []
     sections.append(_header_section(prompt, task_record))
@@ -90,14 +91,12 @@ def serialize_prompt(
     return (SECTION_SEP * 2).join(s for s in sections if s).strip() + "\n"
 
 
-def _load_task_thread_comments(
+def _load_task_activity_history(
     workspace_root: Path, task_record: TaskRecord
 ) -> list[dict[str, Any]]:
-    """Read the task's discussion comments."""
+    """Read the task's persisted activity entries."""
     try:
-        from litehive.tasks.reports import load_task_thread
-
-        comments = load_task_thread(workspace_root, task_record)
+        comments = load_task_activity(workspace_root, task_record)
     except (OSError, ValidationError, yaml.YAMLError):
         return []
     return [

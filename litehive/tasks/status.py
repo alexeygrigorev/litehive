@@ -198,8 +198,8 @@ def _switch_thread_comment_message(
 def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) -> SwitchTaskSummary:
     from litehive.state.records import require_task
     from litehive.state.persist import load_state
+    from litehive.tasks.activity import append_task_activity
     from litehive.tasks.queue import move_queued_task
-    from litehive.tasks.reports import append_thread_comment
     from litehive.tasks.runtime import mark_engine_switch
 
     if engine not in VALID_TASK_ENGINES:
@@ -249,7 +249,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
     prior_work_paths = _switch_prior_work_paths(root, task)
     from litehive.domain.reports import TaskThreadComment
 
-    append_thread_comment(
+    append_task_activity(
         root,
         task,
         TaskThreadComment(
@@ -281,13 +281,12 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
     from litehive.state.records import require_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.state.persist import load_state
+    from litehive.tasks.activity import load_task_activity, save_task_activity
     from litehive.tasks.queue import reset_task_for_recovery
     from litehive.tasks.reports import (
         normalized_files_changed,
         is_retractable_pass_comment,
-        load_task_thread,
         retract_thread_comment,
-        save_task_thread,
     )
     from litehive.tasks.worktrees import resolve_recorded_worktree_path
     from litehive.state.persist import persist_task_and_state_without_runner_guard
@@ -328,7 +327,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
         main_ref = current_head(root)
         if main_ref is not None:
             checkout_path = _task_checkout_path(task)
-            thread = load_task_thread(root, task)
+            thread = load_task_activity(root, task)
             changed = False
             for comment in thread:
                 if not is_retractable_pass_comment(comment):
@@ -338,7 +337,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
                     continue
                 changed = retract_thread_comment(comment) or changed
             if changed:
-                save_task_thread(root, task, thread)
+                save_task_activity(root, task, thread)
         reset_task_for_recovery(
             task,
             status="queued",

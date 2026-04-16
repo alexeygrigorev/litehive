@@ -31,7 +31,7 @@ from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
 from litehive.state.persist import load_state
 from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection, plan_task_selections
-from litehive.tasks.reports import append_thread_comment
+from litehive.tasks.activity import append_task_activity
 from litehive.state.locking import runner_status
 
 
@@ -316,14 +316,15 @@ def report_command(
         print(f"report failed: task {task_id} not found")
         return 1
     stage = stage or step or task.pipeline_status
+    normalized_verdict = "reject" if verdict == "fail" else verdict
     comment = TaskThreadComment(
         role=role,
         stage=stage,
-        verdict=verdict,
+        verdict=normalized_verdict,
         message=message,
         files_changed=list(files_changed or []),
     )
-    append_thread_comment(root, task, comment)
+    append_task_activity(root, task, comment)
     print(f"task: {task.id}")
     print(f"stage: {stage}")
     print(f"verdict: {comment.verdict}")
