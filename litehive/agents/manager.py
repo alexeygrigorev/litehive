@@ -142,6 +142,9 @@ class SubagentManager(SessionMixin):
                 run_live_callable = effective_engine_callable(execution_engine, "run_live")
                 if not callable(run_live_callable):
                     run_live_callable = execution_engine.run_live
+                inactivity_timeout_seconds = self._subagent_inactivity_timeout_seconds(
+                    engine_name
+                )
                 live_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
                     "model": model,
@@ -163,10 +166,8 @@ class SubagentManager(SessionMixin):
                     )
                 if max_turns is not None:
                     live_kwargs["max_turns"] = max_turns
-                if self.config.subagent_inactivity_timeout_seconds > 0:
-                    live_kwargs["inactivity_timeout_seconds"] = (
-                        self.config.subagent_inactivity_timeout_seconds
-                    )
+                if inactivity_timeout_seconds > 0:
+                    live_kwargs["inactivity_timeout_seconds"] = inactivity_timeout_seconds
                 proc = run_live_callable(
                     prompt,
                     **filter_supported_kwargs(run_live_callable, live_kwargs),
@@ -193,6 +194,9 @@ class SubagentManager(SessionMixin):
                     prompt,
                     **filter_supported_kwargs(run_callable, run_kwargs),
                 )
+            completed_timeout = self._completed_inactivity_timeout(engine_name, proc)
+            if completed_timeout is not None:
+                raise completed_timeout
             transcript = self._render_execution_transcript(
                 ref.engine,
                 proc,
@@ -525,7 +529,7 @@ class SubagentManager(SessionMixin):
             continuation=continuation,
         )
         self._write_timeline(base, ref, task, execution.stdout)
-        self._check_stdout_inactivity(base, execution)
+        self._check_stdout_inactivity(base, ref.engine, execution)
 
     def _parse_execution_report(
         self,

@@ -6,7 +6,11 @@ exercised without the full state machine.
 
 from typing import Any
 
+from heru.types import RuntimeEngineContinuation, SubagentRef
+
+from litehive.domain.agent import EngineFailure, SubagentResult
 from litehive.lifecycle.events import Crash, Pass
+from litehive.lifecycle.heru_factory import HeruEngineAdapter
 from litehive.lifecycle.nodes.agent import (
     AgentNode,
     AgentVerdict,
@@ -17,6 +21,7 @@ from litehive.lifecycle.nodes.agent import (
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.sessions import InMemorySessionStore
 from litehive.lifecycle.types import PipelineMode
+from litehive.state.records import create_task
 
 
 class _ScriptedEngine:
@@ -55,6 +60,19 @@ class _TrivialAgent(AgentNode):
 
     def build_prompt(self, state: TaskState) -> dict:
         return {"stage": self.name, "task_id": state.task_id}
+
+
+class _HeruPromptAgent(AgentNode):
+    """AgentNode that emits the prompt shape expected by HeruEngineAdapter."""
+
+    def build_prompt(self, state: TaskState) -> dict:
+        return {
+            "task_id": state.task_id,
+            "stage": self.name,
+            "role": "swe",
+            "pipeline_mode": "full",
+            "instructions": [],
+        }
 
 
 def make_state(**overrides) -> TaskState:
@@ -216,6 +234,90 @@ def test_transient_error_not_in_retry_on_switches_engine_without_retry() -> None
     assert isinstance(event, Pass)
     assert codex.calls == 1
     assert claude.calls == 1
+
+
+class _OpenCodeTimeoutThenPassManager:
+    calls = 0
+    last_kwargs: list[dict[str, object]] = []
+
+    def __init__(self, workspace_root, *, execution_root=None):
+        del workspace_root, execution_root
+
+    def run(self, task, **kwargs) -> SubagentResult:
+        del task
+        _OpenCodeTimeoutThenPassManager.calls += 1
+        _OpenCodeTimeoutThenPassManager.last_kwargs.append(dict(kwargs))
+        if _OpenCodeTimeoutThenPassManager.calls == 1:
+            return SubagentResult(
+                ref=SubagentRef(
+                    id="SA-0001",
+                    role="swe",
+                    engine="opencode",
+                    status="failed",
+                    path="subagents/SA-0001-swe",
+                ),
+                execution=None,
+                transcript="",
+                exit_code=124,
+                failure=EngineFailure(
+                    kind="retryable_execution_error",
+                    reason="transient timeout",
+                    classification="timeout",
+                ),
+                continuation=RuntimeEngineContinuation(session_id="opencode-session-123"),
+            )
+        return SubagentResult(
+            ref=SubagentRef(
+                id="SA-0002",
+                role="swe",
+                engine="opencode",
+                status="completed",
+                path="subagents/SA-0002-swe",
+            ),
+            execution=None,
+            transcript="",
+            exit_code=0,
+            continuation=RuntimeEngineContinuation(session_id="opencode-session-123"),
+        )
+
+
+def test_agent_node_retries_opencode_timeout_via_existing_retry_flow(
+    tmp_path, monkeypatch
+) -> None:
+    task = create_task(tmp_path, title="OpenCode timeout retry")
+    adapter = HeruEngineAdapter("opencode", tmp_path)
+    store = InMemorySessionStore()
+    node = _HeruPromptAgent(
+        "implementing",
+        _ListSelector([adapter]),
+        store,
+        retry_budget=3,
+    )
+
+    _OpenCodeTimeoutThenPassManager.calls = 0
+    _OpenCodeTimeoutThenPassManager.last_kwargs = []
+    monkeypatch.setattr(
+        "litehive.lifecycle.heru_factory.SubagentManager",
+        _OpenCodeTimeoutThenPassManager,
+    )
+    monkeypatch.setattr(
+        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
+    )
+
+    event = node.run(make_state(task_id=task.id))
+
+    assert isinstance(event, Pass)
+    assert _OpenCodeTimeoutThenPassManager.calls == 2
+    assert _OpenCodeTimeoutThenPassManager.last_kwargs[0]["resume_session_id"] is None
+    assert (
+        _OpenCodeTimeoutThenPassManager.last_kwargs[1]["resume_session_id"]
+        == "opencode-session-123"
+    )
+
+    session = store.get_or_create(task.id, "implementing", "opencode")
+    assert session.engine_session_id == "opencode-session-123"
+    assert session.turn_count == 1
 
 
 def test_nudge_budget_exhausted_returns_crash() -> None:

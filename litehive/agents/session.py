@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+import re
 import signal
 import time
 from typing import Callable
@@ -25,6 +26,12 @@ from litehive.agents.artifacts import (
 )
 from litehive.domain.agent import SubagentInactivityTimeout
 from litehive.tasks.runtime import mark_subagent_pid
+
+_OPENCODE_INACTIVITY_TIMEOUT_SECONDS = 300.0
+_OPENCODE_INACTIVITY_PATTERN = re.compile(
+    r"\[litehive\]\s*Process killed after\s+\d+(?:\.\d+)?s of inactivity\.",
+    re.IGNORECASE,
+)
 
 
 class SessionMixin:
@@ -199,20 +206,47 @@ class SessionMixin:
             data={"subagent_id": ref.id, "pid": pid},
         )
 
-    def _check_stdout_inactivity(self, base: Path, execution: CLIExecutionResult) -> None:
+    def _subagent_inactivity_timeout_seconds(self, engine_name: str) -> float:
+        if engine_name == "opencode":
+            return _OPENCODE_INACTIVITY_TIMEOUT_SECONDS
+        return self.config.subagent_inactivity_timeout_seconds
+
+    def _completed_inactivity_timeout(
+        self,
+        engine_name: str,
+        execution: CLIExecutionResult,
+    ) -> SubagentInactivityTimeout | None:
+        if engine_name != "opencode":
+            return None
+        if _OPENCODE_INACTIVITY_PATTERN.search(execution.stderr or "") is None:
+            return None
+        limit_seconds = self._subagent_inactivity_timeout_seconds(engine_name)
+        return SubagentInactivityTimeout(
+            execution,
+            idle_seconds=limit_seconds,
+            limit_seconds=limit_seconds,
+        )
+
+    def _check_stdout_inactivity(
+        self,
+        base: Path,
+        engine_name: str,
+        execution: CLIExecutionResult,
+    ) -> None:
         if execution.pid is None:
             return
         stdout_path = base / "stdout.txt"
         if not stdout_path.exists():
             return
+        limit_seconds = self._subagent_inactivity_timeout_seconds(engine_name)
         idle_seconds = max(0.0, time.time() - stdout_path.stat().st_mtime)
-        if idle_seconds < self.config.subagent_inactivity_timeout_seconds:
+        if idle_seconds < limit_seconds:
             return
         self._terminate_stale_pid(execution.pid)
         raise SubagentInactivityTimeout(
             execution,
             idle_seconds=idle_seconds,
-            limit_seconds=self.config.subagent_inactivity_timeout_seconds,
+            limit_seconds=limit_seconds,
         )
 
     def _terminate_stale_pid(self, pid: int) -> None:
