@@ -288,10 +288,10 @@ def _auto_repair_stale_state(root: Path) -> None:
     active_task_id or ``execution_status == "running"`` is leftover from
     a crashed process and must be cleaned up before we start.
     """
-    from litehive.recovery.workspace_repair import repair_workspace
+    from litehive.recovery.workspace_repair import repair_workspace_state
 
     try:
-        result = repair_workspace(root)
+        result = repair_workspace_state(root)
         if result.repaired:
             import sys
             print(
