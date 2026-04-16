@@ -7,10 +7,30 @@ import importlib.resources
 import os
 import sqlite3
 from pathlib import Path
+from typing import TypeAlias
 
 from litehive.config.paths import workspace_database_path
 
 MIGRATIONS_PACKAGE = "litehive.db.migrations"
+_BASELINE_REQUIRED_TABLES = {
+    "schema_migrations",
+    "pool_state",
+    "queue",
+    "task_state",
+    "task_journal",
+    "task_activity",
+    "stage_reports",
+    "hook_artifacts",
+    "subagent_sessions",
+    "events",
+    "engine_monitoring",
+    "attention",
+    "worktrees",
+    "pipeline_transitions",
+    "pipeline_journal",
+    "pipeline_task_state",
+    "pipeline_sessions",
+}
 
 
 @dataclass(frozen=True)
@@ -102,6 +122,47 @@ def _applied_versions(connection: sqlite3.Connection) -> set[int]:
     return {int(row["version"]) for row in rows}
 
 
+def _applied_migration_rows(connection: sqlite3.Connection) -> list[tuple[int, str]]:
+    _ensure_schema_migrations_table(connection)
+    rows = connection.execute(
+        "SELECT version, name FROM schema_migrations ORDER BY version"
+    ).fetchall()
+    return [(int(row["version"]), str(row["name"])) for row in rows]
+
+
+def _has_required_baseline_tables(connection: sqlite3.Connection) -> bool:
+    rows = connection.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table'"
+    ).fetchall()
+    tables = {str(row["name"]) for row in rows}
+    return _BASELINE_REQUIRED_TABLES <= tables
+
+
+def _migration_history_matches_prefix(
+    applied: list[tuple[int, str]],
+    available: tuple[Migration, ...],
+) -> bool:
+    if len(applied) > len(available):
+        return False
+    expected_prefix = [(migration.version, migration.name) for migration in available[: len(applied)]]
+    return applied == expected_prefix
+
+
+def _database_requires_rebuild(db_path: Path, migrations: tuple[Migration, ...]) -> bool:
+    if not db_path.exists():
+        return False
+    try:
+        with _open_connection(db_path) as connection:
+            applied = _applied_migration_rows(connection)
+            if not _migration_history_matches_prefix(applied, migrations):
+                return True
+            if applied and not _has_required_baseline_tables(connection):
+                return True
+    except sqlite3.DatabaseError:
+        return True
+    return False
+
+
 def migration_status(root: Path) -> MigrationStatus:
     db_path = workspace_database_path(root)
     migrations = available_migrations()
@@ -125,6 +186,15 @@ def migration_status(root: Path) -> MigrationStatus:
 def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationPlan:
     db_path = workspace_database_path(root)
     migrations = available_migrations()
+    if _database_requires_rebuild(db_path, migrations):
+        if dry_run:
+            return MigrationPlan(
+                applied_migrations=(),
+                pending_migrations=migrations,
+                dry_run=True,
+            )
+        db_path.unlink(missing_ok=True)
+        _MIGRATED_DB_PATHS.pop(str(db_path.resolve()), None)
     with _open_connection(db_path) as connection:
         applied_versions = _applied_versions(connection)
         pending = tuple(migration for migration in migrations if migration.version not in applied_versions)
@@ -153,7 +223,18 @@ def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationP
     return MigrationPlan(applied_migrations=applied, pending_migrations=pending, dry_run=False)
 
 
-_MIGRATED_DB_PATHS: set[str] = set()
+_DbFingerprint: TypeAlias = tuple[int, int, int, int] | None
+
+
+def _db_fingerprint(db_path: Path) -> _DbFingerprint:
+    try:
+        stat = db_path.stat()
+    except OSError:
+        return None
+    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
+
+
+_MIGRATED_DB_PATHS: dict[str, _DbFingerprint] = {}
 
 
 def connect_workspace_db(root: Path, *, migrate: bool = True) -> sqlite3.Connection:
@@ -163,9 +244,10 @@ def connect_workspace_db(root: Path, *, migrate: bool = True) -> sqlite3.Connect
         # XDG_DATA_HOME changes can move the db even when root stays the same.
         # Cuts repeated sqlite opens from ~5ms to <1ms across a test suite.
         key = str(db_path.resolve())
-        if key not in _MIGRATED_DB_PATHS:
+        fingerprint = _db_fingerprint(db_path)
+        if key not in _MIGRATED_DB_PATHS or _MIGRATED_DB_PATHS[key] != fingerprint:
             apply_pending_migrations(root)
-            _MIGRATED_DB_PATHS.add(key)
+            _MIGRATED_DB_PATHS[key] = _db_fingerprint(db_path)
     connection = _open_connection(db_path)
     _ensure_schema_migrations_table(connection)
     return connection

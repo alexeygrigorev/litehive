@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from litehive.config.workspace import ensure_workspace
+from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.runtime import finish_task_run_transition
@@ -126,6 +127,24 @@ def test_flag_count_not_reset_by_requeue(tmp_path: Path) -> None:
     assert t is not None
     assert t.flag_count == 1  # not reset
     assert t.status == "queued"
+
+
+def test_requeue_task_resets_sticky_pipeline_failure_state(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Requeue clears failed pipeline state")
+    task.status = "flagged"
+    task.pipeline_status = "implementing"
+    save_task(tmp_path, task)
+
+    persistence = SqlitePersistence(tmp_path)
+    failed_state = persistence.initialize(task.id)
+    failed_state.stage = "failed"
+    persistence.save(failed_state)
+
+    requeue_task(tmp_path, task.id)
+
+    with pytest.raises(TaskNotFound):
+        persistence.load(task.id)
 
 
 def test_cli_requeue_warns_and_fails_without_force(

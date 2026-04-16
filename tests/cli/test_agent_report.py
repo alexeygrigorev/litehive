@@ -49,6 +49,8 @@ def test_agent_report_uses_intent_record_when_runtime_row_is_missing(tmp_path: P
             "recovery",
             "--stage",
             "grooming",
+            "--target-stage",
+            "grooming",
             "--task-id",
             "T-0001",
             "--workspace",
@@ -65,11 +67,82 @@ def test_agent_report_uses_intent_record_when_runtime_row_is_missing(tmp_path: P
         TaskThreadComment(
             role="recovery",
             stage="grooming",
+            target_stage="grooming",
             verdict="resume",
             message="recovery completed",
             files_changed=[],
         )
     ]
+
+
+def test_agent_report_persists_hidden_recovery_target_stage(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Persist target stage")
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "report",
+            "--verdict",
+            "resume",
+            "--message",
+            "retry implementing",
+            "--role",
+            "recovery",
+            "--stage",
+            "recovering",
+            "--target-stage",
+            "implementing",
+            "--task-id",
+            task.id,
+            "--workspace",
+            str(tmp_path),
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    task = get_task_record(tmp_path, task.id)
+    assert task is not None
+    comments = load_task_thread(tmp_path, task)
+    assert comments == [
+        TaskThreadComment(
+            role="recovery",
+            stage="recovering",
+            target_stage="implementing",
+            verdict="resume",
+            message="retry implementing",
+            files_changed=[],
+        )
+    ]
+
+
+def test_agent_report_rejects_recovery_resume_without_target_stage(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Recovery target stage required")
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "report",
+            "--verdict",
+            "resume",
+            "--message",
+            "retry implementing",
+            "--role",
+            "recovery",
+            "--stage",
+            "recovering",
+            "--task-id",
+            task.id,
+            "--workspace",
+            str(tmp_path),
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 1
+    assert "requires --target-stage" in result.output
 
 
 def test_agent_report_uses_env_stage_when_runtime_row_is_missing(
@@ -250,6 +323,8 @@ def test_agent_report_accepts_recovery_resume_verdict(tmp_path: Path) -> None:
             "recovery",
             "--stage",
             "recovering",
+            "--target-stage",
+            "grooming",
             "--task-id",
             task.id,
             "--workspace",
@@ -265,6 +340,7 @@ def test_agent_report_accepts_recovery_resume_verdict(tmp_path: Path) -> None:
         TaskThreadComment(
             role="recovery",
             stage="recovering",
+            target_stage="grooming",
             verdict="resume",
             message="fixed the runner; retry grooming",
             files_changed=[],
@@ -272,9 +348,46 @@ def test_agent_report_accepts_recovery_resume_verdict(tmp_path: Path) -> None:
     ]
 
 
-def test_root_report_accepts_hidden_step_alias(tmp_path: Path) -> None:
+def test_agent_report_accepts_hidden_step_alias(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Agent report step alias")
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "report",
+            "--verdict",
+            "pass",
+            "--message",
+            "integration report from codex",
+            "--role",
+            "swe",
+            "--step",
+            "implementing",
+            "--task-id",
+            task.id,
+            "--workspace",
+            str(tmp_path),
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    comments = load_task_thread(tmp_path, updated)
+    assert len(comments) == 1
+    assert comments[0].role == "swe"
+    assert comments[0].stage == "implementing"
+    assert comments[0].verdict == "pass"
+    assert comments[0].message == "integration report from codex"
+    assert comments[0].files_changed == []
+
+
+def test_root_report_accepts_hidden_step_alias(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Legacy step alias for root report")
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
 
     result = CliRunner().invoke(
         root_app,

@@ -43,7 +43,7 @@ def workspace_lock(root: Path):
 def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> None:
     handle.seek(0)
     handle.truncate()
-    handle.write(yaml.safe_dump(status.model_dump(mode="python"), sort_keys=False))
+    handle.write(yaml.safe_dump(status.model_dump(mode="json"), sort_keys=False))
     handle.flush()
 
 

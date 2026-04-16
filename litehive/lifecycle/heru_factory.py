@@ -114,6 +114,7 @@ def _latest_verdict_after(
         reason=latest.message or "",
         metadata={
             "files_changed": list(latest.files_changed),
+            "target_stage": latest.target_stage,
         },
     )
 

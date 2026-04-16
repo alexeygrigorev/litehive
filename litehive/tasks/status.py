@@ -366,7 +366,16 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
         task = require_task(root, task_id)
         state = load_state(root)
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", "merge_failed", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
+        stranded_in_progress = (
+            task.status == "in_progress"
+            and task.runtime.execution_status in {"interrupted", "idle"}
+            and bool(task.pipeline_status)
+            and task.pipeline_status not in {"backlog", "done"}
+        )
+        if (
+            task.status not in {"flagged", "merge_failed", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}
+            and not stranded_in_progress
+        ):
             raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, merge_failed, or closed")
         if task.pipeline_status in {"backlog", "done"}:
             raise ValueError(f"Task {task.id} has no resumable stage")
@@ -379,8 +388,8 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             task,
             status="queued",
             pipeline_status=resumed_stage,
-            clear_last_outcome=task.status not in {"interrupted", "parked", "flagged", "merge_failed"},
-            preserve_continuation_handoff=task.status in {"interrupted", "parked"},
+            clear_last_outcome=task.status not in {"interrupted", "parked", "flagged", "merge_failed"} and not stranded_in_progress,
+            preserve_continuation_handoff=task.status in {"interrupted", "parked"} or stranded_in_progress,
         )
         _reset_pipeline_state_for_requeue(root, task.id)
         _queue_task(state, task.id, front=front)

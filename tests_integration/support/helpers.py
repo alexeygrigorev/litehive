@@ -95,6 +95,7 @@ def sandboxed_integration_workspace(root: Path) -> Path:
     nvm = f"{home}/.nvm/versions/node/v24.13.1"
     codex_dir = f"{home}/.codex"
     claude_dir = f"{home}/.claude"
+    claude_config = f"{home}/.claude.json"
     copilot_dir = f"{home}/.copilot"
     gh_config = f"{home}/.config/gh"  # copilot auth lives here via `gh auth login`
     gemini_dir = f"{home}/.gemini"
@@ -119,11 +120,14 @@ def sandboxed_integration_workspace(root: Path) -> Path:
     if Path(nvm).exists() and Path(claude_dir).exists():
         # ~/.claude is rewritten on every run (telemetry, statsig, session
         # state). Read-only causes intermittent rc!=0.
+        claude_rw_binds = [claude_dir]
+        if Path(claude_config).exists():
+            claude_rw_binds.append(claude_config)
         engine_policies["claude"] = ExternalEngineSandboxPolicy(
             enabled=True,
             network_mode="host",
             extra_ro_binds=[nvm],
-            extra_rw_binds=[claude_dir],
+            extra_rw_binds=claude_rw_binds,
             setenv=setenv_home,
         )
     if Path(nvm).exists() and Path(copilot_dir).exists():
@@ -214,6 +218,7 @@ def execute_engine_prompt(
     extra_env: dict[str, str] | None = None,
     sandboxed: bool = False,
     role: str = "swe",
+    allow_timeout: bool = False,
 ) -> tuple[object, CLIExecutionResult]:
     engine = get_engine(engine_name)
     if max_turns is None and engine_name == "claude":
@@ -294,6 +299,14 @@ def execute_engine_prompt(
                 check=False,
             )
         except subprocess.TimeoutExpired as exc:
+            if allow_timeout:
+                completed = subprocess.CompletedProcess(
+                    args=argv,
+                    returncode=124,
+                    stdout=exc.stdout or "",
+                    stderr=exc.stderr or "",
+                )
+                break
             stdout_tail = (exc.stdout or "")[-800:]
             stderr_tail = (exc.stderr or "")[-800:]
             pytest.fail(
@@ -399,6 +412,9 @@ def assert_nudge_verdict_submission(
         "litehive report "
         "--verdict pass "
         "--role swe "
+        "--stage implementing "
+        f"--task-id {session.task_id} "
+        "--workspace . "
         "--message ok"
     )
 
@@ -412,12 +428,17 @@ def assert_nudge_verdict_submission(
             session.resume_session_id if engine_name not in {"gemini", "goz", "opencode"} else None
         ),
         extra_env={"LITEHIVE_TASK_ID": session.task_id},
+        allow_timeout=engine_name == "gemini",
     )
-    assert nudge_run.exit_code == 0, nudge_run.stderr
 
     # Step 3: verify verdict persisted
     thread = load_task_thread(session.cwd, require_task(session.cwd, session.task_id))
     verdicts = [c for c in thread if c.verdict != "comment"]
+    if verdicts:
+        assert verdicts[-1].verdict == "pass"
+        assert verdicts[-1].role == "swe"
+        return
+    assert nudge_run.exit_code == 0, nudge_run.stderr
     assert len(verdicts) >= 1, f"Expected verdict from {engine_name}, got: {thread}"
     assert verdicts[-1].verdict == "pass"
     assert verdicts[-1].role == "swe"

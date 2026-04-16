@@ -10,6 +10,7 @@ import pytest
 
 from heru.types import SubagentRef
 
+from litehive.agents.session_store import save_subagent_artifacts
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.runtime import RuntimeSubagentState
 from litehive.state.records import create_task, save_task, save_task_runtime
@@ -227,15 +228,27 @@ def test_logs_agent_all_lists_all_subagents_with_duration(
 
     planner_dir = task_dir(tmp_path, task) / "subagents" / "SA-0001-planner"
     planner_dir.mkdir(parents=True, exist_ok=True)
-    (planner_dir / "session.yaml").write_text(
-        "exit_code: 0\ncreated_at: 2026-04-09T10:00:00Z\nupdated_at: 2026-04-09T10:00:03Z\n",
-        encoding="utf-8",
+    save_subagent_artifacts(
+        tmp_path,
+        task.id,
+        "SA-0001",
+        session={
+            "exit_code": 0,
+            "created_at": "2026-04-09T10:00:00Z",
+            "updated_at": "2026-04-09T10:00:03Z",
+        },
     )
     swe_dir = task_dir(tmp_path, task) / "subagents" / "SA-0002-swe"
     swe_dir.mkdir(parents=True, exist_ok=True)
-    (swe_dir / "session.yaml").write_text(
-        "exit_code: 1\ncreated_at: 2026-04-09T10:00:10Z\nupdated_at: 2026-04-09T10:00:15Z\n",
-        encoding="utf-8",
+    save_subagent_artifacts(
+        tmp_path,
+        task.id,
+        "SA-0002",
+        session={
+            "exit_code": 1,
+            "created_at": "2026-04-09T10:00:10Z",
+            "updated_at": "2026-04-09T10:00:15Z",
+        },
     )
 
     exit_code = _cmd_logs(_ns(tmp_path, task.id, agent=True, all_flag=True))

@@ -91,7 +91,7 @@ def ensure_runtime_ignored(root: Path) -> None:
 def serialize_task_record(task: TaskRecord) -> str:
     _normalize_task_worktree_state(task)
     _normalize_task_flag_reason(task)
-    payload = task.to_intent_record().model_dump(mode="python")
+    payload = task.to_intent_record().model_dump(mode="json")
     return yaml.safe_dump(payload, sort_keys=False)
 
 

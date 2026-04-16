@@ -25,10 +25,18 @@ CREATE TABLE IF NOT EXISTS task_journal (
     PRIMARY KEY (task_id, entry_index)
 );
 
+CREATE TABLE IF NOT EXISTS task_activity (
+    task_id TEXT NOT NULL,
+    entry_index INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    PRIMARY KEY (task_id, entry_index)
+);
+
 CREATE TABLE IF NOT EXISTS stage_reports (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_id TEXT NOT NULL,
-    step TEXT NOT NULL,
+    stage TEXT NOT NULL,
     created_at TEXT NOT NULL,
     payload TEXT NOT NULL
 );
@@ -77,4 +85,61 @@ CREATE TABLE IF NOT EXISTS worktrees (
     worktree_path TEXT,
     updated_at TEXT NOT NULL,
     payload TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pipeline_transitions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    from_stage TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    event_payload TEXT NOT NULL DEFAULT '{}',
+    to_stage TEXT NOT NULL,
+    rule_description TEXT NOT NULL DEFAULT '',
+    delta TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_pipeline_transitions_task_seq
+    ON pipeline_transitions (task_id, seq);
+
+CREATE INDEX IF NOT EXISTS idx_pipeline_transitions_event_type
+    ON pipeline_transitions (event_type);
+
+CREATE TABLE IF NOT EXISTS pipeline_journal (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    payload TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_pipeline_journal_task_seq
+    ON pipeline_journal (task_id, seq);
+
+CREATE INDEX IF NOT EXISTS idx_pipeline_journal_task_kind
+    ON pipeline_journal (task_id, kind);
+
+CREATE TABLE IF NOT EXISTS pipeline_task_state (
+    task_id       TEXT PRIMARY KEY,
+    stage         TEXT NOT NULL,
+    pipeline_mode TEXT NOT NULL,
+    payload       TEXT NOT NULL DEFAULT '{}',
+    updated_at    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pipeline_task_state_stage
+    ON pipeline_task_state (stage);
+
+CREATE TABLE IF NOT EXISTS pipeline_sessions (
+    task_id            TEXT NOT NULL,
+    node_name          TEXT NOT NULL,
+    engine_name        TEXT NOT NULL,
+    engine_session_id  TEXT,
+    conversation_id    TEXT,
+    turn_count         INTEGER NOT NULL DEFAULT 0,
+    metadata           TEXT NOT NULL DEFAULT '{}',
+    updated_at         TEXT NOT NULL,
+    PRIMARY KEY (task_id, node_name, engine_name)
 );

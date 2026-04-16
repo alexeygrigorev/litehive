@@ -34,6 +34,7 @@ from litehive.lifecycle.nodes.system import MergeConflict
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.lifecycle.sessions import InMemorySessionStore
 from litehive.lifecycle.types import PipelineMode
+from litehive.domain.recovery import RecoveryTrigger
 from litehive.state.records import get_task, get_task_worktree_path
 from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
@@ -84,7 +85,11 @@ class _RecoveringEngine(_PassEngine):
         session.engine_session_id = f"stub-{state.task_id}-{state.stage}"
         outcome = self.plan.get(state.stage, "pass")
         if outcome == "resume":
-            return AgentVerdict(outcome="resume", metadata={"target_stage": state.origin_stage or "implementing"})
+            trigger = state.active_recovery_trigger
+            origin_stage = (
+                trigger.origin_stage if isinstance(trigger, RecoveryTrigger) else "implementing"
+            )
+            return AgentVerdict(outcome="resume", metadata={"target_stage": origin_stage or "implementing"})
         return AgentVerdict(outcome=outcome)
 
 

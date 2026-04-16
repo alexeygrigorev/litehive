@@ -176,6 +176,7 @@ def test_latest_verdict_after_accepts_recovery_resume(tmp_path) -> None:
         TaskThreadComment(
             role="recovery",
             stage="recovering",
+            target_stage="testing",
             verdict="resume",
             message="fixed the runner bug",
         ),
@@ -191,3 +192,32 @@ def test_latest_verdict_after_accepts_recovery_resume(tmp_path) -> None:
     assert verdict is not None
     assert verdict.outcome == "resume"
     assert verdict.reason == "fixed the runner bug"
+    assert verdict.metadata["target_stage"] == "testing"
+
+
+def test_latest_verdict_after_preserves_recovery_advance_target_stage(tmp_path) -> None:
+    from litehive.state.records import create_task
+
+    task = create_task(tmp_path, title="recovery advance target stage")
+    append_thread_comment(
+        tmp_path,
+        task,
+        TaskThreadComment(
+            role="recovery",
+            stage="recovering",
+            target_stage="accepting",
+            verdict="advance",
+            message="skip ahead to acceptance",
+        ),
+    )
+
+    verdict = _latest_verdict_after(
+        tmp_path,
+        task.id,
+        "recovering",
+        datetime.now(UTC) - timedelta(minutes=1),
+    )
+
+    assert verdict is not None
+    assert verdict.outcome == "advance"
+    assert verdict.metadata["target_stage"] == "accepting"

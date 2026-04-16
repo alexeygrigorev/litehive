@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from typing import Callable
 
-from .events import Event, Reject
+from litehive.domain.lifecycle_deltas import recovery_trigger_from_event
+from .events import Event, RecoverySucceeded, Reject
 from .persistence import TaskState
 from .types import NodeName, PipelineMode
 
@@ -88,6 +89,26 @@ def pre_exec_budget_remaining() -> Guard:
         return state.pre_exec_recovery_attempt < 1
 
     return Guard(check, "pre_exec_budget_remaining")
+
+
+def recovery_budget_available() -> Guard:
+    def check(state: TaskState, event: Event) -> bool:
+        return state.recovery_budget_available(recovery_trigger_from_event(state, event))
+
+    return Guard(check, "recovery_budget_available")
+
+
+def recovery_budget_exhausted() -> Guard:
+    available = recovery_budget_available()
+    return ~available
+
+
+def recovery_resume_is_concrete() -> Guard:
+    def check(state: TaskState, event: Event) -> bool:
+        del state
+        return isinstance(event, RecoverySucceeded) and bool(event.resume.strip())
+
+    return Guard(check, "recovery_resume_is_concrete")
 
 
 def _always(state: TaskState, event: Event) -> bool:

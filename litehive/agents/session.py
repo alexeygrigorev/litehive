@@ -6,11 +6,13 @@ import signal
 import time
 from typing import Callable
 
-import yaml
-
 from heru import extract_engine_timeline
 from litehive.agents.unified_events import parse_unified_execution
 from litehive.agents._continuation import extract_execution_continuation
+from litehive.agents.session_store import (
+    load_subagent_session,
+    save_subagent_artifacts,
+)
 from heru.base import CLIExecutionResult
 from litehive.observability.events import append_event, append_session_log, ensure_session_log
 from heru.types import SubagentRef
@@ -22,7 +24,6 @@ from litehive.agents.artifacts import (
     write_text_artifact,
 )
 from litehive.domain.agent import SubagentInactivityTimeout
-from litehive.state.persist import write_atomic_files
 from litehive.tasks.runtime import mark_subagent_pid
 
 
@@ -108,6 +109,7 @@ class SessionMixin:
             },
         )
         self._write_session_snapshot(
+            task,
             base,
             ref,
             prompt=prompt,
@@ -131,6 +133,7 @@ class SessionMixin:
 
     def _write_session_metadata(
         self,
+        task: TaskRecord,
         base: Path,
         ref: SubagentRef,
         *,
@@ -141,40 +144,36 @@ class SessionMixin:
         continuation=None,
     ) -> None:
         created_at = utcnow()
-        session_path = base / "session.yaml"
         resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
-        if session_path.exists():
-            existing = yaml.safe_load(session_path.read_text(encoding="utf-8")) or {}
-            if isinstance(existing, dict) and isinstance(existing.get("created_at"), str):
-                created_at = existing["created_at"]
-        write_atomic_files(
-            {
-                session_path: yaml.safe_dump(
-                    {
-                        "id": ref.id,
-                        "role": ref.role,
-                        "engine": ref.engine,
-                        "status": ref.status,
-                        "sandboxed": ref.sandboxed,
-                        "sandbox": ref.sandbox_summary or "host",
-                        "created_at": created_at,
-                        "updated_at": utcnow(),
-                        "pid": pid,
-                        "exit_code": exit_code,
-                        "interruption_reason": interruption_reason,
-                        "resource_control": resource_control,
-                        "resource_limit_event": (
-                            None
-                            if resource_limit_event is None
-                            else resource_limit_event.model_dump(mode="python")
-                        ),
-                        "continuation": None
-                        if continuation is None
-                        else continuation.model_dump(mode="python"),
-                    },
-                    sort_keys=False,
-                )
-            }
+        existing = load_subagent_session(self.root, task.id, ref.id)
+        if isinstance(existing.get("created_at"), str):
+            created_at = existing["created_at"]
+        save_subagent_artifacts(
+            self.root,
+            task.id,
+            ref.id,
+            session={
+                "id": ref.id,
+                "role": ref.role,
+                "engine": ref.engine,
+                "status": ref.status,
+                "sandboxed": ref.sandboxed,
+                "sandbox": ref.sandbox_summary or "host",
+                "created_at": created_at,
+                "updated_at": utcnow(),
+                "pid": pid,
+                "exit_code": exit_code,
+                "interruption_reason": interruption_reason,
+                "resource_control": resource_control,
+                "resource_limit_event": (
+                    None
+                    if resource_limit_event is None
+                    else resource_limit_event.model_dump(mode="python")
+                ),
+                "continuation": None
+                if continuation is None
+                else continuation.model_dump(mode="python"),
+            },
         )
 
     def _record_subagent_pid(
@@ -184,6 +183,7 @@ class SessionMixin:
             return
         mark_subagent_pid(self.root, task, pid)
         self._write_session_metadata(
+            task,
             base,
             ref,
             exit_code=None,
@@ -236,16 +236,16 @@ class SessionMixin:
         )
         if timeline is None:
             return
-        write_text_artifact(
-            base,
-            "timeline",
-            ".yaml",
-            yaml.safe_dump(timeline.model_dump(mode="python"), sort_keys=False),
-            compress=ref.status != "running",
+        save_subagent_artifacts(
+            self.root,
+            task.id,
+            ref.id,
+            timeline=timeline.model_dump(mode="python"),
         )
 
     def _write_session_snapshot(
         self,
+        task: TaskRecord,
         base: Path,
         ref: SubagentRef,
         *,
@@ -261,41 +261,37 @@ class SessionMixin:
         continuation=None,
     ) -> None:
         created_at = utcnow()
-        session_path = base / "session.yaml"
         resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
-        if session_path.exists():
-            existing = yaml.safe_load(session_path.read_text(encoding="utf-8")) or {}
-            if isinstance(existing, dict) and isinstance(existing.get("created_at"), str):
-                created_at = existing["created_at"]
-        write_atomic_files(
-            {
-                session_path: yaml.safe_dump(
-                    {
-                        "id": ref.id,
-                        "role": ref.role,
-                        "engine": ref.engine,
-                        "status": ref.status,
-                        "sandboxed": ref.sandboxed,
-                        "sandbox": ref.sandbox_summary or "host",
-                        "created_at": created_at,
-                        "updated_at": utcnow(),
-                        "pid": pid,
-                        "exit_code": exit_code,
-                        "interruption_reason": interruption_reason,
-                        "resource_control": resource_control,
-                        "resource_limit_event": (
-                            None
-                            if resource_limit_event is None
-                            else resource_limit_event.model_dump(mode="python")
-                        ),
-                        "continuation": None
-                        if continuation is None
-                        else continuation.model_dump(mode="python"),
-                    },
-                    sort_keys=False,
+        existing = load_subagent_session(self.root, task.id, ref.id)
+        if isinstance(existing.get("created_at"), str):
+            created_at = existing["created_at"]
+        save_subagent_artifacts(
+            self.root,
+            task.id,
+            ref.id,
+            session={
+                "id": ref.id,
+                "role": ref.role,
+                "engine": ref.engine,
+                "status": ref.status,
+                "sandboxed": ref.sandboxed,
+                "sandbox": ref.sandbox_summary or "host",
+                "created_at": created_at,
+                "updated_at": utcnow(),
+                "pid": pid,
+                "exit_code": exit_code,
+                "interruption_reason": interruption_reason,
+                "resource_control": resource_control,
+                "resource_limit_event": (
+                    None
+                    if resource_limit_event is None
+                    else resource_limit_event.model_dump(mode="python")
                 ),
-                base / "report.yaml": yaml.safe_dump(report_payload, sort_keys=False),
-            }
+                "continuation": None
+                if continuation is None
+                else continuation.model_dump(mode="python"),
+            },
+            report=report_payload,
         )
         write_text_artifact(base, "prompt", ".txt", prompt, compress=False)
         write_text_artifact(

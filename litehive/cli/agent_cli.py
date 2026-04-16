@@ -82,6 +82,14 @@ def agent_report_command(
     message_file: Annotated[Path | None, typer.Option("--message-file", help="Read message from file")] = None,
     role: Annotated[str | None, typer.Option("--role", help="Override role (default: from env)")] = None,
     stage: Annotated[str | None, typer.Option("--stage", help="Override stage (default: from task)")] = None,
+    target_stage: Annotated[
+        str | None,
+        typer.Option("--target-stage", help="Recovery destination stage", hidden=True),
+    ] = None,
+    step: Annotated[
+        str | None,
+        typer.Option("--step", hidden=True, help="Legacy alias for --stage"),
+    ] = None,
     task_id: Annotated[str | None, typer.Option("--task-id", help="Override task id")] = None,
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
     files_changed: Annotated[list[str] | None, typer.Option("--files-changed", help="Changed file paths")] = None,
@@ -101,6 +109,14 @@ def agent_report_command(
     allowed = _allowed_verdicts_for_role(agent_role)
     if normalized_verdict not in allowed:
         print("You are not authorized to perform this command.")
+        raise SystemExit(1)
+    normalized_target_stage = target_stage.strip() if target_stage else None
+    if agent_role == "recovery" and normalized_verdict in {"resume", "advance"}:
+        if not normalized_target_stage:
+            print(f"report failed: recovery verdict '{normalized_verdict}' requires --target-stage")
+            raise SystemExit(1)
+    elif normalized_target_stage:
+        print("report failed: --target-stage is only valid with recovery resume/advance verdicts")
         raise SystemExit(1)
 
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
@@ -126,13 +142,14 @@ def agent_report_command(
     except TaskNotFound:
         pipeline_stage = None
     actual_stage = _resolve_report_stage(
-        explicit_stage=stage,
+        explicit_stage=stage or step,
         task=task,
         pipeline_stage=pipeline_stage,
     )
     comment = TaskThreadComment(
         role=agent_role,
         stage=actual_stage,
+        target_stage=normalized_target_stage,
         verdict=normalized_verdict,
         message=message,
         files_changed=list(files_changed or []),
@@ -142,6 +159,8 @@ def agent_report_command(
     print(f"stage: {actual_stage}")
     print(f"verdict: {normalized_verdict}")
     print(f"role: {agent_role}")
+    if normalized_target_stage:
+        print(f"target_stage: {normalized_target_stage}")
 
 
 def _require_role(allowed: set[str]) -> str:

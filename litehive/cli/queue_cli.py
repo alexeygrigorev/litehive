@@ -98,7 +98,7 @@ def promote(task_id: Annotated[str, typer.Argument(help="Queued task id")], work
             task = resume_task(workspace, task_id, front=True)
             print(f"task: {task.id} {task.title}")
             print("status: queued")
-            print(f"pipeline_status: {task.pipeline_status}")
+            print(f"pipeline_stage: {task.pipeline_status}")
             missing_criteria_reason = missing_acceptance_criteria_reason(task)
             if missing_criteria_reason is not None:
                 print(f"warning: {missing_criteria_reason}")
@@ -132,7 +132,7 @@ def requeue(
     state = load_state(workspace)
     print(f"task: {task.id} {task.title}")
     print("status: queued")
-    print(f"pipeline_status: {task.pipeline_status}")
+    print(f"pipeline_stage: {task.pipeline_status}")
     missing_criteria_reason = missing_acceptance_criteria_reason(task)
     if missing_criteria_reason is not None:
         print(f"warning: {missing_criteria_reason}")
@@ -155,7 +155,7 @@ def resume(
     state = load_state(workspace)
     print(f"task: {task.id} {task.title}")
     print("status: queued")
-    print(f"pipeline_status: {task.pipeline_status}")
+    print(f"pipeline_stage: {task.pipeline_status}")
     missing_criteria_reason = missing_acceptance_criteria_reason(task)
     if missing_criteria_reason is not None:
         print(f"warning: {missing_criteria_reason}")
@@ -173,7 +173,7 @@ def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
         return 1
     print(f"task: {summary.task.id} {summary.task.title}")
     print(f"status: {summary.task.status}")
-    print(f"pipeline_status: {summary.task.pipeline_status}")
+    print(f"pipeline_stage: {summary.task.pipeline_status}")
     print(f"runner_pid: {summary.runner_pid if summary.runner_pid is not None else '-'}")
     print(f"signal_sent: {'yes' if summary.signal_sent else 'no'}")
     return 0
@@ -202,7 +202,7 @@ def recover(task_id: str, workspace: Path) -> int:
         return 1
     print(f"task: {task.id} {task.title}")
     print("status: queued")
-    print(f"pipeline_status: {task.pipeline_status}")
+    print(f"pipeline_stage: {task.pipeline_status}")
     print("recovery_policy: recover requeued the task without reverting workspace code")
     print(f"next_commit_message: {checkpoint_message(task)}")
     missing_criteria_reason = missing_acceptance_criteria_reason(task)
@@ -221,7 +221,7 @@ def switch(task_id: str, engine: str, workspace: Path, reason: str) -> int:
     state = load_state(workspace)
     print(f"task: {summary.task.id} {summary.task.title}")
     print("status: queued")
-    print(f"pipeline_status: {summary.task.pipeline_status}")
+    print(f"pipeline_stage: {summary.task.pipeline_status}")
     print(f"engine: {summary.previous_engine} -> {summary.new_engine}")
     print(f"was_active: {'yes' if summary.was_active else 'no'}")
     print(f"runner_pid: {summary.runner_pid if summary.runner_pid is not None else '-'}")

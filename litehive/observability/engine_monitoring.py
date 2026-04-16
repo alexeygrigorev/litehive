@@ -57,7 +57,7 @@ def save_engine_monitoring(root: Path, monitoring: WorkspaceEngineMonitoring) ->
     with workspace_mutation_guard(root):
         atomic_write_text(
             engine_monitoring_file(root),
-            yaml.safe_dump(monitoring.model_dump(mode="python"), sort_keys=False),
+            yaml.safe_dump(monitoring.model_dump(mode="json"), sort_keys=False),
         )
         ignore_path = workspace_gitignore_path(root)
         expected = render_workspace_gitignore()

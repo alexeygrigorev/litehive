@@ -7,6 +7,7 @@ from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.registry import build_registry
 from litehive.lifecycle.runner import StateMachineRunner
 from litehive.roles.base import PromptContext
+from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.lifecycle.nodes.hook import HookResult, HookRunner, HookSpec
 from litehive.lifecycle.nodes.system import StubCommitNode
 from litehive.lifecycle.nodes.agent import AgentVerdict
@@ -16,6 +17,7 @@ from litehive.lifecycle.sessions import InMemorySessionStore
 from litehive.lifecycle.types import PipelineMode
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task
+from litehive.state.records import get_task
 from litehive.state.persist import load_state, save_state
 from litehive.tasks.queue import peek_next_task_selection
 
@@ -106,7 +108,8 @@ def test_same_hook_reject_loop_triggers_one_recovery_and_then_resumes(workspace:
     assert final_state.last_hook_reject_fingerprint is None
     assert final_state.hook_reject_recovery_invoked is False
     assert sum(1 for row in transitions if row["to_stage"] == "recovering") == 1
-    assert final_state.recovery_attempt == {"after_implementing": 1}
+    assert len(final_state.recovery_history) == 1
+    assert final_state.recovery_history[0].trigger.origin_stage == "after_implementing"
 
 
 def test_same_hook_reject_loop_flags_task_and_queue_skips_it_when_recovery_fails(workspace: Path) -> None:
@@ -153,6 +156,55 @@ def test_successful_stage_progress_resets_same_hook_counter(workspace: Path) -> 
     final_state = runner.run_task(task.id)
 
     assert final_state.stage == "done"
-    assert final_state.recovery_attempt == {}
+    assert final_state.recovery_history == []
     assert final_state.consecutive_same_hook_rejects == 0
     assert final_state.last_hook_reject_fingerprint is None
+
+
+def test_sync_back_nonterminal_stage_updates_runtime_current_stage(workspace: Path) -> None:
+    task = create_task(workspace, title="Live recovery visibility", pipeline_mode="single")
+    persistence = SqlitePersistence(workspace)
+    state = persistence.initialize(task.id, pipeline_mode=PipelineMode.SINGLE)
+    state.stage = "recovering"
+
+    updated = _sync_back(state, workspace)
+
+    assert updated is not None
+    assert updated.status == "in_progress"
+    assert updated.pipeline_status == "grooming"
+    assert updated.runtime.execution_status == "running"
+    assert updated.runtime.current_stage.stage == "recovering"
+    assert updated.runtime.current_stage.status == "running"
+
+    reloaded = get_task(workspace, task.id)
+    assert reloaded is not None
+    assert reloaded.runtime.current_stage.stage == "recovering"
+
+
+def test_sync_back_commit_origin_recovery_crash_flags_instead_of_merge_failed(workspace: Path) -> None:
+    task = create_task(workspace, title="Commit recovery crashed", pipeline_mode="single")
+    persistence = SqlitePersistence(workspace)
+    state = persistence.initialize(task.id, pipeline_mode=PipelineMode.SINGLE)
+    state.stage = "failed"
+    state.failed_reason = "recovery_crashed"
+    state.failed_message = "recovery agent exited without verdict"
+    state.active_recovery_trigger = RecoveryTrigger(
+        origin_stage="commit",
+        trigger_event_kind=TriggerEventKind.CRASH,
+        failure_fingerprint=FailureFingerprint(
+            fingerprint="GitError:merge aborted",
+            classification="GitError",
+        ),
+        message="merge aborted",
+    )
+
+    updated = _sync_back(state, workspace)
+
+    assert updated is not None
+    assert updated.status == "flagged"
+    assert updated.pipeline_status == "flagged"
+
+    reloaded = get_task(workspace, task.id)
+    assert reloaded is not None
+    assert reloaded.status == "flagged"
+    assert reloaded.pipeline_status == "flagged"

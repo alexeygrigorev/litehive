@@ -72,8 +72,6 @@ def prune_superseded_subagent_artifacts(task_root: Path, *, keep_subagent_id: st
         "stderr.log",
         "stderr.txt",
         "stderr.txt.gz",
-        "timeline.yaml",
-        "timeline.yaml.gz",
     )
     prefix = f"{keep_subagent_id}-"
     for child in subagents_root.iterdir():

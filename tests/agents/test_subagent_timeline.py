@@ -1,12 +1,12 @@
 from pathlib import Path
 
 import pytest
-import yaml
 
 from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
 
 from litehive.agents.manager import SubagentManager
+from litehive.agents.session_store import load_subagent_report, load_subagent_timeline
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.recovery.workspace_repair import mark_interrupted_subagent
@@ -56,7 +56,7 @@ def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
 
     manager._write_session_progress(task, base, ref, "stream partial Claude output", execution)
 
-    report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
+    report = load_subagent_report(tmp_path, task.id, "SA-0001")
     assert report["status"] == "running"
     assert "did not submit verdict" in report["summary"]
     assert report["files_changed"] == []
@@ -73,7 +73,7 @@ def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
     assert interrupted is not None
     assert "did not submit verdict" in interrupted.transcript_snippet
 
-    resumed_report = yaml.safe_load((base / "report.yaml").read_text(encoding="utf-8"))
+    resumed_report = load_subagent_report(tmp_path, task.id, "SA-0001")
     assert resumed_report["status"] == "interrupted"
     assert resumed_report["resume_stage"] == "implementing"
 
@@ -118,9 +118,7 @@ def test_subagent_writes_timeline_during_live_progress(
                 on_update(first)
 
             base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
-            timeline_path = base / "timeline.yaml"
-            assert timeline_path.exists()
-            timeline_data = yaml.safe_load(timeline_path.read_text(encoding="utf-8"))
+            timeline_data = load_subagent_timeline(tmp_path, task.id, "SA-0001")
             assert timeline_data["engine"] == "opencode"
             assert timeline_data["task_id"] == task.id
             assert len(timeline_data["events"]) == 1
@@ -144,9 +142,7 @@ def test_subagent_writes_timeline_during_live_progress(
     assert result.ref.status == "completed"
 
     base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
-    timeline_path = base / "timeline.yaml"
-    assert timeline_path.exists()
-    timeline_data = yaml.safe_load(timeline_path.read_text(encoding="utf-8"))
+    timeline_data = load_subagent_timeline(tmp_path, task.id, "SA-0001")
     assert len(timeline_data["events"]) == 2
     assert timeline_data["event_counts"] == {"message": 1, "usage": 1}
 
@@ -185,4 +181,4 @@ def test_subagent_skips_timeline_when_no_events(
     assert result.ref.status == "completed"
 
     base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
-    assert not (base / "timeline.yaml").exists()
+    assert load_subagent_timeline(tmp_path, task.id, "SA-0001") == {}

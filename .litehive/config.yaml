@@ -46,7 +46,7 @@ runner_hooks:
 subagent_inactivity_timeout_seconds: 360.0
 inactivity_timeout_seconds: null
 external_engine_sandbox:
-  enabled: true
+  enabled: false
   backend: docker
   runtime_binary: docker
   image: litehive-external-engine:latest

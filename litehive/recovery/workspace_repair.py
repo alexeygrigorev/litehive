@@ -3,10 +3,14 @@
 import sqlite3
 from pathlib import Path
 
-import yaml
-
+from litehive.agents.session_store import (
+    load_subagent_report,
+    load_subagent_session,
+    save_subagent_artifacts,
+)
 from litehive.config.loading import load_config
 from litehive.domain.common import utcnow
+from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.runtime import (
     RuntimeContinuationHandoff,
@@ -52,7 +56,7 @@ def _running_task_ids(root: Path) -> list[str]:
 def prepare_interrupted_task_for_requeue(task: TaskRecord) -> None:
     now = clear_task_run_activity(task, execution_status="idle")
     task.status = "queued"
-    if task.runtime.current_stage.step is None:
+    if task.runtime.current_stage.stage is None:
         task.runtime.current_stage = idle_stage_state(updated_at=now)
         return
     task.runtime.current_stage = task.runtime.current_stage.model_copy(
@@ -64,16 +68,11 @@ def _interrupted_subagent_snippet(
     root: Path, task: TaskRecord, active: RuntimeSubagentState
 ) -> str:
     subagent_base = task_dir(root, task) / active.path
-    report_path = subagent_base / "report.yaml"
-    if report_path.exists():
-        try:
-            report = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
-        except yaml.YAMLError:
-            report = {}
-        if isinstance(report, dict):
-            summary = str(report.get("summary") or "").strip()
-            if summary:
-                return summary
+    report = load_subagent_report(root, task.id, active.id)
+    if report:
+        summary = str(report.get("summary") or "").strip()
+        if summary:
+            return summary
     transcript_path = resolve_artifact_path(subagent_base, "transcript.md")
     if transcript_path is not None:
         snippet = summarize_transcript(read_text_artifact(transcript_path))
@@ -101,19 +100,9 @@ def _write_interrupted_subagent_artifacts(
     *,
     resume_stage: str,
 ) -> None:
-    from litehive.state.persist import write_atomic_files
-
     now = utcnow()
-    base = task_dir(root, task) / subagent.path
-    session_path = base / "session.yaml"
-    report_path = base / "report.yaml"
-    writes: dict[Path, str] = {}
-    session_payload = (
-        yaml.safe_load(session_path.read_text(encoding="utf-8")) if session_path.exists() else {}
-    ) or {}
-    report_payload = (
-        yaml.safe_load(report_path.read_text(encoding="utf-8")) if report_path.exists() else {}
-    ) or {}
+    session_payload = load_subagent_session(root, task.id, subagent.id)
+    report_payload = load_subagent_report(root, task.id, subagent.id)
     session_payload.update(
         {
             "id": subagent.id,
@@ -139,9 +128,13 @@ def _write_interrupted_subagent_artifacts(
     report_payload["continuation"] = None
     if subagent.continuation is not None:
         report_payload["continuation"] = subagent.continuation.model_dump(mode="python")
-    writes[session_path] = yaml.safe_dump(session_payload, sort_keys=False)
-    writes[report_path] = yaml.safe_dump(report_payload, sort_keys=False)
-    write_atomic_files(writes)
+    save_subagent_artifacts(
+        root,
+        task.id,
+        subagent.id,
+        session=session_payload,
+        report=report_payload,
+    )
 
 
 def mark_interrupted_subagent(
@@ -229,7 +222,7 @@ def _set_interruption_metadata(
         subagent=interrupted_subagent,
     )
     task.runtime.continuation_handoff = RuntimeContinuationHandoff(
-        step=stage,
+        stage=stage,
         kind="restart",
         reason=reason,
         from_engine=None if interrupted_subagent is None else interrupted_subagent.engine,
@@ -242,8 +235,8 @@ def _set_interruption_metadata(
         if interrupted_subagent is None
         else interrupted_subagent.transcript_snippet,
         warnings=[],
-        session_path=None if interrupted_subagent is None else f"{interrupted_subagent.path}/session.yaml",
-        report_path=None if interrupted_subagent is None else f"{interrupted_subagent.path}/report.yaml",
+        session_path=None,
+        report_path=None,
         transcript_path=None
         if interrupted_subagent is None
         else f"{interrupted_subagent.path}/transcript.md",
@@ -252,7 +245,7 @@ def _set_interruption_metadata(
     )
     task.runtime.current_stage = task.runtime.current_stage.model_copy(
         update={
-            "step": stage,
+            "stage": stage,
             "status": "interrupted",
             "started_at": started_at,
             "completed_at": now,
@@ -364,8 +357,8 @@ def _record_commit_stale_recovery(
     record_recovery_report(
         root,
         task,
-        trigger="stale_runner_recovery",
-        stage="commit_to_git",
+        trigger_event_kind=TriggerEventKind.STALE_RUNNER_RECOVERY,
+        origin_stage="commit_to_git",
         summary=journal_message,
         runnable_state="runnable",
         failure_classification="stale_runner",
@@ -448,8 +441,8 @@ def _recover_stale_running_task(
     record_recovery_report(
         root,
         task,
-        trigger="stale_runner_recovery",
-        stage=task.pipeline_status,
+        trigger_event_kind=TriggerEventKind.STALE_RUNNER_RECOVERY,
+        origin_stage=task.pipeline_status,
         summary=f"Recovered stale runner state and returned the task to `{task.pipeline_status}`.",
         runnable_state="runnable",
         failure_classification="stale_runner",
@@ -534,18 +527,28 @@ def recover_stale_runner_state(
             state.queue = [task_id for task_id in state.queue if task_id not in running_task_ids]
             if prioritized_ids:
                 state.queue = [*prioritized_ids, *state.queue]
-        if state.active_task_id is not None and (
-            state.active_task_id not in tasks_by_id or state.active_task_id in prioritized_ids
-        ):
+        if state.active_task_id is not None:
             active_task = tasks_by_id.get(state.active_task_id)
-            should_report_clear = not (
-                active_task is not None
-                and (is_stranded_commit_task(active_task) or should_requeue_commit_stage_task(active_task))
+            should_clear_active_task_id = (
+                state.active_task_id not in tasks_by_id
+                or state.active_task_id in prioritized_ids
+                or (
+                    active_task is not None
+                    and active_task.runtime.execution_status != "running"
+                    and active_task.id not in running_task_ids
+                    and not is_stranded_commit_task(active_task)
+                    and not should_requeue_commit_stage_task(active_task)
+                )
             )
-            if summary is not None and summary.cleared_active_task_id is None and should_report_clear:
-                summary.cleared_active_task_id = state.active_task_id
-            state.active_task_id = None
-            mutated = True
+            if should_clear_active_task_id:
+                should_report_clear = not (
+                    active_task is not None
+                    and (is_stranded_commit_task(active_task) or should_requeue_commit_stage_task(active_task))
+                )
+                if summary is not None and summary.cleared_active_task_id is None and should_report_clear:
+                    summary.cleared_active_task_id = state.active_task_id
+                state.active_task_id = None
+                mutated = True
         if transitioned:
             persist_tasks_and_state_without_runner_guard(
                 root,

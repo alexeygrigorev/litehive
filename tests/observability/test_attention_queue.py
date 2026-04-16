@@ -11,6 +11,9 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.paths import worktree_root
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.execution import run_daemon_loop
+from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
+from litehive.lifecycle.persistence import SqlitePersistence
+from litehive.lifecycle.types import PipelineMode
 from litehive.main import _fast_status
 from litehive.state.records import create_task, save_task
 from litehive.state.persist import load_state, save_state, set_pool_stop_reason
@@ -134,6 +137,10 @@ def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, mon
     assert "stale_worktree" in kinds
     assert "origin_divergence" in kinds
     assert "human_checkpoint_before_commit" in kinds
+    merge_item = next(item for item in items if item.kind == "merge_failed_task")
+    assert merge_item.suggested_action == (
+        f"Run `litehive task debug {merge_failed.id} --worktree` and then `litehive recover {merge_failed.id}`."
+    )
 
     shutil.rmtree(duplicate_dir)
     flagged.status = "queued"
@@ -149,6 +156,51 @@ def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, mon
 
     remaining = list_attention(tmp_path)
     assert remaining == []
+
+
+def test_merge_failed_attention_refreshes_to_recovery_follow_up_when_commit_recovery_crashes(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+
+    task = create_task(tmp_path, title="Commit crash mislabeled as merge")
+    task.status = "merge_failed"
+    task.pipeline_status = "merge_failed"
+    save_task(tmp_path, task)
+
+    persistence = SqlitePersistence(tmp_path)
+    state = persistence.initialize(task.id, pipeline_mode=PipelineMode.FULL)
+    state.stage = "failed"
+    state.failed_reason = "recovery_crashed"
+    state.active_recovery_trigger = RecoveryTrigger(
+        origin_stage="commit",
+        trigger_event_kind=TriggerEventKind.CRASH,
+        failure_fingerprint=FailureFingerprint(
+            fingerprint="GitError:merge aborted",
+            classification="GitError",
+        ),
+        message="merge aborted",
+    )
+    persistence.save(state)
+
+    record_attention(
+        tmp_path,
+        kind="merge_failed_task",
+        task_id=task.id,
+        title=f"Task {task.id} needs merge recovery",
+        reason="old reason",
+        suggested_action="old action",
+        dedupe_key=f"merge_failed_task:{task.id}",
+    )
+
+    items = list_attention(tmp_path)
+
+    merge_item = next(item for item in items if item.kind == "merge_failed_task")
+    assert merge_item.title == f"Task {task.id} needs recovery follow-up"
+    assert merge_item.reason == "Recovery crashed while handling commit-stage failure; operator follow-up is required."
+    assert merge_item.suggested_action == (
+        f"Run `litehive task debug {task.id} --worktree` and then `litehive recover {task.id}`."
+    )
 
 
 def test_duplicate_id_detection_ignores_non_mapping_task_yaml(tmp_path: Path) -> None:

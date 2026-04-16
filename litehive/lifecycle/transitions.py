@@ -10,9 +10,16 @@ This module provides:
 from dataclasses import dataclass
 from typing import Callable
 
-from litehive.domain.lifecycle_deltas import EMPTY_DELTA, EffectFn, StateDelta, enter_recovery, inc_stage_retry
+from litehive.domain.lifecycle_deltas import (
+    EMPTY_DELTA,
+    EffectFn,
+    StateDelta,
+    enter_recovery,
+    exhaust_recovery_budget,
+    inc_stage_retry,
+)
 from .events import Event, PreExecRecoverySucceeded, RecoverySucceeded, Reject
-from .guards import Guard, stage_retries_exhausted, stage_retries_remaining
+from .guards import Guard, recovery_budget_available, recovery_budget_exhausted, stage_retries_exhausted, stage_retries_remaining
 from .persistence import TaskState
 from .stages import Stage
 from .types import STAGES, NodeName
@@ -93,6 +100,11 @@ def resume_from_origin(state: TaskState, event: Event) -> NodeName:
     e: RecoverySucceeded = event  # type: ignore[assignment]
     if e.resume == "done":
         return "done"
+    if not e.resume:
+        trigger = state.active_recovery_trigger
+        if trigger is not None and trigger.origin_stage in STAGES:
+            return f"before_{trigger.origin_stage}"
+        raise ValueError("RecoverySucceeded missing resume destination")
     if e.resume in STAGES:
         return f"before_{e.resume}"
     return e.resume
@@ -124,8 +136,13 @@ def retry_epoch_rules(counter_stage, phases, retry_target, recovering_stage) -> 
             with_effect=inc_stage_retry(name),
         ))
         rules.append(Rule(
+            from_state=phase, on_event=Reject, transition_to="failed",
+            when=stage_retries_exhausted(name) & recovery_budget_exhausted(),
+            with_effect=exhaust_recovery_budget,
+        ))
+        rules.append(Rule(
             from_state=phase, on_event=Reject, transition_to=recovering_stage,
-            when=stage_retries_exhausted(name),
+            when=stage_retries_exhausted(name) & recovery_budget_available(),
             with_effect=enter_recovery,
         ))
     return rules

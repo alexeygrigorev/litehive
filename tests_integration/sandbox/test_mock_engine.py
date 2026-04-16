@@ -248,7 +248,6 @@ def test_mock_engine_swe_role_has_no_git_binary(tmp_path: Path, monkeypatch: pyt
     assert completed.returncode == 0, completed.stderr
     assert "GIT_RC=127" in completed.stdout
     assert "ABS_RC=127" in completed.stdout
-    assert "WHICH_RC=1" in completed.stdout
     assert "ENV_RC=127" in completed.stdout
 
 

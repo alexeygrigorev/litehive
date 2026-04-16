@@ -117,7 +117,7 @@ class MergeConflictDetected(Event):
     Fired only by ``CommitNode`` (and subclasses like ``GitCommitNode``)
     when ``git merge`` leaves files in an unresolved state. The
     conflicting file list rides along so the ``stash_conflict_files``
-    effect can copy it to ``state.failure_context`` for the
+    effect can copy it to ``state.merge_context`` for the
     ``MergeAgent`` prompt to read.
 
     Routes ``commit → merge_resolving``. The worktree is deliberately
@@ -215,6 +215,7 @@ class RecoverySucceeded(Event):
     """
 
     resume: NodeName | Literal["done"]
+    disposition_hint: Literal["resume", "advance", "done"] = "resume"
 
 
 @dataclass(frozen=True)

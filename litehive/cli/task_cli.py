@@ -202,7 +202,7 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
     print(f"title: {task.title}")
     print(f"status: {task.status}")
     print(f"flag_reason: {_display_flag_reason(task)}")
-    print(f"pipeline_status: {task.pipeline_status}")
+    print(f"pipeline_stage: {task.pipeline_status}")
     print(f"priority: {task.priority}")
     print(f"engine: {load_config(workspace).default_engine}")
     print(f"model: {task.model or '-'}")
@@ -232,7 +232,7 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
         print("plan: -")
     rt = task.runtime
     print(f"execution_status: {rt.execution_status or '-'}")
-    print(f"current_stage: {rt.current_stage.step if rt.current_stage and rt.current_stage.step else '-'}")
+    print(f"current_stage: {rt.current_stage.stage if rt.current_stage and rt.current_stage.stage else '-'}")
     print(f"retry_count: {rt.retry_count}")
     print(f"last_outcome: {rt.last_outcome or '-'}")
     return 0
@@ -248,7 +248,7 @@ def abandon(task_id: Annotated[str, typer.Argument(help="Task id")], workspace: 
         return 1
     print(f"task: {task.id} {task.title}")
     print("status: cancelled")
-    print(f"pipeline_status: {task.pipeline_status}")
+    print(f"pipeline_stage: {task.pipeline_status}")
     return 0
 
 
@@ -282,7 +282,7 @@ def close(
     print(f"outcome: {task.runtime.last_outcome.reason_code}")
     print(f"reason: {task.runtime.last_outcome.reason}")
     print(f"follow_up_task: {task.runtime.last_outcome.follow_up_task_id or '-'}")
-    print(f"pipeline_status: {task.pipeline_status}")
+    print(f"pipeline_stage: {task.pipeline_status}")
     return 0
 
 

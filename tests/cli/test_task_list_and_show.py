@@ -179,7 +179,7 @@ def test_show_prints_task_details(
     assert f"id: {task.id}" in output
     assert "title: Detail task" in output
     assert "status: queued" in output
-    assert "pipeline_status: backlog" in output
+    assert "pipeline_stage: backlog" in output
     assert "priority: high" in output
     assert "engine: gemini" in output
     assert "goal: Test the show command" in output

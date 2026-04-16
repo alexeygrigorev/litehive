@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 from heru import ENGINE_CHOICES
 from heru.quota import UsageStatus, UsageWindow
@@ -9,7 +10,12 @@ from litehive.cli.workspace import (
     _health_daemon_status,
     _quota_health,
     _repair_summary_lines,
+    status_command,
 )
+from litehive.config.model import LitehiveConfig
+from litehive.domain.engine import WorkspaceEngineMonitoring
+from litehive.domain.runtime import RunnerStatusState
+from litehive.domain.task import WorkspaceState
 from litehive.domain.task_ops import WorkspaceRepairSummary
 
 
@@ -135,3 +141,51 @@ def test_print_doctor_snapshot_reports_clean_workspace(tmp_path: Path, monkeypat
 
     assert exit_code == 0
     assert f"doctor: clean workspace={tmp_path}" in output
+
+
+def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatch, capsys) -> None:
+    snapshot = SimpleNamespace(
+        config=LitehiveConfig(default_engine="codex"),
+        state=WorkspaceState(active_task_id=None, queue=["T-0382"]),
+        runner=RunnerStatusState(
+            status="running",
+            pid=123,
+            started_at="2026-04-16T03:15:43Z",
+            heartbeat_at="2026-04-16T03:21:53Z",
+            active_task_id="T-0381",
+        ),
+        monitoring=WorkspaceEngineMonitoring(),
+        issues=[],
+    )
+    active_task = SimpleNamespace(
+        id="T-0381",
+        title="Move stage and recovery reports off YAML storage",
+        pipeline_status="implementing",
+        runtime=SimpleNamespace(
+            active_subagent=None,
+            last_subagent=None,
+            run_started_at="2026-04-16T03:15:43Z",
+            current_stage=SimpleNamespace(
+                stage="implementing",
+                started_at="2026-04-16T03:20:00Z",
+                duration_seconds=0,
+            ),
+        ),
+    )
+
+    monkeypatch.setattr("litehive.cli.workspace.collect_status_snapshot", lambda root: snapshot)
+    monkeypatch.setattr("litehive.cli.workspace._safe_active_task", lambda workspace, task_id: active_task if task_id == "T-0381" else None)
+    monkeypatch.setattr("litehive.cli.workspace.list_tasks_state_first", lambda workspace, state=None: [])
+    monkeypatch.setattr("litehive.cli.workspace.find_last_completed_task", lambda tasks: None)
+    monkeypatch.setattr("litehive.cli.workspace.waiting_for_you_lines", lambda root: [])
+    monkeypatch.setattr("litehive.cli.workspace.collect_recent_activity", lambda root: [])
+    monkeypatch.setattr("litehive.cli.workspace.render_engine_health_section", lambda monitoring: [])
+    monkeypatch.setattr("litehive.cli.workspace.render_engine_monitoring_lines", lambda monitoring: [])
+    monkeypatch.setattr("litehive.cli.workspace.render_recent_activity_section", lambda events: [])
+    monkeypatch.setattr("litehive.cli.workspace._print_status_issues", lambda issues: 0)
+
+    exit_code = status_command(tmp_path)
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "T-0381 implementing with codex" in output

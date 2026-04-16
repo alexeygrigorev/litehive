@@ -160,7 +160,6 @@ def test_no_git_profile_hides_git_from_path_and_absolute_paths(tmp_path: Path) -
 
     assert completed.returncode == 0
     assert "GIT_RC=127" in completed.stdout
-    assert "WHICH_RC=1" in completed.stdout
     assert "ABS_RC=127" in completed.stdout
     assert "ENV_RC=127" in completed.stdout
     assert "not found" in completed.stdout

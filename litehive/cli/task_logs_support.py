@@ -4,8 +4,7 @@ from datetime import datetime
 from pathlib import Path
 import time
 
-import yaml
-
+from litehive.agents.session_store import load_subagent_session
 from litehive.config.paths import workspace_logs_dir
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.state.records import get_task_record, list_tasks
@@ -90,7 +89,7 @@ def _list_task_subagents(root: Path, task) -> int:
 
     for ref in reversed(task.subagents):
         runtime_state = runtime_by_id.get(ref.id)
-        session = _load_session_yaml(task_dir(root, task) / ref.path)
+        session = load_subagent_session(root, task.id, ref.id)
         exit_code = _pick_value(runtime_state, session, "exit_code")
         started_at = _pick_value(runtime_state, session, "started_at", "created_at")
         completed_at = _pick_value(runtime_state, session, "completed_at", "updated_at")
@@ -237,17 +236,6 @@ def _print_artifact_tail(path: Path | None, label: str) -> None:
         return
     print(f"{label}:")
     print(_tail_text(content))
-
-
-def _load_session_yaml(base: Path) -> dict[str, object]:
-    session_path = resolve_artifact_path(base, "session.yaml")
-    if session_path is None:
-        return {}
-    try:
-        data = yaml.safe_load(read_text_artifact(session_path))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
 
 
 def _pick_value(runtime_state, session: dict[str, object], *keys: str):

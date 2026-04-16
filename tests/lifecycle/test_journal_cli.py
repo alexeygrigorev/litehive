@@ -10,6 +10,7 @@ import pytest
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
+from litehive.domain.recovery import FailureFingerprint, RecoveryDisposition, RecoveryOutcome, RecoveryTrigger, TriggerEventKind
 from litehive.domain.lifecycle_deltas import StateDelta
 from litehive.lifecycle.events import CleanState, Reject
 from litehive.lifecycle.journal import SqliteJournal
@@ -27,8 +28,31 @@ def workspace(tmp_path: Path) -> Path:
 def _seed_journal(workspace: Path, task_id: str) -> None:
     store = SqlitePersistence(workspace)
     state = store.initialize(task_id, pipeline_mode=PipelineMode.FULL)
-    state.origin_stage = "grooming"
-    state.recovery_attempt["grooming"] = 1
+    state.active_recovery_trigger = RecoveryTrigger(
+        origin_stage="grooming",
+        trigger_event_kind=TriggerEventKind.REJECT,
+        failure_fingerprint=FailureFingerprint(
+            fingerprint="agent:blank task",
+            classification="agent_reject",
+        ),
+        source="agent",
+        message="blank task",
+    )
+    state.recovery_history.append(
+        RecoveryOutcome(
+            trigger=RecoveryTrigger(
+                origin_stage="implementing",
+                trigger_event_kind=TriggerEventKind.CRASH,
+                failure_fingerprint=FailureFingerprint(
+                    fingerprint="RuntimeError:boom",
+                    classification="RuntimeError",
+                ),
+                message="boom",
+            ),
+            recovery_verdict="resume",
+            disposition=RecoveryDisposition.RESUMED,
+        )
+    )
     state.stage = "recovering"
     store.save(state)
 
@@ -48,7 +72,7 @@ def _seed_journal(workspace: Path, task_id: str) -> None:
         event=Reject(source="agent", reason="blank task"),
         to_stage="recovering",
         rule_description="grooming reject → recovering",
-        delta=StateDelta(set_origin_stage="grooming", inc_recovery_attempt="grooming"),
+        delta=StateDelta(set_active_recovery_trigger=state.active_recovery_trigger),
     )
 
 
@@ -62,8 +86,9 @@ def test_pipeline_journal_prints_state_and_transitions(workspace: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "task: T-0099" in result.output
     assert "stage: recovering" in result.output
-    assert "origin_stage: grooming" in result.output
-    assert "recovery_attempt:" in result.output
+    assert "active_recovery_trigger:" in result.output
+    assert "origin_stage=grooming" in result.output
+    assert "recovery_history:" in result.output
     assert "ready" in result.output
     assert "worktree_sync" in result.output
     assert "grooming reject → recovering" in result.output

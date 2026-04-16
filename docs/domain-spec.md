@@ -179,7 +179,7 @@ Each domain section should start with:
 
 Example:
 
-~~~md
+```md
 ## Payment Domain
 
 Purpose:
@@ -198,7 +198,7 @@ Primary actions:
 - authorize a payment
 - capture a payment
 - refund a payment
-~~~
+```
 
 ## Entry Types
 
@@ -216,7 +216,7 @@ Use for top-level domain sections.
 
 Template:
 
-~~~md
+```md
 ## <Domain Name> Domain
 
 Purpose:
@@ -229,7 +229,7 @@ Primary actors:
 Primary actions:
 
 - <meaningful domain action>
-~~~
+```
 
 ### Actor Template
 
@@ -238,7 +238,7 @@ work in the model.
 
 Template:
 
-~~~md
+```md
 ### <Actor Name>
 
 <one-sentence definition>
@@ -250,7 +250,7 @@ Exists because:
 Uses:
 
 - <main concepts this actor reads or writes>
-~~~
+```
 
 ### Cross-Domain Section Template
 
@@ -266,7 +266,7 @@ Typical examples:
 
 Template:
 
-~~~md
+```md
 ## <Cross-Domain Section Name>
 
 <why this section is global rather than domain-local>
@@ -282,7 +282,7 @@ Exists because:
 Used by:
 
 - <which domains or actors rely on it>
-~~~
+```
 
 ## When To Split or Merge Concepts
 
@@ -348,7 +348,7 @@ Optional fields:
 
 Example:
 
-~~~md
+```md
 ### Order
 
 A customer purchase tracked over time.
@@ -374,7 +374,7 @@ class Order(BaseModel):
     id: str
     status: OrderStatus
 ```
-~~~
+```
 
 ### Value Object Template
 
@@ -392,7 +392,7 @@ Required fields:
 
 Template:
 
-~~~md
+```md
 ### <Value Object Name>
 
 <one-sentence definition>
@@ -416,7 +416,7 @@ Used after creation by:
 class <TypeName>(BaseModel):
     ...
 ```
-~~~
+```
 
 ### Enum, Status, Reason, or Classifier Template
 
@@ -434,7 +434,7 @@ Required fields:
 
 Example:
 
-~~~md
+```md
 ### Order Status
 
 The high-level lifecycle state for an order.
@@ -449,11 +449,11 @@ Used by:
 
 - Preferred: `order status`
 - Python type: `OrderStatus`
-~~~
+```
 
 Template:
 
-~~~md
+```md
 ### <Enum Name>
 
 <one-sentence definition>
@@ -477,7 +477,7 @@ class <TypeName>(str, Enum):
 Values:
 
 - `<value>`: <meaning>
-~~~
+```
 
 ### Service Template
 
@@ -499,7 +499,7 @@ Optional fields:
 
 Template:
 
-~~~md
+```md
 ### <Service Name>
 
 <one-sentence definition>
@@ -519,7 +519,7 @@ Used by:
 class <TypeName>:
     ...
 ```
-~~~
+```
 
 ### Store Template
 
@@ -536,7 +536,7 @@ Required fields:
 
 Template:
 
-~~~md
+```md
 ### <Store Name>
 
 <one-sentence definition>
@@ -556,7 +556,7 @@ Used by:
 class <TypeName>(ABC):
     ...
 ```
-~~~
+```
 
 ### Event Template
 
@@ -574,7 +574,7 @@ Required fields:
 
 Template:
 
-~~~md
+```md
 ### <Event Name>
 
 <one-sentence definition>
@@ -599,7 +599,7 @@ Used after creation by:
 class <TypeName>:
     ...
 ```
-~~~
+```
 
 ### Artifact Template
 
@@ -607,7 +607,7 @@ Use for persisted byproducts such as traces, journals, logs, and sessions.
 
 Template:
 
-~~~md
+```md
 ### <Artifact Name>
 
 <one-sentence definition>
@@ -631,7 +631,7 @@ Used after creation by:
 class <TypeName>(BaseModel):
     ...
 ```
-~~~
+```
 
 ## Relationship Notation
 
@@ -812,7 +812,7 @@ Watch for these common domain-document failures:
 
 Weak entry:
 
-~~~md
+```md
 ### PaymentState
 
 ```python
@@ -820,7 +820,7 @@ class PaymentState(str, Enum):
     NEW = "new"
     DONE = "done"
 ```
-~~~
+```
 
 Why it is weak:
 
@@ -831,7 +831,7 @@ Why it is weak:
 
 Stronger entry:
 
-~~~md
+```md
 ### Payment Status
 
 The high-level lifecycle state for a payment.
@@ -847,7 +847,7 @@ Used by:
 
 - Preferred: `payment status`
 - Python type: `PaymentStatus`
-~~~
+```
 
 Why it is stronger:
 
@@ -863,12 +863,12 @@ possible.
 
 Preferred format:
 
-~~~md
+```md
 ## Open Questions
 
 - Should `PaymentStatus` and `PaymentOutcome` stay separate?
 - Should `RefundRequest` be its own entity or part of `Payment`?
-~~~
+```
 
 Rule:
 
@@ -882,12 +882,12 @@ small, explicit section.
 
 Template:
 
-~~~md
+```md
 ## Migration Notes
 
 - current `PaymentStateRecord` -> target `Payment`
 - current `payment_status` -> target `payment_state`
-~~~
+```
 
 Rule:
 

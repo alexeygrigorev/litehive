@@ -9,15 +9,15 @@ INSTRUCTIONS = """\
 - You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path.
 - Your job is to diagnose why the previous agent failed and restore a runnable path by fixing Litehive infrastructure bugs.
 - **Pull logs before diagnosing.** The failure is not obvious from the prompt — go read the evidence yourself. Sources, in order of value:
-  - `litehive pipeline journal <task_id>` — **start here.** One command, no sqlite incantations: dumps the v2 task state (stage, origin_stage, recovery_attempt, failed_reason, last_rejection_by_stage), the lifecycle events, and the recent pipeline_transitions rows in one readable block.
+  - `litehive pipeline journal <task_id>` — **start here.** One command, no sqlite incantations: dumps the task state (stage, active recovery trigger, recovery history, failed reason, last rejection by stage), the lifecycle events, and the recent pipeline transitions in one readable block.
   - `litehive task logs <task_id> --agent` — transcript / stdout / stderr of the failing subagent process. This is usually where the root cause is.
   - `litehive task logs <task_id> --agent --all` — lists every subagent run on this task so you can diff the recent ones.
   - `litehive task logs <task_id>` — task journal (v1 style) with stage entries, verdict submissions, and operator notes.
   - `litehive task logs --daemon` — daemon-level events if you suspect an orchestrator/runner bug rather than an agent bug.
   - `litehive pipeline rules` — the full v2 transition table, if you need to understand what routing decisions the state machine made.
   - `.litehive/tasks/<task_id>/reports/*.yaml` — stage reports the agent wrote (if any).
-  - `.litehive/tasks/<task_id>/comments.yaml` — verdict history.
-  - The `failure_context` field in your prompt already contains the most recent trigger event, source, and reason — use it to narrow your log search.
+  - Task activity from `litehive task logs <task_id>` / `litehive task debug <task_id>` — verdict history and operator discussion.
+  - The `recovery_trigger` field in your prompt already contains the most recent trigger event, source, and reason — use it to narrow your log search.
   - If you need to go deeper than the CLI commands, the underlying tables are `pipeline_transitions` (columns: `seq, created_at, from_stage, event_type, event_payload, to_stage, rule_description, delta`) and `pipeline_journal` (columns: `seq, created_at, kind, payload`). Don't invent column names.
 - Your job is not to redo the failed stage's work, not to re-run the task's implementation or verification, and not to submit the failed stage verdict on the previous agent's behalf.
 - Make the smallest effective fix needed so the task can resume the current stage and finish cleanly.
@@ -26,13 +26,14 @@ INSTRUCTIONS = """\
 - run `uv run pytest` in the Litehive repo before reporting success when you changed Litehive code; keep verification targeted.
 - If the evidence points to a project/task bug rather than a Litehive bug, do not implement the task; report that no Litehive infrastructure fix was found and leave the task for the normal stage owner.
 - Submit your own recovery verdict describing the root cause, the Litehive fix you made, and why the failed stage should be retried.
+- If you submit `resume` or `advance`, include a concrete `--target-stage <stage>`; do not leave the destination implicit.
 """
 
 
 class RecoveryAgent(RoleAgent):
     """Singleton recovery node, reachable from any stage.
 
-    Reads ``origin_stage`` and ``failure_context`` from ``TaskState`` — no
+    Reads the active structured recovery trigger from ``TaskState`` — no
     per-entry construction and no ``RecoveryRequest`` object. Fits into the
     ``NodeRegistry`` like every other node.
 
@@ -47,12 +48,11 @@ class RecoveryAgent(RoleAgent):
 
     def build_prompt(self, state: TaskState) -> dict[str, Any]:
         base = super().build_prompt(state)
-        origin = state.origin_stage or ""
+        trigger = state.active_recovery_trigger
         base.update(
             {
-                "origin_stage": origin,
-                "failure_context": state.failure_context,
-                "recovery_attempt": state.recovery_attempt.get(origin, 0),
+                "recovery_trigger": trigger.to_payload() if trigger is not None else None,
+                "recovery_failure_explanation": state.recovery_failure_explanation,
             }
         )
         return base
@@ -60,12 +60,17 @@ class RecoveryAgent(RoleAgent):
     def _verdict_to_event(self, verdict: AgentVerdict) -> Event:
         outcome = verdict.outcome.lower()
         if outcome == "resume":
-            return RecoverySucceeded(resume=verdict.metadata.get("target_stage") or "")
+            target = str(verdict.metadata.get("target_stage") or "").strip()
+            if not target:
+                return RecoveryFailed(reason="recovery resume verdict missing target_stage")
+            return RecoverySucceeded(resume=target, disposition_hint="resume")
         if outcome == "advance":
-            target = verdict.metadata.get("target_stage", "")
-            return RecoverySucceeded(resume=target)
+            target = str(verdict.metadata.get("target_stage") or "").strip()
+            if not target:
+                return RecoveryFailed(reason="recovery advance verdict missing target_stage")
+            return RecoverySucceeded(resume=target, disposition_hint="advance")
         if outcome == "done":
-            return RecoverySucceeded(resume="done")
+            return RecoverySucceeded(resume="done", disposition_hint="done")
         if outcome == "budget_hit":
             return RecoveryBudgetHit()
         return RecoveryFailed(reason=verdict.reason or "recovery_failed")

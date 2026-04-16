@@ -10,10 +10,19 @@ from pathlib import Path
 import pytest
 
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.recovery import (
+    FailureFingerprint,
+    RecoveryDisposition,
+    RecoveryOutcome,
+    RecoveryTrigger,
+    TriggerEventKind,
+)
 from litehive.lifecycle.persistence import (
     HookRejectFingerprint,
     LastRejection,
     LastReport,
+    MergeContext,
+    CommitResult,
     Limits,
     SqlitePersistence,
     TaskNotFound,
@@ -56,10 +65,40 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
         stage="implementing",
         pipeline_mode=PipelineMode.FULL,
         stage_retry={"implementing": 2, "testing": 1},
-        recovery_attempt={"grooming": 1},
+        active_recovery_trigger=RecoveryTrigger(
+            origin_stage="implementing",
+            trigger_event_kind=TriggerEventKind.CRASH,
+            failure_fingerprint=FailureFingerprint(
+                fingerprint="RuntimeError:boom",
+                classification="RuntimeError",
+            ),
+            message="boom",
+        ),
+        recovery_history=[
+            RecoveryOutcome(
+                trigger=RecoveryTrigger(
+                    origin_stage="grooming",
+                    trigger_event_kind=TriggerEventKind.REJECT,
+                    failure_fingerprint=FailureFingerprint(
+                        fingerprint="agent:blank task",
+                        classification="agent_reject",
+                    ),
+                    source="agent",
+                    message="blank task",
+                ),
+                recovery_verdict="resume",
+                disposition=RecoveryDisposition.RESUMED,
+            )
+        ],
         pre_exec_recovery_attempt=1,
-        origin_stage="grooming",
-        failure_context={"trigger_event": "Reject", "source": "hook", "reason": "boom"},
+        merge_context=MergeContext(
+            conflict_files=["conflicted.py"],
+            merge_attempt=2,
+        ),
+        commit_result=CommitResult(
+            head_sha="abc123",
+            reason="checkpoint_created",
+        ),
         last_report=LastReport(files_changed=7, tests_added=3),
         last_rejection_by_stage={
             "implementing": LastRejection(
@@ -78,6 +117,7 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
         hook_reject_recovery_invoked=True,
         failed_reason=None,
         failed_message=None,
+        recovery_failure_explanation=None,
     )
     store.save(original)
 
@@ -86,10 +126,16 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
     assert loaded.stage == "implementing"
     assert loaded.pipeline_mode == PipelineMode.FULL
     assert loaded.stage_retry == {"implementing": 2, "testing": 1}
-    assert loaded.recovery_attempt == {"grooming": 1}
+    assert loaded.active_recovery_trigger is not None
+    assert loaded.active_recovery_trigger.trigger_event_kind == TriggerEventKind.CRASH
+    assert loaded.recovery_history[0].disposition == RecoveryDisposition.RESUMED
     assert loaded.pre_exec_recovery_attempt == 1
-    assert loaded.origin_stage == "grooming"
-    assert loaded.failure_context["reason"] == "boom"
+    assert loaded.merge_context is not None
+    assert loaded.merge_context.conflict_files == ("conflicted.py",)
+    assert loaded.merge_context.merge_attempt == 2
+    assert loaded.commit_result is not None
+    assert loaded.commit_result.head_sha == "abc123"
+    assert loaded.commit_result.reason == "checkpoint_created"
     assert loaded.last_report.files_changed == 7
     assert loaded.last_report.tests_added == 3
     assert loaded.last_rejection_by_stage["implementing"].source == "qa"

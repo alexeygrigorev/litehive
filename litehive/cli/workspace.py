@@ -201,13 +201,14 @@ def doctor_command(
 
 
 def status_full(workspace, root, config, state, runner, monitoring, issues):
+    active_task_id = runner.active_task_id or state.active_task_id
     for line in render_full_status_header_lines(workspace, config, state, runner):
         print(line)
     for line in waiting_for_you_lines(root):
         print(line)
     if state.queue:
         print(f"queue_head: {state.queue[0]}")
-    active_task = _safe_active_task(workspace, state.active_task_id)
+    active_task = _safe_active_task(workspace, active_task_id)
     for line in render_active_task_detail_lines(active_task, config.default_engine):
         print(line)
     for line in render_engine_monitoring_lines(monitoring):
@@ -218,7 +219,7 @@ def status_full(workspace, root, config, state, runner, monitoring, issues):
     if tasks:
         print()
         for task in tasks:
-            for line in render_task_summary(task, active=task.id == state.active_task_id, root=root):
+            for line in render_task_summary(task, active=task.id == active_task_id, root=root):
                 print(line)
     return _print_status_issues(issues)
 
@@ -236,7 +237,8 @@ def status_command(
     if full:
         return status_full(workspace, root, config, state, runner, monitoring, snapshot.issues)
 
-    active_task = _safe_active_task(workspace, state.active_task_id)
+    active_task_id = runner.active_task_id or state.active_task_id
+    active_task = _safe_active_task(workspace, active_task_id)
     for line in render_active_task_section(active_task, config.default_engine):
         print(line)
 

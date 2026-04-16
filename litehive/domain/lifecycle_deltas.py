@@ -1,8 +1,32 @@
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Callable
 
-from litehive.lifecycle.events import Blocked, Crash, Event, MergeConflictDetected, Reject
-from litehive.lifecycle.persistence import HookRejectFingerprint, LastRejection, TaskState
+from litehive.domain.recovery import (
+    FailureFingerprint,
+    RecoveryDisposition,
+    RecoveryOutcome,
+    RecoveryTrigger,
+    TriggerEventKind,
+)
+from litehive.lifecycle.events import (
+    Blocked,
+    Crash,
+    Event,
+    MergeConflictDetected,
+    OverallRetryLimitHit,
+    RecoveryBudgetHit,
+    RecoveryFailed,
+    RecoverySucceeded,
+    Reject,
+    StageRetryLimitHit,
+    Timeout,
+)
+from litehive.lifecycle.persistence import (
+    HookRejectFingerprint,
+    LastRejection,
+    MergeContext,
+    TaskState,
+)
 from litehive.lifecycle.types import FailedReason, NodeName
 
 EffectFn = Callable[[TaskState, Event], "StateDelta"]
@@ -16,20 +40,23 @@ class StateDelta:
     parse, no silent drops on typos.
     """
 
-    set_origin_stage: NodeName | None = None
-    clear_origin_stage: bool = False
     inc_stage_retry: NodeName | None = None
     reset_stage_retry: NodeName | None = None
-    inc_recovery_attempt: NodeName | None = None
+    set_active_recovery_trigger: RecoveryTrigger | None = None
+    clear_active_recovery_trigger: bool = False
+    append_recovery_outcome: RecoveryOutcome | None = None
     inc_pre_exec_recovery_attempt: bool = False
+    set_merge_context: MergeContext | None = None
+    clear_merge_context: bool = False
     set_last_rejection: tuple[NodeName, LastRejection] | None = None
     set_consecutive_same_hook_rejects: int | None = None
     set_last_hook_reject_fingerprint: HookRejectFingerprint | None = None
     clear_hook_reject_tracking: bool = False
     set_hook_reject_recovery_invoked: bool | None = None
-    set_failure_context: dict[str, Any] | None = None
     failed_reason: FailedReason | None = None
     failed_message: str | None = None
+    set_recovery_failure_explanation: str | None = None
+    clear_recovery_failure_explanation: bool = False
 
 
 EMPTY_DELTA = StateDelta()
@@ -45,36 +72,112 @@ def _rejection_from_event(state: TaskState, event: Event) -> LastRejection | Non
     )
 
 
-def _failure_context_from_event(state: TaskState, event: Event) -> dict[str, Any]:
-    source = event.source if isinstance(event, Reject) else None
-    reason_code = None
+def _reason_code_from_event(state: TaskState, event: Event) -> str | None:
+    if isinstance(event, Reject) and _hook_reject_loop_detected(state, event):
+        return "hook_reject_loop"
+    return None
+
+
+def _trigger_event_kind(event: Event) -> TriggerEventKind:
     if isinstance(event, Reject):
-        reason = event.reason
-        if _hook_reject_loop_detected(state, event):
-            reason_code = "hook_reject_loop"
-    elif isinstance(event, Crash):
-        reason = event.message
-    elif isinstance(event, Blocked):
-        reason = event.reason
-    else:
-        reason = None
-    context = {
-        "trigger_event": type(event).__name__,
-        "source": source,
-        "reason": reason,
-        "raised_at_phase": state.stage,
-    }
+        return TriggerEventKind.REJECT
+    if isinstance(event, Blocked):
+        return TriggerEventKind.BLOCKED
+    if isinstance(event, Crash):
+        return TriggerEventKind.CRASH
+    if isinstance(event, Timeout):
+        return TriggerEventKind.TIMEOUT
+    if isinstance(event, StageRetryLimitHit):
+        return TriggerEventKind.STAGE_RETRY_LIMIT
+    if isinstance(event, OverallRetryLimitHit):
+        return TriggerEventKind.RETRY_LIMIT
+    return TriggerEventKind.UNKNOWN
+
+
+def _fingerprint_from_event(state: TaskState, event: Event) -> FailureFingerprint:
     hook = _hook_fingerprint_from_event(event)
     if hook is not None:
-        context["hook"] = {
-            "point": hook.point,
-            "command": hook.command,
-            "description": hook.description,
-            "fingerprint": hook.fingerprint,
-        }
-    if reason_code is not None:
-        context["reason_code"] = reason_code
-    return context
+        return FailureFingerprint(
+            fingerprint=hook.fingerprint,
+            classification="hook_reject",
+            diagnostics={
+                "point": hook.point,
+                "command": hook.command,
+                "description": hook.description,
+            },
+        )
+    if isinstance(event, Reject):
+        reason_code = _reason_code_from_event(state, event)
+        return FailureFingerprint(
+            fingerprint=f"{event.source}:{event.reason}",
+            classification=reason_code or f"{event.source}_reject",
+            diagnostics={"source": event.source},
+        )
+    if isinstance(event, Crash):
+        return FailureFingerprint(
+            fingerprint=f"{event.exc_type}:{event.message}",
+            classification=event.exc_type,
+            diagnostics={"exc_type": event.exc_type},
+        )
+    if isinstance(event, Blocked):
+        return FailureFingerprint(
+            fingerprint=f"blocked:{event.reason}",
+            classification="blocked",
+        )
+    if isinstance(event, Timeout):
+        return FailureFingerprint(
+            fingerprint="timeout",
+            classification="timeout",
+        )
+    if isinstance(event, StageRetryLimitHit):
+        return FailureFingerprint(
+            fingerprint=f"stage_retry_limit:{event.stage}",
+            classification="stage_retry_limit",
+            diagnostics={"stage": event.stage},
+        )
+    if isinstance(event, OverallRetryLimitHit):
+        return FailureFingerprint(
+            fingerprint="retry_limit",
+            classification="retry_limit",
+        )
+    return FailureFingerprint(fingerprint=type(event).__name__.lower())
+
+
+def recovery_trigger_from_event(state: TaskState, event: Event) -> RecoveryTrigger:
+    reason_code = _reason_code_from_event(state, event)
+    if isinstance(event, Reject):
+        message = event.reason
+        source = event.source
+        diagnostics = dict(event.metadata or {})
+    elif isinstance(event, Crash):
+        message = event.message
+        source = None
+        diagnostics = {"exc_type": event.exc_type}
+    elif isinstance(event, Blocked):
+        message = event.reason
+        source = None
+        diagnostics = {}
+    elif isinstance(event, StageRetryLimitHit):
+        message = f"Stage retry limit exhausted for {event.stage}"
+        source = None
+        diagnostics = {"stage": event.stage}
+    elif isinstance(event, OverallRetryLimitHit):
+        message = "Overall retry limit exhausted"
+        source = None
+        diagnostics = {}
+    else:
+        message = ""
+        source = None
+        diagnostics = {}
+    return RecoveryTrigger(
+        origin_stage=state.stage,
+        trigger_event_kind=_trigger_event_kind(event),
+        failure_fingerprint=_fingerprint_from_event(state, event),
+        source=source,
+        reason_code=reason_code,
+        message=message,
+        diagnostics=diagnostics,
+    )
 
 
 def _hook_fingerprint_from_event(event: Event) -> HookRejectFingerprint | None:
@@ -125,19 +228,19 @@ def _hook_reject_delta(state: TaskState, event: Event, *, recovery_invoked: bool
 
 
 def enter_recovery(state: TaskState, event: Event) -> StateDelta:
+    trigger = recovery_trigger_from_event(state, event)
     hook_delta = _hook_reject_delta(
         state,
         event,
         recovery_invoked=True if _hook_reject_loop_detected(state, event) else None,
     )
     return StateDelta(
-        set_origin_stage=state.stage,
-        inc_recovery_attempt=state.stage,
+        set_active_recovery_trigger=trigger,
         set_consecutive_same_hook_rejects=hook_delta.set_consecutive_same_hook_rejects,
         set_last_hook_reject_fingerprint=hook_delta.set_last_hook_reject_fingerprint,
         clear_hook_reject_tracking=hook_delta.clear_hook_reject_tracking,
         set_hook_reject_recovery_invoked=hook_delta.set_hook_reject_recovery_invoked,
-        set_failure_context=_failure_context_from_event(state, event),
+        clear_recovery_failure_explanation=True,
     )
 
 
@@ -146,11 +249,27 @@ def enter_pre_exec_recovery(state: TaskState, event: Event) -> StateDelta:
 
 
 def clear_recovery_attempt(state: TaskState, event: Event) -> StateDelta:
+    trigger = state.active_recovery_trigger
+    outcome = None
+    if isinstance(event, RecoverySucceeded) and trigger is not None:
+        disposition = {
+            "resume": RecoveryDisposition.RESUMED,
+            "advance": RecoveryDisposition.ADVANCED,
+            "done": RecoveryDisposition.COMPLETED,
+        }[event.disposition_hint]
+        outcome = RecoveryOutcome(
+            trigger=trigger,
+            recovery_verdict=event.disposition_hint,
+            disposition=disposition,
+            message=f"Recovery {event.disposition_hint}d task via {event.resume}",
+        )
     return StateDelta(
-        clear_origin_stage=True,
-        reset_stage_retry=state.origin_stage,
+        reset_stage_retry=trigger.origin_stage if trigger is not None else None,
+        clear_active_recovery_trigger=True,
+        append_recovery_outcome=outcome,
         clear_hook_reject_tracking=True,
         set_hook_reject_recovery_invoked=False,
+        clear_recovery_failure_explanation=True,
     )
 
 
@@ -181,27 +300,102 @@ def stash_conflict_files(state: TaskState, event: Event) -> StateDelta:
     """Effect for ``commit → merge_resolving``.
 
     Copies the conflict file list from the ``MergeConflictDetected`` event
-    into ``state.failure_context`` so the ``MergeAgent`` can read it from
+    into ``state.merge_context`` so the ``MergeAgent`` can read it from
     its prompt context.
     """
     if not isinstance(event, MergeConflictDetected):
         return StateDelta()
-    ctx = {
-        **state.failure_context,
-        "conflict_files": list(event.conflict_files),
-        "merge_attempt": state.failure_context.get("merge_attempt", 0) + 1,
-    }
-    return StateDelta(set_failure_context=ctx)
+    current_attempt = state.merge_context.merge_attempt if state.merge_context is not None else 0
+    return StateDelta(
+        set_merge_context=MergeContext(
+            conflict_files=tuple(event.conflict_files),
+            merge_attempt=current_attempt + 1,
+        )
+    )
 
 
 def fail(reason: FailedReason) -> EffectFn:
+    normalized_reason = reason if isinstance(reason, FailedReason) else FailedReason(reason)
+
     def _effect(state: TaskState, event: Event) -> StateDelta:
         if isinstance(event, (Reject, Blocked)):
             message = event.reason
         elif isinstance(event, Crash):
             message = event.message
+        elif isinstance(event, RecoveryFailed):
+            message = event.reason
         else:
             message = ""
-        return StateDelta(failed_reason=reason, failed_message=message)
+        outcome = None
+        explanation = None
+        if state.stage == "recovering":
+            trigger = state.active_recovery_trigger
+            if trigger is not None:
+                outcome = RecoveryOutcome(
+                    trigger=trigger,
+                    recovery_verdict=_recovery_verdict_for_terminal_event(event, normalized_reason),
+                    disposition=RecoveryDisposition.TERMINATED,
+                    reason_code=normalized_reason.value,
+                    message=message,
+                )
+                explanation = _recovery_failure_explanation(trigger, normalized_reason, message)
+        return StateDelta(
+            failed_reason=normalized_reason,
+            failed_message=message,
+            append_recovery_outcome=outcome,
+            clear_active_recovery_trigger=state.stage == "recovering",
+            set_recovery_failure_explanation=explanation,
+        )
 
     return _effect
+
+
+def exhaust_recovery_budget(state: TaskState, event: Event) -> StateDelta:
+    trigger = recovery_trigger_from_event(state, event)
+    return StateDelta(
+        failed_reason=FailedReason.RECOVERY_BUDGET_HIT,
+        failed_message=trigger.message,
+        append_recovery_outcome=RecoveryOutcome(
+            trigger=trigger,
+            recovery_verdict="budget_hit",
+            disposition=RecoveryDisposition.TERMINATED,
+            reason_code=FailedReason.RECOVERY_BUDGET_HIT.value,
+            message=trigger.message,
+        ),
+        set_recovery_failure_explanation=_recovery_failure_explanation(
+            trigger,
+            FailedReason.RECOVERY_BUDGET_HIT,
+            trigger.message,
+        ),
+    )
+
+
+def _recovery_verdict_for_terminal_event(event: Event, reason: FailedReason) -> str:
+    if isinstance(event, RecoveryFailed):
+        return "failed"
+    if isinstance(event, RecoveryBudgetHit):
+        return "budget_hit"
+    if isinstance(event, Timeout):
+        return "timeout"
+    if isinstance(event, Crash):
+        return "crash"
+    return reason.value
+
+
+def _recovery_failure_explanation(
+    trigger: RecoveryTrigger,
+    reason: FailedReason,
+    message: str,
+) -> str:
+    subject = trigger.origin_stage or "unknown stage"
+    if reason == FailedReason.RECOVERY_BUDGET_HIT:
+        return (
+            f"Recovery budget exhausted for `{subject}` after repeated "
+            f"`{trigger.trigger_event_kind.value}` failures with fingerprint "
+            f"`{trigger.failure_fingerprint.budget_key()}`."
+        )
+    if reason == FailedReason.RECOVERY_CRASHED:
+        suffix = f": {message}" if message else "."
+        return f"Recovery agent crashed while handling `{subject}`{suffix}"
+    suffix = f": {message}" if message else "."
+    return f"Recovery could not restore a runnable path for `{subject}`{suffix}"

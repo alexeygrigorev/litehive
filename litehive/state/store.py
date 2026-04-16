@@ -3,15 +3,24 @@
 import json
 import logging
 import sqlite3
-
 from pathlib import Path
+
+import yaml
 
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
 from litehive.domain.runtime import TaskRuntime
-from litehive.domain.task import TaskStateRecord, WorkspaceState
+from litehive.domain.task import TaskIntentRecord, TaskRecord, TaskStateRecord, WorkspaceState
 
 logger = logging.getLogger(__name__)
+_LEGACY_TASK_INTENT_KEYS = {
+    "mode",
+    "pm_complexity",
+    "planned_effort",
+    "human_checkpoints",
+    "upstream_origin",
+    "github_origin",
+}
 
 
 # Map subagent statuses that earlier versions of the runtime wrote into SQLite
@@ -44,6 +53,9 @@ class RuntimeStore:
     def bootstrap(self) -> None:
         with connect_workspace_db(self.root) as connection:
             self._ensure_workspace_state_rows(connection)
+            disk_task_ids = self._seed_task_state_rows_from_disk(connection)
+            self._seed_workspace_state_from_disk(connection, disk_task_ids)
+            connection.commit()
 
     def load_workspace_state(self) -> WorkspaceState | None:
         with connect_workspace_db(self.root) as connection:
@@ -99,7 +111,7 @@ class RuntimeStore:
 
     def _save_workspace_state(self, connection: sqlite3.Connection, state: WorkspaceState) -> None:
         now = utcnow()
-        payload = state.model_dump(mode="python")
+        payload = state.model_dump(mode="json")
         queue_payload = json.dumps(payload.pop("queue"), sort_keys=True)
         connection.execute(
             """
@@ -145,7 +157,7 @@ class RuntimeStore:
         state.updated_at = now
         if state.runtime.updated_at is None:
             state.runtime.updated_at = now
-        payload = state.model_dump(mode="python")
+        payload = state.model_dump(mode="json")
         payload["updated_at"] = now
         connection.execute(
             """
@@ -169,7 +181,7 @@ class RuntimeStore:
             (
                 "workspace",
                 json.dumps(
-                    WorkspaceState().model_dump(mode="python", exclude={"queue"}),
+                    WorkspaceState().model_dump(mode="json", exclude={"queue"}),
                     sort_keys=True,
                 ),
                 now,
@@ -183,6 +195,66 @@ class RuntimeStore:
             ("workspace", json.dumps([], sort_keys=True), now),
         )
         connection.commit()
+
+    def _seed_task_state_rows_from_disk(self, connection: sqlite3.Connection) -> list[str]:
+        existing_rows = connection.execute("SELECT task_id FROM task_state").fetchall()
+        existing_task_ids = {str(row["task_id"]) for row in existing_rows}
+        task_ids_on_disk: list[str] = []
+        tasks_dir = self.root / ".litehive" / "tasks"
+        if not tasks_dir.exists():
+            return task_ids_on_disk
+        for task_file in sorted(tasks_dir.glob("*/task.yaml")):
+            try:
+                loaded = yaml.safe_load(task_file.read_text(encoding="utf-8")) or {}
+                if not isinstance(loaded, dict):
+                    raise ValueError("task file must contain a mapping")
+                payload = dict(loaded)
+                for key in _LEGACY_TASK_INTENT_KEYS:
+                    payload.pop(key, None)
+                intent = TaskIntentRecord.model_validate(payload)
+            except Exception as exc:
+                logger.warning("Skipping invalid task file during sqlite bootstrap %s: %s", task_file, exc)
+                continue
+            task = TaskRecord.from_intent_and_state(intent)
+            task_ids_on_disk.append(task.id)
+            if task.id in existing_task_ids:
+                continue
+            self._save_task_state(connection, task.id, task.to_storage_state_record())
+        return task_ids_on_disk
+
+    def _seed_workspace_state_from_disk(
+        self,
+        connection: sqlite3.Connection,
+        task_ids_on_disk: list[str],
+    ) -> None:
+        state_row = connection.execute(
+            "SELECT payload FROM pool_state WHERE workspace_key = ?",
+            ("workspace",),
+        ).fetchone()
+        queue_row = connection.execute(
+            "SELECT payload FROM queue WHERE workspace_key = ?",
+            ("workspace",),
+        ).fetchone()
+        if state_row is None or queue_row is None:
+            return
+        payload = json.loads(state_row["payload"])
+        queue = json.loads(queue_row["payload"])
+        highest_task_number = 0
+        for task_id in task_ids_on_disk:
+            try:
+                highest_task_number = max(highest_task_number, int(task_id.split("-", 1)[1]))
+            except (IndexError, ValueError):
+                continue
+        default_state_payload = WorkspaceState().model_dump(mode="json", exclude={"queue"})
+        fresh_workspace_state = payload == default_state_payload and queue == []
+        if not fresh_workspace_state and highest_task_number <= int(payload.get("next_task_number") or 0):
+            return
+        state = WorkspaceState(**payload, queue=queue)
+        if fresh_workspace_state and task_ids_on_disk:
+            state.queue = list(task_ids_on_disk)
+        if highest_task_number > state.next_task_number:
+            state.next_task_number = highest_task_number
+        self._save_workspace_state(connection, state)
 
 
 def runtime_store(root: Path) -> RuntimeStore:

@@ -5,6 +5,13 @@ runner, no persistence.
 """
 import pytest
 
+from litehive.domain.recovery import (
+    FailureFingerprint,
+    RecoveryDisposition,
+    RecoveryOutcome,
+    RecoveryTrigger,
+    TriggerEventKind,
+)
 from litehive.lifecycle.rules import RULES
 from litehive.lifecycle.transitions import evaluate, list_transitions
 from litehive.lifecycle.events import (
@@ -36,21 +43,21 @@ def make_state(
     *,
     mode: PipelineMode = PipelineMode.FULL,
     stage_retry: dict[str, int] | None = None,
-    recovery_attempt: dict[str, int] | None = None,
     pre_exec_recovery_attempt: int = 0,
-    origin_stage: str | None = None,
     files_changed: int = 1,
     tests_added: int = 0,
     stage_retry_limit: int = 3,
+    active_recovery_trigger: RecoveryTrigger | None = None,
+    recovery_history: list[RecoveryOutcome] | None = None,
 ) -> TaskState:
     return TaskState(
         task_id="T-0001",
         stage=stage,
         pipeline_mode=mode,
         stage_retry=stage_retry or {},
-        recovery_attempt=recovery_attempt or {},
+        active_recovery_trigger=active_recovery_trigger,
+        recovery_history=list(recovery_history or []),
         pre_exec_recovery_attempt=pre_exec_recovery_attempt,
-        origin_stage=origin_stage,
         last_report=LastReport(files_changed=files_changed, tests_added=tests_added),
         limits=Limits(stage_retry_limit=stage_retry_limit),
     )
@@ -131,8 +138,8 @@ def test_grooming_reject_goes_straight_to_recovering():
     state = make_state("grooming")
     trans = step("grooming", Reject(source="agent", reason="x"), state)
     assert trans.next == "recovering"
-    assert trans.delta.inc_recovery_attempt == "grooming"
-    assert trans.delta.set_origin_stage == "grooming"
+    assert trans.delta.set_active_recovery_trigger is not None
+    assert trans.delta.set_active_recovery_trigger.origin_stage == "grooming"
 
 
 def test_implementing_reject_retries_with_counter_bump():
@@ -185,33 +192,149 @@ def test_timeout_in_any_stage_phase_routes_to_recovering(phase):
     assert step(phase, Timeout(), state).next == "recovering"
 
 
+def test_same_stage_same_fingerprint_crash_budget_routes_directly_to_failed():
+    prior_trigger = RecoveryTrigger(
+        origin_stage="implementing",
+        trigger_event_kind=TriggerEventKind.CRASH,
+        failure_fingerprint=FailureFingerprint(
+            fingerprint="RuntimeError:boom",
+            classification="RuntimeError",
+        ),
+        message="boom",
+    )
+    state = make_state(
+        "implementing",
+        recovery_history=[
+            RecoveryOutcome(
+                trigger=prior_trigger,
+                recovery_verdict="resume",
+                disposition=RecoveryDisposition.RESUMED,
+            )
+        ],
+    )
+
+    trans = step("implementing", Crash(exc_type="RuntimeError", message="boom"), state)
+
+    assert trans.next == "failed"
+    assert trans.delta.failed_reason == "recovery_budget_hit"
+    assert trans.delta.set_recovery_failure_explanation is not None
+
+
+def test_different_stage_crash_gets_fresh_recovery_budget():
+    prior_trigger = RecoveryTrigger(
+        origin_stage="implementing",
+        trigger_event_kind=TriggerEventKind.CRASH,
+        failure_fingerprint=FailureFingerprint(
+            fingerprint="RuntimeError:boom",
+            classification="RuntimeError",
+        ),
+        message="boom",
+    )
+    state = make_state(
+        "testing",
+        recovery_history=[
+            RecoveryOutcome(
+                trigger=prior_trigger,
+                recovery_verdict="resume",
+                disposition=RecoveryDisposition.RESUMED,
+            )
+        ],
+    )
+
+    trans = step("testing", Crash(exc_type="RuntimeError", message="boom"), state)
+
+    assert trans.next == "recovering"
+    assert trans.delta.set_active_recovery_trigger is not None
+    assert trans.delta.set_active_recovery_trigger.origin_stage == "testing"
+
+
 # ── recovering exit ───────────────────────────────────────────────────────
 
 
 def test_recovery_succeeded_resume_origin_stage_name():
-    state = make_state("recovering", origin_stage="testing")
+    state = make_state(
+        "recovering",
+        active_recovery_trigger=RecoveryTrigger(
+            origin_stage="testing",
+            trigger_event_kind=TriggerEventKind.CRASH,
+            failure_fingerprint=FailureFingerprint(
+                fingerprint="RuntimeError:boom",
+                classification="RuntimeError",
+            ),
+            message="boom",
+        ),
+    )
     trans = step("recovering", RecoverySucceeded(resume="testing"), state)
     assert trans.next == "before_testing"
-    assert trans.delta.clear_origin_stage is True
+    assert trans.delta.clear_active_recovery_trigger is True
+
+
+def test_recovery_succeeded_without_destination_fails_explicitly():
+    state = make_state(
+        "recovering",
+        active_recovery_trigger=RecoveryTrigger(
+            origin_stage="testing",
+            trigger_event_kind=TriggerEventKind.CRASH,
+            failure_fingerprint=FailureFingerprint(
+                fingerprint="RuntimeError:boom",
+                classification="RuntimeError",
+            ),
+            message="boom",
+        ),
+    )
+    trans = step("recovering", RecoverySucceeded(resume=""), state)
+    assert trans.next == "failed"
+    assert trans.delta.failed_reason == "recovery_missing_target_stage"
 
 
 def test_recovery_succeeded_resume_done():
-    state = make_state("recovering", origin_stage="commit")
+    state = make_state(
+        "recovering",
+        active_recovery_trigger=RecoveryTrigger(
+            origin_stage="commit",
+            trigger_event_kind=TriggerEventKind.CRASH,
+            failure_fingerprint=FailureFingerprint(
+                fingerprint="RuntimeError:boom",
+                classification="RuntimeError",
+            ),
+            message="boom",
+        ),
+    )
     assert step("recovering", RecoverySucceeded(resume="done"), state).next == "done"
 
 
 def test_recovery_failed_goes_to_failed_terminal_with_reason():
-    state = make_state("recovering", origin_stage="implementing")
+    trigger = RecoveryTrigger(
+        origin_stage="implementing",
+        trigger_event_kind=TriggerEventKind.CRASH,
+        failure_fingerprint=FailureFingerprint(
+            fingerprint="RuntimeError:boom",
+            classification="RuntimeError",
+        ),
+        message="boom",
+    )
+    state = make_state("recovering", active_recovery_trigger=trigger)
     trans = step("recovering", RecoveryFailed(reason="x"), state)
     assert trans.next == "failed"
     assert trans.delta.failed_reason == "recovery_exhausted"
+    assert trans.delta.set_recovery_failure_explanation is not None
 
 
 def test_recovery_crash_routes_to_failed_with_recovery_crashed():
-    state = make_state("recovering", origin_stage="implementing")
+    trigger = RecoveryTrigger(
+        origin_stage="implementing",
+        trigger_event_kind=TriggerEventKind.CRASH,
+        failure_fingerprint=FailureFingerprint(
+            fingerprint="RuntimeError:boom",
+            classification="RuntimeError",
+        ),
+        message="boom",
+    )
+    state = make_state("recovering", active_recovery_trigger=trigger)
     trans = step("recovering", Crash(exc_type="E", message="boom"), state)
     assert trans.next == "failed"
     assert trans.delta.failed_reason == "recovery_crashed"
+    assert "crashed" in (trans.delta.set_recovery_failure_explanation or "")
 
 
 def test_recovering_wildcard_does_not_route_recovering_back_to_itself():

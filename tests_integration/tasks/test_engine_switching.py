@@ -34,7 +34,7 @@ def test_switch_cli_persists_engine_handoff_and_requeues_task(integration_root) 
         transcript_snippet="implementation half done",
     )
     interrupted.runtime.continuation_handoff = RuntimeContinuationHandoff(
-        step="implementing",
+        stage="implementing",
         kind="restart",
         reason="Need a different engine",
         from_engine="codex",

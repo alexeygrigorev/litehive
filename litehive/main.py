@@ -62,7 +62,7 @@ def _fast_status(argv: list[str]) -> int:
     runner = snapshot.runner
     monitoring = snapshot.monitoring
 
-    active_task_id = state.active_task_id
+    active_task_id = runner.active_task_id or state.active_task_id
     queue = state.queue
     stop_reason = state.pool_stop_reason
     default_engine = snapshot.config.default_engine

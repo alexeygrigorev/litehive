@@ -1,12 +1,11 @@
 """Task and workspace record models."""
 
-from typing import Literal
-
 from pydantic import BaseModel, ConfigDict, Field
 
 from .common import (
     PipelineMode,
     PipelineStatus,
+    TaskStage,
     TaskStatus,
     utcnow,
 )
@@ -22,7 +21,7 @@ class TaskCreationSource(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task_id: str
-    stage: Literal["grooming", "accepting"]
+    stage: TaskStage
     rationale: str
     blocking: bool = False
 
@@ -88,7 +87,7 @@ class TaskIntentRecord(BaseModel):
     title: str
     created_at: str = Field(default_factory=utcnow)
     task_type: str | None = None
-    pipeline_mode: PipelineMode = "full"
+    pipeline_mode: PipelineMode = PipelineMode.FULL
     priority: str = "medium"
     depends_on: list[str] = Field(default_factory=list)
     goal: str = ""
@@ -101,10 +100,10 @@ class TaskIntentRecord(BaseModel):
 
 class TaskStateRecord(BaseModel):
     model: str | None = None
-    status: TaskStatus = "queued"
+    status: TaskStatus = TaskStatus.QUEUED
     flag_reason: str | None = None
     flag_count: int = 0
-    pipeline_status: PipelineStatus = "backlog"
+    pipeline_status: PipelineStatus = PipelineStatus.BACKLOG
     updated_at: str = Field(default_factory=utcnow)
     subagents: list[SubagentRef] = Field(default_factory=list)
     git: TaskStateGitSettings = Field(default_factory=TaskStateGitSettings)
@@ -132,11 +131,11 @@ class TaskRecord(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     task_type: str | None = None
     model: str | None = None
-    pipeline_mode: PipelineMode = "full"
-    status: TaskStatus = "queued"
+    pipeline_mode: PipelineMode = PipelineMode.FULL
+    status: TaskStatus = TaskStatus.QUEUED
     flag_reason: str | None = None
     flag_count: int = 0
-    pipeline_status: PipelineStatus = "backlog"
+    pipeline_status: PipelineStatus = PipelineStatus.BACKLOG
     priority: str = "medium"
     created_at: str = Field(default_factory=utcnow)
     updated_at: str = Field(default_factory=utcnow)

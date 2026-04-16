@@ -94,6 +94,10 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
         "engine_monitoring",
         "attention",
         "worktrees",
+        "pipeline_transitions",
+        "pipeline_journal",
+        "pipeline_task_state",
+        "pipeline_sessions",
     } <= tables
 def test_workspace_registry_handles_parallel_registration(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

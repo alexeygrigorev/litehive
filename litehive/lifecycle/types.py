@@ -1,5 +1,6 @@
 from enum import Enum
-from typing import Literal
+
+from litehive.domain.common import StringEnum
 
 
 class NodeType(str, Enum):
@@ -47,11 +48,12 @@ RECOVERING: NodeName = "recovering"
 READY: NodeName = "ready"
 
 
-FailedReason = Literal[
-    "recovery_exhausted",
-    "recovery_budget_hit",
-    "recovery_crashed",
-    "pre_exec_recovery_failed",
-    "operator_abandoned",
-    "unrecoverable_error",
-]
+
+class FailedReason(StringEnum):
+    RECOVERY_EXHAUSTED = "recovery_exhausted"
+    RECOVERY_BUDGET_HIT = "recovery_budget_hit"
+    RECOVERY_CRASHED = "recovery_crashed"
+    RECOVERY_MISSING_TARGET_STAGE = "recovery_missing_target_stage"
+    PRE_EXEC_RECOVERY_FAILED = "pre_exec_recovery_failed"
+    OPERATOR_ABANDONED = "operator_abandoned"
+    UNRECOVERABLE_ERROR = "unrecoverable_error"

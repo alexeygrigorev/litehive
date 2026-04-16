@@ -78,16 +78,47 @@ def pipeline_journal_command(
 
     print(f"task: {task_id}")
     print(f"stage: {state.stage}")
-    if state.origin_stage:
-        print(f"origin_stage: {state.origin_stage}")
-    if state.recovery_attempt:
-        print(f"recovery_attempt: {dict(state.recovery_attempt)}")
+    if state.active_recovery_trigger:
+        trigger = state.active_recovery_trigger
+        print(
+            "active_recovery_trigger: "
+            f"origin_stage={trigger.origin_stage} "
+            f"trigger_event_kind={trigger.trigger_event_kind.value} "
+            f"fingerprint={trigger.failure_fingerprint.budget_key()} "
+            f"source={trigger.source or '-'} "
+            f"reason_code={trigger.reason_code or '-'}"
+        )
+    if state.merge_context is not None:
+        print(
+            "merge_context: "
+            f"merge_attempt={state.merge_context.merge_attempt} "
+            f"conflict_files={state.merge_context.conflict_files}"
+        )
+    if state.commit_result is not None:
+        print(
+            "commit_result: "
+            f"head_sha={state.commit_result.head_sha} "
+            f"reason={state.commit_result.reason or '-'}"
+        )
+    if state.recovery_history:
+        print("recovery_history:")
+        for outcome in state.recovery_history:
+            print(
+                "  "
+                f"{outcome.created_at} "
+                f"{outcome.trigger.origin_stage or '-'} "
+                f"{outcome.trigger.trigger_event_kind.value} "
+                f"{outcome.recovery_verdict} "
+                f"{outcome.disposition.value}"
+            )
     if state.stage_retry:
         print(f"stage_retry: {dict(state.stage_retry)}")
     if state.failed_reason:
         print(f"failed_reason: {state.failed_reason}")
     if state.failed_message:
         print(f"failed_message: {state.failed_message}")
+    if state.recovery_failure_explanation:
+        print(f"recovery_failure_explanation: {state.recovery_failure_explanation}")
     if state.last_rejection_by_stage:
         print("last_rejection_by_stage:")
         for stage, rej in state.last_rejection_by_stage.items():

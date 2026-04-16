@@ -4,9 +4,11 @@ import sqlite3
 import pytest
 from typer.testing import CliRunner
 
+from litehive.agents.session_store import load_subagent_report, save_subagent_artifacts
 from litehive.cli.app import app
 from litehive.config.paths import workspace_database_path
 from litehive.config.workspace import ensure_workspace
+from litehive.state.records import create_task
 from litehive.db.schema import Migration, MigrationApplyError, apply_pending_migrations, available_migrations
 
 
@@ -14,17 +16,11 @@ def test_embedded_initial_migration_is_discoverable() -> None:
     migrations = available_migrations()
 
     names = [migration.name for migration in migrations]
-    assert names == [
-        "0001_initial.sql",
-        "0002_pipeline_journal.sql",
-        "0003_pipeline_task_state.sql",
-    ]
+    assert names == ["0001_initial.sql"]
     assert migrations[0].version == 1
-    assert migrations[1].version == 2
-    assert migrations[2].version == 3
     assert "CREATE TABLE IF NOT EXISTS pool_state" in migrations[0].sql
-    assert "CREATE TABLE IF NOT EXISTS pipeline_transitions" in migrations[1].sql
-    assert "CREATE TABLE IF NOT EXISTS pipeline_task_state" in migrations[2].sql
+    assert "CREATE TABLE IF NOT EXISTS pipeline_transitions" in migrations[0].sql
+    assert "CREATE TABLE IF NOT EXISTS pipeline_task_state" in migrations[0].sql
 
 
 def test_db_status_and_dry_run_report_pending_migrations(
@@ -33,7 +29,7 @@ def test_db_status_and_dry_run_report_pending_migrations(
     ensure_workspace(tmp_path)
     staged = (
         *available_migrations(),
-        Migration(version=4, name="0004_add_marker.sql", sql="CREATE TABLE marker (id INTEGER PRIMARY KEY);"),
+        Migration(version=2, name="0002_add_marker.sql", sql="CREATE TABLE marker (id INTEGER PRIMARY KEY);"),
     )
     monkeypatch.setattr("litehive.db.schema.available_migrations", lambda: staged)
 
@@ -41,13 +37,13 @@ def test_db_status_and_dry_run_report_pending_migrations(
     dry_run = CliRunner().invoke(app, ["db", "migrate", "--dry-run", "--workspace", str(tmp_path)])
 
     assert status.exit_code == 0, status.output
-    assert "schema_version: 3" in status.output
+    assert "schema_version: 1" in status.output
     assert "pending_migrations: 1" in status.output
-    assert "pending: 0004_add_marker.sql" in status.output
+    assert "pending: 0002_add_marker.sql" in status.output
 
     assert dry_run.exit_code == 0, dry_run.output
     assert "dry_run: yes" in dry_run.output
-    assert "would_apply: 0004_add_marker.sql" in dry_run.output
+    assert "would_apply: 0002_add_marker.sql" in dry_run.output
 
     with sqlite3.connect(workspace_database_path(tmp_path)) as connection:
         marker = connection.execute(
@@ -63,8 +59,8 @@ def test_apply_pending_migrations_rolls_back_failed_migration(
     staged = (
         *available_migrations(),
         Migration(
-            version=4,
-            name="0004_broken.sql",
+            version=2,
+            name="0002_broken.sql",
             sql=(
                 "CREATE TABLE broken_marker (id INTEGER PRIMARY KEY);"
                 "INSERT INTO missing_table(value) VALUES (1);"
@@ -87,7 +83,7 @@ def test_apply_pending_migrations_rolls_back_failed_migration(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'broken_marker'"
         ).fetchone()
 
-    assert applied_versions == [1, 2, 3]
+    assert applied_versions == [1]
     assert broken_marker is None
 
 
@@ -98,8 +94,8 @@ def test_daemon_run_applies_pending_migrations_before_start(
     staged = (
         *available_migrations(),
         Migration(
-            version=4,
-            name="0004_daemon_marker.sql",
+            version=2,
+            name="0002_daemon_marker.sql",
             sql="CREATE TABLE daemon_marker (id INTEGER PRIMARY KEY);",
         ),
     )
@@ -125,5 +121,91 @@ def test_daemon_run_applies_pending_migrations_before_start(
         daemon_marker = connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'daemon_marker'"
         ).fetchone()
-    assert applied_versions == [1, 2, 3, 4]
+    assert applied_versions == [1, 2]
     assert daemon_marker is not None
+
+
+def test_legacy_workspace_db_is_rebuilt_from_task_yaml_only(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Keep me")
+    db_path = workspace_database_path(tmp_path)
+    db_path.unlink()
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)"
+        )
+        connection.executemany(
+            "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
+            [
+                (1, "0001_initial.sql", "2026-04-15T00:00:00Z"),
+                (2, "0002_pipeline_journal.sql", "2026-04-15T00:00:01Z"),
+                (3, "0003_pipeline_task_state.sql", "2026-04-15T00:00:02Z"),
+            ],
+        )
+        connection.execute(
+            "CREATE TABLE task_state (task_id TEXT PRIMARY KEY, payload TEXT NOT NULL, updated_at TEXT NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO task_state (task_id, payload, updated_at) VALUES (?, ?, ?)",
+            ("T-9999", "{}", "2026-04-15T00:00:03Z"),
+        )
+        connection.commit()
+
+    apply_pending_migrations(tmp_path)
+    ensure_workspace(tmp_path)
+
+    with sqlite3.connect(db_path) as connection:
+        applied_versions = [
+            row[0]
+            for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+        rows = connection.execute(
+            "SELECT task_id FROM task_state ORDER BY task_id"
+        ).fetchall()
+        queue_row = connection.execute(
+            "SELECT payload FROM queue WHERE workspace_key = 'workspace'"
+        ).fetchone()
+
+    assert applied_versions == [1]
+    assert rows == [(task.id,)]
+    assert queue_row is not None
+    assert task.id in queue_row[0]
+
+
+def test_connect_workspace_db_rebuilds_replaced_cached_db(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    db_path = workspace_database_path(tmp_path)
+
+    save_subagent_artifacts(
+        tmp_path,
+        "T-0001",
+        "SA-0001",
+        session={"status": "running"},
+    )
+
+    db_path.unlink()
+    with sqlite3.connect(db_path):
+        pass
+
+    save_subagent_artifacts(
+        tmp_path,
+        "T-0001",
+        "SA-0001",
+        report={"summary": "recovered"},
+    )
+
+    report = load_subagent_report(tmp_path, "T-0001", "SA-0001")
+    assert report["summary"] == "recovered"
+
+    with sqlite3.connect(db_path) as connection:
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+
+    assert "subagent_sessions" in tables

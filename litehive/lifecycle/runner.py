@@ -1,5 +1,6 @@
 from typing import Callable
 
+from litehive.lifecycle.persistence import CommitResult
 from litehive.domain.lifecycle_deltas import StateDelta
 from .events import Event, HookOk, Pass, RecoverySucceeded
 from .journal import NullJournal, PipelineJournal
@@ -11,6 +12,7 @@ from .types import TERMINAL_NODES
 
 
 StopPredicate = Callable[[], bool]
+StateSyncCallback = Callable[[TaskState], None]
 
 
 class StateMachineRunner:
@@ -37,12 +39,14 @@ class StateMachineRunner:
         rules: list[Rule] = RULES,
         journal: PipelineJournal | None = None,
         stop_requested: StopPredicate | None = None,
+        state_sync: StateSyncCallback | None = None,
     ) -> None:
         self.registry = registry
         self.persistence = persistence
         self.rules = rules
         self.journal = journal or NullJournal()
         self._stop_requested = stop_requested or (lambda: False)
+        self._state_sync = state_sync
 
     def run_task(self, task_id: str) -> TaskState:
         state = self.persistence.load(task_id)
@@ -57,6 +61,8 @@ class StateMachineRunner:
             state.stage = trans.next
             self._reset_hook_reject_tracking_on_progress(state, from_stage, trans.next, event)
             self.persistence.save(state)
+            if self._state_sync is not None:
+                self._state_sync(state)
             self.journal.transition(
                 task_id=task_id,
                 from_stage=from_stage,
@@ -93,10 +99,12 @@ class StateMachineRunner:
             state.last_report.tests_added = tests_added
         commit_result = meta.get("commit_result")
         if isinstance(commit_result, dict):
-            state.failure_context = {
-                **state.failure_context,
-                "commit_result": dict(commit_result),
-            }
+            head_sha = commit_result.get("head_sha")
+            if isinstance(head_sha, str) and head_sha:
+                state.commit_result = CommitResult(
+                    head_sha=head_sha,
+                    reason=commit_result.get("reason"),
+                )
 
     @staticmethod
     def _reset_hook_reject_tracking_on_progress(
@@ -128,20 +136,23 @@ class StateMachineRunner:
 
     @staticmethod
     def _apply_delta(state: TaskState, delta: StateDelta) -> None:
-        if delta.set_origin_stage is not None:
-            state.origin_stage = delta.set_origin_stage
-        if delta.clear_origin_stage:
-            state.origin_stage = None
         if delta.inc_stage_retry is not None:
             stage = delta.inc_stage_retry
             state.stage_retry[stage] = state.stage_retry.get(stage, 0) + 1
         if delta.reset_stage_retry is not None:
             state.stage_retry.pop(delta.reset_stage_retry, None)
-        if delta.inc_recovery_attempt is not None:
-            stage = delta.inc_recovery_attempt
-            state.recovery_attempt[stage] = state.recovery_attempt.get(stage, 0) + 1
+        if delta.set_active_recovery_trigger is not None:
+            state.active_recovery_trigger = delta.set_active_recovery_trigger
+        if delta.clear_active_recovery_trigger:
+            state.active_recovery_trigger = None
+        if delta.append_recovery_outcome is not None:
+            state.recovery_history.append(delta.append_recovery_outcome)
         if delta.inc_pre_exec_recovery_attempt:
             state.pre_exec_recovery_attempt += 1
+        if delta.set_merge_context is not None:
+            state.merge_context = delta.set_merge_context
+        if delta.clear_merge_context:
+            state.merge_context = None
         if delta.set_last_rejection is not None:
             stage, rejection = delta.set_last_rejection
             state.last_rejection_by_stage[stage] = rejection
@@ -153,12 +164,14 @@ class StateMachineRunner:
             state.last_hook_reject_fingerprint = delta.set_last_hook_reject_fingerprint
         if delta.set_hook_reject_recovery_invoked is not None:
             state.hook_reject_recovery_invoked = delta.set_hook_reject_recovery_invoked
-        if delta.set_failure_context is not None:
-            state.failure_context = dict(delta.set_failure_context)
         if delta.failed_reason is not None:
             state.failed_reason = delta.failed_reason
         if delta.failed_message is not None:
             state.failed_message = delta.failed_message
+        if delta.clear_recovery_failure_explanation:
+            state.recovery_failure_explanation = None
+        if delta.set_recovery_failure_explanation is not None:
+            state.recovery_failure_explanation = delta.set_recovery_failure_explanation
 
 
 def _pipeline_stage_for_phase(phase: str) -> str:

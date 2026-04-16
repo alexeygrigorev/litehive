@@ -3,6 +3,7 @@
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+import sqlite3
 import tomllib
 from typing import Any, Literal, Mapping
 
@@ -125,6 +126,24 @@ def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssu
 
 def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue]]:
     issues: list[StatusIssue] = []
+    db_path = workspace_database_path(root)
+    if db_path.exists():
+        try:
+            with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
+                connection.execute("PRAGMA schema_version").fetchone()
+        except sqlite3.DatabaseError as exc:
+            detail = str(exc).strip() or type(exc).__name__
+            issues.append(
+                StatusIssue(
+                    key="state",
+                    severity="ERROR",
+                    message=(
+                        f"BROKEN at {db_path} ({detail})"
+                        " — restore the workspace database from backup or rerun `litehive db migrate`."
+                    ),
+                )
+            )
+            return WorkspaceState(), issues
     try:
         store_state = runtime_store(root).load_workspace_state()
     except Exception as exc:
@@ -134,7 +153,7 @@ def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue
                 key="state",
                 severity="ERROR",
                 message=(
-                    f"BROKEN at {workspace_database_path(root)} ({detail})"
+                    f"BROKEN at {db_path} ({detail})"
                     " — restore the workspace database from backup or rerun `litehive db migrate`."
                 ),
             )

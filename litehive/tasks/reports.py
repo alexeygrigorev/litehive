@@ -1,6 +1,4 @@
 """Recovery evidence, task discussion comments, and report helpers."""
-
-import json
 from pathlib import Path
 from typing import Iterable
 

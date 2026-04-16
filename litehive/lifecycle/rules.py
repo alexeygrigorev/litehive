@@ -6,7 +6,14 @@ Read top to bottom to understand routing. Each row is:
 Ctrl+click any S.STAGE to see the node that runs there.
 """
 
-from litehive.domain.lifecycle_deltas import clear_recovery_attempt, enter_pre_exec_recovery, enter_recovery, fail, stash_conflict_files
+from litehive.domain.lifecycle_deltas import (
+    clear_recovery_attempt,
+    enter_pre_exec_recovery,
+    enter_recovery,
+    exhaust_recovery_budget,
+    fail,
+    stash_conflict_files,
+)
 from .events import (
     Blocked,
     CleanState,
@@ -26,9 +33,35 @@ from .events import (
     StageRetryLimitHit,
     Timeout,
 )
-from .guards import hook_reject_loop_detected, mode, zero_change_shortcut
+from .guards import (
+    hook_reject_loop_detected,
+    mode,
+    recovery_budget_available,
+    recovery_budget_exhausted,
+    recovery_resume_is_concrete,
+    zero_change_shortcut,
+)
 from .stages import Stages as S
 from .transitions import Rule, resume_from_origin, resume_from_pre_exec, retry_epoch_rules
+
+
+def _recovery_rules(from_state, on_event, *, when=None) -> list[Rule]:
+    return [
+        Rule(
+            from_state=from_state,
+            on_event=on_event,
+            transition_to=S.FAILED,
+            when=recovery_budget_exhausted() if when is None else when & recovery_budget_exhausted(),
+            with_effect=exhaust_recovery_budget,
+        ),
+        Rule(
+            from_state=from_state,
+            on_event=on_event,
+            transition_to=S.RECOVERING,
+            when=recovery_budget_available() if when is None else when & recovery_budget_available(),
+            with_effect=enter_recovery,
+        ),
+    ]
 
 
 RULES: list[Rule] = [
@@ -57,24 +90,9 @@ RULES: list[Rule] = [
         transition_to=S.BEFORE_IMPLEMENTING,
         when=mode("single"),
     ),
-    Rule(
-        from_state=S.WORKTREE_SYNC,
-        on_event=Reject,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
-    Rule(
-        from_state=S.WORKTREE_SYNC,
-        on_event=Crash,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
-    Rule(
-        from_state=S.WORKTREE_SYNC,
-        on_event=Timeout,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
+    *_recovery_rules(S.WORKTREE_SYNC, Reject),
+    *_recovery_rules(S.WORKTREE_SYNC, Crash),
+    *_recovery_rules(S.WORKTREE_SYNC, Timeout),
     # ── pre-exec recovery ─────────────────────────────────────────────
     Rule(
         from_state=S.PRE_EXEC_RECOVERY,
@@ -210,50 +228,21 @@ RULES: list[Rule] = [
         on_event=Pass,
         transition_to=S.AFTER_COMMIT,
     ),
-    Rule(
-        from_state=S.MERGE_RESOLVING,
-        on_event=Reject,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
-    Rule(
-        from_state=S.MERGE_RESOLVING,
-        on_event=Blocked,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
-    Rule(
-        from_state=S.MERGE_RESOLVING,
-        on_event=Crash,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
-    Rule(
-        from_state=S.MERGE_RESOLVING,
-        on_event=Timeout,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
+    *_recovery_rules(S.MERGE_RESOLVING, Reject),
+    *_recovery_rules(S.MERGE_RESOLVING, Blocked),
+    *_recovery_rules(S.MERGE_RESOLVING, Crash),
+    *_recovery_rules(S.MERGE_RESOLVING, Timeout),
     # ── rejections: grooming (no retry) ─────────────────────────────────────────────
     *[
-        Rule(
-            from_state=p,
-            on_event=Reject,
-            transition_to=S.RECOVERING,
-            with_effect=enter_recovery,
-        )
+        rule
         for p in S.GROOMING_EPOCH
+        for rule in _recovery_rules(p, Reject)
     ],
     # ── same-hook reject circuit breaker ─────────────────────────────────────────────
     *[
-        Rule(
-            from_state=phase,
-            on_event=Reject,
-            transition_to=S.RECOVERING,
-            when=hook_reject_loop_detected(),
-            with_effect=enter_recovery,
-        )
+        rule
         for phase in (*S.IMPLEMENTING_EPOCH, *S.TESTING_EPOCH, *S.ACCEPTING_EPOCH)
+        for rule in _recovery_rules(phase, Reject, when=hook_reject_loop_detected())
     ],
     # ── rejections: implementing / testing / accepting (retry then recover) ─────────────────────────────────────────────
     *retry_epoch_rules(
@@ -263,58 +252,31 @@ RULES: list[Rule] = [
     *retry_epoch_rules(S.ACCEPTING, S.ACCEPTING_EPOCH, retry_target=S.IMPLEMENTING, recovering_stage=S.RECOVERING),
     # ── rejections: commit (no retry) ─────────────────────────────────────────────
     *[
-        Rule(
-            from_state=p,
-            on_event=Reject,
-            transition_to=S.RECOVERING,
-            with_effect=enter_recovery,
-        )
+        rule
         for p in S.COMMIT_EPOCH
+        for rule in _recovery_rules(p, Reject)
     ],
     # ── blocked ─────────────────────────────────────────────
-    Rule(
-        from_state=S.GROOMING,
-        on_event=Blocked,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
-    Rule(
-        from_state=S.IMPLEMENTING,
-        on_event=Blocked,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
-    Rule(
-        from_state=S.TESTING,
-        on_event=Blocked,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
-    Rule(
-        from_state=S.ACCEPTING,
-        on_event=Blocked,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
+    *_recovery_rules(S.GROOMING, Blocked),
+    *_recovery_rules(S.IMPLEMENTING, Blocked),
+    *_recovery_rules(S.TESTING, Blocked),
+    *_recovery_rules(S.ACCEPTING, Blocked),
     # ── escalations ─────────────────────────────────────────────
-    Rule(
-        from_state=S.ALL_STAGE_PHASES,
-        on_event=StageRetryLimitHit,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
-    Rule(
-        from_state=S.ALL_STAGE_PHASES,
-        on_event=OverallRetryLimitHit,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
+    *_recovery_rules(S.ALL_STAGE_PHASES, StageRetryLimitHit),
+    *_recovery_rules(S.ALL_STAGE_PHASES, OverallRetryLimitHit),
     # ── recovering ─────────────────────────────────────────────
     Rule(
         from_state=S.RECOVERING,
         on_event=RecoverySucceeded,
         transition_to=resume_from_origin,
+        when=recovery_resume_is_concrete(),
         with_effect=clear_recovery_attempt,
+    ),
+    Rule(
+        from_state=S.RECOVERING,
+        on_event=RecoverySucceeded,
+        transition_to=S.FAILED,
+        with_effect=fail("recovery_missing_target_stage"),
     ),
     Rule(
         from_state=S.RECOVERING,
@@ -341,16 +303,6 @@ RULES: list[Rule] = [
         with_effect=fail("recovery_crashed"),
     ),
     # ── wildcards (must be last) ─────────────────────────────────────────────
-    Rule(
-        from_state=S.ALL_STAGE_PHASES,
-        on_event=Crash,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
-    Rule(
-        from_state=S.ALL_STAGE_PHASES,
-        on_event=Timeout,
-        transition_to=S.RECOVERING,
-        with_effect=enter_recovery,
-    ),
+    *_recovery_rules(S.ALL_STAGE_PHASES, Crash),
+    *_recovery_rules(S.ALL_STAGE_PHASES, Timeout),
 ]

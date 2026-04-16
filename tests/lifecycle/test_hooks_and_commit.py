@@ -273,6 +273,38 @@ def test_commit_node_with_conflict_emits_merge_conflict_detected(
     assert "a.txt" in unresolved.stdout
 
 
+def test_commit_node_concludes_resolved_in_progress_merge(git_repo_with_branch) -> None:
+    main_repo, worktree = git_repo_with_branch
+
+    (worktree / "a.txt").write_text("feature_change\n")
+    subprocess.run(["git", "commit", "-qam", "feature change"], cwd=worktree, check=True)
+    (main_repo / "a.txt").write_text("main_change\n")
+    subprocess.run(["git", "commit", "-qam", "main change"], cwd=main_repo, check=True)
+
+    node = GitCommitNode(
+        main_repo,
+        worktree_resolver=lambda state: worktree,
+    )
+
+    conflict_event = node.run(make_state(stage="commit"))
+    assert isinstance(conflict_event, MergeConflictDetected)
+
+    (main_repo / "a.txt").write_text("main_change\nfeature_change\n")
+    subprocess.run(["git", "add", "a.txt"], cwd=main_repo, check=True)
+
+    event = node.run(make_state(stage="commit"))
+
+    assert isinstance(event, Pass), event
+    assert (main_repo / "a.txt").read_text() == "main_change\nfeature_change\n"
+    merge_head = subprocess.run(
+        ["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"],
+        cwd=main_repo,
+        capture_output=True,
+        text=True,
+    )
+    assert merge_head.returncode != 0
+
+
 # ── StubCommitNode still works (sanity) ─────────────────────────────────
 
 

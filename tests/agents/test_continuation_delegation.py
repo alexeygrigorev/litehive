@@ -106,7 +106,7 @@ def test_set_continuation_handoff_preserves_unified_continuation_payload(
     handoff = _set_continuation_handoff(
         tmp_path,
         task,
-        step="implementing",
+        stage="implementing",
         kind="restart",
         reason="retry",
         result=result,

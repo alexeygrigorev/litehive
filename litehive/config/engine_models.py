@@ -339,7 +339,7 @@ def resolve_engine_plan(
         return [engine_override]
     if (
         task.runtime.last_engine_switch is not None
-        and task.runtime.last_engine_switch.step == task.pipeline_status
+        and task.runtime.last_engine_switch.stage == task.pipeline_status
     ):
         return [task.runtime.last_engine_switch.to_engine]
     return [config.default_engine]
@@ -361,7 +361,7 @@ def _set_continuation_handoff(
     root: Path,
     task: TaskRecord,
     *,
-    step: str,
+    stage: str,
     kind: str,
     reason: str,
     result,
@@ -381,7 +381,7 @@ def _set_continuation_handoff(
         transcript_snippet = transcript_snippet or rendered.splitlines()[0].strip()
 
     handoff = RuntimeContinuationHandoff(
-        step=step,
+        stage=stage,
         kind=kind,  # type: ignore[arg-type]
         reason=reason,
         from_engine=from_engine,
@@ -395,8 +395,8 @@ def _set_continuation_handoff(
         summary=summary,
         transcript_snippet=transcript_snippet,
         warnings=warnings,
-        session_path=f"{result.ref.path}/session.yaml",
-        report_path=f"{result.ref.path}/report.yaml",
+        session_path=None,
+        report_path=None,
         transcript_path=f"{result.ref.path}/transcript.md",
         continuation=extract_execution_continuation(from_engine, result.execution),
     )
@@ -410,10 +410,10 @@ def _is_recovery_run(task: TaskRecord) -> bool:
     return task.runtime.last_outcome.kind in {"flagged", "interrupted"}
 
 
-def _role_for_step(step: str, task: TaskRecord | None = None) -> str:
+def _role_for_stage(stage: str, task: TaskRecord | None = None) -> str:
     if (
         task is not None
-        and step in {"implementing", "testing", "accepting"}
+        and stage in {"implementing", "testing", "accepting"}
         and _is_recovery_run(task)
     ):
         return "recovery"
@@ -422,4 +422,4 @@ def _role_for_step(step: str, task: TaskRecord | None = None) -> str:
         "implementing": "swe",
         "testing": "qa",
         "accepting": "reviewer",
-    }.get(step, "swe")
+    }.get(stage, "swe")

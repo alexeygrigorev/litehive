@@ -20,7 +20,7 @@ _REJECTING_HOOK_POINTS: dict[str, str] = {
 
 def stage_prompt(
     task: TaskRecord,
-    step: str,
+    stage: str,
     workspace_context: str = "",
     *,
     process_profile: str = "generic",
@@ -32,18 +32,18 @@ def stage_prompt(
     single_mode = getattr(task, "pipeline_mode", "full") == "single"
     profile = resolve_process_profile(process_profile)
     workspace_overlay = profile.get("workspace_overlay", [])
-    stage_overlay = profile.get("stage_overlay", {}).get(step, [])
+    stage_overlay = profile.get("stage_overlay", {}).get(stage, [])
     stage_instructions = profile.get("stage_instructions", {}).get(
-        step, ["Complete the requested stage."]
+        stage, ["Complete the requested stage."]
     )
     lifecycle_verification_overlay: list[str] = []
-    stage_owner = role_name or _stage_owner_for_step(step)
-    stage_role = _stage_role_prompt(step, stage_owner)
+    stage_owner = role_name or _stage_owner_for_stage(stage)
+    stage_role = _stage_role_prompt(stage, stage_owner)
     startup_guidance = _agent_startup_guidance(config, stage_owner, root=root)
 
     lines = [
         f"Task: {task.id} {task.title}",
-        f"Stage: {step}",
+        f"Stage: {stage}",
         f"Stage owner: {stage_owner}",
         f"Process profile: {profile['label']}",
         f"Task type: {task.task_type or '-'}",
@@ -85,7 +85,7 @@ def stage_prompt(
                 *startup_guidance,
             ]
         )
-    hook_summary = _runner_hook_prompt_lines(step, config)
+    hook_summary = _runner_hook_prompt_lines(stage, config)
     if hook_summary:
         lines.extend([
             "",
@@ -101,7 +101,7 @@ def stage_prompt(
         ]
     )
     lines.extend(stage_overlay)
-    if single_mode and step == "implementing":
+    if single_mode and stage == "implementing":
         lifecycle_verification_overlay.extend(
             [
                 "- Pipeline mode is `single`: you are the only execution-stage agent for this task.",
@@ -128,7 +128,7 @@ def stage_prompt(
     if missing_criteria_reason is not None:
         inferred_acceptance_criteria = infer_acceptance_criteria(task)
         lines.extend(["", "Acceptance gate:"])
-        if step == "grooming" and inferred_acceptance_criteria:
+        if stage == "grooming" and inferred_acceptance_criteria:
             lines.extend(
                 [
                     "- Structured acceptance criteria are still missing on the task record, but the current task context is sufficient to infer them.",
@@ -149,7 +149,7 @@ def stage_prompt(
                     "- Use grooming or task intake to define the missing criteria before implementation starts.",
                 ]
             )
-            if step == "grooming":
+            if stage == "grooming":
                 lines.extend(
                     [
                         "- As the planner for grooming, provide an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets before passing grooming.",
@@ -157,7 +157,7 @@ def stage_prompt(
                     ]
                 )
 
-    if step == "grooming":
+    if stage == "grooming":
         lines.extend(
             [
                 "",
@@ -176,7 +176,7 @@ def stage_prompt(
         )
 
     handoff = task.runtime.continuation_handoff
-    if handoff is not None and handoff.step == step:
+    if handoff is not None and handoff.stage == stage:
         lines.extend(["", "Continuation handoff:"])
         lines.append(f"- Kind: {handoff.kind}")
         lines.append(f"- Reason: {handoff.reason}")
@@ -235,7 +235,7 @@ def stage_prompt(
         lines.append("- Keep changes scoped to the task.")
 
     lines.append("")
-    if step == "grooming" and missing_criteria_reason is not None:
+    if stage == "grooming" and missing_criteria_reason is not None:
         lines.extend(
             [
                 "ACCEPTANCE_CRITERIA:",
@@ -255,7 +255,7 @@ def stage_prompt(
         [
             "",
             "IMPORTANT: When you are done, you MUST submit your verdict by running:",
-            f'  litehive report --verdict <pass|reject> --role {stage_owner} --step {step} --message "<your report>"',
+            f'  litehive report --verdict <pass|reject> --role {stage_owner} --stage {stage} --message "<your report>"',
             f"The environment variable LITEHIVE_TASK_ID is set to {task.id} for this session. Workspace and task resolution should use the injected environment automatically.",
             "",
             "Your --message is the PRIMARY way the next agent understands what happened.",
@@ -280,20 +280,20 @@ def stage_prompt(
     return "\n".join(lines)
 
 
-def _stage_owner_for_step(step: str) -> str:
+def _stage_owner_for_stage(stage: str) -> str:
     return {
         "grooming": "planner",
         "implementing": "swe",
         "testing": "qa",
         "accepting": "reviewer",
         "commit_to_git": "runner",
-    }.get(step, "swe")
+    }.get(stage, "swe")
 
 
-def _runner_hook_prompt_lines(step: str, config: LitehiveConfig | None) -> list[str]:
+def _runner_hook_prompt_lines(stage: str, config: LitehiveConfig | None) -> list[str]:
     if config is None:
         return []
-    hook_point = _REJECTING_HOOK_POINTS.get(step)
+    hook_point = _REJECTING_HOOK_POINTS.get(stage)
     if hook_point is None:
         return []
     hooks = config.runner_hooks.get(hook_point, [])
@@ -314,8 +314,8 @@ def _format_runner_hook_prompt_entry(hook: object) -> str:
     return command
 
 
-def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
-    owner = owner or _stage_owner_for_step(step)
+def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
+    owner = owner or _stage_owner_for_stage(stage)
     if owner == "recovery":
         return [
             "- You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path.",
@@ -329,7 +329,7 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- If the evidence points to a project/task bug rather than a Litehive bug, do not implement the task; report that no Litehive infrastructure fix was found and leave the task for the normal stage owner.",
             "- Submit your own recovery verdict describing the root cause, the Litehive fix you made, and why the failed stage should be retried.",
         ]
-    if step == "grooming":
+    if stage == "grooming":
         return [
             "- You are the planner, a PM-style role representing the user's and product's point of view.",
             "- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks.",
@@ -340,7 +340,7 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or reject it with a clear explanation of what is missing.",
             "- Do not implement code in this stage.",
         ]
-    if step == "accepting":
+    if stage == "accepting":
         return [
             "- You are the reviewer, a PM-style role representing the user's and product's point of view.",
             "- Validate the strict end-user outcome, look for regressions or missing evidence, and make a final done versus not-done judgment.",
@@ -349,7 +349,7 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- Use `wont_do`, `duplicate`, or `deferred` only when the task is genuinely obsolete, superseded, or duplicated.",
             "- You may close a task as duplicate, wont_do, or deferred via `litehive task close <task-id> --outcome <status> --reason <text>`.",
         ]
-    if step == "implementing":
+    if stage == "implementing":
         return [
             "- You are the SWE responsible for completing the implementation within scope.",
             "- Start from the task record, latest report, and latest rejection or recovery artifact before broad repository exploration.",
@@ -361,7 +361,7 @@ def _stage_role_prompt(step: str, owner: str | None = None) -> list[str]:
             "- If the task needs scope correction rather than code changes, use `litehive task update` to narrow scope or adjust the acceptance criteria so the task re-enters the pipeline with the corrected contract.",
             "- If the task is genuinely obsolete or duplicated, use `litehive task close --outcome wont_do` or `litehive task close --outcome duplicate` with a concrete reason instead of exiting silently.",
         ]
-    if step == "testing":
+    if stage == "testing":
         return ["- You are the QA verifier responsible for focused independent validation."]
     return ["- Follow the stage instructions and keep the report concise and explicit."]
 
@@ -398,5 +398,3 @@ def _agent_startup_guidance(
             for item in guidance.get(key, []):
                 lines.append(f"- {item}")
     return lines
-
-

@@ -81,7 +81,13 @@ class AttentionStore:
         with connect_workspace_db(self.root) as connection:
             existing = self._find_pending_by_dedupe(connection, item.dedupe_key)
             if existing is not None:
-                return self._row_to_item(existing)
+                existing_item = self._row_to_item(existing)
+                refreshed = self._refreshed_pending_item(existing_item, item)
+                if refreshed is not None:
+                    self._update_item(connection, refreshed)
+                    connection.commit()
+                    return refreshed
+                return existing_item
             connection.execute(
                 """
                 INSERT INTO attention (task_id, created_at, kind, payload)
@@ -98,6 +104,22 @@ class AttentionStore:
             connection.commit()
         item.id = row_id
         return item
+
+    @staticmethod
+    def _refreshed_pending_item(existing: AttentionItem, replacement: AttentionItem) -> AttentionItem | None:
+        updated = existing.model_copy(
+            update={
+                "task_id": replacement.task_id,
+                "kind": replacement.kind,
+                "title": replacement.title,
+                "reason": replacement.reason,
+                "suggested_action": replacement.suggested_action,
+                "metadata": replacement.metadata,
+            }
+        )
+        if updated == existing:
+            return None
+        return updated
 
     def resolve(self, item_id: int, *, resolution: str) -> AttentionItem | None:
         with connect_workspace_db(self.root) as connection:
@@ -130,8 +152,6 @@ class AttentionStore:
         detected_keys = {item.dedupe_key for item in detected}
 
         for item in detected:
-            if item.dedupe_key in pending_by_key:
-                continue
             previous = latest_by_key.get(item.dedupe_key)
             if previous is not None and self._is_operator_suppressed(previous):
                 continue
@@ -272,7 +292,7 @@ def _detect_attention_items(root: Path, pool_stop_reason: str | None) -> list[At
     state = load_state(root)
     detected: list[AttentionItem] = []
     detected.extend(_duplicate_id_items(root))
-    detected.extend(_flagged_and_merge_failed_items(tasks))
+    detected.extend(_flagged_and_merge_failed_items(root, tasks))
     detected.extend(_stale_worktree_items(root, tasks, state))
     divergence = _origin_divergence_item(root)
     if divergence is not None:
@@ -357,7 +377,7 @@ def _duplicate_id_items(root: Path) -> list[AttentionItem]:
     return items
 
 
-def _flagged_and_merge_failed_items(tasks: list[TaskRecord]) -> list[AttentionItem]:
+def _flagged_and_merge_failed_items(root: Path, tasks: list[TaskRecord]) -> list[AttentionItem]:
     items: list[AttentionItem] = []
     for task in tasks:
         if task.status == "flagged":
@@ -376,15 +396,34 @@ def _flagged_and_merge_failed_items(tasks: list[TaskRecord]) -> list[AttentionIt
                 )
             )
         if task.status == "merge_failed":
+            title = f"Task {task.id} needs merge recovery"
+            reason = "Checkpoint commit or merge resolution failed and the managed worktree needs operator recovery."
+            metadata: dict[str, Any] = {"pipeline_status": task.pipeline_status}
+            try:
+                from litehive.lifecycle.persistence import SqlitePersistence
+
+                state = SqlitePersistence(root).load(task.id)
+                trigger = state.active_recovery_trigger
+                if trigger is None and state.recovery_history:
+                    trigger = state.recovery_history[-1].trigger
+                origin_stage = None if trigger is None else trigger.origin_stage
+                failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
+                metadata["failed_reason"] = failed_reason
+                metadata["origin_stage"] = origin_stage
+                if origin_stage != "merge_resolving" and failed_reason == "recovery_crashed":
+                    title = f"Task {task.id} needs recovery follow-up"
+                    reason = "Recovery crashed while handling commit-stage failure; operator follow-up is required."
+            except Exception:
+                pass
             items.append(
                 AttentionItem(
                     task_id=task.id,
                     kind="merge_failed_task",
-                    title=f"Task {task.id} needs merge recovery",
-                    reason="Checkpoint commit or merge resolution failed and the managed worktree needs operator recovery.",
-                    suggested_action=f"Run `litehive debug {task.id} --worktree` and then `litehive recover {task.id}`.",
+                    title=title,
+                    reason=reason,
+                    suggested_action=f"Run `litehive task debug {task.id} --worktree` and then `litehive recover {task.id}`.",
                     dedupe_key=f"merge_failed_task:{task.id}",
-                    metadata={"pipeline_status": task.pipeline_status},
+                    metadata=metadata,
                 )
             )
     return items

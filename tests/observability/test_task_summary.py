@@ -35,7 +35,7 @@ def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) 
         yaml.safe_dump(
             {
                 "task_id": task.id,
-                "step": "grooming",
+                "stage": "grooming",
                 "verdict": "pass",
                 "summary": "ok",
                 "duration_seconds": 120,
@@ -57,7 +57,7 @@ def test_render_active_task_detail_lines_prefers_active_subagent_engine(tmp_path
     task = create_task(tmp_path, title="Active detail task")
     task.status = "in_progress"
     task.pipeline_status = "implementing"
-    task.runtime.current_stage.step = "testing"
+    task.runtime.current_stage.stage = "testing"
     task.runtime.active_subagent = RuntimeSubagentState(
         id="sa-1",
         role="implementer",
@@ -111,6 +111,22 @@ def test_render_runner_status_and_full_header_lines(tmp_path: Path) -> None:
     assert "queued_tasks: 2" in lines
 
 
+def test_render_full_status_header_prefers_live_runner_active_task_id(tmp_path: Path) -> None:
+    config = LitehiveConfig(default_engine="codex", litehive_source_path="/src/litehive")
+    state = WorkspaceState(active_task_id=None, queue=["T-0002"])
+    runner = RunnerStatusState(
+        status="running",
+        pid=123,
+        started_at="2026-04-14T10:00:00Z",
+        heartbeat_at="2026-04-14T10:01:00Z",
+        active_task_id="T-0381",
+    )
+
+    lines = render_full_status_header_lines(tmp_path, config, state, runner)
+
+    assert "active_task_id: T-0381" in lines
+
+
 def test_render_runtime_policy_lines_uses_preformatted_retry_label() -> None:
     config = LitehiveConfig(
         default_retry_limit=5,
@@ -141,13 +157,13 @@ def test_render_health_task_sections(tmp_path: Path) -> None:
     active = create_task(tmp_path, title="Active health task")
     active.status = "in_progress"
     active.pipeline_status = "implementing"
-    active.runtime.current_stage.step = "testing"
+    active.runtime.current_stage.stage = "testing"
 
     flagged = create_task(tmp_path, title="Flagged health task")
     flagged.status = "flagged"
     flagged.pipeline_status = "testing"
     flagged.flag_reason = "needs review"
-    flagged.runtime.last_stage.verdict = "fail"
+    flagged.runtime.last_stage.verdict = "reject"
     flagged.runtime.last_stage.summary = "missing evidence"
 
     done = create_task(tmp_path, title="Done health task")
@@ -166,7 +182,7 @@ def test_render_health_task_sections(tmp_path: Path) -> None:
     assert flagged_lines == [
         "=== Flagged Tasks ===",
         "flagged_count: 1",
-        "flagged: T-0002 stage=testing reason=needs review last_verdict=fail summary=missing evidence",
+        "flagged: T-0002 stage=testing reason=needs review last_verdict=reject summary=missing evidence",
     ]
     assert completion_lines == [
         "=== Recent Completions ===",

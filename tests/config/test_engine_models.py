@@ -112,7 +112,7 @@ def test_resolve_engine_name_honors_stage_matched_engine_switch(tmp_path: Path) 
     task = create_task(tmp_path, title="Switch engine for retry")
     task.pipeline_status = "implementing"
     task.runtime.last_engine_switch = RuntimeEngineSwitch(
-        step="implementing",
+        stage="implementing",
         from_engine="codex",
         to_engine="opencode",
         reason="codex recovery loop",

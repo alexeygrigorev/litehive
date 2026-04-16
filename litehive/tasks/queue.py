@@ -8,6 +8,7 @@ from litehive.config.loading import load_config
 from litehive.config.model import VALID_POOL_SELECTION_POLICIES
 from litehive.domain.common import utcnow
 from litehive.domain.reports import RecoveryAction
+from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.runtime import TaskOutcomeState
 from litehive.domain.task import TaskRecord, WorkspaceState
 
@@ -132,8 +133,11 @@ def _is_hook_reject_loop_flagged(task: TaskRecord) -> bool:
     return task.status == "flagged" and task.flag_reason == "hook_reject_loop"
 
 
-def _is_crash_budget_exhausted(task: TaskRecord) -> bool:
-    return task.status == "flagged" and task.flag_reason == "crash_budget_exhausted"
+def _is_recovery_budget_exhausted(task: TaskRecord) -> bool:
+    return task.status == "flagged" and task.flag_reason in {
+        "crash_budget_exhausted",
+        "recovery_budget_exhausted",
+    }
 
 
 def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
@@ -237,7 +241,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
             mutated = True
         if mutated:
             if next_task.status == "flagged":
-                if _is_hook_reject_loop_flagged(next_task) or _is_crash_budget_exhausted(next_task):
+                if _is_hook_reject_loop_flagged(next_task) or _is_recovery_budget_exhausted(next_task):
                     if state.active_task_id == next_task.id:
                         state.active_task_id = None
                     if mutated:
@@ -247,8 +251,8 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                 record_recovery_report(
                     root,
                     next_task,
-                    trigger="flagged_task",
-                    stage=next_task.pipeline_status,
+                    trigger_event_kind=TriggerEventKind.FLAGGED_TASK,
+                    origin_stage=next_task.pipeline_status,
                     summary=(
                         f"Recovered flagged task back to `{recovery_stage}` so it can run again."
                     ),
@@ -292,7 +296,7 @@ def is_task_eligible_for_execution(task: TaskRecord) -> bool:
         return False
     if _is_hook_reject_loop_flagged(task):
         return False
-    if _is_crash_budget_exhausted(task):
+    if _is_recovery_budget_exhausted(task):
         return False
     if task.status in {"queued", "in_progress", "flagged"}:
         return True

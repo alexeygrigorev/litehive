@@ -30,6 +30,7 @@ from litehive.config.engine_models import resolve_task_retry_policy
 from litehive.git.ops import GitError, remove_worktree
 from litehive.domain.task import TaskRecord
 from litehive.domain.runtime import RuntimeHookRejectFingerprint
+from litehive.domain.common import utcnow
 from litehive.state.records import (
     clear_task_worktree_path,
     get_task,
@@ -93,48 +94,67 @@ def _runtime_hook_reject_fingerprint(state: TaskState) -> RuntimeHookRejectFinge
     )
 
 
-_CRASH_BUDGET_FAILED_REASONS = {
-    "crash",
-    "recovery_crashed",
-    "recovery_exhausted",
-    "recovery_budget_hit",
-    "recovery_timeout",
-}
-
-
 def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
+    now = utcnow()
     task_record.runtime.consecutive_same_hook_rejects = state.consecutive_same_hook_rejects
     task_record.runtime.last_hook_reject_fingerprint = _runtime_hook_reject_fingerprint(state)
     task_record.runtime.hook_reject_recovery_invoked = state.hook_reject_recovery_invoked
+    if state.stage in {"done", "failed"}:
+        task_record.runtime.execution_status = "idle"
+        task_record.runtime.current_stage = task_record.runtime.current_stage.model_copy(
+            update={
+                "stage": None,
+                "status": "idle",
+                "started_at": None,
+                "completed_at": None,
+                "updated_at": now,
+            }
+        )
+        return
+    current_stage = task_record.runtime.current_stage
+    started_at = current_stage.started_at if current_stage.stage == state.stage else now
+    task_record.runtime.execution_status = "running"
+    task_record.runtime.current_stage = current_stage.model_copy(
+        update={
+            "stage": state.stage,
+            "status": "running",
+            "started_at": started_at,
+            "completed_at": None,
+            "updated_at": now,
+        }
+    )
+
+
+def _latest_recovery_trigger(state: TaskState):
+    if state.active_recovery_trigger is not None:
+        return state.active_recovery_trigger
+    if state.recovery_history:
+        return state.recovery_history[-1].trigger
+    return None
 
 
 def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | None:
     journal_message: str | None = None
-    commit_result = state.failure_context.get("commit_result")
+    commit_result = state.commit_result
     if state.stage == "done":
         task_record.status = "done"
         task_record.pipeline_status = "done"
-        # Task reached terminal success — the crash-budget marker is no
-        # longer relevant. Clear it so a future re-open of the same task
-        # gets a fresh budget.
-        task_record.runtime.last_crashed_stage = None
-        if isinstance(commit_result, dict):
-            head_sha = commit_result.get("head_sha")
-            if isinstance(head_sha, str) and head_sha:
-                set_task_commit_sha(task_record, head_sha)
-                reason = commit_result.get("reason")
-                if reason == "already_landed":
-                    journal_message = (
-                        f"commit_to_git reconciled: worktree patch already landed on main at {head_sha}."
-                    )
-                else:
-                    journal_message = (
-                        f"commit_to_git reconciled as a no-op on main at {head_sha}; "
-                        "no new integration commit was needed."
-                    )
+        if commit_result is not None:
+            set_task_commit_sha(task_record, commit_result.head_sha)
+            if commit_result.reason == "already_landed":
+                journal_message = (
+                    f"commit_to_git reconciled: worktree patch already landed on main at {commit_result.head_sha}."
+                )
+            else:
+                journal_message = (
+                    f"commit_to_git reconciled as a no-op on main at {commit_result.head_sha}; "
+                    "no new integration commit was needed."
+                )
     elif state.stage == "failed":
-        commit_stages = {"commit", "before_commit", "after_commit", "merge_resolving"}
-        if state.origin_stage in commit_stages:
+        trigger = _latest_recovery_trigger(state)
+        origin_stage = trigger.origin_stage if trigger is not None else None
+        failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
+        if origin_stage == "merge_resolving":
             task_record.status = "merge_failed"
             task_record.pipeline_status = "merge_failed"
             if state.failed_message:
@@ -142,20 +162,15 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
         else:
             task_record.status = "flagged"
             task_record.pipeline_status = "flagged"
-            if state.failure_context.get("reason_code") == "hook_reject_loop":
+            if trigger is not None and trigger.reason_code == "hook_reject_loop":
                 task_record.flag_reason = "hook_reject_loop"
-            elif state.failed_reason in _CRASH_BUDGET_FAILED_REASONS:
-                # Crash-budget circuit breaker. If the same origin stage has
-                # already crashed once and recovery failed to clear it, the
-                # second crash in the same stage means recovery can't fix the
-                # class of bug — mark terminally flagged so dequeue_next_task
-                # won't re-queue it.
-                previously_crashed = task_record.runtime.last_crashed_stage
-                origin = state.origin_stage or state.failure_context.get("raised_at_phase")
-                if previously_crashed is not None and previously_crashed == origin:
-                    task_record.flag_reason = "crash_budget_exhausted"
-                elif origin:
-                    task_record.runtime.last_crashed_stage = origin
+            elif failed_reason == "recovery_budget_hit":
+                trigger_kind = trigger.trigger_event_kind.value if trigger is not None else None
+                task_record.flag_reason = (
+                    "crash_budget_exhausted"
+                    if trigger_kind in {"crash", "timeout"}
+                    else "recovery_budget_exhausted"
+                )
     else:
         task_record.status = "in_progress"
         task_record.pipeline_status = _STAGE_TO_PIPELINE_STATUS.get(state.stage, task_record.pipeline_status)
@@ -346,6 +361,7 @@ def run_task(
             registry,
             persistence,
             journal=journal,
+            state_sync=lambda state: _sync_back(state, root),
         )
 
         # 3. Run under the heartbeat so `litehive status` sees the active task.

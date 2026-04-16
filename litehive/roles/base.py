@@ -105,7 +105,6 @@ class RoleAgent(AgentNode):
                 else None
             ),
             "rejecting_hooks": self._rejecting_hooks_for_stage(),
-            "thread": state.failure_context.get("thread", []),
         }
 
     def _rejecting_hooks_for_stage(self) -> list[dict[str, Any]]:

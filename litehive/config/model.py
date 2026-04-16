@@ -16,7 +16,7 @@ VALID_AGENT_STARTUP_GUIDANCE_KEYS = frozenset(
 VALID_RETRY_ON_FAILURE_KINDS = frozenset({"execution_limit", "timeout", "network", "service"})
 VALID_SANDBOX_NETWORK_MODES = frozenset({"none", "bridge", "host"})
 VALID_SANDBOX_WORKSPACE_MODES = frozenset({"ro", "rw"})
-VALID_SANDBOX_BACKENDS = frozenset({"docker"})
+VALID_SANDBOX_BACKENDS = frozenset({"docker", "bubblewrap"})
 VALID_RUNNER_HOOK_POINTS = frozenset(
     {
         "before_grooming",

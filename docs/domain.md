@@ -534,6 +534,29 @@ class TaskPriority(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+    CRITICAL = "critical"
+```
+
+Values:
+
+- `critical`: highest scheduling urgency
+- `high`: urgent work
+- `medium`: default urgency
+- `low`: lowest scheduling urgency
+
+Scheduling order:
+
+- when priorities are sorted for selection, use `critical`, `high`, `medium`,
+  `low`
+- lower numeric rank means higher priority
+
+```python
+TASK_PRIORITY_ORDER = {
+    TaskPriority.CRITICAL: 0,
+    TaskPriority.HIGH: 1,
+    TaskPriority.MEDIUM: 2,
+    TaskPriority.LOW: 3,
+}
 ```
 
 ### Task Retry Policy
@@ -1309,6 +1332,7 @@ class EngineName(str, Enum):
     GEMINI = "gemini"
     COPILOT = "copilot"
     OPENCODE = "opencode"
+    GOZ = "goz"
 ```
 
 ### Subagent Status

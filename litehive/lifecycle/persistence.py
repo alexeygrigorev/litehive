@@ -5,6 +5,7 @@ from typing import Any, Protocol
 
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
+from litehive.domain.recovery import RecoveryOutcome, RecoveryTrigger
 
 from .types import FailedReason, NodeName, PipelineMode
 
@@ -93,6 +94,45 @@ class LastRejection:
 
 
 @dataclass
+class MergeContext:
+    conflict_files: tuple[str, ...] = ()
+    merge_attempt: int = 1
+
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "conflict_files": list(self.conflict_files),
+            "merge_attempt": self.merge_attempt,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> "MergeContext":
+        files = payload.get("conflict_files") or []
+        return cls(
+            conflict_files=tuple(str(path) for path in files),
+            merge_attempt=int(payload.get("merge_attempt") or 1),
+        )
+
+
+@dataclass
+class CommitResult:
+    head_sha: str
+    reason: str | None = None
+
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "head_sha": self.head_sha,
+            "reason": self.reason,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> "CommitResult":
+        return cls(
+            head_sha=str(payload["head_sha"]),
+            reason=payload.get("reason"),
+        )
+
+
+@dataclass
 class TaskState:
     """Single source of truth for task state the machine reads and writes.
 
@@ -108,10 +148,11 @@ class TaskState:
     stage: NodeName
     pipeline_mode: PipelineMode
     stage_retry: dict[NodeName, int] = field(default_factory=dict)
-    recovery_attempt: dict[NodeName, int] = field(default_factory=dict)
+    active_recovery_trigger: RecoveryTrigger | None = None
+    recovery_history: list[RecoveryOutcome] = field(default_factory=list)
     pre_exec_recovery_attempt: int = 0
-    origin_stage: NodeName | None = None
-    failure_context: dict[str, Any] = field(default_factory=dict)
+    merge_context: MergeContext | None = None
+    commit_result: CommitResult | None = None
     last_report: LastReport = field(default_factory=LastReport)
     last_rejection_by_stage: dict[NodeName, LastRejection] = field(default_factory=dict)
     consecutive_same_hook_rejects: int = 0
@@ -119,7 +160,17 @@ class TaskState:
     hook_reject_recovery_invoked: bool = False
     failed_reason: FailedReason | None = None
     failed_message: str | None = None
+    recovery_failure_explanation: str | None = None
     limits: Limits = field(default_factory=Limits)
+
+    def recovery_attempts_for_origin(self, origin_stage: NodeName) -> int:
+        count = sum(1 for outcome in self.recovery_history if outcome.trigger.origin_stage == origin_stage)
+        if self.active_recovery_trigger is not None and self.active_recovery_trigger.origin_stage == origin_stage:
+            count += 1
+        return count
+
+    def recovery_budget_available(self, trigger: RecoveryTrigger) -> bool:
+        return all(outcome.trigger.budget_key() != trigger.budget_key() for outcome in self.recovery_history)
 
 
 class Persistence(Protocol):
@@ -144,10 +195,23 @@ class InMemoryPersistence:
 def _state_payload(state: TaskState) -> dict[str, Any]:
     return {
         "stage_retry": dict(state.stage_retry),
-        "recovery_attempt": dict(state.recovery_attempt),
+        "active_recovery_trigger": (
+            state.active_recovery_trigger.to_payload()
+            if state.active_recovery_trigger is not None
+            else None
+        ),
+        "recovery_history": [outcome.to_payload() for outcome in state.recovery_history],
         "pre_exec_recovery_attempt": state.pre_exec_recovery_attempt,
-        "origin_stage": state.origin_stage,
-        "failure_context": dict(state.failure_context),
+        "merge_context": (
+            state.merge_context.to_payload()
+            if state.merge_context is not None
+            else None
+        ),
+        "commit_result": (
+            state.commit_result.to_payload()
+            if state.commit_result is not None
+            else None
+        ),
         "last_report": state.last_report.to_payload(),
         "last_rejection_by_stage": {
             stage: rej.to_payload()
@@ -162,6 +226,7 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
         "hook_reject_recovery_invoked": state.hook_reject_recovery_invoked,
         "failed_reason": state.failed_reason,
         "failed_message": state.failed_message,
+        "recovery_failure_explanation": state.recovery_failure_explanation,
     }
 
 
@@ -175,15 +240,36 @@ def _state_from_row(
     last_report_data = payload.get("last_report") or {}
     last_rejections_data = payload.get("last_rejection_by_stage") or {}
     hook_fingerprint_data = payload.get("last_hook_reject_fingerprint") or None
+    active_recovery_trigger = payload.get("active_recovery_trigger")
+    recovery_history = payload.get("recovery_history")
+    merge_context = payload.get("merge_context")
+    commit_result = payload.get("commit_result")
     return TaskState(
         task_id=task_id,
         stage=stage,
         pipeline_mode=PipelineMode(pipeline_mode),
         stage_retry=dict(payload.get("stage_retry") or {}),
-        recovery_attempt=dict(payload.get("recovery_attempt") or {}),
+        active_recovery_trigger=(
+            RecoveryTrigger.from_payload(dict(active_recovery_trigger))
+            if isinstance(active_recovery_trigger, dict)
+            else None
+        ),
+        recovery_history=[
+            RecoveryOutcome.from_payload(dict(item))
+            for item in list(recovery_history or [])
+            if isinstance(item, dict)
+        ],
         pre_exec_recovery_attempt=int(payload.get("pre_exec_recovery_attempt") or 0),
-        origin_stage=payload.get("origin_stage"),
-        failure_context=dict(payload.get("failure_context") or {}),
+        merge_context=(
+            MergeContext.from_payload(dict(merge_context))
+            if isinstance(merge_context, dict)
+            else None
+        ),
+        commit_result=(
+            CommitResult.from_payload(dict(commit_result))
+            if isinstance(commit_result, dict)
+            else None
+        ),
         last_report=LastReport.from_payload(last_report_data),
         last_rejection_by_stage={
             stage_name: LastRejection.from_payload(rej)
@@ -196,8 +282,13 @@ def _state_from_row(
             else None
         ),
         hook_reject_recovery_invoked=bool(payload.get("hook_reject_recovery_invoked", False)),
-        failed_reason=payload.get("failed_reason"),
+        failed_reason=(
+            FailedReason(payload["failed_reason"])
+            if payload.get("failed_reason")
+            else None
+        ),
         failed_message=payload.get("failed_message"),
+        recovery_failure_explanation=payload.get("recovery_failure_explanation"),
         limits=limits,
     )
 
@@ -211,7 +302,7 @@ class SqlitePersistence:
 
     The scalar fields (stage, pipeline_mode) are stored as columns so the
     daemon can query them directly without parsing JSON. Everything else
-    (counters, failure_context, last_rejection_by_stage, last_report, failed_*)
+    (counters, recovery/merge details, last_rejection_by_stage, last_report, failed_*)
     lives in the free-form ``payload`` column.
 
     ``limits`` is runtime config and is re-injected from the ``limits``

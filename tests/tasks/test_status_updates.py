@@ -1,8 +1,10 @@
 from pathlib import Path
 
+import pytest
 import yaml
 
 from litehive.config.workspace import ensure_workspace
+from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.status import close_task, update_task
@@ -54,6 +56,11 @@ def test_update_task_requeues_task_with_structured_action(tmp_path: Path) -> Non
     task.pipeline_status = "implementing"
     save_task(tmp_path, task)
 
+    persistence = SqlitePersistence(tmp_path)
+    failed_state = persistence.initialize(task.id)
+    failed_state.stage = "failed"
+    persistence.save(failed_state)
+
     update_task(tmp_path, task.id, action="requeue")
 
     refreshed = require_task(tmp_path, task.id)
@@ -62,6 +69,8 @@ def test_update_task_requeues_task_with_structured_action(tmp_path: Path) -> Non
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "implementing"
     assert state.queue[-1] == task.id
+    with pytest.raises(TaskNotFound):
+        persistence.load(task.id)
 
 
 def test_update_task_abandons_task_with_structured_action(tmp_path: Path) -> None:

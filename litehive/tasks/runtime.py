@@ -26,9 +26,9 @@ def idle_stage_state(*, updated_at: str) -> RuntimeStageState:
     return RuntimeStageState(updated_at=updated_at)
 
 
-def _running_stage_state(step: str, *, started_at: str) -> RuntimeStageState:
+def _running_stage_state(stage: str, *, started_at: str) -> RuntimeStageState:
     return RuntimeStageState(
-        step=step,
+        stage=stage,
         status="running",
         started_at=started_at,
         updated_at=started_at,
@@ -42,7 +42,7 @@ def _completed_stage_state(
     completed_at: str,
 ) -> RuntimeStageState:
     return RuntimeStageState(
-        step=report.step,
+        stage=report.stage,
         status="completed" if report.verdict in {"pass", "accept"} else report.verdict,
         started_at=started_at,
         completed_at=completed_at,
@@ -270,10 +270,10 @@ def apply_task_outcome(
     )
 
 
-def mark_stage_started(root: Path, task: TaskRecord, step: str) -> None:
+def mark_stage_started(root: Path, task: TaskRecord, stage: str) -> None:
     now = utcnow()
     task.runtime.updated_at = now
-    task.runtime.current_stage = _running_stage_state(step, started_at=now)
+    task.runtime.current_stage = _running_stage_state(stage, started_at=now)
     save_task_runtime(root, task)
 
 
@@ -290,7 +290,7 @@ def apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
     task.runtime.current_stage = idle_stage_state(updated_at=now)
     if (
         task.runtime.continuation_handoff is not None
-        and task.runtime.continuation_handoff.step == report.step
+        and task.runtime.continuation_handoff.stage == report.stage
     ):
         task.runtime.continuation_handoff = None
 
@@ -329,7 +329,7 @@ def mark_subagent_progress(
         return
     now = utcnow()
     task.runtime.updated_at = now
-    if task.runtime.current_stage.step is not None:
+    if task.runtime.current_stage.stage is not None:
         task.runtime.current_stage = task.runtime.current_stage.model_copy(
             update={"updated_at": now}
         )
@@ -387,7 +387,7 @@ def mark_engine_switch(
     root: Path,
     task: TaskRecord,
     *,
-    step: str,
+    stage: str,
     from_engine: str,
     to_engine: str,
     reason: str,
@@ -395,7 +395,7 @@ def mark_engine_switch(
     now = utcnow()
     task.runtime.updated_at = now
     task.runtime.last_engine_switch = RuntimeEngineSwitch(
-        step=step,
+        stage=stage,
         from_engine=from_engine,
         to_engine=to_engine,
         reason=reason,

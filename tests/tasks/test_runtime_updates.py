@@ -42,7 +42,7 @@ def test_mark_task_run_started_resets_stage_and_active_subagent(tmp_path: Path) 
 
     refreshed = require_task(tmp_path, task.id)
     assert refreshed.runtime.execution_status == "running"
-    assert refreshed.runtime.current_stage.step is None
+    assert refreshed.runtime.current_stage.stage is None
     assert refreshed.runtime.current_stage.status == "idle"
     assert refreshed.runtime.active_subagent is None
     assert refreshed.runtime.interruption is None
@@ -56,7 +56,7 @@ def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_pat
     task = require_task(tmp_path, task.id)
     report = StageReport(
         task_id=task.id,
-        step="implementing",
+        stage="implementing",
         verdict="pass",
         summary="implemented the change",
     )
@@ -64,10 +64,10 @@ def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_pat
     mark_stage_finished(tmp_path, task, report)
 
     refreshed = require_task(tmp_path, task.id)
-    assert refreshed.runtime.last_stage.step == "implementing"
+    assert refreshed.runtime.last_stage.stage == "implementing"
     assert refreshed.runtime.last_stage.status == "completed"
     assert refreshed.runtime.last_stage.summary == "implemented the change"
-    assert refreshed.runtime.current_stage.step is None
+    assert refreshed.runtime.current_stage.stage is None
     assert refreshed.runtime.current_stage.status == "idle"
 
 

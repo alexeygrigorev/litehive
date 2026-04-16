@@ -2,7 +2,7 @@
 
 from typing import Literal, TypeAlias
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .common import (
     FEEDBACK_CAP,
@@ -111,10 +111,20 @@ class TaskThreadComment(BaseModel):
 
     role: str
     stage: str
+    target_stage: str | None = None
     verdict: Verdict = Verdict.COMMENT
     message: str
     files_changed: list[str] = Field(default_factory=list)
     created_at: str = Field(default_factory=utcnow)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_stage(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        if "stage" not in data and "step" in data:
+            return {**data, "stage": data["step"]}
+        return data
 
 
 __all__ = [

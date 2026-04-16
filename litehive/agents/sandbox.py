@@ -4,9 +4,12 @@ Backed by docker: container-based isolation using a per-engine image.
 """
 
 from dataclasses import dataclass
+from enum import Enum
 import os
 from pathlib import Path, PurePosixPath
 import shutil
+import sys
+from typing import Mapping
 
 from litehive.config.model import LitehiveConfig
 from litehive.config.model import ExternalEngineSandboxPolicy
@@ -21,9 +24,21 @@ from heru.engine_detection import (
 from litehive.domain.runtime import ResourceLimitEvent
 
 
+class SandboxProfile(str, Enum):
+    NO_GIT = "no_git"
+    MERGE_RESOLVER = "merge_resolver"
+
+
+def sandbox_profile_for_role(role: str) -> SandboxProfile:
+    if role == "merge-resolver":
+        return SandboxProfile.MERGE_RESOLVER
+    return SandboxProfile.NO_GIT
+
+
 def _forced_engine_rw_state_dirs(
     engine_name: str,
     policy: "ExternalEngineSandboxPolicy | None",
+    env: Mapping[str, str] | None = None,
 ) -> frozenset[Path]:
     """State dirs that an engine must be able to write into.
 
@@ -37,13 +52,15 @@ def _forced_engine_rw_state_dirs(
     regardless of how the workspace YAML is shaped.
     """
 
-    setenv = {} if policy is None else dict(policy.setenv)
-    home_override = setenv.get("HOME")
+    effective_env = dict(env or {})
+    if policy is not None:
+        effective_env.update(policy.setenv)
+    home_override = effective_env.get("HOME")
     home = Path(home_override).expanduser() if home_override else Path.home()
 
     candidates: list[Path] = []
     if engine_name == "codex":
-        codex_home = setenv.get("CODEX_HOME")
+        codex_home = effective_env.get("CODEX_HOME")
         candidates.append(Path(codex_home).expanduser() if codex_home else home / ".codex")
     elif engine_name == "claude":
         candidates.append(home / ".claude")
@@ -145,14 +162,13 @@ class SandboxLauncher:
         self.config = config
 
     def policy_summary(self, engine_name: str, role: str = "") -> SandboxPolicySummary:
-        del role  # kept for backward-compat; docker has a single profile
         policy = self._policy_for_engine(engine_name)
         sandbox_enabled = self.config.external_engine_sandbox.enabled and policy is not None and policy.enabled
         if not sandbox_enabled:
             return SandboxPolicySummary(enabled=False)
         return SandboxPolicySummary(
             enabled=True,
-            backend="docker",
+            backend=self.config.external_engine_sandbox.backend,
             runtime=self.config.external_engine_sandbox.runtime_binary,
             image=self.config.external_engine_sandbox.image,
             network_mode=(
@@ -196,6 +212,13 @@ class SandboxLauncher:
             )
 
         return self._wrap_docker(
+            engine_name,
+            role,
+            binary_name,
+            binary_path,
+            invocation,
+            summary,
+        ) if runtime_config.backend == "docker" else self._wrap_bubblewrap(
             engine_name,
             role,
             binary_name,
@@ -268,7 +291,9 @@ class SandboxLauncher:
             value = invocation.env.get(env_name)
             if value is not None:
                 allowed_env[env_name] = value
-        extra_ro_binds = self._resolved_extra_ro_binds(engine_name, policy)
+        if policy is not None:
+            allowed_env.update(policy.setenv)
+        extra_ro_binds = self._resolved_extra_ro_binds(engine_name, policy, invocation.env)
         for host_path in extra_ro_binds:
             argv.extend(
                 [
@@ -298,6 +323,140 @@ class SandboxLauncher:
         argv.extend(container_argv)
         return CLIInvocation(argv=tuple(argv), cwd=invocation.cwd, env=invocation.env)
 
+    def _wrap_bubblewrap(
+        self,
+        engine_name: str,
+        role: str,
+        binary_name: str,
+        binary_path: str,
+        invocation: CLIInvocation,
+        summary: SandboxPolicySummary,
+    ) -> CLIInvocation:
+        runtime_config = self.config.external_engine_sandbox
+        policy = self._policy_for_engine(engine_name)
+        profile = sandbox_profile_for_role(role)
+        env = dict(invocation.env)
+        if policy is not None:
+            env.update(policy.setenv)
+
+        argv: list[str] = [
+            runtime_config.runtime_binary,
+            "--die-with-parent",
+            "--new-session",
+            "--unshare-all",
+        ]
+        if summary.network_mode in {"host", "bridge"}:
+            argv.append("--share-net")
+        argv.extend(["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"])
+
+        for system_path in ("/usr", "/bin", "/lib", "/lib64", "/sbin", "/etc"):
+            host_path = Path(system_path)
+            if not host_path.exists():
+                continue
+            self._ensure_bubblewrap_target(argv, PurePosixPath(system_path), is_dir=True)
+            argv.extend(["--ro-bind", system_path, system_path])
+        for system_file in ("/etc/resolv.conf",):
+            host_file = Path(system_file)
+            try:
+                resolved_file = host_file.resolve(strict=True)
+            except OSError:
+                continue
+            if resolved_file == host_file:
+                continue
+            target = PurePosixPath(str(resolved_file))
+            self._ensure_bubblewrap_target(argv, target, is_dir=False)
+            argv.extend(["--ro-bind", str(resolved_file), str(target)])
+
+        self._ensure_bubblewrap_target(argv, PurePosixPath(str(self.root)), is_dir=True)
+        argv.extend(["--bind", str(self.root), str(self.root)])
+
+        for host_path in self._resolved_extra_ro_binds(engine_name, policy, env):
+            target = PurePosixPath(str(host_path))
+            self._ensure_bubblewrap_target(argv, target, is_dir=host_path.is_dir())
+            argv.extend(["--ro-bind", str(host_path), str(target)])
+        for host_path in self._resolved_extra_rw_binds(engine_name, policy, env):
+            target = PurePosixPath(str(host_path))
+            self._ensure_bubblewrap_target(argv, target, is_dir=host_path.is_dir())
+            argv.extend(["--bind", str(host_path), str(target)])
+
+        wrapper_paths = self._ensure_bubblewrap_wrappers()
+        real_git_path = shutil.which("git")
+        if profile is SandboxProfile.NO_GIT:
+            env["PATH"] = f"{wrapper_paths['no_git_bin']}{os.pathsep}{env.get('PATH', '')}"
+            self._ensure_bubblewrap_target(argv, PurePosixPath("/usr/bin/git"), is_dir=False)
+            argv.extend(["--bind", str(wrapper_paths["no_git"]), "/usr/bin/git"])
+        elif profile is SandboxProfile.MERGE_RESOLVER and real_git_path is not None:
+            env["PATH"] = f"{wrapper_paths['merge_bin']}{os.pathsep}{env.get('PATH', '')}"
+            env["LITEHIVE_REAL_GIT_PATH"] = "/litehive/bin/git.real"
+            env["LITEHIVE_WORKSPACE_ROOT"] = str(self.root)
+            env["LITEHIVE_SOURCE_ROOT"] = str(Path(__file__).resolve().parents[2])
+            env["LITEHIVE_PYTHON_PATH"] = sys.executable
+            self._ensure_bubblewrap_target(argv, PurePosixPath("/litehive/bin/git.real"), is_dir=False)
+            argv.extend(["--ro-bind", real_git_path, "/litehive/bin/git.real"])
+            source_root = Path(env["LITEHIVE_SOURCE_ROOT"]).resolve()
+            self._ensure_bubblewrap_target(argv, PurePosixPath(str(source_root)), is_dir=True)
+            argv.extend(["--ro-bind", str(source_root), str(source_root)])
+
+        sanitized_path = _sanitize_path_env(env.get("PATH", ""))
+        if sanitized_path:
+            env["PATH"] = sanitized_path
+
+        argv.append("--")
+        argv.extend(invocation.argv)
+        return CLIInvocation(argv=tuple(argv), cwd=invocation.cwd, env=env)
+
+    @staticmethod
+    def _ensure_bubblewrap_target(
+        argv: list[str],
+        target: PurePosixPath,
+        *,
+        is_dir: bool,
+    ) -> None:
+        candidates = list(target.parents)[::-1]
+        if is_dir:
+            candidates.append(target)
+        else:
+            candidates.append(target.parent)
+        seen: set[str] = set()
+        for candidate in candidates:
+            text = str(candidate)
+            if text in {"", "/"} or text in seen:
+                continue
+            seen.add(text)
+            argv.extend(["--dir", text])
+
+    def _ensure_bubblewrap_wrappers(self) -> dict[str, Path]:
+        runtime_dir = self.root / ".litehive" / "runtime" / "sandbox"
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        merge_bin = runtime_dir / "merge-bin"
+        no_git_bin = runtime_dir / "no-git-bin"
+        merge_bin.mkdir(parents=True, exist_ok=True)
+        no_git_bin.mkdir(parents=True, exist_ok=True)
+        merge_git = merge_bin / "git"
+        no_git = no_git_bin / "git"
+        merge_git.write_text(
+            """#!/bin/sh
+export PYTHONPATH="${LITEHIVE_SOURCE_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
+exec "${LITEHIVE_PYTHON_PATH}" -c 'from litehive.sandbox.git_wrapper import main; import os, sys; raise SystemExit(main(sys.argv[1:], real_git_path=os.environ["LITEHIVE_REAL_GIT_PATH"], workspace_root=os.environ["LITEHIVE_WORKSPACE_ROOT"]))' "$@"
+""",
+            encoding="utf-8",
+        )
+        no_git.write_text(
+            """#!/bin/sh
+echo "git: not found" >&2
+exit 127
+""",
+            encoding="utf-8",
+        )
+        for path in (merge_git, no_git):
+            path.chmod(0o755)
+        return {
+            "merge_git": merge_git,
+            "merge_bin": merge_bin,
+            "no_git": no_git,
+            "no_git_bin": no_git_bin,
+        }
+
     def _policy_for_engine(self, engine_name: str) -> ExternalEngineSandboxPolicy | None:
         return self.config.external_engine_sandbox.engine_policies.get(engine_name)
 
@@ -305,8 +464,9 @@ class SandboxLauncher:
     def _resolved_extra_ro_binds(
         engine_name: str,
         policy: ExternalEngineSandboxPolicy | None,
+        env: Mapping[str, str] | None = None,
     ) -> tuple[Path, ...]:
-        forced_rw = _forced_engine_rw_state_dirs(engine_name, policy)
+        forced_rw = _forced_engine_rw_state_dirs(engine_name, policy, env)
         resolved_paths: list[Path] = []
         for raw_path in () if policy is None else policy.extra_ro_binds:
             host_path = Path(raw_path).expanduser()
@@ -329,8 +489,9 @@ class SandboxLauncher:
     def _resolved_extra_rw_binds(
         engine_name: str,
         policy: ExternalEngineSandboxPolicy | None,
+        env: Mapping[str, str] | None = None,
     ) -> tuple[Path, ...]:
-        forced_rw = _forced_engine_rw_state_dirs(engine_name, policy)
+        forced_rw = _forced_engine_rw_state_dirs(engine_name, policy, env)
         resolved_paths: list[Path] = []
         seen: set[Path] = set()
         for raw_path in () if policy is None else policy.extra_rw_binds:
