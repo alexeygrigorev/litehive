@@ -4,7 +4,10 @@ import pytest
 import yaml
 
 from litehive.config.loading import load_config
-from litehive.config.model import LitehiveConfig
+from litehive.config.model import (
+    DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS,
+    LitehiveConfig,
+)
 from litehive.config.paths import global_config_path
 from litehive.config.workspace import ensure_workspace
 
@@ -160,7 +163,7 @@ def test_litehive_config_normalizes_retry_on() -> None:
 def test_litehive_config_defaults_include_flat_retry_on() -> None:
     config = LitehiveConfig()
 
-    assert config.subagent_inactivity_timeout_seconds == 360.0
+    assert config.subagent_inactivity_timeout_seconds == DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS
     assert config.retry_on == ["execution_limit", "timeout"]
 
 

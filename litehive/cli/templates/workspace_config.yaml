@@ -58,8 +58,11 @@ runner_hook_execution_mode: run_all
 #   instructions_on_failure: optional guidance surfaced on failure
 runner_hooks: {}
 
-# Timeout budget for detecting hung subagents and top-level runs.
-subagent_inactivity_timeout_seconds: 360.0
+# Timeout budget for detecting hung live subagents and top-level runs.
+# Litehive kills a stalled live Codex subprocess after 300 seconds without new
+# stdout, then lets the normal stage retry flow restart that stage.
+# `inactivity_timeout_seconds` is separate daemon/runner stale-state handling.
+subagent_inactivity_timeout_seconds: 300.0
 inactivity_timeout_seconds: null
 
 # External engine sandbox configuration used for adapters that launch outside the repo.

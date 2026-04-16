@@ -108,7 +108,7 @@ def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
     with workspace_lock(root):
         state = load_state(root)
         state.pool_stop_reason = stop_reason
-        save_state(root, state)
+        save_state_without_runner_guard(root, state)
         return state
 
 

@@ -157,7 +157,10 @@ When a stage fails or an agent crashes, litehive does not just give up:
 - If a merge conflict occurs during commit, a merge resolution agent resolves it
 - If the same stage fails 3 or more times, the task gets escalated back to grooming for replanning
 - If an engine hits its quota, litehive switches to another engine
+- If a live Codex subagent goes 5 minutes without new stdout, Litehive terminates that subprocess and lets the normal stage retry flow restart the same stage
 - The recovery engine can be different from the task engine (e.g. use Claude for recovery while Codex does the work)
+
+That 5-minute live-subagent timeout is separate from daemon stale-runner recovery. It applies to stalled subprocess output, not to background daemon lock or heartbeat repair.
 
 Configure the recovery engine:
 
@@ -175,6 +178,8 @@ recovery_engine: claude
 codex_model: gpt-5.4-high
 claude_model: claude-opus-4-6
 auto_commit: true
+subagent_inactivity_timeout_seconds: 300.0
+inactivity_timeout_seconds: null
 
 # Hooks that run before/after stages
 runner_hooks:
@@ -196,6 +201,8 @@ agent_startup_guidance:
   qa:
     - Read the latest implementing report before running tests.
 ```
+
+`subagent_inactivity_timeout_seconds` controls live subagent stdout stall detection. For Codex, Litehive kills the subprocess after 300 seconds without new output and relies on the existing retry path to restart the stage, reusing continuation or resume ids when the engine produced one. `inactivity_timeout_seconds` is the separate top-level runner timeout.
 
 Describe your project in `.litehive/context.md` so agents understand the codebase:
 
@@ -315,7 +322,7 @@ Currently supported:
 - **Each test file should finish within 1 minute** — if a test file takes longer, the tests need to be optimized or split
 - **The full test suite must finish within 3 minutes** (`uv run pytest tests/ -q`) — if a change pushes it over 3 minutes, QA must reject
 - **Integration tests** (in `tests_integration/`) may take up to 3 minutes per file
-- The agent process is killed after **6 minutes of no output** — run only the specific test file for your change, not the full suite
+- A live subagent is killed after **5 minutes of no output** and the normal retry flow restarts the stage — run only the specific test file for your change, not the full suite
 - `LITEHIVE_SKIP_FSYNC=1` is set automatically in tests via `conftest.py` to avoid slow disk flushes
 
 ### Always mock the execution layer

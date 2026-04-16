@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 import pytest
 
@@ -11,10 +12,11 @@ from litehive.agents.session_store import (
     load_subagent_timeline,
 )
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.agent import EngineFailure
+from litehive.domain.agent import EngineFailure, SubagentInactivityTimeout
 from litehive.domain.reports import TaskThreadComment
 from litehive.lifecycle.heru_factory import HeruEngineAdapter
 from litehive.state.records import create_task, get_task, save_task
+from litehive.tasks.paths import task_dir
 from litehive.tasks.reports import append_thread_comment
 
 
@@ -355,3 +357,175 @@ def test_subagent_manager_prefers_bound_instance_run_override_over_inherited_run
 
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
+
+
+def test_subagent_manager_kills_stale_live_codex_output_after_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    manager = SubagentManager(tmp_path)
+    manager.config.subagent_inactivity_timeout_seconds = 1.0
+    base = tmp_path / "subagent"
+    base.mkdir()
+    stdout_path = base / "stdout.txt"
+    stdout_path.write_text("partial output", encoding="utf-8")
+    stale_time = stdout_path.stat().st_mtime - 5
+    os.utime(stdout_path, (stale_time, stale_time))
+
+    killed: list[int] = []
+    monkeypatch.setattr(manager, "_terminate_stale_pid", killed.append)
+
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec"),
+        cwd=tmp_path,
+        exit_code=0,
+        stdout="partial output",
+        stderr="",
+        pid=4242,
+    )
+
+    with pytest.raises(SubagentInactivityTimeout, match="1s without new stdout"):
+        manager._check_stdout_inactivity(base, execution)
+
+    assert killed == [4242]
+
+
+def test_subagent_manager_passes_default_inactivity_timeout_to_live_codex_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Live inactivity timeout")
+    manager = SubagentManager(tmp_path)
+    captured: dict[str, object] = {}
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run_live(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            max_turns: int | None = None,
+            resume_session_id: str | None = None,
+            on_started=None,
+            on_update=None,
+            inactivity_timeout_seconds: float = 0,
+            extra_env: dict[str, str] | None = None,
+            emit_unified: bool = False,
+        ) -> CLIExecutionResult:
+            del prompt, model, max_turns, resume_session_id, on_update, extra_env
+            captured["emit_unified"] = emit_unified
+            captured["inactivity_timeout_seconds"] = inactivity_timeout_seconds
+            if on_started is not None:
+                on_started(4242)
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="plain transcript",
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    engine = FakeEngine()
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
+
+    manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert captured["emit_unified"] is True
+    assert captured["inactivity_timeout_seconds"] == 300.0
+
+
+def test_subagent_manager_classifies_inactivity_timeout_as_retryable_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Retry stalled codex run")
+    manager = SubagentManager(tmp_path)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run_live(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            max_turns: int | None = None,
+            resume_session_id: str | None = None,
+            on_started=None,
+            on_update=None,
+            inactivity_timeout_seconds: float = 0,
+            extra_env: dict[str, str] | None = None,
+            emit_unified: bool = False,
+        ) -> CLIExecutionResult:
+            del prompt, model, max_turns, resume_session_id, on_update, extra_env, emit_unified
+            if on_started is not None:
+                on_started(4242)
+            execution = CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout=(
+                    '{"kind":"message","engine":"codex","sequence":0,'
+                    '"role":"assistant","content":"still working",'
+                    '"timestamp":"2026-04-12T00:00:00+00:00","usage_delta":{},'
+                    '"raw":{},"metadata":{}}\n'
+                    '{"kind":"continuation","engine":"codex","sequence":1,'
+                    '"timestamp":"2026-04-12T00:00:01+00:00",'
+                    '"continuation_id":"session-42","usage_delta":{},'
+                    '"raw":{},"metadata":{}}\n'
+                ),
+                stderr="",
+                pid=4242,
+            )
+            raise SubagentInactivityTimeout(
+                execution,
+                idle_seconds=305.0,
+                limit_seconds=inactivity_timeout_seconds,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    engine = FakeEngine()
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert result.failure == EngineFailure(
+        kind="retryable_execution_error",
+        reason="transient timeout",
+        classification="timeout",
+    )
+    assert result.exit_code == 124
+    assert result.execution is not None
+    assert "300s without new stdout" in result.execution.stderr
+    assert result.continuation is not None
+    assert result.continuation.resume_id == "session-42"
+
+    session = load_subagent_session(tmp_path, task.id, result.ref.id)
+    report = load_subagent_report(tmp_path, task.id, result.ref.id)
+    stderr_path = task_dir(tmp_path, task) / result.ref.path / "stderr.txt"
+
+    assert session["exit_code"] == 124
+    assert session["continuation"]["session_id"] == "session-42"
+    assert report["status"] == "failed"
+    assert "300s without new stdout" in stderr_path.read_text(encoding="utf-8")

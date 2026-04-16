@@ -173,13 +173,14 @@ class HeruEngineAdapter:
             self._reraise(exc)
             raise  # unreachable
 
-        if result.failure is not None:
-            self._reraise_failure(result.failure)
-
         # Update the session with the new heru continuation id (if any).
         new_session_id = self._extract_continuation_id(result, session.engine_session_id)
         if new_session_id:
             session.engine_session_id = new_session_id
+
+        if result.failure is not None:
+            self._reraise_failure(result.failure)
+
         session.turn_count = (session.turn_count or 0) + 1
 
         # Did the agent submit a verdict during this turn?

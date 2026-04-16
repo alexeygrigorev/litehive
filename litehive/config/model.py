@@ -33,6 +33,7 @@ VALID_RUNNER_HOOK_POINTS = frozenset(
 REJECTABLE_HOOK_POINTS = frozenset({"after_implementing", "after_testing", "after_commit"})
 
 RUNNER_HOOK_EXECUTION_MODES = {"run_all", "fail_fast"}
+DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS = 300.0
 
 
 # --- supporting dataclasses ---
@@ -118,7 +119,7 @@ class LitehiveConfig:
     pool_selection_policy: str = "dependency_aware"
     runner_hook_execution_mode: str = "run_all"
     runner_hooks: dict[str, list[RunnerHookConfig]] = field(default_factory=dict)
-    subagent_inactivity_timeout_seconds: float = 360.0
+    subagent_inactivity_timeout_seconds: float = DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS
     inactivity_timeout_seconds: float | None = None
     external_engine_sandbox: ExternalEngineSandboxConfig = field(
         default_factory=ExternalEngineSandboxConfig
