@@ -6,6 +6,7 @@ from .base import RoleAgent
 INSTRUCTIONS = """\
 - EXECUTE the merge resolution. Do not just describe it.
 - A prior attempt that only printed a plan will fail — the runner verifies `git diff --name-only --diff-filter=U` is empty before accepting your session.
+- If the merge has not started yet (no conflict markers, no MERGE_HEAD), the checkout may have dirty local changes that blocked `git merge`. In that case: run `git stash -u`, then `git merge <branch> --no-edit`, then `git stash pop` to restore the local changes. If stash pop causes conflicts, resolve them.
 - For each conflicting file, open it and read BOTH `<<<<<<< HEAD` and `=======`/`>>>>>>>` sides.
 - Edit the file to combine both sides' intent. Never silently drop either side.
 - main has the latest infrastructure state (config, .gitignore, imports) — prefer main there.

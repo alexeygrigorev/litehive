@@ -559,11 +559,17 @@ class GitCommitNode(CommitNode):
 
         unresolved = self._unresolved_conflicts()
         if not unresolved:
-            # git merge failed for a reason other than conflicts (e.g. bad
-            # ref, missing commit). Leave nothing half-applied.
+            stderr = result.stderr.strip() or result.stdout.strip()
+            # Dirty checkout: git refuses to start because local changes
+            # would be overwritten.  Parse the affected files and route
+            # them to the MergeAgent instead of crashing.
+            dirty_files = self._parse_dirty_checkout_files(stderr)
+            if dirty_files:
+                raise MergeConflict(dirty_files)
+            # Genuine non-conflict failure (bad ref, missing commit, …).
             self._abort_merge()
             raise GitError(
-                f"git merge failed with no conflict files: {result.stderr.strip() or result.stdout.strip()}"
+                f"git merge failed with no conflict files: {stderr}"
             )
 
         # Leave the worktree in the unresolved state. The state machine
@@ -660,68 +666,42 @@ class GitCommitNode(CommitNode):
         return proc.stdout.strip() or None
 
     def _git_merge(self, branch_ref: str) -> subprocess.CompletedProcess:
-        stash_ref = self._stash_main_changes()
-        try:
-            result = subprocess.run(
-                ["git", "merge", branch_ref, "--no-edit"],
-                cwd=str(self.main_repo_root),
-                capture_output=True,
-                text=True,
-            )
-        except BaseException:
-            self._restore_main_changes(stash_ref)
-            raise
-        # Restore stashed changes after a clean merge or a conflict-free
-        # failure.  For conflict merges the caller will inspect unresolved
-        # files before we get here again (via _conclude_in_progress_merge).
-        if result.returncode == 0 or not self._unresolved_conflicts():
-            self._restore_main_changes(stash_ref)
-        return result
+        return subprocess.run(
+            ["git", "merge", branch_ref, "--no-edit"],
+            cwd=str(self.main_repo_root),
+            capture_output=True,
+            text=True,
+        )
 
-    def _stash_main_changes(self) -> str | None:
-        """Stash dirty main checkout so ``git merge`` can proceed."""
-        dirty = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
-        if dirty.returncode != 0 or not dirty.stdout.strip():
-            return None
-        before = subprocess.run(
-            ["git", "rev-parse", "-q", "--verify", "refs/stash"],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
-        stash = subprocess.run(
-            ["git", "stash", "push", "-u", "-m", "litehive-commit-stage-autostash"],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
-        if stash.returncode != 0:
-            return None  # non-fatal — merge may still work
-        after = subprocess.run(
-            ["git", "rev-parse", "-q", "--verify", "refs/stash"],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
-        if after.stdout.strip() != before.stdout.strip():
-            return after.stdout.strip()
-        return None
+    @staticmethod
+    def _parse_dirty_checkout_files(stderr: str) -> list[str]:
+        """Extract file paths from a dirty-checkout merge refusal.
 
-    def _restore_main_changes(self, stash_ref: str | None) -> None:
-        """Pop the autostash created by ``_stash_main_changes``."""
-        if not stash_ref:
-            return
-        subprocess.run(
-            ["git", "stash", "pop", "--index"],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
+        Git prints messages like::
+
+            error: Your local changes to the following files would be overwritten by merge:
+                litehive/domain/common.py
+                litehive/tasks/queue.py
+            Please commit your changes or stash them before you merge.
+
+        Returns the list of affected files, or an empty list if the error
+        is not a dirty-checkout refusal.
+        """
+        if "would be overwritten by merge" not in stderr:
+            return []
+        files: list[str] = []
+        capture = False
+        for line in stderr.splitlines():
+            stripped = line.strip()
+            if "would be overwritten by merge" in stripped:
+                capture = True
+                continue
+            if capture:
+                if stripped.startswith("Please ") or stripped.startswith("error:") or not stripped:
+                    capture = False
+                    continue
+                files.append(stripped)
+        return files
 
     def _merge_in_progress(self) -> bool:
         proc = subprocess.run(
