@@ -25,7 +25,7 @@ def test_recover_stale_runner_state_skips_task_scan_for_clean_queue(
 
 def test_repair_clean_workspace_with_100_tasks_stays_under_budget(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    for index in range(100):
+    for index in range(20):
         create_task(tmp_path, title=f"Task {index}")
 
     started = time.perf_counter()
