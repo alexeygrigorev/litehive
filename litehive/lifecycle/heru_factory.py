@@ -122,9 +122,23 @@ def _latest_verdict_after(
 class HeruEngineAdapter:
     """``Engine`` that delegates to ``SubagentManager`` for one turn."""
 
-    def __init__(self, engine_name: str, workspace_root: Path) -> None:
+    def __init__(
+        self,
+        engine_name: str,
+        workspace_root: Path,
+        *,
+        model_name: str | None = None,
+    ) -> None:
         self.name = engine_name
         self.workspace_root = Path(workspace_root)
+        self.model_name = model_name
+
+    def with_model(self, model_name: str | None) -> "HeruEngineAdapter":
+        return HeruEngineAdapter(
+            self.name,
+            self.workspace_root,
+            model_name=model_name,
+        )
 
     def run_turn(self, session: Session, prompt: Any, state: TaskState) -> AgentVerdict:
         if not isinstance(prompt, dict):
@@ -152,6 +166,7 @@ class HeruEngineAdapter:
                 role=role,
                 engine_name=self.name,
                 prompt=prompt_text,
+                model=self.model_name,
                 resume_session_id=session.engine_session_id,
             )
         except Exception as exc:

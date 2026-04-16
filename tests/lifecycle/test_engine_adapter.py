@@ -15,6 +15,7 @@ from heru.types import RuntimeEngineContinuation
 
 class _StubManager:
     last_init: tuple[Path, Path] | None = None
+    last_kwargs: dict[str, object] | None = None
 
     def __init__(self, workspace_root, *, execution_root=None):
         self.workspace_root = workspace_root
@@ -22,7 +23,8 @@ class _StubManager:
         _StubManager.last_init = (Path(workspace_root), Path(execution_root))
 
     def run(self, task, **kwargs) -> SubagentResult:
-        del task, kwargs
+        del task
+        _StubManager.last_kwargs = dict(kwargs)
         return SubagentResult(
             ref=SubagentRef(
                 id="SA-0001",
@@ -103,6 +105,40 @@ def test_heru_engine_adapter_runs_subagent_in_task_worktree(tmp_path, monkeypatc
     )
 
     assert _StubManager.last_init == (tmp_path.resolve(), worktree.resolve())
+
+
+def test_heru_engine_adapter_passes_selected_model_to_subagent_manager(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from litehive.state.records import create_task
+
+    task = create_task(tmp_path, title="model handoff", goal="use configured model")
+    session = Session()
+    state = TaskState(task_id=task.id, stage="implementing", pipeline_mode=PipelineMode.FULL)
+    adapter = HeruEngineAdapter("goz", tmp_path).with_model("goz-preview-model")
+
+    _StubManager.last_kwargs = None
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
+    monkeypatch.setattr(
+        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
+    )
+
+    adapter.run_turn(
+        session,
+        {
+            "task_id": task.id,
+            "stage": "implementing",
+            "role": "swe",
+            "pipeline_mode": "full",
+            "instructions": [],
+        },
+        state,
+    )
+
+    assert _StubManager.last_kwargs is not None
+    assert _StubManager.last_kwargs["model"] == "goz-preview-model"
 
 
 def test_latest_verdict_after_rejects_empty_implementing_pass(tmp_path, monkeypatch) -> None:

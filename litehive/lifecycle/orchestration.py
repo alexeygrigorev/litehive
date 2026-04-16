@@ -310,6 +310,8 @@ def run_task(
     task: TaskRecord,
     *,
     engine_factory: EngineFactory | None = None,
+    engine_override: str | None = None,
+    model_override: str | None = None,
 ) -> ExecutionResult:
     """Run a single task through the state machine.
 
@@ -329,7 +331,13 @@ def run_task(
         _load_or_initialize(task.id, root, persistence)
 
         factory = engine_factory or heru_engine_factory(root)
-        selector = ConfigBackedEngineSelector(config, factory)
+        selector = ConfigBackedEngineSelector(
+            config,
+            factory,
+            workspace_root=root,
+            engine_override=engine_override,
+            model_override=model_override,
+        )
         sessions = SqliteSessionStore(root)
         journal = SqliteJournal(root)
         hook_runner = SubprocessHookRunner(root)
