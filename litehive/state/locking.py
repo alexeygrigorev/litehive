@@ -280,6 +280,30 @@ def runner_conflict_message(root: Path) -> str:
     )
 
 
+def _auto_repair_stale_state(root: Path) -> None:
+    """Clear stale active_task_id and running execution statuses.
+
+    Called inside ``workspace_runner_guard`` after acquiring the exclusive
+    flock.  Since we hold the lock, no other runner is alive — any
+    active_task_id or ``execution_status == "running"`` is leftover from
+    a crashed process and must be cleaned up before we start.
+    """
+    from litehive.recovery.workspace_repair import repair_workspace
+
+    try:
+        result = repair_workspace(root)
+        if result.repaired:
+            import sys
+            print(
+                f"auto-repair: cleared stale state "
+                f"(active={result.cleared_active_task_id or '-'}, "
+                f"requeued={', '.join(result.requeued_task_ids) or '-'})",
+                file=sys.stderr,
+            )
+    except Exception:
+        pass  # best-effort — don't block the runner from starting
+
+
 @contextmanager
 def workspace_runner_guard(root: Path):
     root = root.resolve()
@@ -319,6 +343,10 @@ def workspace_runner_guard(root: Path):
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
             raise WorkspaceConflictError(runner_conflict_message(root)) from exc
+        # Auto-repair stale state left by a crashed runner.  We hold the
+        # exclusive flock, so no other runner is alive — any active_task_id
+        # or "running" execution_status is leftover from a dead process.
+        _auto_repair_stale_state(root)
         now = utcnow()
         status = RunnerStatusState(
             status="running",
