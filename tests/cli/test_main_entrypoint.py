@@ -87,6 +87,7 @@ def test_main_dispatches_task_subcommands_without_full_root_app(
         return 5
 
     monkeypatch.setattr("litehive.cli.task_cli.app", fake_task_app)
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.setattr(sys, "argv", ["litehive", "task", "show", "T-0001"])
 
     exit_code = main_module.main()
@@ -107,6 +108,7 @@ def test_main_dispatches_pipeline_subcommands_without_full_root_app(
         return 6
 
     monkeypatch.setattr("litehive.cli.pipeline_cli.app", fake_pipeline_app)
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.setattr(sys, "argv", ["litehive", "pipeline", "journal", "T-0001"])
 
     exit_code = main_module.main()
@@ -150,6 +152,7 @@ def test_main_dispatches_root_add_without_full_root_app(
         return 10
 
     monkeypatch.setattr("litehive.cli.task_cli.app", fake_task_app)
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.setattr(sys, "argv", ["litehive", "add", "New task", "--goal", "scope it"])
 
     exit_code = main_module.main()
