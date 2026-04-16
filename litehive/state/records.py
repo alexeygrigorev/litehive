@@ -192,16 +192,9 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
     store = runtime_store(root)
     task_state = store.load_task_state(task.id)
     if task_state is None:
-        # Some task-creation paths (e.g. subagent-authored follow-up tasks)
-        # write the task.yaml intent file without persisting a runtime row,
-        # which then trips this strict loader on every subsequent repair
-        # cycle. Rather than forcing an operator to backfill rows by hand,
-        # lazily initialize an empty TaskStateRecord and persist it so the
-        # task becomes loadable on the next tick.
-        from litehive.domain.task import TaskStateRecord
-
-        task_state = TaskStateRecord()
-        store.save_task_state(task.id, task_state)
+        raise TaskStateMissingError(
+            f"Task {task.id} is missing its SQLite runtime state row"
+        )
     task = TaskRecord.from_intent_and_state(task.to_intent_record(), task_state)
     set_task_commit_sha(task, task.runtime.git.commit_sha)
     _normalize_task_worktree_state(task)
