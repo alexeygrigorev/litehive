@@ -11,6 +11,7 @@ from litehive.git.ops import (
     status_porcelain,
 )
 from litehive.state.records import (
+    get_task,
     get_task_worktree_path,
     list_tasks,
     set_task_commit_sha,
@@ -19,7 +20,7 @@ from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.state.persist import load_state, save_state
 from litehive.tasks.worktrees import is_managed_worktree_path, resolve_recorded_worktree_path
 
-_CLEANABLE_STATUSES = {"done", "deferred", "wont_do", "duplicate"}
+_CLEANABLE_STATUSES = {"done", "wont_do", "duplicate"}
 
 
 @dataclass(slots=True)

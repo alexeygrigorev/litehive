@@ -173,23 +173,28 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
 
         recorded = resolve_recorded_worktree_path(self.workspace_root, task.runtime.git.worktree_path)
         if recorded is None or not recorded.exists():
-            worktree = task_worktree_path(self.workspace_root, task)
-            worktree.parent.mkdir(parents=True, exist_ok=True)
             branch = task_worktree_branch(task)
-            self._prune_stale_worktrees(self.workspace_root)
-            created = subprocess.run(
-                ["git", "worktree", "add", "--force", "-B", branch, str(worktree), "HEAD"],
-                cwd=str(self.workspace_root),
-                capture_output=True,
-                text=True,
-            )
-            if created.returncode != 0:
-                raise GitError(
-                    f"git worktree add failed: {created.stderr.strip() or created.stdout.strip()}"
+            existing = self._registered_worktree_for_branch(self.workspace_root, branch)
+            if existing is not None:
+                task.runtime.git.worktree_path = serialize_worktree_path(existing)
+                save_task(self.workspace_root, task)
+            else:
+                worktree = task_worktree_path(self.workspace_root, task)
+                worktree.parent.mkdir(parents=True, exist_ok=True)
+                self._prune_stale_worktrees(self.workspace_root)
+                created = subprocess.run(
+                    ["git", "worktree", "add", "--force", "-B", branch, str(worktree), "HEAD"],
+                    cwd=str(self.workspace_root),
+                    capture_output=True,
+                    text=True,
                 )
-            task.runtime.git.worktree_path = serialize_worktree_path(worktree)
-            save_task(self.workspace_root, task)
-            return True
+                if created.returncode != 0:
+                    raise GitError(
+                        f"git worktree add failed: {created.stderr.strip() or created.stdout.strip()}"
+                    )
+                task.runtime.git.worktree_path = serialize_worktree_path(worktree)
+                save_task(self.workspace_root, task)
+                return True
 
         worktree = self.worktree_resolver(state)
         if not Path(worktree).exists():
@@ -272,6 +277,38 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         )
         if proc.returncode != 0:
             raise GitError(f"git worktree prune failed: {proc.stderr.strip() or proc.stdout.strip()}")
+
+    @staticmethod
+    def _registered_worktree_for_branch(root: Path, branch: str) -> Path | None:
+        proc = subprocess.run(
+            ["git", "worktree", "list", "--porcelain"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            raise GitError(f"git worktree list failed: {proc.stderr.strip() or proc.stdout.strip()}")
+
+        current_path: Path | None = None
+        current_branch: str | None = None
+        for raw_line in proc.stdout.splitlines():
+            line = raw_line.strip()
+            if not line:
+                if current_branch == branch and current_path is not None and current_path.exists():
+                    return current_path.resolve()
+                current_path = None
+                current_branch = None
+                continue
+            if line.startswith("worktree "):
+                current_path = Path(line.removeprefix("worktree ").strip()).expanduser()
+                continue
+            if not line.startswith("branch refs/heads/"):
+                continue
+            current_branch = line.removeprefix("branch refs/heads/").strip()
+
+        if current_branch == branch and current_path is not None and current_path.exists():
+            return current_path.resolve()
+        return None
 
     @staticmethod
     def _is_dirty(worktree: Path) -> bool:
@@ -489,6 +526,13 @@ class GitCommitNode(CommitNode):
         branch_ref = self._worktree_branch(worktree) or self._worktree_head(worktree)
         worktree_head = self._worktree_head(worktree)
 
+        if self._merge_in_progress():
+            unresolved = self._unresolved_conflicts()
+            if unresolved:
+                raise MergeConflict(unresolved)
+            self._conclude_in_progress_merge()
+            return None
+
         result = self._git_merge(branch_ref)
         if result.returncode == 0:
             # Clean merge or "Already up to date" (which is the case when
@@ -616,11 +660,90 @@ class GitCommitNode(CommitNode):
         return proc.stdout.strip() or None
 
     def _git_merge(self, branch_ref: str) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            ["git", "merge", branch_ref, "--no-edit"],
+        stash_ref = self._stash_main_changes()
+        try:
+            result = subprocess.run(
+                ["git", "merge", branch_ref, "--no-edit"],
+                cwd=str(self.main_repo_root),
+                capture_output=True,
+                text=True,
+            )
+        except BaseException:
+            self._restore_main_changes(stash_ref)
+            raise
+        # Restore stashed changes after a clean merge or a conflict-free
+        # failure.  For conflict merges the caller will inspect unresolved
+        # files before we get here again (via _conclude_in_progress_merge).
+        if result.returncode == 0 or not self._unresolved_conflicts():
+            self._restore_main_changes(stash_ref)
+        return result
+
+    def _stash_main_changes(self) -> str | None:
+        """Stash dirty main checkout so ``git merge`` can proceed."""
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain"],
             cwd=str(self.main_repo_root),
             capture_output=True,
             text=True,
+        )
+        if dirty.returncode != 0 or not dirty.stdout.strip():
+            return None
+        before = subprocess.run(
+            ["git", "rev-parse", "-q", "--verify", "refs/stash"],
+            cwd=str(self.main_repo_root),
+            capture_output=True,
+            text=True,
+        )
+        stash = subprocess.run(
+            ["git", "stash", "push", "-u", "-m", "litehive-commit-stage-autostash"],
+            cwd=str(self.main_repo_root),
+            capture_output=True,
+            text=True,
+        )
+        if stash.returncode != 0:
+            return None  # non-fatal — merge may still work
+        after = subprocess.run(
+            ["git", "rev-parse", "-q", "--verify", "refs/stash"],
+            cwd=str(self.main_repo_root),
+            capture_output=True,
+            text=True,
+        )
+        if after.stdout.strip() != before.stdout.strip():
+            return after.stdout.strip()
+        return None
+
+    def _restore_main_changes(self, stash_ref: str | None) -> None:
+        """Pop the autostash created by ``_stash_main_changes``."""
+        if not stash_ref:
+            return
+        subprocess.run(
+            ["git", "stash", "pop", "--index"],
+            cwd=str(self.main_repo_root),
+            capture_output=True,
+            text=True,
+        )
+
+    def _merge_in_progress(self) -> bool:
+        proc = subprocess.run(
+            ["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"],
+            cwd=str(self.main_repo_root),
+            capture_output=True,
+            text=True,
+        )
+        return proc.returncode == 0
+
+    def _conclude_in_progress_merge(self) -> None:
+        commit = subprocess.run(
+            ["git", "commit", "--no-edit"],
+            cwd=str(self.main_repo_root),
+            capture_output=True,
+            text=True,
+        )
+        if commit.returncode == 0:
+            return
+        raise GitError(
+            "git merge is already in progress but could not be concluded: "
+            f"{commit.stderr.strip() or commit.stdout.strip()}"
         )
 
     def _worktree_patch_already_on_main(self, worktree_head: str, main_head: str | None) -> bool:
