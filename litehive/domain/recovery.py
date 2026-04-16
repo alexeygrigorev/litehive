@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """Recovery-domain enums and persisted value objects."""
 
 from dataclasses import dataclass, field
@@ -137,30 +136,3 @@ __all__ = [
     "RecoveryTrigger",
     "TriggerEventKind",
 ]
-=======
-"""Recovery-domain value objects shared across persistence and prompts."""
-
-from enum import Enum
-
-from pydantic import BaseModel
-
-
-class TriggerEventKind(str, Enum):
-    CRASH = "crash"
-    FLAGGED_TASK = "flagged_task"
-    STALE_RUNNER_RECOVERY = "stale_runner_recovery"
-
-
-class FailureFingerprint(BaseModel):
-    fingerprint: str
-    classification: str
-
-
-class RecoveryTrigger(BaseModel):
-    origin_stage: str
-    trigger_event_kind: TriggerEventKind
-    failure_fingerprint: FailureFingerprint | None = None
-    reason_code: str | None = None
-    message: str = ""
-
->>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)

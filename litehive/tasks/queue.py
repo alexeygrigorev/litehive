@@ -7,7 +7,6 @@ from pathlib import Path
 from litehive.config.loading import load_config
 from litehive.config.model import VALID_POOL_SELECTION_POLICIES
 from litehive.domain.common import utcnow
-from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.runtime import TaskOutcomeState
@@ -454,10 +453,6 @@ def _resolve_next_task_from_state(
     return next_task, blocked, snapshot_mutated
 
 
-def _should_restore_missing_task_to_front(task: TaskRecord) -> bool:
-    return task.status == "in_progress"
-
-
 def restore_missing_queued_tasks(
     state: WorkspaceState,
     tasks_by_id: dict[str, TaskRecord],
@@ -471,7 +466,7 @@ def restore_missing_queued_tasks(
         if task_id == state.active_task_id or task_id in queued_ids:
             continue
         queued_ids.add(task_id)
-        if _should_restore_missing_task_to_front(task):
+        if task.status == "in_progress":
             restored_front.append(task_id)
         else:
             restored_back.append(task_id)

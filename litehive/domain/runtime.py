@@ -7,7 +7,7 @@ models (RuntimeGitState, RuntimeStageState, etc.) authoritative here.
 
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import BaseModel, Field
 
 from litehive.domain._heru_compat import (
     ResourceLimitEvent,
@@ -30,11 +30,7 @@ class RuntimeGitState(BaseModel):
 
 
 class RuntimeStageState(BaseModel):
-<<<<<<< HEAD
     stage: str | None = None
-=======
-    step: str | None = Field(default=None, validation_alias=AliasChoices("step", "stage"))
->>>>>>> 61b0a5fa (litehive T-0398: auto-commit worktree changes)
     status: str = "idle"
     started_at: str | None = None
     completed_at: str | None = None
@@ -44,12 +40,12 @@ class RuntimeStageState(BaseModel):
     summary: str = ""
 
     @property
-    def stage(self) -> str | None:
-        return self.step
+    def step(self) -> str | None:
+        return self.stage
 
-    @stage.setter
-    def stage(self, value: str | None) -> None:
-        self.step = value
+    @step.setter
+    def step(self, value: str | None) -> None:
+        self.stage = value
 
 
 class RuntimeSubagentState(BaseModel):

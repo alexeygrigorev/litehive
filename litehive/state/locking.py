@@ -385,6 +385,12 @@ def ensure_future_task_mutation_allowed(
             and task.runtime.execution_status != "running"
         ):
             continue
+        if (
+            marker_set == {"task.status=in_progress"}
+            and task is not None
+            and task.runtime.execution_status != "running"
+        ):
+            continue
         conflicts.append(f"{task_id} ({', '.join(markers[task_id])})")
     if conflicts:
         details = "; ".join(conflicts)

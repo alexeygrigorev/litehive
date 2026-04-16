@@ -133,6 +133,7 @@ def requeue(
     print(f"task: {task.id} {task.title}")
     print("status: queued")
     print(f"pipeline_stage: {task.pipeline_status}")
+    print(f"pipeline_status: {task.pipeline_status}")
     missing_criteria_reason = missing_acceptance_criteria_reason(task)
     if missing_criteria_reason is not None:
         print(f"warning: {missing_criteria_reason}")
@@ -156,6 +157,7 @@ def resume(
     print(f"task: {task.id} {task.title}")
     print("status: queued")
     print(f"pipeline_stage: {task.pipeline_status}")
+    print(f"pipeline_status: {task.pipeline_status}")
     missing_criteria_reason = missing_acceptance_criteria_reason(task)
     if missing_criteria_reason is not None:
         print(f"warning: {missing_criteria_reason}")

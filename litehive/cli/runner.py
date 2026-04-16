@@ -305,6 +305,9 @@ def report_command(
     task_id: Annotated[str | None, typer.Option(help="Task ID")] = None,
     files_changed: Annotated[list[str] | None, typer.Option(help="Changed paths; repeat for multiple")] = None,
 ) -> int:
+    from litehive.cli.agent_cli import block_if_agent
+
+    block_if_agent()
     if not task_id:
         task_id = os.environ.get("LITEHIVE_TASK_ID")
     try:

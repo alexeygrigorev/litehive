@@ -116,21 +116,6 @@ def _ensure_schema_migrations_table(connection: sqlite3.Connection) -> None:
     connection.commit()
 
 
-def _ensure_compat_tables(connection: sqlite3.Connection) -> None:
-    connection.execute(
-        """
-        CREATE TABLE IF NOT EXISTS task_activity (
-            task_id TEXT NOT NULL,
-            entry_index INTEGER NOT NULL,
-            created_at TEXT NOT NULL,
-            payload TEXT NOT NULL,
-            PRIMARY KEY (task_id, entry_index)
-        )
-        """
-    )
-    connection.commit()
-
-
 def _applied_versions(connection: sqlite3.Connection) -> set[int]:
     _ensure_schema_migrations_table(connection)
     rows = connection.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
@@ -265,5 +250,4 @@ def connect_workspace_db(root: Path, *, migrate: bool = True) -> sqlite3.Connect
             _MIGRATED_DB_PATHS[key] = _db_fingerprint(db_path)
     connection = _open_connection(db_path)
     _ensure_schema_migrations_table(connection)
-    _ensure_compat_tables(connection)
     return connection
