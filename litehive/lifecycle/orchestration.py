@@ -68,11 +68,32 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
         raise LookupError(f"no task record for {task_id!r}")
     raw = task_record.pipeline_mode
     mode = _PipelineMode(raw) if isinstance(raw, str) and raw else _PipelineMode.FULL
-    return persistence.initialize(task_id, pipeline_mode=mode)
+    return persistence.initialize(
+        task_id,
+        pipeline_mode=mode,
+        entry_stage=_entry_stage_for_task(task_record),
+    )
+
+
+def _entry_stage_for_task(task_record: TaskRecord) -> str | None:
+    stage = (
+        task_record.runtime.current_stage.stage
+        or (
+            None
+            if task_record.runtime.interruption is None
+            else task_record.runtime.interruption.resume_stage
+        )
+        or task_record.pipeline_status
+    )
+    if stage in {None, "backlog", "done", "flagged", "merge_failed"}:
+        return None
+    if stage == "commit_to_git":
+        return "commit"
+    return stage
 
 
 _STAGE_TO_PIPELINE_STATUS: dict[str, str] = {
-    "ready": "backlog", "recovering_pre_exec": "backlog",
+    "ready": "backlog",
     "before_grooming": "grooming", "grooming": "grooming", "after_grooming": "grooming",
     "before_implementing": "implementing", "implementing": "implementing", "after_implementing": "implementing",
     "before_testing": "testing", "testing": "testing", "after_testing": "testing",
@@ -256,6 +277,32 @@ def _clear_stale_worktree_repair(root: Path):
     return _repair
 
 
+def _mark_task_interrupted_on_crash(
+    root: Path, task: TaskRecord, persistence: object
+) -> None:
+    """Best-effort cleanup when run_task raises an unexpected exception.
+
+    Clears active_task_id and marks the task as interrupted so the next
+    runner start can resume it instead of finding stale "running" state.
+    """
+    try:
+        from litehive.state.persist import load_state, save_state
+
+        state = load_state(root)
+        if state.active_task_id == task.id:
+            state.active_task_id = None
+            if task.id not in state.queue:
+                state.queue.insert(0, task.id)
+            save_state(root, state)
+        fresh = get_task(root, task.id)
+        if fresh is not None and fresh.runtime.execution_status == "running":
+            fresh.runtime.execution_status = "interrupted"
+            fresh.status = "queued"
+            save_task(root, fresh)
+    except Exception:
+        pass  # best-effort — don't mask the original crash
+
+
 def _cleanup_terminal_worktree(root: Path, task: TaskRecord | None) -> None:
     if task is None:
         return
@@ -374,7 +421,13 @@ def run_task(
 
         # 3. Run under the heartbeat so `litehive status` sees the active task.
         with runner_heartbeat(root, active_task_id=task.id):
-            final_state = runner.run_task(task.id)
+            try:
+                final_state = runner.run_task(task.id)
+            except BaseException:
+                # Runner crashed — mark task as interrupted so it can be
+                # resumed instead of leaving stale "running" state behind.
+                _mark_task_interrupted_on_crash(root, task, persistence)
+                raise
 
         # 4. Mirror terminal state back to the v1 TaskRecord.
         updated_task = _sync_back(final_state, root) or task
