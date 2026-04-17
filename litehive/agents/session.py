@@ -28,8 +28,8 @@ from litehive.domain.agent import SubagentInactivityTimeout
 from litehive.tasks.runtime import mark_subagent_pid
 
 _OPENCODE_INACTIVITY_TIMEOUT_SECONDS = 300.0
-_OPENCODE_INACTIVITY_PATTERN = re.compile(
-    r"\[litehive\]\s*Process killed after\s+\d+(?:\.\d+)?s of inactivity\.",
+_COMPLETED_INACTIVITY_PATTERN = re.compile(
+    r"\[litehive\]\s*Process killed after\s+(?P<seconds>\d+(?:\.\d+)?)s of inactivity\.",
     re.IGNORECASE,
 )
 
@@ -216,11 +216,10 @@ class SessionMixin:
         engine_name: str,
         execution: CLIExecutionResult,
     ) -> SubagentInactivityTimeout | None:
-        if engine_name != "opencode":
+        match = _COMPLETED_INACTIVITY_PATTERN.search(execution.stderr or "")
+        if match is None:
             return None
-        if _OPENCODE_INACTIVITY_PATTERN.search(execution.stderr or "") is None:
-            return None
-        limit_seconds = self._subagent_inactivity_timeout_seconds(engine_name)
+        limit_seconds = float(match.group("seconds"))
         return SubagentInactivityTimeout(
             execution,
             idle_seconds=limit_seconds,

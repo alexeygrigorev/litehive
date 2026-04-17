@@ -505,17 +505,29 @@ def test_subagent_manager_preserves_workspace_timeout_for_non_opencode_live_runs
     assert captured["inactivity_timeout_seconds"] == 123.0
 
 
-def test_subagent_manager_classifies_opencode_inactivity_timeout_as_retryable_timeout(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("engine_name", "configured_timeout_seconds", "expected_timeout_seconds"),
+    [
+        ("opencode", 123.0, 300.0),
+        ("gemini", 123.0, 123.0),
+    ],
+)
+def test_subagent_manager_classifies_completed_inactivity_timeout_as_retryable_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    engine_name: str,
+    configured_timeout_seconds: float,
+    expected_timeout_seconds: float,
 ) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Retry stalled opencode run")
+    task = create_task(tmp_path, title=f"Retry stalled {engine_name} run")
     manager = SubagentManager(tmp_path)
-    manager.config.subagent_inactivity_timeout_seconds = 123.0
+    manager.config.subagent_inactivity_timeout_seconds = configured_timeout_seconds
+    captured: dict[str, float] = {}
 
     class FakeEngine:
-        name = "opencode"
-        binary = "opencode"
+        name = engine_name
+        binary = engine_name
 
         def is_available(self) -> bool:
             return True
@@ -535,15 +547,17 @@ def test_subagent_manager_classifies_opencode_inactivity_timeout_as_retryable_ti
             emit_unified: bool = False,
         ) -> CLIExecutionResult:
             del prompt, model, max_turns, resume_session_id, on_update, extra_env, emit_unified
+            captured["inactivity_timeout_seconds"] = inactivity_timeout_seconds
             if on_started is not None:
                 on_started(4242)
+            rendered_timeout = f"{expected_timeout_seconds:g}"
             return CLIExecutionResult(
-                adapter="opencode",
-                argv=("opencode", "run"),
+                adapter=engine_name,
+                argv=(engine_name, "run"),
                 cwd=cwd,
                 exit_code=-15,
                 stdout="still working",
-                stderr="\n[litehive] Process killed after 300s of inactivity.\n",
+                stderr=f"\n[litehive] Process killed after {rendered_timeout}s of inactivity.\n",
                 pid=4242,
             )
 
@@ -553,18 +567,22 @@ def test_subagent_manager_classifies_opencode_inactivity_timeout_as_retryable_ti
     engine = FakeEngine()
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
 
-    result = manager.run(task, role="swe", engine_name="opencode", prompt="implement it")
+    result = manager.run(task, role="swe", engine_name=engine_name, prompt="implement it")
 
     assert result.failure == EngineFailure(
         kind="retryable_execution_error",
         reason="transient timeout",
         classification="timeout",
     )
+    assert captured["inactivity_timeout_seconds"] == expected_timeout_seconds
     assert result.exit_code == 124
     assert result.execution is not None
     assert result.execution.exit_code == 124
-    assert "[litehive] Process killed after 300s of inactivity." in result.execution.stderr
-    assert "300s without new stdout" in result.execution.stderr
+    assert (
+        f"[litehive] Process killed after {expected_timeout_seconds:g}s of inactivity."
+        in result.execution.stderr
+    )
+    assert f"{expected_timeout_seconds:g}s without new stdout" in result.execution.stderr
     assert result.ref.status == "failed"
 
     session = load_subagent_session(tmp_path, task.id, result.ref.id)
@@ -573,4 +591,7 @@ def test_subagent_manager_classifies_opencode_inactivity_timeout_as_retryable_ti
 
     assert session["exit_code"] == 124
     assert report["status"] == "failed"
-    assert "300s without new stdout" in stderr_path.read_text(encoding="utf-8")
+    assert (
+        f"{expected_timeout_seconds:g}s without new stdout"
+        in stderr_path.read_text(encoding="utf-8")
+    )
