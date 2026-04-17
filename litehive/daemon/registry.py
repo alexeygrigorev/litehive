@@ -129,7 +129,20 @@ def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
         except BlockingIOError:
             existing = _read_locked_metadata(handle)
             existing_pid = existing.get("pid")
-            raise RuntimeError(f"daemon already running for {workspace}: pid={existing_pid}") from None
+            if isinstance(existing_pid, int) and pid_is_alive(existing_pid):
+                raise RuntimeError(f"daemon already running for {workspace}: pid={existing_pid}") from None
+            # PID is dead — stale lock held by an inherited FD.
+            # Delete the lock file and reopen so we get a fresh flock.
+            handle.close()
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            handle = path.open("a+", encoding="utf-8")
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise RuntimeError(f"daemon already running for {workspace}: pid={existing_pid}") from None
         payload = {
             "workspace": str(workspace),
             "pid": pid,
