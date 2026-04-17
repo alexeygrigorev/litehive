@@ -1,0 +1,4 @@
+.lock
+pool-summary.txt
+engine-monitoring.yaml
+tasks/*/reports/commit_to_git-*.yaml

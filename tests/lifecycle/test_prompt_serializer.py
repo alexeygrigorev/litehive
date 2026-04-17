@@ -98,6 +98,9 @@ def test_serialize_includes_role_instructions(workspace: Path) -> None:
     assert "Instructions:" in text
     assert "## Role guidance" in text
     assert "You are the SWE" in text  # from the swe.py INSTRUCTIONS
+    assert "litehive agent report --verdict pass --message-file /tmp/verdict_msg.txt" in text
+    assert "litehive report --verdict pass" not in text
+    assert "Never exit the stage without calling `litehive report`." not in text
 
 
 def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
@@ -239,6 +242,8 @@ def test_serialize_works_without_task_record() -> None:
     assert "Goal:\n(task record not loaded)" in text
     assert "Acceptance criteria:\n- (none defined)" in text
     assert "litehive agent report" in text
+    assert "litehive agent report --verdict pass --message-file /tmp/verdict_msg.txt" in text
+    assert "litehive report --verdict pass" not in text
 
 
 def test_serialize_verdict_instructions_match_role_and_stage(workspace: Path) -> None:
