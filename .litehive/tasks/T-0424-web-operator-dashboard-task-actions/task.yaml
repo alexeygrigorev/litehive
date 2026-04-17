@@ -1,0 +1,33 @@
+id: T-0424
+slug: web-operator-dashboard-task-actions
+title: Web operator dashboard task actions
+created_at: '2026-04-17T12:01:00+00:00'
+task_type: null
+mode: implementation
+pipeline_mode: full
+priority: high
+pm_complexity: null
+planned_effort: null
+depends_on:
+- T-0423
+goal: Add browser endpoints and UI controls for task lifecycle mutations so operators can create, edit, close, requeue, abandon, and stop tasks from the web dashboard using the same domain operations as the CLI.
+acceptance_criteria:
+- Task creation is available from the browser and captures title, goal, acceptance criteria, priority, dependencies, and pipeline mode.
+- Task edit actions update the same fields exposed by litehive task update by reusing the existing metadata update path.
+- Browser actions exist for close, requeue, abandon, and stop-active-task and call the same backend functions as litehive task close, litehive queue requeue, litehive task abandon, and litehive queue stop.
+- Mutation endpoints return structured success and validation error payloads that let the browser refresh task and queue state deterministically.
+- The browser UI includes confirmations and inline error handling for destructive task actions.
+- Tests cover happy-path and invalid-state behavior for each task action endpoint.
+constraints: []
+plan: []
+human_checkpoints: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0424 web-operator-dashboard-task-actions'
+created_from:
+  task_id: T-0215
+  stage: implementing
+  rationale: Greenfield browser follow-up task created from the T-0215 CLI-versus-browser gap analysis.
+  blocking: false
+upstream_origin: null
+github_origin: null
