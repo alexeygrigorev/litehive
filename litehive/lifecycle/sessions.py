@@ -40,13 +40,9 @@ class SessionStore(Protocol):
     shared persistent store.
     """
 
-    def get_or_create(
-        self, task_id: str, node_name: NodeName, engine_name: str
-    ) -> Session: ...
+    def get_or_create(self, task_id: str, node_name: NodeName, engine_name: str) -> Session: ...
 
-    def persist(
-        self, task_id: str, node_name: NodeName, engine_name: str, session: Session
-    ) -> None: ...
+    def persist(self, task_id: str, node_name: NodeName, engine_name: str, session: Session) -> None: ...
 
 
 class InMemorySessionStore:
@@ -55,14 +51,10 @@ class InMemorySessionStore:
     def __init__(self) -> None:
         self._sessions: dict[tuple[str, NodeName, str], Session] = {}
 
-    def get_or_create(
-        self, task_id: str, node_name: NodeName, engine_name: str
-    ) -> Session:
+    def get_or_create(self, task_id: str, node_name: NodeName, engine_name: str) -> Session:
         return self._sessions.setdefault((task_id, node_name, engine_name), Session())
 
-    def persist(
-        self, task_id: str, node_name: NodeName, engine_name: str, session: Session
-    ) -> None:
+    def persist(self, task_id: str, node_name: NodeName, engine_name: str, session: Session) -> None:
         self._sessions[(task_id, node_name, engine_name)] = session
 
 
@@ -78,9 +70,7 @@ class SqliteSessionStore:
     def __init__(self, workspace_root: Path) -> None:
         self.workspace_root = workspace_root
 
-    def get_or_create(
-        self, task_id: str, node_name: NodeName, engine_name: str
-    ) -> Session:
+    def get_or_create(self, task_id: str, node_name: NodeName, engine_name: str) -> Session:
         with connect_workspace_db(self.workspace_root) as connection:
             row = connection.execute(
                 """
@@ -99,9 +89,7 @@ class SqliteSessionStore:
             metadata=json.loads(row["metadata"] or "{}"),
         )
 
-    def persist(
-        self, task_id: str, node_name: NodeName, engine_name: str, session: Session
-    ) -> None:
+    def persist(self, task_id: str, node_name: NodeName, engine_name: str, session: Session) -> None:
         metadata_json = json.dumps(session.metadata, sort_keys=True)
         with connect_workspace_db(self.workspace_root) as connection:
             connection.execute(

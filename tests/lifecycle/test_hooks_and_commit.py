@@ -20,6 +20,8 @@ from litehive.tasks.queue import dequeue_next_task
 from litehive.tasks.reports import load_task_thread
 from litehive.tasks.worktrees import serialize_worktree_path, task_worktree_branch, task_worktree_path
 
+pytestmark = pytest.mark.integration
+
 
 def make_state(stage: str = "before_grooming", task_id: str = "T-0001") -> TaskState:
     return TaskState(task_id=task_id, stage=stage, pipeline_mode=PipelineMode.FULL)
@@ -190,15 +192,11 @@ def test_commit_node_autocommit_excludes_runner_owned_task_metadata(tmp_path: Pa
     subprocess.run(["git", "config", "user.name", "t"], cwd=worktree, check=True)
 
     # Main repo: runner writes an edit to task metadata (simulating the race).
-    (repo / ".litehive" / "tasks" / "T-0001-demo" / "task.yaml").write_text(
-        "id: T-0001\nstatus: in_progress\n"
-    )
+    (repo / ".litehive" / "tasks" / "T-0001-demo" / "task.yaml").write_text("id: T-0001\nstatus: in_progress\n")
 
     # Worktree: SWE writes real code AND the runner updates task metadata there too.
     (worktree / "new.txt").write_text("agent wrote this\n")
-    (worktree / ".litehive" / "tasks" / "T-0001-demo" / "task.yaml").write_text(
-        "id: T-0001\nstatus: implementing\n"
-    )
+    (worktree / ".litehive" / "tasks" / "T-0001-demo" / "task.yaml").write_text("id: T-0001\nstatus: implementing\n")
 
     node = GitCommitNode(repo, worktree_resolver=lambda state: worktree)
     event = node.run(make_state(stage="commit", task_id="T-0001"))

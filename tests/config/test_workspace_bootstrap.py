@@ -34,9 +34,7 @@ def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
     assert (tmp_path / ".litehive" / "tasks").exists()
 
 
-def test_ensure_workspace_bootstraps_runtime_db_and_registry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     data_home = tmp_path / "xdg-data"
     state_home = tmp_path / "xdg-state"
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
@@ -69,17 +67,12 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
     assert litehive_database_path() == data_home / "litehive" / "litehive.db"
 
     with sqlite3.connect(litehive_database_path()) as connection:
-        rows = connection.execute(
-            "SELECT workspace_id, path FROM workspaces ORDER BY path"
-        ).fetchall()
+        rows = connection.execute("SELECT workspace_id, path FROM workspaces ORDER BY path").fetchall()
     assert rows == [(wid, str(tmp_path.resolve()))]
 
     with connect_workspace_db(tmp_path) as connection:
         tables = {
-            row[0]
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            ).fetchall()
+            row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
         }
     assert {
         "schema_migrations",
@@ -99,9 +92,9 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(
         "pipeline_task_state",
         "pipeline_sessions",
     } <= tables
-def test_workspace_registry_handles_parallel_registration(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+
+
+def test_workspace_registry_handles_parallel_registration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     data_home = tmp_path / "xdg-data"
     state_home = tmp_path / "xdg-state"
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
@@ -125,18 +118,11 @@ def test_workspace_registry_handles_parallel_registration(
 
     assert {Path(path) for path in results} == set(workspaces)
     with sqlite3.connect(litehive_database_path()) as connection:
-        rows = connection.execute(
-            "SELECT workspace_id, path FROM workspaces ORDER BY path"
-        ).fetchall()
-    assert rows == [
-        (workspace_id(root), str(root.resolve()))
-        for root in sorted(workspaces)
-    ]
+        rows = connection.execute("SELECT workspace_id, path FROM workspaces ORDER BY path").fetchall()
+    assert rows == [(workspace_id(root), str(root.resolve())) for root in sorted(workspaces)]
 
 
-def test_workspace_registry_rebuilds_after_corruption(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_workspace_registry_rebuilds_after_corruption(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     data_home = tmp_path / "xdg-data"
     state_home = tmp_path / "xdg-state"
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
@@ -150,16 +136,11 @@ def test_workspace_registry_rebuilds_after_corruption(
     ensure_workspace(tmp_path)
 
     with sqlite3.connect(litehive_database_path()) as connection:
-        paths = [
-            row[0]
-            for row in connection.execute("SELECT path FROM workspaces ORDER BY path").fetchall()
-        ]
+        paths = [row[0] for row in connection.execute("SELECT path FROM workspaces ORDER BY path").fetchall()]
     assert paths == [str(tmp_path.resolve())]
 
 
-def test_workspace_registry_uses_thread_local_connections(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_workspace_registry_uses_thread_local_connections(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
     ensure_workspace(tmp_path)
 
@@ -179,9 +160,7 @@ def test_workspace_registry_uses_thread_local_connections(
     assert results == [[tmp_path.resolve()]]
 
 
-def test_litehive_home_overrides_default_root(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_litehive_home_overrides_default_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     custom_home = tmp_path / "custom-home"
     monkeypatch.setenv("LITEHIVE_HOME", str(custom_home))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "ignored-data"))
@@ -200,6 +179,8 @@ def test_litehive_home_overrides_default_root(
     assert litehive_root() == custom_home
     assert litehive_database_path() == custom_home / "litehive.db"
     assert workspace_database_path(tmp_path) == custom_home / wid / "data.db"
+
+
 def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None:
     ensure_workspace(
         tmp_path,

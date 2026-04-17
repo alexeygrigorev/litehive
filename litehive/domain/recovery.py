@@ -84,9 +84,7 @@ class RecoveryTrigger:
         return cls(
             origin_stage=payload.get("origin_stage"),
             trigger_event_kind=TriggerEventKind(payload.get("trigger_event_kind") or TriggerEventKind.UNKNOWN),
-            failure_fingerprint=FailureFingerprint.from_payload(
-                dict(payload.get("failure_fingerprint") or {})
-            ),
+            failure_fingerprint=FailureFingerprint.from_payload(dict(payload.get("failure_fingerprint") or {})),
             source=payload.get("source"),
             reason_code=payload.get("reason_code"),
             message=str(payload.get("message") or ""),
@@ -120,9 +118,7 @@ class RecoveryOutcome:
         return cls(
             trigger=RecoveryTrigger.from_payload(dict(payload.get("trigger") or {})),
             recovery_verdict=str(payload.get("recovery_verdict") or ""),
-            disposition=RecoveryDisposition(
-                payload.get("disposition") or RecoveryDisposition.TERMINATED
-            ),
+            disposition=RecoveryDisposition(payload.get("disposition") or RecoveryDisposition.TERMINATED),
             reason_code=payload.get("reason_code"),
             message=str(payload.get("message") or ""),
             created_at=str(payload.get("created_at") or utcnow()),

@@ -3,11 +3,8 @@ slug: goz-adapter-wire-continuation-extraction-and
 title: 'goz adapter: wire continuation extraction and resume-session'
 created_at: '2026-04-09T21:18:33+00:00'
 task_type: adapter
-mode: tasks
 pipeline_mode: full
 priority: medium
-pm_complexity: moderate
-planned_effort: m
 depends_on: []
 goal: Update Litehive's goz adapter to extract continuation metadata from goz JSONL
   output and resume goz sessions on retries or recovery.
@@ -23,10 +20,7 @@ plan:
 - Inspect the existing adapter interface, config wiring, and invocation flow.
 - Implement the adapter change close to the integration seam.
 - Verify the adapter path with a focused test or representative run.
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0275 goz-adapter-wire-continuation-extraction-and'
 created_from: null
-upstream_origin: null
-github_origin: null

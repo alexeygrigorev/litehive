@@ -328,3 +328,6 @@ CommitToGit complete. Commit: f69553d1f2c1bf1efac70c80020b985d4aaa9f21
 
 ## 2026-04-13T10:26:46+00:00
 Task closed: duplicate. Already done on previous run (runtime.yaml execution_status=done). Zombie task re-queued due to dequeue bug (T-0366).
+
+## 2026-04-17T12:37:27+00:00
+Task metadata updated via CLI.

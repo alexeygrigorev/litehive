@@ -3,11 +3,8 @@ slug: handle-no-op-merges-in-commit-to-git-without
 title: Handle no-op merges in commit_to_git without leaving tasks stuck in merge_failed
 created_at: '2026-04-09T21:39:19+00:00'
 task_type: bugfix
-mode: tasks
 pipeline_mode: full
 priority: medium
-pm_complexity: simple
-planned_effort: s
 depends_on: []
 goal: Make commit_to_git treat already-landed/no-op integrations as successful reconciliation
   instead of routing the task into merge_failed.
@@ -35,10 +32,7 @@ plan:
   text so reviewers can tell no-op reconciliation from merge_conflict failures.
 - Run the affected pytest slice around commit_to_git, recovery, and merge-agent behavior
   to prove the new path and guard existing conflict handling.
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0280 handle-no-op-merges-in-commit-to-git-without'
 created_from: null
-upstream_origin: null
-github_origin: null

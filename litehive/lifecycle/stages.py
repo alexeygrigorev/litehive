@@ -44,7 +44,6 @@ class Stage:
 
 
 class Stages:
-
     # entry
     READY = Stage("ready", ReadyNode)
     WORKTREE_SYNC = Stage("worktree_sync", WorktreeSyncNode)

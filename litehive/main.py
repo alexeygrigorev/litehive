@@ -1,6 +1,5 @@
 """Lightweight CLI entrypoint with a fast status path."""
 
-
 import os
 import sys
 from pathlib import Path

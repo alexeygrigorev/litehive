@@ -3,11 +3,8 @@ slug: goz-adapter-wire-continuation-extraction-and
 title: 'Goz adapter: wire continuation extraction and resume support'
 created_at: '2026-04-10T05:52:21+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Add session continuation extraction and --resume-session support to the goz
   adapter in heru/. The litehive/agents/adapters/goz.py re-exports from heru.
@@ -19,10 +16,7 @@ acceptance_criteria:
 - Tests pass including test_goz_adapter tests
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0281 goz-adapter-wire-continuation-extraction-and'
 created_from: null
-upstream_origin: null
-github_origin: null

@@ -3,11 +3,8 @@ slug: remove-dead-per-task-engine-override-field-cli
 title: Remove dead per-task engine override (field, CLI flags, display)
 created_at: '2026-04-10T20:53:57+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: "The per-task engine override feature was removed from the pipeline runner earlier\
   \ but the field and surrounding UI were never cleaned up. Grep confirms zero runtime\
@@ -45,10 +42,7 @@ acceptance_criteria:
 - All tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0338 remove-dead-per-task-engine-override-field-cli'
 created_from: null
-upstream_origin: null
-github_origin: null

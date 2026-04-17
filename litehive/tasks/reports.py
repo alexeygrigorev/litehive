@@ -1,4 +1,5 @@
 """Recovery evidence, task discussion comments, and report helpers."""
+
 from pathlib import Path
 from typing import Iterable
 
@@ -111,11 +112,7 @@ def collect_recovery_evidence(
     if subagent_base is not None:
         rel_subagent_path = str(subagent_base.relative_to(task_dir(root, task)))
         subagent_ref = next((ref for ref in task.subagents if ref.path == rel_subagent_path), None)
-        artifacts = (
-            {}
-            if subagent_ref is None
-            else load_subagent_artifacts(root, task.id, subagent_ref.id)
-        )
+        artifacts = {} if subagent_ref is None else load_subagent_artifacts(root, task.id, subagent_ref.id)
         for key, label in (
             ("session", "latest subagent session"),
             ("report", "latest subagent report"),
@@ -169,9 +166,7 @@ def collect_recovery_evidence(
     )
 
     if is_git_repo(root):
-        worktree_path = resolve_recorded_worktree_path(
-            root, task.runtime.git.worktree_path or task.git.worktree_path
-        )
+        worktree_path = resolve_recorded_worktree_path(root, task.runtime.git.worktree_path or task.git.worktree_path)
         worktree_rel = get_task_worktree_path(task)
         try:
             root_status = status_porcelain(root)
@@ -198,11 +193,7 @@ def collect_recovery_evidence(
                 label="task worktree state",
                 path=worktree_rel,
                 exists=worktree_path.exists() if worktree_path is not None else False,
-                summary=(
-                    "task worktree not configured"
-                    if worktree_path is None
-                    else f"dirty={len(worktree_status)}"
-                ),
+                summary=("task worktree not configured" if worktree_path is None else f"dirty={len(worktree_status)}"),
                 metadata={"dirty_paths": status_entry_paths(worktree_status), "stage": stage},
             )
         )
@@ -215,9 +206,7 @@ def write_recovery_report(root: Path, task: TaskRecord, report: RecoveryReport) 
     existing = sorted(reports_dir.glob("recovery-*.yaml"))
     ordinal = len(existing) + 1
     path = reports_dir / f"recovery-{ordinal:03d}.yaml"
-    path.write_text(
-        yaml.safe_dump(report.model_dump(mode="json"), sort_keys=False), encoding="utf-8"
-    )
+    path.write_text(yaml.safe_dump(report.model_dump(mode="json"), sort_keys=False), encoding="utf-8")
     return path
 
 
@@ -324,9 +313,7 @@ def render_task_thread(root: Path, task: TaskRecord, *, for_prompt: bool = False
         if for_prompt and is_retracted_thread_comment(c):
             header = f"[{c.created_at}] {c.role} ({c.stage}) - {c.verdict} {RETRACTED_FILESYSTEM_MARKER}"
             lines.append(f"\n--- {header} ---")
-            lines.append(
-                "Prior pass report withheld from prompt context after requeue-time filesystem validation."
-            )
+            lines.append("Prior pass report withheld from prompt context after requeue-time filesystem validation.")
             claimed_files = normalized_files_changed(c.files_changed)
             if claimed_files:
                 lines.append(f"Claimed files: {', '.join(claimed_files)}")

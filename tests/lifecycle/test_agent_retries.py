@@ -203,10 +203,10 @@ def test_nudge_does_not_consume_retry_budget() -> None:
     engine = _ScriptedEngine(
         "codex",
         [
-            NudgeRequired("missed"),              # nudge
+            NudgeRequired("missed"),  # nudge
             TransientError("blip", failure_kind="timeout"),  # tier-1 retry (1/3)
             TransientError("blip", failure_kind="timeout"),  # tier-1 retry (2/3)
-            AgentVerdict(outcome="pass"),         # success
+            AgentVerdict(outcome="pass"),  # success
         ],
     )
     node = _TrivialAgent(
@@ -326,9 +326,7 @@ def test_agent_node_retries_timeout_via_existing_retry_flow(
     assert isinstance(event, Pass)
     assert _TimeoutThenPassManager.calls == 2
     assert _TimeoutThenPassManager.last_kwargs[0]["resume_session_id"] is None
-    assert (
-        _TimeoutThenPassManager.last_kwargs[1]["resume_session_id"] == session_id
-    )
+    assert _TimeoutThenPassManager.last_kwargs[1]["resume_session_id"] == session_id
 
     session = store.get_or_create(task.id, "implementing", engine_name)
     assert session.engine_session_id == session_id

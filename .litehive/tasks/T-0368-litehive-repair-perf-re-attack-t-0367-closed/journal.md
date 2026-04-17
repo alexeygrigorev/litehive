@@ -8,3 +8,6 @@ Task metadata updated via CLI.
 
 ## 2026-04-13T14:17:22+00:00
 Task closed: duplicate. T-0368 SWE work was recovered from the dangling commit and landed in main as commit 943316eb. The merge at commit-stage had crashed on a dirty main-repo orphan (now stashed). Acceptance criteria all met by the recovered change. Closing as duplicate because the perf work is done and in main.
+
+## 2026-04-17T13:26:08+00:00
+Task closed: wont_do. Duplicate of T-0367, already acceptable perf

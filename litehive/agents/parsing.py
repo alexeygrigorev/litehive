@@ -30,9 +30,7 @@ def stage_report_from_subagent(
                 task_id=task.id,
                 stage=stage,  # type: ignore[arg-type]
                 verdict=latest.verdict,  # type: ignore[arg-type]
-                summary=latest.message.splitlines()[0]
-                if latest.message
-                else f"{stage} {latest.verdict}",
+                summary=latest.message.splitlines()[0] if latest.message else f"{stage} {latest.verdict}",
                 feedback=latest.message,
                 submitted_via_cli=True,
                 files_changed=list(latest.files_changed),

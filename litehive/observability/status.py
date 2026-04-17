@@ -27,11 +27,7 @@ def estimate_task_execution(root: Path, task: TaskRecord) -> ExecutionEstimate:
     avg_duration = sum(durations) / len(durations)
     velocity = 3600.0 / avg_duration if avg_duration > 0 else 0.0
 
-    current_step = (
-        task.runtime.current_stage.stage
-        or task.pipeline_status
-        or _PIPELINE_STAGES[0]
-    )
+    current_step = task.runtime.current_stage.stage or task.pipeline_status or _PIPELINE_STAGES[0]
     try:
         current_idx = _PIPELINE_STAGES.index(current_step)
     except ValueError:
@@ -104,9 +100,7 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
 
     runtime = task.runtime
     configured_limit = retry_policy if retry_policy is not None else "default"
-    lines.append(
-        f"  retry_policy=configured:{configured_limit} effective:{runtime.retry_limit}"
-    )
+    lines.append(f"  retry_policy=configured:{configured_limit} effective:{runtime.retry_limit}")
     if (
         runtime.execution_status != "idle"
         or runtime.current_stage.stage
@@ -245,11 +239,7 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
         if runtime.last_outcome.failure_classification is not None:
             phase = runtime.last_outcome.failure_diagnostics.get("phase", "-")
             lines.append(
-                "  "
-                + (
-                    f"failure_classification={runtime.last_outcome.failure_classification} "
-                    f"failure_phase={phase}"
-                )
+                "  " + (f"failure_classification={runtime.last_outcome.failure_classification} failure_phase={phase}")
             )
 
     if task.status == "merge_failed":
@@ -308,6 +298,7 @@ def _sandbox_label(sandboxed: bool, sandbox_summary: str) -> str:
 # Dashboard-style status output
 # ---------------------------------------------------------------------------
 
+
 def render_active_task_section(task: TaskRecord | None, default_engine: str) -> list[str]:
     """Render the Active Task dashboard section."""
     lines: list[str] = ["=== Active Task ==="]
@@ -327,9 +318,7 @@ def render_active_task_section(task: TaskRecord | None, default_engine: str) -> 
         task.runtime.current_stage.duration_seconds,
     )
 
-    lines.append(
-        f"  {task.id} {stage} with {engine}, running for {task_duration}"
-    )
+    lines.append(f"  {task.id} {stage} with {engine}, running for {task_duration}")
     lines.append(f"  stage: {stage} elapsed {stage_duration}")
     lines.append(f"  title: {task.title}")
 

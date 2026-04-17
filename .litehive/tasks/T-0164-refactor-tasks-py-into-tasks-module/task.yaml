@@ -3,23 +3,29 @@ slug: refactor-tasks-py-into-tasks-module
 title: Refactor tasks.py into tasks/ module
 created_at: '2026-04-04T20:46:45+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
-goal: Split tasks.py into tasks/__init__.py with separate files for CRUD, state management,
-  queue operations, thread, and repair.
+goal: The original split from the monolithic litehive/tasks.py into the litehive/tasks/
+  package is already complete in the current codebase under T-0204 / commit 60675504.
+  This task should only correct the stale record and remain closed as a duplicate
+  of T-0204 instead of sending more implementation work.
 acceptance_criteria:
-- litehive/tasks/ is a package
-- all tests pass
-constraints: []
-plan: []
-human_checkpoints: []
+- Task metadata states that the package split already landed under T-0204 / commit
+  60675504.
+- T-0164 is closed as duplicate with a reason pointing to T-0204.
+- No additional refactor or code changes are requested under T-0164.
+constraints:
+- Do not expand scope into further decomposition of litehive/tasks/status.py, queue.py,
+  runtime.py, or other task-domain modules under this task.
+- Do not make code changes in this grooming pass; task shaping and duplicate closure
+  only.
+plan:
+- Verify the codebase already uses litehive/tasks/ and no monolithic litehive/tasks.py
+  file remains.
+- Update the task record so the remaining action is duplicate closure, not implementation.
+- Close T-0164 as duplicate of T-0204 so it does not re-enter the pipeline.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0164 refactor-tasks-py-into-tasks-module'
 created_from: null
-upstream_origin: null
-github_origin: null

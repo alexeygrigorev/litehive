@@ -38,3 +38,24 @@ Execution finished with status `flagged`.
 
 ## 2026-04-08T15:27:09+00:00
 Task closed: wont_do. Completed manually - models/ package merged
+
+## 2026-04-17T04:03:24+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T04:11:48+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T04:15:27+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T04:19:23+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T04:19:59+00:00
+Interrupted subagent execution while `grooming` was running. Reason: Task stopped via CLI. Subagent `SA-0011` (planner/codex, pid=1935952, path `subagents/SA-0011-planner`) stopped with status `interrupted`. Last snippet: grooming rejected: agent did not submit verdict via litehive report CLI. Resume from `grooming`.
+
+## 2026-04-17T04:20:02+00:00
+Task closed: deferred. Planner crash loop — 4 starts with no completion. Same daemon instability as T-0088/T-0107/T-0159.
+
+## 2026-04-17T05:11:46+00:00
+Task resumed from `grooming`.

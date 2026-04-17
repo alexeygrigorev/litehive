@@ -3,11 +3,8 @@ slug: remove-verdict-text-parsing-fallback-require
 title: Remove verdict text parsing fallback - require litehive report CLI
 created_at: '2026-04-06T20:27:27+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'Agents must submit verdicts via litehive report CLI. If they don''t, continue
   the session and explicitly ask them to run litehive report instead of parsing VERDICT:
@@ -22,10 +19,7 @@ acceptance_criteria:
 - If agent still does not submit after being asked, stage fails with clear error
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0197 remove-verdict-text-parsing-fallback-require'
 created_from: null
-upstream_origin: null
-github_origin: null

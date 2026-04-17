@@ -104,7 +104,7 @@ def reset_task_for_recovery(
     task.runtime.retry_limit = 0
     if not preserve_continuation_handoff:
         task.runtime.continuation_handoff = None
-    task.runtime.current_stage = idle_stage_state(updated_at=now)
+    task.runtime.current_stage = idle_stage_state(updated_at=now, stage=pipeline_status)
     if clear_last_outcome:
         task.runtime.last_outcome = TaskOutcomeState()
     elif task.runtime.last_outcome.kind == "interrupted":
@@ -254,9 +254,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                     next_task,
                     trigger_event_kind=TriggerEventKind.FLAGGED_TASK,
                     origin_stage=next_task.pipeline_status,
-                    summary=(
-                        f"Recovered flagged task back to `{recovery_stage}` so it can run again."
-                    ),
+                    summary=(f"Recovered flagged task back to `{recovery_stage}` so it can run again."),
                     runnable_state="runnable",
                     failure_classification=next_task.runtime.last_outcome.reason_code,
                     actions=[
@@ -357,9 +355,7 @@ def validate_task_dependencies(root: Path, *, task_id: str, depends_on: list[str
             raise ValueError(f"Task {task_id} dependency cycle detected via {dependency_id}")
 
 
-def _dependency_reaches_task(
-    task_id: str, dependency_id: str, tasks_by_id: dict[str, TaskRecord]
-) -> bool:
+def _dependency_reaches_task(task_id: str, dependency_id: str, tasks_by_id: dict[str, TaskRecord]) -> bool:
     stack = [dependency_id]
     seen: set[str] = set()
     while stack:
@@ -376,20 +372,13 @@ def _dependency_reaches_task(
     return False
 
 
-def _dependent_task_count(
-    task_id: str, queue: list[str], tasks_by_id: dict[str, TaskRecord]
-) -> int:
+def _dependent_task_count(task_id: str, queue: list[str], tasks_by_id: dict[str, TaskRecord]) -> int:
     eligible_task_ids = {
         queued_id
         for queued_id in queue
-        if (
-            (queued_task := tasks_by_id.get(queued_id)) is not None
-            and is_task_eligible_for_execution(queued_task)
-        )
+        if ((queued_task := tasks_by_id.get(queued_id)) is not None and is_task_eligible_for_execution(queued_task))
     }
-    reverse_dependencies: dict[str, set[str]] = {
-        candidate_id: set() for candidate_id in eligible_task_ids
-    }
+    reverse_dependencies: dict[str, set[str]] = {candidate_id: set() for candidate_id in eligible_task_ids}
     for queued_id in eligible_task_ids:
         queued_task = tasks_by_id[queued_id]
         for dependency_id in queued_task.depends_on:
@@ -410,9 +399,7 @@ def _dependent_task_count(
 
 
 def _is_interrupted_task(task: TaskRecord) -> bool:
-    return is_task_eligible_for_execution(task) and (
-        task.status == "in_progress" or task.pipeline_status != "backlog"
-    )
+    return is_task_eligible_for_execution(task) and (task.status == "in_progress" or task.pipeline_status != "backlog")
 
 
 def _task_selection_key(
@@ -447,9 +434,7 @@ def _resolve_next_task_from_state(
     policy = load_config(root).pool_selection_policy
     if policy not in VALID_POOL_SELECTION_POLICIES:
         policy = "dependency_aware"
-    next_task, blocked, snapshot_mutated = _resolve_next_task_from_snapshot(
-        state, tasks_by_id, policy=policy
-    )
+    next_task, blocked, snapshot_mutated = _resolve_next_task_from_snapshot(state, tasks_by_id, policy=policy)
     return next_task, blocked, snapshot_mutated
 
 
@@ -475,8 +460,6 @@ def restore_missing_queued_tasks(
     if restored_back:
         state.queue.extend(restored_back)
     return [*restored_front, *restored_back]
-
-
 
 
 def _resolve_next_task_from_snapshot(
@@ -592,11 +575,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
             )
             return state
 
-        if (
-            task is not None
-            and is_task_eligible_for_execution(task)
-            and task.runtime.execution_status != "running"
-        ):
+        if task is not None and is_task_eligible_for_execution(task) and task.runtime.execution_status != "running":
             task.status = "queued"
             enqueue_recovered_task(state, task.id)
             state.active_task_id = None
@@ -633,7 +612,6 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
         return state
 
 
-
 def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict[str, list[str]]:
     from litehive.state.records import list_tasks
     from litehive.state.persist import load_state
@@ -642,14 +620,9 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
     current_state = state or load_state(root)
     tasks = list_tasks(root, strict=False)
     tasks_by_id = {task.id: task for task in tasks}
-    active_task = (
-        None
-        if current_state.active_task_id is None
-        else tasks_by_id.get(current_state.active_task_id)
-    )
+    active_task = None if current_state.active_task_id is None else tasks_by_id.get(current_state.active_task_id)
     if active_task is not None and (
-        is_task_eligible_for_execution(active_task)
-        or active_task.runtime.execution_status == "running"
+        is_task_eligible_for_execution(active_task) or active_task.runtime.execution_status == "running"
     ):
         markers.setdefault(current_state.active_task_id, []).append("workspace.active_task_id")
     for task in tasks:
@@ -664,10 +637,7 @@ def validate_single_active_task(root: Path, state: WorkspaceState | None = None)
     markers = active_task_markers(root, state)
     if len(markers) <= 1:
         return
-    details = "; ".join(
-        f"{task_id} ({', '.join(task_markers)})"
-        for task_id, task_markers in sorted(markers.items())
-    )
+    details = "; ".join(f"{task_id} ({', '.join(task_markers)})" for task_id, task_markers in sorted(markers.items()))
     raise WorkspaceConflictError(
         f"workspace has multiple active tasks: {details}. Clear the stale active task state before running again."
     )

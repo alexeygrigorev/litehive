@@ -38,3 +38,24 @@ Task metadata updated via CLI.
 
 ## 2026-04-15T09:23:36+00:00
 Task closed: duplicate. Umbrella task split into focused child tasks: T-0197 verdict fallback removal, T-0200 structured stage-result parsing, T-0203 legacy config compat, T-0374 engine-output parse warnings, and T-0375 explicit rmtree cleanup. Do not reopen as one broad cleanup task.
+
+## 2026-04-17T09:04:09+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T09:05:23+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T09:08:30+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T09:12:25+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T09:14:35+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T09:15:40+00:00
+Interrupted subagent execution while `grooming` was running. Reason: Task stopped via CLI. Subagent `SA-0047` (planner/codex, pid=2367257, path `subagents/SA-0047-planner`) stopped with status `interrupted`. Last snippet: grooming rejected: agent did not submit verdict via litehive report CLI. Resume from `grooming`.
+
+## 2026-04-17T09:15:43+00:00
+Task closed: deferred. Planner budget exhaustion — 5 attempts.

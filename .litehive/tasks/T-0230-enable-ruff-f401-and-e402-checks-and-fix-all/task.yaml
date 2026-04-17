@@ -3,11 +3,8 @@ slug: enable-ruff-f401-and-e402-checks-and-fix-all
 title: Enable ruff F401 and E402 checks and fix all violations
 created_at: '2026-04-08T06:46:37+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Add F401 (unused imports) and E402 (module-level import not at top) to ruff
   config, fix all existing violations, and ensure CI/hooks catch future ones.
@@ -22,10 +19,7 @@ acceptance_criteria:
   any are found
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0230 enable-ruff-f401-and-e402-checks-and-fix-all'
 created_from: null
-upstream_origin: null
-github_origin: null

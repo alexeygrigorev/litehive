@@ -51,9 +51,7 @@ def atomic_write_gzip_text(path: Path, content: str) -> None:
 
 
 def write_atomic_files(writes: dict[Path, str]) -> None:
-    snapshots = {
-        path: path.read_text(encoding="utf-8") if path.exists() else _MISSING for path in writes
-    }
+    snapshots = {path: path.read_text(encoding="utf-8") if path.exists() else _MISSING for path in writes}
     applied: list[Path] = []
     try:
         for path, content in writes.items():
@@ -71,9 +69,7 @@ def write_atomic_files(writes: dict[Path, str]) -> None:
 
 
 def write_atomic_files_and_then(writes: dict[Path, str], callback) -> None:
-    snapshots = {
-        path: path.read_text(encoding="utf-8") if path.exists() else _MISSING for path in writes
-    }
+    snapshots = {path: path.read_text(encoding="utf-8") if path.exists() else _MISSING for path in writes}
     applied: list[Path] = []
     try:
         for path, content in writes.items():

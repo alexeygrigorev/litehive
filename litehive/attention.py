@@ -307,10 +307,7 @@ def _import_attention_log_events(root: Path) -> None:
     log_path = root / ".litehive" / "runtime" / "attention.log"
     if not log_path.exists():
         return
-    seen_keys = {
-        item.dedupe_key
-        for item in attention_store(root).list_items(include_resolved=True)
-    }
+    seen_keys = {item.dedupe_key for item in attention_store(root).list_items(include_resolved=True)}
     try:
         entries = [line.strip() for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     except OSError:
@@ -407,7 +404,9 @@ def _flagged_and_merge_failed_items(root: Path, tasks: list[TaskRecord]) -> list
                 if trigger is None and state.recovery_history:
                     trigger = state.recovery_history[-1].trigger
                 origin_stage = None if trigger is None else trigger.origin_stage
-                failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
+                failed_reason = (
+                    state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
+                )
                 metadata["failed_reason"] = failed_reason
                 metadata["origin_stage"] = origin_stage
                 if origin_stage != "merge_resolving" and failed_reason == "recovery_crashed":

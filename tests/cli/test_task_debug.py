@@ -33,9 +33,7 @@ def _make_task_with_subagent(tmp_path, *, engine="codex", role="swe", sa_id="SA-
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Debug test task", auto_commit=False)
     sa_path = f"subagents/{sa_id}"
-    task.subagents = [
-        SubagentRef(id=sa_id, role=role, engine=engine, status="completed", path=sa_path)
-    ]
+    task.subagents = [SubagentRef(id=sa_id, role=role, engine=engine, status="completed", path=sa_path)]
     save_task(tmp_path, task)
 
     # Create subagent artifact directory
@@ -44,18 +42,24 @@ def _make_task_with_subagent(tmp_path, *, engine="codex", role="swe", sa_id="SA-
     return task, sa_dir
 
 
-def _write_session_record(root: Path, task_id: str, *, sa_id="SA-implementing", role="swe", engine="codex",
-                          status="completed", exit_code=0):
+def _write_session_record(
+    root: Path, task_id: str, *, sa_id="SA-implementing", role="swe", engine="codex", status="completed", exit_code=0
+):
     """Write a subagent session record into SQLite storage."""
-    save_subagent_artifacts(root, task_id, sa_id, session={
-        "id": sa_id,
-        "role": role,
-        "engine": engine,
-        "status": status,
-        "exit_code": exit_code,
-        "created_at": "2026-04-09T10:00:00Z",
-        "updated_at": "2026-04-09T10:05:00Z",
-    })
+    save_subagent_artifacts(
+        root,
+        task_id,
+        sa_id,
+        session={
+            "id": sa_id,
+            "role": role,
+            "engine": engine,
+            "status": status,
+            "exit_code": exit_code,
+            "created_at": "2026-04-09T10:00:00Z",
+            "updated_at": "2026-04-09T10:05:00Z",
+        },
+    )
 
 
 def _init_git_repo(root: Path) -> None:
@@ -238,9 +242,7 @@ def test_debug_gzipped_artifacts(tmp_path: Path, capsys: pytest.CaptureFixture[s
 # -- Missing artifacts graceful handling --
 
 
-def test_debug_missing_artifacts_graceful(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_debug_missing_artifacts_graceful(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     task, sa_dir = _make_task_with_subagent(tmp_path)
     # No artifacts written — should not crash
 
@@ -280,16 +282,25 @@ def test_debug_all_subagents(tmp_path: Path, capsys: pytest.CaptureFixture[str])
     sa_path_3 = "subagents/SA-testing"
     task.subagents = [
         SubagentRef(
-            id="SA-grooming", role="planner", engine="gemini",
-            status="completed", path=sa_path_1,
+            id="SA-grooming",
+            role="planner",
+            engine="gemini",
+            status="completed",
+            path=sa_path_1,
         ),
         SubagentRef(
-            id="SA-implementing", role="swe", engine="codex",
-            status="completed", path=sa_path_2,
+            id="SA-implementing",
+            role="swe",
+            engine="codex",
+            status="completed",
+            path=sa_path_2,
         ),
         SubagentRef(
-            id="SA-testing", role="qa", engine="claude",
-            status="failed", path=sa_path_3,
+            id="SA-testing",
+            role="qa",
+            engine="claude",
+            status="failed",
+            path=sa_path_3,
         ),
     ]
     save_task(tmp_path, task)
@@ -334,9 +345,7 @@ def test_debug_all_no_subagents(tmp_path: Path, capsys: pytest.CaptureFixture[st
 # -- Runtime subagent state (exit code, timing) --
 
 
-def test_debug_shows_exit_code_from_runtime(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_debug_shows_exit_code_from_runtime(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     task, sa_dir = _make_task_with_subagent(tmp_path)
     task.runtime.last_subagent = RuntimeSubagentState(
         id="SA-implementing",
@@ -360,9 +369,7 @@ def test_debug_shows_exit_code_from_runtime(
     assert "completed_at: 2026-04-09T08:05:00Z" in output
 
 
-def test_debug_worktree_shows_uncommitted_changes(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_debug_worktree_shows_uncommitted_changes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
     _init_git_repo(tmp_path)
     task = create_task(tmp_path, title="Worktree debug task", auto_commit=False)
@@ -403,9 +410,7 @@ def test_debug_worktree_shows_committed_changes_ahead_of_main(
     assert "  - feature.py" in output
 
 
-def test_debug_worktree_shows_no_worktree_when_missing(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_debug_worktree_shows_no_worktree_when_missing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Missing worktree task", auto_commit=False)
     task.git.worktree_path = ".litehive/worktrees/missing-task"

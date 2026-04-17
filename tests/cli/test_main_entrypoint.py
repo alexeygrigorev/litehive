@@ -202,7 +202,9 @@ def test_fast_status_prefers_runner_active_task_id(
         lambda workspace: snapshot,
     )
     monkeypatch.setattr("litehive.observability.status_diagnostics.status_has_problems", lambda issues: False)
-    monkeypatch.setattr("litehive.observability.engine_monitoring.render_engine_monitoring_lines", lambda monitoring: [])
+    monkeypatch.setattr(
+        "litehive.observability.engine_monitoring.render_engine_monitoring_lines", lambda monitoring: []
+    )
     monkeypatch.setattr("litehive.state.records.get_task", lambda workspace, task_id: task)
 
     exit_code = main_module._fast_status([])

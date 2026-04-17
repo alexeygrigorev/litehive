@@ -63,9 +63,7 @@ def test_load_config_preserves_runner_hook_descriptions(tmp_path: Path) -> None:
 
     config = load_config(tmp_path)
 
-    assert config.runner_hooks["after_implementing"][0].description == (
-        "ensures lint passes before acceptance"
-    )
+    assert config.runner_hooks["after_implementing"][0].description == ("ensures lint passes before acceptance")
 
 
 def test_load_config_rejects_conflicting_runner_hook_blocking_flags(tmp_path: Path) -> None:

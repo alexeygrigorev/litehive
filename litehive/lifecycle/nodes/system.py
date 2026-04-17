@@ -189,9 +189,7 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
                     text=True,
                 )
                 if created.returncode != 0:
-                    raise GitError(
-                        f"git worktree add failed: {created.stderr.strip() or created.stdout.strip()}"
-                    )
+                    raise GitError(f"git worktree add failed: {created.stderr.strip() or created.stdout.strip()}")
                 task.runtime.git.worktree_path = serialize_worktree_path(worktree)
                 save_task(self.workspace_root, task)
                 return True
@@ -392,9 +390,7 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         unresolved = self._unresolved(worktree)
         if unresolved:
             raise MergeConflict(unresolved)
-        raise GitError(
-            f"git stash pop failed: {restored.stderr.strip() or restored.stdout.strip()}"
-        )
+        raise GitError(f"git stash pop failed: {restored.stderr.strip() or restored.stdout.strip()}")
 
 
 class PreExecRecoveryNode(SystemNode):
@@ -431,7 +427,7 @@ class PreExecRecoveryNode(SystemNode):
                     f"[pre-exec repair] ignored error: {type(exc).__name__}: {exc}",
                     file=sys.stderr,
                 )
-        resume_stage = "implementing" if state.pipeline_mode.value == "single" else "grooming"
+        resume_stage = state.entry_stage or ("implementing" if state.pipeline_mode.value == "single" else "grooming")
         return PreExecRecoverySucceeded(resume_stage=resume_stage)
 
 
@@ -568,9 +564,7 @@ class GitCommitNode(CommitNode):
                 raise MergeConflict(dirty_files)
             # Genuine non-conflict failure (bad ref, missing commit, …).
             self._abort_merge()
-            raise GitError(
-                f"git merge failed with no conflict files: {stderr}"
-            )
+            raise GitError(f"git merge failed with no conflict files: {stderr}")
 
         # Leave the worktree in the unresolved state. The state machine
         # routes MergeConflictDetected → merge_resolving (MergeAgent), which
@@ -639,9 +633,7 @@ class GitCommitNode(CommitNode):
             text=True,
         )
         if commit.returncode != 0:
-            raise GitError(
-                f"git commit failed in {worktree}: {commit.stderr.strip() or commit.stdout.strip()}"
-            )
+            raise GitError(f"git commit failed in {worktree}: {commit.stderr.strip() or commit.stdout.strip()}")
 
     def _worktree_head(self, worktree: Path) -> str:
         proc = subprocess.run(

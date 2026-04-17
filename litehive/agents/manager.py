@@ -180,9 +180,7 @@ class SubagentManager(SessionMixin):
 
         try:
             if not engine.is_available():
-                raise EngineError(
-                    f"Engine '{engine.name}' is unavailable: missing binary '{engine.binary}'"
-                )
+                raise EngineError(f"Engine '{engine.name}' is unavailable: missing binary '{engine.binary}'")
             if isinstance(engine, ExternalCLIAdapter) and sandbox_summary.enabled:
                 execution_engine = SandboxedAdapter(engine, self.sandbox, engine_name, role)
             # Probe the wrapped adapter for capability preference. The sandbox wrapper
@@ -200,9 +198,7 @@ class SubagentManager(SessionMixin):
                 run_live_callable = effective_engine_callable(execution_engine, "run_live")
                 if not callable(run_live_callable):
                     run_live_callable = execution_engine.run_live
-                inactivity_timeout_seconds = self._subagent_inactivity_timeout_seconds(
-                    engine_name
-                )
+                inactivity_timeout_seconds = self._subagent_inactivity_timeout_seconds(engine_name)
                 live_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
                     "model": model,
@@ -323,9 +319,7 @@ class SubagentManager(SessionMixin):
             0 if proc is None else proc.exit_code,
             pid=None if proc is None else proc.pid,
             interruption_reason=(
-                None
-                if failure is None or failure.kind != "execution_interrupted"
-                else failure.reason
+                None if failure is None or failure.kind != "execution_interrupted" else failure.reason
             ),
             resource_limit_event=None if failure is None else failure.resource_limit_event,
             continuation=continuation,
@@ -339,9 +333,7 @@ class SubagentManager(SessionMixin):
             0 if proc is None else proc.exit_code,
             proc,
             interruption_reason=(
-                None
-                if failure is None or failure.kind != "execution_interrupted"
-                else failure.reason
+                None if failure is None or failure.kind != "execution_interrupted" else failure.reason
             ),
             resource_limit_event=None if failure is None else failure.resource_limit_event,
             continuation=continuation,
@@ -418,9 +410,7 @@ class SubagentManager(SessionMixin):
                 execution=execution,
                 transcript=transcript,
             )
-        report = report.model_copy(
-            update={"warnings": self._merged_warnings(report.warnings, extra_warnings)}
-        )
+        report = report.model_copy(update={"warnings": self._merged_warnings(report.warnings, extra_warnings)})
         self._write_session_snapshot(
             task,
             base,
@@ -442,9 +432,7 @@ class SubagentManager(SessionMixin):
                     if report.resource_limit_event is None
                     else report.resource_limit_event.model_dump(mode="python")
                 ),
-                "continuation": None
-                if continuation is None
-                else continuation.model_dump(mode="python"),
+                "continuation": None if continuation is None else continuation.model_dump(mode="python"),
             },
             exit_code=exit_code,
             pid=None if execution is None else execution.pid,
@@ -452,12 +440,8 @@ class SubagentManager(SessionMixin):
             resource_limit_event=resource_limit_event,
             continuation=continuation,
         )
-        write_stream_artifact(
-            base, "stdout", "" if execution is None else execution.stdout, compress=True
-        )
-        write_stream_artifact(
-            base, "stderr", "" if execution is None else execution.stderr, compress=True
-        )
+        write_stream_artifact(base, "stdout", "" if execution is None else execution.stdout, compress=True)
+        write_stream_artifact(base, "stderr", "" if execution is None else execution.stderr, compress=True)
         if execution is not None:
             self._append_stream_delta(base, ref, "stdout", execution.stdout)
             self._append_stream_delta(base, ref, "stderr", execution.stderr)
@@ -562,9 +546,7 @@ class SubagentManager(SessionMixin):
                     if report.resource_limit_event is None
                     else report.resource_limit_event.model_dump(mode="python")
                 ),
-                "continuation": None
-                if continuation is None
-                else continuation.model_dump(mode="python"),
+                "continuation": None if continuation is None else continuation.model_dump(mode="python"),
             }
         self._write_session_snapshot(
             task,

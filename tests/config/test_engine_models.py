@@ -32,10 +32,7 @@ def test_resolve_model_prefers_run_override_then_task_then_workspace_default(
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Pending task", model="custom-task-model")
 
-    assert (
-        resolve_model(task, config, engine_name="opencode", model_override="run-model")
-        == "run-model"
-    )
+    assert resolve_model(task, config, engine_name="opencode", model_override="run-model") == "run-model"
     assert resolve_model(task, config, engine_name="opencode") == "custom-task-model"
 
     task.model = None

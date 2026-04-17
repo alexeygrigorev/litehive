@@ -22,8 +22,8 @@ from litehive.state.persist import load_state
 from litehive.state.persist import persist_task_and_state
 
 
-def idle_stage_state(*, updated_at: str) -> RuntimeStageState:
-    return RuntimeStageState(updated_at=updated_at)
+def idle_stage_state(*, updated_at: str, stage: str | None = None) -> RuntimeStageState:
+    return RuntimeStageState(stage=stage, updated_at=updated_at)
 
 
 def _running_stage_state(stage: str, *, started_at: str) -> RuntimeStageState:
@@ -148,12 +148,7 @@ def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) 
         ):
             state.queue.insert(0, task.id)
             state_changed = True
-        if (
-            final_status == "done"
-            and task.status == "done"
-            and task.pipeline_status == "done"
-            and not state_changed
-        ):
+        if final_status == "done" and task.status == "done" and task.pipeline_status == "done" and not state_changed:
             write_task_runtime(root, task)
             return task
         persist_task_and_state(root, task=task, state=state)
@@ -288,10 +283,7 @@ def apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
     task.runtime.updated_at = now
     task.runtime.last_stage = _completed_stage_state(report, started_at=started_at, completed_at=now)
     task.runtime.current_stage = idle_stage_state(updated_at=now)
-    if (
-        task.runtime.continuation_handoff is not None
-        and task.runtime.continuation_handoff.stage == report.stage
-    ):
+    if task.runtime.continuation_handoff is not None and task.runtime.continuation_handoff.stage == report.stage:
         task.runtime.continuation_handoff = None
 
 
@@ -303,17 +295,11 @@ def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> Non
 
 
 def mark_subagent_pid(root: Path, task: TaskRecord, pid: int | None) -> None:
-    if (
-        pid is None
-        or task.runtime.active_subagent is None
-        or task.runtime.active_subagent.pid == pid
-    ):
+    if pid is None or task.runtime.active_subagent is None or task.runtime.active_subagent.pid == pid:
         return
     now = utcnow()
     task.runtime.updated_at = now
-    task.runtime.active_subagent = task.runtime.active_subagent.model_copy(
-        update={"pid": pid, "updated_at": now}
-    )
+    task.runtime.active_subagent = task.runtime.active_subagent.model_copy(update={"pid": pid, "updated_at": now})
     save_task_runtime(root, task)
 
 
@@ -330,9 +316,7 @@ def mark_subagent_progress(
     now = utcnow()
     task.runtime.updated_at = now
     if task.runtime.current_stage.stage is not None:
-        task.runtime.current_stage = task.runtime.current_stage.model_copy(
-            update={"updated_at": now}
-        )
+        task.runtime.current_stage = task.runtime.current_stage.model_copy(update={"updated_at": now})
     updates: dict[str, object] = {"updated_at": now}
     if pid is not None:
         updates["pid"] = pid

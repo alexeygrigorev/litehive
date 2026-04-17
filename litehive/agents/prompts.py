@@ -33,9 +33,7 @@ def stage_prompt(
     profile = resolve_process_profile(process_profile)
     workspace_overlay = profile.get("workspace_overlay", [])
     stage_overlay = profile.get("stage_overlay", {}).get(stage, [])
-    stage_instructions = profile.get("stage_instructions", {}).get(
-        stage, ["Complete the requested stage."]
-    )
+    stage_instructions = profile.get("stage_instructions", {}).get(stage, ["Complete the requested stage."])
     lifecycle_verification_overlay: list[str] = []
     stage_owner = role_name or _stage_owner_for_stage(stage)
     stage_role = _stage_role_prompt(stage, stage_owner)
@@ -87,12 +85,14 @@ def stage_prompt(
         )
     hook_summary = _runner_hook_prompt_lines(stage, config)
     if hook_summary:
-        lines.extend([
-            "",
-            "Checks that will reject your work if they fail:",
-            *hook_summary,
-            "- IMPORTANT: Run these checks yourself before finishing. If they fail, your work will be rejected.",
-        ])
+        lines.extend(
+            [
+                "",
+                "Checks that will reject your work if they fail:",
+                *hook_summary,
+                "- IMPORTANT: Run these checks yourself before finishing. If they fail, your work will be rejected.",
+            ]
+        )
     lines.extend(
         [
             "",
@@ -191,9 +191,7 @@ def stage_prompt(
         if handoff.attempt is not None:
             lines.append(f"- Prior attempt: {handoff.attempt}")
         if handoff.subagent_id or handoff.subagent_path:
-            lines.append(
-                f"- Prior subagent: {handoff.subagent_id or '-'} at `{handoff.subagent_path or '-'}`"
-            )
+            lines.append(f"- Prior subagent: {handoff.subagent_id or '-'} at `{handoff.subagent_path or '-'}`")
         if handoff.summary:
             lines.append(f"- Prior summary: {handoff.summary}")
         if handoff.transcript_snippet:
@@ -210,9 +208,7 @@ def stage_prompt(
             if path
         ]
         if artifact_parts:
-            lines.append(
-                f"- Handoff artifacts: {', '.join(f'`{path}`' for path in artifact_parts)}"
-            )
+            lines.append(f"- Handoff artifacts: {', '.join(f'`{path}`' for path in artifact_parts)}")
         if handoff.warnings:
             lines.extend(["- Prior warnings:"] + [f"  - {warning}" for warning in handoff.warnings])
         lines.extend(

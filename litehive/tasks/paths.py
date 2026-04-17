@@ -57,6 +57,7 @@ def task_dir(root: Path, task: TaskRecord) -> Path:
 def task_file(root: Path, task: TaskRecord) -> Path:
     return task_dir(root, task) / "task.yaml"
 
+
 def task_recovery_dir(root: Path, task: TaskRecord) -> Path:
     return task_dir(root, task) / "recovery"
 

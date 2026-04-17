@@ -78,11 +78,7 @@ def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
 
     tasks = list_tasks(root)
     if dirty_entries:
-        owners = [
-            task
-            for task in tasks
-            if _task_can_resume_with_owned_dirty_paths(root, task, dirty_entries)
-        ]
+        owners = [task for task in tasks if _task_can_resume_with_owned_dirty_paths(root, task, dirty_entries)]
         finding = DirtyWorktreeFinding(
             location_kind="main-checkout",
             ownership="main-checkout",

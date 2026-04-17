@@ -95,11 +95,7 @@ def pipeline_journal_command(
             f"conflict_files={state.merge_context.conflict_files}"
         )
     if state.commit_result is not None:
-        print(
-            "commit_result: "
-            f"head_sha={state.commit_result.head_sha} "
-            f"reason={state.commit_result.reason or '-'}"
-        )
+        print(f"commit_result: head_sha={state.commit_result.head_sha} reason={state.commit_result.reason or '-'}")
     if state.recovery_history:
         print("recovery_history:")
         for outcome in state.recovery_history:

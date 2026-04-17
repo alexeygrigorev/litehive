@@ -4,11 +4,8 @@ title: Retract stale 'pass' reports from task thread when filesystem evidence co
   them
 created_at: '2026-04-10T14:54:49+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on:
 - T-0313
 goal: "T-0240's confirmation-bias loop was amplified because a single hallucinated\
@@ -38,10 +35,7 @@ acceptance_criteria:
   fed to the next subagent prompt contains a retraction marker for the stale report.'
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0314 retract-stale-pass-reports-from-task-thread-when'
 created_from: null
-upstream_origin: null
-github_origin: null

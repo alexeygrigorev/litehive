@@ -73,6 +73,8 @@ class DirtyWorktreeGateReport:
             finding.ownership in {"main-checkout", "ambiguous-ownership", "missing-recorded-worktree"}
             for finding in self.findings
         )
+
+
 def _path_within(candidate: Path, root: Path) -> bool:
     try:
         candidate.resolve().relative_to(root.resolve())

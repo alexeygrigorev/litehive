@@ -3,11 +3,8 @@ slug: rename-thread-yaml-to-comments-yaml
 title: Rename thread.yaml to comments.yaml
 created_at: '2026-04-10T06:48:26+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: moderate
-planned_effort: m
 depends_on: []
 goal: Rename the per-task agent review file from thread.yaml to comments.yaml for
   clearer terminology (matches GitHub PR comment mental model). Update all code references,
@@ -37,10 +34,7 @@ plan:
   during workspace repair and covered by focused tests.
 - Update tests and active docs or prompt text that describe the task discussion artifact,
   then run targeted pytest coverage for the touched surfaces.
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0294 rename-thread-yaml-to-comments-yaml'
 created_from: null
-upstream_origin: null
-github_origin: null

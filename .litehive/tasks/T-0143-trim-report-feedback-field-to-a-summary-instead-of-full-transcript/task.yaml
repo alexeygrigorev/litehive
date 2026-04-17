@@ -3,11 +3,8 @@ slug: trim-report-feedback-field-to-a-summary-instead-of-full-transcript
 title: Trim report feedback field to a summary instead of full transcript
 created_at: '2026-04-04T16:46:47+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Stage reports should contain a concise feedback summary (under 2000 chars) instead
   of the full agent transcript. The full transcript stays in subagents/ artifacts.
@@ -19,10 +16,7 @@ acceptance_criteria:
   is already a summary
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0143 trim-report-feedback-field-to-a-summary-instead-of-full-transcript'
 created_from: null
-upstream_origin: null
-github_origin: null

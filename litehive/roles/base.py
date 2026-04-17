@@ -71,9 +71,7 @@ class RoleAgent(AgentNode):
         grace_period_seconds: int | None = None,
     ) -> None:
         if not self.NODE_NAME or not self.ROLE:
-            raise TypeError(
-                f"{type(self).__name__} must set NODE_NAME and ROLE class attributes"
-            )
+            raise TypeError(f"{type(self).__name__} must set NODE_NAME and ROLE class attributes")
         super().__init__(
             name=self.NODE_NAME,
             selector=selector,

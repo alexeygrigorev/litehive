@@ -35,6 +35,7 @@ def cap_feedback(text: str, *, limit: int = FEEDBACK_CAP) -> str:
 
 # ── litehive-native task-lifecycle vocabularies ─────────────────────────────
 
+
 class OutcomeKind(StringEnum):
     FLAGGED = "flagged"
     BLOCKED = "blocked"

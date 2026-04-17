@@ -39,6 +39,7 @@ def root(ctx: typer.Context) -> int | None:
         return 0
     return status_command(Path.cwd(), full=False)
 
+
 register_workspace_commands(app)
 register_runner_commands(app, backup_app, db_app)
 register_hidden_root_commands(app)

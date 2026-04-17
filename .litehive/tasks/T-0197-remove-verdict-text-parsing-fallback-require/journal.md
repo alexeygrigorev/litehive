@@ -8,3 +8,6 @@ Task closed: duplicate. Merged into T-0210
 
 ## 2026-04-13T07:21:55+00:00
 Warning: Ignoring malformed task update in report: acceptance_criteria must be a YAML list of strings
+
+## 2026-04-17T08:41:49+00:00
+Task metadata updated via CLI.

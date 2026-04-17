@@ -17,7 +17,7 @@ def _set_running_task(task, *, stage: str = "implementing") -> None:
     task.pipeline_status = stage
     task.runtime.execution_status = "running"
     task.runtime.run_started_at = "2026-04-12T10:00:00Z"
-    task.runtime.current_stage.step = stage
+    task.runtime.current_stage.stage = stage
     task.runtime.current_stage.status = "running"
     task.runtime.current_stage.started_at = "2026-04-12T10:00:00Z"
 
@@ -95,9 +95,7 @@ def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
         title="Dirty ownership",
         acceptance_criteria=["allow resume with owned dirty paths"],
     )
-    reports_dir = (
-        tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
-    )
+    reports_dir = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
     (reports_dir / "implementing-001.yaml").write_text(
         yaml.safe_dump({"files_changed": ["src/app.py"]}, sort_keys=False),
         encoding="utf-8",
@@ -166,7 +164,7 @@ def test_queue_resume_and_requeue_keep_parked_semantics_explicit(
     )
     assert resume_result.exit_code == 0, resume_result.output
     assert "status: queued" in resume_result.output
-    assert "pipeline_status: testing" in resume_result.output
+    assert "pipeline_stage: testing" in resume_result.output
 
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
@@ -187,7 +185,7 @@ def test_queue_resume_and_requeue_keep_parked_semantics_explicit(
     )
     assert requeue_result.exit_code == 0, requeue_result.output
     assert "status: queued" in requeue_result.output
-    assert "pipeline_status: implementing" in requeue_result.output
+    assert "pipeline_stage: implementing" in requeue_result.output
 
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None

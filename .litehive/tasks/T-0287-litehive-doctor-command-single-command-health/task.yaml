@@ -3,11 +3,8 @@ slug: litehive-doctor-command-single-command-health
 title: 'litehive doctor command: single-command health check'
 created_at: '2026-04-10T05:59:18+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: moderate
-planned_effort: m
 depends_on: []
 goal: 'Add a ''litehive doctor'' command that runs a comprehensive workspace health
   check: duplicate task IDs, merge_failed tasks, flagged tasks, local/origin divergence,
@@ -42,10 +39,7 @@ plan:
   both the finding text and the recommended fix command.
 - Update CLI help/README so operators know when to use `doctor` versus `health` and
   `repair`.
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0287 litehive-doctor-command-single-command-health'
 created_from: null
-upstream_origin: null
-github_origin: null

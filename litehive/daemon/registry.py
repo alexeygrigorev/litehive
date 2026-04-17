@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 _DAEMON_LOCKS: dict[Path, TextIO] = {}
 _DAEMON_LOCKS_MUTEX = threading.Lock()
+
+
 def daemon_lock_path(workspace: Path) -> Path:
     return workspace_daemon_lock_path(workspace.resolve())
 

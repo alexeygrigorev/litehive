@@ -21,10 +21,7 @@ def task_model_label(task_model):
 def task_dependencies_label(task_id, dependencies):
     if not dependencies:
         return "-"
-    return (
-        ", ".join(dependency_id for dependency_id in dependencies if dependency_id != task_id)
-        or "-"
-    )
+    return ", ".join(dependency_id for dependency_id in dependencies if dependency_id != task_id) or "-"
 
 
 def task_interruption_label(task):

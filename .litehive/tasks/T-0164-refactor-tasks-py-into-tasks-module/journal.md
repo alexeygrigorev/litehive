@@ -50,3 +50,18 @@ Execution finished with status `flagged`.
 
 ## 2026-04-08T15:27:04+00:00
 Task closed: duplicate. Already done by T-0204
+
+## 2026-04-17T04:24:52+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T04:27:32+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T04:29:37+00:00
+Interrupted subagent execution while `grooming` was running. Reason: Task stopped via CLI. Subagent `SA-0018` (planner/codex, pid=1951481, path `subagents/SA-0018-planner`) stopped with status `interrupted`. Last snippet: grooming rejected: agent did not submit verdict via litehive report CLI. Resume from `grooming`.
+
+## 2026-04-17T04:29:40+00:00
+Task closed: deferred. Planner crash loop — same daemon instability pattern.
+
+## 2026-04-17T05:11:51+00:00
+Task resumed from `grooming`.

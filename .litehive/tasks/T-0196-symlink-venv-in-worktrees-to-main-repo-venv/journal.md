@@ -5,3 +5,6 @@ Task created.
 
 ## 2026-04-06T20:20:54+00:00
 Task closed: wont_do. Symlinked venv is unsafe - agents may install packages that affect other worktrees. Separate venvs per worktree is safer, disk cost is small.
+
+## 2026-04-17T08:01:10+00:00
+Task metadata updated via CLI.

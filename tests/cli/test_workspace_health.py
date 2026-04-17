@@ -174,7 +174,10 @@ def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatc
     )
 
     monkeypatch.setattr("litehive.cli.workspace.collect_status_snapshot", lambda root: snapshot)
-    monkeypatch.setattr("litehive.cli.workspace._safe_active_task", lambda workspace, task_id: active_task if task_id == "T-0381" else None)
+    monkeypatch.setattr(
+        "litehive.cli.workspace._safe_active_task",
+        lambda workspace, task_id: active_task if task_id == "T-0381" else None,
+    )
     monkeypatch.setattr("litehive.cli.workspace.list_tasks_state_first", lambda workspace, state=None: [])
     monkeypatch.setattr("litehive.cli.workspace.find_last_completed_task", lambda tasks: None)
     monkeypatch.setattr("litehive.cli.workspace.waiting_for_you_lines", lambda root: [])

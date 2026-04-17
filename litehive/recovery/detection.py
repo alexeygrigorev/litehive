@@ -8,11 +8,7 @@ from litehive.observability.events import last_event_timestamp
 
 
 def is_stranded_commit_task(task: TaskRecord) -> bool:
-    return (
-        task.pipeline_status == "done"
-        and task.git.commit_sha is None
-        and task.git.checkpoint_attempts > 0
-    )
+    return task.pipeline_status == "done" and task.git.commit_sha is None and task.git.checkpoint_attempts > 0
 
 
 def should_requeue_commit_stage_task(task: TaskRecord) -> bool:

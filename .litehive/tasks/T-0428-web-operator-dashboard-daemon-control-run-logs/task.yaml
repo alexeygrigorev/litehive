@@ -3,30 +3,30 @@ slug: web-operator-dashboard-daemon-control-run-logs
 title: Web operator dashboard daemon control and run logs
 created_at: '2026-04-17T12:05:00+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on:
 - T-0423
-goal: Mirror daemon lifecycle and run-all log inspection in the browser so operators can manage the workspace process without leaving the dashboard.
+goal: Mirror daemon lifecycle and run-all log inspection in the browser so operators
+  can manage the workspace process without leaving the dashboard.
 acceptance_criteria:
-- Daemon endpoints expose readonly status, PID, heartbeat freshness, and stale-runner signals using nonblocking inspection paths suitable for web requests.
-- Browser actions exist for daemon start, stop, and restart and call the same backend operations as the daemon CLI.
-- The browser shows recent run-all log excerpts alongside daemon status and refreshes them after lifecycle actions.
-- Daemon action failures are reported as structured errors the UI can present without losing current page state.
+- Daemon endpoints expose readonly status, PID, heartbeat freshness, and stale-runner
+  signals using nonblocking inspection paths suitable for web requests.
+- Browser actions exist for daemon start, stop, and restart and call the same backend
+  operations as the daemon CLI.
+- The browser shows recent run-all log excerpts alongside daemon status and refreshes
+  them after lifecycle actions.
+- Daemon action failures are reported as structured errors the UI can present without
+  losing current page state.
 - Tests cover daemon status serialization and lifecycle action error handling.
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0428 web-operator-dashboard-daemon-control-run-logs'
 created_from:
   task_id: T-0215
   stage: implementing
-  rationale: Greenfield browser follow-up task created from the T-0215 CLI-versus-browser gap analysis.
+  rationale: Greenfield browser follow-up task created from the T-0215 CLI-versus-browser
+    gap analysis.
   blocking: false
-upstream_origin: null
-github_origin: null

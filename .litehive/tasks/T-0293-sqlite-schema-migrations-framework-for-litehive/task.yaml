@@ -3,11 +3,8 @@ slug: sqlite-schema-migrations-framework-for-litehive
 title: SQLite schema migrations framework for litehive data.db
 created_at: '2026-04-10T06:46:58+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: moderate
-planned_effort: m
 depends_on:
 - T-0291
 goal: Evolve the data.db schema over time without data loss. Every schema change is
@@ -28,10 +25,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0293 sqlite-schema-migrations-framework-for-litehive'
 created_from: null
-upstream_origin: null
-github_origin: null

@@ -78,9 +78,7 @@ def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
     assert resumed_report["resume_stage"] == "implementing"
 
 
-def test_subagent_writes_timeline_during_live_progress(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_subagent_writes_timeline_during_live_progress(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Timeline live progress test")
     manager = SubagentManager(tmp_path)
@@ -147,9 +145,7 @@ def test_subagent_writes_timeline_during_live_progress(
     assert timeline_data["event_counts"] == {"message": 1, "usage": 1}
 
 
-def test_subagent_skips_timeline_when_no_events(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_subagent_skips_timeline_when_no_events(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="No timeline test")
     manager = SubagentManager(tmp_path)

@@ -70,3 +70,6 @@ CommitToGit complete. Commit: df4ce25a4f88f743cd6fa00947c651d813f746b4
 
 ## 2026-04-13T10:32:42+00:00
 Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.
+
+## 2026-04-17T13:23:37+00:00
+Task closed: wont_do. Bubblewrap sandbox removed

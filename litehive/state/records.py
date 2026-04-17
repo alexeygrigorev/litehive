@@ -171,6 +171,7 @@ def _persist_created_tasks(
         protected_task_ids=[task.id for task in tasks],
     )
     try:
+
         def callback() -> None:
             runtime_store(root).save_runtime_transaction(
                 task_states={task.id: task_state_for_storage(task) for task in tasks},
@@ -192,9 +193,7 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
     store = runtime_store(root)
     task_state = store.load_task_state(task.id)
     if task_state is None:
-        raise TaskStateMissingError(
-            f"Task {task.id} is missing its SQLite runtime state row"
-        )
+        raise TaskStateMissingError(f"Task {task.id} is missing its SQLite runtime state row")
     task = TaskRecord.from_intent_and_state(task.to_intent_record(), task_state)
     set_task_commit_sha(task, task.runtime.git.commit_sha)
     _normalize_task_worktree_state(task)
@@ -400,10 +399,7 @@ def list_tasks_state_first(
     state: WorkspaceState | None = None,
     include_runtime: bool = False,
 ) -> list[TaskRecord]:
-    task_by_id = {
-        task.id: task
-        for task in _load_tasks_from_disk(root, include_runtime=include_runtime, strict=True)
-    }
+    task_by_id = {task.id: task for task in _load_tasks_from_disk(root, include_runtime=include_runtime, strict=True)}
 
     workspace_state = load_state(root) if state is None else state
     ordered_ids: list[str] = []
@@ -461,8 +457,6 @@ def save_task(root: Path, task: TaskRecord) -> None:
         writes = workspace_transition_writes(root, tasks=[task])
         write_atomic_files_and_then(
             writes,
-            lambda: runtime_store(root).save_runtime_transaction(
-                task_states={task.id: task_state_for_storage(task)}
-            ),
+            lambda: runtime_store(root).save_runtime_transaction(task_states={task.id: task_state_for_storage(task)}),
         )
         ensure_runtime_ignored(root)

@@ -80,14 +80,10 @@ def parse_runner_hooks(
     for raw_value in raw_values:
         point, separator, remainder = raw_value.partition("=")
         if separator != "=":
-            raise ValueError(
-                f"{option_name} entries must use HOOK_POINT=reject|run:COMMAND"
-            )
+            raise ValueError(f"{option_name} entries must use HOOK_POINT=reject|run:COMMAND")
         mode_label, separator, command = remainder.partition(":")
         if separator != ":":
-            raise ValueError(
-                f"{option_name} entries must use HOOK_POINT=reject|run:COMMAND"
-            )
+            raise ValueError(f"{option_name} entries must use HOOK_POINT=reject|run:COMMAND")
         mode_key = mode_label.strip().lower()
         if mode_key not in {"reject", "run"}:
             raise ValueError(f"{option_name} mode must be `reject` or `run`")
@@ -135,4 +131,3 @@ def parse_text_list_option(
     if not normalized:
         raise ValueError(f"{option_name} must not be empty")
     return normalized
-

@@ -3,11 +3,8 @@ slug: add-litehive-health-command-single-command-for
 title: Add litehive health command - single command for full workspace diagnostics
 created_at: '2026-04-09T08:47:51+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'One command that shows everything needed to assess workspace health: active
   task + stage, flagged tasks with reasons, stale worktrees, uncommitted code changes,
@@ -22,10 +19,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0247 add-litehive-health-command-single-command-for'
 created_from: null
-upstream_origin: null
-github_origin: null

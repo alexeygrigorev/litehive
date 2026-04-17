@@ -19,3 +19,6 @@ Interrupted subagent execution while `backlog` was running. Reason: Task stopped
 
 ## 2026-04-13T20:45:20+00:00
 Task closed: duplicate. Already landed manually in commit af6ea1bd (Sandbox: per-engine bind + HOME/CODEX_HOME setenv + integration tests). Codex/claude/copilot/opencode work sandboxed end-to-end; gemini + goz tracked under T-0371 (autodiscovery).
+
+## 2026-04-17T13:24:08+00:00
+Task closed: wont_do. Bubblewrap sandbox removed

@@ -3,11 +3,8 @@ slug: add-litehive-logs-cli-for-viewing-daemon-task-and
 title: Add litehive logs CLI for viewing daemon, task, and agent logs
 created_at: '2026-04-09T08:50:52+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Add a logs command for quick access to all log types without navigating directories
   manually. Covers daemon run logs, task journals, and agent stdout/transcript.
@@ -22,10 +19,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0249 add-litehive-logs-cli-for-viewing-daemon-task-and'
 created_from: null
-upstream_origin: null
-github_origin: null

@@ -101,11 +101,7 @@ class HookNode(Node):
         for spec in self.hooks:
             result = self.runner.run(spec, state)
             results.append(result)
-            if (
-                self.execution_mode == ExecutionMode.FAIL_FAST
-                and not result.ok
-                and spec.reject_on_failure
-            ):
+            if self.execution_mode == ExecutionMode.FAIL_FAST and not result.ok and spec.reject_on_failure:
                 break
         rejecting = [r for r in results if not r.ok and r.spec.reject_on_failure]
         if rejecting:

@@ -273,6 +273,7 @@ def render_engine_monitoring_lines(monitoring: WorkspaceEngineMonitoring) -> lis
         lines.append(" ".join(parts))
     return lines
 
+
 def _limit_kind(reason: str | None) -> str | None:
     if not reason:
         return None

@@ -14,8 +14,7 @@ from litehive.config.workspace import ensure_workspace
 
 _LEGACY_UNSUPPORTED_KEYS = {
     "pre_acceptance_command": (
-        "pre_acceptance_command is no longer supported. "
-        "Migrate this command to runner_hooks.before_accepting."
+        "pre_acceptance_command is no longer supported. Migrate this command to runner_hooks.before_accepting."
     ),
     "task_engine_routing": (
         "task_engine_routing is no longer supported. "
@@ -72,9 +71,7 @@ def load_config(root: Path) -> LitehiveConfig:
     valid_keys = {f.name for f in fields(LitehiveConfig)}
     for key in list(data):
         if key not in valid_keys:
-            raise ValueError(
-                f"unknown config key {key!r}; remove it or migrate to a supported config field"
-            )
+            raise ValueError(f"unknown config key {key!r}; remove it or migrate to a supported config field")
     return LitehiveConfig(**data)
 
 

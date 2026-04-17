@@ -101,13 +101,9 @@ class EngineSelector(Protocol):
 
 
 class SessionProvider(Protocol):
-    def get_or_create(
-        self, task_id: str, node_name: NodeName, engine_name: str
-    ) -> Any: ...
+    def get_or_create(self, task_id: str, node_name: NodeName, engine_name: str) -> Any: ...
 
-    def persist(
-        self, task_id: str, node_name: NodeName, engine_name: str, session: Any
-    ) -> None: ...
+    def persist(self, task_id: str, node_name: NodeName, engine_name: str, session: Any) -> None: ...
 
 
 class AgentNode(Node):
@@ -257,9 +253,7 @@ class AgentNode(Node):
 
         while attempts_used < self.retry_budget:
             if attempts_used > 0 and self.retry_backoff_seconds > 0:
-                delay = self.retry_backoff_seconds * (
-                    self.retry_backoff_multiplier ** (attempts_used - 1)
-                )
+                delay = self.retry_backoff_seconds * (self.retry_backoff_multiplier ** (attempts_used - 1))
                 self._sleep(delay)
             try:
                 verdict = engine.run_turn(session, current_prompt, state)
@@ -270,9 +264,7 @@ class AgentNode(Node):
                     return Crash(
                         exc_type="NudgeBudgetExhausted",
                         message=(
-                            "agent did not submit a verdict via "
-                            "`litehive agent report` after being nudged: "
-                            f"{exc}"
+                            f"agent did not submit a verdict via `litehive agent report` after being nudged: {exc}"
                         ),
                     )
                 nudges_used += 1
@@ -283,8 +275,7 @@ class AgentNode(Node):
             except TransientError as exc:
                 if exc.failure_kind not in self.retry_on:
                     return EngineBlockedError(
-                        f"{engine.name} failed with non-retryable execution kind "
-                        f"{exc.failure_kind or 'unknown'}: {exc}"
+                        f"{engine.name} failed with non-retryable execution kind {exc.failure_kind or 'unknown'}: {exc}"
                     )
                 last_exc = exc
                 attempts_used += 1
@@ -293,9 +284,7 @@ class AgentNode(Node):
                 return exc
             except UnrecoverableError as exc:
                 return Crash(exc_type=type(exc).__name__, message=str(exc))
-        return EngineBlockedError(
-            f"retry budget ({self.retry_budget}) exhausted on {engine.name}: {last_exc}"
-        )
+        return EngineBlockedError(f"retry budget ({self.retry_budget}) exhausted on {engine.name}: {last_exc}")
 
     def _verdict_to_event(self, verdict: AgentVerdict) -> Event:
         outcome = verdict.outcome.lower()

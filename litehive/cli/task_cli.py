@@ -6,7 +6,12 @@ import typer
 
 from litehive.cli.common import WorkspaceOption, choice, make_typer
 from litehive.cli.display import task_dependencies_label, task_model_label
-from litehive.cli.parse import TASK_TYPE_CHOICES, parse_acceptance_criteria, parse_dependency_ids, parse_text_list_option
+from litehive.cli.parse import (
+    TASK_TYPE_CHOICES,
+    parse_acceptance_criteria,
+    parse_dependency_ids,
+    parse_text_list_option,
+)
 from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
 from litehive.tasks.archive import archive_root
@@ -29,9 +34,7 @@ def _show_dependency_label(root, task) -> str:
     if not task.depends_on:
         return "-"
 
-    active_statuses = {
-        record.id: record.status for record in load_tasks(root, include_runtime=True, strict=False)
-    }
+    active_statuses = {record.id: record.status for record in load_tasks(root, include_runtime=True, strict=False)}
     index_path = archive_root(root) / "INDEX.csv"
     archived_ids: set[str] = set()
     if index_path.exists():

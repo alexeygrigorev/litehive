@@ -3,30 +3,31 @@ slug: web-operator-dashboard-foundation-and-task-detail
 title: Web operator dashboard foundation and task detail views
 created_at: '2026-04-17T12:00:00+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
-goal: Create the first browser operator surface from scratch. Introduce a litehive/web package with a server entrypoint, HTML shell, and read-only task and status endpoints that mirror the CLI task detail and status views.
+goal: Create the first browser operator surface from scratch. Introduce a litehive/web
+  package with a server entrypoint, HTML shell, and read-only task and status endpoints
+  that mirror the CLI task detail and status views.
 acceptance_criteria:
-- A new litehive/web package exists with a server entrypoint, shared HTTP helpers, and template or static asset structure suitable for later browser tasks.
+- A new litehive/web package exists with a server entrypoint, shared HTTP helpers,
+  and template or static asset structure suitable for later browser tasks.
 - GET / serves a browser dashboard shell for the current workspace.
-- Read-only endpoints expose workspace status, queue state, and per-task detail data sourced from existing state and observability modules.
-- The task detail view exposes the core fields from litehive task show, plus report, activity, and recovery summaries from existing task artifacts.
-- The initial browser UI can navigate between queue items and render task detail, recent activity, and empty or error states without any mutation endpoints.
+- Read-only endpoints expose workspace status, queue state, and per-task detail data
+  sourced from existing state and observability modules.
+- The task detail view exposes the core fields from litehive task show, plus report,
+  activity, and recovery summaries from existing task artifacts.
+- The initial browser UI can navigate between queue items and render task detail,
+  recent activity, and empty or error states without any mutation endpoints.
 - Tests cover app startup plus the read-only task and status endpoints.
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0423 web-operator-dashboard-foundation-and-task-detail'
 created_from:
   task_id: T-0215
   stage: implementing
-  rationale: Greenfield browser follow-up task created from the T-0215 CLI-versus-browser gap analysis.
+  rationale: Greenfield browser follow-up task created from the T-0215 CLI-versus-browser
+    gap analysis.
   blocking: false
-upstream_origin: null
-github_origin: null

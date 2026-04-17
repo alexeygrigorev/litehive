@@ -3,11 +3,8 @@ slug: split-cli-parser-py-build-parser-into-per-command
 title: Split cli/parser.py build_parser() into per-command modules
 created_at: '2026-04-09T09:16:13+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: build_parser() is 1015 lines in a single function with 39 subparsers. Split
   into one module per command group (run, queue, tasks, daemon, etc.) that each define
@@ -20,10 +17,7 @@ acceptance_criteria:
 - All existing tests pass including parser duplicate detection test
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0253 split-cli-parser-py-build-parser-into-per-command'
 created_from: null
-upstream_origin: null
-github_origin: null

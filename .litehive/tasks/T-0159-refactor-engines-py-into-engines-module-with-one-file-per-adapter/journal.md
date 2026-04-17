@@ -20,3 +20,21 @@ Task closed: deferred. Stale interrupted task, superseded by newer tasks
 
 ## 2026-04-10T19:31:12+00:00
 Task closed: wont_do. Superseded by T-0269 which extracted the engine adapter layer into the heru/ module (now a standalone repo at github.com/alexeygrigorev/heru). The original refactor goal is fully addressed — each adapter lives in its own file under heru/adapters/.
+
+## 2026-04-17T03:48:52+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T03:52:27+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T03:56:28+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T03:59:38+00:00
+Interrupted subagent execution while `grooming` was running. Reason: Task stopped via CLI. Subagent `SA-0010` (planner/codex, pid=1909329, path `subagents/SA-0010-planner`) stopped with status `interrupted`. Last snippet: grooming rejected: agent did not submit verdict via litehive report CLI. Resume from `grooming`.
+
+## 2026-04-17T03:59:41+00:00
+Task closed: deferred. Planner crash loop — 4 starts with no completion in 10 min. Same pattern as T-0088/T-0107.
+
+## 2026-04-17T05:11:42+00:00
+Task resumed from `grooming`.

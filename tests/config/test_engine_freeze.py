@@ -325,37 +325,6 @@ def test_builder_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.M
     pass  # build_executor deleted
 
 
-def test_dry_run_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from litehive.cli.dry_run import plan_single_task_dry_run
-    from litehive.domain.pool import TaskPoolStopConditions
-
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    task = create_task(tmp_path, title="Dry run selection")
-    config = load_config(tmp_path)
-    monkeypatch.setattr(
-        "litehive.cli.dry_run.select_engine",
-        lambda *args, **kwargs: EngineSelection(
-            engine_name="gemini",
-            model_name="gemini-2.5-pro",
-            engine_attempts=["codex", "gemini"],
-            skipped=[],
-        ),
-    )
-
-    planned, reason = plan_single_task_dry_run(
-        tmp_path,
-        planned_tasks=[task],
-        blocked_count=0,
-        config=config,
-        stop_conditions=TaskPoolStopConditions(),
-        engine_override=None,
-        model_override=None,
-    )
-
-    assert reason == "single_task_complete"
-    assert planned[0][1] == "gemini"
-
-
 def test_recovery_auto_engine_uses_shared_select_engine(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

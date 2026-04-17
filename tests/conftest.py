@@ -24,9 +24,7 @@ if Path(_GIT_CORE_DIR).is_dir():
     current_path = os.environ.get("PATH", "")
     path_entries = current_path.split(os.pathsep) if current_path else []
     if _GIT_CORE_DIR not in path_entries:
-        os.environ["PATH"] = (
-            os.pathsep.join([_GIT_CORE_DIR, *path_entries]) if current_path else _GIT_CORE_DIR
-        )
+        os.environ["PATH"] = os.pathsep.join([_GIT_CORE_DIR, *path_entries]) if current_path else _GIT_CORE_DIR
     os.environ.setdefault("GIT_EXEC_PATH", _GIT_CORE_DIR)
 
 # Several git tests assume `git init` defaults to `main`.
@@ -53,13 +51,6 @@ def _neutralize_codex_quota(request, monkeypatch):
     _codex_quota_mod.reset_cache()
     # Patch at the source module
     monkeypatch.setattr(_codex_quota_mod, "codex_quota_block_reason", _noop_block_reason)
-    # Patch at import sites that did `from ... import codex_quota_block_reason`
-    try:
-        import litehive.cli.dry_run as dry_run_mod
-
-        monkeypatch.setattr(dry_run_mod, "codex_quota_block_reason", _noop_block_reason)
-    except (ImportError, AttributeError):
-        pass
     try:
         import litehive.config.engine_models as models_mod
 

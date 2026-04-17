@@ -19,7 +19,13 @@ from litehive.domain.lifecycle_deltas import (
     inc_stage_retry,
 )
 from .events import Event, PreExecRecoverySucceeded, RecoverySucceeded, Reject
-from .guards import Guard, recovery_budget_available, recovery_budget_exhausted, stage_retries_exhausted, stage_retries_remaining
+from .guards import (
+    Guard,
+    recovery_budget_available,
+    recovery_budget_exhausted,
+    stage_retries_exhausted,
+    stage_retries_remaining,
+)
 from .persistence import TaskState
 from .stages import Stage
 from .types import STAGES, NodeName
@@ -47,9 +53,7 @@ class Transition:
 
 class NoTransitionError(RuntimeError):
     def __init__(self, current: NodeName, event: Event) -> None:
-        super().__init__(
-            f"no transition rule matched: current={current!r} event={type(event).__name__}"
-        )
+        super().__init__(f"no transition rule matched: current={current!r} event={type(event).__name__}")
         self.current = current
         self.event = event
 
@@ -74,9 +78,7 @@ def _resolve_to(to: ToSpec, state: TaskState, event: Event) -> NodeName:
     return to
 
 
-def evaluate(
-    rules: list[Rule], current: NodeName, event: Event, state: TaskState
-) -> Transition:
+def evaluate(rules: list[Rule], current: NodeName, event: Event, state: TaskState) -> Transition:
     """First-match evaluation. Pure function — no I/O, no mutation."""
     for rule in rules:
         if not _matches_from(rule.from_state, current):
@@ -86,9 +88,7 @@ def evaluate(
         if rule.when is not None and not rule.when(state, event):
             continue
         target = _resolve_to(rule.transition_to, state, event)
-        delta = (
-            rule.with_effect(state, event) if rule.with_effect is not None else EMPTY_DELTA
-        )
+        delta = rule.with_effect(state, event) if rule.with_effect is not None else EMPTY_DELTA
         return Transition(next=target, delta=delta, rule=rule)
     raise NoTransitionError(current, event)
 
@@ -117,6 +117,17 @@ def resume_from_pre_exec(state: TaskState, event: Event) -> NodeName:
     return e.resume_stage
 
 
+def entry_from_worktree_sync(state: TaskState, event: Event) -> NodeName:
+    del event
+    if state.entry_stage in STAGES:
+        return f"before_{state.entry_stage}"
+    if state.entry_stage:
+        return state.entry_stage
+    if state.pipeline_mode == "single":
+        return "before_implementing"
+    return "before_grooming"
+
+
 # ── rule generators (used by rules.py) ──────────────────────────────────
 
 
@@ -130,25 +141,38 @@ def retry_epoch_rules(counter_stage, phases, retry_target, recovering_stage) -> 
     name = counter_stage.name if isinstance(counter_stage, Stage) else counter_stage
     rules: list[Rule] = []
     for phase in phases:
-        rules.append(Rule(
-            from_state=phase, on_event=Reject, transition_to=retry_target,
-            when=stage_retries_remaining(name),
-            with_effect=inc_stage_retry(name),
-        ))
-        rules.append(Rule(
-            from_state=phase, on_event=Reject, transition_to="failed",
-            when=stage_retries_exhausted(name) & recovery_budget_exhausted(),
-            with_effect=exhaust_recovery_budget,
-        ))
-        rules.append(Rule(
-            from_state=phase, on_event=Reject, transition_to=recovering_stage,
-            when=stage_retries_exhausted(name) & recovery_budget_available(),
-            with_effect=enter_recovery,
-        ))
+        rules.append(
+            Rule(
+                from_state=phase,
+                on_event=Reject,
+                transition_to=retry_target,
+                when=stage_retries_remaining(name),
+                with_effect=inc_stage_retry(name),
+            )
+        )
+        rules.append(
+            Rule(
+                from_state=phase,
+                on_event=Reject,
+                transition_to="failed",
+                when=stage_retries_exhausted(name) & recovery_budget_exhausted(),
+                with_effect=exhaust_recovery_budget,
+            )
+        )
+        rules.append(
+            Rule(
+                from_state=phase,
+                on_event=Reject,
+                transition_to=recovering_stage,
+                when=stage_retries_exhausted(name) & recovery_budget_available(),
+                with_effect=enter_recovery,
+            )
+        )
     return rules
 
 
 def list_transitions() -> list[Rule]:
     """Return the default rule table from ``rules.py``."""
     from .rules import RULES
+
     return list(RULES)

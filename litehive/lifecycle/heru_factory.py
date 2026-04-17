@@ -56,10 +56,7 @@ def _execution_checkout_has_changes(workspace_root: Path, task_id: str) -> bool:
     task = get_task(workspace_root, task_id)
     if task is None:
         return False
-    checkout = (
-        resolve_recorded_worktree_path(workspace_root, task.runtime.git.worktree_path)
-        or workspace_root
-    )
+    checkout = resolve_recorded_worktree_path(workspace_root, task.runtime.git.worktree_path) or workspace_root
     if not is_git_repo(checkout):
         return False
     try:
@@ -154,8 +151,7 @@ class HeruEngineAdapter:
         role = prompt["role"]
         prompt_text = serialize_prompt(prompt, task_record=task, workspace_root=self.workspace_root)
         execution_root = (
-            resolve_recorded_worktree_path(self.workspace_root, task.runtime.git.worktree_path)
-            or self.workspace_root
+            resolve_recorded_worktree_path(self.workspace_root, task.runtime.git.worktree_path) or self.workspace_root
         )
 
         before_turn = datetime.now(UTC)
@@ -186,9 +182,7 @@ class HeruEngineAdapter:
         # Did the agent submit a verdict during this turn?
         verdict = _latest_verdict_after(self.workspace_root, state.task_id, stage, before_turn)
         if verdict is None:
-            raise NudgeRequired(
-                f"{self.name} finished {stage} without a litehive agent report submission"
-            )
+            raise NudgeRequired(f"{self.name} finished {stage} without a litehive agent report submission")
 
         return verdict
 

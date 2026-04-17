@@ -53,9 +53,7 @@ def test_record_engine_execution_accepts_provider_usage_observation(tmp_path: Pa
         ) -> list[str]:  # type: ignore[override]
             return ["provider-cli", prompt]
 
-        def extract_usage_observation(
-            self, execution: CLIExecutionResult
-        ) -> EngineUsageObservation | None:
+        def extract_usage_observation(self, execution: CLIExecutionResult) -> EngineUsageObservation | None:
             return EngineUsageObservation(
                 source="provider",
                 provider="gemini",
@@ -71,9 +69,7 @@ def test_record_engine_execution_accepts_provider_usage_observation(tmp_path: Pa
         adapter=ProviderAdapter(
             name="gemini",
             binary="provider-cli",
-            capabilities=AdapterCapabilities(
-                supports_model_override=True, transcript_format="jsonl"
-            ),
+            capabilities=AdapterCapabilities(supports_model_override=True, transcript_format="jsonl"),
         ),
         execution=CLIExecutionResult(
             adapter="gemini",
@@ -177,9 +173,7 @@ def test_record_engine_execution_tracks_claude_provider_limit_observation(tmp_pa
     assert record.last_limit_kind == "rate"
     assert record.last_limit_reason == "rate limit reached"
     assert record.metadata["error_type"] == "rate_limit_error"
-    assert record.metadata["error_message"] == (
-        "Your account has hit a rate limit. Please retry after a short delay."
-    )
+    assert record.metadata["error_message"] == ("Your account has hit a rate limit. Please retry after a short delay.")
 
 
 def test_record_engine_execution_tracks_opencode_provider_usage_observation(tmp_path: Path) -> None:
@@ -219,4 +213,3 @@ def test_record_engine_execution_tracks_opencode_provider_usage_observation(tmp_
     assert record.usage.unit == "tokens"
     assert record.metadata["input_tokens"] == 10509
     assert record.metadata["finish_reason"] == "stop"
-

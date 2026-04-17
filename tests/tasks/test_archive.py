@@ -135,9 +135,7 @@ def test_archived_tasks_excluded_from_list_tasks(tmp_path: Path) -> None:
     assert _queued.id in task_ids
 
 
-def test_archived_tasks_excluded_from_queue(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_archived_tasks_excluded_from_queue(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
     task = _make_done_task(tmp_path, "Will archive")
     archive_task(tmp_path, task.id)
@@ -149,16 +147,12 @@ def test_archived_tasks_excluded_from_queue(
     assert task.id not in output
 
 
-def test_archived_tasks_excluded_from_status(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_archived_tasks_excluded_from_status(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
     task = _make_done_task(tmp_path, "Will archive")
     archive_task(tmp_path, task.id)
 
-    exit_code = _cmd_status(
-        argparse.Namespace(workspace=tmp_path, fast=False, full=False)
-    )
+    exit_code = _cmd_status(argparse.Namespace(workspace=tmp_path, fast=False, full=False))
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -214,4 +208,3 @@ def test_cleanup_invalid_duration(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Invalid duration format"):
         cleanup_archived_tasks(tmp_path, "foobar")
-

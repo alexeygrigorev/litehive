@@ -1,6 +1,5 @@
 """Git integration helpers."""
 
-
 import logging
 import re
 import shutil

@@ -3,11 +3,8 @@ slug: migrate-cli-from-argparse-to-typer
 title: Migrate CLI from argparse to Typer
 created_at: '2026-04-09T14:52:45+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: low
-pm_complexity: null
-planned_effort: null
 depends_on:
 - T-0264
 goal: Replace argparse with Typer for the CLI. Each command becomes a decorated function
@@ -21,10 +18,7 @@ acceptance_criteria:
 - typer added to dependencies
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0263 migrate-cli-from-argparse-to-typer'
 created_from: null
-upstream_origin: null
-github_origin: null

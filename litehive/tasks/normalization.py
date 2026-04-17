@@ -136,20 +136,15 @@ def infer_acceptance_criteria(task: TaskRecord) -> list[str]:
         if len(task.plan) == 1:
             inferred.append(f"The implementation completes the planned work: {task.plan[0]}.")
         else:
-            inferred.append(
-                "The implementation covers the defined plan end-to-end without broad unrelated changes."
-            )
+            inferred.append("The implementation covers the defined plan end-to-end without broad unrelated changes.")
         anchored = True
 
     if task.depends_on and anchored:
         dependency_list = ", ".join(task.depends_on)
-        inferred.append(
-            f"The result aligns with the prerequisite task context needed from: {dependency_list}."
-        )
+        inferred.append(f"The result aligns with the prerequisite task context needed from: {dependency_list}.")
 
     if not inferred:
         return []
 
     inferred.append("Focused verification demonstrates the targeted behavior works as intended.")
     return normalize_acceptance_criteria(inferred)
-

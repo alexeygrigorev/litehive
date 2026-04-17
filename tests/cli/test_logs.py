@@ -80,9 +80,7 @@ def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
     return task, base
 
 
-def test_logs_defaults_to_latest_daemon_run_tail(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_logs_defaults_to_latest_daemon_run_tail(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
     from litehive.config.paths import workspace_logs_dir
 
@@ -99,10 +97,7 @@ def test_logs_defaults_to_latest_daemon_run_tail(
     assert "line two" in output
 
 
-
-def test_logs_daemon_lists_latest_sessions_with_outcomes(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_logs_daemon_lists_latest_sessions_with_outcomes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
     from litehive.config.paths import workspace_logs_dir
 
@@ -128,9 +123,7 @@ def test_logs_daemon_lists_latest_sessions_with_outcomes(
     assert "20260409T120000Z" not in output
 
 
-def test_logs_task_journal_prints_journal(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_logs_task_journal_prints_journal(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Journal task", auto_commit=False)
     journal = task_dir(tmp_path, task) / "journal.md"
@@ -167,9 +160,7 @@ def test_logs_task_journal_tolerates_unrelated_missing_runtime_rows(
     assert "entry" in output
 
 
-def test_logs_agent_prefers_live_stdout_for_active_subagent(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_logs_agent_prefers_live_stdout_for_active_subagent(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     task, base = _make_task_with_subagent(tmp_path, active=True)
     (base / "transcript.md").write_text("live transcript\n", encoding="utf-8")
     (base / "stdout.log").write_text("live stdout\n", encoding="utf-8")
@@ -186,9 +177,7 @@ def test_logs_agent_prefers_live_stdout_for_active_subagent(
     assert "stale snapshot" not in output
 
 
-def test_logs_agent_reads_compressed_completed_artifacts(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_logs_agent_reads_compressed_completed_artifacts(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     task, base = _make_task_with_subagent(tmp_path, active=False)
     with gzip.open(base / "transcript.md.gz", "wt", encoding="utf-8") as handle:
         handle.write("final transcript\n")
@@ -203,9 +192,7 @@ def test_logs_agent_reads_compressed_completed_artifacts(
     assert "final stdout" in output
 
 
-def test_logs_agent_all_lists_all_subagents_with_duration(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_logs_agent_all_lists_all_subagents_with_duration(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="All subagents", auto_commit=False)
     task.subagents = [

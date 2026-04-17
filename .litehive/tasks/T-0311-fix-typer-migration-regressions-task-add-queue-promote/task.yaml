@@ -3,11 +3,8 @@ slug: fix-typer-migration-regressions-task-add-queue-promote
 title: "Fix Typer migration regressions \u2014 task add and queue promote are broken"
 created_at: '2026-04-10T14:50:15+00:00'
 task_type: bugfix
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: simple
-planned_effort: s
 depends_on: []
 goal: "T-0263's Typer migration introduced two user-visible regressions discovered\
   \ immediately after landing: (1) 'litehive task add' accepts the title positional\
@@ -42,10 +39,7 @@ plan:
   \ with whatever Typer's actual API is (context via typer.Context parameter, most\
   \ likely)"
 - Add regression tests for both commands so this doesn't happen again
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0311 fix-typer-migration-regressions-task-add-queue-promote'
 created_from: null
-upstream_origin: null
-github_origin: null

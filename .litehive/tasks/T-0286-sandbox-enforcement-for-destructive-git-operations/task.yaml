@@ -3,11 +3,8 @@ slug: sandbox-enforcement-for-destructive-git-operations
 title: Sandbox enforcement for destructive git operations
 created_at: '2026-04-10T05:59:06+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: "Prevent agents from running destructive git operations by removing git from\
   \ the sandbox filesystem for every role except merge-resolver. The T-0266 incident\
@@ -118,10 +115,7 @@ plan:
   a runbook for manually auditing with real LLM agents (codex, claude). Wire it so
   it is NOT picked up by the default pytest collection.
 - Docs update describing the policy and how to audit it.
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0286 sandbox-enforcement-for-destructive-git-operations'
 created_from: null
-upstream_origin: null
-github_origin: null

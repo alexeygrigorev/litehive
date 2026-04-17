@@ -64,9 +64,14 @@ def prepare_interrupted_task_for_requeue(task: TaskRecord) -> None:
     )
 
 
-def _interrupted_subagent_snippet(
-    root: Path, task: TaskRecord, active: RuntimeSubagentState
-) -> str:
+def canonicalize_resumable_task(task: TaskRecord, *, stage: str) -> None:
+    now = clear_task_run_activity(task, execution_status="idle")
+    task.status = "queued"
+    task.pipeline_status = stage
+    task.runtime.current_stage = idle_stage_state(updated_at=now, stage=stage)
+
+
+def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeSubagentState) -> str:
     subagent_base = task_dir(root, task) / active.path
     report = load_subagent_report(root, task.id, active.id)
     if report:
@@ -116,9 +121,7 @@ def _write_interrupted_subagent_artifacts(
             "exit_code": subagent.exit_code,
             "interruption_reason": subagent.interruption_reason or None,
             "resume_stage": resume_stage,
-            "continuation": None
-            if subagent.continuation is None
-            else subagent.continuation.model_dump(mode="python"),
+            "continuation": None if subagent.continuation is None else subagent.continuation.model_dump(mode="python"),
         }
     )
     report_payload["status"] = subagent.status
@@ -137,9 +140,7 @@ def _write_interrupted_subagent_artifacts(
     )
 
 
-def mark_interrupted_subagent(
-    root: Path, task: TaskRecord, *, reason: str, stage: str
-) -> RuntimeSubagentState | None:
+def mark_interrupted_subagent(root: Path, task: TaskRecord, *, reason: str, stage: str) -> RuntimeSubagentState | None:
     active = task.runtime.active_subagent
     existing = task.runtime.last_subagent if task.runtime.last_subagent is not None else None
     if active is None and (existing is None or existing.status != "interrupted"):
@@ -231,15 +232,11 @@ def _set_interruption_metadata(
         subagent_path=None if interrupted_subagent is None else interrupted_subagent.path,
         status=None if interrupted_subagent is None else interrupted_subagent.status,
         summary=summary,
-        transcript_snippet=""
-        if interrupted_subagent is None
-        else interrupted_subagent.transcript_snippet,
+        transcript_snippet="" if interrupted_subagent is None else interrupted_subagent.transcript_snippet,
         warnings=[],
         session_path=None,
         report_path=None,
-        transcript_path=None
-        if interrupted_subagent is None
-        else f"{interrupted_subagent.path}/transcript.md",
+        transcript_path=None if interrupted_subagent is None else f"{interrupted_subagent.path}/transcript.md",
         continuation=None if interrupted_subagent is None else interrupted_subagent.continuation,
         updated_at=now,
     )
@@ -375,7 +372,9 @@ def _record_commit_stale_recovery(
 
 
 def _commit_stale_recovery_actions(task: TaskRecord, *, finalized: bool) -> list[RecoveryAction]:
-    actions = [RecoveryAction(action="clear_stale_active_state", summary="Cleared stale active runner state for the task.")]
+    actions = [
+        RecoveryAction(action="clear_stale_active_state", summary="Cleared stale active runner state for the task.")
+    ]
     if finalized:
         actions.append(
             RecoveryAction(
@@ -418,7 +417,7 @@ def _recover_stale_running_task(
             summary="Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`.",
             reason=stale_interruption_reason(task, "commit_to_git", stale_pid=stale_pid),
         )
-        task.status = "queued"
+        canonicalize_resumable_task(task, stage="commit_to_git")
         journal_message = interruption_journal_message(task)
         _record_commit_stale_recovery(
             root,
@@ -436,6 +435,7 @@ def _recover_stale_running_task(
         summary=f"Interrupted run recovered after stale runner detection. Resume from `{stage}`.",
         reason=stale_interruption_reason(task, stage, stale_pid=stale_pid),
     )
+    canonicalize_resumable_task(task, stage=stage)
     from litehive.tasks.reports import record_recovery_report
 
     record_recovery_report(
@@ -447,7 +447,9 @@ def _recover_stale_running_task(
         runnable_state="runnable",
         failure_classification="stale_runner",
         actions=[
-            RecoveryAction(action="clear_stale_active_state", summary="Cleared stale active runner state for the task."),
+            RecoveryAction(
+                action="clear_stale_active_state", summary="Cleared stale active runner state for the task."
+            ),
             RecoveryAction(
                 action="requeue_stage",
                 summary=f"Requeued the task at {task.pipeline_status}.",
@@ -502,9 +504,7 @@ def recover_stale_runner_state(
 
                     if not runner_metadata_present(read_runner_lock_metadata(root)):
                         continue
-            task_mutated, journal_message, prioritize = _recover_stale_running_task(
-                root, task, summary=summary
-            )
+            task_mutated, journal_message, prioritize = _recover_stale_running_task(root, task, summary=summary)
             if not task_mutated:
                 continue
             transitioned.append(task)

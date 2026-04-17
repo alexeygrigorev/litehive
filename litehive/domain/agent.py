@@ -29,13 +29,10 @@ class SubagentResult:
 class SubagentInactivityTimeout(RuntimeError):
     """Raised when a live subagent stops producing stdout for too long."""
 
-    def __init__(
-        self, execution: CLIExecutionResult, *, idle_seconds: float, limit_seconds: float
-    ) -> None:
+    def __init__(self, execution: CLIExecutionResult, *, idle_seconds: float, limit_seconds: float) -> None:
         self.execution = execution
         self.idle_seconds = idle_seconds
         self.limit_seconds = limit_seconds
         super().__init__(
-            "litehive killed stale subagent after "
-            f"{limit_seconds:g}s without new stdout (idle {idle_seconds:.1f}s)"
+            f"litehive killed stale subagent after {limit_seconds:g}s without new stdout (idle {idle_seconds:.1f}s)"
         )

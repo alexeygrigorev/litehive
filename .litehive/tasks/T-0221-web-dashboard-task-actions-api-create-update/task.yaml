@@ -4,11 +4,8 @@ title: 'Web dashboard: task actions API (create, update, close, requeue, abandon
   stop)'
 created_at: '2026-04-08T06:04:50+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'Add POST endpoints to the web dashboard for task mutation operations: create
   task, update task properties, close task (with outcome), requeue task, abandon task,
@@ -29,10 +26,7 @@ acceptance_criteria:
 - Frontend UI adds action buttons and forms for each operation
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0221 web-dashboard-task-actions-api-create-update'
 created_from: null
-upstream_origin: null
-github_origin: null

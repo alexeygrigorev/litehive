@@ -3,11 +3,8 @@ slug: web-dashboard-live-agent-output-streaming-via-sse
 title: 'Web dashboard: live agent output streaming via SSE'
 created_at: '2026-04-08T06:05:09+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Replace the 1.5-second polling mechanism with Server-Sent Events (SSE) for real-time
   updates. Add an SSE endpoint that streams workspace state changes and agent output
@@ -21,10 +18,7 @@ acceptance_criteria:
 - Reduced server load compared to 1.5s polling when workspace is idle
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0225 web-dashboard-live-agent-output-streaming-via-sse'
 created_from: null
-upstream_origin: null
-github_origin: null

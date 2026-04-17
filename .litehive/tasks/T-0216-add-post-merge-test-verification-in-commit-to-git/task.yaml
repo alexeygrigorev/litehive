@@ -3,11 +3,8 @@ slug: add-post-merge-test-verification-in-commit-to-git
 title: Add post-merge test verification in commit_to_git
 created_at: '2026-04-07T20:58:27+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: "After merging a task worktree into main, run after_merge hooks (e.g. test suite)\
   \ on main to verify the merge didn't break anything. If hooks fail, send the task\
@@ -22,10 +19,7 @@ acceptance_criteria:
 - If no after_merge hook is configured, the check is skipped (backward compatible)
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0216 add-post-merge-test-verification-in-commit-to-git'
 created_from: null
-upstream_origin: null
-github_origin: null

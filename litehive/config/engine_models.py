@@ -19,9 +19,7 @@ from litehive.domain.task import TaskRecord
 from litehive.tasks.runtime import set_task_continuation_handoff
 
 
-def _engine_attempt_order(
-    initial_engine_names: list[str], engine_preference: list[str]
-) -> list[str]:
+def _engine_attempt_order(initial_engine_names: list[str], engine_preference: list[str]) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
     for engine_name in list(initial_engine_names) + engine_preference:
@@ -337,10 +335,7 @@ def resolve_engine_plan(
 ) -> list[str]:
     if engine_override is not None:
         return [engine_override]
-    if (
-        task.runtime.last_engine_switch is not None
-        and task.runtime.last_engine_switch.stage == task.pipeline_status
-    ):
+    if task.runtime.last_engine_switch is not None and task.runtime.last_engine_switch.stage == task.pipeline_status:
         return [task.runtime.last_engine_switch.to_engine]
     return [config.default_engine]
 
@@ -411,11 +406,7 @@ def _is_recovery_run(task: TaskRecord) -> bool:
 
 
 def _role_for_stage(stage: str, task: TaskRecord | None = None) -> str:
-    if (
-        task is not None
-        and stage in {"implementing", "testing", "accepting"}
-        and _is_recovery_run(task)
-    ):
+    if task is not None and stage in {"implementing", "testing", "accepting"} and _is_recovery_run(task):
         return "recovery"
     return {
         "grooming": "planner",

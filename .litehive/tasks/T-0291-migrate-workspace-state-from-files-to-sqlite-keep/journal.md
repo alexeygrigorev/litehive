@@ -700,3 +700,6 @@ Recovered existing checkpoint commit after interrupted `commit_to_git` and final
 
 ## 2026-04-13T10:33:08+00:00
 Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.
+
+## 2026-04-17T13:21:18+00:00
+Task closed: wont_do. Already done

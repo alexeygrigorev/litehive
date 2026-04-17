@@ -273,9 +273,7 @@ heru = { path = "../heru", editable = true }
     assert "uv sync" in output
 
 
-def test_status_reports_origin_divergence_as_attention_required(
-    tmp_path: Path, capsys, monkeypatch
-) -> None:
+def test_status_reports_origin_divergence_as_attention_required(tmp_path: Path, capsys, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     save_state(tmp_path, WorkspaceState(pool_stop_reason="diverged_from_origin"))
     monkeypatch.setattr(
@@ -292,7 +290,10 @@ def test_status_reports_origin_divergence_as_attention_required(
 
     assert exit_code == 1
     assert "pool_stop_reason: diverged_from_origin" in output
-    assert "origin_divergence: !!! ATTENTION REQUIRED !!! local main (12345678) and origin/main (abcdef12) have diverged." in output
+    assert (
+        "origin_divergence: !!! ATTENTION REQUIRED !!! local main (12345678) and origin/main (abcdef12) have diverged."
+        in output
+    )
     assert "git fetch origin main" in output
     assert "git log --oneline --left-right main...origin/main" in output
 

@@ -41,9 +41,7 @@ class _StubManager:
         )
 
 
-def test_heru_engine_adapter_updates_session_from_subagent_result_continuation(
-    tmp_path, monkeypatch
-) -> None:
+def test_heru_engine_adapter_updates_session_from_subagent_result_continuation(tmp_path, monkeypatch) -> None:
     from litehive.state.records import create_task
 
     task = create_task(tmp_path, title="resume", goal="keep continuation")
@@ -74,9 +72,7 @@ def test_heru_engine_adapter_updates_session_from_subagent_result_continuation(
     assert session.turn_count == 1
 
 
-def test_heru_engine_adapter_passes_resume_session_id_to_subagent_manager(
-    tmp_path, monkeypatch
-) -> None:
+def test_heru_engine_adapter_passes_resume_session_id_to_subagent_manager(tmp_path, monkeypatch) -> None:
     from litehive.state.records import create_task
 
     task = create_task(tmp_path, title="resume", goal="reuse continuation")
@@ -148,9 +144,7 @@ class _TimeoutThenResumeManager(_StubManager):
         )
 
 
-def test_heru_engine_adapter_reuses_failed_turn_continuation_on_retry(
-    tmp_path, monkeypatch
-) -> None:
+def test_heru_engine_adapter_reuses_failed_turn_continuation_on_retry(tmp_path, monkeypatch) -> None:
     from litehive.state.records import create_task
 
     task = create_task(tmp_path, title="resume timeout", goal="reuse continuation after timeout")

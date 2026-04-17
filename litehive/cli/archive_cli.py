@@ -96,9 +96,7 @@ def archive_group(
         else:
             tasks = archive_done_tasks(
                 workspace,
-                on_skip=lambda skipped_task_id, exc: print(
-                    f"archive skipped: {skipped_task_id} ({exc})"
-                ),
+                on_skip=lambda skipped_task_id, exc: print(f"archive skipped: {skipped_task_id} ({exc})"),
             )
             for task in tasks:
                 print(f"archived: {task.id} {task.title}")

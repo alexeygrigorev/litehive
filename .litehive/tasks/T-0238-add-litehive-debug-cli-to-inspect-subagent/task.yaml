@@ -3,11 +3,8 @@ slug: add-litehive-debug-cli-to-inspect-subagent
 title: Add litehive debug CLI to inspect subagent artifacts for a task
 created_at: '2026-04-09T07:45:26+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Add a command like 'litehive debug T-XXXX' that shows the latest subagent's
   session.yaml, report.yaml, exit code, transcript summary, stdout tail, stderr, and
@@ -23,10 +20,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0238 add-litehive-debug-cli-to-inspect-subagent'
 created_from: null
-upstream_origin: null
-github_origin: null

@@ -11,6 +11,7 @@ from litehive.domain.task import TaskRecord
 
 def _events_path(root: Path, task: TaskRecord) -> Path:
     from litehive.tasks.paths import task_dir
+
     return task_dir(root, task) / "events.jsonl"
 
 

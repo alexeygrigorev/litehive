@@ -4,11 +4,8 @@ title: Migrate workspace state from files to SQLite, keep only task intent and c
   in git
 created_at: '2026-04-10T06:46:28+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Separate task intent (committed to git) from execution state (out of repo).
   Git holds only config.yaml, context.md, tasks/<id>/task.yaml and tasks/<id>/comments.yaml.
@@ -45,10 +42,7 @@ acceptance_criteria:
   task intent + comments only)
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0291 migrate-workspace-state-from-files-to-sqlite-keep'
 created_from: null
-upstream_origin: null
-github_origin: null

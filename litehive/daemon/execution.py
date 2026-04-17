@@ -312,8 +312,7 @@ def run_daemon_loop(
                 repair_rc = -1
             repair_elapsed_ms = int((time.perf_counter() - repair_started) * 1000)
             if repair_rc != 0 and not iteration_failed:
-                _emit(f"litehive repair failed (rc={repair_rc}); see {repair_file}",
-                      stream=output_stream)
+                _emit(f"litehive repair failed (rc={repair_rc}); see {repair_file}", stream=output_stream)
                 iteration_failed = True
                 iteration_failure_reason = f"repair exited {repair_rc}"
             elif repair_rc == 0:
@@ -380,9 +379,7 @@ def run_daemon_loop(
             if stop_reason_before == "blocked_tasks_remaining":
                 _emit("Blocked tasks remain and nothing is runnable. Stopping.", stream=output_stream)
                 return 0
-            if _is_explicit_pool_stop_reason(
-                str(stop_reason_before) if stop_reason_before is not None else None
-            ):
+            if _is_explicit_pool_stop_reason(str(stop_reason_before) if stop_reason_before is not None else None):
                 _emit(f"Pool already stopped: {stop_reason_before}", stream=output_stream)
                 return 0
             if load_config(workspace).pool_stop_on_attention:
@@ -410,8 +407,7 @@ def run_daemon_loop(
                 iteration_failure_reason = f"run raised: {exc}"
                 run_rc = -1
             if run_rc != 0 and not iteration_failed:
-                _emit(f"litehive run failed (rc={run_rc}); see {run_file}",
-                      stream=output_stream)
+                _emit(f"litehive run failed (rc={run_rc}); see {run_file}", stream=output_stream)
                 iteration_failed = True
                 iteration_failure_reason = f"run exited {run_rc}"
 

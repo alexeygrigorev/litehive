@@ -23,9 +23,7 @@ def test_embedded_initial_migration_is_discoverable() -> None:
     assert "CREATE TABLE IF NOT EXISTS pipeline_task_state" in migrations[0].sql
 
 
-def test_db_status_and_dry_run_report_pending_migrations(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     staged = (
         *available_migrations(),
@@ -52,19 +50,14 @@ def test_db_status_and_dry_run_report_pending_migrations(
     assert marker is None
 
 
-def test_apply_pending_migrations_rolls_back_failed_migration(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_apply_pending_migrations_rolls_back_failed_migration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     staged = (
         *available_migrations(),
         Migration(
             version=2,
             name="0002_broken.sql",
-            sql=(
-                "CREATE TABLE broken_marker (id INTEGER PRIMARY KEY);"
-                "INSERT INTO missing_table(value) VALUES (1);"
-            ),
+            sql=("CREATE TABLE broken_marker (id INTEGER PRIMARY KEY);INSERT INTO missing_table(value) VALUES (1);"),
         ),
     )
     monkeypatch.setattr("litehive.db.schema.available_migrations", lambda: staged)
@@ -74,10 +67,7 @@ def test_apply_pending_migrations_rolls_back_failed_migration(
 
     with sqlite3.connect(workspace_database_path(tmp_path)) as connection:
         applied_versions = [
-            row[0]
-            for row in connection.execute(
-                "SELECT version FROM schema_migrations ORDER BY version"
-            ).fetchall()
+            row[0] for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
         ]
         broken_marker = connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'broken_marker'"
@@ -113,10 +103,7 @@ def test_daemon_run_applies_pending_migrations_before_start(
     assert "daemon_status: running" in output
     with sqlite3.connect(workspace_database_path(tmp_path)) as connection:
         applied_versions = [
-            row[0]
-            for row in connection.execute(
-                "SELECT version FROM schema_migrations ORDER BY version"
-            ).fetchall()
+            row[0] for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
         ]
         daemon_marker = connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'daemon_marker'"
@@ -157,17 +144,10 @@ def test_legacy_workspace_db_is_rebuilt_from_task_yaml_only(tmp_path: Path) -> N
 
     with sqlite3.connect(db_path) as connection:
         applied_versions = [
-            row[0]
-            for row in connection.execute(
-                "SELECT version FROM schema_migrations ORDER BY version"
-            ).fetchall()
+            row[0] for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
         ]
-        rows = connection.execute(
-            "SELECT task_id FROM task_state ORDER BY task_id"
-        ).fetchall()
-        queue_row = connection.execute(
-            "SELECT payload FROM queue WHERE workspace_key = 'workspace'"
-        ).fetchone()
+        rows = connection.execute("SELECT task_id FROM task_state ORDER BY task_id").fetchall()
+        queue_row = connection.execute("SELECT payload FROM queue WHERE workspace_key = 'workspace'").fetchone()
 
     assert applied_versions == [1]
     assert rows == [(task.id,)]
@@ -202,10 +182,7 @@ def test_connect_workspace_db_rebuilds_replaced_cached_db(tmp_path: Path) -> Non
 
     with sqlite3.connect(db_path) as connection:
         tables = {
-            row[0]
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            ).fetchall()
+            row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
         }
 
     assert "subagent_sessions" in tables

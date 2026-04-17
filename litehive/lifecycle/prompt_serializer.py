@@ -77,11 +77,13 @@ def serialize_prompt(
         sections.append(_nudge_section(prompt))
 
     if thread:
-        sections.append(_thread_section(
-            thread,
-            current_stage=prompt.get("stage"),
-            last_rejection=last_rejection,
-        ))
+        sections.append(
+            _thread_section(
+                thread,
+                current_stage=prompt.get("stage"),
+                last_rejection=last_rejection,
+            )
+        )
 
     rejecting_hooks = prompt.get("rejecting_hooks") or []
     if rejecting_hooks:
@@ -91,9 +93,7 @@ def serialize_prompt(
     return (SECTION_SEP * 2).join(s for s in sections if s).strip() + "\n"
 
 
-def _load_task_activity_history(
-    workspace_root: Path, task_record: TaskRecord
-) -> list[dict[str, Any]]:
+def _load_task_activity_history(workspace_root: Path, task_record: TaskRecord) -> list[dict[str, Any]]:
     """Read the task's persisted activity entries."""
     try:
         comments = load_task_activity(workspace_root, task_record)
@@ -115,8 +115,7 @@ def _load_task_activity_history(
 
 def _header_section(prompt: dict[str, Any], task_record: TaskRecord | None) -> str:
     lines = [
-        f"Task: {prompt['task_id']}"
-        + (f" — {task_record.title}" if task_record is not None else ""),
+        f"Task: {prompt['task_id']}" + (f" — {task_record.title}" if task_record is not None else ""),
         f"Stage: {prompt['stage']}",
         f"Role: {prompt['role']}",
         f"Pipeline mode: {prompt['pipeline_mode']}",
@@ -239,10 +238,7 @@ def _trim_thread_for_prompt(
     - Cap each individual message to 500 chars.
     """
     # Filter out recovery bookkeeping comments
-    thread = [
-        e for e in thread
-        if not (e.get("role") == "recovery" and e.get("verdict") == "comment")
-    ]
+    thread = [e for e in thread if not (e.get("role") == "recovery" and e.get("verdict") == "comment")]
 
     if not thread:
         return []
@@ -252,7 +248,8 @@ def _trim_thread_for_prompt(
         rej_reason = last_rejection.get("reason", "")
         rej_source = last_rejection.get("source", "")
         thread = [
-            e for e in thread
+            e
+            for e in thread
             if not (
                 e.get("verdict") == "reject"
                 and (e.get("source") or e.get("role", "")) == rej_source
@@ -280,7 +277,9 @@ def _trim_thread_for_prompt(
         if not last_rejection:
             for e in reversed(thread):
                 if e.get("verdict") == "reject" and e.get("stage") in (
-                    "testing", "accepting", "implementing",
+                    "testing",
+                    "accepting",
+                    "implementing",
                 ):
                     kept.append(e)
                     break
@@ -350,12 +349,16 @@ def _rejecting_hooks_section(hooks: list[dict[str, Any]]) -> str:
             lines.append(f"- {cmd} ({desc})")
         else:
             lines.append(f"- {cmd}")
-    lines.append("Run these checks yourself before submitting your verdict. If they fail, the after-stage hook will reject your work and you will need to fix it.")
+    lines.append(
+        "Run these checks yourself before submitting your verdict. If they fail, the after-stage hook will reject your work and you will need to fix it."
+    )
     return "\n".join(lines)
 
 
 def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
-    verdicts = "<resume|advance|done|budget_hit|reject>" if prompt.get("role") == "recovery" else "<pass|reject|blocked>"
+    verdicts = (
+        "<resume|advance|done|budget_hit|reject>" if prompt.get("role") == "recovery" else "<pass|reject|blocked>"
+    )
     return (
         "IMPORTANT: when you are done, submit your verdict by running:\n"
         "  echo 'your report text' > /tmp/verdict_msg.txt\n"

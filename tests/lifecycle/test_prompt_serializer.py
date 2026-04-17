@@ -313,9 +313,7 @@ def test_implementing_retry_thread_keeps_only_grooming_and_dedups_last_rejection
 
     text = serialize_prompt(prompt, task_record=task)
 
-    assert _discussion_lines(text) == [
-        f"[grooming] planner (pass): {'scope ' + ('x' * 494)}…(truncated)"
-    ]
+    assert _discussion_lines(text) == [f"[grooming] planner (pass): {'scope ' + ('x' * 494)}…(truncated)"]
     assert "- Source: qa" in text
     assert "- Reason: tests fail" in text
     assert "bookkeeping" not in text

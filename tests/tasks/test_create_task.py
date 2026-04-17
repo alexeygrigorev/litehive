@@ -134,9 +134,7 @@ def test_create_task_rejects_dependency_cycle(tmp_path: Path) -> None:
     first.depends_on = [second.id]
     save_task(tmp_path, first)
 
-    with pytest.raises(
-        ValueError, match=rf"Task {second.id} dependency cycle detected via {first.id}"
-    ):
+    with pytest.raises(ValueError, match=rf"Task {second.id} dependency cycle detected via {first.id}"):
         update_task_metadata(tmp_path, second.id, depends_on=[first.id])
 
 

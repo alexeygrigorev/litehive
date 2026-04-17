@@ -42,7 +42,7 @@ from .guards import (
     zero_change_shortcut,
 )
 from .stages import Stages as S
-from .transitions import Rule, resume_from_origin, resume_from_pre_exec, retry_epoch_rules
+from .transitions import Rule, entry_from_worktree_sync, resume_from_origin, resume_from_pre_exec, retry_epoch_rules
 
 
 def _recovery_rules(from_state, on_event, *, when=None) -> list[Rule]:
@@ -81,14 +81,7 @@ RULES: list[Rule] = [
     Rule(
         from_state=S.WORKTREE_SYNC,
         on_event=Pass,
-        transition_to=S.BEFORE_GROOMING,
-        when=mode("full"),
-    ),
-    Rule(
-        from_state=S.WORKTREE_SYNC,
-        on_event=Pass,
-        transition_to=S.BEFORE_IMPLEMENTING,
-        when=mode("single"),
+        transition_to=entry_from_worktree_sync,
     ),
     *_recovery_rules(S.WORKTREE_SYNC, Reject),
     *_recovery_rules(S.WORKTREE_SYNC, Crash),
@@ -233,11 +226,7 @@ RULES: list[Rule] = [
     *_recovery_rules(S.MERGE_RESOLVING, Crash),
     *_recovery_rules(S.MERGE_RESOLVING, Timeout),
     # ── rejections: grooming (no retry) ─────────────────────────────────────────────
-    *[
-        rule
-        for p in S.GROOMING_EPOCH
-        for rule in _recovery_rules(p, Reject)
-    ],
+    *[rule for p in S.GROOMING_EPOCH for rule in _recovery_rules(p, Reject)],
     # ── same-hook reject circuit breaker ─────────────────────────────────────────────
     *[
         rule
@@ -251,11 +240,7 @@ RULES: list[Rule] = [
     *retry_epoch_rules(S.TESTING, S.TESTING_EPOCH, retry_target=S.IMPLEMENTING, recovering_stage=S.RECOVERING),
     *retry_epoch_rules(S.ACCEPTING, S.ACCEPTING_EPOCH, retry_target=S.IMPLEMENTING, recovering_stage=S.RECOVERING),
     # ── rejections: commit (no retry) ─────────────────────────────────────────────
-    *[
-        rule
-        for p in S.COMMIT_EPOCH
-        for rule in _recovery_rules(p, Reject)
-    ],
+    *[rule for p in S.COMMIT_EPOCH for rule in _recovery_rules(p, Reject)],
     # ── blocked ─────────────────────────────────────────────
     *_recovery_rules(S.GROOMING, Blocked),
     *_recovery_rules(S.IMPLEMENTING, Blocked),

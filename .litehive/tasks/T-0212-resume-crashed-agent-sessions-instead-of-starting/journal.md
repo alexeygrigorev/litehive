@@ -305,3 +305,6 @@ Interrupted runner execution while `backlog` was running. Reason: Task stopped v
 
 ## 2026-04-13T10:45:44+00:00
 Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=cancelled. See T-0366.
+
+## 2026-04-17T12:12:19+00:00
+Task metadata updated via CLI.

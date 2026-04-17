@@ -57,9 +57,7 @@ def archive_task(root: Path, task_id: str) -> TaskRecord:
     with workspace_lock(root):
         task = require_task(root, task_id)
         if task.status != "done":
-            raise ValueError(
-                f"Task {task.id} has status '{task.status}' — only done tasks can be archived"
-            )
+            raise ValueError(f"Task {task.id} has status '{task.status}' — only done tasks can be archived")
         src = task_dir(root, task)
         dst = archive_root(root) / src.name
         if dst.exists():

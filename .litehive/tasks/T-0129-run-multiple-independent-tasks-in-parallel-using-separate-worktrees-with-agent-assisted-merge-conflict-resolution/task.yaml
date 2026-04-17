@@ -4,11 +4,8 @@ title: Run multiple independent tasks in parallel using separate worktrees with 
   merge conflict resolution
 created_at: '2026-04-03T06:53:52+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Allow litehive to run multiple independent tasks in parallel, each in its own
   dedicated worktree, while keeping runner-owned orchestration and using a dedicated
@@ -57,10 +54,7 @@ plan:
 - Add focused lifecycle tests for parallel task execution, integration success, and
   conflict recovery, then document the feature as task-level parallelism rather than
   intra-task worker fanout.
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0129 run-multiple-independent-tasks-in-parallel-using-separate-worktrees-with-agent-assisted-merge-conflict-resolution'
 created_from: null
-upstream_origin: null
-github_origin: null

@@ -90,7 +90,9 @@ def move(
 
 
 @app.command("promote", help="Move a queued task to the front of the queue")
-def promote(task_id: Annotated[str, typer.Argument(help="Queued task id")], workspace: WorkspaceOption = Path.cwd()) -> int:
+def promote(
+    task_id: Annotated[str, typer.Argument(help="Queued task id")], workspace: WorkspaceOption = Path.cwd()
+) -> int:
     ensure_workspace(workspace)
     try:
         task = require_task(workspace, task_id)

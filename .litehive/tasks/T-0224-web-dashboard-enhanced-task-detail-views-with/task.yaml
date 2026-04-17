@@ -3,11 +3,8 @@ slug: web-dashboard-enhanced-task-detail-views-with
 title: 'Web dashboard: enhanced task detail views with edit capabilities'
 created_at: '2026-04-08T06:05:04+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Enhance the task detail panel in the web dashboard to show all task information
   (matching litehive show output) and allow inline editing of task properties. Add
@@ -23,10 +20,7 @@ acceptance_criteria:
 - Thread/discussion view shows the task discussion thread from thread.yaml
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0224 web-dashboard-enhanced-task-detail-views-with'
 created_from: null
-upstream_origin: null
-github_origin: null

@@ -3,11 +3,8 @@ slug: fix-bubblewrap-argv-0-rewrite-and-add-per-engine
 title: Fix bubblewrap argv[0] rewrite and add per-engine extra_ro_binds
 created_at: '2026-04-10T10:09:43+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: The bubblewrap sandbox path in SandboxLauncher._wrap_bubblewrap does not rewrite
   argv[0] the way _wrap_docker does, so an engine binary that is not on PATH inside
@@ -32,10 +29,7 @@ acceptance_criteria:
   message, fail closed)
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0301 fix-bubblewrap-argv-0-rewrite-and-add-per-engine'
 created_from: null
-upstream_origin: null
-github_origin: null

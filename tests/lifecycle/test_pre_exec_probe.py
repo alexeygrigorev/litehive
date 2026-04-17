@@ -71,8 +71,6 @@ def test_pre_exec_recovery_runs_repairs_then_succeeds() -> None:
 
     # Budget exhausted → short-circuit, no repairs run.
     applied.clear()
-    budget_event = PreExecRecoveryNode(repairs=[fix_a]).run(
-        _state(pre_exec_recovery_attempt=2)
-    )
+    budget_event = PreExecRecoveryNode(repairs=[fix_a]).run(_state(pre_exec_recovery_attempt=2))
     assert isinstance(budget_event, PreExecRecoveryBudgetHit)
     assert applied == []

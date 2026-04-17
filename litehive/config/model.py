@@ -10,9 +10,7 @@ from typing import Mapping, Sequence
 
 VALID_POOL_SELECTION_POLICIES = {"fifo", "priority_first", "dependency_aware"}
 VALID_ENGINE_NAMES = frozenset({"codex", "opencode", "gemini", "copilot", "claude", "goz"})
-VALID_AGENT_STARTUP_GUIDANCE_KEYS = frozenset(
-    {"all", "planner", "swe", "qa", "reviewer", "recovery"}
-)
+VALID_AGENT_STARTUP_GUIDANCE_KEYS = frozenset({"all", "planner", "swe", "qa", "reviewer", "recovery"})
 VALID_RETRY_ON_FAILURE_KINDS = frozenset({"execution_limit", "timeout", "network", "service"})
 VALID_SANDBOX_NETWORK_MODES = frozenset({"none", "bridge", "host"})
 VALID_SANDBOX_WORKSPACE_MODES = frozenset({"ro", "rw"})
@@ -125,13 +123,9 @@ class LitehiveConfig:
     runner_hooks: dict[str, list[RunnerHookConfig]] = field(default_factory=dict)
     subagent_inactivity_timeout_seconds: float = DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS
     inactivity_timeout_seconds: float | None = None
-    external_engine_sandbox: ExternalEngineSandboxConfig = field(
-        default_factory=ExternalEngineSandboxConfig
-    )
+    external_engine_sandbox: ExternalEngineSandboxConfig = field(default_factory=ExternalEngineSandboxConfig)
     engine_freeze: dict[str, str] = field(default_factory=dict)
-    engine_preference: list[str] = field(
-        default_factory=lambda: ["codex", "opencode", "gemini", "copilot", "goz"]
-    )
+    engine_preference: list[str] = field(default_factory=lambda: ["codex", "opencode", "gemini", "copilot", "goz"])
     agent_startup_guidance: dict[str, list[str]] = field(default_factory=dict)
     auto_commit: bool = True
     task_mode_name: str = "tasks"
@@ -148,9 +142,7 @@ class LitehiveConfig:
         self.runner_hook_execution_mode = str(self.runner_hook_execution_mode).strip().lower()
         if self.runner_hook_execution_mode not in RUNNER_HOOK_EXECUTION_MODES:
             allowed = ", ".join(sorted(RUNNER_HOOK_EXECUTION_MODES))
-            raise ValueError(
-                f"runner_hook_execution_mode must be one of: {allowed}"
-            )
+            raise ValueError(f"runner_hook_execution_mode must be one of: {allowed}")
         self.runner_hooks = normalize_runner_hooks(self.runner_hooks)
         self.subagent_inactivity_timeout_seconds = float(self.subagent_inactivity_timeout_seconds)
         if self.subagent_inactivity_timeout_seconds <= 0:
@@ -161,9 +153,7 @@ class LitehiveConfig:
                 raise ValueError("inactivity_timeout_seconds must be greater than 0 when set")
         if self.litehive_source_path is not None:
             self.litehive_source_path = self.litehive_source_path.strip() or None
-        self.external_engine_sandbox = normalize_external_engine_sandbox_config(
-            self.external_engine_sandbox
-        )
+        self.external_engine_sandbox = normalize_external_engine_sandbox_config(self.external_engine_sandbox)
 
 
 def normalize_engine_sequence(engines: Sequence[str], *, field_name: str) -> list[str]:
@@ -330,15 +320,9 @@ def _normalize_external_engine_sandbox_policy(
     else:
         policy = ExternalEngineSandboxPolicy(
             enabled=bool(raw_policy.get("enabled", False)),
-            network_mode=(
-                None
-                if raw_policy.get("network_mode") is None
-                else str(raw_policy.get("network_mode"))
-            ),
+            network_mode=(None if raw_policy.get("network_mode") is None else str(raw_policy.get("network_mode"))),
             workspace_mode=(
-                None
-                if raw_policy.get("workspace_mode") is None
-                else str(raw_policy.get("workspace_mode"))
+                None if raw_policy.get("workspace_mode") is None else str(raw_policy.get("workspace_mode"))
             ),
             environment=[str(item) for item in raw_policy.get("environment", [])],
             credential_inputs=[
@@ -350,36 +334,22 @@ def _normalize_external_engine_sandbox_policy(
             ],
             extra_ro_binds=[str(item).strip() for item in raw_policy.get("extra_ro_binds", [])],
             extra_rw_binds=[str(item).strip() for item in raw_policy.get("extra_rw_binds", [])],
-            setenv={
-                str(key): str(value)
-                for key, value in (raw_policy.get("setenv") or {}).items()
-            },
+            setenv={str(key): str(value) for key, value in (raw_policy.get("setenv") or {}).items()},
         )
     for index, env_name in enumerate(policy.environment):
         if not re.fullmatch(r"[A-Z][A-Z0-9_]*", env_name):
-            raise ValueError(
-                f"{field_name}.environment[{index}] must be an uppercase environment variable name"
-            )
+            raise ValueError(f"{field_name}.environment[{index}] must be an uppercase environment variable name")
     for env_name in policy.setenv.keys():
         if not re.fullmatch(r"[A-Z][A-Z0-9_]*", env_name):
-            raise ValueError(
-                f"{field_name}.setenv key {env_name!r} must be an uppercase environment variable name"
-            )
+            raise ValueError(f"{field_name}.setenv key {env_name!r} must be an uppercase environment variable name")
     if policy.network_mode is not None and policy.network_mode not in VALID_SANDBOX_NETWORK_MODES:
         allowed = ", ".join(sorted(VALID_SANDBOX_NETWORK_MODES))
         raise ValueError(f"{field_name}.network_mode must be one of: {allowed}")
-    if (
-        policy.workspace_mode is not None
-        and policy.workspace_mode not in VALID_SANDBOX_WORKSPACE_MODES
-    ):
+    if policy.workspace_mode is not None and policy.workspace_mode not in VALID_SANDBOX_WORKSPACE_MODES:
         allowed = ", ".join(sorted(VALID_SANDBOX_WORKSPACE_MODES))
         raise ValueError(f"{field_name}.workspace_mode must be one of: {allowed}")
-    policy.extra_ro_binds = _normalize_bind_list(
-        policy.extra_ro_binds, field_name=f"{field_name}.extra_ro_binds"
-    )
-    policy.extra_rw_binds = _normalize_bind_list(
-        policy.extra_rw_binds, field_name=f"{field_name}.extra_rw_binds"
-    )
+    policy.extra_ro_binds = _normalize_bind_list(policy.extra_ro_binds, field_name=f"{field_name}.extra_ro_binds")
+    policy.extra_rw_binds = _normalize_bind_list(policy.extra_rw_binds, field_name=f"{field_name}.extra_rw_binds")
     return policy
 
 
@@ -422,9 +392,7 @@ def normalize_external_engine_sandbox_config(
         raise ValueError(f"external_engine_sandbox.default_network_mode must be one of: {allowed}")
     if config.default_workspace_mode not in VALID_SANDBOX_WORKSPACE_MODES:
         allowed = ", ".join(sorted(VALID_SANDBOX_WORKSPACE_MODES))
-        raise ValueError(
-            f"external_engine_sandbox.default_workspace_mode must be one of: {allowed}"
-        )
+        raise ValueError(f"external_engine_sandbox.default_workspace_mode must be one of: {allowed}")
     if not config.workspace_mount_path.startswith("/"):
         raise ValueError("external_engine_sandbox.workspace_mount_path must be an absolute path")
     if not config.binary_mount_root.startswith("/"):
@@ -436,9 +404,7 @@ def normalize_external_engine_sandbox_config(
     for engine_name, policy in config.engine_policies.items():
         if engine_name not in VALID_ENGINE_NAMES:
             allowed = ", ".join(sorted(VALID_ENGINE_NAMES))
-            raise ValueError(
-                f"external_engine_sandbox.engine_policies key must be one of: {allowed}"
-            )
+            raise ValueError(f"external_engine_sandbox.engine_policies key must be one of: {allowed}")
         normalized_policies[engine_name] = _normalize_external_engine_sandbox_policy(
             policy,
             field_name=f"external_engine_sandbox.engine_policies[{engine_name}]",

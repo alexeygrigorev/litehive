@@ -115,9 +115,7 @@ def create_workspace_backup(root: Path, *, when: datetime | None = None) -> Work
             target.close()
             source.close()
 
-        with temp_db_path.open("rb") as source_handle, gzip.open(
-            temp_gz_path, "wb", compresslevel=9
-        ) as gzip_handle:
+        with temp_db_path.open("rb") as source_handle, gzip.open(temp_gz_path, "wb", compresslevel=9) as gzip_handle:
             while True:
                 chunk = source_handle.read(1024 * 1024)
                 if not chunk:

@@ -3,6 +3,7 @@
 These only exercise the pure rule layer via ``evaluate`` — no engines, no
 runner, no persistence.
 """
+
 import pytest
 
 from litehive.domain.recovery import (
@@ -71,23 +72,23 @@ def step(stage: str, event, state: TaskState):
 
 
 FULL_HAPPY_PATH = [
-    ("ready",                  CleanState(),  "worktree_sync"),
-    ("worktree_sync",          Pass(),        "before_grooming"),
-    ("before_grooming",        HookOk(),      "grooming"),
-    ("grooming",               Pass(),        "after_grooming"),
-    ("after_grooming",         HookOk(),      "before_implementing"),
-    ("before_implementing",    HookOk(),      "implementing"),
-    ("implementing",           Pass(),        "after_implementing"),
-    ("after_implementing",     HookOk(),      "before_testing"),
-    ("before_testing",         HookOk(),      "testing"),
-    ("testing",                Pass(),        "after_testing"),
-    ("after_testing",          HookOk(),      "before_accepting"),
-    ("before_accepting",       HookOk(),      "accepting"),
-    ("accepting",              Pass(),        "after_accepting"),
-    ("after_accepting",        HookOk(),      "before_commit"),
-    ("before_commit",          HookOk(),      "commit"),
-    ("commit",                 Pass(),        "after_commit"),
-    ("after_commit",           HookOk(),      "done"),
+    ("ready", CleanState(), "worktree_sync"),
+    ("worktree_sync", Pass(), "before_grooming"),
+    ("before_grooming", HookOk(), "grooming"),
+    ("grooming", Pass(), "after_grooming"),
+    ("after_grooming", HookOk(), "before_implementing"),
+    ("before_implementing", HookOk(), "implementing"),
+    ("implementing", Pass(), "after_implementing"),
+    ("after_implementing", HookOk(), "before_testing"),
+    ("before_testing", HookOk(), "testing"),
+    ("testing", Pass(), "after_testing"),
+    ("after_testing", HookOk(), "before_accepting"),
+    ("before_accepting", HookOk(), "accepting"),
+    ("accepting", Pass(), "after_accepting"),
+    ("after_accepting", HookOk(), "before_commit"),
+    ("before_commit", HookOk(), "commit"),
+    ("commit", Pass(), "after_commit"),
+    ("after_commit", HookOk(), "done"),
 ]
 
 
@@ -376,9 +377,7 @@ def test_pre_exec_failed_goes_to_failed_terminal():
 def test_no_rule_leaves_recovering_looping_to_recovering():
     for rule in list_transitions():
         if rule.from_state == "recovering" and not callable(rule.transition_to):
-            assert rule.transition_to != "recovering", (
-                f"self-loop on recovering: {rule.description}"
-            )
+            assert rule.transition_to != "recovering", f"self-loop on recovering: {rule.description}"
 
 
 def test_every_stage_phase_has_crash_route():
@@ -395,9 +394,7 @@ def test_unmatched_event_raises_no_transition():
 
 def test_terminal_nodes_have_no_outgoing_rules():
     for rule in list_transitions():
-        from_nodes = (
-            rule.from_state if isinstance(rule.from_state, frozenset) else {rule.from_state}
-        )
+        from_nodes = rule.from_state if isinstance(rule.from_state, frozenset) else {rule.from_state}
         assert not (from_nodes & TERMINAL_NODES), f"terminal outgoing: {rule.description}"
 
 

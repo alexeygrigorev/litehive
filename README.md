@@ -94,7 +94,6 @@ Execution:
 ```bash
 litehive run                              # run one task
 litehive run --drain                      # run until queue is empty
-litehive run --dry-run                    # preview what would run
 litehive start                       # start background daemon
 litehive stop                      # stop daemon
 litehive status                    # quick runner and queue state

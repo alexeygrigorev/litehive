@@ -1,6 +1,5 @@
 """SQLite schema migration runtime for Litehive workspace databases."""
 
-
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import importlib.resources
@@ -124,16 +123,12 @@ def _applied_versions(connection: sqlite3.Connection) -> set[int]:
 
 def _applied_migration_rows(connection: sqlite3.Connection) -> list[tuple[int, str]]:
     _ensure_schema_migrations_table(connection)
-    rows = connection.execute(
-        "SELECT version, name FROM schema_migrations ORDER BY version"
-    ).fetchall()
+    rows = connection.execute("SELECT version, name FROM schema_migrations ORDER BY version").fetchall()
     return [(int(row["version"]), str(row["name"])) for row in rows]
 
 
 def _has_required_baseline_tables(connection: sqlite3.Connection) -> bool:
-    rows = connection.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table'"
-    ).fetchall()
+    rows = connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
     tables = {str(row["name"]) for row in rows}
     return _BASELINE_REQUIRED_TABLES <= tables
 

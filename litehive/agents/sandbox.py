@@ -182,9 +182,7 @@ class SandboxLauncher:
                 else policy.workspace_mode
             ),
             environment=tuple(() if policy is None else policy.environment),
-            credential_inputs=tuple(
-                () if policy is None else (item.env_var for item in policy.credential_inputs)
-            ),
+            credential_inputs=tuple(() if policy is None else (item.env_var for item in policy.credential_inputs)),
             propagated_mounts=(),
         )
 
@@ -207,24 +205,26 @@ class SandboxLauncher:
             )
         binary_path = shutil.which(binary_name)
         if binary_path is None:
-            raise SandboxError(
-                f"Engine '{engine_name}' is unavailable: missing binary '{binary_name}'"
-            )
+            raise SandboxError(f"Engine '{engine_name}' is unavailable: missing binary '{binary_name}'")
 
-        return self._wrap_docker(
-            engine_name,
-            role,
-            binary_name,
-            binary_path,
-            invocation,
-            summary,
-        ) if runtime_config.backend == "docker" else self._wrap_bubblewrap(
-            engine_name,
-            role,
-            binary_name,
-            binary_path,
-            invocation,
-            summary,
+        return (
+            self._wrap_docker(
+                engine_name,
+                role,
+                binary_name,
+                binary_path,
+                invocation,
+                summary,
+            )
+            if runtime_config.backend == "docker"
+            else self._wrap_bubblewrap(
+                engine_name,
+                role,
+                binary_name,
+                binary_path,
+                invocation,
+                summary,
+            )
         )
 
     def _wrap_docker(
@@ -251,9 +251,7 @@ class SandboxLauncher:
         )
 
         mounted_binary_name = Path(binary_path).name
-        container_binary_path = (
-            PurePosixPath(runtime_config.binary_mount_root) / mounted_binary_name
-        )
+        container_binary_path = PurePosixPath(runtime_config.binary_mount_root) / mounted_binary_name
         if container_argv:
             container_argv[0] = str(container_binary_path)
 
@@ -279,9 +277,7 @@ class SandboxLauncher:
                     read_only=workspace_mode == "ro",
                 ),
                 "--mount",
-                self._bind_mount_spec(
-                    Path(binary_path).resolve(), container_binary_path, read_only=True
-                ),
+                self._bind_mount_spec(Path(binary_path).resolve(), container_binary_path, read_only=True),
             ]
         )
 
@@ -309,9 +305,7 @@ class SandboxLauncher:
             argv.extend(
                 [
                     "--mount",
-                    self._bind_mount_spec(
-                        host_path, PurePosixPath(credential.mount_path), read_only=True
-                    ),
+                    self._bind_mount_spec(host_path, PurePosixPath(credential.mount_path), read_only=True),
                 ]
             )
             allowed_env[credential.env_var] = credential.mount_path
@@ -549,10 +543,9 @@ exit 127
         mode = ",readonly" if read_only else ""
         return f"type=bind,src={source},dst={target}{mode}"
 
+
 class SandboxedAdapter(ExternalCLIAdapter):
-    def __init__(
-        self, adapter: ExternalCLIAdapter, launcher: SandboxLauncher, engine_name: str, role: str
-    ) -> None:
+    def __init__(self, adapter: ExternalCLIAdapter, launcher: SandboxLauncher, engine_name: str, role: str) -> None:
         super().__init__(
             name=adapter.name,
             binary=adapter.binary,

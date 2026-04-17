@@ -3,11 +3,8 @@ slug: human-attention-queue-persistent-list-of-items
 title: 'Human attention queue: persistent list of items requiring operator review'
 created_at: '2026-04-10T06:03:05+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'Maintain a persistent list of items that need human (operator) attention. Items
   enter the queue when: destructive operation attempted, task hits human_checkpoint_before_commit,
@@ -26,10 +23,7 @@ acceptance_criteria:
 - Attention items persisted in .litehive/attention/ as YAML files (one per item)
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0289 human-attention-queue-persistent-list-of-items'
 created_from: null
-upstream_origin: null
-github_origin: null

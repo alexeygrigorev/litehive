@@ -139,11 +139,11 @@ def test_daemon_loop_creates_scheduled_backup(tmp_path: Path, monkeypatch: pytes
             [
                 "#!/usr/bin/env bash",
                 "set -euo pipefail",
-                "if [[ \"${1:-}\" == \"run\" && \"${2:-}\" == \"litehive\" && \"${3:-}\" == \"repair\" ]]; then",
-                "  echo \"repaired: no\"",
+                'if [[ "${1:-}" == "run" && "${2:-}" == "litehive" && "${3:-}" == "repair" ]]; then',
+                '  echo "repaired: no"',
                 "  exit 0",
                 "fi",
-                "echo \"unexpected uv invocation: $*\" >&2",
+                'echo "unexpected uv invocation: $*" >&2',
                 "exit 1",
             ]
         ),

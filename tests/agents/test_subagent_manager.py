@@ -20,9 +20,7 @@ from litehive.tasks.paths import task_dir
 from litehive.tasks.reports import append_thread_comment
 
 
-def test_subagent_manager_passes_workspace_root_in_extra_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_subagent_manager_passes_workspace_root_in_extra_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     execution_root = tmp_path / "other-project"
     execution_root.mkdir()
@@ -736,10 +734,7 @@ def test_subagent_manager_classifies_completed_inactivity_timeout_as_retryable_t
     assert result.exit_code == 124
     assert result.execution is not None
     assert result.execution.exit_code == 124
-    assert (
-        f"[litehive] Process killed after {expected_timeout_seconds:g}s of inactivity."
-        in result.execution.stderr
-    )
+    assert f"[litehive] Process killed after {expected_timeout_seconds:g}s of inactivity." in result.execution.stderr
     assert f"{expected_timeout_seconds:g}s without new stdout" in result.execution.stderr
     assert result.ref.status == "failed"
 
@@ -749,7 +744,4 @@ def test_subagent_manager_classifies_completed_inactivity_timeout_as_retryable_t
 
     assert session["exit_code"] == 124
     assert report["status"] == "failed"
-    assert (
-        f"{expected_timeout_seconds:g}s without new stdout"
-        in stderr_path.read_text(encoding="utf-8")
-    )
+    assert f"{expected_timeout_seconds:g}s without new stdout" in stderr_path.read_text(encoding="utf-8")

@@ -6,9 +6,7 @@ from litehive.config.workspace import ensure_workspace, resolve_workspace
 from litehive.state.records import create_task
 
 
-def test_resolve_workspace_uses_workspace_root_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_resolve_workspace_uses_workspace_root_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
 
     outside = tmp_path / "outside"
@@ -20,9 +18,7 @@ def test_resolve_workspace_uses_workspace_root_env(
     assert resolve_workspace(None) == tmp_path.resolve()
 
 
-def test_resolve_workspace_walks_up_and_normalizes_worktree(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_resolve_workspace_walks_up_and_normalizes_worktree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Walk up worktree")
 
@@ -64,9 +60,7 @@ def test_resolve_workspace_prefers_current_unified_root_worktree_over_registry_t
     assert resolve_workspace(None) == workspace_two.resolve()
 
 
-def test_resolve_workspace_prefers_explicit_override(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_resolve_workspace_prefers_explicit_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -90,9 +84,7 @@ def test_resolve_workspace_explicit_plain_root_skips_registry_lookup(
     assert resolve_workspace(None, workspace=tmp_path) == tmp_path.resolve()
 
 
-def test_resolve_workspace_uses_registry_from_outside_repo(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_resolve_workspace_uses_registry_from_outside_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     data_home = tmp_path / "xdg-data"
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     ensure_workspace(tmp_path)

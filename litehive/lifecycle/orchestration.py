@@ -82,11 +82,7 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
 def _entry_stage_for_task(task_record: TaskRecord) -> str | None:
     stage = (
         task_record.runtime.current_stage.stage
-        or (
-            None
-            if task_record.runtime.interruption is None
-            else task_record.runtime.interruption.resume_stage
-        )
+        or (None if task_record.runtime.interruption is None else task_record.runtime.interruption.resume_stage)
         or task_record.pipeline_status
     )
     if stage in {None, "backlog", "done", "flagged", "merge_failed"}:
@@ -98,12 +94,23 @@ def _entry_stage_for_task(task_record: TaskRecord) -> str | None:
 
 _STAGE_TO_PIPELINE_STATUS: dict[str, str] = {
     "ready": "backlog",
-    "before_grooming": "grooming", "grooming": "grooming", "after_grooming": "grooming",
-    "before_implementing": "implementing", "implementing": "implementing", "after_implementing": "implementing",
-    "before_testing": "testing", "testing": "testing", "after_testing": "testing",
-    "before_accepting": "accepting", "accepting": "accepting", "after_accepting": "accepting",
-    "before_commit": "commit_to_git", "commit": "commit_to_git", "after_commit": "commit_to_git",
-    "merge_resolving": "commit_to_git", "recovering": "grooming",
+    "before_grooming": "grooming",
+    "grooming": "grooming",
+    "after_grooming": "grooming",
+    "before_implementing": "implementing",
+    "implementing": "implementing",
+    "after_implementing": "implementing",
+    "before_testing": "testing",
+    "testing": "testing",
+    "after_testing": "testing",
+    "before_accepting": "accepting",
+    "accepting": "accepting",
+    "after_accepting": "accepting",
+    "before_commit": "commit_to_git",
+    "commit": "commit_to_git",
+    "after_commit": "commit_to_git",
+    "merge_resolving": "commit_to_git",
+    "recovering": "grooming",
 }
 
 
@@ -192,9 +199,7 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
             elif failed_reason == "recovery_budget_hit":
                 trigger_kind = trigger.trigger_event_kind.value if trigger is not None else None
                 task_record.flag_reason = (
-                    "crash_budget_exhausted"
-                    if trigger_kind in {"crash", "timeout"}
-                    else "recovery_budget_exhausted"
+                    "crash_budget_exhausted" if trigger_kind in {"crash", "timeout"} else "recovery_budget_exhausted"
                 )
     else:
         task_record.status = "in_progress"
@@ -281,9 +286,7 @@ def _clear_stale_worktree_repair(root: Path):
     return _repair
 
 
-def _mark_task_interrupted_on_crash(
-    root: Path, task: TaskRecord, persistence: object
-) -> None:
+def _mark_task_interrupted_on_crash(root: Path, task: TaskRecord, persistence: object) -> None:
     """Best-effort cleanup when run_task raises an unexpected exception.
 
     Clears active_task_id and marks the task as interrupted so the next
@@ -458,7 +461,7 @@ def run_task(
 
     Takes the workspace runner guard and publishes a heartbeat so other
     tools see the task as active. Always uses the real ``GitCommitNode``
-    — 
+    —
 
     ``engine_factory`` is an injection point for tests: pass a callable
     that produces fake ``Engine`` instances and the pipeline will use it in place

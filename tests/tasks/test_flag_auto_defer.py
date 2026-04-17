@@ -147,9 +147,7 @@ def test_requeue_task_resets_sticky_pipeline_failure_state(tmp_path: Path) -> No
         persistence.load(task.id)
 
 
-def test_cli_requeue_warns_and_fails_without_force(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_cli_requeue_warns_and_fails_without_force(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="CLI force check")
 
@@ -161,17 +159,13 @@ def test_cli_requeue_warns_and_fails_without_force(
     t.pipeline_status = "implementing"
     save_task(tmp_path, t)
 
-    exit_code = _cmd_requeue_task(
-        argparse.Namespace(workspace=tmp_path, task_id=task.id, front=False, force=False)
-    )
+    exit_code = _cmd_requeue_task(argparse.Namespace(workspace=tmp_path, task_id=task.id, front=False, force=False))
     output = capsys.readouterr().out
     assert exit_code == 1
     assert "flagged 3 times" in output
 
 
-def test_cli_requeue_succeeds_with_force(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_cli_requeue_succeeds_with_force(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="CLI force requeue")
 
@@ -182,9 +176,7 @@ def test_cli_requeue_succeeds_with_force(
     t.pipeline_status = "implementing"
     save_task(tmp_path, t)
 
-    exit_code = _cmd_requeue_task(
-        argparse.Namespace(workspace=tmp_path, task_id=task.id, front=True, force=True)
-    )
+    exit_code = _cmd_requeue_task(argparse.Namespace(workspace=tmp_path, task_id=task.id, front=True, force=True))
     output = capsys.readouterr().out
     assert exit_code == 0
     assert "status: queued" in output

@@ -76,3 +76,6 @@ Task closed: wont_do. Superseded by T-0324 (delete litehive/web/ entirely). The 
 
 ## 2026-04-13T10:45:57+00:00
 Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=cancelled. See T-0366.
+
+## 2026-04-17T13:13:30+00:00
+Task closed: wont_do. Web dashboard moving to separate project

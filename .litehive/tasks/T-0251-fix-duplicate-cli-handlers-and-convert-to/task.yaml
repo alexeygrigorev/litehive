@@ -3,11 +3,8 @@ slug: fix-duplicate-cli-handlers-and-convert-to
 title: Fix duplicate CLI handlers and convert to dispatch table
 created_at: '2026-04-09T09:16:09+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: cli/__init__.py has duplicate handlers (import-issue, import-issues, debug,
   list, show appear twice) and 80+ if-statements. Remove duplicates, convert to a
@@ -19,10 +16,7 @@ acceptance_criteria:
 - All existing tests pass including parser duplicate detection test
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0251 fix-duplicate-cli-handlers-and-convert-to'
 created_from: null
-upstream_origin: null
-github_origin: null

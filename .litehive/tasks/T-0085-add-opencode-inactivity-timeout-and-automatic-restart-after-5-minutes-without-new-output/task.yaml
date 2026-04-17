@@ -4,11 +4,8 @@ title: Add OpenCode inactivity timeout and automatic restart after 5 minutes wit
   new output
 created_at: '2026-04-01T07:43:34+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: moderate
-planned_effort: m
 depends_on: []
 goal: Detect when an OpenCode subagent stops producing new output for 5 minutes, terminate
   the stale subprocess, and automatically resume execution through Litehive's existing
@@ -41,10 +38,7 @@ plan:
   `timeout` retry classification so the pipeline restarts automatically.
 - Add focused tests for OpenCode inactivity timeout behavior and for pipeline retry/restart
   after that timeout.
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0085 add-opencode-inactivity-timeout-and-automatic-restart-after-5-minutes-without-new-output'
 created_from: null
-upstream_origin: null
-github_origin: null

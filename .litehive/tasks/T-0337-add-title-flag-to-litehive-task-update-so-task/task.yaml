@@ -4,11 +4,8 @@ title: Add --title flag to 'litehive task update' so task titles can be renamed 
   place
 created_at: '2026-04-10T20:51:08+00:00'
 task_type: adapter
-mode: tasks
 pipeline_mode: full
 priority: low
-pm_complexity: simple
-planned_effort: xs
 depends_on: []
 goal: '''litehive task update'' should support renaming a task''s title in place.
   Today there is no way to change a title after creation, which forces close-and-recreate
@@ -26,10 +23,7 @@ plan:
 - Inspect the existing adapter interface, config wiring, and invocation flow.
 - Implement the adapter change close to the integration seam.
 - Verify the adapter path with a focused test or representative run.
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0337 add-title-flag-to-litehive-task-update-so-task'
 created_from: null
-upstream_origin: null
-github_origin: null

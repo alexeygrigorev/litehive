@@ -3,11 +3,8 @@ slug: reduce-noisy-jsonl-parse-warnings-for-codex
 title: Reduce noisy JSONL parse warnings for Codex command_execution payloads
 created_at: '2026-04-10T05:52:45+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: low
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Codex emits command_execution payloads that trip JSONL parse warnings. Filter
   or normalize them in heru/adapters/_codex_impl.py so the warnings don't spam logs
@@ -18,10 +15,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0283 reduce-noisy-jsonl-parse-warnings-for-codex'
 created_from: null
-upstream_origin: null
-github_origin: null

@@ -102,3 +102,6 @@ Task record updated from grooming output:
 
 ## 2026-04-12T12:54:47+00:00
 Recovered interrupted run and requeued the task at `flagged`.
+
+## 2026-04-17T13:21:27+00:00
+Task closed: wont_do. Already done

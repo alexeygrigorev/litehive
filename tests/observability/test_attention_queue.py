@@ -39,9 +39,7 @@ def test_attention_list_and_resolve_persist_items(tmp_path: Path, capsys) -> Non
     assert "Destructive git command was blocked" in output
     assert "suggested_action:" in output
 
-    resolve_code = cmd_attention_resolve(
-        type("Args", (), {"workspace": tmp_path, "attention_id": item.id})()
-    )
+    resolve_code = cmd_attention_resolve(type("Args", (), {"workspace": tmp_path, "attention_id": item.id})())
     resolved_output = capsys.readouterr().out
 
     assert resolve_code == 0
@@ -268,9 +266,7 @@ def test_operator_resolve_suppresses_detectable_attention_until_condition_clears
     assert second.id != first.id
 
 
-def test_pool_stops_before_running_tasks_when_attention_gate_enabled(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_pool_stops_before_running_tasks_when_attention_gate_enabled(tmp_path: Path, monkeypatch) -> None:
     config = LitehiveConfig(pool_stop_on_attention=True)
     ensure_workspace(tmp_path, config)
     create_task(tmp_path, title="Queued work")
@@ -306,9 +302,7 @@ def test_pool_stops_before_running_tasks_when_attention_gate_enabled(
     assert "Pool stopped: attention_required" in output
 
 
-def test_pool_halts_immediately_when_local_main_diverges_from_origin(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_pool_halts_immediately_when_local_main_diverges_from_origin(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Queued work")
 
@@ -338,7 +332,10 @@ def test_pool_halts_immediately_when_local_main_diverges_from_origin(
 
     assert exit_code == 0
     assert calls == []
-    assert "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. Halting pool: diverged_from_origin" in output
+    assert (
+        "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. Halting pool: diverged_from_origin"
+        in output
+    )
     assert "git fetch origin main" in output
     assert "git log --oneline --left-right main...origin/main" in output
     assert load_state(tmp_path).pool_stop_reason == "diverged_from_origin"

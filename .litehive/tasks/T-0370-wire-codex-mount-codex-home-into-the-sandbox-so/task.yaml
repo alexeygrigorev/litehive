@@ -3,11 +3,8 @@ slug: wire-codex-mount-codex-home-into-the-sandbox-so
 title: Wire ~/.codex mount + CODEX_HOME into the sandbox so codex works under bwrap
 created_at: '2026-04-13T20:16:11+00:00'
 task_type: bugfix
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: moderate
-planned_effort: m
 depends_on: []
 goal: Restore sandboxed Codex execution under external_engine_sandbox by mounting
   the real host Codex home into the sandbox and exposing it via CODEX_HOME, then prove
@@ -45,10 +42,7 @@ plan:
   that proves sandboxed codex startup and verdict submission work end-to-end.
 - Re-enable external_engine_sandbox.enabled in the shipped defaults only after the
   sandboxed smoke passes.
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0370 wire-codex-mount-codex-home-into-the-sandbox-so'
 created_from: null
-upstream_origin: null
-github_origin: null

@@ -3,11 +3,8 @@ slug: reject-swe-implementing-stage-when-git-diff-is
 title: Reject SWE implementing stage when git diff is empty but report claims changes
 created_at: '2026-04-10T14:54:31+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: "Root cause of T-0240's multi-day confirmation-bias loop: the first SWE hallucinated\
   \ a completion report without actually invoking any file-edit tool. The report described\
@@ -36,10 +33,7 @@ acceptance_criteria:
   but never actually modified foo.py. Assert the stage is rejected with hallucinated_completion.'
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0313 reject-swe-implementing-stage-when-git-diff-is'
 created_from: null
-upstream_origin: null
-github_origin: null

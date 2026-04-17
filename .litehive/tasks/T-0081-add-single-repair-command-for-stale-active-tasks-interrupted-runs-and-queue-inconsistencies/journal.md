@@ -43,3 +43,9 @@ Task closed: duplicate. Covered by repair command improvements already landed
 
 ## 2026-04-10T20:41:17+00:00
 Task closed: duplicate. Already marked status=duplicate; formally closing to remove from active listing.
+
+## 2026-04-16T20:53:26+00:00
+Interrupted subagent execution while `grooming` was running. Reason: Stale runner detected while subagent `SA-0044` (planner/codex, pid 1305493 no longer alive) was still marked running in `grooming`.. Subagent `SA-0044` (planner/codex, pid=1305493, path `subagents/SA-0044-planner`) stopped with status `interrupted`. Last snippet: grooming rejected: agent did not submit verdict via litehive report CLI. Resume from `grooming`.
+
+## 2026-04-16T20:56:40+00:00
+Task metadata updated via CLI.

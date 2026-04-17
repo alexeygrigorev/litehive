@@ -46,9 +46,7 @@ def test_agent_verdict_metadata_flows_into_pass_event() -> None:
         _FixedSelector(_ReportingEngine()),
         InMemorySessionStore(),
     )
-    event = agent.run(
-        TaskState(task_id="T-0001", stage="implementing", pipeline_mode=PipelineMode.FULL)
-    )
+    event = agent.run(TaskState(task_id="T-0001", stage="implementing", pipeline_mode=PipelineMode.FULL))
     assert isinstance(event, Pass)
     assert event.metadata["files_changed"] == ["a.py", "b.py", "c.py"]
     assert event.metadata["tests_added"] == 2

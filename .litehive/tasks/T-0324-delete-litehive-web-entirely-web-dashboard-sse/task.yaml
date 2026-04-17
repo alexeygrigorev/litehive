@@ -3,11 +3,8 @@ slug: delete-litehive-web-entirely-web-dashboard-sse
 title: Delete litehive/web/ entirely (web dashboard + SSE + actions + tests)
 created_at: '2026-04-10T20:23:10+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: "Single-user workflow does not need a web dashboard. `litehive status` covers\
   \ observation. The web subsystem is ~1900 LOC of code + ~2000 LOC of tests \u2014\
@@ -38,10 +35,7 @@ acceptance_criteria:
 - All remaining tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0324 delete-litehive-web-entirely-web-dashboard-sse'
 created_from: null
-upstream_origin: null
-github_origin: null

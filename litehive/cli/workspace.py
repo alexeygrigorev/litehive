@@ -16,7 +16,11 @@ from heru import ENGINE_CHOICES, get_engine
 from litehive.attention import waiting_for_you_lines
 from litehive.cli.display import format_retry_on
 from litehive.cli.common import WorkspaceOption, choice
-from litehive.config.engine_models import clear_persisted_engine_freeze, parse_engine_freeze_until, persist_engine_freeze_iso
+from litehive.config.engine_models import (
+    clear_persisted_engine_freeze,
+    parse_engine_freeze_until,
+    persist_engine_freeze_iso,
+)
 from litehive.config.loading import load_config
 from litehive.config.paths import config_path
 from litehive.config.workspace import ensure_workspace
@@ -88,9 +92,7 @@ def engine_command(
     engine_action: Annotated[
         str, typer.Argument(click_type=choice(["freeze", "unfreeze", "status"]), help="Subcommand")
     ] = ...,
-    engine_name: Annotated[
-        str | None, typer.Argument(click_type=choice(ENGINE_CHOICES), help="Engine name")
-    ] = None,
+    engine_name: Annotated[str | None, typer.Argument(click_type=choice(ENGINE_CHOICES), help="Engine name")] = None,
     until: Annotated[str | None, typer.Option(help="Freeze until this ISO date (YYYY-MM-DD)")] = None,
     reason: Annotated[str | None, typer.Option(help="Optional operator note")] = None,
 ) -> int:
@@ -308,7 +310,9 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     worktrees = collect_managed_worktrees(root)
     dirty_report = inspect_dirty_worktree_gate(root)
     quota_health = _collect_quota_health()
-    completed = sorted((task for task in tasks if task.status == "done"), key=lambda task: task.updated_at or "", reverse=True)[:3]
+    completed = sorted(
+        (task for task in tasks if task.status == "done"), key=lambda task: task.updated_at or "", reverse=True
+    )[:3]
 
     print("=== Workspace Health ===")
     print(f"workspace: {root}")

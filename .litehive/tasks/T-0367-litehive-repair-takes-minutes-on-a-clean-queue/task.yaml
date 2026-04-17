@@ -3,11 +3,8 @@ slug: litehive-repair-takes-minutes-on-a-clean-queue
 title: litehive repair takes minutes on a clean queue - blocks daemon startup
 created_at: '2026-04-13T11:20:25+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: critical
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: "After every daemon stop/start, 'litehive repair' runs as the first daemon action\
   \ and takes 2+ minutes on a 43-task queue with no actual repairs needed. During\
@@ -28,10 +25,7 @@ acceptance_criteria:
   wall-clock budget'
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0367 litehive-repair-takes-minutes-on-a-clean-queue'
 created_from: null
-upstream_origin: null
-github_origin: null

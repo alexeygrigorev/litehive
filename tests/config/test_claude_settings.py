@@ -79,4 +79,3 @@ def test_claude_model_resolved_from_workspace_defaults() -> None:
 
     config_default = LitehiveConfig()
     assert workspace_model_for_engine(config_default, "claude") == "claude-sonnet-4-20250514"
-

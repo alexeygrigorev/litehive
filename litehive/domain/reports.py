@@ -48,9 +48,7 @@ class StageReport(BaseModel):
     outcome_reason_code: OutcomeReasonCode | None = None
     outcome_reason: str = ""
     failure_classification: str | None = None
-    failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(
-        default_factory=dict
-    )
+    failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)
     resource_limit_event: ResourceLimitEvent | None = None
     duration_seconds: int = 0
     hook_results: list[dict[str, str | int | bool | None]] = Field(default_factory=list)

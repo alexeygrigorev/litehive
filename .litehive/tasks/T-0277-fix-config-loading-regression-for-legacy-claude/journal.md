@@ -8,3 +8,6 @@ Task closed: duplicate. Already fixed in b74604ee — generic unknown config key
 
 ## 2026-04-13T10:46:23+00:00
 Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=cancelled. See T-0366.
+
+## 2026-04-17T13:25:49+00:00
+Task closed: wont_do. Already fixed

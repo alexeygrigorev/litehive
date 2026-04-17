@@ -39,8 +39,8 @@ EngineFactory = Callable[[str], Engine]
 class ConfigBackedEngineSelector:
     """``EngineSelector`` driven by ``LitehiveConfig``.
 
-    Resolves the task's next engine/model using the shared selection logic
-    used by dry-run, then materializes the corresponding engine instance.
+    Resolves the task's next engine/model using the shared selection logic,
+    then materializes the corresponding engine instance.
 
     When task context is unavailable, it falls back to the historical
     config-only behavior and simply walks ``config.engine_preference``.

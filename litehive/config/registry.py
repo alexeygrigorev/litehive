@@ -113,7 +113,9 @@ def list_registered_workspace_paths() -> list[Path]:
             ).fetchall()
         )
     except sqlite3.DatabaseError as exc:
-        log.warning("workspace registry database %s remained unreadable (%s); continuing empty", litehive_database_path(), exc)
+        log.warning(
+            "workspace registry database %s remained unreadable (%s); continuing empty", litehive_database_path(), exc
+        )
         return []
     roots: list[Path] = []
     seen: set[Path] = set()

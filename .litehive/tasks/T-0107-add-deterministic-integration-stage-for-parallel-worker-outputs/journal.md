@@ -102,3 +102,21 @@ To push the current branch and set the remote as upstream, use
 
 To have this happen automatically for branches without a tracking
 upstream, see 'push.autoSetupRemote' in 'git help config'.
+
+## 2026-04-17T01:20:37+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T01:21:00+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T01:25:17+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T01:29:47+00:00
+Task closed: deferred. Planner crashes repeatedly in grooming — same pattern as T-0088. Possible codex budget issue.
+
+## 2026-04-17T05:11:38+00:00
+Task resumed from `grooming`.
+
+## 2026-04-17T13:21:08+00:00
+Task closed: wont_do. Already done

@@ -35,10 +35,7 @@ class UnifiedExecutionView:
         subagent_id: str | None = None,
     ) -> LiveTimeline:
         timeline = LiveTimeline(engine=engine_name, task_id=task_id, subagent_id=subagent_id)
-        timeline.events = [
-            LiveEvent.model_validate(event.model_dump(mode="python"))
-            for event in self.events
-        ]
+        timeline.events = [LiveEvent.model_validate(event.model_dump(mode="python")) for event in self.events]
         timeline.recompute_counts()
         return timeline
 

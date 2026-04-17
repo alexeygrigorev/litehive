@@ -77,3 +77,36 @@ Execution finished with status `flagged`.
 
 ## 2026-04-08T15:27:06+00:00
 Task closed: wont_do. Completed manually - tests moved to test_retry_commit_and_recovery.py
+
+## 2026-04-17T05:07:06+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T05:09:45+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T05:12:06+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T05:15:13+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T05:22:14+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T05:24:48+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T05:28:57+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T05:31:56+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T05:34:52+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T05:35:05+00:00
+Interrupted subagent execution while `grooming` was running. Reason: Task stopped via CLI. Subagent `SA-0028` (planner/codex, pid=2043683, path `subagents/SA-0028-planner`) stopped with status `interrupted`. Last snippet: grooming rejected: agent did not submit verdict via litehive report CLI. Resume from `grooming`.
+
+## 2026-04-17T05:35:08+00:00
+Task closed: deferred. Planner cannot complete grooming after 10 attempts — possible task complexity or codex session limit.

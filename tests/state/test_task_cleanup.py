@@ -25,4 +25,3 @@ def test_discard_created_task_existing_dir_removed(tmp_path: Path) -> None:
     discard_created_task(tmp_path, task.id)
 
     assert not td.exists()
-

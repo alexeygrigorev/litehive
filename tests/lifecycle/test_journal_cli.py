@@ -10,7 +10,13 @@ import pytest
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
-from litehive.domain.recovery import FailureFingerprint, RecoveryDisposition, RecoveryOutcome, RecoveryTrigger, TriggerEventKind
+from litehive.domain.recovery import (
+    FailureFingerprint,
+    RecoveryDisposition,
+    RecoveryOutcome,
+    RecoveryTrigger,
+    TriggerEventKind,
+)
 from litehive.domain.lifecycle_deltas import StateDelta
 from litehive.lifecycle.events import CleanState, Reject
 from litehive.lifecycle.journal import SqliteJournal
@@ -79,9 +85,7 @@ def _seed_journal(workspace: Path, task_id: str) -> None:
 def test_pipeline_journal_prints_state_and_transitions(workspace: Path) -> None:
     _seed_journal(workspace, "T-0099")
 
-    result = CliRunner().invoke(
-        app, ["pipeline", "journal", "T-0099", "--workspace", str(workspace)]
-    )
+    result = CliRunner().invoke(app, ["pipeline", "journal", "T-0099", "--workspace", str(workspace)])
 
     assert result.exit_code == 0, result.output
     assert "task: T-0099" in result.output
@@ -95,8 +99,6 @@ def test_pipeline_journal_prints_state_and_transitions(workspace: Path) -> None:
 
 
 def test_pipeline_journal_unknown_task_returns_error(workspace: Path) -> None:
-    result = CliRunner().invoke(
-        app, ["pipeline", "journal", "T-9999", "--workspace", str(workspace)]
-    )
+    result = CliRunner().invoke(app, ["pipeline", "journal", "T-9999", "--workspace", str(workspace)])
     assert result.exit_code == 1
     assert "no v2 state row for task T-9999" in result.output

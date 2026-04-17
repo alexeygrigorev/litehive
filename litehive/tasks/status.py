@@ -60,9 +60,7 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
         state = load_state(root)
         active_task_id = _active_task_id_for_stop(root, state)
         if active_task_id != task_id:
-            raise WorkspaceConflictError(
-                f"task {task_id} is no longer the active task in this workspace"
-            )
+            raise WorkspaceConflictError(f"task {task_id} is no longer the active task in this workspace")
         task = require_task(root, task_id)
         if task.pipeline_status == "done":
             raise ValueError(f"Task {task.id} is already done")
@@ -242,9 +240,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
     elif task.status in {"interrupted", "parked", "flagged", "merge_failed", *CLOSED_TASK_STATUSES}:
         task = resume_task(root, task.id, front=True)
     else:
-        raise ValueError(
-            f"Task {task.id} is {task.status} and cannot be switched into a queued runnable state"
-        )
+        raise ValueError(f"Task {task.id} is {task.status} and cannot be switched into a queued runnable state")
 
     prior_work_paths = _switch_prior_work_paths(root, task)
     from litehive.domain.reports import TaskThreadComment
@@ -276,7 +272,6 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
     )
 
 
-
 def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool = False) -> TaskRecord:
     from litehive.state.records import require_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
@@ -292,9 +287,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     def _task_checkout_path(task: TaskRecord) -> Path:
-        worktree_path = resolve_recorded_worktree_path(
-            root, task.runtime.git.worktree_path or task.git.worktree_path
-        )
+        worktree_path = resolve_recorded_worktree_path(root, task.runtime.git.worktree_path or task.git.worktree_path)
         if worktree_path is not None and worktree_path.exists():
             return worktree_path
         return root
@@ -316,10 +309,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
     with workspace_lock(root):
         task = require_task(root, task_id)
         if task.flag_count >= 3 and not force:
-            raise ValueError(
-                f"Task {task.id} has been flagged {task.flag_count} times. "
-                "Use --force to requeue anyway."
-            )
+            raise ValueError(f"Task {task.id} has been flagged {task.flag_count} times. Use --force to requeue anyway.")
         state = load_state(root)
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", "merge_failed", "parked", *CLOSED_TASK_STATUSES}:
@@ -388,7 +378,8 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             task,
             status="queued",
             pipeline_status=resumed_stage,
-            clear_last_outcome=task.status not in {"interrupted", "parked", "flagged", "merge_failed"} and not stranded_in_progress,
+            clear_last_outcome=task.status not in {"interrupted", "parked", "flagged", "merge_failed"}
+            and not stranded_in_progress,
             preserve_continuation_handoff=task.status in {"interrupted", "parked"} or stranded_in_progress,
         )
         _reset_pipeline_state_for_requeue(root, task.id)
@@ -621,24 +612,16 @@ def update_task(
         with RUNNER_LOCKS_MUTEX:
             runner_state = RUNNER_LOCKS.get(root.resolve())
         is_runner_thread = runner_state is not None and runner_state.owner_thread_id == owner_thread_id
-        allow_active_task_mutation = (
-            allow_active_agent_task_mutation and state.active_task_id == task.id
-        )
+        allow_active_task_mutation = allow_active_agent_task_mutation and state.active_task_id == task.id
         if not is_runner_thread and not allow_active_task_mutation:
             ensure_future_task_mutation_allowed(root, [task.id], state=state)
 
         if outcome is not ... and outcome is not None:
             outcome_str = str(outcome)
-            reason_str = (
-                str(outcome_reason)
-                if outcome_reason is not ... and outcome_reason is not None
-                else None
-            )
+            reason_str = str(outcome_reason) if outcome_reason is not ... and outcome_reason is not None else None
             if outcome_str not in _CLOSE_OUTCOME_REASON_CODES:
                 allowed = ", ".join(sorted(_CLOSE_OUTCOME_REASON_CODES))
-                raise ValueError(
-                    f"Unsupported close outcome '{outcome_str}'. Expected one of: {allowed}"
-                )
+                raise ValueError(f"Unsupported close outcome '{outcome_str}'. Expected one of: {allowed}")
             if task.status == "done":
                 raise ValueError(f"Task {task.id} is already done and cannot be closed")
             close_msg = _apply_close_task_state(
@@ -745,13 +728,8 @@ def update_task(
 
         if journal_message is None:
             journal_message = "Task metadata updated via CLI."
-        if (
-            task.pipeline_status == "grooming"
-            and missing_acceptance_criteria_reason(task) is not None
-        ):
-            journal_message += (
-                " Rerouted to `grooming` until structured acceptance criteria are added."
-            )
+        if task.pipeline_status == "grooming" and missing_acceptance_criteria_reason(task) is not None:
+            journal_message += " Rerouted to `grooming` until structured acceptance criteria are added."
         persist_future_task_update(root, task, journal_message=journal_message)
         return task
 

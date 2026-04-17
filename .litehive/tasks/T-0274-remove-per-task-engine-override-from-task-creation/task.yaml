@@ -3,11 +3,8 @@ slug: remove-per-task-engine-override-from-task-creation
 title: Remove per-task engine override from task creation
 created_at: '2026-04-09T21:17:58+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: low
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Remove the --engine flag from task add/update CLI and the engine field from
   TaskRecord. Engine selection should be fully handled by the global select_engine()
@@ -20,10 +17,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0274 remove-per-task-engine-override-from-task-creation'
 created_from: null
-upstream_origin: null
-github_origin: null

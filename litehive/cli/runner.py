@@ -6,10 +6,7 @@ import sys
 import click
 import typer
 
-from litehive.cli.display import cli_override_or_default
-from litehive.cli.dry_run import plan_pool_dry_run, plan_single_task_dry_run, print_pool_dry_run_plan
 from litehive.cli.common import WorkspaceOption, choice, require_subcommand
-from litehive.config.loading import load_config
 from litehive.config.paths import workspace_database_path
 from litehive.config.workspace import ensure_workspace, resolve_workspace
 from heru import ENGINE_CHOICES
@@ -30,7 +27,7 @@ from litehive.state.records import get_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
 from litehive.state.persist import load_state
-from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection, plan_task_selections
+from litehive.tasks.queue import dequeue_next_task
 from litehive.tasks.activity import append_task_activity
 from litehive.state.locking import runner_status
 
@@ -108,7 +105,9 @@ def daemon_instances():
     instances = list_daemon_instances()
     print(f"instances: {len(instances)}")
     for index, entry in enumerate(instances, start=1):
-        print(f"{index}. workspace={entry.get('workspace')} pid={entry.get('pid')} started_at={entry.get('started_at')} log_dir={entry.get('log_dir')}")
+        print(
+            f"{index}. workspace={entry.get('workspace')} pid={entry.get('pid')} started_at={entry.get('started_at')} log_dir={entry.get('log_dir')}"
+        )
     return 0
 
 
@@ -154,7 +153,6 @@ def _run_single(
 
 def run_command(
     workspace: WorkspaceOption = Path.cwd(),
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Show the planned selection only")] = False,
     drain: Annotated[bool, typer.Option("--drain", help="Drain the task pool")] = False,
     engine: Annotated[str | None, typer.Option(click_type=choice(ENGINE_CHOICES), help="Override the engine")] = None,
     model: Annotated[str | None, typer.Option(help="Override the model")] = None,
@@ -163,113 +161,8 @@ def run_command(
     stop_on_dirty_git: Annotated[bool | None, typer.Option("--stop-on-dirty-git", flag_value=True)] = None,
 ) -> int:
     ensure_workspace(workspace)
-    if dry_run:
-        config = load_config(workspace)
-        if drain:
-            return run_drain_dry_run(workspace, config=config, engine=engine, model=model, stop_on_failure=stop_on_failure, max_tasks=max_tasks, stop_on_dirty_git=stop_on_dirty_git)
-        return run_single_dry_run(workspace, config=config, engine=engine, model=model, stop_on_failure=stop_on_failure, max_tasks=max_tasks, stop_on_dirty_git=stop_on_dirty_git)
+    del drain, stop_on_failure, max_tasks, stop_on_dirty_git
     return _run_single(workspace, engine=engine, model=model)
-
-
-def _dry_run_stop_conditions(
-    config,
-    *,
-    stop_on_failure=None,
-    max_tasks=None,
-    stop_on_dirty_git=None,
-):
-    from litehive.domain.pool import TaskPoolStopConditions
-
-    return TaskPoolStopConditions(
-        max_tasks=max_tasks,
-        stop_on_failure=cli_override_or_default(stop_on_failure, config.pool_stop_on_failure),
-        stop_on_dirty_git=cli_override_or_default(stop_on_dirty_git, config.pool_stop_on_dirty_git),
-        stop_on_attention=config.pool_stop_on_attention,
-    )
-
-
-def _print_dry_run_plan(
-    workspace,
-    *,
-    planned_tasks,
-    blocked,
-    config,
-    stop_conditions,
-    predicted_stop_reason,
-):
-    print_pool_dry_run_plan(
-        workspace,
-        planned_tasks=planned_tasks,
-        blocked=blocked,
-        config=config,
-        stop_conditions=stop_conditions,
-        predicted_stop_reason=predicted_stop_reason,
-    )
-
-
-def run_drain_dry_run(workspace, *, config, engine=None, model=None, stop_on_failure=None, max_tasks=None, stop_on_dirty_git=None):
-    try:
-        plan = plan_task_selections(workspace)
-    except WorkspaceConflictError as exc:
-        print(f"run failed: {exc}")
-        return 1
-    stop_conditions = _dry_run_stop_conditions(
-        config,
-        stop_on_failure=stop_on_failure,
-        max_tasks=max_tasks,
-        stop_on_dirty_git=stop_on_dirty_git,
-    )
-    runnable_tasks, predicted_stop_reason = plan_pool_dry_run(
-        workspace,
-        planned_tasks=plan.tasks,
-        blocked_count=len(plan.blocked),
-        config=config,
-        stop_conditions=stop_conditions,
-        engine_override=engine,
-        model_override=model,
-    )
-    _print_dry_run_plan(
-        workspace,
-        planned_tasks=runnable_tasks,
-        blocked=plan.blocked,
-        config=config,
-        stop_conditions=stop_conditions,
-        predicted_stop_reason=predicted_stop_reason,
-    )
-    return 0
-
-
-def run_single_dry_run(workspace, *, config, engine=None, model=None, stop_on_failure=None, max_tasks=None, stop_on_dirty_git=None):
-    try:
-        selection = peek_next_task_selection(workspace)
-    except WorkspaceConflictError as exc:
-        print(f"run failed: {exc}")
-        return 1
-    stop_conditions = _dry_run_stop_conditions(
-        config,
-        stop_on_failure=stop_on_failure,
-        max_tasks=max_tasks,
-        stop_on_dirty_git=stop_on_dirty_git,
-    )
-    planned_tasks = [selection.task] if selection.task is not None else []
-    runnable_tasks, predicted_stop_reason = plan_single_task_dry_run(
-        workspace,
-        planned_tasks=planned_tasks,
-        blocked_count=len(selection.blocked),
-        config=config,
-        stop_conditions=stop_conditions,
-        engine_override=engine,
-        model_override=model,
-    )
-    _print_dry_run_plan(
-        workspace,
-        planned_tasks=runnable_tasks,
-        blocked=selection.blocked,
-        config=config,
-        stop_conditions=stop_conditions,
-        predicted_stop_reason=predicted_stop_reason,
-    )
-    return 0
 
 
 def rollback_command(

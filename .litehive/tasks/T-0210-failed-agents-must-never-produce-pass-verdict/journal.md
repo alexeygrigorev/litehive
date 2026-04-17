@@ -100,3 +100,6 @@ Interrupted subagent execution while `backlog` was running. Reason: Task stopped
 
 ## 2026-04-13T10:34:29+00:00
 Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=cancelled. See T-0366.
+
+## 2026-04-17T11:42:35+00:00
+Task metadata updated via CLI.

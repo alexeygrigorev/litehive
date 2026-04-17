@@ -20,3 +20,6 @@ CommitToGit complete. Commit: b28404b48c869f7dbd3730d6693d006aa49fa0ca
 
 ## 2026-04-13T10:27:41+00:00
 Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.
+
+## 2026-04-17T13:13:49+00:00
+Task closed: wont_do. Web dashboard moving to separate project

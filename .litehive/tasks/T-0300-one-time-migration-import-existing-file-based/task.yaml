@@ -3,11 +3,8 @@ slug: one-time-migration-import-existing-file-based
 title: 'One-time migration: import existing file-based workspace into the new DB layout'
 created_at: '2026-04-10T06:50:03+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on:
 - T-0291
 - T-0292
@@ -35,10 +32,7 @@ acceptance_criteria:
 - Pre-migration backup created automatically in case something goes wrong
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0300 one-time-migration-import-existing-file-based'
 created_from: null
-upstream_origin: null
-github_origin: null

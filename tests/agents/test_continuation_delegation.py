@@ -58,9 +58,7 @@ def test_extract_execution_continuation_delegates_to_heru_for_supported_engines(
     assert captured == ["codex", "claude", "copilot", "gemini", "goz", "opencode"]
 
 
-def test_set_continuation_handoff_preserves_unified_continuation_payload(
-    tmp_path, monkeypatch
-) -> None:
+def test_set_continuation_handoff_preserves_unified_continuation_payload(tmp_path, monkeypatch) -> None:
     task = create_task(tmp_path, title="Continuation handoff", auto_commit=False)
 
     class FakeEngine:

@@ -39,3 +39,6 @@ Execution finished with status `merge_failed`.
 
 ## 2026-04-10T10:10:00+00:00
 Rescued via `litehive worktree rescue --apply`. Cherry-pick of worktree commit 402f9bd0 landed on main as a70137121cf4103095fe36f668640c80b5c20b09 (heru/adapters/_goz_impl.py, heru/adapters/goz.py, tests/test_goz_adapter.py — 85 lines). Rescue command's own state finalization failed because the daemon held the runner lock; task.yaml and runtime.yaml were finalized manually. Worktree removed with `git worktree remove --force`.
+
+## 2026-04-17T13:22:09+00:00
+Task closed: duplicate. Duplicate of T-0271/T-0272

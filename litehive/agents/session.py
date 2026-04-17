@@ -85,9 +85,7 @@ class SessionMixin:
             subagent_id=subagent_id,
         )
 
-    def _append_stream_delta(
-        self, base: Path, ref: SubagentRef, stream: str, full_content: str
-    ) -> None:
+    def _append_stream_delta(self, base: Path, ref: SubagentRef, stream: str, full_content: str) -> None:
         """Append only the new portion of a stream to the append-only log."""
         key = f"{ref.id}:{stream}"
         prev = self._stream_offsets.get(key, 0)
@@ -173,19 +171,13 @@ class SessionMixin:
                 "interruption_reason": interruption_reason,
                 "resource_control": resource_control,
                 "resource_limit_event": (
-                    None
-                    if resource_limit_event is None
-                    else resource_limit_event.model_dump(mode="python")
+                    None if resource_limit_event is None else resource_limit_event.model_dump(mode="python")
                 ),
-                "continuation": None
-                if continuation is None
-                else continuation.model_dump(mode="python"),
+                "continuation": None if continuation is None else continuation.model_dump(mode="python"),
             },
         )
 
-    def _record_subagent_pid(
-        self, task: TaskRecord, base: Path, ref: SubagentRef, pid: int | None
-    ) -> None:
+    def _record_subagent_pid(self, task: TaskRecord, base: Path, ref: SubagentRef, pid: int | None) -> None:
         if pid is None:
             return
         mark_subagent_pid(self.root, task, pid)
@@ -316,13 +308,9 @@ class SessionMixin:
                 "interruption_reason": interruption_reason,
                 "resource_control": resource_control,
                 "resource_limit_event": (
-                    None
-                    if resource_limit_event is None
-                    else resource_limit_event.model_dump(mode="python")
+                    None if resource_limit_event is None else resource_limit_event.model_dump(mode="python")
                 ),
-                "continuation": None
-                if continuation is None
-                else continuation.model_dump(mode="python"),
+                "continuation": None if continuation is None else continuation.model_dump(mode="python"),
             },
             report=report_payload,
         )

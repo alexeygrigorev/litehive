@@ -5,3 +5,6 @@ Task created.
 
 ## 2026-04-15T08:04:23+00:00
 Task requeued for another implementation pass.
+
+## 2026-04-17T13:24:13+00:00
+Task closed: wont_do. Bubblewrap sandbox removed

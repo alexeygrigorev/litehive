@@ -83,5 +83,7 @@ def render_context_template(profile_name: str) -> str:
         lines.append(profile["specifics_heading"])
         lines.extend(profile.get("specifics", []))
         lines.append("")
-    lines.extend(["## Development rules", *profile["development_rules"], "", "## Tool usage", *profile["tool_usage"], ""])
+    lines.extend(
+        ["## Development rules", *profile["development_rules"], "", "## Tool usage", *profile["tool_usage"], ""]
+    )
     return "\n".join(lines)

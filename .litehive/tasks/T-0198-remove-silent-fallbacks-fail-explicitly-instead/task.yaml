@@ -6,24 +6,30 @@ task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: 'The codebase has ~40 places where errors are silently swallowed, values are
-  guessed from context, or legacy compatibility code masks problems. Instead of guessing,
-  we should fail explicitly and tell the agent what to do. Key areas: (1) text parsing
-  fallbacks in engines/base.py that guess verdicts, summaries, follow-up tasks from
-  transcript text, (2) silent error swallowing with ignore_errors=True on rmtree and
-  continue on parse failures, (3) legacy config compat like pre_acceptance_command
-  silent conversion, (4) engine output parsing that skips unparseable items without
-  logging. See the full list in thread.'
+goal: 'Keep T-0198 as a historical umbrella record for the silent-fallback cleanup
+  split. Do not implement under this task. Route execution through the focused tasks
+  already carrying scope: T-0197 for verdict CLI-only reporting, T-0200 for structured
+  stage-result parsing, T-0203 for legacy compatibility removal, T-0374 for engine-output
+  parse warnings, and T-0375 for explicit rmtree cleanup. Any newly discovered silent-fallback
+  gap should be filed as its own focused follow-up task instead of broadening T-0198
+  again.'
 acceptance_criteria:
-- No silent verdict guessing - require litehive report CLI (covered by T-0197)
-- No summary fabrication from transcript text - require structured submission
-- Invalid JSON in stage results fails with clear error instead of falling back to
-  text parsing
-- rmtree calls log what they are deleting and raise on unexpected failures
-- Legacy pre_acceptance_command compat removed - use hooks directly
-- Engine output parse failures are logged, not silently skipped
-constraints: []
-plan: []
+- T-0198 is treated as a duplicate umbrella record, not as an implementation task.
+- The remaining scope is mapped explicitly to T-0197, T-0200, T-0203, T-0374, and
+  T-0375.
+- Implementation is routed through those focused tasks rather than reopening T-0198.
+- Any newly discovered silent-fallback gap becomes a focused follow-up task instead
+  of broadening T-0198 again.
+constraints:
+- Do not implement code under T-0198.
+- Keep execution scoped to the split child tasks.
+plan:
+- Confirm the umbrella concerns are already covered by T-0197, T-0200, T-0203, T-0374,
+  and T-0375.
+- Close T-0198 as a duplicate umbrella record with the child-task mapping captured
+  in the close reason.
+- Send execution through the focused child tasks; create a new focused task only if
+  a real uncovered gap appears.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0198 remove-silent-fallbacks-fail-explicitly-instead'

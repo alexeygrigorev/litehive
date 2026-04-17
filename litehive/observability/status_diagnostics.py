@@ -245,8 +245,7 @@ def _probe_daemon_status(root: Path) -> list[StatusIssue]:
                 key="daemon_status",
                 severity="ERROR",
                 message=(
-                    f"STOPPED (pid {pid} not alive)"
-                    " — restart the daemon with `litehive start` or `litehive restart`."
+                    f"STOPPED (pid {pid} not alive) — restart the daemon with `litehive start` or `litehive restart`."
                 ),
             )
         ]
@@ -290,9 +289,7 @@ def _probe_heru_link(root: Path) -> list[StatusIssue]:
         data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError):
         return []
-    heru_source = (
-        (((data.get("tool") or {}).get("uv") or {}).get("sources") or {}).get("heru")
-    )
+    heru_source = (((data.get("tool") or {}).get("uv") or {}).get("sources") or {}).get("heru")
     if not isinstance(heru_source, Mapping):
         return []
     configured_path = heru_source.get("path")
@@ -329,10 +326,7 @@ def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIs
         StatusIssue(
             key="origin_divergence",
             severity="ERROR",
-            message=(
-                "!!! ATTENTION REQUIRED !!! "
-                f"{detail}"
-            ),
+            message=(f"!!! ATTENTION REQUIRED !!! {detail}"),
         )
     ]
 

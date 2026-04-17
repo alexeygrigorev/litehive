@@ -31,11 +31,7 @@ def _event_payload(event: Event) -> dict[str, Any]:
 
 
 def _delta_payload(delta: StateDelta) -> dict[str, Any]:
-    return {
-        k: v
-        for k, v in asdict(delta).items()
-        if v not in (None, False, (), [], {})
-    }
+    return {k: v for k, v in asdict(delta).items() if v not in (None, False, (), [], {})}
 
 
 # Kinds recorded in the journal. Keep this list tight — adding a kind is a

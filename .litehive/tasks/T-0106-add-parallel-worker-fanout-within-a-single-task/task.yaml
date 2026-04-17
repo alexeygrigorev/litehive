@@ -3,11 +3,8 @@ slug: add-parallel-worker-fanout-within-a-single-task
 title: Add parallel worker fanout within a single task
 created_at: '2026-04-01T15:05:40+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: complex
-planned_effort: l
 depends_on:
 - T-0070
 goal: ''
@@ -29,10 +26,7 @@ acceptance_criteria:
   failed fanout behavior.
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0106 add-parallel-worker-fanout-within-a-single-task'
 created_from: null
-upstream_origin: null
-github_origin: null

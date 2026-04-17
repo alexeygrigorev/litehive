@@ -16,9 +16,7 @@ def write_stream_artifact(base: Path, name: str, content: str, *, compress: bool
             compressed_path.unlink()
         write_text_if_changed(plain_path, "")
         return
-    should_compress = (
-        compress and len(content.encode("utf-8")) >= _COMPRESS_STREAM_ARTIFACT_MIN_BYTES
-    )
+    should_compress = compress and len(content.encode("utf-8")) >= _COMPRESS_STREAM_ARTIFACT_MIN_BYTES
     if should_compress:
         if plain_path.exists():
             plain_path.unlink()

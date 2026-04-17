@@ -132,10 +132,7 @@ def _apply_rescue_candidate(root: Path, candidate: _RescueCandidate) -> _RescueR
             worktree_rel=candidate.worktree_rel,
             status="active_task",
             commit_shas=candidate.commit_shas,
-            message=(
-                f"task {task.id} is still state.active_task_id; "
-                "worktree rescue refuses to race with the runner"
-            ),
+            message=(f"task {task.id} is still state.active_task_id; worktree rescue refuses to race with the runner"),
         )
     worktree_head = _git_stdout(candidate.worktree_path, "rev-parse", "HEAD")
     main_head = current_head(root)
@@ -238,9 +235,7 @@ def _apply_rescue_candidate(root: Path, candidate: _RescueCandidate) -> _RescueR
         )
         if pick.returncode != 0:
             conflicts = _git_lines(root, "diff", "--name-only", "--diff-filter=U")
-            metadata_conflicts = [
-                path for path in conflicts if _is_task_metadata_path(path, task.id)
-            ]
+            metadata_conflicts = [path for path in conflicts if _is_task_metadata_path(path, task.id)]
             if conflicts and len(metadata_conflicts) == len(conflicts):
                 _resolve_metadata_conflicts(root, metadata_conflicts)
             else:
@@ -338,6 +333,8 @@ def _apply_rescue_candidate(root: Path, candidate: _RescueCandidate) -> _RescueR
         head_sha=head_sha,
         message="rescued onto main",
     )
+
+
 def _worktree_commits_ahead_of_main(root: Path, worktree_path: Path) -> list[str]:
     main_head = current_head(root) or "HEAD"
     fork_point = _git_stdout(worktree_path, "merge-base", main_head, "HEAD")
@@ -422,14 +419,11 @@ def _finalize_rescue(root: Path, task, *, outcome: str, head_sha: str | None) ->
         state = load_state(root)
         if state.active_task_id == task.id:
             raise WorkspaceConflictError(
-                f"task {task.id} is still state.active_task_id; "
-                "worktree rescue refuses to race with the runner"
+                f"task {task.id} is still state.active_task_id; worktree rescue refuses to race with the runner"
             )
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
 
-        state.unmerged_worktrees = [
-            entry for entry in state.unmerged_worktrees if entry.task_id != task.id
-        ]
+        state.unmerged_worktrees = [entry for entry in state.unmerged_worktrees if entry.task_id != task.id]
         clear_task_worktree_path(task)
         if outcome in {"rescued", "already-landed", "no-op"}:
             task.status = "done"

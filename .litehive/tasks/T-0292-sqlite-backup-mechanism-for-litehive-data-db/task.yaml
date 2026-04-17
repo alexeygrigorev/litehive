@@ -3,11 +3,8 @@ slug: sqlite-backup-mechanism-for-litehive-data-db
 title: SQLite backup mechanism for litehive data.db
 created_at: '2026-04-10T06:46:43+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: moderate
-planned_effort: m
 depends_on:
 - T-0291
 goal: Back up the litehive workspace database regularly so operators can recover from
@@ -25,10 +22,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0292 sqlite-backup-mechanism-for-litehive-data-db'
 created_from: null
-upstream_origin: null
-github_origin: null

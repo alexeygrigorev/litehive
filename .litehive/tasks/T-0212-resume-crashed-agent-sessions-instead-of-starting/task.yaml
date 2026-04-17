@@ -3,11 +3,8 @@ slug: resume-crashed-agent-sessions-instead-of-starting
 title: Resume crashed agent sessions instead of starting from scratch
 created_at: '2026-04-07T15:41:35+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: When an agent exits with code 1 and no specific failure classification (not
   quota, not timeout, not interrupted), resume the same Claude session instead of
@@ -25,10 +22,7 @@ acceptance_criteria:
 - Journal logs the resume attempt clearly
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0212 resume-crashed-agent-sessions-instead-of-starting'
 created_from: null
-upstream_origin: null
-github_origin: null

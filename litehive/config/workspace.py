@@ -24,12 +24,8 @@ from litehive.config.registry import (
 )
 
 log = logging.getLogger(__name__)
-_UNRESOLVED_SHELL_VAR_RE = re.compile(
-    r"(?<!\\)\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)"
-)
-_WORKSPACE_CONFIG_TEMPLATE = (
-    Path(__file__).resolve().parents[1] / "cli" / "templates" / "workspace_config.yaml"
-)
+_UNRESOLVED_SHELL_VAR_RE = re.compile(r"(?<!\\)\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)")
+_WORKSPACE_CONFIG_TEMPLATE = Path(__file__).resolve().parents[1] / "cli" / "templates" / "workspace_config.yaml"
 
 
 def render_workspace_gitignore() -> str:
@@ -175,9 +171,7 @@ def resolve_workspace(
 
     env_workspace = os.environ.get("LITEHIVE_WORKSPACE_ROOT")
     if env_workspace:
-        resolved_env_workspace = _validate_workspace_root(
-            Path(env_workspace), source="LITEHIVE_WORKSPACE_ROOT"
-        )
+        resolved_env_workspace = _validate_workspace_root(Path(env_workspace), source="LITEHIVE_WORKSPACE_ROOT")
         if not effective_task_id or _task_exists(resolved_env_workspace, effective_task_id):
             _register_workspace(resolved_env_workspace)
             return resolved_env_workspace
@@ -239,9 +233,7 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
             )
 
     if not context_path(root).exists():
-        context_path(root).write_text(
-            render_context_template(cfg.process_profile), encoding="utf-8"
-        )
+        context_path(root).write_text(render_context_template(cfg.process_profile), encoding="utf-8")
 
     if not workspace_gitignore_path(root).exists():
         workspace_gitignore_path(root).write_text(
@@ -253,6 +245,7 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
 
     # Import here to avoid circular import with litehive.state
     from litehive.state.store import runtime_store
+
     runtime_store(root).bootstrap()
     workspace_database_path(root).parent.mkdir(parents=True, exist_ok=True)
 

@@ -3,11 +3,8 @@ slug: replace-per-engine-fallbacks-with-single-engine
 title: Replace per-engine fallbacks with single engine_preference list
 created_at: '2026-04-05T17:40:17+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Replace the confusing per-engine fallback maps with a single global engine_preference
   list (e.g. [claude, codex, goz, copilot]). When any engine fails, try the next available
@@ -19,10 +16,7 @@ acceptance_criteria:
 - Existing engine_fallbacks in config.yaml is migrated or ignored
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0184 replace-per-engine-fallbacks-with-single-engine'
 created_from: null
-upstream_origin: null
-github_origin: null

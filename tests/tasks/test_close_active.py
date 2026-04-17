@@ -21,9 +21,7 @@ from litehive.tasks.runtime import (
 )
 
 
-def test_cmd_close_task_stops_active_runner_and_closes_task(
-    tmp_path: Path, capsys, monkeypatch
-) -> None:
+def test_cmd_close_task_stops_active_runner_and_closes_task(tmp_path: Path, capsys, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     monkeypatch.setattr("litehive.cli.agent_cli.block_if_agent", lambda: None)
     task = create_task(tmp_path, title="Kill bad run")
@@ -70,9 +68,7 @@ with workspace_runner_guard(root):
     env = os.environ.copy()
     repo_root = Path(__file__).resolve().parents[1]
     pythonpath = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = (
-        f"{repo_root}{os.pathsep}{pythonpath}" if pythonpath else str(repo_root)
-    )
+    env["PYTHONPATH"] = f"{repo_root}{os.pathsep}{pythonpath}" if pythonpath else str(repo_root)
     proc = subprocess.Popen(
         [sys.executable, "-c", f"import sys\n{script}", str(tmp_path), task.id, str(ready_file)],
         cwd=repo_root,

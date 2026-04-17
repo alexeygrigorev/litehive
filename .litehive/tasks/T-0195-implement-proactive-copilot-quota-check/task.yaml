@@ -3,32 +3,37 @@ slug: implement-proactive-copilot-quota-check
 title: Investigate copilot quota API and produce implementation task
 created_at: '2026-04-06T20:17:35+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
-priority: medium
-pm_complexity: null
-planned_effort: null
+priority: low
 depends_on: []
-goal: 'Add proactive quota checking for GitHub Copilot. The AgentLimits project shows
-  the endpoint is GET https://github.com/github-copilot/chat/entitlement with GitHub
-  session cookies (credentials: include). Returns monthly premium interaction quota
-  percentage. Need to figure out how to get auth tokens from the copilot CLI or GitHub
-  CLI (gh) rather than browser cookies. Check if gh auth token or copilot CLI stores
-  credentials we can reuse.'
+goal: Verify the active GitHub Copilot quota endpoint, auth path, and response contract
+  used by Litehive and imported Heru, then determine whether any implementation gap
+  remains in the active dependency path.
 acceptance_criteria:
-- Find the exact API endpoint for copilot quota (try gh auth token with github.com/github-copilot/chat/entitlement
-  or alternatives)
-- Verify it works from CLI without browser cookies
-- Document the response format (fields, quota percentage, reset time)
-- Produce a follow-up implementation task with exact endpoint, auth method, response
-  fields, and code to write
-- This is research only - no code changes
-constraints: []
-plan: []
-human_checkpoints: []
+- Confirm that gh api /copilot_internal/user succeeds for the active workspace using
+  stored gh OAuth credentials and identify that the current Heru implementation issues
+  this exact request shape.
+- Confirm that the same endpoint succeeds with GH_TOKEN and GITHUB_TOKEN auth fallbacks,
+  and that a direct bearer-token request to https://api.github.com/copilot_internal/user
+  works without browser cookies.
+- 'Capture the verified response contract needed for quota evaluation from quota_snapshots.premium_interactions:
+  percent_remaining, remaining, entitlement, unlimited, overage_count, overage_permitted,
+  timestamp_utc; plus top-level quota_reset_date and quota_reset_date_utc.'
+- Compare the verified contract against active imported Heru and Litehive call sites,
+  and close the task as duplicate if proactive Copilot quota checking is already implemented
+  in the active dependency path.
+constraints:
+- Research and task shaping only; do not change product code.
+plan:
+- Probe the live Copilot endpoint through gh api and direct bearer-token HTTP requests
+  to confirm auth shape and cookie independence.
+- 'Verify gh auth fallback precedence relevant to this workspace: stored gh credentials,
+  GH_TOKEN, and GITHUB_TOKEN.'
+- Inspect imported Heru quota code and Litehive consumers to determine whether any
+  implementation task remains in the active path.
+- Close the task as duplicate if proactive checking is already active; otherwise leave
+  a minimal remaining implementation task.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0195 implement-proactive-copilot-quota-check'
 created_from: null
-upstream_origin: null
-github_origin: null

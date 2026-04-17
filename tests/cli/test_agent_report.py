@@ -21,9 +21,7 @@ def _assert_thread_comments(
 ) -> None:
     assert len(actual) == len(expected)
     for actual_comment, expected_comment in zip(actual, expected, strict=True):
-        assert actual_comment.model_dump(exclude={"created_at"}) == expected_comment.model_dump(
-            exclude={"created_at"}
-        )
+        assert actual_comment.model_dump(exclude={"created_at"}) == expected_comment.model_dump(exclude={"created_at"})
         assert actual_comment.created_at
 
 
@@ -75,16 +73,19 @@ def test_agent_report_uses_intent_record_when_runtime_row_is_missing(tmp_path: P
     task = get_task_record(tmp_path, "T-0001")
     assert task is not None
     comments = load_task_thread(tmp_path, task)
-    _assert_thread_comments(comments, [
-        TaskThreadComment(
-            role="recovery",
-            stage="grooming",
-            target_stage="grooming",
-            verdict="resume",
-            message="recovery completed",
-            files_changed=[],
-        )
-    ])
+    _assert_thread_comments(
+        comments,
+        [
+            TaskThreadComment(
+                role="recovery",
+                stage="grooming",
+                target_stage="grooming",
+                verdict="resume",
+                message="recovery completed",
+                files_changed=[],
+            )
+        ],
+    )
 
 
 def test_agent_report_persists_hidden_recovery_target_stage(tmp_path: Path) -> None:
@@ -117,16 +118,19 @@ def test_agent_report_persists_hidden_recovery_target_stage(tmp_path: Path) -> N
     task = get_task_record(tmp_path, task.id)
     assert task is not None
     comments = load_task_thread(tmp_path, task)
-    _assert_thread_comments(comments, [
-        TaskThreadComment(
-            role="recovery",
-            stage="recovering",
-            target_stage="implementing",
-            verdict="resume",
-            message="retry implementing",
-            files_changed=[],
-        )
-    ])
+    _assert_thread_comments(
+        comments,
+        [
+            TaskThreadComment(
+                role="recovery",
+                stage="recovering",
+                target_stage="implementing",
+                verdict="resume",
+                message="retry implementing",
+                files_changed=[],
+            )
+        ],
+    )
 
 
 def test_agent_report_rejects_recovery_resume_without_target_stage(tmp_path: Path) -> None:
@@ -157,9 +161,7 @@ def test_agent_report_rejects_recovery_resume_without_target_stage(tmp_path: Pat
     assert "requires --target-stage" in result.output
 
 
-def test_agent_report_uses_env_stage_when_runtime_row_is_missing(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_agent_report_uses_env_stage_when_runtime_row_is_missing(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-missing-runtime"
     task_dir.mkdir(parents=True)
@@ -204,24 +206,24 @@ def test_agent_report_uses_env_stage_when_runtime_row_is_missing(
     task = get_task_record(tmp_path, "T-0001")
     assert task is not None
     comments = load_task_thread(tmp_path, task)
-    _assert_thread_comments(comments, [
-        TaskThreadComment(
-            role="planner",
-            stage="grooming",
-            verdict="pass",
-            message="planner completed",
-            files_changed=[],
-        )
-    ])
+    _assert_thread_comments(
+        comments,
+        [
+            TaskThreadComment(
+                role="planner",
+                stage="grooming",
+                verdict="pass",
+                message="planner completed",
+                files_changed=[],
+            )
+        ],
+    )
 
-def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(
-    tmp_path: Path, monkeypatch
-) -> None:
+
+def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Prefer env stage")
-    SqlitePersistence(tmp_path).save(
-        TaskState(task_id=task.id, stage="implementing", pipeline_mode=PipelineMode.FULL)
-    )
+    SqlitePersistence(tmp_path).save(TaskState(task_id=task.id, stage="implementing", pipeline_mode=PipelineMode.FULL))
     monkeypatch.setenv("LITEHIVE_STAGE", "grooming")
 
     result = CliRunner().invoke(
@@ -246,20 +248,21 @@ def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(
     task = get_task_record(tmp_path, task.id)
     assert task is not None
     comments = load_task_thread(tmp_path, task)
-    _assert_thread_comments(comments, [
-        TaskThreadComment(
-            role="planner",
-            stage="grooming",
-            verdict="blocked",
-            message="planner blocked",
-            files_changed=[],
-        )
-    ])
+    _assert_thread_comments(
+        comments,
+        [
+            TaskThreadComment(
+                role="planner",
+                stage="grooming",
+                verdict="blocked",
+                message="planner blocked",
+                files_changed=[],
+            )
+        ],
+    )
 
 
-def test_agent_update_allows_planner_to_shape_active_task(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_agent_update_allows_planner_to_shape_active_task(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Shape active task", goal="old goal")
     state = load_state(tmp_path)
@@ -348,16 +351,19 @@ def test_agent_report_accepts_recovery_resume_verdict(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    _assert_thread_comments(load_task_thread(tmp_path, updated), [
-        TaskThreadComment(
-            role="recovery",
-            stage="recovering",
-            target_stage="grooming",
-            verdict="resume",
-            message="fixed the runner; retry grooming",
-            files_changed=[],
-        )
-    ])
+    _assert_thread_comments(
+        load_task_thread(tmp_path, updated),
+        [
+            TaskThreadComment(
+                role="recovery",
+                stage="recovering",
+                target_stage="grooming",
+                verdict="resume",
+                message="fixed the runner; retry grooming",
+                files_changed=[],
+            )
+        ],
+    )
 
 
 def test_agent_report_accepts_hidden_step_alias(tmp_path: Path) -> None:
@@ -424,12 +430,15 @@ def test_root_report_accepts_hidden_step_alias(tmp_path: Path, monkeypatch) -> N
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    _assert_thread_comments(load_task_thread(tmp_path, updated), [
-        TaskThreadComment(
-            role="recovery",
-            stage="recovering",
-            verdict="pass",
-            message="recovery note",
-            files_changed=[],
-        )
-    ])
+    _assert_thread_comments(
+        load_task_thread(tmp_path, updated),
+        [
+            TaskThreadComment(
+                role="recovery",
+                stage="recovering",
+                verdict="pass",
+                message="recovery note",
+                files_changed=[],
+            )
+        ],
+    )

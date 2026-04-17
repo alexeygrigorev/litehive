@@ -294,6 +294,7 @@ def _auto_repair_stale_state(root: Path) -> None:
         result = repair_workspace_state(root)
         if result.repaired:
             import sys
+
             print(
                 f"auto-repair: cleared stale state "
                 f"(active={result.cleared_active_task_id or '-'}, "
@@ -358,9 +359,7 @@ def workspace_runner_guard(root: Path):
         )
         write_runner_lock_metadata(handle, status)
         with RUNNER_LOCKS_MUTEX:
-            RUNNER_LOCKS[root] = RunnerLockState(
-                handle=handle, depth=1, status=status, owner_thread_id=owner_thread_id
-            )
+            RUNNER_LOCKS[root] = RunnerLockState(handle=handle, depth=1, status=status, owner_thread_id=owner_thread_id)
     except Exception:
         handle.close()
         raise
@@ -447,8 +446,6 @@ def persist_future_task_update(
         writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_message}\n"
     write_atomic_files_and_then(
         writes,
-        lambda: runtime_store(root).save_runtime_transaction(
-            task_states={task.id: task_state_for_storage(task)}
-        ),
+        lambda: runtime_store(root).save_runtime_transaction(task_states={task.id: task_state_for_storage(task)}),
     )
     ensure_runtime_ignored(root)
