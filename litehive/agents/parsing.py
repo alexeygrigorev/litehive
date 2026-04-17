@@ -50,7 +50,7 @@ def stage_report_from_subagent(
             stage=stage,  # type: ignore[arg-type]
             verdict="blocked",
             summary=f"{stage} blocked: {event.reason}",
-            feedback=result.transcript,
+            feedback=cap_feedback(result.transcript),
             warnings=[event.reason],
             resource_limit_event=event,
         )
