@@ -1,6 +1,7 @@
 """SubagentManager: run external CLI subagents inside a task-scoped folder."""
 
 from dataclasses import replace
+import logging
 from pathlib import Path
 import re
 
@@ -55,6 +56,8 @@ _DEFAULT_STAGE_FOR_ROLE = {
     "recovery": "recovering",
 }
 
+logger = logging.getLogger(__name__)
+
 
 class SubagentManager(SessionMixin):
     """Run external CLI subagents inside a task-scoped folder."""
@@ -65,6 +68,31 @@ class SubagentManager(SessionMixin):
         self.config = load_config(self.root)
         self.sandbox = SandboxLauncher(self.root, self.config)
         self._stream_offsets: dict[str, int] = {}
+
+    @staticmethod
+    def _merged_warnings(base: list[str], extra: list[str]) -> list[str]:
+        merged = list(base)
+        for warning in extra:
+            if warning not in merged:
+                merged.append(warning)
+        return merged
+
+    def _record_live_callback_failure(
+        self,
+        *,
+        ref: SubagentRef,
+        phase: str,
+        exc: Exception,
+        warnings: list[str],
+    ) -> None:
+        warning = f"runner {phase} bookkeeping failed: {type(exc).__name__}: {exc}"
+        if warning not in warnings:
+            warnings.append(warning)
+        logger.exception(
+            "Subagent %s %s callback failed; continuing without crashing the runner",
+            ref.id,
+            phase,
+        )
 
     @staticmethod
     def _agent_stage_for_task(task: TaskRecord, role: str | None = None) -> str:
@@ -120,6 +148,36 @@ class SubagentManager(SessionMixin):
         mark_subagent_started(self.root, task, ref)
         self._write_session_start(task, base, ref, prompt)
         failure: EngineFailure | None = None
+        callback_warnings: list[str] = []
+
+        def _safe_on_started(pid: int) -> None:
+            try:
+                self._record_subagent_pid(task, base, ref, pid)
+            except Exception as exc:  # callback failures must not crash the runner
+                self._record_live_callback_failure(
+                    ref=ref,
+                    phase="start",
+                    exc=exc,
+                    warnings=callback_warnings,
+                )
+
+        def _safe_on_update(execution: CLIExecutionResult) -> None:
+            try:
+                self._write_session_progress(
+                    task,
+                    base,
+                    ref,
+                    prompt,
+                    execution,
+                )
+            except Exception as exc:  # progress persistence must not crash the runner
+                self._record_live_callback_failure(
+                    ref=ref,
+                    phase="progress",
+                    exc=exc,
+                    warnings=callback_warnings,
+                )
+
         try:
             if not engine.is_available():
                 raise EngineError(
@@ -150,20 +208,12 @@ class SubagentManager(SessionMixin):
                     "model": model,
                     "emit_unified": True,
                     "extra_env": task_env,
-                    "on_update": lambda execution: self._write_session_progress(
-                        task,
-                        base,
-                        ref,
-                        prompt,
-                        execution,
-                    ),
+                    "on_update": _safe_on_update,
                 }
                 if resume_session_id:
                     live_kwargs["resume_session_id"] = resume_session_id
                 if supports_live_on_started(callback_probe):
-                    live_kwargs["on_started"] = lambda pid: self._record_subagent_pid(
-                        task, base, ref, pid
-                    )
+                    live_kwargs["on_started"] = _safe_on_started
                 if max_turns is not None:
                     live_kwargs["max_turns"] = max_turns
                 if inactivity_timeout_seconds > 0:
@@ -187,9 +237,7 @@ class SubagentManager(SessionMixin):
                 if max_turns is not None:
                     run_kwargs["max_turns"] = max_turns
                 if supports_on_started(callback_probe):
-                    run_kwargs["on_started"] = lambda pid: self._record_subagent_pid(
-                        task, base, ref, pid
-                    )
+                    run_kwargs["on_started"] = _safe_on_started
                 proc = run_callable(
                     prompt,
                     **filter_supported_kwargs(run_callable, run_kwargs),
@@ -297,6 +345,7 @@ class SubagentManager(SessionMixin):
             ),
             resource_limit_event=None if failure is None else failure.resource_limit_event,
             continuation=continuation,
+            extra_warnings=callback_warnings,
         )
         prune_superseded_subagent_artifacts(task_dir(self.root, task), keep_subagent_id=ref.id)
         if proc is not None:
@@ -348,6 +397,7 @@ class SubagentManager(SessionMixin):
         interruption_reason: str | None,
         resource_limit_event: ResourceLimitEvent | None,
         continuation,
+        extra_warnings: list[str],
     ) -> None:
         report_stage = self._report_stage_for_task(task, ref.role)
         if resource_limit_event is not None:
@@ -368,6 +418,9 @@ class SubagentManager(SessionMixin):
                 execution=execution,
                 transcript=transcript,
             )
+        report = report.model_copy(
+            update={"warnings": self._merged_warnings(report.warnings, extra_warnings)}
+        )
         self._write_session_snapshot(
             task,
             base,

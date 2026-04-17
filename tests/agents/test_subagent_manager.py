@@ -505,6 +505,164 @@ def test_subagent_manager_preserves_workspace_timeout_for_non_opencode_live_runs
     assert captured["inactivity_timeout_seconds"] == 123.0
 
 
+def test_subagent_manager_survives_nonfatal_start_callback_failure_for_planner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Planner start callback failure")
+    task.runtime.current_stage.stage = "grooming"
+    save_task(tmp_path, task)
+    manager = SubagentManager(tmp_path)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run_live(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            max_turns: int | None = None,
+            resume_session_id: str | None = None,
+            on_started=None,
+            on_update=None,
+            inactivity_timeout_seconds: float = 0,
+            extra_env: dict[str, str] | None = None,
+            emit_unified: bool = False,
+        ) -> CLIExecutionResult:
+            del (
+                prompt,
+                model,
+                max_turns,
+                resume_session_id,
+                on_update,
+                inactivity_timeout_seconds,
+                extra_env,
+                emit_unified,
+            )
+            if on_started is not None:
+                on_started(4242)
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="planner output",
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    def fail_record_pid(*args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        raise RuntimeError("pid bookkeeping failed")
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr(manager, "_record_subagent_pid", fail_record_pid)
+
+    result = manager.run(task, role="planner", engine_name="codex", prompt="groom it")
+
+    assert result.ref.status == "completed"
+    session = load_subagent_session(tmp_path, task.id, result.ref.id)
+    report = load_subagent_report(tmp_path, task.id, result.ref.id)
+
+    assert session["pid"] == 4242
+    assert any(
+        "runner start bookkeeping failed: RuntimeError: pid bookkeeping failed" in warning
+        for warning in report["warnings"]
+    )
+
+
+def test_subagent_manager_survives_nonfatal_progress_callback_failure_for_planner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Planner progress callback failure")
+    task.runtime.current_stage.stage = "grooming"
+    save_task(tmp_path, task)
+    manager = SubagentManager(tmp_path)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run_live(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            max_turns: int | None = None,
+            resume_session_id: str | None = None,
+            on_started=None,
+            on_update=None,
+            inactivity_timeout_seconds: float = 0,
+            extra_env: dict[str, str] | None = None,
+            emit_unified: bool = False,
+        ) -> CLIExecutionResult:
+            del (
+                prompt,
+                model,
+                max_turns,
+                resume_session_id,
+                inactivity_timeout_seconds,
+                extra_env,
+                emit_unified,
+            )
+            if on_started is not None:
+                on_started(4242)
+            partial = CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="partial planner output",
+                stderr="",
+                pid=4242,
+            )
+            if on_update is not None:
+                on_update(partial)
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="final planner output",
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    def fail_progress(*args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        raise RuntimeError("progress bookkeeping failed")
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr(manager, "_write_session_progress", fail_progress)
+
+    result = manager.run(task, role="planner", engine_name="codex", prompt="groom it")
+
+    assert result.ref.status == "completed"
+    session = load_subagent_session(tmp_path, task.id, result.ref.id)
+    report = load_subagent_report(tmp_path, task.id, result.ref.id)
+
+    assert session["pid"] == 4242
+    assert any(
+        "runner progress bookkeeping failed: RuntimeError: progress bookkeeping failed" in warning
+        for warning in report["warnings"]
+    )
+
+
 @pytest.mark.parametrize(
     ("engine_name", "configured_timeout_seconds", "expected_timeout_seconds"),
     [
