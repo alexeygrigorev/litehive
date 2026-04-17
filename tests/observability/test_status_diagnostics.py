@@ -63,6 +63,29 @@ def test_status_reports_invalid_merged_config_without_silent_defaulting(tmp_path
     assert "health:" in output
 
 
+def test_status_ignores_legacy_engine_fallbacks_config(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+    config_file = workspace_dir(tmp_path) / "config.yaml"
+    config_file.write_text(
+        yaml.safe_dump(
+            {
+                "engine_fallbacks": {
+                    "codex": ["goz", "copilot"],
+                    "goz": ["copilot"],
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code, output = _run_fast_status(tmp_path, capsys)
+
+    assert exit_code == 0
+    assert "config: INVALID merged config (" not in output
+    assert "default_engine: codex" in output
+
+
 def test_status_reports_invalid_engine_monitoring_schema(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     monitoring_file = workspace_dir(tmp_path) / "engine-monitoring.yaml"

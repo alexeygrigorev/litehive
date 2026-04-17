@@ -18,6 +18,7 @@ _LEGACY_UNSUPPORTED_KEYS = {
         "Migrate this command to runner_hooks.before_accepting."
     ),
 }
+_LEGACY_IGNORED_KEYS = frozenset({"engine_fallbacks"})
 
 
 def read_config_mapping(path: Path) -> dict[str, Any]:
@@ -46,9 +47,16 @@ def load_effective_config_data(root: Path) -> dict[str, Any]:
     return data
 
 
+def drop_ignored_legacy_config_keys(data: Mapping[str, Any]) -> dict[str, Any]:
+    cleaned = dict(data)
+    for key in _LEGACY_IGNORED_KEYS:
+        cleaned.pop(key, None)
+    return cleaned
+
+
 def load_config(root: Path) -> LitehiveConfig:
     ensure_workspace(root)
-    data = load_effective_config_data(root)
+    data = drop_ignored_legacy_config_keys(load_effective_config_data(root))
     if data.get("process_profile") not in PROCESS_PROFILES:
         data["process_profile"] = "generic"
     if data.get("pool_selection_policy") not in VALID_POOL_SELECTION_POLICIES:
