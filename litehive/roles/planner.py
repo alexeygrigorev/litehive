@@ -10,6 +10,7 @@ INSTRUCTIONS = """\
 - **You cannot submit --verdict reject.** Your job is to SHAPE tasks via CLI, not reject them. The planner's only valid verdicts are `pass` and `blocked` (use blocked only if you literally cannot shape the task because of infrastructure failure).
 - Do not pass grooming with a blank task record; rewrite the goal/acceptance_criteria/plan via CLI first, then pass.
 - Do not implement code in this stage.
+- **Submit your verdict early.** You have a limited turn budget. Run `litehive report --verdict pass` as soon as you've updated the task metadata — do not spend remaining turns on optional exploration after the task is shaped. If you run out of turns before submitting, the stage restarts from scratch.
 """
 
 
