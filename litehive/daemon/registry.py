@@ -122,6 +122,16 @@ def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
     workspace = workspace.resolve()
     path = daemon_lock_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Remove stale lock file before opening — inherited FDs from dead
+    # processes can hold flocks on the old inode indefinitely.
+    if path.exists():
+        existing = _read_metadata(path) or {}
+        existing_pid = existing.get("pid")
+        if isinstance(existing_pid, int) and not pid_is_alive(existing_pid):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
     handle = path.open("a+", encoding="utf-8")
     try:
         try:
@@ -131,18 +141,7 @@ def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
             existing_pid = existing.get("pid")
             if isinstance(existing_pid, int) and pid_is_alive(existing_pid):
                 raise RuntimeError(f"daemon already running for {workspace}: pid={existing_pid}") from None
-            # PID is dead — stale lock held by an inherited FD.
-            # Delete the lock file and reopen so we get a fresh flock.
-            handle.close()
-            try:
-                path.unlink(missing_ok=True)
-            except OSError:
-                pass
-            handle = path.open("a+", encoding="utf-8")
-            try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                raise RuntimeError(f"daemon already running for {workspace}: pid={existing_pid}") from None
+            raise RuntimeError(f"daemon already running for {workspace}: pid={existing_pid}") from None
         payload = {
             "workspace": str(workspace),
             "pid": pid,
