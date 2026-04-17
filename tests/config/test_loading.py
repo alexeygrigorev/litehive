@@ -201,6 +201,19 @@ def test_load_config_rejects_legacy_pre_acceptance_command(tmp_path: Path) -> No
         load_config(tmp_path)
 
 
+def test_load_config_rejects_legacy_task_engine_routing(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
+    raw_config["task_engine_routing"] = {"research": "gemini", "refactor": "codex"}
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(raw_config, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="task_engine_routing is no longer supported"):
+        load_config(tmp_path)
+
+
 def test_load_config_ignores_legacy_engine_fallbacks_key(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))

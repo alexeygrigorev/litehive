@@ -121,3 +121,37 @@ def test_resolve_engine_name_honors_stage_matched_engine_switch(tmp_path: Path) 
 
     assert resolve_engine_name(task, config) == "opencode"
     assert resolve_engine_plan(task, config) == ["opencode"]
+
+
+def test_resolve_engine_name_run_override_beats_stage_matched_engine_switch(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    config = load_config(tmp_path)
+    task = create_task(tmp_path, title="Switch engine for retry")
+    task.pipeline_status = "implementing"
+    task.runtime.last_engine_switch = RuntimeEngineSwitch(
+        stage="implementing",
+        from_engine="codex",
+        to_engine="opencode",
+        reason="codex recovery loop",
+        happened_at="2026-04-14T17:00:00Z",
+    )
+
+    assert resolve_engine_name(task, config, engine_override="gemini") == "gemini"
+    assert resolve_engine_plan(task, config, engine_override="gemini") == ["gemini"]
+
+
+def test_resolve_engine_name_ignores_stage_mismatched_engine_switch(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    config = load_config(tmp_path)
+    task = create_task(tmp_path, title="Switch engine for retry")
+    task.pipeline_status = "implementing"
+    task.runtime.last_engine_switch = RuntimeEngineSwitch(
+        stage="testing",
+        from_engine="codex",
+        to_engine="opencode",
+        reason="qa needed a different engine",
+        happened_at="2026-04-14T17:00:00Z",
+    )
+
+    assert resolve_engine_name(task, config) == "codex"
+    assert resolve_engine_plan(task, config) == ["codex"]

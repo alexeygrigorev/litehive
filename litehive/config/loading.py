@@ -17,6 +17,11 @@ _LEGACY_UNSUPPORTED_KEYS = {
         "pre_acceptance_command is no longer supported. "
         "Migrate this command to runner_hooks.before_accepting."
     ),
+    "task_engine_routing": (
+        "task_engine_routing is no longer supported. "
+        "Engine selection now comes only from default_engine, explicit runtime engine switches, "
+        "or CLI --engine."
+    ),
 }
 _LEGACY_IGNORED_KEYS = frozenset({"engine_fallbacks"})
 
