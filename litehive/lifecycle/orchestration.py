@@ -71,11 +71,12 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
         raise LookupError(f"no task record for {task_id!r}")
     raw = task_record.pipeline_mode
     mode = _PipelineMode(raw) if isinstance(raw, str) and raw else _PipelineMode.FULL
-    entry_stage = _entry_stage_for_task(task_record) or "ready"
+    entry_stage = _entry_stage_for_task(task_record)
     return persistence.initialize(
         task_id,
         pipeline_mode=mode,
-        stage=entry_stage,
+        stage="ready",
+        entry_stage=entry_stage,
     )
 
 

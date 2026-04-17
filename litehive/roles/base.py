@@ -6,7 +6,7 @@ from pydantic import ValidationError
 import yaml
 
 from litehive.lifecycle.nodes.agent import AgentNode, EngineSelector, SessionProvider
-from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.persistence import LastRejection, TaskState
 from litehive.lifecycle.types import NodeName
 from .guidance import default_startup_guidance
 
@@ -85,7 +85,7 @@ class RoleAgent(AgentNode):
         self.prompt_context = prompt_context or PromptContext()
 
     def build_prompt(self, state: TaskState) -> dict[str, Any]:
-        last_rejection = state.last_rejection_by_stage.get(self.NODE_NAME)
+        last_rejection = self._last_rejection_for_prompt(state)
         return {
             "role": self.ROLE,
             "stage": self.NODE_NAME,
@@ -104,6 +104,26 @@ class RoleAgent(AgentNode):
             ),
             "rejecting_hooks": self._rejecting_hooks_for_stage(),
         }
+
+    def _last_rejection_for_prompt(self, state: TaskState) -> LastRejection | None:
+        """Return the rejection context the next agent turn should actually see.
+
+        Implementing retries are special: work can be routed back there by
+        rejects from implementing itself, testing, or accepting. The next SWE
+        prompt should reflect the freshest reject that actually sent the task
+        back to implementing, not whichever rejection was last stored under the
+        implementing key.
+        """
+        fallback = state.last_rejection_by_stage.get(self.NODE_NAME)
+        if self.NODE_NAME != "implementing":
+            return fallback
+        root = self.prompt_context.workspace_root
+        if root is None:
+            return fallback
+        rejection_stage = _latest_reject_stage_for_implementing(root, state.task_id)
+        if rejection_stage is None:
+            return fallback
+        return state.last_rejection_by_stage.get(rejection_stage) or fallback
 
     def _rejecting_hooks_for_stage(self) -> list[dict[str, Any]]:
         """Return the after-stage hooks that reject on failure for this node.
@@ -165,3 +185,33 @@ class RoleAgent(AgentNode):
             return None
         text = md_path.read_text(encoding="utf-8").strip()
         return text or None
+
+
+_IMPLEMENTING_RETRY_ORIGIN_BY_PHASE: dict[str, str] = {
+    "before_implementing": "implementing",
+    "implementing": "implementing",
+    "after_implementing": "implementing",
+    "before_testing": "testing",
+    "testing": "testing",
+    "after_testing": "testing",
+    "before_accepting": "accepting",
+    "accepting": "accepting",
+    "after_accepting": "accepting",
+}
+
+
+def _latest_reject_stage_for_implementing(root: Path, task_id: str) -> str | None:
+    try:
+        from litehive.lifecycle.journal import SqliteJournal
+
+        transitions = SqliteJournal(root).load_transitions(task_id)
+    except Exception:
+        return None
+
+    for row in reversed(transitions):
+        if row.get("event_type") != "Reject":
+            continue
+        stage = _IMPLEMENTING_RETRY_ORIGIN_BY_PHASE.get(str(row.get("from_stage") or ""))
+        if stage is not None:
+            return stage
+    return None

@@ -169,11 +169,17 @@ def _constraints_section(task_record: TaskRecord | None) -> str:
 
 def _last_rejection_section(rejection: dict[str, Any]) -> str:
     return (
-        "Last rejection (from the previous attempt at this stage):\n"
+        "Last rejection (previous attempt at this stage):\n"
         f"- Source: {rejection.get('source')}\n"
         f"- Raised at phase: {rejection.get('raised_at_phase')}\n"
         f"- Reason: {rejection.get('reason')}\n"
-        "Address this concretely in your work this turn."
+        "\n"
+        "Rules when responding to a rejection:\n"
+        "- Read every failure above. Each one is yours to fix, including ones that look pre-existing, environmental, or out of scope.\n"
+        "- Verify with the exact commands cited in REPRODUCTION / FAILURES. Don't substitute shortcuts (e.g. `pytest -q` for `pytest tests/ tests_integration/`).\n"
+        "- Don't declare the rejection stale, replayed, or pipeline-confused. It is live until its commands pass in this worktree.\n"
+        "- Don't submit `blocked` to escape. Blocked is only for unclear/impossible goals or info only a human can give.\n"
+        "- Before `pass`: re-run each reproduction command, include output as evidence."
     )
 
 

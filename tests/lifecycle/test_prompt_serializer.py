@@ -13,7 +13,10 @@ from litehive.roles.swe import SWEAgent
 from litehive.roles.base import PromptContext
 from litehive.config.workspace import ensure_workspace
 from litehive.config.paths import config_path
+from litehive.domain.lifecycle_deltas import StateDelta
 from litehive.domain.reports import TaskThreadComment
+from litehive.lifecycle.events import HookOk, Pass, Reject
+from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.persistence import LastRejection, TaskState
 from litehive.lifecycle.prompt_serializer import serialize_prompt
 from litehive.lifecycle.types import PipelineMode
@@ -319,6 +322,96 @@ def test_implementing_retry_thread_keeps_only_grooming_and_dedups_last_rejection
     assert "bookkeeping" not in text
     assert "old swe pass" not in text
     assert "older reject" not in text
+
+
+def test_implementing_prompt_uses_latest_testing_reject_that_sent_work_back(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    journal = SqliteJournal(workspace)
+    journal.task_started(task.id, "ready")
+    journal.transition(
+        task.id,
+        "after_implementing",
+        Reject(source="hook", reason="old hook failure"),
+        "implementing",
+        "",
+        StateDelta(),
+    )
+    journal.transition(task.id, "implementing", Pass(), "after_implementing", "", StateDelta())
+    journal.transition(task.id, "after_implementing", HookOk(), "before_testing", "", StateDelta())
+    journal.transition(task.id, "before_testing", HookOk(), "testing", "", StateDelta())
+    journal.transition(
+        task.id,
+        "testing",
+        Reject(source="agent", reason="latest qa failure"),
+        "implementing",
+        "",
+        StateDelta(),
+    )
+
+    agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
+    state = make_state(task.id)
+    state.last_rejection_by_stage["implementing"] = LastRejection(
+        source="hook",
+        reason="old hook failure",
+        raised_at_phase="after_implementing",
+    )
+    state.last_rejection_by_stage["testing"] = LastRejection(
+        source="agent",
+        reason="latest qa failure",
+        raised_at_phase="testing",
+    )
+
+    prompt = agent.build_prompt(state)
+
+    assert prompt["last_rejection"] == {
+        "source": "agent",
+        "reason": "latest qa failure",
+        "raised_at_phase": "testing",
+    }
+
+
+def test_implementing_prompt_keeps_latest_hook_reject_when_it_is_newest(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    journal = SqliteJournal(workspace)
+    journal.task_started(task.id, "ready")
+    journal.transition(
+        task.id,
+        "testing",
+        Reject(source="agent", reason="older qa failure"),
+        "implementing",
+        "",
+        StateDelta(),
+    )
+    journal.transition(task.id, "implementing", Pass(), "after_implementing", "", StateDelta())
+    journal.transition(
+        task.id,
+        "after_implementing",
+        Reject(source="hook", reason="newest hook failure"),
+        "implementing",
+        "",
+        StateDelta(),
+    )
+
+    agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
+    state = make_state(task.id)
+    state.last_rejection_by_stage["implementing"] = LastRejection(
+        source="hook",
+        reason="newest hook failure",
+        raised_at_phase="after_implementing",
+    )
+    state.last_rejection_by_stage["testing"] = LastRejection(
+        source="agent",
+        reason="older qa failure",
+        raised_at_phase="testing",
+    )
+
+    prompt = agent.build_prompt(state)
+
+    assert prompt["last_rejection"] == {
+        "source": "hook",
+        "reason": "newest hook failure",
+        "raised_at_phase": "after_implementing",
+    }
 
 
 def test_thread_does_not_dedup_reject_when_source_differs(workspace: Path) -> None:
