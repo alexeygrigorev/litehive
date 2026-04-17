@@ -18,6 +18,7 @@ def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
                     "before_accepting": [{"command": "echo review"}],
                     "after_accepting": [{"command": "echo accepted"}],
                     "after_commit": [{"command": "echo verify", "reject_on_failure": True}],
+                    "after_merge": [{"command": "echo post-merge", "blocking": True}],
                 }
             },
             sort_keys=False,
@@ -35,6 +36,9 @@ def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
     assert config.runner_hooks["after_accepting"][0].reject_on_failure is False
     assert config.runner_hooks["after_commit"][0].command == "echo verify"
     assert config.runner_hooks["after_commit"][0].reject_on_failure is True
+    assert config.runner_hooks["after_merge"][0].command == "echo post-merge"
+    assert config.runner_hooks["after_merge"][0].reject_on_failure is True
+    assert config.runner_hooks["after_merge"][0].blocking is True
 
 
 def test_load_config_preserves_runner_hook_descriptions(tmp_path: Path) -> None:
@@ -62,6 +66,30 @@ def test_load_config_preserves_runner_hook_descriptions(tmp_path: Path) -> None:
     assert config.runner_hooks["after_implementing"][0].description == (
         "ensures lint passes before acceptance"
     )
+
+
+def test_load_config_rejects_conflicting_runner_hook_blocking_flags(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "runner_hooks": {
+                    "after_merge": [
+                        {
+                            "command": "uv run pytest -q",
+                            "blocking": True,
+                            "reject_on_failure": False,
+                        }
+                    ]
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="blocking must match .*reject_on_failure"):
+        load_config(tmp_path)
 
 
 def test_load_config_preserves_runner_hook_execution_mode(tmp_path: Path) -> None:
@@ -99,4 +127,3 @@ def test_configure_rejects_invalid_runner_hook_point(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="runner_hooks key must be one of:"):
         load_config(tmp_path)
-

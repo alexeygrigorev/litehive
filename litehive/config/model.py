@@ -28,9 +28,12 @@ VALID_RUNNER_HOOK_POINTS = frozenset(
         "before_accepting",
         "after_accepting",
         "after_commit",
+        "after_merge",
     }
 )
-REJECTABLE_HOOK_POINTS = frozenset({"after_implementing", "after_testing", "after_commit"})
+REJECTABLE_HOOK_POINTS = frozenset(
+    {"after_implementing", "after_testing", "after_commit", "after_merge"}
+)
 
 RUNNER_HOOK_EXECUTION_MODES = {"run_all", "fail_fast"}
 DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS = 300.0
@@ -85,7 +88,8 @@ class ExternalEngineSandboxConfig:
 @dataclass(slots=True)
 class RunnerHookConfig:
     command: str
-    reject_on_failure: bool = False
+    reject_on_failure: bool | None = None
+    blocking: bool | None = None
     description: str | None = None
     timeout_seconds: float | None = None
     instructions_on_failure: str | None = None
@@ -232,6 +236,21 @@ def _normalize_runner_hook_config(
     hook.command = hook.command.strip()
     if not hook.command:
         raise ValueError(f"{field_name}.command must not be empty")
+    if hook.reject_on_failure is not None and not isinstance(hook.reject_on_failure, bool):
+        raise ValueError(f"{field_name}.reject_on_failure must be a boolean")
+    if hook.blocking is not None and not isinstance(hook.blocking, bool):
+        raise ValueError(f"{field_name}.blocking must be a boolean")
+    if hook.blocking is not None:
+        if (
+            hook.reject_on_failure is not None
+            and hook.reject_on_failure != hook.blocking
+        ):
+            raise ValueError(
+                f"{field_name}.blocking must match {field_name}.reject_on_failure when both are set"
+            )
+        hook.reject_on_failure = hook.blocking
+    if hook.reject_on_failure is None:
+        hook.reject_on_failure = False
     if hook.description is not None:
         hook.description = hook.description.strip() or None
     if hook.instructions_on_failure is not None:
@@ -242,8 +261,9 @@ def _normalize_runner_hook_config(
             raise ValueError(f"{field_name}.timeout_seconds must be greater than 0")
     if hook.reject_on_failure and point not in REJECTABLE_HOOK_POINTS:
         allowed = ", ".join(sorted(REJECTABLE_HOOK_POINTS))
+        field_label = "blocking" if hook.blocking is not None else "reject_on_failure"
         raise ValueError(
-            f"{field_name}.reject_on_failure is only valid for: {allowed} (got {point})"
+            f"{field_name}.{field_label} is only valid for: {allowed} (got {point})"
         )
     return hook
 

@@ -28,6 +28,7 @@ import subprocess
 from litehive.config.loading import load_config
 from litehive.config.engine_models import resolve_task_retry_policy
 from litehive.git.ops import GitError, remove_worktree
+from litehive.domain.reports import TaskThreadComment
 from litehive.domain.task import TaskRecord
 from litehive.domain.runtime import RuntimeHookRejectFingerprint
 from litehive.domain.common import utcnow
@@ -39,14 +40,16 @@ from litehive.state.records import (
     set_task_commit_sha,
 )
 from litehive.tasks.worktrees import resolve_recorded_worktree_path, task_worktree_branch
+from litehive.tasks.activity import append_task_activity
 from litehive.state.locking import persist_future_task_update
 from litehive.state.locking import runner_heartbeat, workspace_runner_guard
 
 from litehive.roles.base import PromptContext
+from .events import Reject
 from .engines import ConfigBackedEngineSelector, EngineFactory
 from .heru_factory import heru_engine_factory
 from .journal import SqliteJournal
-from .nodes.hook import HookSpec, SubprocessHookRunner
+from .nodes.hook import ExecutionMode, HookNode, HookSpec, SubprocessHookRunner
 from .nodes.system import (
     CommitNode,
     GitCommitNode,
@@ -54,7 +57,7 @@ from .nodes.system import (
     PreExecRecoveryNode,
     ReadyNode,
 )
-from .persistence import SqlitePersistence, TaskState
+from .persistence import LastRejection, SqlitePersistence, TaskState
 from .registry import build_registry
 from .runner import StateMachineRunner
 from .sessions import SqliteSessionStore
@@ -68,10 +71,11 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
         raise LookupError(f"no task record for {task_id!r}")
     raw = task_record.pipeline_mode
     mode = _PipelineMode(raw) if isinstance(raw, str) and raw else _PipelineMode.FULL
+    entry_stage = _entry_stage_for_task(task_record) or "ready"
     return persistence.initialize(
         task_id,
         pipeline_mode=mode,
-        entry_stage=_entry_stage_for_task(task_record),
+        stage=entry_stage,
     )
 
 
@@ -328,9 +332,9 @@ def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
     """Translate ``LitehiveConfig.runner_hooks`` into ``HookSpec`` lists.
 
     Config stores runner hooks as ``dict[phase_name, list[HookConfig]]``
-    where HookConfig has ``command``, ``reject_on_failure``,
-    ``timeout_seconds``, ``description``, ``instructions_on_failure``. v2
-    HookSpec is a strict subset — just command / reject_on_failure /
+    where HookConfig has ``command``, ``reject_on_failure``/``blocking``,
+    ``timeout_seconds``, ``description``, ``instructions_on_failure``.
+    v2 HookSpec is a strict subset — just command / reject_on_failure /
     timeout_seconds. The phase names match (``before_grooming``,
     ``after_implementing``, …), so this is a straight per-phase rewrite.
     """
@@ -350,6 +354,96 @@ def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
         if specs:
             out[phase] = specs
     return out
+
+
+def _hook_execution_mode_from_config(config) -> ExecutionMode:
+    raw_mode = getattr(config, "runner_hook_execution_mode", ExecutionMode.FAIL_FAST.value)
+    try:
+        return ExecutionMode(str(raw_mode).strip().lower())
+    except ValueError:
+        return ExecutionMode.FAIL_FAST
+
+
+def _run_after_merge_hooks(
+    root: Path,
+    *,
+    task_id: str,
+    pipeline_mode: _PipelineMode,
+    config,
+    hook_runner: SubprocessHookRunner,
+) -> str | None:
+    specs = hook_specs_from_config(config).get("after_merge", [])
+    if not specs or pipeline_mode != _PipelineMode.FULL:
+        return None
+
+    event = HookNode(
+        "after_merge",
+        hooks=specs,
+        runner=hook_runner,
+        execution_mode=_hook_execution_mode_from_config(config),
+    ).run(TaskState(task_id=task_id, stage="after_merge", pipeline_mode=pipeline_mode))
+    if isinstance(event, Reject):
+        return event.reason
+    return None
+
+
+def _after_merge_failure_message(reason: str) -> str:
+    return (
+        "After-merge verification failed on `main`; the merge was preserved and the "
+        "task was requeued to `implementing` so SWE can fix the merged state.\n"
+        f"Failure: {reason}\n"
+        "Continue from the merged `main` checkout when addressing this."
+    )
+
+
+def _requeue_after_failed_after_merge_check(
+    root: Path,
+    task: TaskRecord,
+    *,
+    reason: str,
+    pipeline_mode: _PipelineMode,
+) -> TaskRecord:
+    from litehive.state.persist import load_state, persist_task_and_state
+    from litehive.tasks.queue import prepare_completed_task_for_recovery
+
+    failure_message = _after_merge_failure_message(reason)
+    prepare_completed_task_for_recovery(task, recovery_stage="implementing")
+
+    state = load_state(root)
+    if state.active_task_id == task.id:
+        state.active_task_id = None
+    state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
+    state.queue.insert(0, task.id)
+    persist_task_and_state(
+        root,
+        task=task,
+        state=state,
+        journal_message=failure_message,
+    )
+    append_task_activity(
+        root,
+        task,
+        TaskThreadComment(
+            role="hook",
+            stage="implementing",
+            verdict="reject",
+            message=failure_message,
+        ),
+    )
+    persistence = SqlitePersistence(root)
+    persistence.reset(task.id)
+    pipeline_state = persistence.initialize(
+        task.id,
+        pipeline_mode=pipeline_mode,
+        stage="implementing",
+    )
+    pipeline_state.last_rejection_by_stage["implementing"] = LastRejection(
+        source="hook",
+        reason=failure_message,
+        raised_at_phase="after_merge",
+    )
+    persistence.save(pipeline_state)
+    return task
 
 
 def run_task(
@@ -431,16 +525,32 @@ def run_task(
 
         # 4. Mirror terminal state back to the v1 TaskRecord.
         updated_task = _sync_back(final_state, root) or task
+        after_merge_failure: str | None = None
         if final_state.stage in {"done", "failed"}:
             try:
                 _cleanup_terminal_worktree(root, updated_task)
             except GitError:
                 pass
+        if final_state.stage == "done":
+            after_merge_failure = _run_after_merge_hooks(
+                root,
+                task_id=updated_task.id,
+                pipeline_mode=final_state.pipeline_mode,
+                config=config,
+                hook_runner=hook_runner,
+            )
+            if after_merge_failure is not None:
+                updated_task = _requeue_after_failed_after_merge_check(
+                    root,
+                    updated_task,
+                    reason=after_merge_failure,
+                    pipeline_mode=final_state.pipeline_mode,
+                )
 
     return ExecutionResult(
         task=updated_task,
         final_state=final_state,
-        final_stage=final_state.stage,
-        failed_reason=final_state.failed_reason,
-        failed_message=final_state.failed_message,
+        final_stage=updated_task.pipeline_status if after_merge_failure is not None else final_state.stage,
+        failed_reason="after_merge_hook_failed" if after_merge_failure is not None else final_state.failed_reason,
+        failed_message=after_merge_failure or final_state.failed_message,
     )

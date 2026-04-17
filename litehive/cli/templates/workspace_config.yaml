@@ -49,13 +49,20 @@ runner_hook_execution_mode: run_all
 # Lifecycle hooks keyed by hook point.
 # Supported keys:
 #   before_grooming, after_grooming, before_implementing, after_implementing,
-#   before_testing, after_testing, before_accepting, after_accepting, after_commit
+#   before_testing, after_testing, before_accepting, after_accepting,
+#   after_commit, after_merge
 # Each hook supports:
 #   command: shell command string
-#   reject_on_failure: only meaningful for rejectable hook points
+#   blocking: preferred user-facing flag for rejectable hook points
+#   reject_on_failure: backward-compatible alias for blocking
 #   description: optional operator-facing label
 #   timeout_seconds: optional timeout budget
 #   instructions_on_failure: optional guidance surfaced on failure
+# Example:
+# runner_hooks:
+#   after_merge:
+#     - command: uv run pytest -q
+#       blocking: true
 runner_hooks: {}
 
 # Timeout budget for detecting hung live subagents and top-level runs.

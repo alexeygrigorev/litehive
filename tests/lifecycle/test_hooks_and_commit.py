@@ -5,11 +5,20 @@ from pathlib import Path
 
 import pytest
 
+from litehive.config.model import LitehiveConfig
+from litehive.config.workspace import ensure_workspace
 from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass, Reject
+from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.hook import HookNode, HookSpec, SubprocessHookRunner
 from litehive.lifecycle.nodes.system import GitCommitNode, StubCommitNode
-from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.orchestration import run_task
+from litehive.lifecycle.persistence import SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
+from litehive.state.persist import load_state
+from litehive.state.records import create_task, get_task, save_task, set_task_worktree_path
+from litehive.tasks.queue import dequeue_next_task
+from litehive.tasks.reports import load_task_thread
+from litehive.tasks.worktrees import serialize_worktree_path, task_worktree_branch, task_worktree_path
 
 
 def make_state(stage: str = "before_grooming", task_id: str = "T-0001") -> TaskState:
@@ -312,3 +321,152 @@ def test_stub_commit_node_always_passes() -> None:
     node = StubCommitNode()
     event = node.run(make_state(stage="commit"))
     assert isinstance(event, Pass)
+
+
+class _AlwaysPassEngine:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def run_turn(self, session, prompt, state) -> AgentVerdict:
+        return AgentVerdict(outcome="pass")
+
+
+def _init_workspace_git_repo(root: Path, *, config: LitehiveConfig | None = None) -> None:
+    ensure_workspace(root, config)
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
+    (root / "seed.txt").write_text("seed\n")
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "seed"], cwd=root, check=True)
+
+
+def _prepare_committed_task_worktree(root: Path, task, *, filename: str = "merged.txt") -> Path:
+    worktree = task_worktree_path(root, task)
+    worktree.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-q", "-b", task_worktree_branch(task), str(worktree), "HEAD"],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=worktree, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=worktree, check=True)
+    (worktree / filename).write_text("merged\n")
+    subprocess.run(["git", "add", filename], cwd=worktree, check=True)
+    subprocess.run(["git", "commit", "-qm", "feature"], cwd=worktree, check=True)
+    set_task_worktree_path(task, serialize_worktree_path(worktree))
+    save_task(root, task)
+    return worktree
+
+
+def test_run_task_runs_after_merge_hook_on_main_and_finishes(tmp_path: Path) -> None:
+    _init_workspace_git_repo(
+        tmp_path,
+        config=LitehiveConfig(
+            runner_hooks={
+                "after_merge": [
+                    {
+                        "command": "git branch --show-current > after_merge_branch.txt && test -f merged.txt",
+                        "blocking": True,
+                    }
+                ]
+            }
+        ),
+    )
+    create_task(tmp_path, title="After merge pass")
+    task = dequeue_next_task(tmp_path)
+    assert task is not None
+    worktree = _prepare_committed_task_worktree(tmp_path, task)
+
+    result = run_task(
+        tmp_path,
+        task,
+        engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
+    )
+    refreshed = get_task(tmp_path, task.id)
+
+    assert result.final_stage == "done"
+    assert refreshed is not None
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert (tmp_path / "merged.txt").read_text() == "merged\n"
+    assert (tmp_path / "after_merge_branch.txt").read_text().strip() == "main"
+    assert not worktree.exists()
+
+
+def test_run_task_requeues_implementing_when_after_merge_hook_fails(tmp_path: Path) -> None:
+    _init_workspace_git_repo(
+        tmp_path,
+        config=LitehiveConfig(
+            runner_hooks={
+                "after_merge": [
+                    {
+                        "command": "git branch --show-current > after_merge_branch.txt && echo fail && exit 1",
+                        "blocking": True,
+                    }
+                ]
+            }
+        ),
+    )
+    create_task(tmp_path, title="After merge fail")
+    task = dequeue_next_task(tmp_path)
+    assert task is not None
+    worktree = _prepare_committed_task_worktree(tmp_path, task)
+
+    result = run_task(
+        tmp_path,
+        task,
+        engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
+    )
+    refreshed = get_task(tmp_path, task.id)
+    state = load_state(tmp_path)
+    pipeline_state = SqlitePersistence(tmp_path).load(task.id)
+
+    assert result.final_stage == "implementing"
+    assert result.failed_reason == "after_merge_hook_failed"
+    assert refreshed is not None
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "implementing"
+    assert refreshed.runtime.git.commit_sha is None
+    assert refreshed.runtime.git.worktree_path is None
+    assert (tmp_path / "merged.txt").read_text() == "merged\n"
+    assert (tmp_path / "after_merge_branch.txt").read_text().strip() == "main"
+    assert not worktree.exists()
+    assert state.active_task_id is None
+    assert state.queue[0] == task.id
+    assert pipeline_state.stage == "implementing"
+    assert pipeline_state.last_rejection_by_stage["implementing"].source == "hook"
+    assert pipeline_state.last_rejection_by_stage["implementing"].raised_at_phase == "after_merge"
+    assert "After-merge verification failed on `main`" in (
+        pipeline_state.last_rejection_by_stage["implementing"].reason
+    )
+    assert "echo fail && exit 1" in pipeline_state.last_rejection_by_stage["implementing"].reason
+
+    thread = load_task_thread(tmp_path, refreshed)
+    assert thread[-1].role == "hook"
+    assert thread[-1].stage == "implementing"
+    assert thread[-1].verdict == "reject"
+    assert "fix the merged state" in thread[-1].message
+
+
+def test_run_task_skips_after_merge_when_hook_not_configured(tmp_path: Path) -> None:
+    _init_workspace_git_repo(tmp_path, config=LitehiveConfig())
+    create_task(tmp_path, title="After merge skipped")
+    task = dequeue_next_task(tmp_path)
+    assert task is not None
+    worktree = _prepare_committed_task_worktree(tmp_path, task)
+
+    result = run_task(
+        tmp_path,
+        task,
+        engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
+    )
+    refreshed = get_task(tmp_path, task.id)
+
+    assert result.final_stage == "done"
+    assert refreshed is not None
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert (tmp_path / "merged.txt").read_text() == "merged\n"
+    assert not (tmp_path / "after_merge_branch.txt").exists()
+    assert not worktree.exists()
