@@ -9,6 +9,10 @@ from copy import deepcopy
 
 DEFAULT_STARTUP_GUIDANCE: dict[str, list[str]] = {
     "all": [],
+    "qa": [
+        "Start from the latest implementing report and the repo's documented verification flow before broad test sweeps.",
+        "Use the default deterministic test suite and targeted checks first; only gate on opt-in, external-boundary, or authenticated integration coverage when the task contract or changed surface requires it.",
+    ],
     "recovery": [
         "Your job is to diagnose why the previous agent failed and fix Litehive infrastructure bugs so the next stage retry can succeed.",
         "Do not redo the failed stage's work, do not implement the task itself, and do not submit the failed stage's verdict on the prior agent's behalf.",

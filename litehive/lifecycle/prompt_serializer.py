@@ -175,11 +175,11 @@ def _last_rejection_section(rejection: dict[str, Any]) -> str:
         f"- Reason: {rejection.get('reason')}\n"
         "\n"
         "Rules when responding to a rejection:\n"
-        "- Read every failure above. Each one is yours to fix, including ones that look pre-existing, environmental, or out of scope.\n"
-        "- Verify with the exact commands cited in REPRODUCTION / FAILURES. Don't substitute shortcuts (e.g. `pytest -q` for `pytest tests/ tests_integration/`).\n"
-        "- Don't declare the rejection stale, replayed, or pipeline-confused. It is live until its commands pass in this worktree.\n"
-        "- Don't submit `blocked` to escape. Blocked is only for unclear/impossible goals or info only a human can give.\n"
-        "- Before `pass`: re-run each reproduction command, include output as evidence."
+        "- Read every failure above. Resolve the ones required by the acceptance criteria, the repo's documented verification contract, or your changed surface.\n"
+        "- Do not dismiss a failure as stale, unrelated, or environmental without current evidence from this worktree.\n"
+        "- Reproduce the cited commands when they are still the correct contract for this task. If the repo documents a narrower default suite or the cited command is opt-in or external coverage, explain that and run the appropriate verification instead.\n"
+        "- If the rejection itself appears to come from Litehive prompt or pipeline behavior rather than task code, call that out explicitly so recovery can fix the infrastructure.\n"
+        "- Before `pass`: rerun the commands you are relying on and include output as evidence."
     )
 
 

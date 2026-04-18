@@ -38,7 +38,10 @@ from litehive.domain.recovery import RecoveryTrigger
 from litehive.state.records import get_task, get_task_worktree_path
 from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
-from tests.support.helpers import LitehiveConfig, create_task, ensure_workspace, run_task
+from litehive.config.model import LitehiveConfig
+from litehive.config.workspace import ensure_workspace
+from litehive.lifecycle.orchestration import run_task
+from litehive.state.records import create_task
 
 pytestmark = pytest.mark.integration
 

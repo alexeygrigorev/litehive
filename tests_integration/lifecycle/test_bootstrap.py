@@ -20,7 +20,7 @@ from litehive.lifecycle.nodes.agent import AgentVerdict, EngineBlockedError
 from litehive.lifecycle.orchestration import run_task
 from litehive.state.records import create_task, save_task
 
-from tests.support.helpers import ensure_workspace
+from litehive.config.workspace import ensure_workspace
 
 pytestmark = pytest.mark.integration
 
