@@ -95,8 +95,13 @@ def extract_engine_timeline(
             task_id=task_id,
             subagent_id=subagent_id,
         )
-    adapter = get_stream_event_adapter(engine_name)
-    timeline = extract_live_timeline(stdout, engine=engine_name, adapter=adapter)
+    adapter = ENGINE_REGISTRY.get(engine_name)
+    timeline = extract_live_timeline(
+        stdout,
+        engine=engine_name,
+        adapter=None if adapter is None else adapter.stream_event_adapter(),
+        payloads=None if adapter is None else adapter._iter_live_native_payloads(stdout),
+    )
     if not timeline.events:
         return None
     if task_id is not None:

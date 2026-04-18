@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import logging
 from typing import Callable
 
@@ -56,6 +57,8 @@ class UnifiedExecutionView:
 
 
 def parse_unified_execution(stdout: str) -> UnifiedExecutionView | None:
+    if not _looks_like_unified_jsonl(stdout):
+        return None
     events: list[UnifiedEvent] = []
     for payload in iter_jsonl_payloads(stdout):
         try:
@@ -82,6 +85,19 @@ def render_execution_transcript(
     if fallback_renderer is not None:
         return fallback_renderer(execution)
     return execution.transcript
+
+
+def _looks_like_unified_jsonl(stdout: str) -> bool:
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            return False
+        return isinstance(payload, dict) and "kind" in payload
+    return False
 
 
 def _render_event_for_transcript(event: UnifiedEvent) -> str:

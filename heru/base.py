@@ -15,7 +15,7 @@ import selectors
 import shutil
 import subprocess
 import time
-from typing import Callable, Literal
+from typing import Callable, Iterable, Literal
 
 from heru.types import (
     EngineUsageObservation,
@@ -922,10 +922,12 @@ def extract_live_timeline(
     *,
     engine: str,
     adapter: StreamEventAdapter | None = None,
+    payloads: Iterable[dict[str, object]] | None = None,
 ) -> LiveTimeline:
     events: list[LiveEvent] = []
     sequence = 0
-    for raw_payload in iter_jsonl_payloads(stdout):
+    payload_iter = payloads if payloads is not None else iter_jsonl_payloads(stdout)
+    for raw_payload in payload_iter:
         payload = adapter.unwrap(raw_payload) if adapter is not None else raw_payload
         if adapter is not None:
             for event in adapter.extract_live_events(payload):
