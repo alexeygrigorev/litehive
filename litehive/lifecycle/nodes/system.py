@@ -485,9 +485,16 @@ def _is_runner_owned_metadata(relpath: str, task_id: str) -> bool:
     as the pipeline advances; capturing them in the checkpoint commit
     causes ``git merge`` to abort with "Your local changes would be
     overwritten" (see T-0320).
+
+    ``uv.lock`` is also excluded: test runs regenerate its ``exclude-newer``
+    timestamp, producing spurious conflicts with main's lockfile on every
+    merge. Dependency changes go via ``pyproject.toml``; the merge-resolver
+    (or a post-merge ``uv sync``) regenerates a consistent lockfile.
     """
     prefix = f".litehive/tasks/{task_id}-"
-    return relpath.startswith(prefix) or relpath.startswith(".litehive/tasks/archive/")
+    if relpath.startswith(prefix) or relpath.startswith(".litehive/tasks/archive/"):
+        return True
+    return relpath == "uv.lock"
 
 
 class GitCommitNode(CommitNode):

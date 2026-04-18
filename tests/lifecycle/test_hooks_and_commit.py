@@ -209,6 +209,45 @@ def test_commit_node_autocommit_excludes_runner_owned_task_metadata(tmp_path: Pa
     )
 
 
+def test_commit_node_autocommit_excludes_uv_lock(tmp_path: Path) -> None:
+    """uv.lock must never be captured in the auto-commit.
+
+    Test runs regenerate its ``exclude-newer`` timestamp, producing spurious
+    conflicts with main's lockfile on every merge. The lockfile should be
+    regenerated from pyproject.toml instead.
+    """
+    repo = tmp_path / "main"
+    worktree = tmp_path / "wt"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=repo, check=True)
+    (repo / "seed.txt").write_text("seed\n")
+    (repo / "uv.lock").write_text("version = 1\n")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "seed"], cwd=repo, check=True)
+
+    subprocess.run(
+        ["git", "worktree", "add", "-q", "-b", "feature", str(worktree), "HEAD"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=worktree, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=worktree, check=True)
+
+    # Worktree: real code change + uv.lock timestamp churn.
+    (worktree / "new.txt").write_text("agent wrote this\n")
+    (worktree / "uv.lock").write_text("version = 1\n# timestamp churn\n")
+
+    node = GitCommitNode(repo, worktree_resolver=lambda state: worktree)
+    event = node.run(make_state(stage="commit"))
+
+    assert isinstance(event, Pass), event
+    assert (repo / "new.txt").read_text() == "agent wrote this\n"
+    # Main's uv.lock must remain the main-side version — not overwritten by the worktree churn.
+    assert (repo / "uv.lock").read_text() == "version = 1\n"
+
+
 def test_commit_node_reports_already_landed_noop_reconciliation(git_repo_with_branch, monkeypatch) -> None:
     main_repo, worktree = git_repo_with_branch
 
