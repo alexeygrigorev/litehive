@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+from typing import Any, Callable
 
 import pytest
 
@@ -18,6 +19,23 @@ from litehive.lifecycle.heru_factory import HeruEngineAdapter
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.paths import task_dir
 from litehive.tasks.reports import append_activity_entry
+
+
+def _fresh_codex_engine(
+    *,
+    run_live_override: Callable[..., CLIExecutionResult] | None = None,
+):
+    from heru import get_engine
+
+    adapter_cls = type(get_engine("codex"))
+    if run_live_override is None:
+        return adapter_cls()
+
+    class _TestCodexCLIAdapter(adapter_cls):
+        def run_live(self, *args: Any, **kwargs: Any) -> CLIExecutionResult:
+            return run_live_override(*args, **kwargs)
+
+    return _TestCodexCLIAdapter()
 
 
 def test_subagent_manager_passes_workspace_root_in_extra_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -263,9 +281,11 @@ def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Fallback usage-limit task")
     manager = SubagentManager(tmp_path)
-    from heru import get_engine
 
-    engine = get_engine("codex")
+    def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
+        raise AssertionError("run_live should not be used when only run is overridden")
+
+    engine = _fresh_codex_engine(run_live_override=fail_run_live)
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
     monkeypatch.setattr(engine, "is_available", lambda: True)
 
@@ -294,11 +314,7 @@ def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
             pid=4242,
         )
 
-    def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
-        raise AssertionError("run_live should not be used when only run is overridden")
-
     monkeypatch.setattr(engine, "run", fake_run)
-    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -312,9 +328,11 @@ def test_subagent_manager_prefers_bound_instance_run_override_over_inherited_run
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Fallback usage-limit task")
     manager = SubagentManager(tmp_path)
-    from heru import get_engine
 
-    engine = get_engine("codex")
+    def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
+        raise AssertionError("run_live should not be used when run is rebound to a custom method")
+
+    engine = _fresh_codex_engine(run_live_override=fail_run_live)
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
     monkeypatch.setattr(engine, "is_available", lambda: True)
 
@@ -345,11 +363,7 @@ def test_subagent_manager_prefers_bound_instance_run_override_over_inherited_run
             pid=4242,
         )
 
-    def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
-        raise AssertionError("run_live should not be used when run is rebound to a custom method")
-
     monkeypatch.setattr(engine, "run", fake_run.__get__(engine, type(engine)))
-    monkeypatch.setattr("heru.base.ExternalCLIAdapter.run_live", fail_run_live)
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 

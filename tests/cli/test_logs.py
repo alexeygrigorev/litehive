@@ -3,8 +3,6 @@
 import argparse
 import gzip
 from pathlib import Path
-import threading
-import time
 
 import pytest
 
@@ -256,28 +254,33 @@ def test_logs_follow_streams_active_stdout_until_subagent_finishes(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("litehive.cli.task_logs_support._FOLLOW_POLL_SECONDS", 0.01)
+    monkeypatch.setattr("litehive.cli.task_logs_support._FOLLOW_POLL_SECONDS", 0.0)
     task, base = _make_task_with_subagent(tmp_path, active=True)
     stdout_path = base / "stdout.log"
     stdout_path.write_text("", encoding="utf-8")
 
-    def writer() -> None:
-        time.sleep(0.02)
-        stdout_path.write_text("chunk one\n", encoding="utf-8")
-        time.sleep(0.02)
+    resolve_calls = 0
+
+    def fake_resolve_follow_task(root: Path, *, task_id: str | None):
+        del root, task_id
+        nonlocal resolve_calls
+        resolve_calls += 1
+        if resolve_calls == 1:
+            return task
+        if resolve_calls == 2:
+            stdout_path.write_text("chunk one\n", encoding="utf-8")
+            return task
         stdout_path.write_text("chunk one\nchunk two\n", encoding="utf-8")
         task.runtime.active_subagent = None
-        save_task_runtime(tmp_path, task)
+        return task
 
-    worker = threading.Thread(target=writer)
-    worker.start()
-    try:
-        exit_code = _cmd_logs(_ns(tmp_path, follow=True))
-    finally:
-        worker.join(timeout=1)
+    monkeypatch.setattr("litehive.cli.task_logs_support._resolve_follow_task", fake_resolve_follow_task)
+
+    exit_code = _cmd_logs(_ns(tmp_path, follow=True))
     output = capsys.readouterr().out
 
     assert exit_code == 0
+    assert resolve_calls == 3
     assert "following: .litehive/tasks/" in output
     assert "chunk one" in output
     assert "chunk two" in output

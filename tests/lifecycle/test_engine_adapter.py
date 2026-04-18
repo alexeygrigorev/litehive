@@ -144,6 +144,13 @@ class _TimeoutThenResumeManager(_StubManager):
         )
 
 
+@pytest.fixture(autouse=True)
+def _reset_stub_manager_state() -> None:
+    _StubManager.last_init = None
+    _StubManager.last_kwargs = None
+    _TimeoutThenResumeManager.calls = 0
+
+
 def test_heru_engine_adapter_reuses_failed_turn_continuation_on_retry(tmp_path, monkeypatch) -> None:
     from litehive.state.records import create_task
 

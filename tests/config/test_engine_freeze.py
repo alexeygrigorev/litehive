@@ -202,7 +202,8 @@ def test_select_engine_records_quota_freeze_and_falls_back(
 ) -> None:
     from litehive.config.engine_models import select_engine
 
-    freeze_until = datetime(2099, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+    freeze_until = (datetime.now(timezone.utc) + timedelta(days=30)).replace(microsecond=0)
+    freeze_iso = freeze_until.strftime("%Y-%m-%dT%H:%M:%SZ")
     ensure_workspace(
         tmp_path,
         LitehiveConfig(default_engine="codex", engine_preference=["codex", "gemini"]),
@@ -212,7 +213,7 @@ def test_select_engine_records_quota_freeze_and_falls_back(
 
     def fake_quota_block(root: Path, engine_name: str):
         if engine_name == "codex":
-            return "codex quota exhausted (used 100%, resets at 2099-01-02T03:04:05Z)", freeze_until
+            return f"codex quota exhausted (used 100%, resets at {freeze_iso})", freeze_until
         return None, None
 
     monkeypatch.setattr("litehive.config.engine_models._engine_quota_block", fake_quota_block)
@@ -221,7 +222,7 @@ def test_select_engine_records_quota_freeze_and_falls_back(
 
     assert selection.engine_name == "gemini"
     reloaded = load_config(tmp_path)
-    assert reloaded.engine_freeze["codex"] == "2099-01-02T03:04:05Z"
+    assert reloaded.engine_freeze["codex"] == freeze_iso
 
 
 def test_select_engine_skips_active_freeze_without_quota_call(
@@ -262,7 +263,8 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
     from litehive.config.engine_models import select_engine
 
     past = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    refreshed = datetime(2099, 2, 3, 4, 5, 6, tzinfo=timezone.utc)
+    refreshed = (datetime.now(timezone.utc) + timedelta(days=7)).replace(microsecond=0)
+    refreshed_iso = refreshed.strftime("%Y-%m-%dT%H:%M:%SZ")
     ensure_workspace(
         tmp_path,
         LitehiveConfig(
@@ -278,7 +280,7 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
     def fake_quota_block(root: Path, engine_name: str):
         quota_calls.append(engine_name)
         if engine_name == "codex":
-            return "codex quota exhausted (used 100%, resets at 2099-02-03T04:05:06Z)", refreshed
+            return f"codex quota exhausted (used 100%, resets at {refreshed_iso})", refreshed
         return None, None
 
     monkeypatch.setattr("litehive.config.engine_models._engine_quota_block", fake_quota_block)
@@ -287,7 +289,7 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
 
     assert selection.engine_name == "gemini"
     assert quota_calls[0] == "codex"
-    assert load_config(tmp_path).engine_freeze["codex"] == "2099-02-03T04:05:06Z"
+    assert load_config(tmp_path).engine_freeze["codex"] == refreshed_iso
 
 
 def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(

@@ -1,4 +1,3 @@
-import time
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -23,14 +22,18 @@ def test_recover_stale_runner_state_skips_task_scan_for_clean_queue(
     assert recover_stale_runner_state(tmp_path) is False
 
 
-def test_repair_clean_workspace_with_100_tasks_stays_under_budget(tmp_path: Path) -> None:
+def test_repair_clean_workspace_with_100_tasks_skips_task_scan(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
-    for index in range(20):
+    for index in range(100):
         create_task(tmp_path, title=f"Task {index}")
 
-    started = time.perf_counter()
+    def _boom(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("clean repair should not scan task records")
+
+    monkeypatch.setattr("litehive.state.records.list_tasks", _boom)
+
     result = CliRunner().invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
-    elapsed = time.perf_counter() - started
 
     assert result.return_value == 0
-    assert elapsed < 1.0
+    assert "active_task_id: None" in result.output
+    assert "queue_length: 100" in result.output

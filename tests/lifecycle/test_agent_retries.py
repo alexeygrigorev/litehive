@@ -285,6 +285,14 @@ class _TimeoutThenPassManager:
         )
 
 
+@pytest.fixture(autouse=True)
+def _reset_timeout_then_pass_manager_state() -> None:
+    _TimeoutThenPassManager.calls = 0
+    _TimeoutThenPassManager.last_kwargs = []
+    _TimeoutThenPassManager.engine_name = "opencode"
+    _TimeoutThenPassManager.session_id = "opencode-session-123"
+
+
 @pytest.mark.parametrize(
     ("engine_name", "session_id"),
     [
