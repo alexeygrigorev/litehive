@@ -365,11 +365,11 @@ def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
 
 
 def _hook_execution_mode_from_config(config) -> ExecutionMode:
-    raw_mode = getattr(config, "runner_hook_execution_mode", ExecutionMode.FAIL_FAST.value)
+    raw_mode = getattr(config, "runner_hook_execution_mode", ExecutionMode.RUN_ALL.value)
     try:
         return ExecutionMode(str(raw_mode).strip().lower())
     except ValueError:
-        return ExecutionMode.FAIL_FAST
+        return ExecutionMode.RUN_ALL
 
 
 def _run_after_merge_hooks(
@@ -602,6 +602,7 @@ def run_task(
             pre_exec_recovery_node=pre_exec_recovery_node,
             prompt_context=prompt_context,
             hook_specs=hook_specs,
+            hook_execution_mode=_hook_execution_mode_from_config(config),
             retry_budget=retry_budget,
             retry_on=tuple(config.retry_on),
         )

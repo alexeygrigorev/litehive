@@ -2,8 +2,8 @@
 
 from types import SimpleNamespace
 
-from litehive.lifecycle.nodes.hook import HookSpec
-from litehive.lifecycle.orchestration import hook_specs_from_config
+from litehive.lifecycle.nodes.hook import ExecutionMode, HookSpec
+from litehive.lifecycle.orchestration import _hook_execution_mode_from_config, hook_specs_from_config
 
 
 def _fake_hook(command: str, *, reject: bool = True, timeout: int = 60) -> SimpleNamespace:
@@ -45,3 +45,12 @@ def test_hook_specs_from_config_skips_empty_phases_and_missing_attr() -> None:
     # Empty per-phase lists are dropped (no empty-list pollution in registry)
     config = SimpleNamespace(runner_hooks={"before_grooming": [], "after_testing": None})
     assert hook_specs_from_config(config) == {}
+
+
+def test_hook_execution_mode_defaults_to_run_all() -> None:
+    assert _hook_execution_mode_from_config(SimpleNamespace()) is ExecutionMode.RUN_ALL
+
+
+def test_hook_execution_mode_honors_fail_fast_override() -> None:
+    config = SimpleNamespace(runner_hook_execution_mode="fail_fast")
+    assert _hook_execution_mode_from_config(config) is ExecutionMode.FAIL_FAST

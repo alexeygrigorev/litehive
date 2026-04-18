@@ -120,7 +120,7 @@ class HookNode(Node):
         hooks: list[HookSpec],
         runner: HookRunner,
         *,
-        execution_mode: ExecutionMode = ExecutionMode.FAIL_FAST,
+        execution_mode: ExecutionMode = ExecutionMode.RUN_ALL,
     ) -> None:
         self.name = name
         self.hooks = hooks
