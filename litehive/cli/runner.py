@@ -190,7 +190,7 @@ def rollback_command(
 
 def report_command(
     workspace: Annotated[Path | None, typer.Option("--workspace", help="Repository root containing .litehive/")] = None,
-    verdict: Annotated[str, typer.Option(click_type=choice(["pass", "reject", "comment"]))] = ...,
+    verdict: Annotated[str, typer.Option(click_type=choice(["pass", "reject", "comment", "fail"]))] = ...,
     message: Annotated[str, typer.Option(help="Detailed explanation")] = ...,
     role: Annotated[str, typer.Option(help="Role submitting the report")] = "swe",
     stage: Annotated[str | None, typer.Option(help="Stage name")] = None,

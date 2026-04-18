@@ -369,9 +369,7 @@ def _runner_hooks_section(stage: str | None, hooks: list[dict[str, Any]]) -> str
 
 
 def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
-    verdicts = (
-        "<resume|advance|done|budget_hit|reject>" if prompt.get("role") == "recovery" else "<pass|reject|blocked>"
-    )
+    verdicts = "<resume|advance|done|budget_hit|reject>" if prompt.get("role") == "recovery" else "<pass|reject>"
     return (
         "IMPORTANT: when you are done, submit your verdict by running:\n"
         "  echo 'your report text' > /tmp/verdict_msg.txt\n"

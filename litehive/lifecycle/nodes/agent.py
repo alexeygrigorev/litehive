@@ -72,7 +72,7 @@ class NudgeRequired(Exception):
 
 @dataclass
 class AgentVerdict:
-    outcome: str  # "pass" | "reject" | "blocked"
+    outcome: str  # "pass" | "reject"
     reason: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -189,7 +189,7 @@ class AgentNode(Node):
             nudged["nudge"] = True
             nudged["nudge_message"] = (
                 "You finished your last turn without submitting a verdict via "
-                "`litehive agent report --verdict <pass|reject|blocked>`. Please "
+                "`litehive agent report --verdict <pass|reject>`. Please "
                 "review your work and submit your verdict now."
             )
             return nudged

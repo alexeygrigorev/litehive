@@ -231,9 +231,9 @@ def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path
         [
             "report",
             "--verdict",
-            "blocked",
+            "reject",
             "--message",
-            "planner blocked",
+            "planner rejected",
             "--role",
             "planner",
             "--task-id",
@@ -254,12 +254,74 @@ def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path
             TaskActivityEntry(
                 role="planner",
                 stage="grooming",
-                verdict="blocked",
-                message="planner blocked",
+                verdict="reject",
+                message="planner rejected",
                 files_changed=[],
             )
         ],
     )
+
+
+def test_agent_report_rejects_agent_blocked_verdict(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Agent blocked verdict rejected")
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "report",
+            "--verdict",
+            "blocked",
+            "--message",
+            "cannot proceed",
+            "--role",
+            "swe",
+            "--stage",
+            "implementing",
+            "--task-id",
+            task.id,
+            "--workspace",
+            str(tmp_path),
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 1
+    assert "not authorized" in result.output
+
+
+def test_agent_report_normalizes_legacy_fail_to_reject(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Legacy fail verdict")
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "report",
+            "--verdict",
+            "fail",
+            "--message",
+            "legacy failure wording",
+            "--role",
+            "swe",
+            "--stage",
+            "implementing",
+            "--task-id",
+            task.id,
+            "--workspace",
+            str(tmp_path),
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    comments = load_task_activity(tmp_path, updated)
+    assert len(comments) == 1
+    assert comments[0].verdict == "reject"
+    assert comments[0].message == "legacy failure wording"
+    assert "verdict: reject" in result.output
 
 
 def test_agent_update_allows_planner_to_shape_active_task(tmp_path: Path, monkeypatch) -> None:
@@ -442,3 +504,38 @@ def test_root_report_accepts_hidden_step_alias(tmp_path: Path, monkeypatch) -> N
             )
         ],
     )
+
+
+def test_root_report_normalizes_legacy_fail_to_reject(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Legacy root fail verdict")
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
+
+    result = CliRunner().invoke(
+        root_app,
+        [
+            "report",
+            "--workspace",
+            str(tmp_path),
+            "--task-id",
+            task.id,
+            "--role",
+            "swe",
+            "--verdict",
+            "fail",
+            "--step",
+            "implementing",
+            "--message",
+            "legacy root failure wording",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    comments = load_task_activity(tmp_path, updated)
+    assert len(comments) == 1
+    assert comments[0].verdict == "reject"
+    assert comments[0].message == "legacy root failure wording"
+    assert "verdict: reject" in result.output

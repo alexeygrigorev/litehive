@@ -130,12 +130,13 @@ class MergeConflictDetected(Event):
 
 @dataclass(frozen=True)
 class Blocked(Event):
-    """Agent needs operator intervention; don't retry, route to recovery.
+    """System-detected infrastructure blockage; don't retry, route to recovery.
 
-    Fired by agent nodes when the agent submits a ``blocked`` verdict —
-    meaning the task can't proceed without an operator decision (missing
-    credential, unclear API, scope contradiction, etc.). Always routes
-    to ``recovering`` regardless of stage, because retrying won't fix it.
+    Reserved for non-agent code paths that detect a blocked execution
+    condition such as missing dependencies, quota exhaustion, or another
+    infrastructure stop. Agent-authored verdicts no longer use
+    ``blocked``; agents submit ``reject`` instead and explain what
+    prevented completion.
     """
 
     reason: str

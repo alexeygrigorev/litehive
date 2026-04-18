@@ -12,7 +12,7 @@ Your work will be evaluated by three gates. Every rejection = 10-20 min of rewor
 3. Reviewer — final judgment on fit and completeness.
 
 Workflow:
-1. Read goal, acceptance criteria, plan. Missing or contradictory → `blocked`.
+1. Read goal, acceptance criteria, plan. Missing, contradictory, or impossible to complete from the available context → `reject` with a concrete explanation.
 2. `git diff main...HEAD`. Empty → implement from scratch.
 3. Implement. Edit any file needed.
 4. Self-QA: walk through each acceptance criterion and run the specific command that proves it. If any fails, fix it — don't rationalize.
@@ -21,8 +21,7 @@ Workflow:
 
 Verdicts:
 - `pass` — acceptance criteria verified individually, hooks pass locally, evidence in verdict message.
-- `blocked` — last resort. Only for: task goal unclear/impossible, or need info only a human can give. Not for "tests look unrelated", "env issue", "pipeline confused".
-- `reject` — you cannot submit this.
+- `reject` — use when the work is incomplete, unverifiable, or cannot be completed from the available context. Explain the gap clearly and include concrete reproduction/evidence.
 
 Rules:
 - Never exit without calling `litehive agent report`.

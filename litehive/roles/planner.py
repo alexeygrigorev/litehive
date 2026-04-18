@@ -7,7 +7,8 @@ INSTRUCTIONS = """\
   - `litehive task update <task-id> --goal ... --acceptance-criteria ...` (or `litehive agent update` inside a subagent) to rewrite task fields.
   - `litehive task add ...` to create follow-up tasks when the current task mixes concerns.
   - `litehive task close <task-id> --outcome duplicate|wont_do|deferred --reason ...` to close.
-- **You cannot submit --verdict reject.** Your job is to SHAPE tasks via CLI, not reject them. The planner's only valid verdicts are `pass` and `blocked` (use blocked only if you literally cannot shape the task because of infrastructure failure).
+- Your only verdicts are `pass` and `reject`.
+- Use `reject` when grooming cannot be completed from the available task context; explain the gap concretely instead of inventing scope or passing an underspecified task.
 - Do not pass grooming with a blank task record; rewrite the goal/acceptance_criteria/plan via CLI first, then pass.
 - Do not implement code in this stage.
 - **Submit your verdict early.** You have a limited turn budget. Run `litehive agent report --verdict pass --message-file /tmp/verdict_msg.txt` as soon as you've updated the task metadata — do not spend remaining turns on optional exploration after the task is shaped. If you run out of turns before submitting, the stage restarts from scratch.

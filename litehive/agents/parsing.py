@@ -23,7 +23,7 @@ def stage_report_from_subagent(
             root,
             task,
             stage=stage,
-            verdicts={"pass", "reject", "blocked", "resume", "advance", "done", "budget_hit"},
+            verdicts={"pass", "reject", "resume", "advance", "done", "budget_hit"},
         )
         if latest is not None:
             return StageReport(

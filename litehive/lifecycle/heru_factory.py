@@ -49,7 +49,7 @@ class _MissingThreadComment(Exception):
 def _allowed_verdicts_for_stage(stage: str) -> set[str]:
     if stage == "recovering":
         return {"resume", "advance", "done", "budget_hit", "reject"}
-    return {"pass", "reject", "blocked"}
+    return {"pass", "reject"}
 
 
 def _execution_checkout_has_changes(workspace_root: Path, task_id: str) -> bool:

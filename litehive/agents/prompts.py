@@ -134,7 +134,7 @@ def stage_prompt(
                     "- Structured acceptance criteria are still missing on the task record, but the current task context is sufficient to infer them.",
                     "- As the planner for grooming, either provide explicit `ACCEPTANCE_CRITERIA:` bullets or let the runner persist the inferred version after you submit `litehive agent report --verdict pass --message-file /tmp/verdict_msg.txt`.",
                     "- You may submit that pass verdict without restating the inferred criteria; the runner will persist them after grooming.",
-                    "- If the current task context is not sufficient after all, submit `litehive agent report --verdict blocked --message-file /tmp/verdict_msg.txt` instead of passing grooming without criteria.",
+                    "- If the current task context is not sufficient after all, submit `litehive agent report --verdict reject --message-file /tmp/verdict_msg.txt` instead of passing grooming without criteria.",
                     "- To override the inferred version, you may add an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets that can be persisted directly.",
                     "- If the inferred criteria are incomplete or incorrect and the task still needs more information, do not pass grooming; explain the gap clearly in your report.",
                     "",
@@ -153,7 +153,7 @@ def stage_prompt(
                 lines.extend(
                     [
                         "- As the planner for grooming, provide an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets before passing grooming.",
-                        "- If the context is still insufficient, explain the missing information in your report and submit `litehive agent report --verdict blocked --message-file /tmp/verdict_msg.txt`.",
+                        "- If the context is still insufficient, explain the missing information in your report and submit `litehive agent report --verdict reject --message-file /tmp/verdict_msg.txt`.",
                     ]
                 )
 
@@ -247,7 +247,7 @@ def stage_prompt(
         lines.extend(["", thread_text])
 
     # Instruct agents to submit their verdict via CLI
-    verdicts = "<pass|blocked>" if stage_owner == "planner" else "<pass|reject|blocked>"
+    verdicts = "<resume|advance|done|budget_hit|reject>" if stage_owner == "recovery" else "<pass|reject>"
     lines.extend(
         [
             "",
@@ -262,7 +262,7 @@ def stage_prompt(
             "Do NOT rely on your raw transcript being read — write the report as if it is the only thing the next agent will see.",
             "",
             "Report requirements:",
-            "- On PASS/ACCEPT: explain what you verified, what tests you ran, what evidence confirms the acceptance criteria are met.",
+            "- On PASS: explain what you verified, what tests you ran, what evidence confirms the acceptance criteria are met.",
             "- On REJECT: you MUST include ALL of the following:",
             "  1. EXPECTED behavior: what should happen according to the acceptance criteria",
             "  2. OBSERVED behavior: what actually happens (exact error messages, test output, wrong values)",

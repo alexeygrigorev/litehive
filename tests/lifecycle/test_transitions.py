@@ -163,6 +163,13 @@ def test_testing_reject_routes_back_to_implementing():
     assert trans.delta.inc_stage_retry == "testing"
 
 
+def test_accepting_reject_routes_back_to_implementing():
+    state = make_state("accepting", stage_retry={"accepting": 0})
+    trans = step("accepting", Reject(source="agent", reason="x"), state)
+    assert trans.next == "implementing"
+    assert trans.delta.inc_stage_retry == "accepting"
+
+
 def test_commit_reject_goes_to_recovering():
     state = make_state("commit")
     trans = step("commit", Reject(source="system", reason="merge conflict"), state)

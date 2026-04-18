@@ -15,7 +15,7 @@ Key context:
 - Read `docs/pipeline-monitoring.md` for full debugging instructions
 - Rules table: `litehive/pipeline/rules.py`
 - Stages enum: `litehive/pipeline/stages.py`
-- Agent CLI enforces role-based verdicts (SWE can only pass/blocked)
+- Agent CLI enforces role-based verdicts (non-recovery agents use pass/reject only)
 - The after_implementing hook runs ruff + pytest on the full codebase
 - `litehive pipeline journal <task_id>` shows the full state machine trace
 - `litehive pipeline reset <task_id>` clears v2 state for a fresh start

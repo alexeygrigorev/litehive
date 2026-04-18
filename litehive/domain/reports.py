@@ -117,12 +117,16 @@ class TaskActivityEntry(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _normalize_stage(cls, data: object) -> object:
+    def _normalize_payload(cls, data: object) -> object:
         if not isinstance(data, dict):
             return data
-        if "stage" not in data and "step" in data:
-            return {**data, "stage": data["step"]}
-        return data
+        normalized = dict(data)
+        if "stage" not in normalized and "step" in normalized:
+            normalized["stage"] = normalized["step"]
+        verdict = normalized.get("verdict")
+        if isinstance(verdict, str) and verdict.strip().lower() == "fail":
+            normalized["verdict"] = "reject"
+        return normalized
 
 
 __all__ = [

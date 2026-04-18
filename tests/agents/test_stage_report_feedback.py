@@ -91,6 +91,34 @@ def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Pat
     assert report.feedback == message
 
 
+def test_stage_report_from_subagent_normalizes_legacy_fail_to_reject(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Normalize legacy fail verdict")
+
+    append_activity_entry(
+        tmp_path,
+        task,
+        TaskActivityEntry(
+            role="swe",
+            stage="implementing",
+            verdict="fail",
+            message="legacy failure wording",
+        ),
+    )
+
+    report = stage_report_from_subagent(
+        task,
+        "implementing",
+        _subagent_result(transcript="legacy transcript"),
+        root=tmp_path,
+    )
+
+    assert report.submitted_via_cli is True
+    assert report.verdict == "reject"
+    assert report.summary == "legacy failure wording"
+    assert report.feedback == "legacy failure wording"
+
+
 def test_subagent_manager_keeps_full_transcript_artifacts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

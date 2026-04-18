@@ -25,12 +25,12 @@ from litehive.tasks.activity import append_task_activity
 
 
 VERDICT_ALLOWLIST: dict[str, set[str]] = {
-    "planner": {"pass", "blocked"},  # planners shape tasks via CLI, not reject
-    "swe": {"pass", "blocked"},
-    "qa": {"pass", "reject", "blocked"},
-    "reviewer": {"pass", "reject", "blocked"},
+    "planner": {"pass", "reject"},
+    "swe": {"pass", "reject"},
+    "qa": {"pass", "reject"},
+    "reviewer": {"pass", "reject"},
     "recovery": {"resume", "advance", "done", "budget_hit", "reject"},
-    "merge-resolver": {"pass", "reject", "blocked"},
+    "merge-resolver": {"pass", "reject"},
 }
 
 agent_app = typer.Typer(
@@ -65,7 +65,7 @@ def _resolve_report_stage(*, explicit_stage: str | None, task, pipeline_stage: s
 
 
 def _allowed_verdicts_for_role(role: str) -> set[str]:
-    return VERDICT_ALLOWLIST.get(role, {"pass", "reject", "blocked"})
+    return VERDICT_ALLOWLIST.get(role, {"pass", "reject"})
 
 
 def block_if_agent() -> None:
@@ -77,7 +77,7 @@ def block_if_agent() -> None:
 
 @agent_app.command("report", help="Submit your stage verdict")
 def agent_report_command(
-    verdict: Annotated[str, typer.Option("--verdict", help="pass, reject, or blocked")],
+    verdict: Annotated[str, typer.Option("--verdict", help="Stage verdict")],
     message: Annotated[str, typer.Option("--message", help="Your report text (use - for stdin)")] = "",
     message_file: Annotated[Path | None, typer.Option("--message-file", help="Read message from file")] = None,
     role: Annotated[str | None, typer.Option("--role", help="Override role (default: from env)")] = None,
@@ -105,6 +105,8 @@ def agent_report_command(
         raise SystemExit(1)
 
     normalized_verdict = verdict.strip().lower()
+    if agent_role != "recovery" and normalized_verdict == "fail":
+        normalized_verdict = "reject"
 
     allowed = _allowed_verdicts_for_role(agent_role)
     if normalized_verdict not in allowed:
