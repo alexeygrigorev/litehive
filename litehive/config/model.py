@@ -30,7 +30,16 @@ VALID_RUNNER_HOOK_POINTS = frozenset(
     }
 )
 REJECTABLE_HOOK_POINTS = frozenset(
-    {"after_implementing", "after_testing", "after_commit", "after_merge"}
+    {
+        "before_implementing",
+        "after_implementing",
+        "before_testing",
+        "after_testing",
+        "before_accepting",
+        "after_accepting",
+        "after_commit",
+        "after_merge",
+    }
 )
 
 RUNNER_HOOK_EXECUTION_MODES = {"run_all", "fail_fast"}

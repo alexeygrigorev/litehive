@@ -11,10 +11,10 @@ from heru.types import SubagentRef
 
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.runtime import RuntimeSubagentState
-from litehive.domain.reports import TaskActivityEntry
+from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.state.records import create_task, save_task, save_task_runtime
 from litehive.tasks.paths import task_dir
-from litehive.tasks.reports import append_activity_entry
+from litehive.tasks.reports import append_activity_entry, record_stage_report
 
 from tests.support.helpers import _cmd_debug, _run, _task_worktree_path
 
@@ -172,6 +172,31 @@ def test_debug_no_verdict(tmp_path: Path, capsys: pytest.CaptureFixture[str]) ->
 
     assert exit_code == 0
     assert "verdict: none" in output
+
+
+def test_debug_shows_latest_hook_stage_report(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    task, sa_dir = _make_task_with_subagent(tmp_path)
+    record_stage_report(
+        tmp_path,
+        task,
+        StageReport(
+            task_id=task.id,
+            stage="accepting",
+            verdict="reject",
+            source="hook",
+            summary="accepting rejected: hook `uv run ruff check .` failed at `before_accepting`",
+            feedback="Runner hook failure at `before_accepting`",
+        ),
+    )
+
+    exit_code = _cmd_debug(_ns(tmp_path, task.id))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "stage_report_verdict: reject" in output
+    assert "stage_report_source: hook" in output
+    assert "stage_report_stage: accepting" in output
+    assert "stage_report_summary: accepting rejected: hook `uv run ruff check .` failed at `before_accepting`" in output
 
 
 # -- stdout/stderr tail --

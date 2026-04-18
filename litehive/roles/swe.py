@@ -7,7 +7,7 @@ INSTRUCTIONS = """\
 
 Your work will be evaluated by three gates. Every rejection = 10-20 min of rework. Run each gate locally BEFORE submitting pass:
 
-1. After-implementing hooks — linters and automated checks listed in this prompt under "Checks that will reject your work". Run each command locally and fix anything it flags (common: ruff, unused imports left from refactoring, failing pytest).
+1. After-implementing hooks — linters and automated checks listed in this prompt under "After implementing, these checks will run:". Run each command locally and fix anything it flags (common: ruff, unused imports left from refactoring, failing pytest).
 2. QA engineer — runs the EXACT command in each acceptance criterion and verifies the observable behavior. Unit tests passing is not enough. If a criterion says "`litehive status --full` shows X", run that exact command and confirm X. If a criterion says "field Y persists to task.yaml", inspect the yaml file.
 3. Reviewer — final judgment on fit and completeness.
 

@@ -18,7 +18,7 @@ from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.heru_factory import HeruEngineAdapter
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.paths import task_dir
-from litehive.tasks.reports import append_activity_entry
+from litehive.tasks.reports import append_activity_entry, load_stage_reports
 
 
 def _fresh_codex_engine(
@@ -139,9 +139,13 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
     result = manager.run(task, role="planner", engine_name="codex", prompt="groom it")
 
     report = load_subagent_report(tmp_path, task.id, result.ref.id)
+    stage_reports = load_stage_reports(tmp_path, task)
 
     assert report["summary"] == "REJECT"
     assert report["warnings"] == []
+    assert stage_reports[-1].source == "agent"
+    assert stage_reports[-1].stage == "grooming"
+    assert stage_reports[-1].summary == "REJECT"
 
 
 def test_subagent_manager_uses_recovering_stage_for_recovery_cli_verdict(
