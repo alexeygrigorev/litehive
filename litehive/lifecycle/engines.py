@@ -19,11 +19,10 @@ from pathlib import Path
 from typing import Callable
 
 from litehive.config.engine_models import (
-    is_engine_frozen,
-    resolve_engine_attempt_order,
     select_engine,
 )
 from litehive.config.model import LitehiveConfig
+from litehive.domain.task import TaskRecord
 from litehive.state.records import get_task
 
 from .nodes.agent import (
@@ -42,8 +41,9 @@ class ConfigBackedEngineSelector:
     Resolves the task's next engine/model using the shared selection logic,
     then materializes the corresponding engine instance.
 
-    When task context is unavailable, it falls back to the historical
-    config-only behavior and simply walks ``config.engine_preference``.
+    When a persisted task record is unavailable, it synthesizes minimal
+    task context so selection still flows through the shared quota-aware
+    selector.
 
     The engine instance itself is built via the injected
     ``engine_factory``. Returns ``None`` if every candidate is excluded
@@ -66,14 +66,21 @@ class ConfigBackedEngineSelector:
         self.engine_override = engine_override
         self.model_override = model_override
 
-    def _fallback_select(self, excluded: frozenset[str]) -> Engine | None:
-        for engine_name in self.config.engine_preference:
-            if engine_name in excluded:
-                continue
-            if is_engine_frozen(self.config, engine_name):
-                continue
-            return self.engine_factory(engine_name)
-        return None
+    def _selection_task(self, state: TaskState, node_name: NodeName) -> TaskRecord | None:
+        if self.workspace_root is None:
+            return None
+        if getattr(state, "task_id", None):
+            task = get_task(self.workspace_root, state.task_id)
+            if task is not None:
+                return task
+        return TaskRecord(
+            id=getattr(state, "task_id", None) or "T-runtime-selection",
+            slug="runtime-engine-selection",
+            title="Runtime engine selection",
+            pipeline_mode=state.pipeline_mode.value,
+            status="in_progress",
+            pipeline_status=node_name,
+        )
 
     def select(
         self,
@@ -81,32 +88,17 @@ class ConfigBackedEngineSelector:
         node_name: NodeName,
         excluded: frozenset[str],
     ) -> Engine | None:
-        del node_name
-        if self.workspace_root is None or not getattr(state, "task_id", None):
-            return self._fallback_select(excluded)
-
-        task = get_task(self.workspace_root, state.task_id)
+        task = self._selection_task(state, node_name)
         if task is None:
-            return self._fallback_select(excluded)
-
-        candidate_engine_names = [
-            engine_name
-            for engine_name in resolve_engine_attempt_order(
-                task,
-                self.config,
-                engine_override=self.engine_override,
-            )
-            if engine_name not in excluded
-        ]
-        if not candidate_engine_names:
             return None
 
         selection = select_engine(
             self.workspace_root,
             task,
             self.config,
+            engine_override=self.engine_override,
             model_override=self.model_override,
-            engine_names=candidate_engine_names,
+            excluded_engine_names=excluded,
         )
         if selection.engine_name is None:
             return None

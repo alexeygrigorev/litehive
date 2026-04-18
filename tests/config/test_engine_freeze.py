@@ -19,12 +19,25 @@ from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.task import TaskRecord
+from litehive.git.ops import GitError
+from litehive.lifecycle.engines import ConfigBackedEngineSelector
+from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task
 
 
 def _run_engine(*args: str) -> tuple[int | None, str]:
     result = CliRunner().invoke(app, list(args), standalone_mode=False)
     return result.return_value, result.output
+
+
+class _StubLifecycleEngine:
+    def __init__(self, name: str, model_name: str | None = None) -> None:
+        self.name = name
+        self.model_name = model_name
+
+    def with_model(self, model_name: str | None) -> "_StubLifecycleEngine":
+        return _StubLifecycleEngine(self.name, model_name=model_name)
 
 
 def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -321,39 +334,173 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
 
     assert selection.engine_name == "codex"
     assert quota_calls == ["codex"]
+    assert "codex" not in load_config(tmp_path).engine_freeze
 
 
-def test_builder_uses_shared_select_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    pass  # build_executor deleted
-
-
-def test_recovery_auto_engine_uses_shared_select_engine(
+def test_lifecycle_selector_uses_shared_select_engine_when_task_record_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    captured: dict[str, object] = {}
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            default_engine="codex",
+            engine_preference=["codex", "gemini"],
+        ),
+    )
+    config = load_config(tmp_path)
+
+    def fake_select_engine(root: Path, task: TaskRecord, config: LitehiveConfig, **kwargs) -> EngineSelection:
+        captured["root"] = root
+        captured["task"] = task
+        captured["config"] = config
+        captured["kwargs"] = kwargs
+        return EngineSelection(
+            engine_name="gemini",
+            model_name="gemini-2.5-pro",
+            engine_attempts=["gemini"],
+            skipped=[],
+        )
+
+    monkeypatch.setattr("litehive.lifecycle.engines.select_engine", fake_select_engine)
+
+    selector = ConfigBackedEngineSelector(
+        config,
+        lambda engine_name: _StubLifecycleEngine(engine_name),
+        workspace_root=tmp_path,
+    )
+
+    engine = selector.select(
+        TaskState(task_id="T-4040", stage="implementing", pipeline_mode=PipelineMode.FULL),
+        "implementing",
+        frozenset({"codex"}),
+    )
+
+    assert isinstance(engine, _StubLifecycleEngine)
+    assert engine.name == "gemini"
+    assert engine.model_name == "gemini-2.5-pro"
+    assert captured["root"] == tmp_path
+    assert isinstance(captured["task"], TaskRecord)
+    assert captured["task"].id == "T-4040"
+    assert captured["task"].pipeline_status == "implementing"
+    assert captured["kwargs"] == {
+        "engine_override": None,
+        "model_override": None,
+        "excluded_engine_names": frozenset({"codex"}),
+    }
+
+
+@pytest.mark.parametrize(
+    ("recovery_engine", "default_engine", "expected_kwargs"),
+    [
+        ("auto", "codex", {"engine_override": None, "require_available": True}),
+        (None, "codex", {"engine_override": None, "require_available": True}),
+        ("codex", "gemini", {"engine_override": "codex", "require_available": True}),
+    ],
+)
+def test_recovery_engine_uses_shared_select_engine(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    recovery_engine: str | None,
+    default_engine: str,
+    expected_kwargs: dict[str, object],
+) -> None:
     from litehive.recovery.execution_recovery import resolve_recovery_engine
 
+    captured: dict[str, object] = {}
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            default_engine=default_engine,
+            recovery_engine=recovery_engine,
+            engine_preference=["codex", "gemini"],
+        ),
+    )
+    task = create_task(tmp_path, title="Recovery selection")
+    config = load_config(tmp_path)
+
+    def fake_select_engine(root: Path, task: TaskRecord, config: LitehiveConfig, **kwargs) -> EngineSelection:
+        captured["root"] = root
+        captured["task"] = task
+        captured["config"] = config
+        captured["kwargs"] = kwargs
+        return EngineSelection(
+            engine_name="gemini",
+            model_name="gemini-2.5-pro",
+            engine_attempts=["codex", "gemini"],
+            skipped=[],
+        )
+
+    monkeypatch.setattr("litehive.config.engine_models.select_engine", fake_select_engine)
+
+    engine_name, model_name = resolve_recovery_engine(tmp_path, task, config)
+
+    assert engine_name == "gemini"
+    assert model_name == "gemini-2.5-pro"
+    assert captured["root"] == tmp_path
+    assert captured["task"] == task
+    assert captured["config"] == config
+    assert captured["kwargs"] == expected_kwargs
+
+
+def test_recovery_auto_engine_respects_shared_selector_blocked_result(tmp_path: Path) -> None:
+    from litehive.config.engine_models import select_engine
+    from litehive.recovery.execution_recovery import resolve_recovery_engine
+
+    future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     ensure_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine="codex",
             recovery_engine="auto",
             engine_preference=["codex", "gemini"],
+            engine_freeze={"codex": future, "gemini": future},
         ),
     )
-    task = create_task(tmp_path, title="Recovery selection")
+    task = create_task(tmp_path, title="Recovery freeze repro")
     config = load_config(tmp_path)
-    monkeypatch.setattr(
-        "litehive.config.engine_models.select_engine",
-        lambda *args, **kwargs: EngineSelection(
-            engine_name="gemini",
-            model_name="gemini-2.5-pro",
-            engine_attempts=["codex", "gemini"],
-            skipped=[],
+
+    selection = select_engine(tmp_path, task, config, require_available=True)
+
+    assert selection.engine_name is None
+    assert selection.blocked_reason == "all candidate engines are frozen"
+
+    with pytest.raises(GitError, match="all candidate engines are frozen"):
+        resolve_recovery_engine(tmp_path, task, config)
+
+
+@pytest.mark.parametrize(
+    ("recovery_engine", "default_engine", "selector_kwargs"),
+    [
+        (None, "codex", {}),
+        ("codex", "gemini", {"engine_override": "codex"}),
+    ],
+)
+def test_recovery_non_auto_branches_skip_frozen_engines(
+    tmp_path: Path,
+    recovery_engine: str | None,
+    default_engine: str,
+    selector_kwargs: dict[str, object],
+) -> None:
+    from litehive.config.engine_models import select_engine
+    from litehive.recovery.execution_recovery import resolve_recovery_engine
+
+    future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            default_engine=default_engine,
+            recovery_engine=recovery_engine,
+            engine_preference=["codex", "gemini"],
+            engine_freeze={"codex": future},
         ),
     )
+    task = create_task(tmp_path, title=f"Recovery branch {recovery_engine!r}")
+    config = load_config(tmp_path)
 
-    engine_name, model_name = resolve_recovery_engine(tmp_path, task, config)
+    selection = select_engine(tmp_path, task, config, require_available=True, **selector_kwargs)
+    engine_name, _model_name = resolve_recovery_engine(tmp_path, task, config)
 
+    assert selection.engine_name == "gemini"
     assert engine_name == "gemini"
-    assert model_name == "gemini-2.5-pro"

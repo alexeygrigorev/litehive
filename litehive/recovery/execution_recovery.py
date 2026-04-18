@@ -19,31 +19,25 @@ def resolve_recovery_engine(
     task: TaskRecord,
     config: LitehiveConfig | None,
 ) -> tuple[str, str | None]:
-    from litehive.config.engine_models import resolve_model, select_engine
+    from litehive.config.engine_models import select_engine
 
-    model: str | None = None
-    if config and config.recovery_engine and config.recovery_engine != "auto":
-        engine = config.recovery_engine
-    elif config and config.recovery_engine == "auto":
-        candidates = list(config.engine_preference) if config.engine_preference else []
-        if config.default_engine and config.default_engine not in candidates:
-            candidates.append(config.default_engine)
-        if not candidates:
-            candidates = ["claude", "codex", "copilot", "goz"]
-        selection = select_engine(
-            root,
-            task,
-            config,
-            engine_names=candidates,
-            require_available=True,
-        )
-        engine = selection.engine_name or config.default_engine or "codex"
-        model = selection.model_name if selection.engine_name is not None else None
-    else:
-        engine = config.default_engine if config else "codex"
-    if model is None:
-        model = resolve_model(task, config, engine_name=engine) if config else None
-    return engine, model
+    if config is None:
+        return "codex", None
+
+    engine_override = None
+    if config.recovery_engine and config.recovery_engine != "auto":
+        engine_override = config.recovery_engine
+
+    selection = select_engine(
+        root,
+        task,
+        config,
+        engine_override=engine_override,
+        require_available=True,
+    )
+    if selection.engine_name is None:
+        raise GitError(selection.blocked_reason or "no eligible recovery engine available")
+    return selection.engine_name, selection.model_name
 
 
 def require_completed_task(task: TaskRecord, action: str) -> None:

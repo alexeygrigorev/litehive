@@ -250,7 +250,11 @@ def _run_worktree_merge_agent(
     cfg = config or load_config(root)
     from litehive.recovery.execution_recovery import resolve_recovery_engine
 
-    engine_name, model = resolve_recovery_engine(root, task, cfg)
+    try:
+        engine_name, model = resolve_recovery_engine(root, task, cfg)
+    except GitError as exc:
+        append_journal(root, task, f"[worktree] Merge agent unavailable: {exc}")
+        return
     subagents = SubagentManager(root, execution_root=worktree_path)
     subagents.run(
         task,

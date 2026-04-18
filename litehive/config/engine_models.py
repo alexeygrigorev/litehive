@@ -1,5 +1,6 @@
 """Model and engine resolution and continuation handoff."""
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -155,6 +156,11 @@ def _persist_engine_freeze(
     config.engine_freeze[engine_name] = freeze_iso
 
 
+def _clear_engine_freeze(root: Path, config: LitehiveConfig, *, engine_name: str) -> None:
+    clear_persisted_engine_freeze(root, engine_name=engine_name)
+    config.engine_freeze.pop(engine_name, None)
+
+
 def _record_codex_quota_monitoring(root: Path, status: object) -> None:
     try:
         from litehive.observability.engine_monitoring import record_codex_quota_check
@@ -214,21 +220,27 @@ def select_engine(
     engine_override: str | None = None,
     model_override: str | None = None,
     engine_names: list[str] | None = None,
+    excluded_engine_names: Collection[str] = (),
     require_available: bool = False,
 ) -> EngineSelection:
+    excluded = set(excluded_engine_names)
     if engine_names is not None:
-        order = _dedupe_engine_names(engine_names)
+        order = [engine_name for engine_name in _dedupe_engine_names(engine_names) if engine_name not in excluded]
     else:
         plan = resolve_engine_plan(
             task,
             config,
             engine_override=engine_override,
         )
-        order = _engine_attempt_order(plan, config.engine_preference)
+        order = [
+            engine_name
+            for engine_name in _engine_attempt_order(plan, config.engine_preference)
+            if engine_name not in excluded
+        ]
     frozen_engines = active_engine_freezes(config)
     attempts = [engine_name for engine_name in order if engine_name not in frozen_engines]
     skipped: list[EngineSkip] = []
-    if not attempts and frozen_engines:
+    if not attempts and order and all(engine_name in frozen_engines for engine_name in order):
         return EngineSelection(
             engine_name=None,
             model_name=None,
@@ -244,12 +256,19 @@ def select_engine(
                     continue
             except Exception:  # noqa: BLE001
                 pass
+        expired_freeze = (
+            engine_name not in frozen_engines and _parse_datetime_utc(config.engine_freeze.get(engine_name)) is not None
+        )
         quota_reason, freeze_until = _engine_quota_block(root, engine_name)
         if quota_reason is not None:
             if freeze_until is not None:
                 _persist_engine_freeze(root, config, engine_name=engine_name, freeze_until=freeze_until)
+            elif expired_freeze:
+                _clear_engine_freeze(root, config, engine_name=engine_name)
             skipped.append(EngineSkip(engine_name=engine_name, reason=quota_reason))
             continue
+        if expired_freeze:
+            _clear_engine_freeze(root, config, engine_name=engine_name)
         return EngineSelection(
             engine_name=engine_name,
             model_name=resolve_model(
