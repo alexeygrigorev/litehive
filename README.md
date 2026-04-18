@@ -234,6 +234,44 @@ Litehive bootstraps `.litehive/config.yaml` and `.litehive/context.md` on first 
 
 Each task runs in its own git worktree. When it passes all stages, the worktree is merged into main and cleaned up.
 
+## Querying workspace data
+
+Pipeline state lives in a single SQLite database outside the repo so it doesn't pollute git history. The path is derived from a hash of the workspace path:
+
+```
+~/.local/share/litehive/<workspace-hash>/data.db
+```
+
+For the current workspace, resolve it with:
+
+```bash
+python -c "from pathlib import Path; from litehive.config.paths import workspace_database_path; print(workspace_database_path(Path.cwd()))"
+```
+
+Useful tables: `pipeline_transitions`, `task_state`, `pipeline_journal`, `queue`, `stage_reports`, `subagent_sessions`, `engine_monitoring`, `attention`, `worktrees`.
+
+Example — transitions + duration + status for every task touched in the last 24h (single query, instant):
+
+```bash
+DB=$(python -c "from pathlib import Path; from litehive.config.paths import workspace_database_path; print(workspace_database_path(Path.cwd()))")
+sqlite3 "$DB" <<'SQL'
+.mode column
+.headers on
+SELECT
+  t.task_id,
+  COUNT(*) AS transitions,
+  CAST((julianday(MAX(t.created_at)) - julianday(MIN(t.created_at))) * 24 * 60 AS INTEGER) AS dur_min,
+  json_extract(s.payload, '$.status') AS status
+FROM pipeline_transitions t
+LEFT JOIN task_state s ON s.task_id = t.task_id
+WHERE t.created_at > datetime('now', '-24 hours')
+GROUP BY t.task_id
+ORDER BY t.task_id;
+SQL
+```
+
+Prefer direct SQL over iterating `litehive task show` per task — the CLI per-task approach is ~100× slower on any non-trivial report.
+
 ## Artifact retention
 
 Litehive keeps `task.yaml`, `runtime.yaml`, stage reports, `comments.yaml`, `journal.md`, `events.jsonl`, `session.yaml`, and `report.yaml` as the durable evidence surface for status, repair, recovery, and handoff.
