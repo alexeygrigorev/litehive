@@ -1,6 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import heru
 from litehive.agents._continuation import extract_execution_continuation
 from heru.base import CLIExecutionResult
 from litehive.config.engine_models import _set_continuation_handoff
@@ -20,10 +21,12 @@ def _execution(stdout: str) -> CLIExecutionResult:
 
 
 def test_extract_execution_continuation_prefers_unified_events(monkeypatch) -> None:
-    def fail_if_called(engine_name, execution):  # type: ignore[no-untyped-def]
-        raise AssertionError(f"Heru fallback should not run for {engine_name}")
+    adapter = heru.ENGINE_REGISTRY["codex"]
 
-    monkeypatch.setattr("litehive.agents._continuation.extract_engine_continuation", fail_if_called)
+    def fail_if_called(execution):  # type: ignore[no-untyped-def]
+        raise AssertionError("Adapter fallback should not run for codex")
+
+    monkeypatch.setattr(adapter, "extract_continuation", fail_if_called)
 
     execution = _execution(
         '{"kind":"message","engine":"codex","sequence":0,'
@@ -48,7 +51,7 @@ def test_extract_execution_continuation_delegates_to_heru_for_supported_engines(
         assert execution is not None
         return RuntimeEngineContinuation(session_id=f"{engine_name}-session")
 
-    monkeypatch.setattr("litehive.agents._continuation.extract_engine_continuation", fake_extract)
+    monkeypatch.setattr("litehive.agents._continuation._extract_engine_continuation", fake_extract)
 
     for engine_name in ("codex", "claude", "copilot", "gemini", "goz", "opencode"):
         continuation = extract_execution_continuation(engine_name, _execution("plain stdout"))

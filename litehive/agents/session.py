@@ -7,8 +7,7 @@ import signal
 import time
 from typing import Callable
 
-from heru import extract_engine_timeline
-from litehive.agents.unified_events import parse_unified_execution
+from heru import extract_engine_timeline, render_execution_transcript
 from litehive.agents._continuation import extract_execution_continuation
 from litehive.agents.session_store import (
     load_subagent_session,
@@ -47,14 +46,11 @@ class SessionMixin:
         *,
         fallback_renderer: Callable[[CLIExecutionResult], str] | None = None,
     ) -> str:
-        if execution is None:
-            return ""
-        unified = parse_unified_execution(execution.stdout)
-        if unified is not None:
-            return unified.transcript(stderr=execution.stderr)
-        if fallback_renderer is not None:
-            return fallback_renderer(execution)
-        return execution.transcript
+        del engine_name
+        return render_execution_transcript(
+            execution,
+            fallback_renderer=fallback_renderer,
+        )
 
     @staticmethod
     def _extract_execution_continuation(
@@ -71,13 +67,6 @@ class SessionMixin:
         task_id: str | None = None,
         subagent_id: str | None = None,
     ):
-        unified = parse_unified_execution(stdout)
-        if unified is not None:
-            return unified.timeline(
-                engine_name=engine_name,
-                task_id=task_id,
-                subagent_id=subagent_id,
-            )
         return extract_engine_timeline(
             engine_name,
             stdout,

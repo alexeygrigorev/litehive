@@ -11,16 +11,14 @@ import shutil
 import sys
 from typing import Mapping
 
+from heru._sandbox import (
+    SandboxedAdapter as HeruSandboxedAdapter,
+    forced_engine_rw_state_dirs as _forced_engine_rw_state_dirs,
+    sanitize_path_env as _sanitize_path_env,
+)
+from heru.base import CLIInvocation
 from litehive.config.model import LitehiveConfig
 from litehive.config.model import ExternalEngineSandboxPolicy
-from heru.base import CLIExecutionResult, CLIInvocation, ExternalCLIAdapter
-from heru.engine_detection import (
-    ORIGINAL_EXTERNAL_ADAPTER_RUN,
-    ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE,
-    effective_engine_callable,
-    filter_supported_kwargs,
-    has_callable_override,
-)
 from litehive.domain.runtime import ResourceLimitEvent
 
 
@@ -29,84 +27,13 @@ class SandboxProfile(str, Enum):
     MERGE_RESOLVER = "merge_resolver"
 
 
+SandboxedAdapter = HeruSandboxedAdapter
+
+
 def sandbox_profile_for_role(role: str) -> SandboxProfile:
     if role == "merge-resolver":
         return SandboxProfile.MERGE_RESOLVER
     return SandboxProfile.NO_GIT
-
-
-def _forced_engine_rw_state_dirs(
-    engine_name: str,
-    policy: "ExternalEngineSandboxPolicy | None",
-    env: Mapping[str, str] | None = None,
-) -> frozenset[Path]:
-    """State dirs that an engine must be able to write into.
-
-    Each external engine keeps session/cache state under a known directory
-    (codex → ``$CODEX_HOME``, claude → ``~/.claude``, etc.). If the workspace
-    sandbox policy accidentally classifies that dir as read-only, the engine
-    crashes on startup with "Read-only file system" trying to record its
-    session rollout. This helper returns the absolute paths that the
-    SandboxLauncher must always mount read-write for the given engine, so
-    we can promote them out of ``extra_ro_binds`` and into ``extra_rw_binds``
-    regardless of how the workspace YAML is shaped.
-    """
-
-    effective_env = dict(env or {})
-    if policy is not None:
-        effective_env.update(policy.setenv)
-    home_override = effective_env.get("HOME")
-    home = Path(home_override).expanduser() if home_override else Path.home()
-
-    candidates: list[Path] = []
-    if engine_name == "codex":
-        codex_home = effective_env.get("CODEX_HOME")
-        candidates.append(Path(codex_home).expanduser() if codex_home else home / ".codex")
-    elif engine_name == "claude":
-        candidates.append(home / ".claude")
-    elif engine_name == "copilot":
-        candidates.append(home / ".copilot")
-    elif engine_name == "gemini":
-        candidates.append(home / ".gemini")
-    elif engine_name == "opencode":
-        candidates.append(home / ".config" / "opencode")
-    elif engine_name == "goz":
-        candidates.append(home / ".goz")
-        candidates.append(home / ".config" / "goz")
-
-    resolved: set[Path] = set()
-    for candidate in candidates:
-        try:
-            resolved.add(candidate.resolve())
-        except OSError:
-            continue
-    return frozenset(resolved)
-
-
-def _sanitize_path_env(raw_path: str) -> str:
-    """Drop PATH segments that point at ephemeral codex arg0 dirs.
-
-    Codex injects a randomly-named directory under ``$CODEX_HOME/tmp/arg0``
-    into PATH when it starts, and removes it at exit. If the litehive daemon
-    inherited a PATH from a shell where codex had previously run, it may
-    carry a stale arg0 entry whose target no longer exists. Passing that
-    through to a fresh codex process inside the sandbox makes codex emit
-    "WARNING: proceeding, even though we could not update PATH: Read-only
-    file system" and in older codex builds bail out entirely.
-    """
-
-    if not raw_path:
-        return raw_path
-    kept: list[str] = []
-    for segment in raw_path.split(":"):
-        if not segment:
-            continue
-        if "codex-arg0" in segment:
-            continue
-        if "codex-linux-" in segment and segment.endswith("/path"):
-            continue
-        kept.append(segment)
-    return ":".join(kept)
 
 
 @dataclass(frozen=True, slots=True)
@@ -542,136 +469,3 @@ exit 127
     def _bind_mount_spec(source: Path, target: PurePosixPath, *, read_only: bool) -> str:
         mode = ",readonly" if read_only else ""
         return f"type=bind,src={source},dst={target}{mode}"
-
-
-class SandboxedAdapter(ExternalCLIAdapter):
-    def __init__(self, adapter: ExternalCLIAdapter, launcher: SandboxLauncher, engine_name: str, role: str) -> None:
-        super().__init__(
-            name=adapter.name,
-            binary=adapter.binary,
-            capabilities=adapter.capabilities,
-            stripped_env_vars=adapter.stripped_env_vars,
-        )
-        self._adapter = adapter
-        self._launcher = launcher
-        self._engine_name = engine_name
-        self._role = role
-        self._summary = launcher.policy_summary(engine_name, role)
-
-    def build_command(
-        self,
-        prompt: str,
-        cwd: Path,
-        model: str | None = None,
-        *,
-        max_turns: int | None = None,
-        resume_session_id: str | None = None,
-    ) -> list[str]:
-        return self._adapter.build_command(
-            prompt,
-            cwd,
-            model=model,
-            max_turns=max_turns,
-            resume_session_id=resume_session_id,
-        )
-
-    def detect_capabilities(self):
-        return self._adapter.detect_capabilities()
-
-    def finalize_invocation(self, invocation):
-        return self._launcher.wrap_invocation(
-            self._engine_name,
-            self.binary,
-            invocation,
-            role=self._role,
-        )
-
-    def sandbox_details(self) -> tuple[bool, str]:
-        return (self._summary.enabled, self._summary.summary)
-
-    def run(
-        self,
-        prompt: str,
-        cwd: Path,
-        model: str | None = None,
-        *,
-        max_turns: int | None = None,
-        resume_session_id: str | None = None,
-        on_started=None,
-        emit_unified: bool = False,
-    ) -> CLIExecutionResult:
-        if has_callable_override(self._adapter, "run", ORIGINAL_EXTERNAL_ADAPTER_RUN):
-            run_callable = effective_engine_callable(self._adapter, "run")
-            if not callable(run_callable):
-                run_callable = self._adapter.run
-            run_kwargs = {"model": model}
-            if max_turns is not None:
-                run_kwargs["max_turns"] = max_turns
-            if resume_session_id is not None:
-                run_kwargs["resume_session_id"] = resume_session_id
-            if on_started is not None:
-                run_kwargs["on_started"] = on_started
-            run_kwargs["emit_unified"] = emit_unified
-            return run_callable(
-                prompt,
-                cwd,
-                **filter_supported_kwargs(run_callable, run_kwargs),
-            )
-        return super().run(
-            prompt,
-            cwd,
-            model=model,
-            max_turns=max_turns,
-            resume_session_id=resume_session_id,
-            on_started=on_started,
-            emit_unified=emit_unified,
-        )
-
-    def run_live(
-        self,
-        prompt: str,
-        cwd: Path,
-        model: str | None = None,
-        *,
-        max_turns: int | None = None,
-        resume_session_id: str | None = None,
-        on_started=None,
-        on_update=None,
-        inactivity_timeout_seconds: float = 0,
-        emit_unified: bool = False,
-    ) -> CLIExecutionResult:
-        if has_callable_override(self._adapter, "run_live", ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE):
-            run_live_callable = effective_engine_callable(self._adapter, "run_live")
-            if not callable(run_live_callable):
-                run_live_callable = self._adapter.run_live
-            run_live_kwargs = {"model": model}
-            if max_turns is not None:
-                run_live_kwargs["max_turns"] = max_turns
-            if resume_session_id is not None:
-                run_live_kwargs["resume_session_id"] = resume_session_id
-            if on_started is not None:
-                run_live_kwargs["on_started"] = on_started
-            if on_update is not None:
-                run_live_kwargs["on_update"] = on_update
-            if inactivity_timeout_seconds > 0:
-                run_live_kwargs["inactivity_timeout_seconds"] = inactivity_timeout_seconds
-            run_live_kwargs["emit_unified"] = emit_unified
-            return run_live_callable(
-                prompt,
-                cwd,
-                **filter_supported_kwargs(run_live_callable, run_live_kwargs),
-            )
-        return super().run_live(
-            prompt,
-            cwd,
-            model=model,
-            max_turns=max_turns,
-            resume_session_id=resume_session_id,
-            on_started=on_started,
-            on_update=on_update,
-            inactivity_timeout_seconds=inactivity_timeout_seconds,
-            emit_unified=emit_unified,
-        )
-
-    def render_transcript(self, execution: CLIExecutionResult) -> str:
-        return self._adapter.render_transcript(execution)

@@ -12,11 +12,7 @@ dependencies = [
     "pydantic>=2.11.0",
     "pyyaml>=6.0.2",
     "typer>=0.16.0",
-    "heru",
 ]
-
-[tool.uv.sources]
-heru = { path = "../heru", editable = true }
 
 [project.optional-dependencies]
 dev = [
@@ -27,9 +23,10 @@ dev = [
 
 [project.scripts]
 litehive = "litehive.main:main"
+heru = "heru.main:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["litehive"]
+packages = ["litehive", "heru"]
 include = ["litehive/config/profiles/*.yaml", "litehive/db/migrations/*.sql"]
 
 [tool.hatch.version]
