@@ -66,7 +66,13 @@ def add(
         str | None, typer.Option(click_type=choice(TASK_TYPE_CHOICES), help="Explicit routing class for this task")
     ] = None,
     pipeline_mode: Annotated[
-        str, typer.Option(click_type=choice(["full", "single"]), help="Task pipeline mode")
+        str,
+        typer.Option(
+            "--mode",
+            "--pipeline-mode",
+            click_type=choice(["full", "single"]),
+            help="Task pipeline mode",
+        ),
     ] = "full",
     priority: Annotated[
         str | None, typer.Option(click_type=choice(VALID_TASK_PRIORITIES), help="Task priority")

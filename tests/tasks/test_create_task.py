@@ -4,8 +4,10 @@ import sys
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
 import litehive.state.records as tasks_crud
+from litehive.cli.task_cli import app as task_app
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.reports import FollowUpTaskSpec
 from litehive.state.persist import load_state, save_state
@@ -24,6 +26,102 @@ def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
     assert len(tasks) == 1
     assert state.queue == ["T-0001"]
     assert (tmp_path / ".litehive" / "tasks" / "T-0001-fix-login-race" / "task.yaml").exists()
+
+
+def test_create_task_defaults_to_full_pipeline_mode(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    task = create_task(tmp_path, title="Default pipeline mode")
+    persisted = get_task(tmp_path, task.id)
+
+    assert persisted is not None
+    assert persisted.pipeline_mode == "full"
+
+
+def test_create_task_persists_single_pipeline_mode(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    task = create_task(tmp_path, title="Single pipeline mode", pipeline_mode="single")
+    persisted = get_task(tmp_path, task.id)
+
+    assert persisted is not None
+    assert persisted.pipeline_mode == "single"
+
+
+def test_task_add_cli_accepts_mode_alias_and_persists_single_pipeline_mode(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    result = CliRunner().invoke(
+        task_app,
+        [
+            "add",
+            "Single mode task",
+            "--workspace",
+            str(tmp_path),
+            "--mode",
+            "single",
+            "--goal",
+            "Complete in one agent pass",
+            "--acceptance-criteria",
+            "Task finishes after implementing",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "pipeline_mode: single" in result.output
+
+    persisted = get_task(tmp_path, "T-0001")
+    assert persisted is not None
+    assert persisted.pipeline_mode == "single"
+    assert persisted.goal == "Complete in one agent pass"
+    assert persisted.acceptance_criteria == ["Task finishes after implementing"]
+
+
+def test_task_add_cli_defaults_to_full_pipeline_mode(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    result = CliRunner().invoke(
+        task_app,
+        [
+            "add",
+            "Full mode default",
+            "--workspace",
+            str(tmp_path),
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "pipeline_mode: full" in result.output
+
+    persisted = get_task(tmp_path, "T-0001")
+    assert persisted is not None
+    assert persisted.pipeline_mode == "full"
+
+
+def test_task_add_cli_accepts_explicit_full_mode_alias(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    result = CliRunner().invoke(
+        task_app,
+        [
+            "add",
+            "Explicit full mode",
+            "--workspace",
+            str(tmp_path),
+            "--mode",
+            "full",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "pipeline_mode: full" in result.output
+
+    persisted = get_task(tmp_path, "T-0001")
+    assert persisted is not None
+    assert persisted.pipeline_mode == "full"
 
 
 def test_create_task_preserves_runner_queue_changes_after_state_snapshot(tmp_path: Path) -> None:

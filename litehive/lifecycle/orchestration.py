@@ -225,6 +225,22 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
     return task_record
 
 
+def _clear_terminal_task_from_workspace_state(root: Path, task_id: str) -> None:
+    from litehive.state.persist import load_state, persist_tasks_and_state
+
+    state = load_state(root)
+    if state.active_task_id == task_id:
+        state.active_task_id = None
+    if task_id in state.queue:
+        state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
+    persist_tasks_and_state(
+        root,
+        tasks=(),
+        state=state,
+        protected_task_ids=[task_id],
+    )
+
+
 @dataclass
 class ExecutionResult:
     """Result of running one task through the pipeline state machine."""
@@ -635,6 +651,7 @@ def run_task(
         updated_task = _sync_back(final_state, root) or task
         after_merge_failure: Reject | None = None
         if final_state.stage in {"done", "failed"}:
+            _clear_terminal_task_from_workspace_state(root, updated_task.id)
             try:
                 _cleanup_terminal_worktree(root, updated_task)
             except GitError:

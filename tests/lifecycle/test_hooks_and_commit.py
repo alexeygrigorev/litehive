@@ -488,6 +488,25 @@ class _AlwaysPassEngine:
         return AgentVerdict(outcome="pass")
 
 
+class _RecordingPassEngine:
+    def __init__(self, name: str, calls: list[dict[str, str]]) -> None:
+        self.name = name
+        self.calls = calls
+
+    def run_turn(self, session, prompt, state) -> AgentVerdict:
+        del session
+        self.calls.append(
+            {
+                "engine": self.name,
+                "stage": state.stage,
+                "role": prompt["role"],
+                "pipeline_mode": prompt["pipeline_mode"],
+                "task_id": prompt["task_id"],
+            }
+        )
+        return AgentVerdict(outcome="pass")
+
+
 def _init_workspace_git_repo(root: Path, *, config: LitehiveConfig | None = None) -> None:
     ensure_workspace(root, config)
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
@@ -514,6 +533,42 @@ def _prepare_committed_task_worktree(root: Path, task, *, filename: str = "merge
     set_task_worktree_path(task, serialize_worktree_path(worktree))
     save_task(root, task)
     return worktree
+
+
+def test_run_task_single_mode_executes_only_implementing_then_finishes(tmp_path: Path) -> None:
+    _init_workspace_git_repo(tmp_path)
+    create_task(
+        tmp_path,
+        title="Single-mode research task",
+        pipeline_mode="single",
+        goal="Summarize the current workspace state",
+        acceptance_criteria=["A single agent pass completes the task"],
+    )
+    task = dequeue_next_task(tmp_path)
+    assert task is not None
+
+    calls: list[dict[str, str]] = []
+    result = run_task(
+        tmp_path,
+        task,
+        engine_factory=lambda engine_name: _RecordingPassEngine(engine_name, calls),
+    )
+    refreshed = get_task(tmp_path, task.id)
+    pipeline_state = SqlitePersistence(tmp_path).load(task.id)
+    workspace_state = load_state(tmp_path)
+
+    assert len(calls) == 1
+    assert calls[0]["stage"] == "implementing"
+    assert calls[0]["role"] == "swe"
+    assert calls[0]["pipeline_mode"] == "single"
+    assert calls[0]["task_id"] == task.id
+    assert result.final_stage == "done"
+    assert refreshed is not None
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert pipeline_state.stage == "done"
+    assert workspace_state.active_task_id is None
+    assert task.id not in workspace_state.queue
 
 
 def test_run_task_runs_after_merge_hook_on_main_and_finishes(tmp_path: Path) -> None:
