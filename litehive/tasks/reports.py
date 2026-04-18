@@ -1,14 +1,17 @@
 """Recovery evidence, task discussion comments, and report helpers."""
 
+import json
 from pathlib import Path
 from typing import Iterable
 
+from pydantic import ValidationError
 import yaml
 
 from litehive.agents.session_store import load_subagent_artifacts
+from litehive.db.schema import connect_workspace_db
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
 from litehive.domain.recovery import TriggerEventKind
-from litehive.domain.reports import RecoveryAction, RecoveryEvidenceItem, RecoveryReport
+from litehive.domain.reports import RecoveryAction, RecoveryEvidenceItem, RecoveryReport, StageReport
 from litehive.domain.task import TaskRecord
 
 from .activity import (
@@ -260,6 +263,68 @@ def record_recovery_report(
 
 def append_activity_entry(root: Path, task: TaskRecord, comment: "TaskActivityEntry") -> None:
     append_task_activity(root, task, comment)
+
+
+def write_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Path:
+    reports_dir = task_dir(root, task) / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    existing = sorted(reports_dir.glob(f"{report.stage}-*.yaml"))
+    ordinal = len(existing) + 1
+    path = reports_dir / f"{report.stage}-{ordinal:03d}.yaml"
+    path.write_text(yaml.safe_dump(report.model_dump(mode="json"), sort_keys=False), encoding="utf-8")
+    return path
+
+
+def record_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Path:
+    payload = json.dumps(report.model_dump(mode="json"), sort_keys=True)
+    with connect_workspace_db(root) as connection:
+        connection.execute(
+            """
+            INSERT INTO stage_reports (task_id, stage, created_at, payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            (task.id, report.stage, report.created_at, payload),
+        )
+        connection.commit()
+    return write_stage_report(root, task, report)
+
+
+def load_stage_reports(root: Path, task: TaskRecord, *, stage: str | None = None) -> list[StageReport]:
+    query = """
+        SELECT payload
+        FROM stage_reports
+        WHERE task_id = ?
+    """
+    params: list[str] = [task.id]
+    if stage is not None:
+        query += " AND stage = ?"
+        params.append(stage)
+    query += " ORDER BY id ASC"
+    with connect_workspace_db(root) as connection:
+        rows = connection.execute(query, tuple(params)).fetchall()
+
+    reports: list[StageReport] = []
+    for row in rows:
+        try:
+            payload = json.loads(str(row["payload"]))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        try:
+            reports.append(StageReport(**payload))
+        except ValidationError:
+            continue
+    return reports
+
+
+def latest_stage_report(root: Path, task: TaskRecord, *, source: str | None = None) -> StageReport | None:
+    reports = load_stage_reports(root, task)
+    for report in reversed(reports):
+        if source is not None and report.source != source:
+            continue
+        return report
+    return None
 
 
 def normalized_files_changed(paths: Iterable[str]) -> list[str]:

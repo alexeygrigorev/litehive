@@ -17,7 +17,8 @@ from litehive.lifecycle.types import PipelineMode
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task, set_task_worktree_path
 from litehive.tasks.queue import dequeue_next_task
-from litehive.tasks.reports import load_task_activity
+from litehive.tasks.paths import task_dir
+from litehive.tasks.reports import load_stage_reports, load_task_activity
 from litehive.tasks.worktrees import serialize_worktree_path, task_worktree_branch, task_worktree_path
 
 pytestmark = pytest.mark.integration
@@ -79,6 +80,33 @@ def test_hook_node_with_failing_spec_emits_reject(tmp_path: Path) -> None:
     event = node.run(make_state())
     assert isinstance(event, Reject)
     assert event.source == "hook"
+
+
+def test_hook_node_reject_includes_command_exit_code_and_streams(tmp_path: Path) -> None:
+    node = HookNode(
+        "after_implementing",
+        hooks=[
+            HookSpec(
+                command="sh -c 'echo stdout-line && echo stderr-line >&2 && exit 3'",
+                description="captures stdout and stderr",
+                instructions_on_failure="fix the lint issue before retrying",
+            )
+        ],
+        runner=SubprocessHookRunner(tmp_path),
+    )
+
+    event = node.run(make_state(stage="after_implementing"))
+
+    assert isinstance(event, Reject)
+    assert event.source == "hook"
+    assert "Command: sh -c 'echo stdout-line && echo stderr-line >&2 && exit 3'" in event.reason
+    assert "Exit code: 3" in event.reason
+    assert "stdout-line" in event.reason
+    assert "stderr-line" in event.reason
+    assert event.metadata["hook_results"][0]["command"] == "sh -c 'echo stdout-line && echo stderr-line >&2 && exit 3'"
+    assert event.metadata["hook_results"][0]["exit_code"] == 3
+    assert event.metadata["hook_results"][0]["stdout"] == "stdout-line"
+    assert event.metadata["hook_results"][0]["stderr"] == "stderr-line"
 
 
 # ── GitCommitNode ───────────────────────────────────────────────────────
@@ -483,7 +511,89 @@ def test_run_task_requeues_implementing_when_after_merge_hook_fails(tmp_path: Pa
     assert thread[-1].role == "hook"
     assert thread[-1].stage == "implementing"
     assert thread[-1].verdict == "reject"
-    assert "fix the merged state" in thread[-1].message
+    assert "fix the merged state" not in thread[-1].message
+    assert "routing: implementing" in thread[-1].message
+
+    reports = load_stage_reports(tmp_path, refreshed)
+    hook_reports = [report for report in reports if report.source == "hook"]
+    assert hook_reports
+    assert hook_reports[-1].stage == "commit_to_git"
+    assert hook_reports[-1].verdict == "reject"
+    assert hook_reports[-1].source == "hook"
+    assert hook_reports[-1].failure_diagnostics["phase"] == "after_merge"
+    assert hook_reports[-1].failure_diagnostics["routed_to"] == "implementing"
+    assert "Exit code: 1" in hook_reports[-1].feedback
+    assert "echo fail && exit 1" in hook_reports[-1].feedback
+
+
+def test_run_task_before_accepting_hook_retries_back_to_implementing_and_records_hook_report(
+    tmp_path: Path,
+) -> None:
+    _init_workspace_git_repo(
+        tmp_path,
+        config=LitehiveConfig(
+            runner_hooks={
+                "before_accepting": [
+                    {
+                        "command": (
+                            "if [ ! -f .before_accepting_once ]; then "
+                            "echo lint failed >&2; "
+                            "touch .before_accepting_once; "
+                            "exit 1; "
+                            "fi"
+                        ),
+                        "blocking": True,
+                        "description": "ensures acceptance starts from a lint-clean checkout",
+                    }
+                ]
+            }
+        ),
+    )
+    create_task(tmp_path, title="Before accepting hook retry")
+    task = dequeue_next_task(tmp_path)
+    assert task is not None
+
+    result = run_task(
+        tmp_path,
+        task,
+        engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
+    )
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+
+    assert result.final_stage == "done"
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+
+    transitions = SqlitePersistence(tmp_path).load(task.id)
+    assert transitions.stage == "done"
+    assert transitions.last_rejection_by_stage["accepting"].source == "hook"
+    assert transitions.last_rejection_by_stage["accepting"].raised_at_phase == "before_accepting"
+
+    thread = load_task_activity(tmp_path, refreshed)
+    hook_entries = [entry for entry in thread if entry.role == "hook"]
+    assert hook_entries
+    assert hook_entries[-1].stage == "accepting"
+    assert hook_entries[-1].verdict == "reject"
+    assert "routing: implementing" in hook_entries[-1].message
+
+    reports = load_stage_reports(tmp_path, refreshed)
+    hook_reports = [report for report in reports if report.source == "hook"]
+    assert hook_reports
+    report = hook_reports[-1]
+    assert report.stage == "accepting"
+    assert report.verdict == "reject"
+    assert report.source == "hook"
+    assert report.failure_diagnostics["phase"] == "before_accepting"
+    assert report.failure_diagnostics["routed_to"] == "implementing"
+    assert report.hook_results[0]["exit_code"] == 1
+    assert report.hook_results[0]["stderr"] == "lint failed"
+    assert "Exit code: 1" in report.feedback
+    assert "lint failed" in report.feedback
+
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    assert "Runner hook at `before_accepting` rejected the task." in journal
+    assert "routing: `implementing`" in journal
 
 
 def test_run_task_skips_after_merge_when_hook_not_configured(tmp_path: Path) -> None:

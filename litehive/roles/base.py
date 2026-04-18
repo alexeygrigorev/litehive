@@ -86,6 +86,7 @@ class RoleAgent(AgentNode):
 
     def build_prompt(self, state: TaskState) -> dict[str, Any]:
         last_rejection = self._last_rejection_for_prompt(state)
+        runner_hooks = self._runner_hooks_for_stage()
         return {
             "role": self.ROLE,
             "stage": self.NODE_NAME,
@@ -102,7 +103,8 @@ class RoleAgent(AgentNode):
                 if last_rejection is not None
                 else None
             ),
-            "rejecting_hooks": self._rejecting_hooks_for_stage(),
+            "runner_hooks": runner_hooks,
+            "rejecting_hooks": runner_hooks,
         }
 
     def _last_rejection_for_prompt(self, state: TaskState) -> LastRejection | None:
@@ -125,8 +127,8 @@ class RoleAgent(AgentNode):
             return fallback
         return state.last_rejection_by_stage.get(rejection_stage) or fallback
 
-    def _rejecting_hooks_for_stage(self) -> list[dict[str, Any]]:
-        """Return the after-stage hooks that reject on failure for this node.
+    def _runner_hooks_for_stage(self) -> list[dict[str, Any]]:
+        """Return the configured after-stage hooks for this node.
 
         Loads from workspace config so the agent knows what automated
         checks will run on its output and can pre-check before submitting.
@@ -146,9 +148,9 @@ class RoleAgent(AgentNode):
             {
                 "command": hook.command,
                 "description": hook.description or "",
+                "reject_on_failure": bool(hook.reject_on_failure),
             }
             for hook in raw_hooks
-            if hook.reject_on_failure
         ]
 
     def _assemble_instruction_layers(self) -> list[tuple[str, str]]:

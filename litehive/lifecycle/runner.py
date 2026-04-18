@@ -6,13 +6,14 @@ from .events import Event, HookOk, Pass, RecoverySucceeded
 from .journal import NullJournal, PipelineJournal
 from .nodes.base import NodeRegistry
 from .persistence import Persistence, TaskState
-from .transitions import Rule, evaluate
+from .transitions import Rule, Transition, evaluate
 from .rules import RULES
 from .types import TERMINAL_NODES
 
 
 StopPredicate = Callable[[], bool]
 StateSyncCallback = Callable[[TaskState], None]
+TransitionObserver = Callable[[TaskState, str, Event, Transition], None]
 
 
 class StateMachineRunner:
@@ -40,6 +41,7 @@ class StateMachineRunner:
         journal: PipelineJournal | None = None,
         stop_requested: StopPredicate | None = None,
         state_sync: StateSyncCallback | None = None,
+        transition_observer: TransitionObserver | None = None,
     ) -> None:
         self.registry = registry
         self.persistence = persistence
@@ -47,6 +49,7 @@ class StateMachineRunner:
         self.journal = journal or NullJournal()
         self._stop_requested = stop_requested or (lambda: False)
         self._state_sync = state_sync
+        self._transition_observer = transition_observer
 
     def run_task(self, task_id: str) -> TaskState:
         state = self.persistence.load(task_id)
@@ -71,6 +74,8 @@ class StateMachineRunner:
                 rule_description=trans.rule.description,
                 delta=trans.delta,
             )
+            if self._transition_observer is not None:
+                self._transition_observer(state, from_stage, event, trans)
             if self._stop_requested():
                 self.journal.stop_requested(task_id, state.stage)
                 return state

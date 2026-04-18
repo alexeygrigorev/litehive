@@ -66,6 +66,31 @@ def test_load_config_preserves_runner_hook_descriptions(tmp_path: Path) -> None:
     assert config.runner_hooks["after_implementing"][0].description == ("ensures lint passes before acceptance")
 
 
+def test_load_config_allows_blocking_before_accepting_hooks(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "runner_hooks": {
+                    "before_accepting": [
+                        {
+                            "command": "uv run ruff check .",
+                            "blocking": True,
+                            "description": "ensures lint passes before acceptance",
+                        }
+                    ]
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.runner_hooks["before_accepting"][0].reject_on_failure is True
+
+
 def test_load_config_rejects_conflicting_runner_hook_blocking_flags(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(

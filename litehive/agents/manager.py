@@ -45,6 +45,7 @@ from litehive.tasks.runtime import (
     mark_subagent_progress,
     mark_subagent_started,
 )
+from litehive.tasks.reports import record_stage_report
 
 _REPORTABLE_STAGES = {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
 _DEFAULT_STAGE_FOR_ROLE = {
@@ -411,6 +412,7 @@ class SubagentManager(SessionMixin):
                 transcript=transcript,
             )
         report = report.model_copy(update={"warnings": self._merged_warnings(report.warnings, extra_warnings)})
+        record_stage_report(self.root, task, report)
         self._write_session_snapshot(
             task,
             base,

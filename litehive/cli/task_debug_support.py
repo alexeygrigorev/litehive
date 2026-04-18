@@ -12,6 +12,7 @@ from litehive.tasks.paths import (
     task_dir,
 )
 from litehive.tasks.activity import latest_task_activity_entry
+from litehive.tasks.reports import latest_stage_report
 from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
 
@@ -79,6 +80,12 @@ def _debug_latest(root: Path, task):
         report_data = load_subagent_report(root, task.id, ref.id)
         if report_data.get("verdict"):
             print(f"report_verdict: {report_data['verdict']}")
+    stage_report = latest_stage_report(root, task, source="hook")
+    if stage_report is not None:
+        print(f"stage_report_verdict: {stage_report.verdict}")
+        print(f"stage_report_source: {stage_report.source}")
+        print(f"stage_report_stage: {stage_report.stage}")
+        print(f"stage_report_summary: {stage_report.summary}")
 
     # -- Transcript summary (first 200 chars) --
     if sa_base.exists():

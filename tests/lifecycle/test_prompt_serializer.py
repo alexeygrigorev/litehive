@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
@@ -266,6 +267,46 @@ def test_build_prompt_ignores_corrupt_hook_config(workspace: Path) -> None:
     prompt = agent.build_prompt(make_state(task.id))
 
     assert prompt["rejecting_hooks"] == []
+
+
+def test_swe_prompt_lists_after_stage_hooks_with_descriptions(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    config_path(workspace).write_text(
+        yaml.safe_dump(
+            {
+                "runner_hooks": {
+                    "after_implementing": [
+                        {
+                            "command": "ruff check --select E402,F401",
+                            "reject_on_failure": True,
+                            "description": "ensures no unused imports or wrong import order",
+                        },
+                        {
+                            "command": "uv run pytest -q tests/lifecycle/test_prompt_serializer.py",
+                            "description": "runs the focused serializer regression slice",
+                        },
+                    ]
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    agent = SWEAgent(
+        _NullSelector(),
+        _NullSessions(),
+        prompt_context=PromptContext(workspace_root=workspace),
+    )
+    text = serialize_prompt(agent.build_prompt(make_state(task.id)), task_record=task)
+
+    assert "After implementing, these checks will run:" in text
+    assert "- ruff check --select E402,F401 (ensures no unused imports or wrong import order)" in text
+    assert (
+        "- uv run pytest -q tests/lifecycle/test_prompt_serializer.py "
+        "(runs the focused serializer regression slice)"
+    ) in text
+    assert "Blocking hooks will reject your work if they fail." in text
 
 
 def test_serialize_works_without_task_record() -> None:
