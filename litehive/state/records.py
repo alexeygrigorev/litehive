@@ -32,7 +32,7 @@ from litehive.state.persist import (
     write_atomic_files_and_then,
 )
 from litehive.tasks.normalization import normalize_acceptance_criteria
-from litehive.tasks.paths import slugify, task_dir, task_file, tasks_root
+from litehive.tasks.paths import slugify, task_dir, tasks_root
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ def _load_task_record_mapping(path: Path) -> dict:
 
 def _highest_task_number_on_disk(root: Path) -> int:
     existing = []
-    for child in tasks_root(root).iterdir():
+    for child in tasks_root(root, bootstrap=False).iterdir():
         if not child.is_dir():
             continue
         match = re.match(r"^T-(\d{4})-", child.name)
@@ -163,13 +163,14 @@ def _persist_created_tasks(
     writes: dict[Path, str],
     cleanup_dirs: list[Path],
 ) -> None:
-    from litehive.state.persist import merged_state_for_runner_owned_write
+    from litehive.state.persist import merged_state_for_runner_owned_write, skip_bootstrap_load_state
 
-    merged_state = merged_state_for_runner_owned_write(
-        root,
-        state=state,
-        protected_task_ids=[task.id for task in tasks],
-    )
+    with skip_bootstrap_load_state():
+        merged_state = merged_state_for_runner_owned_write(
+            root,
+            state=state,
+            protected_task_ids=[task.id for task in tasks],
+        )
     try:
 
         def callback() -> None:
@@ -232,10 +233,11 @@ def create_task(
     from litehive.tasks.queue import validate_task_dependencies
 
     with workspace_lock(root):
-        state = load_state(root)
+        state = load_state(root, bootstrap=False)
         task_id = f"T-{_reserve_next_task_numbers(root, state)[0]:04d}"
         slug = slugify(title)
-        validate_task_dependencies(root, task_id=task_id, depends_on=depends_on or [])
+        if depends_on:
+            validate_task_dependencies(root, task_id=task_id, depends_on=depends_on)
         task = TaskRecord(
             id=task_id,
             slug=slug,
@@ -254,11 +256,11 @@ def create_task(
             },
         )
 
-        base = task_dir(root, task)
+        base = task_dir(root, task, bootstrap=False)
         _create_task_runtime_dirs(base)
         state.queue.append(task.id)
         writes = {
-            task_file(root, task): serialize_task_record(task),
+            base / "task.yaml": serialize_task_record(task),
             base / "journal.md": f"# {task.id} {task.title}\n\n## {utcnow()}\nTask created.\n",
         }
         _persist_created_tasks(
@@ -288,7 +290,7 @@ def create_follow_up_tasks(
     created_tasks: list[TaskRecord] = []
     created_dirs: list[Path] = []
     with workspace_mutation_guard(root), workspace_lock(root):
-        state = load_state(root)
+        state = load_state(root, bootstrap=False)
         reserved_numbers = _reserve_next_task_numbers(root, state, count=len(follow_ups))
         writes: dict[Path, str] = {}
 
@@ -314,11 +316,11 @@ def create_follow_up_tasks(
                 },
             )
 
-            base = task_dir(root, task)
+            base = task_dir(root, task, bootstrap=False)
             _create_task_runtime_dirs(base)
             created_dirs.append(base)
             state.queue.append(task.id)
-            writes[task_file(root, task)] = serialize_task_record(task)
+            writes[base / "task.yaml"] = serialize_task_record(task)
             writes[base / "journal.md"] = (
                 f"# {task.id} {task.title}\n\n"
                 f"## {utcnow()}\n"

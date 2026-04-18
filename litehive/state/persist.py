@@ -2,6 +2,8 @@
 
 import gzip
 import os
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 
 from litehive.config.workspace import ensure_workspace
@@ -11,10 +13,24 @@ from litehive.state.store import runtime_store
 from litehive.tasks.paths import task_dir, task_file
 
 _MISSING = object()
+_SKIP_BOOTSTRAP_LOAD_STATE: ContextVar[bool] = ContextVar(
+    "litehive_skip_bootstrap_load_state",
+    default=False,
+)
 
 
-def load_state(root: Path) -> WorkspaceState:
-    ensure_workspace(root)
+@contextmanager
+def skip_bootstrap_load_state():
+    token = _SKIP_BOOTSTRAP_LOAD_STATE.set(True)
+    try:
+        yield
+    finally:
+        _SKIP_BOOTSTRAP_LOAD_STATE.reset(token)
+
+
+def load_state(root: Path, *, bootstrap: bool = True) -> WorkspaceState:
+    if bootstrap and not _SKIP_BOOTSTRAP_LOAD_STATE.get():
+        ensure_workspace(root)
     store = runtime_store(root)
     state = store.load_workspace_state()
     if state is None:

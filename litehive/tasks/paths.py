@@ -26,12 +26,15 @@ def _worktree_workspace_dir(root: Path) -> Path | None:
     return None
 
 
-def tasks_root(root: Path) -> Path:
+def tasks_root(root: Path, *, bootstrap: bool = True) -> Path:
     worktree_workspace = _worktree_workspace_dir(root)
     if worktree_workspace is not None:
         return worktree_workspace / "tasks"
-    ensure_workspace(root)
-    return workspace_dir(root) / "tasks"
+    if bootstrap:
+        ensure_workspace(root)
+    tasks = workspace_dir(root) / "tasks"
+    tasks.mkdir(parents=True, exist_ok=True)
+    return tasks
 
 
 def runner_lock_path(root: Path) -> Path:
@@ -50,16 +53,16 @@ def slugify(value: str, max_length: int = 50) -> str:
     return truncated.strip("-") or slug[:max_length].strip("-")
 
 
-def task_dir(root: Path, task: TaskRecord) -> Path:
-    return tasks_root(root) / f"{task.id}-{task.slug}"
+def task_dir(root: Path, task: TaskRecord, *, bootstrap: bool = True) -> Path:
+    return tasks_root(root, bootstrap=bootstrap) / f"{task.id}-{task.slug}"
 
 
-def task_file(root: Path, task: TaskRecord) -> Path:
-    return task_dir(root, task) / "task.yaml"
+def task_file(root: Path, task: TaskRecord, *, bootstrap: bool = True) -> Path:
+    return task_dir(root, task, bootstrap=bootstrap) / "task.yaml"
 
 
-def task_recovery_dir(root: Path, task: TaskRecord) -> Path:
-    return task_dir(root, task) / "recovery"
+def task_recovery_dir(root: Path, task: TaskRecord, *, bootstrap: bool = True) -> Path:
+    return task_dir(root, task, bootstrap=bootstrap) / "recovery"
 
 
 def latest_path(paths: list[Path]) -> Path | None:
