@@ -11,10 +11,10 @@ from heru.types import SubagentRef
 
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.runtime import RuntimeSubagentState
-from litehive.domain.reports import TaskThreadComment
+from litehive.domain.reports import TaskActivityEntry
 from litehive.state.records import create_task, save_task, save_task_runtime
 from litehive.tasks.paths import task_dir
-from litehive.tasks.reports import append_thread_comment
+from litehive.tasks.reports import append_activity_entry
 
 from tests.support.helpers import _cmd_debug, _run, _task_worktree_path
 
@@ -123,10 +123,10 @@ def test_debug_no_subagents(tmp_path: Path, capsys: pytest.CaptureFixture[str]) 
 
 def test_debug_shows_verdict(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     task, sa_dir = _make_task_with_subagent(tmp_path)
-    append_thread_comment(
+    append_activity_entry(
         tmp_path,
         task,
-        TaskThreadComment(role="swe", stage="implementing", verdict="pass", message="All good"),
+        TaskActivityEntry(role="swe", stage="implementing", verdict="pass", message="All good"),
     )
 
     exit_code = _cmd_debug(_ns(tmp_path, task.id))
@@ -147,7 +147,7 @@ def test_debug_reads_verdict_through_activity_boundary(
 
     monkeypatch.setattr(
         "litehive.cli.task_debug_support.latest_task_activity_entry",
-        lambda *args, **kwargs: TaskThreadComment(
+        lambda *args, **kwargs: TaskActivityEntry(
             role="swe",
             stage="implementing",
             verdict="pass",

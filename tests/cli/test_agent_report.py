@@ -8,16 +8,16 @@ from litehive.cli.app import app as root_app
 from litehive.config.workspace import ensure_workspace
 from litehive.lifecycle.persistence import SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
-from litehive.domain.reports import TaskThreadComment
+from litehive.domain.reports import TaskActivityEntry
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import get_task_record
 from litehive.state.records import create_task
-from litehive.tasks.reports import load_task_thread
+from litehive.tasks.reports import load_task_activity
 
 
 def _assert_thread_comments(
-    actual: list[TaskThreadComment],
-    expected: list[TaskThreadComment],
+    actual: list[TaskActivityEntry],
+    expected: list[TaskActivityEntry],
 ) -> None:
     assert len(actual) == len(expected)
     for actual_comment, expected_comment in zip(actual, expected, strict=True):
@@ -72,11 +72,11 @@ def test_agent_report_uses_intent_record_when_runtime_row_is_missing(tmp_path: P
     assert result.exit_code == 0, result.output
     task = get_task_record(tmp_path, "T-0001")
     assert task is not None
-    comments = load_task_thread(tmp_path, task)
+    comments = load_task_activity(tmp_path, task)
     _assert_thread_comments(
         comments,
         [
-            TaskThreadComment(
+            TaskActivityEntry(
                 role="recovery",
                 stage="grooming",
                 target_stage="grooming",
@@ -117,11 +117,11 @@ def test_agent_report_persists_hidden_recovery_target_stage(tmp_path: Path) -> N
     assert result.exit_code == 0, result.output
     task = get_task_record(tmp_path, task.id)
     assert task is not None
-    comments = load_task_thread(tmp_path, task)
+    comments = load_task_activity(tmp_path, task)
     _assert_thread_comments(
         comments,
         [
-            TaskThreadComment(
+            TaskActivityEntry(
                 role="recovery",
                 stage="recovering",
                 target_stage="implementing",
@@ -205,11 +205,11 @@ def test_agent_report_uses_env_stage_when_runtime_row_is_missing(tmp_path: Path,
     assert result.exit_code == 0, result.output
     task = get_task_record(tmp_path, "T-0001")
     assert task is not None
-    comments = load_task_thread(tmp_path, task)
+    comments = load_task_activity(tmp_path, task)
     _assert_thread_comments(
         comments,
         [
-            TaskThreadComment(
+            TaskActivityEntry(
                 role="planner",
                 stage="grooming",
                 verdict="pass",
@@ -247,11 +247,11 @@ def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path
     assert result.exit_code == 0, result.output
     task = get_task_record(tmp_path, task.id)
     assert task is not None
-    comments = load_task_thread(tmp_path, task)
+    comments = load_task_activity(tmp_path, task)
     _assert_thread_comments(
         comments,
         [
-            TaskThreadComment(
+            TaskActivityEntry(
                 role="planner",
                 stage="grooming",
                 verdict="blocked",
@@ -352,9 +352,9 @@ def test_agent_report_accepts_recovery_resume_verdict(tmp_path: Path) -> None:
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
     _assert_thread_comments(
-        load_task_thread(tmp_path, updated),
+        load_task_activity(tmp_path, updated),
         [
-            TaskThreadComment(
+            TaskActivityEntry(
                 role="recovery",
                 stage="recovering",
                 target_stage="grooming",
@@ -393,7 +393,7 @@ def test_agent_report_accepts_hidden_step_alias(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    comments = load_task_thread(tmp_path, updated)
+    comments = load_task_activity(tmp_path, updated)
     assert len(comments) == 1
     assert comments[0].role == "swe"
     assert comments[0].stage == "implementing"
@@ -431,9 +431,9 @@ def test_root_report_accepts_hidden_step_alias(tmp_path: Path, monkeypatch) -> N
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
     _assert_thread_comments(
-        load_task_thread(tmp_path, updated),
+        load_task_activity(tmp_path, updated),
         [
-            TaskThreadComment(
+            TaskActivityEntry(
                 role="recovery",
                 stage="recovering",
                 verdict="pass",

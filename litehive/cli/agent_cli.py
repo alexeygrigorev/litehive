@@ -18,7 +18,7 @@ import typer
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 
 from litehive.config.workspace import resolve_workspace
-from litehive.domain.reports import TaskThreadComment
+from litehive.domain.reports import TaskActivityEntry
 from litehive.state.records import get_task_record
 from litehive.state.persist import load_state
 from litehive.tasks.activity import append_task_activity
@@ -146,7 +146,7 @@ def agent_report_command(
         task=task,
         pipeline_stage=pipeline_stage,
     )
-    comment = TaskThreadComment(
+    comment = TaskActivityEntry(
         role=agent_role,
         stage=actual_stage,
         target_stage=normalized_target_stage,

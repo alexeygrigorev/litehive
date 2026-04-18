@@ -28,7 +28,7 @@ import subprocess
 from litehive.config.loading import load_config
 from litehive.config.engine_models import resolve_task_retry_policy
 from litehive.git.ops import GitError, remove_worktree
-from litehive.domain.reports import TaskThreadComment
+from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.domain.runtime import RuntimeHookRejectFingerprint
 from litehive.domain.common import utcnow
@@ -427,7 +427,7 @@ def _requeue_after_failed_after_merge_check(
     append_task_activity(
         root,
         task,
-        TaskThreadComment(
+        TaskActivityEntry(
             role="hook",
             stage="implementing",
             verdict="reject",

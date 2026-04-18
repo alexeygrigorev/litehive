@@ -10,11 +10,11 @@ from litehive.agents.parsing import stage_report_from_subagent
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.agent import EngineFailure, SubagentResult
 from litehive.domain.common import FEEDBACK_CAP, TRUNCATION_MARKER
-from litehive.domain.reports import TaskThreadComment
+from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.runtime import ResourceLimitEvent
 from litehive.state.records import create_task
 from litehive.tasks.paths import task_dir
-from litehive.tasks.reports import append_thread_comment
+from litehive.tasks.reports import append_activity_entry
 
 
 def _subagent_result(
@@ -68,10 +68,10 @@ def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Pat
     task = create_task(tmp_path, title="Keep CLI summary untouched")
     message = "summary line\n\n" + ("y" * (FEEDBACK_CAP + 250))
 
-    append_thread_comment(
+    append_activity_entry(
         tmp_path,
         task,
-        TaskThreadComment(
+        TaskActivityEntry(
             role="swe",
             stage="implementing",
             verdict="pass",

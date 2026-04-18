@@ -14,7 +14,6 @@ from litehive.domain.task import TaskRecord
 from .activity import (
     append_task_activity,
     load_task_activity,
-    save_task_activity,
     task_activity_path,
 )
 from .paths import (
@@ -225,7 +224,7 @@ def record_recovery_report(
     recovery_subagent_id: str | None = None,
     recovery_subagent_path: str | None = None,
 ) -> Path:
-    from litehive.domain.reports import TaskThreadComment
+    from litehive.domain.reports import TaskActivityEntry
 
     report = RecoveryReport(
         task_id=task.id,
@@ -245,7 +244,7 @@ def record_recovery_report(
     append_task_activity(
         root,
         task,
-        TaskThreadComment(
+        TaskActivityEntry(
             role="recovery",
             stage=origin_stage or task.pipeline_status,
             verdict="comment",
@@ -259,7 +258,7 @@ def record_recovery_report(
     return path
 
 
-def append_thread_comment(root: Path, task: TaskRecord, comment: "TaskThreadComment") -> None:
+def append_activity_entry(root: Path, task: TaskRecord, comment: "TaskActivityEntry") -> None:
     append_task_activity(root, task, comment)
 
 
@@ -277,11 +276,11 @@ def normalized_files_changed(paths: Iterable[str]) -> list[str]:
     return normalized
 
 
-def is_retracted_thread_comment(comment: "TaskThreadComment") -> bool:
+def is_retracted_activity_entry(comment: "TaskActivityEntry") -> bool:
     return RETRACTED_FILESYSTEM_MARKER in comment.message
 
 
-def is_retractable_pass_comment(comment: "TaskThreadComment") -> bool:
+def is_retractable_pass_entry(comment: "TaskActivityEntry") -> bool:
     return (
         comment.verdict == "pass"
         and comment.stage in _RETRACTABLE_STEPS
@@ -289,19 +288,11 @@ def is_retractable_pass_comment(comment: "TaskThreadComment") -> bool:
     )
 
 
-def retract_thread_comment(comment: "TaskThreadComment") -> bool:
-    if is_retracted_thread_comment(comment):
+def retract_activity_entry(comment: "TaskActivityEntry") -> bool:
+    if is_retracted_activity_entry(comment):
         return False
     comment.message = f"{comment.message.rstrip()}\n{RETRACTED_FILESYSTEM_MARKER}"
     return True
-
-
-def load_task_thread(root: Path, task: TaskRecord) -> list["TaskThreadComment"]:
-    return load_task_activity(root, task)
-
-
-def save_task_thread(root: Path, task: TaskRecord, thread: list["TaskThreadComment"]) -> None:
-    save_task_activity(root, task, thread)
 
 
 def render_task_thread(root: Path, task: TaskRecord, *, for_prompt: bool = False) -> str:
@@ -310,7 +301,7 @@ def render_task_thread(root: Path, task: TaskRecord, *, for_prompt: bool = False
         return ""
     lines = ["Discussion thread:"]
     for c in thread:
-        if for_prompt and is_retracted_thread_comment(c):
+        if for_prompt and is_retracted_activity_entry(c):
             header = f"[{c.created_at}] {c.role} ({c.stage}) - {c.verdict} {RETRACTED_FILESYSTEM_MARKER}"
             lines.append(f"\n--- {header} ---")
             lines.append("Prior pass report withheld from prompt context after requeue-time filesystem validation.")

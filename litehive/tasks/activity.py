@@ -8,7 +8,7 @@ from typing import Iterable
 from pydantic import ValidationError
 
 from litehive.db.schema import connect_workspace_db
-from litehive.domain.reports import TaskThreadComment
+from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from .paths import task_dir
 
@@ -17,7 +17,7 @@ def task_activity_path(root: Path, task: TaskRecord) -> Path:
     return task_dir(root, task) / "comments.yaml"
 
 
-def load_task_activity(root: Path, task: TaskRecord) -> list[TaskThreadComment]:
+def load_task_activity(root: Path, task: TaskRecord) -> list[TaskActivityEntry]:
     with connect_workspace_db(root) as connection:
         rows = connection.execute(
             """
@@ -29,7 +29,7 @@ def load_task_activity(root: Path, task: TaskRecord) -> list[TaskThreadComment]:
             (task.id,),
         ).fetchall()
 
-    activity: list[TaskThreadComment] = []
+    activity: list[TaskActivityEntry] = []
     for row in rows:
         try:
             payload = json.loads(str(row["payload"]))
@@ -41,13 +41,13 @@ def load_task_activity(root: Path, task: TaskRecord) -> list[TaskThreadComment]:
         if "stage" not in normalized and "step" in normalized:
             normalized["stage"] = normalized.pop("step")
         try:
-            activity.append(TaskThreadComment(**normalized))
+            activity.append(TaskActivityEntry(**normalized))
         except ValidationError:
             continue
     return activity
 
 
-def save_task_activity(root: Path, task: TaskRecord, activity: list[TaskThreadComment]) -> None:
+def save_task_activity(root: Path, task: TaskRecord, activity: list[TaskActivityEntry]) -> None:
     with connect_workspace_db(root) as connection:
         connection.execute("DELETE FROM task_activity WHERE task_id = ?", (task.id,))
         for entry_index, entry in enumerate(activity):
@@ -62,7 +62,7 @@ def save_task_activity(root: Path, task: TaskRecord, activity: list[TaskThreadCo
         connection.commit()
 
 
-def append_task_activity(root: Path, task: TaskRecord, entry: TaskThreadComment) -> None:
+def append_task_activity(root: Path, task: TaskRecord, entry: TaskActivityEntry) -> None:
     payload = json.dumps(entry.model_dump(mode="json"))
     with connect_workspace_db(root) as connection:
         row = connection.execute(
@@ -89,7 +89,7 @@ def latest_task_activity_entry(
     step: str | None = None,
     verdicts: Iterable[str] | None = None,
     after: datetime | None = None,
-) -> TaskThreadComment | None:
+) -> TaskActivityEntry | None:
     stage = stage or step
     allowed_verdicts = None if verdicts is None else set(verdicts)
     for entry in reversed(load_task_activity(root, task)):

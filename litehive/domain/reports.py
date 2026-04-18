@@ -104,8 +104,8 @@ class ExecutionEstimate(BaseModel):
     velocity_stages_per_hour: float = 0.0
 
 
-class TaskThreadComment(BaseModel):
-    """A single comment in the task discussion thread."""
+class TaskActivityEntry(BaseModel):
+    """A single entry in the task activity log."""
 
     role: str
     stage: str
@@ -133,7 +133,7 @@ __all__ = [
     "RecoveryEvidenceItem",
     "RecoveryReport",
     "StageReport",
-    "TaskThreadComment",
+    "TaskActivityEntry",
     "TRUNCATION_MARKER",
     "cap_feedback",
 ]

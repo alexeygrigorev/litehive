@@ -4,13 +4,13 @@ from pathlib import Path
 import pytest
 
 from litehive.domain.agent import EngineFailure, SubagentResult
-from litehive.domain.reports import TaskThreadComment
+from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.heru_factory import HeruEngineAdapter, _latest_verdict_after
 from litehive.lifecycle.nodes.agent import AgentVerdict, TransientError
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.sessions import Session
 from litehive.lifecycle.types import PipelineMode
-from litehive.tasks.reports import append_thread_comment
+from litehive.tasks.reports import append_activity_entry
 from heru.types import RuntimeEngineContinuation, SubagentRef
 
 
@@ -266,10 +266,10 @@ def test_latest_verdict_after_rejects_empty_implementing_pass(tmp_path, monkeypa
     from litehive.state.records import create_task
 
     task = create_task(tmp_path, title="empty pass")
-    append_thread_comment(
+    append_activity_entry(
         tmp_path,
         task,
-        TaskThreadComment(
+        TaskActivityEntry(
             role="swe",
             stage="implementing",
             verdict="pass",
@@ -297,10 +297,10 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
     from litehive.state.records import create_task
 
     task = create_task(tmp_path, title="real pass")
-    append_thread_comment(
+    append_activity_entry(
         tmp_path,
         task,
-        TaskThreadComment(
+        TaskActivityEntry(
             role="swe",
             stage="implementing",
             verdict="pass",
@@ -327,10 +327,10 @@ def test_latest_verdict_after_accepts_recovery_resume(tmp_path) -> None:
     from litehive.state.records import create_task
 
     task = create_task(tmp_path, title="recovery resume")
-    append_thread_comment(
+    append_activity_entry(
         tmp_path,
         task,
-        TaskThreadComment(
+        TaskActivityEntry(
             role="recovery",
             stage="recovering",
             target_stage="testing",
@@ -356,10 +356,10 @@ def test_latest_verdict_after_preserves_recovery_advance_target_stage(tmp_path) 
     from litehive.state.records import create_task
 
     task = create_task(tmp_path, title="recovery advance target stage")
-    append_thread_comment(
+    append_activity_entry(
         tmp_path,
         task,
-        TaskThreadComment(
+        TaskActivityEntry(
             role="recovery",
             stage="recovering",
             target_stage="accepting",

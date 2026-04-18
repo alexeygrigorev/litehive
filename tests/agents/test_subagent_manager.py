@@ -13,11 +13,11 @@ from litehive.agents.session_store import (
 )
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.agent import EngineFailure, SubagentInactivityTimeout
-from litehive.domain.reports import TaskThreadComment
+from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.heru_factory import HeruEngineAdapter
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.paths import task_dir
-from litehive.tasks.reports import append_thread_comment
+from litehive.tasks.reports import append_activity_entry
 
 
 def test_subagent_manager_passes_workspace_root_in_extra_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -92,10 +92,10 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
             *,
             extra_env: dict[str, str] | None = None,
         ) -> CLIExecutionResult:
-            append_thread_comment(
+            append_activity_entry(
                 tmp_path,
                 task,
-                TaskThreadComment(
+                TaskActivityEntry(
                     role="planner",
                     stage="grooming",
                     verdict="reject",
@@ -150,10 +150,10 @@ def test_subagent_manager_uses_recovering_stage_for_recovery_cli_verdict(
             *,
             extra_env: dict[str, str] | None = None,
         ) -> CLIExecutionResult:
-            append_thread_comment(
+            append_activity_entry(
                 tmp_path,
                 task,
-                TaskThreadComment(
+                TaskActivityEntry(
                     role="recovery",
                     stage="recovering",
                     verdict="resume",

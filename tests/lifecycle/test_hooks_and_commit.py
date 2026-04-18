@@ -17,7 +17,7 @@ from litehive.lifecycle.types import PipelineMode
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task, set_task_worktree_path
 from litehive.tasks.queue import dequeue_next_task
-from litehive.tasks.reports import load_task_thread
+from litehive.tasks.reports import load_task_activity
 from litehive.tasks.worktrees import serialize_worktree_path, task_worktree_branch, task_worktree_path
 
 pytestmark = pytest.mark.integration
@@ -440,7 +440,7 @@ def test_run_task_requeues_implementing_when_after_merge_hook_fails(tmp_path: Pa
     )
     assert "echo fail && exit 1" in pipeline_state.last_rejection_by_stage["implementing"].reason
 
-    thread = load_task_thread(tmp_path, refreshed)
+    thread = load_task_activity(tmp_path, refreshed)
     assert thread[-1].role == "hook"
     assert thread[-1].stage == "implementing"
     assert thread[-1].verdict == "reject"

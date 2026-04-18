@@ -8,13 +8,14 @@ import pytest
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.roles.planner import PlannerAgent
+from litehive.roles.qa import QAAgent
 from litehive.roles.recovery import RecoveryAgent
 from litehive.roles.swe import SWEAgent
 from litehive.roles.base import PromptContext
 from litehive.config.workspace import ensure_workspace
 from litehive.config.paths import config_path
 from litehive.domain.lifecycle_deltas import StateDelta
-from litehive.domain.reports import TaskThreadComment
+from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.events import HookOk, Pass, Reject
 from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.persistence import LastRejection, TaskState
@@ -179,10 +180,10 @@ def test_serialize_reads_activity_through_boundary(workspace: Path, monkeypatch)
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
     calls: list[tuple[Path, str]] = []
 
-    def fake_load_activity(root: Path, task_record) -> list[TaskThreadComment]:
+    def fake_load_activity(root: Path, task_record) -> list[TaskActivityEntry]:
         calls.append((root, task_record.id))
         return [
-            TaskThreadComment(
+            TaskActivityEntry(
                 role="planner",
                 step="grooming",
                 verdict="pass",
@@ -220,6 +221,37 @@ def test_serialize_includes_last_rejection(workspace: Path) -> None:
     assert "- Source: qa" in text
     assert "- Raised at phase: testing" in text
     assert "tests fail with ImportError" in text
+
+
+def test_last_rejection_guidance_respects_repo_contract_and_opt_in_coverage(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+    state = make_state(task.id)
+    state.last_rejection_by_stage["implementing"] = LastRejection(
+        source="qa",
+        reason="integration sweep failed",
+        raised_at_phase="testing",
+    )
+
+    text = serialize_prompt(agent.build_prompt(state), task_record=task)
+
+    assert "repo's documented verification contract" in text
+    assert "opt-in or external coverage" in text
+    assert "Each one is yours to fix" not in text
+    assert "Don't declare the rejection stale, replayed, or pipeline-confused." not in text
+    assert "Don't submit `blocked` to escape." not in text
+
+
+def test_qa_prompt_includes_default_vs_opt_in_verification_guidance(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    agent = QAAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+
+    text = serialize_prompt(agent.build_prompt(make_state(task.id, stage="testing")), task_record=task)
+
+    assert "## Qa startup guidance" in text
+    assert "repo's documented verification flow" in text
+    assert "default deterministic test suite and targeted checks first" in text
+    assert "opt-in, external-boundary, or authenticated integration coverage" in text
 
 
 def test_build_prompt_ignores_corrupt_hook_config(workspace: Path) -> None:

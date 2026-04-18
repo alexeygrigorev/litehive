@@ -19,7 +19,7 @@ from litehive.daemon.execution import (
 from litehive.daemon.registry import get_workspace_daemon, list_daemon_instances
 from litehive.db.schema import MigrationApplyError, apply_pending_migrations, migration_status
 from litehive.git.ops import GitError, checkpoint_message
-from litehive.domain.reports import TaskThreadComment
+from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.orchestration import run_task
 from litehive.recovery.execution_recovery import rollback_completed_task
 from litehive.state.backup import create_workspace_backup, list_workspace_backups, restore_workspace_backup
@@ -220,7 +220,7 @@ def report_command(
         return 1
     stage = stage or step or task.pipeline_status
     normalized_verdict = "reject" if verdict == "fail" else verdict
-    comment = TaskThreadComment(
+    comment = TaskActivityEntry(
         role=role,
         stage=stage,
         verdict=normalized_verdict,

@@ -243,12 +243,12 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
         raise ValueError(f"Task {task.id} is {task.status} and cannot be switched into a queued runnable state")
 
     prior_work_paths = _switch_prior_work_paths(root, task)
-    from litehive.domain.reports import TaskThreadComment
+    from litehive.domain.reports import TaskActivityEntry
 
     append_task_activity(
         root,
         task,
-        TaskThreadComment(
+        TaskActivityEntry(
             role="operator",
             stage=task.pipeline_status,
             verdict="comment",
@@ -280,8 +280,8 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
     from litehive.tasks.queue import reset_task_for_recovery
     from litehive.tasks.reports import (
         normalized_files_changed,
-        is_retractable_pass_comment,
-        retract_thread_comment,
+        is_retractable_pass_entry,
+        retract_activity_entry,
     )
     from litehive.tasks.worktrees import resolve_recorded_worktree_path
     from litehive.state.persist import persist_task_and_state_without_runner_guard
@@ -320,12 +320,12 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
             thread = load_task_activity(root, task)
             changed = False
             for comment in thread:
-                if not is_retractable_pass_comment(comment):
+                if not is_retractable_pass_entry(comment):
                     continue
                 claimed_paths = normalized_files_changed(comment.files_changed)
                 if any(_path_differs_from_main(checkout_path, main_ref, path) for path in claimed_paths):
                     continue
-                changed = retract_thread_comment(comment) or changed
+                changed = retract_activity_entry(comment) or changed
             if changed:
                 save_task_activity(root, task, thread)
         reset_task_for_recovery(
