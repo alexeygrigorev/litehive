@@ -8,22 +8,47 @@ from heru.types import EngineUsageWindow, LiveEvent, RuntimeEngineContinuation
 logger = logging.getLogger("litehive.agents.adapters.goz")
 
 
-def goz_session_id(payload: dict[str, object]) -> str | None:
-    for key in ("sessionID", "session_id"):
+def _first_non_empty_string(payload: dict[str, object], *keys: str) -> str | None:
+    for key in keys:
         value = payload.get(key)
         if isinstance(value, str) and value:
             return value
+    return None
+
+
+def goz_session_id(payload: dict[str, object]) -> str | None:
+    session_id = _first_non_empty_string(payload, "sessionID", "session_id", "sessionId", "session-id")
+    if session_id:
+        return session_id
     part = payload.get("part")
     if isinstance(part, dict):
-        for key in ("sessionID", "session_id"):
-            value = part.get(key)
-            if isinstance(value, str) and value:
-                return value
+        session_id = _first_non_empty_string(part, "sessionID", "session_id", "sessionId", "session-id")
+        if session_id:
+            return session_id
         continuation = part.get("continuation")
         if isinstance(continuation, dict):
-            resume = continuation.get("resume_session_id") or continuation.get("resumeSessionId")
-            if isinstance(resume, str) and resume:
-                return resume
+            session_id = _first_non_empty_string(
+                continuation,
+                "resume_session_id",
+                "resumeSessionId",
+                "session_id",
+                "sessionID",
+                "sessionId",
+                "session-id",
+            )
+            if session_id:
+                return session_id
+    continuation = payload.get("continuation")
+    if isinstance(continuation, dict):
+        return _first_non_empty_string(
+            continuation,
+            "resume_session_id",
+            "resumeSessionId",
+            "session_id",
+            "sessionID",
+            "sessionId",
+            "session-id",
+        )
     return None
 
 

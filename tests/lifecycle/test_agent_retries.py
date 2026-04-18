@@ -297,6 +297,7 @@ def _reset_timeout_then_pass_manager_state() -> None:
     ("engine_name", "session_id"),
     [
         ("opencode", "opencode-session-123"),
+        ("goz", "goz-session-123"),
         ("gemini", "gemini-session-123"),
     ],
 )
