@@ -8,6 +8,7 @@ from litehive.cli.agent_cli import agent_app
 from litehive.cli.archive_cli import app as archive_app
 from litehive.cli.common import make_typer
 from litehive.cli.daemon_cli import app as daemon_app
+from litehive.cli.import_cli import app as import_app
 from litehive.cli.pipeline_cli import app as pipeline_app
 from litehive.cli.queue_cli import app as queue_app, register_hidden_root_commands
 from litehive.cli.runner import register_root_commands as register_runner_commands
@@ -48,6 +49,7 @@ register_hidden_root_commands(app)
 app.add_typer(queue_app, name="queue", help="Show the active task and queued order")
 app.add_typer(task_app, name="task", help="Manage Litehive tasks")
 app.add_typer(archive_app, name="archive", help="Move done tasks to the archive directory")
+app.add_typer(import_app, name="import", help="Import GitHub issues or freeform specs as tasks")
 app.add_typer(backup_app, name="backup", help="Create, list, and restore workspace database backups")
 app.add_typer(db_app, name="db", help="Inspect and migrate the workspace database schema")
 app.add_typer(worktree_app, name="worktree", help="Inspect and clean Litehive-managed task worktrees")

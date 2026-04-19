@@ -387,7 +387,7 @@ def _flagged_and_merge_failed_items(root: Path, tasks: list[TaskRecord]) -> list
                         f"Task is paused in `{task.pipeline_status}` and requires operator review."
                         f" Flag reason: {task.flag_reason or 'unknown'}."
                     ),
-                    suggested_action=f"Run `litehive debug {task.id}` and then `litehive queue promote {task.id}` when it is ready to continue.",
+                    suggested_action=f"Run `litehive task debug {task.id}` and then `litehive queue promote {task.id}` when it is ready to continue.",
                     dedupe_key=f"flagged_task:{task.id}",
                     metadata={"pipeline_status": task.pipeline_status, "flag_reason": task.flag_reason},
                 )
@@ -517,7 +517,7 @@ def _human_checkpoint_item(
         reason = f"Task {task.id} reached `human_checkpoint_before_commit` and needs operator review before commit."
         task_id = task.id
     action = (
-        f"Run `litehive debug {task_id} --worktree` to inspect the task, then continue with `litehive run`"
+        f"Run `litehive task debug {task_id} --worktree` to inspect the task, then continue with `litehive run`"
         " or roll it back with `litehive rollback`."
         if task_id
         else "Inspect the active task and then continue with `litehive run` or `litehive rollback`."

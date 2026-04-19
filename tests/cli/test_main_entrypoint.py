@@ -1,10 +1,13 @@
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+import importlib
 
 import pytest
 
 import litehive.main as main_module
+
+cli_app_module = importlib.import_module("litehive.cli.app")
 
 
 def test_main_rewrites_agent_report_compat_command(
@@ -17,7 +20,7 @@ def test_main_rewrites_agent_report_compat_command(
         return 7
 
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
-    monkeypatch.setattr("litehive.cli.app.main", fake_cli_main)
+    monkeypatch.setattr(cli_app_module, "main", fake_cli_main)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -48,7 +51,7 @@ def test_main_allows_recovery_diagnostic_commands(
         return 9
 
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "recovery")
-    monkeypatch.setattr("litehive.cli.app.main", fake_cli_main)
+    monkeypatch.setattr(cli_app_module, "main", fake_cli_main)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -145,26 +148,21 @@ def test_main_dispatches_agent_subcommands_for_agent_roles_without_full_root_app
     assert captured["args"] is None
 
 
-def test_main_dispatches_root_add_without_full_root_app(
+def test_main_rejects_removed_root_add_alias(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    captured: dict[str, object] = {}
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
-
-    def fake_task_app(*, standalone_mode: bool = False):
-        captured["argv"] = list(sys.argv)
-        captured["standalone_mode"] = standalone_mode
-        return 10
-
-    monkeypatch.setattr("litehive.cli.task_cli.app", fake_task_app)
-    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
-    monkeypatch.setattr(sys, "argv", ["litehive", "add", "New task", "--goal", "scope it"])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["litehive", "add", "New task", "--goal", "scope it"],
+    )
 
     exit_code = main_module.main()
 
-    assert exit_code == 10
-    assert captured["argv"] == ["litehive", "add", "New task", "--goal", "scope it"]
-    assert captured["standalone_mode"] is False
+    assert exit_code == 2
+    assert "No such command 'add'" in capsys.readouterr().err
 
 
 def test_fast_status_prefers_runner_active_task_id(

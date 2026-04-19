@@ -150,9 +150,17 @@ def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, mon
     assert "stale_worktree" in kinds
     assert "origin_divergence" in kinds
     assert "human_checkpoint_before_commit" in kinds
+    flagged_item = next(item for item in items if item.kind == "flagged_task")
+    assert flagged_item.suggested_action == (
+        f"Run `litehive task debug {flagged.id}` and then `litehive queue promote {flagged.id}` when it is ready to continue."
+    )
     merge_item = next(item for item in items if item.kind == "merge_failed_task")
     assert merge_item.suggested_action == (
         f"Run `litehive task debug {merge_failed.id} --worktree` and then `litehive recover {merge_failed.id}`."
+    )
+    checkpoint_item = next(item for item in items if item.kind == "human_checkpoint_before_commit")
+    assert checkpoint_item.suggested_action == (
+        f"Run `litehive task debug {flagged.id} --worktree` to inspect the task, then continue with `litehive run` or roll it back with `litehive rollback`."
     )
 
     shutil.rmtree(duplicate_dir)

@@ -60,7 +60,9 @@ Initialize a repository as a Litehive workspace:
 
 ```bash
 cd /path/to/your/project
-litehive configure
+litehive status
+# Litehive bootstraps .litehive/config.yaml on first run.
+# Edit that file by hand before starting work if you need non-default settings.
 ```
 
 Create a few tasks:
@@ -112,7 +114,7 @@ litehive status
 ## Minimal Daily Workflow
 
 ```bash
-litehive configure
+litehive status   # bootstraps .litehive/config.yaml on first run
 litehive task add "Implement feature X" --goal "..." --acceptance-criteria "..."
 litehive run
 litehive status

@@ -241,6 +241,7 @@ def register_hidden_root_commands(app: typer.Typer) -> None:
     @app.command(
         "recover",
         help="Use after an accepted task needs another pass but its current code should stay in place",
+        hidden=True,
     )
     def recover_command(
         task_id: Annotated[str, typer.Argument(help="Task id to recover")],
@@ -251,6 +252,7 @@ def register_hidden_root_commands(app: typer.Typer) -> None:
     @app.command(
         "prioritize",
         help="Use to pull queued tasks to the front when operator ordering matters more than the current queue",
+        hidden=True,
     )
     def prioritize_command(
         task_ids: Annotated[list[str], typer.Argument(help="Queued task ids to move to the front")],
@@ -261,6 +263,7 @@ def register_hidden_root_commands(app: typer.Typer) -> None:
     @app.command(
         "switch",
         help="Use when a task should continue with a different engine on its next queued run",
+        hidden=True,
     )
     def switch_command(
         task_id: Annotated[str, typer.Argument(help="Task id to switch")],

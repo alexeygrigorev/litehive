@@ -2,11 +2,13 @@ from pathlib import Path
 from typing import Annotated
 import os
 import sys
+from dataclasses import dataclass
 
 import click
 import typer
 
 from litehive.cli.common import WorkspaceOption, choice, require_subcommand
+from litehive.config.loading import load_config
 from litehive.config.paths import workspace_database_path
 from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
 from heru import ENGINE_CHOICES
@@ -18,7 +20,7 @@ from litehive.daemon.execution import (
 )
 from litehive.daemon.registry import get_workspace_daemon, list_daemon_instances
 from litehive.db.schema import MigrationApplyError, apply_pending_migrations, migration_status
-from litehive.git.ops import GitError, checkpoint_message
+from litehive.git.ops import GitError, checkpoint_message, has_non_litehive_changes, is_git_repo
 from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.orchestration import run_task
 from litehive.recovery.execution_recovery import rollback_completed_task
@@ -26,7 +28,7 @@ from litehive.state.backup import create_workspace_backup, list_workspace_backup
 from litehive.state.records import get_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
-from litehive.state.persist import load_state
+from litehive.state.persist import load_state, set_pool_stop_reason
 from litehive.tasks.queue import dequeue_next_task
 from litehive.tasks.activity import append_task_activity
 from litehive.state.locking import runner_status
@@ -117,20 +119,26 @@ def daemon_worker(workspace):
     return run_daemon_loop(workspace, output_stream=None)
 
 
-def _run_single(
+@dataclass(slots=True)
+class _RunCommandIteration:
+    exit_code: int
+    ran_task: bool
+    final_stage: str | None = None
+
+
+def _run_once(
     workspace: Path,
     *,
     engine: str | None = None,
     model: str | None = None,
-) -> int:
+) -> _RunCommandIteration:
     try:
         task = dequeue_next_task(workspace)
     except WorkspaceConflictError as exc:
         print(f"run failed: {exc}")
-        return 1
+        return _RunCommandIteration(exit_code=1, ran_task=False)
     if task is None:
-        print("No queued task.")
-        return 0
+        return _RunCommandIteration(exit_code=0, ran_task=False)
     result = run_task(
         workspace,
         task,
@@ -148,7 +156,65 @@ def _run_single(
     # need more iterations (in_progress, recovering, failed→flagged, etc.) — those
     # are normal pipeline outcomes, not a failure of this command. Reserve
     # non-zero exit for actual exceptions raised above.
-    return 0
+    return _RunCommandIteration(
+        exit_code=0,
+        ran_task=True,
+        final_stage=result.final_stage,
+    )
+
+
+def _run_single(
+    workspace: Path,
+    *,
+    engine: str | None = None,
+    model: str | None = None,
+) -> int:
+    iteration = _run_once(workspace, engine=engine, model=model)
+    if not iteration.ran_task:
+        print("No queued task.")
+    return iteration.exit_code
+
+
+def _workspace_has_dirty_non_litehive_changes(workspace: Path) -> bool:
+    if not is_git_repo(workspace):
+        return False
+    return has_non_litehive_changes(workspace)
+
+
+def _run_drain(
+    workspace: Path,
+    *,
+    engine: str | None,
+    model: str | None,
+    stop_on_failure: bool,
+    max_tasks: int | None,
+    stop_on_dirty_git: bool,
+) -> int:
+    tasks_run = 0
+    while True:
+        if stop_on_dirty_git and _workspace_has_dirty_non_litehive_changes(workspace):
+            set_pool_stop_reason(workspace, "dirty_git_state")
+            print("Pool stopped: dirty_git_state")
+            return 0
+
+        iteration = _run_once(workspace, engine=engine, model=model)
+        if iteration.exit_code != 0:
+            return iteration.exit_code
+        if not iteration.ran_task:
+            if tasks_run == 0:
+                state = load_state(workspace)
+                print("No runnable task." if state.queue else "No queued task.")
+            return 0
+
+        tasks_run += 1
+        if stop_on_failure and iteration.final_stage != "done":
+            set_pool_stop_reason(workspace, "failure_detected")
+            print("Pool stopped: failure_detected")
+            return 0
+        if max_tasks is not None and tasks_run >= max_tasks:
+            set_pool_stop_reason(workspace, "max_tasks_reached")
+            print("Pool stopped: max_tasks_reached")
+            return 0
 
 
 def run_command(
@@ -161,7 +227,19 @@ def run_command(
     stop_on_dirty_git: Annotated[bool | None, typer.Option("--stop-on-dirty-git", flag_value=True)] = None,
 ) -> int:
     ensure_workspace(workspace)
-    del drain, stop_on_failure, max_tasks, stop_on_dirty_git
+    config = load_config(workspace)
+    effective_stop_on_failure = config.pool_stop_on_failure if stop_on_failure is None else stop_on_failure
+    effective_max_tasks = config.pool_max_tasks if max_tasks is None else max_tasks
+    effective_stop_on_dirty_git = config.pool_stop_on_dirty_git if stop_on_dirty_git is None else stop_on_dirty_git
+    if drain:
+        return _run_drain(
+            workspace,
+            engine=engine,
+            model=model,
+            stop_on_failure=effective_stop_on_failure,
+            max_tasks=effective_max_tasks,
+            stop_on_dirty_git=effective_stop_on_dirty_git,
+        )
     return _run_single(workspace, engine=engine, model=model)
 
 

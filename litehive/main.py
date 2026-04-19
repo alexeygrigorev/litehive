@@ -151,21 +151,6 @@ def main() -> int:
             return 1
         return 0 if result is None else int(result)
 
-    if argv and argv[0] == "add":
-        import click
-        from litehive.cli.task_cli import app as task_app
-
-        try:
-            result = task_app(standalone_mode=False)
-        except click.exceptions.Exit as exc:
-            return exc.exit_code
-        except click.ClickException as exc:
-            exc.show()
-            return exc.exit_code
-        except click.Abort:
-            return 1
-        return 0 if result is None else int(result)
-
     if argv and argv[0] == "task":
         import click
         from litehive.cli.task_cli import app as task_app
