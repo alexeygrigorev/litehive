@@ -5,9 +5,7 @@ import re
 from pathlib import Path
 
 from litehive.config.paths import workspace_dir, workspace_logs_dir, workspace_runner_lock_path
-from litehive.config.workspace import ensure_workspace, normalize_workspace_root
-from litehive.config.registry import list_registered_workspace_paths
-from litehive.config.paths import worktree_root
+from litehive.config.workspace import ensure_workspace, normalize_workspace_root, registered_workspace_root
 from litehive.domain.task import TaskRecord
 
 
@@ -17,13 +15,8 @@ def _worktree_workspace_dir(root: Path) -> Path | None:
     for i, part in enumerate(parts):
         if part == ".litehive" and i + 2 < len(parts) and parts[i + 1] == "worktrees":
             return Path(*parts[: i + 3]) / ".litehive"
-    for registered_root in list_registered_workspace_paths():
-        try:
-            if resolved.is_relative_to(worktree_root(registered_root).resolve()):
-                return workspace_dir(registered_root.resolve())
-        except OSError:
-            continue
-    return None
+    registered_root = registered_workspace_root(resolved)
+    return None if registered_root is None else workspace_dir(registered_root)
 
 
 def tasks_root(root: Path, *, bootstrap: bool = True) -> Path:

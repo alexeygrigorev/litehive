@@ -1,4 +1,4 @@
-"""Filesystem paths for repo-local and unified global Litehive state."""
+"""Filesystem paths for repo-local and split global Litehive state."""
 
 import hashlib
 import os
@@ -21,6 +21,12 @@ def workspace_gitignore_path(root: Path) -> Path:
     return workspace_dir(root) / ".gitignore"
 
 
+def litehive_config_root() -> Path:
+    config_home = os.environ.get("XDG_CONFIG_HOME")
+    base = Path(config_home).expanduser() if config_home else Path.home() / ".config"
+    return base / "litehive"
+
+
 def litehive_root() -> Path:
     override = os.environ.get("LITEHIVE_HOME")
     if override:
@@ -32,7 +38,7 @@ def litehive_root() -> Path:
 
 
 def global_config_path() -> Path:
-    return litehive_root() / "config.yaml"
+    return litehive_config_root() / "config.yaml"
 
 
 def litehive_database_path() -> Path:
@@ -40,16 +46,7 @@ def litehive_database_path() -> Path:
 
 
 def workspace_registry_path() -> Path:
-    override = os.environ.get("LITEHIVE_HOME")
-    if override:
-        return Path(override).expanduser() / "workspaces.yaml"
-    config_home = os.environ.get("XDG_CONFIG_HOME")
-    if config_home:
-        return Path(config_home).expanduser() / "litehive" / "workspaces.yaml"
-    # Use ~/.config/litehive/ (XDG-style) so ~/.litehive/ doesn't collide with
-    # the nested-workspace check that treats any ancestor with a .litehive/
-    # directory as an enclosing workspace.
-    return Path.home() / ".config" / "litehive" / "workspaces.yaml"
+    return litehive_config_root() / "workspaces.yaml"
 
 
 def workspace_id(root: Path) -> str:

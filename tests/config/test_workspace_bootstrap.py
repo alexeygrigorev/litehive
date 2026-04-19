@@ -45,6 +45,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, mon
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
     from litehive.config.paths import (
+        global_config_path,
         litehive_database_path,
         workspace_registry_path,
         worktree_root,
@@ -70,10 +71,11 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, mon
     )
     assert workspace_database_path(tmp_path).exists()
     assert litehive_database_path() == data_home / "litehive" / "litehive.db"
+    assert global_config_path() == config_home / "litehive" / "config.yaml"
     assert workspace_registry_path() == config_home / "litehive" / "workspaces.yaml"
 
     registry_payload = yaml.safe_load(workspace_registry_path().read_text(encoding="utf-8"))
-    assert registry_payload == {"workspaces": [str(tmp_path.resolve())]}
+    assert registry_payload == [str(tmp_path.resolve())]
 
     with connect_workspace_db(tmp_path) as connection:
         tables = {
@@ -124,9 +126,9 @@ def test_workspace_registry_handles_parallel_registration(tmp_path: Path, monkey
         )
 
     assert {Path(path) for path in results} == set(workspaces)
-    registry_payload = yaml.safe_load(workspace_registry_path().read_text(encoding="utf-8")) or {}
-    assert set(registry_payload["workspaces"]) == {str(root.resolve()) for root in workspaces}
-    assert len(registry_payload["workspaces"]) == len(workspaces)
+    registry_payload = yaml.safe_load(workspace_registry_path().read_text(encoding="utf-8")) or []
+    assert set(registry_payload) == {str(root.resolve()) for root in workspaces}
+    assert len(registry_payload) == len(workspaces)
 
 
 def test_workspace_registry_rebuilds_after_corruption(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -144,8 +146,8 @@ def test_workspace_registry_rebuilds_after_corruption(tmp_path: Path, monkeypatc
 
     ensure_workspace(tmp_path)
 
-    registry_payload = yaml.safe_load(workspace_registry_path().read_text(encoding="utf-8")) or {}
-    assert registry_payload == {"workspaces": [str(tmp_path.resolve())]}
+    registry_payload = yaml.safe_load(workspace_registry_path().read_text(encoding="utf-8")) or []
+    assert registry_payload == [str(tmp_path.resolve())]
 
 
 def test_workspace_registry_is_available_from_other_threads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -198,11 +200,14 @@ def test_ensure_workspace_skips_disk_scan_for_bootstrapped_empty_workspace(
 
 def test_litehive_home_overrides_default_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     custom_home = tmp_path / "custom-home"
+    config_home = tmp_path / "xdg-config"
     monkeypatch.setenv("LITEHIVE_HOME", str(custom_home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "ignored-data"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "ignored-state"))
 
     from litehive.config.paths import (
+        global_config_path,
         litehive_database_path,
         litehive_root,
         workspace_registry_path,
@@ -215,7 +220,8 @@ def test_litehive_home_overrides_default_root(tmp_path: Path, monkeypatch: pytes
     wid = workspace_id(tmp_path)
     assert litehive_root() == custom_home
     assert litehive_database_path() == custom_home / "litehive.db"
-    assert workspace_registry_path() == custom_home / "workspaces.yaml"
+    assert global_config_path() == config_home / "litehive" / "config.yaml"
+    assert workspace_registry_path() == config_home / "litehive" / "workspaces.yaml"
     assert workspace_database_path(tmp_path) == custom_home / wid / "data.db"
 
 

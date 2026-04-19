@@ -1,6 +1,5 @@
 """Workspace bootstrap helpers."""
 
-import logging
 import os
 import re
 from dataclasses import asdict
@@ -23,7 +22,6 @@ from litehive.config.registry import (
     register_workspace_path,
 )
 
-log = logging.getLogger(__name__)
 _UNRESOLVED_SHELL_VAR_RE = re.compile(r"(?<!\\)\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)")
 _WORKSPACE_CONFIG_TEMPLATE = Path(__file__).resolve().parents[1] / "cli" / "templates" / "workspace_config.yaml"
 
@@ -40,18 +38,18 @@ def render_workspace_gitignore() -> str:
     )
 
 
-def _resolve_workspace_root(path: Path) -> Path:
-    """Resolve back to the main workspace root if path is inside a worktree."""
+def registered_workspace_root(path: Path) -> Path | None:
+    """Return the owning workspace root when ``path`` is inside a managed worktree."""
     resolved = path.resolve()
     if "worktrees" not in resolved.parts:
-        return resolved
-    for registered_root in list_registered_workspace_paths():
+        return None
+    for root in list_registered_workspace_paths():
         try:
-            if resolved.is_relative_to(worktree_root(registered_root).resolve()):
-                return registered_root.resolve()
+            if resolved.is_relative_to(worktree_root(root).resolve()):
+                return root.resolve()
         except OSError:
             continue
-    return resolved
+    return None
 
 
 def _reject_invalid_workspace_path(path: Path | str, *, source: str) -> None:
@@ -64,27 +62,6 @@ def _reject_invalid_workspace_path(path: Path | str, *, source: str) -> None:
         )
 
 
-def _nested_litehive_ancestor(path: Path) -> Path | None:
-    for ancestor in path.parents:
-        if ancestor.name == ".litehive":
-            return ancestor
-    return None
-
-
-def _litehive_control_ancestor(path: Path) -> Path | None:
-    for ancestor in (path, *path.parents):
-        if ancestor.name == ".litehive":
-            return ancestor
-    return None
-
-
-def _managed_worktree_root(path: Path) -> Path | None:
-    for ancestor in (path, *path.parents):
-        if ancestor.name == "worktrees" and ancestor.parent.name == ".litehive":
-            return ancestor
-    return None
-
-
 def _workspace_parent_root(path: Path) -> Path | None:
     for ancestor in path.parents:
         try:
@@ -95,29 +72,33 @@ def _workspace_parent_root(path: Path) -> Path | None:
     return None
 
 
-def _validate_workspace_root(
-    root: Path,
-    *,
-    source: str,
-    allow_worktree_root_alias: bool = True,
-) -> Path:
+def _task_matches(root: Path, task_id: str | None) -> bool:
+    return task_id is None or _task_exists(root, task_id)
+
+
+def normalize_workspace_root(root: Path, *, source: str) -> Path:
     _reject_invalid_workspace_path(root, source=source)
-    expanded = Path(root).expanduser()
-    resolved_input = expanded.resolve()
-    control_ancestor = _litehive_control_ancestor(resolved_input)
-    managed_worktree = _managed_worktree_root(resolved_input)
+    resolved_input = Path(root).expanduser().resolve()
+    resolved_root = registered_workspace_root(resolved_input) or resolved_input
+    managed_worktree = next(
+        (ancestor for ancestor in (resolved_input, *resolved_input.parents) if ancestor.name == "worktrees" and ancestor.parent.name == ".litehive"),
+        None,
+    )
     if managed_worktree is not None:
         raise ValueError(
             f"invalid workspace root from {source}: {resolved_input} is inside Litehive managed "
             f"worktrees at {managed_worktree}; choose the real repo root instead"
         )
+    control_ancestor = next(
+        (ancestor for ancestor in (resolved_input, *resolved_input.parents) if ancestor.name == ".litehive"),
+        None,
+    )
     if control_ancestor is not None:
         raise ValueError(
             f"invalid workspace root from {source}: {resolved_input} is inside the Litehive "
             f"control directory {control_ancestor}; choose the real repo root instead"
         )
-    resolved_root = _resolve_workspace_root(expanded)
-    if _nested_litehive_ancestor(resolved_root) is not None:
+    if any(ancestor.name == ".litehive" for ancestor in resolved_root.parents):
         raise ValueError(
             f"invalid workspace root from {source}: {resolved_root} is nested inside another .litehive tree"
         )
@@ -139,33 +120,6 @@ def _task_exists(root: Path, task_id: str) -> bool:
     return any(tasks_root.glob(f"{task_id}-*"))
 
 
-def _registered_workspace_roots() -> list[Path]:
-    roots: list[Path] = []
-    seen: set[Path] = set()
-    for entry in list_registered_workspace_paths():
-        try:
-            resolved = _validate_workspace_root(entry, source="workspace registry")
-        except ValueError:
-            continue
-        if resolved not in seen:
-            seen.add(resolved)
-            roots.append(resolved)
-    return roots
-
-
-def normalize_workspace_root(
-    root: Path,
-    *,
-    source: str,
-    allow_worktree_root_alias: bool = True,
-) -> Path:
-    return _validate_workspace_root(
-        root,
-        source=source,
-        allow_worktree_root_alias=allow_worktree_root_alias,
-    )
-
-
 def resolve_workspace(
     task_id: str | None,
     *,
@@ -176,28 +130,27 @@ def resolve_workspace(
     env_workspace = os.environ.get("LITEHIVE_WORKSPACE_ROOT")
     if env_workspace:
         resolved_env_workspace = normalize_workspace_root(Path(env_workspace), source="LITEHIVE_WORKSPACE_ROOT")
-        if not effective_task_id or _task_exists(resolved_env_workspace, effective_task_id):
+        if _task_matches(resolved_env_workspace, effective_task_id):
             _register_workspace(resolved_env_workspace)
             return resolved_env_workspace
 
     search_root = (cwd or Path.cwd()).resolve()
     resolved_search_root = normalize_workspace_root(search_root, source=f"cwd:{search_root}")
-    if resolved_search_root != search_root:
-        if not effective_task_id or _task_exists(resolved_search_root, effective_task_id):
-            _register_workspace(resolved_search_root)
-            return resolved_search_root
+    if resolved_search_root != search_root and _task_matches(resolved_search_root, effective_task_id):
+        _register_workspace(resolved_search_root)
+        return resolved_search_root
 
     for candidate in (search_root, *search_root.parents):
         if not workspace_dir(candidate).is_dir():
             continue
-        resolved = normalize_workspace_root(candidate, source=f"cwd:{search_root}")
-        if effective_task_id and not _task_exists(resolved, effective_task_id):
+        resolved = candidate.resolve()
+        if not _task_matches(resolved, effective_task_id):
             continue
         _register_workspace(resolved)
         return resolved
 
     if effective_task_id:
-        for root in _registered_workspace_roots():
+        for root in list_registered_workspace_paths():
             if _task_exists(root, effective_task_id):
                 _register_workspace(root)
                 return root
@@ -213,11 +166,7 @@ def _register_workspace(root: Path) -> None:
 
 
 def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
-    root = _validate_workspace_root(
-        root,
-        source="ensure_workspace",
-        allow_worktree_root_alias=False,
-    )
+    root = normalize_workspace_root(root, source="ensure_workspace")
     _reject_nested_workspace_bootstrap(root, source="ensure_workspace")
     base = workspace_dir(root)
     tasks = base / "tasks"

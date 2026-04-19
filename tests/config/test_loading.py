@@ -55,7 +55,8 @@ def test_configure_persists_process_profile(tmp_path: Path) -> None:
 def test_load_config_uses_global_defaults_when_workspace_config_is_empty(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
     global_path = global_config_path()
     global_path.parent.mkdir(parents=True, exist_ok=True)
     global_path.write_text(
@@ -82,7 +83,8 @@ def test_load_config_uses_global_defaults_when_workspace_config_is_empty(
 def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
     global_path = global_config_path()
     global_path.parent.mkdir(parents=True, exist_ok=True)
     global_path.write_text(
@@ -116,7 +118,8 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
 
 
 def test_load_config_deep_merges_global_and_workspace_mappings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
     global_path = global_config_path()
     global_path.parent.mkdir(parents=True, exist_ok=True)
     global_path.write_text(

@@ -37,7 +37,8 @@ def test_resolve_workspace_walks_up_and_normalizes_worktree(tmp_path: Path, monk
 def test_resolve_workspace_prefers_current_unified_root_worktree_over_registry_task_id_collision(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("LITEHIVE_HOME", str(tmp_path / "litehive-home"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
 
     workspace_one = tmp_path / "workspace-one"
     workspace_two = tmp_path / "workspace-two"
@@ -74,7 +75,9 @@ def test_normalize_workspace_root_accepts_plain_root_without_registry_lookup(
 
 
 def test_resolve_workspace_uses_registry_from_outside_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_home = tmp_path / "xdg-config"
     data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Registry lookup")
