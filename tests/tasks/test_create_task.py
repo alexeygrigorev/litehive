@@ -48,34 +48,67 @@ def test_create_task_persists_single_pipeline_mode(tmp_path: Path) -> None:
     assert persisted.pipeline_mode == "single"
 
 
-def test_task_add_cli_accepts_mode_alias_and_persists_single_pipeline_mode(tmp_path: Path) -> None:
+def test_task_add_cli_persists_surviving_flags(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
+    first = create_task(tmp_path, title="First prerequisite")
+    second = create_task(tmp_path, title="Second prerequisite")
 
     result = CliRunner().invoke(
         task_app,
         [
             "add",
-            "Single mode task",
+            "Queued task",
             "--workspace",
             str(tmp_path),
-            "--mode",
-            "single",
             "--goal",
-            "Complete in one agent pass",
+            "Complete the queued task",
             "--acceptance-criteria",
-            "Task finishes after implementing",
+            "Task ships cleanly",
+            "--depends-on",
+            f"{first.id},{second.id}",
+            "--priority",
+            "high",
         ],
         standalone_mode=False,
     )
 
     assert result.exit_code == 0, result.output
-    assert "pipeline_mode: single" in result.output
+    assert "priority: high" in result.output
+    assert f"depends_on: {first.id}, {second.id}" in result.output
 
-    persisted = get_task(tmp_path, "T-0001")
+    persisted = get_task(tmp_path, "T-0003")
     assert persisted is not None
-    assert persisted.pipeline_mode == "single"
-    assert persisted.goal == "Complete in one agent pass"
-    assert persisted.acceptance_criteria == ["Task finishes after implementing"]
+    assert persisted.pipeline_mode == "full"
+    assert persisted.goal == "Complete the queued task"
+    assert persisted.acceptance_criteria == ["Task ships cleanly"]
+    assert persisted.depends_on == [first.id, second.id]
+    assert persisted.priority == "high"
+
+
+def test_task_add_help_matches_trimmed_option_surface() -> None:
+    result = CliRunner().invoke(task_app, ["add", "--help"], standalone_mode=False)
+
+    assert result.exit_code == 0, result.output
+    for option in [
+        "--goal",
+        "--acceptance-criteria",
+        "--depends-on",
+        "--priority",
+    ]:
+        assert option in result.output
+    for option in [
+        "--model",
+        "--retry-limit",
+        "--record-mode",
+        "--task-type",
+        "--mode",
+        "--pipeline-mode",
+        "--pm-complexity",
+        "--planned-effort",
+        "--auto-commit",
+        "--human-checkpoints",
+    ]:
+        assert option not in result.output
 
 
 def test_task_add_cli_defaults_to_full_pipeline_mode(tmp_path: Path) -> None:
@@ -100,28 +133,76 @@ def test_task_add_cli_defaults_to_full_pipeline_mode(tmp_path: Path) -> None:
     assert persisted.pipeline_mode == "full"
 
 
-def test_task_add_cli_accepts_explicit_full_mode_alias(tmp_path: Path) -> None:
+def test_task_update_help_matches_trimmed_option_surface() -> None:
+    result = CliRunner().invoke(task_app, ["update", "--help"], standalone_mode=False)
+
+    assert result.exit_code == 0, result.output
+    for option in [
+        "--title",
+        "--priority",
+        "--goal",
+        "--depends-on",
+        "--acceptance-criteria",
+    ]:
+        assert option in result.output
+    for option in [
+        "--model",
+        "--retry-limit",
+        "--task-type",
+        "--constraint",
+        "--plan-step",
+        "--pm-complexity",
+        "--planned-effort",
+        "--auto-commit",
+        "--human-checkpoints",
+        "--from-file",
+        "--edit",
+    ]:
+        assert option not in result.output
+
+
+def test_task_update_cli_persists_surviving_flags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     ensure_workspace(tmp_path)
+    create_task(tmp_path, title="First prerequisite")
+    second = create_task(tmp_path, title="Second prerequisite")
+    task = create_task(tmp_path, title="Original title")
 
     result = CliRunner().invoke(
         task_app,
         [
-            "add",
-            "Explicit full mode",
+            "update",
+            task.id,
             "--workspace",
             str(tmp_path),
-            "--mode",
-            "full",
+            "--title",
+            "Updated title",
+            "--priority",
+            "high",
+            "--goal",
+            "Updated goal",
+            "--depends-on",
+            second.id,
+            "--acceptance-criteria",
+            "Updated criterion",
         ],
         standalone_mode=False,
     )
 
     assert result.exit_code == 0, result.output
-    assert "pipeline_mode: full" in result.output
+    assert f"task: {task.id} Updated title" in result.output
+    assert "priority: high" in result.output
+    assert f"depends_on: {second.id}" in result.output
 
-    persisted = get_task(tmp_path, "T-0001")
+    persisted = get_task(tmp_path, task.id)
     assert persisted is not None
-    assert persisted.pipeline_mode == "full"
+    assert persisted.title == "Updated title"
+    assert persisted.priority == "high"
+    assert persisted.goal == "Updated goal"
+    assert persisted.depends_on == [second.id]
+    assert persisted.acceptance_criteria == ["Updated criterion"]
+    assert persisted.constraints == []
+    assert persisted.plan == []
 
 
 def test_create_task_preserves_runner_queue_changes_after_state_snapshot(tmp_path: Path) -> None:

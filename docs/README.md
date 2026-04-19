@@ -74,7 +74,7 @@ litehive task add "Fix queue ordering bug" \
  
 
 litehive task add "Document API auth flow" \
-  --task-type docs \
+  --goal "Document the current auth flow for external integrators" \
  
 ```
 

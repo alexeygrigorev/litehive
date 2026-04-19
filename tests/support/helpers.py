@@ -28,8 +28,6 @@ def _cmd_add(args) -> int:
         argv.extend(["--acceptance-criteria", criterion])
     for dep in args.depends_on or []:
         argv.extend(["--depends-on", dep])
-    if args.task_type is not None:
-        argv.extend(["--task-type", args.task_type])
     if args.priority is not None:
         argv.extend(["--priority", args.priority])
     return _invoke_cli(argv)
@@ -98,20 +96,16 @@ def _cmd_status(args) -> int:
 
 def _cmd_update(args) -> int:
     argv = ["task", "update", args.task_id, "--workspace", args.workspace]
-    for name in ["title", "priority", "goal", "from_file"]:
+    for name in ["title", "priority", "goal"]:
         value = getattr(args, name, None)
         if value is not None:
             argv.extend([f"--{name.replace('_', '-')}", value])
     for option_name, values in [
         ("depends-on", getattr(args, "depends_on", None)),
         ("acceptance-criteria", getattr(args, "acceptance_criteria", None)),
-        ("constraint", getattr(args, "constraint", None)),
-        ("plan-step", getattr(args, "plan_step", None)),
     ]:
         for value in values or []:
             argv.extend([f"--{option_name}", value])
-    if getattr(args, "edit", False):
-        argv.append("--edit")
     return _invoke_cli(argv)
 
 

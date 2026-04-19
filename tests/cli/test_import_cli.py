@@ -16,6 +16,33 @@ def test_import_subapp_help_lists_spec_and_github() -> None:
     assert "github" in result.output
 
 
+def test_import_spec_help_matches_trimmed_option_surface() -> None:
+    result = CliRunner().invoke(app, ["import", "spec", "--help"], standalone_mode=False)
+
+    assert result.exit_code == 0, result.output
+    for option in [
+        "--title",
+        "--priority",
+        "--acceptance-criteria",
+    ]:
+        assert option in result.output
+    for option in [
+        "--task-type",
+        "--goal",
+        "--depends-on",
+        "--model",
+        "--retry-limit",
+        "--record-mode",
+        "--pm-complexity",
+        "--planned-effort",
+        "--auto-commit",
+        "--human-checkpoints",
+        "--from-file",
+        "--edit",
+    ]:
+        assert option not in result.output
+
+
 def test_import_spec_creates_task_from_file(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     spec_path = tmp_path / "feature.md"
@@ -23,7 +50,17 @@ def test_import_spec_creates_task_from_file(tmp_path: Path) -> None:
 
     result = CliRunner().invoke(
         app,
-        ["import", "spec", str(spec_path), "--workspace", str(tmp_path), "--task-type", "docs"],
+        [
+            "import",
+            "spec",
+            str(spec_path),
+            "--workspace",
+            str(tmp_path),
+            "--priority",
+            "high",
+            "--acceptance-criteria",
+            "Imported from spec",
+        ],
         standalone_mode=False,
     )
 
@@ -31,7 +68,9 @@ def test_import_spec_creates_task_from_file(tmp_path: Path) -> None:
     assert "Created task T-0001: Add CSV export" in result.output
     task = list_tasks(tmp_path)[0]
     assert task.title == "Add CSV export"
-    assert task.task_type == "docs"
+    assert task.task_type is None
+    assert task.priority == "high"
+    assert task.acceptance_criteria == ["Imported from spec"]
     assert task.goal == "# Add CSV export\n\nUsers can export reports as CSV."
     brief_path = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "brief.md"
     assert brief_path.read_text(encoding="utf-8") == "# Add CSV export\n\nUsers can export reports as CSV.\n"
@@ -80,3 +119,5 @@ def test_import_github_help_exists() -> None:
 
     assert result.exit_code == 0, result.output
     assert "Import GitHub issues as Litehive tasks" in result.output
+    assert "--repo" in result.output
+    assert "--all" in result.output

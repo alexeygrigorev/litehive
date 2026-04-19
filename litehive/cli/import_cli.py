@@ -11,7 +11,7 @@ from litehive.cli.common import WorkspaceOption, choice, make_typer, require_sub
 from litehive.cli.parse import parse_acceptance_criteria
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task, discard_created_task, list_tasks
-from litehive.tasks.constants import VALID_TASK_PRIORITIES, VALID_TASK_TYPES
+from litehive.tasks.constants import VALID_TASK_PRIORITIES
 from litehive.tasks.paths import task_dir
 
 app = make_typer(invoke_without_command=True)
@@ -221,9 +221,6 @@ def spec(
     file: Annotated[Path | None, typer.Argument(help="Spec file; reads stdin when omitted")] = None,
     workspace: WorkspaceOption = Path.cwd(),
     title: Annotated[str | None, typer.Option(help="Override the derived task title")] = None,
-    task_type: Annotated[
-        str | None, typer.Option(click_type=choice(VALID_TASK_TYPES), help="Set task type")
-    ] = None,
     priority: Annotated[
         str | None, typer.Option(click_type=choice(VALID_TASK_PRIORITIES), help="Set task priority")
     ] = None,
@@ -251,7 +248,6 @@ def spec(
         workspace,
         title=title or _derive_spec_title(spec_text),
         goal=spec_text,
-        task_type=task_type,
         priority=priority,
         acceptance_criteria=None if acceptance_criteria is ... else acceptance_criteria,
     )

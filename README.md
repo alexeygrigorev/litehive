@@ -37,7 +37,7 @@ litehive status
 # Add some tasks
 litehive task add "Add user authentication" --goal "Users can sign up and log in"
 litehive task add "Fix the search bug" --goal "Search returns results for partial matches"
-litehive task add "Write API documentation" --task-type docs
+litehive task add "Write API documentation" --goal "Capture the public API surface and auth flow"
 
 # Start the daemon
 litehive start
@@ -80,7 +80,7 @@ Task management:
 
 ```bash
 litehive task add "Task title" --goal "What needs to happen"
-litehive task add "Research task" --task-type research --mode tasks
+litehive task add "Research task" --goal "Investigate the failure mode and summarize findings"
 litehive task update T-0001 --title "Sharper task title" --priority high
 litehive queue move T-0003 1                    # move to position 1
 litehive queue promote T-0005                   # move to front

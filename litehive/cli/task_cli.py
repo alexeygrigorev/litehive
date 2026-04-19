@@ -7,10 +7,8 @@ import typer
 from litehive.cli.common import WorkspaceOption, choice, make_typer
 from litehive.cli.display import task_dependencies_label, task_model_label
 from litehive.cli.parse import (
-    TASK_TYPE_CHOICES,
     parse_acceptance_criteria,
     parse_dependency_ids,
-    parse_text_list_option,
 )
 from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
@@ -62,18 +60,6 @@ def add(
     depends_on: Annotated[
         list[str] | None, typer.Option(help="Add prerequisite task ids; repeat or use comma-separated values")
     ] = None,
-    task_type: Annotated[
-        str | None, typer.Option(click_type=choice(TASK_TYPE_CHOICES), help="Explicit routing class for this task")
-    ] = None,
-    pipeline_mode: Annotated[
-        str,
-        typer.Option(
-            "--mode",
-            "--pipeline-mode",
-            click_type=choice(["full", "single"]),
-            help="Task pipeline mode",
-        ),
-    ] = "full",
     priority: Annotated[
         str | None, typer.Option(click_type=choice(VALID_TASK_PRIORITIES), help="Task priority")
     ] = None,
@@ -86,10 +72,8 @@ def add(
             workspace,
             title=title,
             depends_on=None if depends_on is ... else depends_on,
-            pipeline_mode=pipeline_mode,
             goal=goal,
             acceptance_criteria=None if acceptance_criteria is ... else acceptance_criteria,
-            task_type=task_type,
             priority=priority,
         )
     except (ValueError, WorkspaceConflictError) as exc:
@@ -306,8 +290,6 @@ def update(
     goal: Annotated[str | None, typer.Option(help="Replace the task goal")] = None,
     depends_on: Annotated[list[str] | None, typer.Option(help="Replace task dependencies")] = None,
     acceptance_criteria: Annotated[list[str] | None, typer.Option(help="Replace acceptance criteria")] = None,
-    constraint: Annotated[list[str] | None, typer.Option(help="Replace constraints")] = None,
-    plan_step: Annotated[list[str] | None, typer.Option(help="Replace the plan")] = None,
 ) -> int:
     from litehive.cli.agent_cli import block_if_agent
 
@@ -317,8 +299,6 @@ def update(
         title is None
         and depends_on is None
         and acceptance_criteria is None
-        and constraint is None
-        and plan_step is None
         and priority is None
         and goal is None
     ):
@@ -327,8 +307,6 @@ def update(
     try:
         depends_on = parse_dependency_ids(depends_on, task_id=task_id, allow_clear=True)
         acceptance_criteria = parse_acceptance_criteria(acceptance_criteria, allow_clear=True)
-        constraints = parse_text_list_option(constraint, option_name="Constraints", allow_clear=True)
-        plan = parse_text_list_option(plan_step, option_name="Plan steps", allow_clear=True)
 
         task = update_task_metadata(
             workspace,
@@ -338,8 +316,6 @@ def update(
             priority=priority if priority is not None else ...,
             goal=goal if goal is not None else ...,
             acceptance_criteria=acceptance_criteria,
-            constraints=constraints,
-            plan=plan,
         )
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"update failed: {exc}")
