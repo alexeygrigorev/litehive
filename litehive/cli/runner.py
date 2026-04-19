@@ -22,7 +22,17 @@ from litehive.daemon.registry import get_workspace_daemon, list_daemon_instances
 from litehive.db.schema import MigrationApplyError, apply_pending_migrations, migration_status
 from litehive.git.ops import has_non_litehive_changes, is_git_repo
 from litehive.domain.reports import TaskActivityEntry
+from litehive.domain.task import TaskRecord
 from litehive.lifecycle.orchestration import run_task
+from litehive.recovery.launch import (
+    LaunchFailure,
+    TaskLaunchFailure,
+    attempt_launch_recovery,
+    best_effort_recovery_task,
+    corrupt_task_launch_diagnostics,
+    flag_task_after_failed_launch_recovery,
+    prepare_task_launch,
+)
 from litehive.state.backup import create_workspace_backup, list_workspace_backups, restore_workspace_backup
 from litehive.state.records import get_task
 from litehive.domain.task_ops import WorkspaceConflictError
@@ -49,7 +59,6 @@ def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: ty
 
 def start(workspace: WorkspaceOption = Path.cwd()) -> int:
     foreground = False
-    ensure_workspace(workspace)
     apply_pending_migrations(workspace)
     if foreground:
         return run_daemon_loop(workspace, output_stream=sys.stdout)
@@ -86,8 +95,8 @@ def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 
 def restart(workspace: WorkspaceOption = Path.cwd()) -> int:
-    ensure_workspace(workspace)
     previous = stop_workspace_daemon(workspace)
+    apply_pending_migrations(workspace)
     try:
         pid = start_background_daemon(workspace)
     except RuntimeError as exc:
@@ -111,8 +120,6 @@ def daemon_instances():
 
 
 def daemon_worker(workspace):
-    ensure_workspace(workspace)
-    apply_pending_migrations(workspace)
     return run_daemon_loop(workspace, output_stream=None)
 
 
@@ -129,35 +136,105 @@ def _run_once(
     engine: str | None = None,
     model: str | None = None,
 ) -> _RunCommandIteration:
-    try:
-        task = dequeue_next_task(workspace)
-    except WorkspaceConflictError as exc:
-        print(f"run failed: {exc}")
-        return _RunCommandIteration(exit_code=1, ran_task=False)
-    if task is None:
-        return _RunCommandIteration(exit_code=0, ran_task=False)
-    result = run_task(
-        workspace,
-        task,
-        engine_override=engine,
-        model_override=model,
-    )
-    if result.task is not None:
-        print(f"task: {result.task.id} {result.task.title}")
-    print(f"final_stage: {result.final_stage}")
-    if result.failed_reason:
-        print(f"failed_reason: {result.failed_reason}")
-    if result.failed_message:
-        print(f"failed_message: {result.failed_message}")
-    # The run command completed without an internal error. The task may still
-    # need more iterations (in_progress, recovering, failed→flagged, etc.) — those
-    # are normal pipeline outcomes, not a failure of this command. Reserve
-    # non-zero exit for actual exceptions raised above.
-    return _RunCommandIteration(
-        exit_code=0,
-        ran_task=True,
-        final_stage=result.final_stage,
-    )
+    selection_recovery_attempted = False
+    while True:
+        try:
+            task = dequeue_next_task(workspace)
+        except WorkspaceConflictError as exc:
+            print(f"run failed: {exc}")
+            return _RunCommandIteration(exit_code=1, ran_task=False)
+        except Exception as exc:
+            recovery_task = best_effort_recovery_task(workspace)
+            if recovery_task is None:
+                print(f"run failed: {exc}")
+                return _RunCommandIteration(exit_code=1, ran_task=False)
+            failure = LaunchFailure(
+                context="pre_stage_setup_failed",
+                summary=f"failed to select the next task: {exc}",
+                diagnostics=corrupt_task_launch_diagnostics(workspace, recovery_task.id),
+            )
+            used_recovery_budget = not selection_recovery_attempted
+            if _handle_failed_launch(
+                workspace,
+                recovery_task,
+                failure,
+                recovery_attempted=selection_recovery_attempted,
+            ):
+                selection_recovery_attempted = True
+            elif used_recovery_budget:
+                selection_recovery_attempted = True
+            continue
+
+        if task is None:
+            return _RunCommandIteration(exit_code=0, ran_task=False)
+
+        recovery_attempted = False
+        launch_recovery_enabled = isinstance(task, TaskRecord)
+        while True:
+            try:
+                if launch_recovery_enabled:
+                    prepare_task_launch(workspace, task)
+                result = run_task(
+                    workspace,
+                    task,
+                    engine_override=engine,
+                    model_override=model,
+                )
+            except TaskLaunchFailure as exc:
+                if not launch_recovery_enabled:
+                    raise
+                if _handle_failed_launch(
+                    workspace,
+                    task,
+                    exc.as_failure(),
+                    recovery_attempted=recovery_attempted,
+                ):
+                    recovery_attempted = True
+                    continue
+                break
+            except Exception as exc:
+                if not launch_recovery_enabled:
+                    raise
+                if _handle_failed_launch(
+                    workspace,
+                    task,
+                    LaunchFailure(
+                        context="pre_stage_setup_failed",
+                        summary=f"task launch crashed before stage entry: {exc}",
+                    ),
+                    recovery_attempted=recovery_attempted,
+                ):
+                    recovery_attempted = True
+                    continue
+                break
+
+            if result.task is not None:
+                print(f"task: {result.task.id} {result.task.title}")
+            print(f"final_stage: {result.final_stage}")
+            if result.failed_reason:
+                print(f"failed_reason: {result.failed_reason}")
+            if result.failed_message:
+                print(f"failed_message: {result.failed_message}")
+            return _RunCommandIteration(
+                exit_code=0,
+                ran_task=True,
+                final_stage=result.final_stage,
+            )
+
+
+def _handle_failed_launch(
+    workspace: Path,
+    task,
+    failure: LaunchFailure,
+    *,
+    recovery_attempted: bool,
+) -> bool:
+    if not recovery_attempted:
+        recovery = attempt_launch_recovery(workspace, task, failure)
+        if recovery.fixed:
+            return True
+    flag_task_after_failed_launch_recovery(workspace, task, failure)
+    return False
 
 
 def _run_single(

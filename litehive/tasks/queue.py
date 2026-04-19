@@ -137,6 +137,7 @@ def _is_recovery_budget_exhausted(task: TaskRecord) -> bool:
     return task.status == "flagged" and task.flag_reason in {
         "crash_budget_exhausted",
         "recovery_budget_exhausted",
+        "recovery_failed",
     }
 
 
