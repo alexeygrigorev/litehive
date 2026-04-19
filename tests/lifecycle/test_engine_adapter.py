@@ -254,7 +254,7 @@ def test_heru_engine_adapter_reuses_failed_turn_continuation_on_retry(tmp_path, 
 @pytest.mark.parametrize(
     ("engine_name", "continuation", "expected_resume_session_id"),
     [
-        ("codex", RuntimeEngineContinuation(thread_id="codex-thread-123"), None),
+        ("codex", RuntimeEngineContinuation(thread_id="codex-thread-123"), "codex-thread-123"),
         ("gemini", RuntimeEngineContinuation(session_id="gemini-session-123"), "gemini-session-123"),
         ("opencode", RuntimeEngineContinuation(session_id="opencode-session-123"), "opencode-session-123"),
     ],

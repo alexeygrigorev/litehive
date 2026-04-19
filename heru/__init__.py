@@ -26,6 +26,7 @@ from heru.base import (
     CLIExecutionResult,
     CLIInvocation,
     ExternalCLIAdapter,
+    LATEST_CONTINUATION_SENTINEL,
     StreamEventAdapter,
     extract_jsonl_errors,
     extract_jsonl_messages,
@@ -129,6 +130,25 @@ def extract_engine_continuation_for_execution(
 
 extract_engine_continuation = extract_engine_continuation_for_execution
 
+
+def resolve_engine_resume_session_id(
+    engine_name: str,
+    continuation: RuntimeEngineContinuation | str | None,
+    *,
+    prefer_latest: bool = False,
+) -> str | None:
+    if isinstance(continuation, str):
+        return continuation or None
+    if continuation is not None and continuation.resume_id:
+        return continuation.resume_id
+    if not prefer_latest:
+        return None
+    adapter = ENGINE_REGISTRY.get(engine_name)
+    if adapter is None or not adapter.supports_continue_latest():
+        return None
+    return LATEST_CONTINUATION_SENTINEL
+
+
 __all__ = [
     "AdapterCapabilities",
     "CLIExecutionResult",
@@ -171,4 +191,5 @@ __all__ = [
     "iter_jsonl_payloads",
     "parse_unified_execution",
     "render_execution_transcript",
+    "resolve_engine_resume_session_id",
 ]

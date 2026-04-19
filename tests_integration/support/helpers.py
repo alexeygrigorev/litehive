@@ -11,7 +11,7 @@ from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.config.model import VALID_ENGINE_NAMES
-from heru import extract_engine_continuation, get_engine
+from heru import extract_engine_continuation, get_engine, resolve_engine_resume_session_id
 from heru.base import CLIExecutionResult
 
 
@@ -377,12 +377,10 @@ def prepare_smoke_session(engine_name: str, *, cwd: Path, sandboxed: bool = Fals
     )
     assert execution.exit_code == 0, execution.transcript
     continuation = extract_engine_continuation(engine_name, execution)
-    resume_session_id = (
-        continuation.session_id
-        if continuation is not None and continuation.session_id
-        else "latest"
-        if engine_name == "copilot"
-        else None
+    resume_session_id = resolve_engine_resume_session_id(
+        engine_name,
+        continuation,
+        prefer_latest=True,
     )
     return SmokeSession(
         engine_name=engine_name,
@@ -439,9 +437,7 @@ def assert_nudge_verdict_submission(
         ),
         cwd=session.cwd,
         max_turns=2 if engine_name == "claude" else None,
-        resume_session_id=(
-            session.resume_session_id if engine_name not in {"gemini", "goz", "opencode"} else None
-        ),
+        resume_session_id=session.resume_session_id,
         extra_env={"LITEHIVE_TASK_ID": session.task_id},
         allow_timeout=engine_name == "gemini",
     )

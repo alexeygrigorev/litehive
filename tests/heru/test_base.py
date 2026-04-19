@@ -3,6 +3,11 @@ from pathlib import Path
 import sys
 
 import heru.base as heru_base
+import pytest
+
+from heru import resolve_engine_resume_session_id
+from heru.base import LATEST_CONTINUATION_SENTINEL
+from heru.types import RuntimeEngineContinuation
 
 
 def test_build_invocation_env_strips_stale_litehive_session_env_outside_workspace(
@@ -44,3 +49,28 @@ def test_build_invocation_env_prefers_current_python_bin_for_litehive(
     env = heru_base.build_invocation_env(cwd=tmp_path)
 
     assert env["PATH"].split(os.pathsep)[0] == python_bin_dir
+
+
+@pytest.mark.parametrize(
+    ("engine_name", "continuation", "prefer_latest", "expected"),
+    [
+        ("codex", RuntimeEngineContinuation(thread_id="codex-thread-123"), False, "codex-thread-123"),
+        ("opencode", RuntimeEngineContinuation(session_id="opencode-session-123"), False, "opencode-session-123"),
+        ("claude", RuntimeEngineContinuation(), True, LATEST_CONTINUATION_SENTINEL),
+        ("goz", RuntimeEngineContinuation(), True, None),
+    ],
+)
+def test_resolve_engine_resume_session_id(
+    engine_name: str,
+    continuation: RuntimeEngineContinuation,
+    prefer_latest: bool,
+    expected: str | None,
+) -> None:
+    assert (
+        resolve_engine_resume_session_id(
+            engine_name,
+            continuation,
+            prefer_latest=prefer_latest,
+        )
+        == expected
+    )
