@@ -53,7 +53,7 @@ from litehive.observability.status_diagnostics import (
     status_has_problems,
 )
 from litehive.recovery.venv_health import broken_venv_issue_message, probe_broken_venv_executables
-from litehive.recovery.workspace_repair import repair_workspace_state
+from litehive.recovery.workspace_repair import repair_stale_unmerged_worktrees, repair_workspace_state
 from litehive.state.records import get_task, list_tasks_state_first
 from litehive.state.persist import load_state
 from litehive.state.records import list_tasks
@@ -149,6 +149,8 @@ def _repair_summary_lines(
         f"{result_label}: {'yes' if summary.mutated else 'no'}",
         f"stale_runner_recovered: {'yes' if summary.stale_runner_recovered else 'no'}",
     ]
+    if summary.stale_unmerged_worktrees_removed or include_empty:
+        lines.append(f"stale_unmerged_worktrees_removed: {summary.stale_unmerged_worktrees_removed}")
     if summary.cleared_active_task_id or include_empty:
         lines.append(f"cleared_active_task_id: {summary.cleared_active_task_id or '-'}")
 
@@ -207,6 +209,7 @@ def doctor_command(
         except WorkspaceConflictError as exc:
             print(f"doctor failed: {exc}")
             return 1
+        print(f"stale_unmerged_worktrees_removed: {summary.stale_unmerged_worktrees_removed}")
         for line in _repair_summary_lines(
             summary,
             result_label="doctor_repaired",
@@ -214,6 +217,9 @@ def doctor_command(
             include_extended_fields=False,
         ):
             print(line)
+    else:
+        removed = repair_stale_unmerged_worktrees(root)
+        print(f"stale_unmerged_worktrees_removed: {removed}")
     return _print_doctor_snapshot(root)
 
 

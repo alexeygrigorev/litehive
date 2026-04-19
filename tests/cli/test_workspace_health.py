@@ -22,8 +22,10 @@ from litehive.config.paths import worktree_root
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
-from litehive.domain.task import WorkspaceState
+from litehive.domain.task import UnmergedWorktree, WorkspaceState
 from litehive.domain.task_ops import WorkspaceRepairSummary
+from litehive.state.persist import load_state, save_state
+from litehive.state.records import create_task, save_task
 
 _RUNNER = CliRunner()
 
@@ -94,6 +96,7 @@ def test_repair_summary_lines_include_empty_fields_for_repair_mode() -> None:
     assert lines == [
         "repaired: no",
         "stale_runner_recovered: no",
+        "stale_unmerged_worktrees_removed: 0",
         "cleared_active_task_id: -",
         "requeued_tasks: -",
         "removed_queue_entries: -",
@@ -180,6 +183,7 @@ def test_doctor_reports_broken_workspace_and_worktree_venvs_without_claiming_fix
     result = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
 
     assert result.return_value == 1
+    assert "stale_unmerged_worktrees_removed: 0" in result.output
     assert f"venv_health: BROKEN binary=ruff venv={tmp_path / '.venv'}" in result.output
     assert f"venv={worktree_path / '.venv'} checkout={worktree_path}" in result.output
     assert "uv venv --clear .venv && uv sync --extra dev" in result.output
@@ -187,9 +191,46 @@ def test_doctor_reports_broken_workspace_and_worktree_venvs_without_claiming_fix
     fix_result = _RUNNER.invoke(app, ["doctor", "--fix", "--workspace", str(tmp_path)], standalone_mode=False)
 
     assert fix_result.return_value == 1
+    assert "stale_unmerged_worktrees_removed: 0" in fix_result.output
     assert "doctor_repaired: no" in fix_result.output
     assert f"broken_venv_binaries: {tmp_path / '.venv'}:ruff {worktree_path / '.venv'}:pytest" in fix_result.output
     assert "uv venv --clear .venv && uv sync --extra dev" in fix_result.output
+
+
+def test_doctor_removes_stale_unmerged_worktree_entries(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    done_task = create_task(tmp_path, title="Done worktree cleanup")
+    done_task.status = "done"
+    done_task.pipeline_status = "done"
+    save_task(tmp_path, done_task)
+
+    queued_task = create_task(tmp_path, title="Missing worktree cleanup")
+
+    existing_worktree = worktree_root(tmp_path) / f"{done_task.id}-{done_task.slug}"
+    existing_worktree.mkdir(parents=True)
+    missing_worktree = worktree_root(tmp_path) / f"{queued_task.id}-{queued_task.slug}"
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = []
+    state.unmerged_worktrees = [
+        UnmergedWorktree(task_id=done_task.id, worktree_path=str(existing_worktree.resolve())),
+        UnmergedWorktree(task_id=queued_task.id, worktree_path=str(missing_worktree.resolve())),
+    ]
+    save_state(tmp_path, state)
+
+    result = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
+
+    assert result.return_value == 0
+    assert "stale_unmerged_worktrees_removed: 2" in result.output
+    assert f"doctor: clean workspace={tmp_path}" in result.output
+    assert load_state(tmp_path).unmerged_worktrees == []
+
+    clean_result = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
+
+    assert clean_result.return_value == 0
+    assert "stale_unmerged_worktrees_removed: 0" in clean_result.output
+    assert f"doctor: clean workspace={tmp_path}" in clean_result.output
 
 
 def test_documented_clear_and_sync_fix_restores_broken_symlink_after_uv_cache_clean(tmp_path: Path) -> None:

@@ -35,6 +35,15 @@ from litehive.tasks.runtime import (
 
 from .detection import has_inactive_running_tasks, is_stranded_commit_task, should_requeue_commit_stage_task
 
+_TERMINAL_UNMERGED_WORKTREE_TASK_STATUSES = {
+    "done",
+    "abandoned",
+    "cancelled",
+    "wont_do",
+    "duplicate",
+    "deferred",
+}
+
 
 def _running_task_ids(root: Path) -> list[str]:
     from litehive.db.schema import connect_workspace_db
@@ -562,8 +571,49 @@ def recover_stale_runner_state(
         return mutated
 
 
+def _is_stale_unmerged_worktree_entry(root: Path, task_id: str, worktree_path: str) -> bool:
+    from litehive.state.records import get_task_record
+    from litehive.tasks.worktrees import resolve_recorded_worktree_path
+
+    task = get_task_record(root, task_id)
+    if task is not None and task.status in _TERMINAL_UNMERGED_WORKTREE_TASK_STATUSES:
+        return True
+    resolved_worktree = resolve_recorded_worktree_path(root, worktree_path)
+    if resolved_worktree is None:
+        return True
+    try:
+        return not resolved_worktree.exists()
+    except OSError:
+        return True
+
+
+def repair_stale_unmerged_worktrees(root: Path, *, summary: WorkspaceRepairSummary | None = None) -> int:
+    from litehive.state.locking import workspace_lock
+    from litehive.state.persist import load_state, save_state_without_runner_guard
+
+    root = root.resolve()
+    with workspace_lock(root):
+        state = load_state(root)
+        if not state.unmerged_worktrees:
+            return 0
+        remaining = []
+        removed = 0
+        for entry in state.unmerged_worktrees:
+            if _is_stale_unmerged_worktree_entry(root, entry.task_id, entry.worktree_path):
+                removed += 1
+                continue
+            remaining.append(entry)
+        if removed:
+            state.unmerged_worktrees = remaining
+            save_state_without_runner_guard(root, state)
+    if summary is not None:
+        summary.stale_unmerged_worktrees_removed += removed
+    return removed
+
+
 def repair_workspace_state(root: Path, *, repair_broken_venvs_in_checkouts: bool = False) -> WorkspaceRepairSummary:
     summary = WorkspaceRepairSummary()
+    repair_stale_unmerged_worktrees(root, summary=summary)
     if repair_broken_venvs_in_checkouts:
         # Tradeoff: broken venv entrypoints are reported and block the daemon,
         # but we do not auto-clear and rebuild `.venv` from `doctor --fix` or
@@ -574,5 +624,5 @@ def repair_workspace_state(root: Path, *, repair_broken_venvs_in_checkouts: bool
             f"{finding.checkout.venv_path}:{finding.binary_name}" for finding in probe_broken_venv_executables(root)
         ]
     summary.stale_runner_recovered = recover_stale_runner_state(root, summary=summary)
-    summary.mutated = summary.stale_runner_recovered
+    summary.mutated = summary.stale_runner_recovered or summary.stale_unmerged_worktrees_removed > 0
     return summary
