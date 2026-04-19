@@ -34,6 +34,22 @@ def after(stage: NodeName) -> NodeName:
     return f"after_{stage}"
 
 
+def pipeline_stage_for_phase(phase: NodeName) -> NodeName:
+    if phase == RECOVERING:
+        return "grooming"
+    if phase in STAGES:
+        return phase
+    if phase.startswith("before_"):
+        candidate = phase.removeprefix("before_")
+        if candidate in STAGES:
+            return candidate
+    if phase.startswith("after_"):
+        candidate = phase.removeprefix("after_")
+        if candidate in STAGES:
+            return candidate
+    return phase
+
+
 STAGE_PHASES: tuple[NodeName, ...] = tuple(
     phase for stage in STAGES for phase in (before(stage), stage, after(stage))
 )

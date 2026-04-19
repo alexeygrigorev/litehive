@@ -321,6 +321,7 @@ def run_task(
             registry,
             persistence,
             journal=journal,
+            session_store=sessions,
         )
 
         # 3. Run under the heartbeat so `litehive status` sees the active task.

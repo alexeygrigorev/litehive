@@ -178,6 +178,37 @@ def test_nudge_required_reissues_turn_with_nudge_prompt() -> None:
     assert "nudge_message" in prompts[1]
 
 
+def test_nudge_keeps_existing_session_continuation() -> None:
+    seen_session_ids: list[str | None] = []
+
+    class _NudgingEngine:
+        name = "codex"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run_turn(self, session: Any, prompt: Any, state: TaskState) -> AgentVerdict:
+            self.calls += 1
+            seen_session_ids.append(session.engine_session_id)
+            if self.calls == 1:
+                session.engine_session_id = "resume-123"
+                raise NudgeRequired("no litehive report call")
+            return AgentVerdict(outcome="pass")
+
+    engine = _NudgingEngine()
+    node = _TrivialAgent(
+        "implementing",
+        _ListSelector([engine]),
+        InMemorySessionStore(),
+        retry_budget=3,
+    )
+
+    event = node.run(make_state())
+
+    assert isinstance(event, Pass)
+    assert seen_session_ids == [None, "resume-123"]
+
+
 def test_nudge_does_not_consume_retry_budget() -> None:
     """Nudge + retry should both work independently of each other's budgets."""
     engine = _ScriptedEngine(

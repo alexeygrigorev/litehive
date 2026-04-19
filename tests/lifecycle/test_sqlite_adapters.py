@@ -188,3 +188,18 @@ def test_sessions_upsert_replaces_existing_row(workspace: Path) -> None:
     loaded = sessions.get_or_create("T-0001", "implementing", "codex")
     assert loaded.engine_session_id == "second"
     assert loaded.turn_count == 5
+
+
+def test_sessions_clear_node_sessions_removes_only_target_task_and_node(workspace: Path) -> None:
+    sessions = SqliteSessionStore(workspace)
+    sessions.persist("T-0001", "implementing", "codex", Session(engine_session_id="cdx-1"))
+    sessions.persist("T-0001", "implementing", "claude", Session(engine_session_id="cla-1"))
+    sessions.persist("T-0001", "testing", "codex", Session(engine_session_id="qa-1"))
+    sessions.persist("T-0002", "implementing", "codex", Session(engine_session_id="other-1"))
+
+    sessions.clear_node_sessions("T-0001", "implementing")
+
+    assert sessions.get_or_create("T-0001", "implementing", "codex").engine_session_id is None
+    assert sessions.get_or_create("T-0001", "implementing", "claude").engine_session_id is None
+    assert sessions.get_or_create("T-0001", "testing", "codex").engine_session_id == "qa-1"
+    assert sessions.get_or_create("T-0002", "implementing", "codex").engine_session_id == "other-1"

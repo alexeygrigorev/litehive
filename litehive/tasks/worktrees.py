@@ -16,7 +16,6 @@ from litehive.git.ops import (
     GitError,
     add_worktree,
     current_head,
-    has_changes,
     is_git_repo,
     rebase_worktree_onto,
     status_porcelain,

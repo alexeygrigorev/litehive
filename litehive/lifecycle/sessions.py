@@ -48,6 +48,8 @@ class SessionStore(Protocol):
         self, task_id: str, node_name: NodeName, engine_name: str, session: Session
     ) -> None: ...
 
+    def clear_node_sessions(self, task_id: str, node_name: NodeName) -> None: ...
+
 
 class InMemorySessionStore:
     """Reference implementation for tests; keeps everything in a dict."""
@@ -64,6 +66,10 @@ class InMemorySessionStore:
         self, task_id: str, node_name: NodeName, engine_name: str, session: Session
     ) -> None:
         self._sessions[(task_id, node_name, engine_name)] = session
+
+    def clear_node_sessions(self, task_id: str, node_name: NodeName) -> None:
+        for key in [k for k in self._sessions if k[:2] == (task_id, node_name)]:
+            del self._sessions[key]
 
 
 class SqliteSessionStore:
@@ -127,5 +133,13 @@ class SqliteSessionStore:
                     metadata_json,
                     utcnow(),
                 ),
+            )
+            connection.commit()
+
+    def clear_node_sessions(self, task_id: str, node_name: NodeName) -> None:
+        with connect_workspace_db(self.workspace_root) as connection:
+            connection.execute(
+                "DELETE FROM pipeline_sessions WHERE task_id = ? AND node_name = ?",
+                (task_id, node_name),
             )
             connection.commit()
