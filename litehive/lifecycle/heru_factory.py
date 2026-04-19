@@ -119,6 +119,8 @@ def _latest_verdict_after(
 class HeruEngineAdapter:
     """``Engine`` that delegates to ``SubagentManager`` for one turn."""
 
+    _CRASH_RESUME_PROMPT_PREFIX = "Please continue where you left off. Complete the task.\n\n"
+
     def __init__(
         self,
         engine_name: str,
@@ -156,23 +158,13 @@ class HeruEngineAdapter:
 
         before_turn = datetime.now(UTC)
         manager = SubagentManager(self.workspace_root, execution_root=execution_root)
-        try:
-            result = manager.run(
-                task,
-                role=role,
-                engine_name=self.name,
-                prompt=prompt_text,
-                model=self.model_name,
-                resume_session_id=session.engine_session_id,
-            )
-        except Exception as exc:
-            self._reraise(exc)
-            raise  # unreachable
-
-        # Update the session with the new heru continuation id (if any).
-        new_session_id = self._extract_continuation_id(result, session.engine_session_id)
-        if new_session_id:
-            session.engine_session_id = new_session_id
+        result = self._run_with_crash_resume(
+            manager,
+            task,
+            role=role,
+            prompt_text=prompt_text,
+            session=session,
+        )
 
         if result.failure is not None:
             self._reraise_failure(result.failure)
@@ -185,6 +177,61 @@ class HeruEngineAdapter:
             raise NudgeRequired(f"{self.name} finished {stage} without a litehive report submission")
 
         return verdict
+
+    def _run_with_crash_resume(
+        self,
+        manager: SubagentManager,
+        task,
+        *,
+        role: str,
+        prompt_text: str,
+        session: Session,
+    ):
+        current_prompt = prompt_text
+        resume_session_id = session.engine_session_id
+        crash_resume_attempted = False
+
+        while True:
+            try:
+                result = manager.run(
+                    task,
+                    role=role,
+                    engine_name=self.name,
+                    prompt=current_prompt,
+                    model=self.model_name,
+                    resume_session_id=resume_session_id,
+                )
+            except Exception as exc:
+                self._reraise(exc)
+                raise  # unreachable
+
+            # Persist the latest continuation handle even if the attempt failed;
+            # same-engine retries and nudges reuse the in-memory session object.
+            new_session_id = self._extract_continuation_id(result, session.engine_session_id)
+            if new_session_id:
+                session.engine_session_id = new_session_id
+
+            if result.failure is not None or result.exit_code == 0 or crash_resume_attempted:
+                return result
+
+            crash_resume_id = self._extract_continuation_id(result, None)
+            if not crash_resume_id:
+                return result
+
+            crash_resume_attempted = True
+            resume_session_id = self._crash_resume_session_id(crash_resume_id)
+            current_prompt = self._crash_resume_prompt(prompt_text)
+
+    @classmethod
+    def _crash_resume_prompt(cls, prompt_text: str) -> str:
+        return f"{cls._CRASH_RESUME_PROMPT_PREFIX}{prompt_text}"
+
+    def _crash_resume_session_id(self, crash_resume_id: str) -> str | None:
+        # Codex crash-resume should retry via a fresh `exec` with the prefixed
+        # task context, not via `codex exec resume`.
+        if self.name == "codex":
+            return None
+        return crash_resume_id
 
     @staticmethod
     def _extract_continuation_id(result, fallback: str | None) -> str | None:
