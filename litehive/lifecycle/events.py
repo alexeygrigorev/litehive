@@ -54,9 +54,8 @@ class Pass(Event):
 class HookOk(Event):
     """The current hook phase finished and execution should continue.
 
-    Fired only by ``HookNode``. Empty hook lists produce ``HookOk``
-    immediately. Hook command failures are recorded as warnings on the
-    event and logged, but they never stop the pipeline.
+    Fired only by ``HookNode`` when every configured hook passes.
+    Empty hook lists also produce ``HookOk`` immediately.
     """
 
     warnings: list[str] = field(default_factory=list)
@@ -91,6 +90,7 @@ class Reject(Event):
     Fired by any node that can produce a rejection:
       - agent nodes → ``source="agent"`` (reviewer finds a bug, QA's
         tests fail, planner can't produce a plan, etc.).
+      - hook nodes → ``source="hook"`` when a runner hook exits non-zero.
       - guards → ``source="guard"`` (e.g. a future ``no_hallucinated_files``
         guard catches the SWE claiming a file it didn't touch).
       - system nodes → ``source="system"`` (currently unused — the

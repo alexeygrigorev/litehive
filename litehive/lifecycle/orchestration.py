@@ -47,7 +47,7 @@ from litehive.state.locking import persist_future_task_update
 from litehive.state.locking import runner_heartbeat, workspace_runner_guard
 
 from litehive.roles.base import PromptContext
-from .events import HookOk
+from .events import HookOk, Reject
 from .engines import ConfigBackedEngineSelector, EngineFactory
 from .heru_factory import heru_engine_factory
 from .journal import SqliteJournal
@@ -441,6 +441,71 @@ def _record_hook_warnings(
     )
 
 
+def _record_hook_reject(
+    root: Path,
+    task: TaskRecord,
+    *,
+    phase: str,
+    reason: str,
+    warnings: list[str],
+    hook: dict[str, str] | None,
+    consecutive_same_hook_rejects: int | None,
+) -> None:
+    report_stage = _report_stage_for_phase(phase)
+    summary = f"Runner hook at `{phase}` rejected the stage."
+    feedback_parts = [reason, *warnings]
+    feedback = "\n\n".join(part for part in feedback_parts if part)
+    failure_diagnostics: dict[str, str | int | bool | None | list[str]] = {
+        "phase": phase,
+        "source": "hook",
+        "consecutive_same_hook_rejects": consecutive_same_hook_rejects,
+    }
+    if hook is not None:
+        failure_diagnostics.update(
+            {
+                "point": hook.get("point"),
+                "command": hook.get("command"),
+                "description": hook.get("description"),
+                "fingerprint": hook.get("fingerprint"),
+            }
+        )
+    report = StageReport(
+        task_id=task.id,
+        stage=report_stage,  # type: ignore[arg-type]
+        verdict="reject",
+        source="hook",
+        summary=summary,
+        feedback=feedback,
+        warnings=warnings,
+        failure_classification="hook_reject",
+        failure_diagnostics=failure_diagnostics,
+    )
+    report_path = record_stage_report(root, task, report)
+    message = (
+        f"{summary}\n\n"
+        f"{feedback}\n\n"
+        f"report: {report_path.relative_to(root)}"
+    )
+    append_task_activity(
+        root,
+        task,
+        TaskActivityEntry(
+            role="hook",
+            stage=report_stage,
+            verdict="reject",
+            message=message,
+        ),
+    )
+    append_journal(
+        root,
+        task,
+        (
+            f"Runner hook at `{phase}` rejected the stage.\n"
+            f"report: `{report_path.relative_to(root)}`"
+        ),
+    )
+
+
 def run_task(
     root: Path,
     task: TaskRecord,
@@ -551,14 +616,29 @@ def _observe_transition(
     trans: Transition,
 ) -> None:
     del trans
-    if not isinstance(event, HookOk) or not event.warnings:
-        return
     task = get_task(root, state.task_id)
     if task is None:
         return
-    _record_hook_warnings(
-        root,
-        task,
-        phase=from_stage,
-        warnings=event.warnings,
-    )
+    if isinstance(event, HookOk) and event.warnings:
+        _record_hook_warnings(
+            root,
+            task,
+            phase=from_stage,
+            warnings=event.warnings,
+        )
+        return
+    if isinstance(event, Reject) and event.source == "hook":
+        hook = event.metadata.get("hook")
+        _record_hook_reject(
+            root,
+            task,
+            phase=from_stage,
+            reason=event.reason,
+            warnings=[str(item) for item in event.metadata.get("warnings", [])],
+            hook=hook if isinstance(hook, dict) else None,
+            consecutive_same_hook_rejects=(
+                event.metadata.get("consecutive_same_hook_rejects")
+                if isinstance(event.metadata.get("consecutive_same_hook_rejects"), int)
+                else None
+            ),
+        )

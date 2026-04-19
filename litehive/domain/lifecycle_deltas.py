@@ -248,6 +248,37 @@ def enter_pre_exec_recovery(state: TaskState, event: Event) -> StateDelta:
     return StateDelta(inc_pre_exec_recovery_attempt=True)
 
 
+def _pipeline_stage_key(name: str | None) -> str | None:
+    if name in {None, ""}:
+        return None
+    if name in {"before_grooming", "grooming", "after_grooming", "recovering"}:
+        return "grooming"
+    if name in {"before_implementing", "implementing", "after_implementing"}:
+        return "implementing"
+    if name in {"before_testing", "testing", "after_testing"}:
+        return "testing"
+    if name in {"before_accepting", "accepting", "after_accepting"}:
+        return "accepting"
+    if name in {"commit", "after_commit", "merge_resolving"}:
+        return "commit_to_git"
+    return name
+
+
+def _retry_counter_stage(origin_stage: str | None) -> NodeName | None:
+    key = _pipeline_stage_key(origin_stage)
+    if key in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}:
+        return key
+    return origin_stage
+
+
+def _hook_recovery_made_progress(trigger: RecoveryTrigger | None, event: Event) -> bool:
+    if trigger is None or trigger.reason_code != "hook_reject_loop" or not isinstance(event, RecoverySucceeded):
+        return False
+    target_stage = _pipeline_stage_key(event.resume)
+    origin_stage = _pipeline_stage_key(trigger.origin_stage)
+    return event.resume == "done" or (target_stage is not None and target_stage != origin_stage)
+
+
 def clear_recovery_attempt(state: TaskState, event: Event) -> StateDelta:
     trigger = state.active_recovery_trigger
     outcome = None
@@ -263,12 +294,15 @@ def clear_recovery_attempt(state: TaskState, event: Event) -> StateDelta:
             disposition=disposition,
             message=f"Recovery {event.disposition_hint}d task via {event.resume}",
         )
+    preserve_hook_tracking = trigger is not None and trigger.reason_code == "hook_reject_loop"
+    if preserve_hook_tracking and _hook_recovery_made_progress(trigger, event):
+        preserve_hook_tracking = False
     return StateDelta(
-        reset_stage_retry=trigger.origin_stage if trigger is not None else None,
+        reset_stage_retry=_retry_counter_stage(trigger.origin_stage if trigger is not None else None),
         clear_active_recovery_trigger=True,
         append_recovery_outcome=outcome,
-        clear_hook_reject_tracking=True,
-        set_hook_reject_recovery_invoked=False,
+        clear_hook_reject_tracking=not preserve_hook_tracking,
+        set_hook_reject_recovery_invoked=False if not preserve_hook_tracking else True,
         clear_recovery_failure_explanation=True,
     )
 

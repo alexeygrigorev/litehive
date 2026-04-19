@@ -306,7 +306,7 @@ def test_swe_prompt_lists_after_stage_hooks_with_descriptions(workspace: Path) -
         "- uv run pytest -q tests/lifecycle/test_prompt_serializer.py "
         "(runs the focused serializer regression slice)"
     ) in text
-    assert "Hook failures are logged as warnings only." in text
+    assert "Hook failures can reject the stage." in text
 
 
 def test_serialize_works_without_task_record() -> None:

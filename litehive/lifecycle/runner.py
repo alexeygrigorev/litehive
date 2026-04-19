@@ -2,7 +2,7 @@ from typing import Callable
 
 from litehive.lifecycle.persistence import CommitResult
 from litehive.domain.lifecycle_deltas import StateDelta
-from .events import Event, HookOk, Pass, RecoverySucceeded
+from .events import Event, HookOk, Pass
 from .journal import NullJournal, PipelineJournal
 from .nodes.base import NodeRegistry
 from .persistence import Persistence, TaskState
@@ -118,9 +118,6 @@ class StateMachineRunner:
         to_stage: str,
         event: Event,
     ) -> None:
-        if isinstance(event, RecoverySucceeded):
-            StateMachineRunner._clear_hook_reject_tracking(state, clear_recovery_invoked=True)
-            return
         if not isinstance(event, (Pass, HookOk)):
             return
         if _pipeline_stage_for_phase(from_stage) == _pipeline_stage_for_phase(to_stage):

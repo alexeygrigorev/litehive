@@ -52,6 +52,7 @@ def make_state(
     stage_retry_limit: int = 3,
     active_recovery_trigger: RecoveryTrigger | None = None,
     recovery_history: list[RecoveryOutcome] | None = None,
+    hook_reject_recovery_invoked: bool = False,
 ) -> TaskState:
     return TaskState(
         task_id="T-0001",
@@ -60,6 +61,7 @@ def make_state(
         stage_retry=stage_retry or {},
         active_recovery_trigger=active_recovery_trigger,
         recovery_history=list(recovery_history or []),
+        hook_reject_recovery_invoked=hook_reject_recovery_invoked,
         pre_exec_recovery_attempt=pre_exec_recovery_attempt,
         last_report=LastReport(files_changed=files_changed, tests_added=tests_added),
         limits=Limits(stage_retry_limit=stage_retry_limit),
@@ -157,6 +159,60 @@ def test_implementing_reject_routes_to_recovering_when_exhausted():
     assert trans.next == "recovering"
 
 
+def test_same_hook_reject_loop_trips_recovery_before_stage_retry_limit():
+    state = make_state("after_implementing", stage_retry={"implementing": 0})
+    trans = step(
+        "after_implementing",
+        Reject(
+            source="hook",
+            reason="pytest timed out",
+            metadata={
+                "consecutive_same_hook_rejects": 3,
+                "hook": {
+                    "point": "after_implementing",
+                    "command": "pytest -q",
+                    "description": "timeout watchdog",
+                    "fingerprint": "after_implementing|pytest -q|timeout watchdog",
+                },
+            },
+        ),
+        state,
+    )
+
+    assert trans.next == "recovering"
+    assert trans.delta.set_active_recovery_trigger is not None
+    assert trans.delta.set_active_recovery_trigger.reason_code == "hook_reject_loop"
+    assert trans.delta.set_hook_reject_recovery_invoked is True
+
+
+def test_same_hook_reject_loop_budget_hits_after_one_recovery_in_same_loop():
+    state = make_state(
+        "after_implementing",
+        stage_retry={"implementing": 0},
+        hook_reject_recovery_invoked=True,
+    )
+    trans = step(
+        "after_implementing",
+        Reject(
+            source="hook",
+            reason="pytest timed out",
+            metadata={
+                "consecutive_same_hook_rejects": 4,
+                "hook": {
+                    "point": "after_implementing",
+                    "command": "pytest -q",
+                    "description": "timeout watchdog",
+                    "fingerprint": "after_implementing|pytest -q|timeout watchdog",
+                },
+            },
+        ),
+        state,
+    )
+
+    assert trans.next == "failed"
+    assert trans.delta.failed_reason == "recovery_budget_hit"
+
+
 def test_testing_reject_routes_back_to_implementing():
     state = make_state("testing", stage_retry={"testing": 0})
     trans = step("testing", Reject(source="agent", reason="x"), state)
@@ -227,6 +283,32 @@ def test_same_stage_same_fingerprint_crash_budget_routes_directly_to_failed():
     assert trans.next == "failed"
     assert trans.delta.failed_reason == "recovery_budget_hit"
     assert trans.delta.set_recovery_failure_explanation is not None
+
+
+def test_hook_reject_loop_recovery_budget_resets_after_progress():
+    prior_trigger = RecoveryTrigger(
+        origin_stage="after_implementing",
+        trigger_event_kind=TriggerEventKind.REJECT,
+        failure_fingerprint=FailureFingerprint(
+            fingerprint="after_implementing|pytest -q|timeout watchdog",
+            classification="hook_reject",
+        ),
+        reason_code="hook_reject_loop",
+        message="pytest timed out",
+    )
+    state = make_state(
+        "after_implementing",
+        recovery_history=[
+            RecoveryOutcome(
+                trigger=prior_trigger,
+                recovery_verdict="resume",
+                disposition=RecoveryDisposition.RESUMED,
+            )
+        ],
+        hook_reject_recovery_invoked=False,
+    )
+
+    assert state.recovery_budget_available(prior_trigger) is True
 
 
 def test_different_stage_crash_gets_fresh_recovery_budget():

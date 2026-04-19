@@ -358,7 +358,7 @@ def _runner_hooks_section(stage: str | None, hooks: list[dict[str, Any]]) -> str
             lines.append(f"- {cmd} ({desc})")
         else:
             lines.append(f"- {cmd}")
-    lines.append("Hook failures are logged as warnings only. Run these checks yourself before submitting your verdict.")
+    lines.append("Hook failures can reject the stage. Run these checks yourself before submitting your verdict.")
     return "\n".join(lines)
 
 

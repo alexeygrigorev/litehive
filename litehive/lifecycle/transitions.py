@@ -21,6 +21,7 @@ from litehive.domain.lifecycle_deltas import (
 from .events import Event, PreExecRecoverySucceeded, RecoverySucceeded, Reject
 from .guards import (
     Guard,
+    hook_reject_loop_detected,
     recovery_budget_available,
     recovery_budget_exhausted,
     stage_retries_exhausted,
@@ -145,6 +146,24 @@ def retry_epoch_rules(counter_stage, phases, retry_target, recovering_stage) -> 
     name = counter_stage.name if isinstance(counter_stage, Stage) else counter_stage
     rules: list[Rule] = []
     for phase in phases:
+        rules.append(
+            Rule(
+                from_state=phase,
+                on_event=Reject,
+                transition_to="failed",
+                when=hook_reject_loop_detected() & recovery_budget_exhausted(),
+                with_effect=exhaust_recovery_budget,
+            )
+        )
+        rules.append(
+            Rule(
+                from_state=phase,
+                on_event=Reject,
+                transition_to=recovering_stage,
+                when=hook_reject_loop_detected() & recovery_budget_available(),
+                with_effect=enter_recovery,
+            )
+        )
         rules.append(
             Rule(
                 from_state=phase,

@@ -171,6 +171,8 @@ class TaskState:
         return count
 
     def recovery_budget_available(self, trigger: RecoveryTrigger) -> bool:
+        if trigger.reason_code == "hook_reject_loop":
+            return not self.hook_reject_recovery_invoked
         return all(outcome.trigger.budget_key() != trigger.budget_key() for outcome in self.recovery_history)
 
 

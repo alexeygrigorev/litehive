@@ -7,7 +7,7 @@ import pytest
 
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
-from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass
+from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass, Reject
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.hook import HookNode, HookResult, HookRunner, HookSpec, SubprocessHookRunner
 from litehive.lifecycle.nodes.system import GitCommitNode, StubCommitNode
@@ -83,16 +83,18 @@ def test_hook_node_with_passing_spec_emits_hook_ok(tmp_path: Path) -> None:
     assert event.warnings == []
 
 
-def test_hook_node_with_failing_spec_emits_warning_only(tmp_path: Path) -> None:
+def test_hook_node_with_failing_spec_emits_hook_reject(tmp_path: Path) -> None:
     node = HookNode(
         "before_grooming",
         hooks=[HookSpec(command="false")],
         runner=SubprocessHookRunner(tmp_path),
     )
     event = node.run(make_state())
-    assert isinstance(event, HookOk)
-    assert len(event.warnings) == 1
-    assert "Runner hook warning" in event.warnings[0]
+    assert isinstance(event, Reject)
+    assert event.source == "hook"
+    assert event.metadata["consecutive_same_hook_rejects"] == 1
+    assert len(event.metadata["warnings"]) == 1
+    assert "Runner hook warning" in event.metadata["warnings"][0]
 
 
 def test_hook_node_warning_includes_command_exit_code_and_streams(tmp_path: Path) -> None:
@@ -110,11 +112,11 @@ def test_hook_node_warning_includes_command_exit_code_and_streams(tmp_path: Path
 
     event = node.run(make_state(stage="after_implementing"))
 
-    assert isinstance(event, HookOk)
-    assert "sh -c 'echo stdout-line && echo stderr-line >&2 && exit 3'" in event.warnings[0]
-    assert "exited with 3" in event.warnings[0]
-    assert "stdout-line" in event.warnings[0]
-    assert "stderr-line" in event.warnings[0]
+    assert isinstance(event, Reject)
+    assert "sh -c 'echo stdout-line && echo stderr-line >&2 && exit 3'" in event.metadata["warnings"][0]
+    assert "exited with 3" in event.metadata["warnings"][0]
+    assert "stdout-line" in event.metadata["warnings"][0]
+    assert "stderr-line" in event.metadata["warnings"][0]
 
 
 def test_hook_node_runs_all_hooks_and_collects_warnings() -> None:
@@ -134,15 +136,16 @@ def test_hook_node_runs_all_hooks_and_collects_warnings() -> None:
 
     event = node.run(make_state(stage="after_implementing"))
 
-    assert isinstance(event, HookOk)
+    assert isinstance(event, Reject)
     assert runner.calls == ["first", "second", "third"]
-    assert len(event.warnings) == 2
-    assert "first" in event.warnings[0]
-    assert "lint stdout" in event.warnings[0]
-    assert "lint stderr" in event.warnings[0]
-    assert "second" in event.warnings[1]
-    assert "tests stdout" in event.warnings[1]
-    assert "tests stderr" in event.warnings[1]
+    assert len(event.metadata["warnings"]) == 2
+    assert event.metadata["hook"]["command"] == "first"
+    assert "first" in event.metadata["warnings"][0]
+    assert "lint stdout" in event.metadata["warnings"][0]
+    assert "lint stderr" in event.metadata["warnings"][0]
+    assert "second" in event.metadata["warnings"][1]
+    assert "tests stdout" in event.metadata["warnings"][1]
+    assert "tests stderr" in event.metadata["warnings"][1]
 
 
 # ── GitCommitNode ───────────────────────────────────────────────────────
@@ -429,6 +432,18 @@ class _AlwaysPassEngine:
         self.name = name
 
     def run_turn(self, session, prompt, state) -> AgentVerdict:
+        del session, prompt, state
+        return AgentVerdict(outcome="pass")
+
+
+class _RejectRecoveryEngine:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def run_turn(self, session, prompt, state) -> AgentVerdict:
+        del session, state
+        if prompt["role"] == "recovery":
+            return AgentVerdict(outcome="reject", reason="recovery could not fix the hook failure")
         return AgentVerdict(outcome="pass")
 
 
@@ -549,7 +564,7 @@ def test_run_task_runs_after_commit_hook_on_main_and_finishes(tmp_path: Path) ->
     assert not worktree.exists()
 
 
-def test_run_task_records_after_commit_hook_warning_and_finishes(tmp_path: Path) -> None:
+def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path) -> None:
     _init_workspace_git_repo(
         tmp_path,
         config=LitehiveConfig(
@@ -570,14 +585,14 @@ def test_run_task_records_after_commit_hook_warning_and_finishes(tmp_path: Path)
     result = run_task(
         tmp_path,
         task,
-        engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
+        engine_factory=lambda engine_name: _RejectRecoveryEngine(engine_name),
     )
     refreshed = get_task(tmp_path, task.id)
 
-    assert result.final_stage == "done"
+    assert result.final_stage == "failed"
     assert refreshed is not None
-    assert refreshed.status == "done"
-    assert refreshed.pipeline_status == "done"
+    assert refreshed.status == "flagged"
+    assert refreshed.pipeline_status == "flagged"
     assert (tmp_path / "merged.txt").read_text() == "merged\n"
     assert (tmp_path / "after_commit_branch.txt").read_text().strip() == "main"
     assert not worktree.exists()
@@ -585,23 +600,22 @@ def test_run_task_records_after_commit_hook_warning_and_finishes(tmp_path: Path)
     thread = load_task_activity(tmp_path, refreshed)
     assert thread[-1].role == "hook"
     assert thread[-1].stage == "commit_to_git"
-    assert thread[-1].verdict == "comment"
-    assert "Runner hooks at `after_commit` completed with warnings." in thread[-1].message
+    assert thread[-1].verdict == "reject"
+    assert "Runner hook at `after_commit` rejected the stage." in thread[-1].message
     assert "echo fail && exit 1" in thread[-1].message
 
     reports = load_stage_reports(tmp_path, refreshed)
     hook_reports = [report for report in reports if report.source == "hook"]
     assert hook_reports
     assert hook_reports[-1].stage == "commit_to_git"
-    assert hook_reports[-1].verdict == "pass"
+    assert hook_reports[-1].verdict == "reject"
     assert hook_reports[-1].source == "hook"
     assert hook_reports[-1].failure_diagnostics["phase"] == "after_commit"
     assert "echo fail && exit 1" in hook_reports[-1].feedback
-    assert "exit code" not in hook_reports[-1].feedback.lower()
     assert hook_reports[-1].warnings
 
 
-def test_run_task_before_accepting_hook_warns_and_continues(
+def test_run_task_before_accepting_hook_retries_and_continues(
     tmp_path: Path,
 ) -> None:
     _init_workspace_git_repo(
@@ -643,7 +657,7 @@ def test_run_task_before_accepting_hook_warns_and_continues(
     hook_entries = [entry for entry in thread if entry.role == "hook"]
     assert hook_entries
     assert hook_entries[-1].stage == "accepting"
-    assert hook_entries[-1].verdict == "comment"
+    assert hook_entries[-1].verdict == "reject"
     assert "lint failed" in hook_entries[-1].message
 
     reports = load_stage_reports(tmp_path, refreshed)
@@ -651,14 +665,15 @@ def test_run_task_before_accepting_hook_warns_and_continues(
     assert hook_reports
     report = hook_reports[-1]
     assert report.stage == "accepting"
-    assert report.verdict == "pass"
+    assert report.verdict == "reject"
     assert report.source == "hook"
     assert report.failure_diagnostics["phase"] == "before_accepting"
+    assert report.failure_diagnostics["consecutive_same_hook_rejects"] == 1
     assert report.warnings
     assert "lint failed" in report.feedback
 
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
-    assert "Runner hooks at `before_accepting` reported warnings." in journal
+    assert "Runner hook at `before_accepting` rejected the stage." in journal
 
 
 def test_run_task_runs_all_stage_hooks_and_records_all_warnings(tmp_path: Path) -> None:
@@ -704,14 +719,14 @@ def test_run_task_runs_all_stage_hooks_and_records_all_warnings(tmp_path: Path) 
     assert result.final_stage == "done"
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
-    assert (tmp_path / ".hook_calls").read_text(encoding="utf-8") == "first\nsecond\n"
+    assert (tmp_path / ".hook_calls").read_text(encoding="utf-8") == "first\nsecond\nfirst\nsecond\n"
 
     reports = load_stage_reports(tmp_path, refreshed)
     hook_reports = [report for report in reports if report.source == "hook"]
     assert len(hook_reports) == 1
     report = hook_reports[0]
     assert report.stage == "implementing"
-    assert report.verdict == "pass"
+    assert report.verdict == "reject"
     assert report.failure_diagnostics["phase"] == "after_implementing"
     assert len(report.warnings) == 2
     assert "first failed" in report.feedback
