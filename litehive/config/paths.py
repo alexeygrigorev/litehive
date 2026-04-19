@@ -46,7 +46,10 @@ def workspace_registry_path() -> Path:
     config_home = os.environ.get("XDG_CONFIG_HOME")
     if config_home:
         return Path(config_home).expanduser() / "litehive" / "workspaces.yaml"
-    return Path.home() / ".litehive" / "workspaces.yaml"
+    # Use ~/.config/litehive/ (XDG-style) so ~/.litehive/ doesn't collide with
+    # the nested-workspace check that treats any ancestor with a .litehive/
+    # directory as an enclosing workspace.
+    return Path.home() / ".config" / "litehive" / "workspaces.yaml"
 
 
 def workspace_id(root: Path) -> str:
