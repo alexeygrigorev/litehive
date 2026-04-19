@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from heru import resolve_engine_resume_session_id
 from litehive.agents.manager import SubagentManager
 from litehive.domain.agent import EngineFailure
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
@@ -219,19 +220,12 @@ class HeruEngineAdapter:
                 return result
 
             crash_resume_attempted = True
-            resume_session_id = self._crash_resume_session_id(crash_resume_id)
+            resume_session_id = resolve_engine_resume_session_id(self.name, crash_resume_id)
             current_prompt = self._crash_resume_prompt(prompt_text)
 
     @classmethod
     def _crash_resume_prompt(cls, prompt_text: str) -> str:
         return f"{cls._CRASH_RESUME_PROMPT_PREFIX}{prompt_text}"
-
-    def _crash_resume_session_id(self, crash_resume_id: str) -> str | None:
-        # Codex crash-resume should retry via a fresh `exec` with the prefixed
-        # task context, not via `codex exec resume`.
-        if self.name == "codex":
-            return None
-        return crash_resume_id
 
     @staticmethod
     def _extract_continuation_id(result, fallback: str | None) -> str | None:
