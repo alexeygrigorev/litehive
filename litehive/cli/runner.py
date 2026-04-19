@@ -20,14 +20,12 @@ from litehive.daemon.execution import (
 )
 from litehive.daemon.registry import get_workspace_daemon, list_daemon_instances
 from litehive.db.schema import MigrationApplyError, apply_pending_migrations, migration_status
-from litehive.git.ops import GitError, checkpoint_message, has_non_litehive_changes, is_git_repo
+from litehive.git.ops import has_non_litehive_changes, is_git_repo
 from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.orchestration import run_task
-from litehive.recovery.execution_recovery import rollback_completed_task
 from litehive.state.backup import create_workspace_backup, list_workspace_backups, restore_workspace_backup
 from litehive.state.records import get_task
 from litehive.domain.task_ops import WorkspaceConflictError
-from litehive.tasks.normalization import missing_acceptance_criteria_reason
 from litehive.state.persist import load_state, set_pool_stop_reason
 from litehive.tasks.queue import dequeue_next_task
 from litehive.tasks.activity import append_task_activity
@@ -39,7 +37,6 @@ def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: ty
     app.command("stop", help="Stop the background Litehive runner")(stop)
     app.command("restart", help="Restart the background Litehive runner")(restart)
     app.command("run", help="Run the next task once")(run_command)
-    app.command("rollback", help="Revert a task checkpoint commit and requeue the task")(rollback_command)
     app.command("report", help="Submit a stage verdict for the active task")(report_command)
     backup_app.callback()(backup_group)
     backup_app.command("create", help="Create a compressed backup of the workspace runtime database")(backup_create)
@@ -243,29 +240,6 @@ def run_command(
     return _run_single(workspace, engine=engine, model=model)
 
 
-def rollback_command(
-    task_id: Annotated[str, typer.Argument(help="Task id to roll back")],
-    workspace: WorkspaceOption = Path.cwd(),
-) -> int:
-    ensure_workspace(workspace)
-    try:
-        summary = rollback_completed_task(workspace, task_id)
-    except (GitError, WorkspaceConflictError) as exc:
-        print(f"rollback failed: {exc}")
-        return 1
-    print(f"task: {summary.task.id} {summary.task.title}")
-    print(f"rollback_of: {summary.rolled_back_sha}")
-    print(f"rollback_commit: {summary.rollback_sha}")
-    print("status: queued")
-    print(f"pipeline_stage: {summary.task.pipeline_status}")
-    print("recovery_policy: rollback reverted the checkpoint and requeued the task")
-    print(f"next_commit_message: {checkpoint_message(summary.task)}")
-    missing_criteria_reason = missing_acceptance_criteria_reason(summary.task)
-    if missing_criteria_reason is not None:
-        print(f"warning: {missing_criteria_reason}")
-    return 0
-
-
 def report_command(
     verdict: Annotated[str, typer.Option(click_type=choice(["pass", "reject", "comment", "fail"]))] = ...,
     message: Annotated[str, typer.Option(help="Detailed explanation (use - for stdin)")] = "",
@@ -421,7 +395,6 @@ def db_migrate(
 
 
 cmd_run = run_command
-cmd_rollback = rollback_command
 cmd_report = report_command
 cmd_backup_create = backup_create
 cmd_backup_list = backup_list

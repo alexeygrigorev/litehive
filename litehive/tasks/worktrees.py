@@ -248,7 +248,7 @@ def _run_worktree_merge_agent(
         f"[worktree] Merge conflict on {len(conflicts)} file(s). Launching merge agent.",
     )
     cfg = config or load_config(root)
-    from litehive.recovery.execution_recovery import resolve_recovery_engine
+    from litehive.tasks.recovery_engine import resolve_recovery_engine
 
     try:
         engine_name, model = resolve_recovery_engine(root, task, cfg)

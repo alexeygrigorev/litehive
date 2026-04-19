@@ -69,6 +69,7 @@ def probe_broken_venv_executables(root: Path) -> list[BrokenVenvExecutable]:
 
 
 def broken_venv_issue_message(workspace_root: Path, finding: BrokenVenvExecutable) -> str:
+    del workspace_root
     checkout_root = finding.checkout.checkout_root
     venv_path = finding.checkout.venv_path
     local_fix = f"`cd {checkout_root} && uv venv --clear .venv && uv sync --extra dev`"
@@ -107,10 +108,6 @@ def _iter_probe_candidates(bin_dir: Path) -> list[Path]:
 
 def _probe_executable(binary_path: Path) -> str | None:
     try:
-        # Use `--version` plus a short timeout to force an actual exec while
-        # minimizing side effects for real tools. Broken uv-cache symlinks fail
-        # before spawn with ENOENT/ENOTDIR, which is the only class we treat as
-        # a broken-venv finding.
         subprocess.run(
             [str(binary_path), "--version"],
             check=False,

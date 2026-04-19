@@ -160,7 +160,7 @@ def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, mon
     )
     checkpoint_item = next(item for item in items if item.kind == "human_checkpoint_before_commit")
     assert checkpoint_item.suggested_action == (
-        f"Run `litehive task debug {flagged.id} --worktree` to inspect the task, then continue with `litehive run` or roll it back with `litehive rollback`."
+        f"Run `litehive task debug {flagged.id} --worktree` to inspect the task, then continue with `litehive run` when you are ready to commit."
     )
 
     shutil.rmtree(duplicate_dir)

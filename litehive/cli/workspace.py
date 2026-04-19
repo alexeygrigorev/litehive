@@ -52,8 +52,8 @@ from litehive.observability.status_diagnostics import (
     render_issue_lines,
     status_has_problems,
 )
-from litehive.recovery.venv_health import broken_venv_issue_message, probe_broken_venv_executables
-from litehive.recovery.workspace_repair import repair_stale_unmerged_worktrees, repair_workspace_state
+from litehive.observability.venv_health import broken_venv_issue_message, probe_broken_venv_executables
+from litehive.recovery.workspace_repair import repair_workspace_state
 from litehive.state.records import get_task, list_tasks_state_first
 from litehive.state.persist import load_state
 from litehive.state.records import list_tasks
@@ -66,7 +66,6 @@ from litehive.cli.worktree_support import collect_managed_worktrees
 
 def register_root_commands(app: typer.Typer) -> None:
     app.command("status", help="Show workspace status")(status_command)
-    app.command("doctor", help="Run workspace integrity checks and optional safe fixes")(doctor_command)
     app.command("health", help="Show workspace health diagnostics")(health_command)
     app.command("engine", help="Manage engine freezes and status")(engine_command)
     app.command("repair", help="Repair stale active tasks, interrupted runs, and queue inconsistencies")(repair_command)
@@ -145,37 +144,26 @@ def _repair_summary_lines(
     include_empty: bool,
     include_extended_fields: bool,
 ) -> list[str]:
+    del include_extended_fields
     lines = [
         f"{result_label}: {'yes' if summary.mutated else 'no'}",
         f"stale_runner_recovered: {'yes' if summary.stale_runner_recovered else 'no'}",
     ]
-    if summary.stale_unmerged_worktrees_removed or include_empty:
-        lines.append(f"stale_unmerged_worktrees_removed: {summary.stale_unmerged_worktrees_removed}")
     if summary.cleared_active_task_id or include_empty:
         lines.append(f"cleared_active_task_id: {summary.cleared_active_task_id or '-'}")
 
     items = [
         ("requeued_tasks", summary.requeued_task_ids),
-        ("removed_queue_entries", summary.removed_queue_entries),
-        ("deduped_queue_entries", summary.deduped_queue_entries),
         ("broken_venv_binaries", summary.broken_venv_binaries),
+        ("stale_process_tasks", summary.stale_process_task_ids),
     ]
-    if include_extended_fields:
-        items.extend(
-            [
-                ("restored_queue_entries", summary.restored_queue_entries),
-                ("finalized_commit_tasks", summary.finalized_commit_task_ids),
-                ("stale_process_tasks", summary.stale_process_task_ids),
-                ("reassigned_duplicate_ids", summary.reassigned_duplicate_ids),
-            ]
-        )
     for label, values in items:
         if values or include_empty:
             lines.append(f"{label}: {' '.join(values) if values else '-'}")
     return lines
 
 
-def _doctor_venv_issues(root: Path) -> list[StatusIssue]:
+def _venv_issues(root: Path) -> list[StatusIssue]:
     return [
         StatusIssue(
             key="venv_health",
@@ -184,43 +172,6 @@ def _doctor_venv_issues(root: Path) -> list[StatusIssue]:
         )
         for finding in probe_broken_venv_executables(root)
     ]
-
-
-def _print_doctor_snapshot(root: Path) -> int:
-    snapshot = collect_status_snapshot(root)
-    issues = [*snapshot.issues, *_doctor_venv_issues(root)]
-    if not issues:
-        print(f"doctor: clean workspace={root}")
-        return 0
-    for line in render_issue_lines(issues):
-        print(line)
-    return 1
-
-
-def doctor_command(
-    workspace: WorkspaceOption = Path.cwd(),
-    fix: Annotated[bool, typer.Option("--fix", help="Apply deterministic non-destructive fixes")] = False,
-) -> int:
-    ensure_workspace(workspace)
-    root = workspace.resolve()
-    if fix:
-        try:
-            summary = repair_workspace_state(root, repair_broken_venvs_in_checkouts=True)
-        except WorkspaceConflictError as exc:
-            print(f"doctor failed: {exc}")
-            return 1
-        print(f"stale_unmerged_worktrees_removed: {summary.stale_unmerged_worktrees_removed}")
-        for line in _repair_summary_lines(
-            summary,
-            result_label="doctor_repaired",
-            include_empty=False,
-            include_extended_fields=False,
-        ):
-            print(line)
-    else:
-        removed = repair_stale_unmerged_worktrees(root)
-        print(f"stale_unmerged_worktrees_removed: {removed}")
-    return _print_doctor_snapshot(root)
 
 
 def status_full(workspace, root, config, state, runner, monitoring, issues):
@@ -310,7 +261,7 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(line)
     print(f"active_task_id: {state.active_task_id}")
     print(f"queue_length: {len(state.queue)}")
-    issues = _doctor_venv_issues(workspace)
+    issues = _venv_issues(workspace)
     if issues:
         for line in render_issue_lines(issues):
             print(line)
@@ -439,7 +390,6 @@ def _quota_health(
 
 
 cmd_status = status_command
-cmd_doctor = doctor_command
 cmd_health = health_command
 cmd_engine = engine_command
 cmd_repair = repair_command

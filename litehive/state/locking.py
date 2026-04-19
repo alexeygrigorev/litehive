@@ -292,7 +292,7 @@ def _auto_repair_stale_state(root: Path) -> None:
 
     try:
         result = repair_workspace_state(root)
-        if result.repaired:
+        if result.mutated:
             import sys
 
             print(

@@ -15,7 +15,7 @@ from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
 from litehive.git.ops import GitError, checkpoint_message
 from litehive.recovery.workspace_repair import recover_stale_runner_state
-from litehive.recovery.execution_recovery import recover_completed_task
+from litehive.tasks.completed_task_recovery import recover_completed_task
 from litehive.state.records import list_tasks, require_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
