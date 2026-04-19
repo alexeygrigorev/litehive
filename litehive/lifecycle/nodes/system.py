@@ -158,6 +158,7 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
     def _sync(self, state: TaskState) -> bool:
         from litehive.state.records import get_task, save_task
         from litehive.tasks.worktrees import (
+            ensure_worktree_venv_link,
             resolve_recorded_worktree_path,
             serialize_worktree_path,
             task_worktree_branch,
@@ -190,6 +191,7 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
                 )
                 if created.returncode != 0:
                     raise GitError(f"git worktree add failed: {created.stderr.strip() or created.stdout.strip()}")
+                ensure_worktree_venv_link(self.workspace_root, worktree)
                 task.runtime.git.worktree_path = serialize_worktree_path(worktree)
                 save_task(self.workspace_root, task)
                 return True

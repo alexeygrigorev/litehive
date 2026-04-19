@@ -66,6 +66,57 @@ def test_worktree_sync_creates_missing_task_worktree(tmp_path: Path) -> None:
     assert _git_ok(recorded_path, "branch", "--show-current") == task_worktree_branch(task)
 
 
+def test_worktree_sync_links_worktree_venv_to_workspace_venv(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _git_ok(workspace, "init", "-b", "main")
+    _configure_repo(workspace)
+    ensure_workspace(workspace)
+
+    (workspace / "app.txt").write_text("base\n", encoding="utf-8")
+    (workspace / ".venv").mkdir()
+    _git_ok(workspace, "add", "app.txt")
+    _git_ok(workspace, "commit", "-m", "initial")
+
+    task = create_task(workspace, title="Shared venv")
+    node = GitWorktreeSyncNode(
+        workspace_root=workspace,
+        worktree_resolver=lambda state: workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}",
+    )
+
+    changed = node._sync(_state(task.id))
+    worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
+
+    assert changed is True
+    assert worktree.joinpath(".venv").is_symlink()
+    assert worktree.joinpath(".venv").resolve() == workspace.joinpath(".venv").resolve()
+
+
+def test_worktree_sync_skips_broken_venv_link_when_workspace_has_no_venv(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _git_ok(workspace, "init", "-b", "main")
+    _configure_repo(workspace)
+    ensure_workspace(workspace)
+
+    (workspace / "app.txt").write_text("base\n", encoding="utf-8")
+    _git_ok(workspace, "add", "app.txt")
+    _git_ok(workspace, "commit", "-m", "initial")
+
+    task = create_task(workspace, title="No shared venv")
+    node = GitWorktreeSyncNode(
+        workspace_root=workspace,
+        worktree_resolver=lambda state: workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}",
+    )
+
+    changed = node._sync(_state(task.id))
+    worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
+
+    assert changed is True
+    assert not worktree.joinpath(".venv").exists()
+    assert not worktree.joinpath(".venv").is_symlink()
+
+
 def test_worktree_sync_skips_dirty_worktrees(tmp_path: Path) -> None:
     origin = tmp_path / "origin.git"
     seed = tmp_path / "seed"

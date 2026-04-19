@@ -62,6 +62,25 @@ def serialize_worktree_path(path: Path) -> str:
     return str(path.expanduser().resolve())
 
 
+def ensure_worktree_venv_link(root: Path, worktree_path: Path) -> Path | None:
+    main_venv = (root / ".venv").expanduser()
+    if not (main_venv.exists() or main_venv.is_symlink()):
+        return None
+
+    worktree_venv = worktree_path / ".venv"
+    if worktree_venv.is_symlink() and worktree_venv.resolve() == main_venv.resolve():
+        return worktree_venv
+
+    if worktree_venv.is_symlink() or worktree_venv.exists():
+        if worktree_venv.is_dir() and not worktree_venv.is_symlink():
+            shutil.rmtree(worktree_venv)
+        else:
+            worktree_venv.unlink()
+
+    worktree_venv.symlink_to(main_venv, target_is_directory=main_venv.is_dir())
+    return worktree_venv
+
+
 def git_worktree_blocks_pool(root: Path) -> bool:
     return inspect_dirty_worktree_gate(root).blocks_pool
 
@@ -318,6 +337,7 @@ def resolve_task_execution_root(
     if worktree_path.exists():
         shutil.rmtree(worktree_path)
     add_worktree(root, worktree_path, ref=current_head(root) or "HEAD")
+    ensure_worktree_venv_link(root, worktree_path)
     _remove_origin_remote(worktree_path)
     set_task_worktree_path(task, serialize_worktree_path(worktree_path))
     save_task(root, task)

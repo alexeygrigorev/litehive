@@ -39,6 +39,7 @@ from litehive.tasks.paths import tasks_root
 from litehive.tasks.reports import record_recovery_report
 from litehive.tasks.runtime import apply_task_outcome, finish_task_run_transition
 from litehive.tasks.worktrees import (
+    ensure_worktree_venv_link,
     resolve_recorded_worktree_path,
     serialize_worktree_path,
     task_worktree_branch,
@@ -365,6 +366,7 @@ def _ensure_task_worktree(root: Path, task: TaskRecord) -> Path:
             diagnostics={"branch": branch, "worktree_path": str(worktree)},
         )
 
+    ensure_worktree_venv_link(root, worktree)
     task.runtime.git.worktree_path = serialize_worktree_path(worktree)
     save_task(root, task)
     return worktree

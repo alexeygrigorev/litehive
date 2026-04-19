@@ -2,7 +2,7 @@ from typing import Callable
 
 from litehive.lifecycle.persistence import CommitResult
 from litehive.domain.lifecycle_deltas import StateDelta
-from .events import Event, HookOk, Pass, RecoverySucceeded, Reject
+from .events import Event, HookOk, Pass, Reject
 from .journal import NullJournal, PipelineJournal
 from .nodes.base import NodeRegistry
 from .persistence import Persistence, TaskState
