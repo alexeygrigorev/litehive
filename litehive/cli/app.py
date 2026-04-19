@@ -10,7 +10,7 @@ from litehive.cli.common import make_typer
 from litehive.cli.daemon_cli import app as daemon_app
 from litehive.cli.import_cli import app as import_app
 from litehive.cli.pipeline_cli import app as pipeline_app
-from litehive.cli.queue_cli import app as queue_app, register_hidden_root_commands
+from litehive.cli.queue_cli import app as queue_app, register_root_shortcuts
 from litehive.cli.runner import register_root_commands as register_runner_commands
 from litehive.cli.task_cli import app as task_app
 from litehive.cli.workspace import register_root_commands as register_workspace_commands, status_command
@@ -43,7 +43,7 @@ def root(ctx: typer.Context) -> int | None:
 
 register_workspace_commands(app)
 register_runner_commands(app, backup_app, db_app)
-register_hidden_root_commands(app)
+register_root_shortcuts(app)
 
 
 app.add_typer(queue_app, name="queue", help="Show the active task and queued order")

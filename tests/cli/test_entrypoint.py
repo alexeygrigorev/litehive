@@ -8,6 +8,10 @@ from litehive.config.workspace import ensure_workspace
 modern_cli = importlib.import_module("litehive.cli.app")
 
 
+def _normalized(text: str) -> str:
+    return " ".join(text.split())
+
+
 def test_bare_litehive_prints_status_when_idle(tmp_path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -33,13 +37,28 @@ def test_bare_litehive_runs_next_task_when_available(monkeypatch) -> None:
     assert result.output == "T-0007: accepting\n"
 
 
-def test_root_help_hides_preserved_recovery_shortcuts() -> None:
+def test_root_help_shows_recovery_shortcuts() -> None:
     result = CliRunner().invoke(modern_cli.app, ["--help"])
 
     assert result.exit_code == 0, result.output
-    assert "recover" not in result.output
-    assert "prioritize" not in result.output
-    assert "switch" not in result.output
+    assert "recover" in result.output
+    assert "prioritize" in result.output
+    assert "switch" in result.output
+
+
+def test_recovery_shortcut_help_explains_when_to_use_each_command() -> None:
+    expected_help = {
+        "recover": "Use after an accepted task needs another pass but its current code should stay in place",
+        "prioritize": "Use to pull queued tasks to the front when operator ordering matters more than the current queue",
+        "switch": "Use when a task should continue with a different engine on its next queued run",
+    }
+
+    runner = CliRunner()
+    for command, help_text in expected_help.items():
+        result = runner.invoke(modern_cli.app, [command, "--help"])
+
+        assert result.exit_code == 0, result.output
+        assert help_text in _normalized(result.output)
 
 
 def test_run_drain_runs_until_queue_is_empty(tmp_path, monkeypatch) -> None:

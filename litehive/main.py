@@ -42,6 +42,10 @@ def _workspace_override_from_argv(argv: list[str]) -> Path | None:
     return None
 
 
+def _requests_help(argv: list[str]) -> bool:
+    return any(arg in {"--help", "-h"} for arg in argv)
+
+
 def _fast_status(argv: list[str]) -> int:
     from litehive.observability.engine_monitoring import render_engine_monitoring_lines
     from litehive.observability.status import render_active_task_detail_lines
@@ -113,16 +117,18 @@ def main() -> int:
     if agent_role:
         route_via_root_cli = False
         cmd = argv[0] if argv else None
-        if cmd is None or cmd in ("--help", "-h"):
+        if cmd is None:
             print("Usage: litehive agent [report|update|close]")
             print("\nRun 'litehive agent --help' for details.")
             return 0
+        if _requests_help(argv):
+            route_via_root_cli = True
         if cmd in {"report", "update", "close"}:
             argv = ["agent", *argv]
             sys.argv = [sys.argv[0], *argv]
             cmd = "agent"
             route_via_root_cli = True
-        elif cmd != "agent":
+        elif cmd != "agent" and not route_via_root_cli:
             if not _agent_command_is_allowed(agent_role, argv):
                 print("You are not authorized to perform this command.")
                 return 1
