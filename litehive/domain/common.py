@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from enum import Enum
 
-from litehive.domain._heru_compat import (
+from heru.types import (
     EngineLimitKind,
     EngineMonitoringSource,
     LiveEventKind,

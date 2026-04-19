@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from litehive.domain._heru_compat import (
+from heru.types import (
     ResourceLimitEvent,
     RuntimeEngineContinuation,
     SubagentRef as HeruSubagentRef,

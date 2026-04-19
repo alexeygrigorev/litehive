@@ -9,6 +9,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dynamic = ["version"]
 dependencies = [
+    "heru>=0.1.0",
     "pydantic>=2.11.0",
     "pyyaml>=6.0.2",
     "typer>=0.16.0",
@@ -23,10 +24,9 @@ dev = [
 
 [project.scripts]
 litehive = "litehive.main:main"
-heru = "heru.main:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["litehive", "heru"]
+packages = ["litehive"]
 include = ["litehive/config/profiles/*.yaml", "litehive/db/migrations/*.sql"]
 
 [tool.hatch.version]
@@ -53,5 +53,14 @@ dev = [
     "ruff>=0.12.0",
     "pytest-xdist>=3.8.0",
 ]
+
+[tool.uv.sources]
+heru = { workspace = true }
+
+[tool.uv.workspace]
+members = ["heru"]
+
+[tool.uv.pip]
+find-links = ["./packages"]
 
 [tool.ruff.format]
