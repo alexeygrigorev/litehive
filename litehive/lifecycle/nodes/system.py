@@ -618,7 +618,18 @@ class GitCommitNode(CommitNode):
         if status.returncode != 0 or not status.stdout.strip():
             return
 
-        dirty_paths = [line[3:] for line in status.stdout.splitlines() if line.strip()]
+        dirty_paths: list[str] = []
+        for line in status.stdout.splitlines():
+            if not line.strip():
+                continue
+            # Porcelain format: "XY path" for most changes; "R  old -> new" for
+            # renames, "C  old -> new" for copies. Extract the new path for
+            # rename/copy entries — `git add -- "old -> new"` is not valid.
+            code = line[:2]
+            rest = line[3:]
+            if code[0] in {"R", "C"} and " -> " in rest:
+                rest = rest.split(" -> ", 1)[1]
+            dirty_paths.append(rest)
         committable = [p for p in dirty_paths if not _is_runner_owned_metadata(p, state.task_id)]
         if not committable:
             # Only runner-owned metadata is dirty — nothing to checkpoint.
