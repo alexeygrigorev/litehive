@@ -270,7 +270,7 @@ def run_daemon_loop(
         iteration = 0
         consecutive_iteration_failures = 0
         # Daemon-level resilience: an individual iteration crashing (e.g. a
-        # corrupt user-global yaml, a stuck lock, a transient subprocess
+        # corrupt user-global registry DB, a stuck lock, a transient subprocess
         # failure) must not kill the whole daemon. Bounded retry with backoff
         # so we don't spin forever on a permanent failure.
         MAX_CONSECUTIVE_FAILURES = 5

@@ -8,7 +8,7 @@ import yaml
 from litehive.attention import list_attention, record_attention, resolve_attention, waiting_for_you_lines
 from litehive.cli.attention import cmd_attention_list, cmd_attention_resolve
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import worktree_root
+from litehive.config.paths import litehive_database_path, worktree_root
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.execution import run_daemon_loop
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
@@ -362,6 +362,44 @@ def test_pool_halts_immediately_when_local_main_diverges_from_origin(tmp_path: P
     assert "git fetch origin main" in output
     assert "git log --oneline --left-right main...origin/main" in output
     assert load_state(tmp_path).pool_stop_reason == "diverged_from_origin"
+
+
+def test_daemon_loop_rebuilds_corrupt_global_registry_without_exiting(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Queued work")
+
+    from litehive.config import registry as registry_mod
+
+    registry_mod._close_all_registry_connections()
+    litehive_database_path().write_bytes(b"not a sqlite database")
+
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_logged_subprocess(command, **kwargs):
+        calls.append(tuple(command))
+        if any(arg == "run" for arg in command[2:]):
+            state = load_state(tmp_path)
+            state.queue = []
+            save_state(tmp_path, state)
+        return 0
+
+    monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
+    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
+
+    stream = io.StringIO()
+    exit_code = run_daemon_loop(tmp_path, output_stream=stream, session_dir=tmp_path / "logs")
+    output = stream.getvalue()
+
+    assert exit_code == 0
+    assert any("repair" in command for command in calls)
+    assert any("run" in command for command in calls)
+    assert "== iteration 1 ==" in output
+
+    with sqlite3.connect(litehive_database_path()) as connection:
+        paths = [str(row[0]) for row in connection.execute("SELECT path FROM workspaces").fetchall()]
+    assert paths == [str(tmp_path.resolve())]
 
 
 def test_pool_refuses_to_start_when_worktree_venv_is_broken(tmp_path: Path, monkeypatch) -> None:

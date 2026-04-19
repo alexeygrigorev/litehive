@@ -2,7 +2,9 @@ from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 import os
 from pathlib import Path
+import sqlite3
 import threading
+import time
 
 import pytest
 import yaml
@@ -28,6 +30,62 @@ def _register_workspace_in_subprocess(args: tuple[str, str, str, str]) -> str:
     return workspace_root
 
 
+def _hold_registry_write_lock(
+    args: tuple[str, str, str, str, str, float, int, int, int],
+) -> None:
+    (
+        workspace_root,
+        config_home,
+        data_home,
+        state_home,
+        ready_path,
+        hold_seconds,
+        busy_timeout_ms,
+        lock_retries,
+        lock_retry_delay_ms,
+    ) = args
+    os.environ["XDG_CONFIG_HOME"] = config_home
+    os.environ["XDG_DATA_HOME"] = data_home
+    os.environ["XDG_STATE_HOME"] = state_home
+    os.environ["LITEHIVE_REGISTRY_BUSY_TIMEOUT_MS"] = str(busy_timeout_ms)
+    os.environ["LITEHIVE_REGISTRY_LOCK_RETRIES"] = str(lock_retries)
+    os.environ["LITEHIVE_REGISTRY_LOCK_RETRY_DELAY_MS"] = str(lock_retry_delay_ms)
+
+    from litehive.config.paths import litehive_database_path, workspace_id
+    from litehive.domain.common import utcnow
+
+    root = Path(workspace_root)
+    ensure_workspace(root)
+    with sqlite3.connect(litehive_database_path(), timeout=30) as connection:
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute(
+            """
+            INSERT INTO workspaces (workspace_id, path, last_seen)
+            VALUES (?, ?, ?)
+            ON CONFLICT(workspace_id) DO UPDATE SET
+                path = excluded.path,
+                last_seen = excluded.last_seen
+            """,
+            (workspace_id(root), str(root.resolve()), utcnow()),
+        )
+        Path(ready_path).write_text("ready", encoding="utf-8")
+        time.sleep(hold_seconds)
+        connection.commit()
+
+
+def _legacy_registry_path(config_home: Path) -> Path:
+    return ((config_home / "litehive") / "workspaces").with_suffix(".yaml")
+
+
+def _registered_paths(db_path: Path) -> list[str]:
+    with sqlite3.connect(db_path) as connection:
+        return [
+            str(row[0])
+            for row in connection.execute("SELECT path FROM workspaces ORDER BY last_seen DESC, path ASC").fetchall()
+        ]
+
+
 def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
@@ -47,7 +105,6 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, mon
     from litehive.config.paths import (
         global_config_path,
         litehive_database_path,
-        workspace_registry_path,
         worktree_root,
         workspace_backups_dir,
         workspace_database_path,
@@ -72,10 +129,14 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, mon
     assert workspace_database_path(tmp_path).exists()
     assert litehive_database_path() == data_home / "litehive" / "litehive.db"
     assert global_config_path() == config_home / "litehive" / "config.yaml"
-    assert workspace_registry_path() == config_home / "litehive" / "workspaces.yaml"
-
-    registry_payload = yaml.safe_load(workspace_registry_path().read_text(encoding="utf-8"))
-    assert registry_payload == [str(tmp_path.resolve())]
+    with sqlite3.connect(litehive_database_path()) as connection:
+        columns = [str(row[1]) for row in connection.execute("PRAGMA table_info(workspaces)").fetchall()]
+        rows = connection.execute("SELECT workspace_id, path, last_seen FROM workspaces").fetchall()
+    assert columns == ["workspace_id", "path", "last_seen"]
+    assert len(rows) == 1
+    assert str(rows[0][0]) == wid
+    assert Path(str(rows[0][1])) == tmp_path.resolve()
+    assert str(rows[0][2])
 
     with connect_workspace_db(tmp_path) as connection:
         tables = {
@@ -109,7 +170,7 @@ def test_workspace_registry_handles_parallel_registration(tmp_path: Path, monkey
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    from litehive.config.paths import workspace_registry_path
+    from litehive.config.paths import litehive_database_path
 
     workspaces = []
     for index in range(8):
@@ -126,9 +187,105 @@ def test_workspace_registry_handles_parallel_registration(tmp_path: Path, monkey
         )
 
     assert {Path(path) for path in results} == set(workspaces)
-    registry_payload = yaml.safe_load(workspace_registry_path().read_text(encoding="utf-8")) or []
-    assert set(registry_payload) == {str(root.resolve()) for root in workspaces}
-    assert len(registry_payload) == len(workspaces)
+    registry_paths = _registered_paths(litehive_database_path())
+    assert set(registry_paths) == {str(root.resolve()) for root in workspaces}
+    assert len(registry_paths) == len(workspaces)
+
+
+def test_workspace_registry_retries_lock_contention_without_rebuilding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_home = tmp_path / "xdg-config"
+    data_home = tmp_path / "xdg-data"
+    state_home = tmp_path / "xdg-state"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
+    monkeypatch.setenv("LITEHIVE_REGISTRY_BUSY_TIMEOUT_MS", "50")
+    monkeypatch.setenv("LITEHIVE_REGISTRY_LOCK_RETRIES", "20")
+    monkeypatch.setenv("LITEHIVE_REGISTRY_LOCK_RETRY_DELAY_MS", "25")
+
+    from litehive.config.paths import litehive_database_path
+
+    workspace_one = tmp_path / "workspace-one"
+    workspace_two = tmp_path / "workspace-two"
+    workspace_one.mkdir()
+    workspace_two.mkdir()
+
+    ready_path = tmp_path / "registry-lock-ready"
+    context = multiprocessing.get_context("spawn")
+    holder = context.Process(
+        target=_hold_registry_write_lock,
+        args=(
+            (
+                str(workspace_one),
+                str(config_home),
+                str(data_home),
+                str(state_home),
+                str(ready_path),
+                0.4,
+                50,
+                20,
+                25,
+            ),
+        ),
+    )
+    holder.start()
+    try:
+        for _ in range(100):
+            if ready_path.exists():
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("timed out waiting for registry lock holder to acquire the write lock")
+
+        ensure_workspace(workspace_two)
+    finally:
+        holder.join(timeout=5)
+        if holder.is_alive():
+            holder.terminate()
+            holder.join(timeout=1)
+
+    assert holder.exitcode == 0
+    assert set(_registered_paths(litehive_database_path())) == {
+        str(workspace_one.resolve()),
+        str(workspace_two.resolve()),
+    }
+
+
+def test_workspace_registry_migrates_legacy_yaml_and_removes_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_home = tmp_path / "xdg-config"
+    data_home = tmp_path / "xdg-data"
+    state_home = tmp_path / "xdg-state"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
+
+    from litehive.config.paths import litehive_database_path
+    from litehive.config.registry import list_registered_workspace_paths
+
+    workspace_one = tmp_path / "workspace-one"
+    workspace_two = tmp_path / "workspace-two"
+    legacy_path = _legacy_registry_path(config_home)
+    legacy_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_path.write_text(
+        yaml.safe_dump(
+            [str(workspace_two), str(workspace_one), str(workspace_one)],
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    migrated = list_registered_workspace_paths()
+
+    assert set(migrated) == {workspace_one.resolve(), workspace_two.resolve()}
+    assert not legacy_path.exists()
+    assert set(_registered_paths(litehive_database_path())) == {
+        str(workspace_one.resolve()),
+        str(workspace_two.resolve()),
+    }
 
 
 def test_workspace_registry_rebuilds_after_corruption(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -139,15 +296,14 @@ def test_workspace_registry_rebuilds_after_corruption(tmp_path: Path, monkeypatc
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    from litehive.config.paths import workspace_registry_path
+    from litehive.config.paths import litehive_database_path
 
-    workspace_registry_path().parent.mkdir(parents=True, exist_ok=True)
-    workspace_registry_path().write_text("not: [valid", encoding="utf-8")
+    litehive_database_path().parent.mkdir(parents=True, exist_ok=True)
+    litehive_database_path().write_bytes(b"not a sqlite database")
 
     ensure_workspace(tmp_path)
 
-    registry_payload = yaml.safe_load(workspace_registry_path().read_text(encoding="utf-8")) or []
-    assert registry_payload == [str(tmp_path.resolve())]
+    assert _registered_paths(litehive_database_path()) == [str(tmp_path.resolve())]
 
 
 def test_workspace_registry_is_available_from_other_threads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -210,7 +366,6 @@ def test_litehive_home_overrides_default_root(tmp_path: Path, monkeypatch: pytes
         global_config_path,
         litehive_database_path,
         litehive_root,
-        workspace_registry_path,
         workspace_database_path,
         workspace_id,
     )
@@ -221,8 +376,8 @@ def test_litehive_home_overrides_default_root(tmp_path: Path, monkeypatch: pytes
     assert litehive_root() == custom_home
     assert litehive_database_path() == custom_home / "litehive.db"
     assert global_config_path() == config_home / "litehive" / "config.yaml"
-    assert workspace_registry_path() == config_home / "litehive" / "workspaces.yaml"
     assert workspace_database_path(tmp_path) == custom_home / wid / "data.db"
+    assert _registered_paths(litehive_database_path()) == [str(tmp_path.resolve())]
 
 
 def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None:

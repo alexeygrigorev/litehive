@@ -45,10 +45,6 @@ def litehive_database_path() -> Path:
     return litehive_root() / "litehive.db"
 
 
-def workspace_registry_path() -> Path:
-    return litehive_config_root() / "workspaces.yaml"
-
-
 def workspace_id(root: Path) -> str:
     canonical = str(root.expanduser().resolve()).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()[:16]

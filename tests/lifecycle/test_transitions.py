@@ -38,6 +38,8 @@ from litehive.lifecycle.types import (
     PipelineMode,
 )
 
+ANY_STAGE_PHASES = tuple(sorted(ANY_STAGE_PHASE))
+
 
 def make_state(
     stage: str,
@@ -187,13 +189,13 @@ def test_blocked_routes_to_recovering(stage):
 # ── tier-3 crash / timeout wildcards ──────────────────────────────────────
 
 
-@pytest.mark.parametrize("phase", list(ANY_STAGE_PHASE))
+@pytest.mark.parametrize("phase", ANY_STAGE_PHASES)
 def test_crash_in_any_stage_phase_routes_to_recovering(phase):
     state = make_state(phase)
     assert step(phase, Crash(exc_type="E", message="m"), state).next == "recovering"
 
 
-@pytest.mark.parametrize("phase", list(ANY_STAGE_PHASE))
+@pytest.mark.parametrize("phase", ANY_STAGE_PHASES)
 def test_timeout_in_any_stage_phase_routes_to_recovering(phase):
     state = make_state(phase)
     assert step(phase, Timeout(), state).next == "recovering"
