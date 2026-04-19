@@ -22,7 +22,7 @@ _LEGACY_UNSUPPORTED_KEYS = {
         "or CLI --engine."
     ),
 }
-_LEGACY_IGNORED_KEYS = frozenset({"engine_fallbacks"})
+_LEGACY_IGNORED_KEYS = frozenset({"engine_fallbacks", "runner_hook_execution_mode"})
 
 
 def read_config_mapping(path: Path) -> dict[str, Any]:

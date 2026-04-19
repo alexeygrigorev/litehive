@@ -47,11 +47,11 @@ from litehive.state.locking import persist_future_task_update
 from litehive.state.locking import runner_heartbeat, workspace_runner_guard
 
 from litehive.roles.base import PromptContext
-from .events import Reject
+from .events import HookOk
 from .engines import ConfigBackedEngineSelector, EngineFactory
 from .heru_factory import heru_engine_factory
 from .journal import SqliteJournal
-from .nodes.hook import ExecutionMode, HookNode, HookSpec, SubprocessHookRunner
+from .nodes.hook import HookSpec, SubprocessHookRunner
 from .nodes.system import (
     CommitNode,
     GitCommitNode,
@@ -59,7 +59,7 @@ from .nodes.system import (
     PreExecRecoveryNode,
     ReadyNode,
 )
-from .persistence import LastRejection, SqlitePersistence, TaskState
+from .persistence import SqlitePersistence, TaskState
 from .registry import build_registry
 from .runner import StateMachineRunner
 from .sessions import SqliteSessionStore
@@ -110,7 +110,6 @@ _STAGE_TO_PIPELINE_STATUS: dict[str, str] = {
     "before_accepting": "accepting",
     "accepting": "accepting",
     "after_accepting": "accepting",
-    "before_commit": "commit_to_git",
     "commit": "commit_to_git",
     "after_commit": "commit_to_git",
     "merge_resolving": "commit_to_git",
@@ -352,72 +351,33 @@ def _cleanup_terminal_worktree(root: Path, task: TaskRecord | None) -> None:
 
 
 def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
-    """Translate ``LitehiveConfig.runner_hooks`` into ``HookSpec`` lists.
-
-    Config stores runner hooks as ``dict[phase_name, list[HookConfig]]``
-    where HookConfig has ``command``, ``reject_on_failure``/``blocking``,
-    ``timeout_seconds``, ``description``, ``instructions_on_failure``.
-    v2 HookSpec is a strict subset — just command / reject_on_failure /
-    timeout_seconds. The phase names match (``before_grooming``,
-    ``after_implementing``, …), so this is a straight per-phase rewrite.
-    """
+    """Translate ``LitehiveConfig.runner_hooks`` into ``HookSpec`` lists."""
     out: dict[str, list[HookSpec]] = {}
     raw = getattr(config, "runner_hooks", None) or {}
     for phase, hooks in raw.items():
         specs: list[HookSpec] = []
         for hook in hooks or []:
+            if isinstance(hook, str):
+                hook = {"command": hook}
             specs.append(
                 HookSpec(
-                    command=hook.command,
-                    reject_on_failure=bool(hook.reject_on_failure),
-                    timeout_seconds=int(hook.timeout_seconds or 60),
-                    description=hook.description,
-                    instructions_on_failure=hook.instructions_on_failure,
+                    command=str(hook["command"]),
+                    timeout_seconds=float(hook.get("timeout_seconds", 60)),
+                    description=(
+                        None
+                        if hook.get("description") is None
+                        else str(hook["description"])
+                    ),
+                    instructions_on_failure=(
+                        None
+                        if hook.get("instructions_on_failure") is None
+                        else str(hook["instructions_on_failure"])
+                    ),
                 )
             )
         if specs:
             out[phase] = specs
     return out
-
-
-def _hook_execution_mode_from_config(config) -> ExecutionMode:
-    raw_mode = getattr(config, "runner_hook_execution_mode", ExecutionMode.RUN_ALL.value)
-    try:
-        return ExecutionMode(str(raw_mode).strip().lower())
-    except ValueError:
-        return ExecutionMode.RUN_ALL
-
-
-def _run_after_merge_hooks(
-    root: Path,
-    *,
-    task_id: str,
-    pipeline_mode: _PipelineMode,
-    config,
-    hook_runner: SubprocessHookRunner,
-) -> Reject | None:
-    specs = hook_specs_from_config(config).get("after_merge", [])
-    if not specs or pipeline_mode != _PipelineMode.FULL:
-        return None
-
-    event = HookNode(
-        "after_merge",
-        hooks=specs,
-        runner=hook_runner,
-        execution_mode=_hook_execution_mode_from_config(config),
-    ).run(TaskState(task_id=task_id, stage="after_merge", pipeline_mode=pipeline_mode))
-    if isinstance(event, Reject):
-        return event
-    return None
-
-
-def _after_merge_failure_message(reason: str) -> str:
-    return (
-        "After-merge verification failed on `main`; the merge was preserved and the "
-        "task was requeued to `implementing` so SWE can fix the merged state.\n"
-        f"Failure: {reason}\n"
-        "Continue from the merged `main` checkout when addressing this."
-    )
 
 
 def _report_stage_for_phase(phase: str) -> str:
@@ -432,63 +392,33 @@ def _report_stage_for_phase(phase: str) -> str:
     return "commit_to_git"
 
 
-def _hook_results_from_event(event: Reject) -> list[dict[str, str | int | bool | None]]:
-    raw_results = event.metadata.get("hook_results")
-    if not isinstance(raw_results, list):
-        return []
-    results: list[dict[str, str | int | bool | None]] = []
-    for raw in raw_results:
-        if isinstance(raw, dict):
-            results.append(raw)
-    return results
-
-
-def _primary_hook_command(event: Reject) -> str:
-    hook = event.metadata.get("hook")
-    if isinstance(hook, dict):
-        command = hook.get("command")
-        if isinstance(command, str) and command:
-            return command
-    for result in _hook_results_from_event(event):
-        command = result.get("command")
-        if isinstance(command, str) and command:
-            return command
-    return "(unknown command)"
-
-
-def _record_hook_reject(
+def _record_hook_warnings(
     root: Path,
     task: TaskRecord,
     *,
-    event: Reject,
-    from_stage: str,
-    to_stage: str,
-    activity_stage: str | None = None,
+    phase: str,
+    warnings: list[str],
 ) -> None:
-    report_stage = _report_stage_for_phase(from_stage)
-    command = _primary_hook_command(event)
-    summary = f"{report_stage} rejected: hook `{command}` failed at `{from_stage}`"
+    report_stage = _report_stage_for_phase(phase)
+    summary = f"Runner hooks at `{phase}` completed with warnings."
+    feedback = "\n\n".join(warnings)
     report = StageReport(
         task_id=task.id,
         stage=report_stage,  # type: ignore[arg-type]
-        verdict="reject",
+        verdict="pass",
         source="hook",
         summary=summary,
-        feedback=event.reason,
-        failure_classification="hook_reject",
+        feedback=feedback,
+        warnings=warnings,
         failure_diagnostics={
-            "phase": from_stage,
-            "routed_to": to_stage,
+            "phase": phase,
             "source": "hook",
         },
-        hook_results=_hook_results_from_event(event),
     )
     report_path = record_stage_report(root, task, report)
-    activity_target = activity_stage or report_stage
     message = (
         f"{summary}\n\n"
-        f"{event.reason}\n\n"
-        f"routing: {to_stage}\n"
+        f"{feedback}\n\n"
         f"report: {report_path.relative_to(root)}"
     )
     append_task_activity(
@@ -496,8 +426,8 @@ def _record_hook_reject(
         task,
         TaskActivityEntry(
             role="hook",
-            stage=activity_target,
-            verdict="reject",
+            stage=report_stage,
+            verdict="comment",
             message=message,
         ),
     )
@@ -505,61 +435,10 @@ def _record_hook_reject(
         root,
         task,
         (
-            f"Runner hook at `{from_stage}` rejected the task.\n"
-            f"command: `{command}`\n"
-            f"routing: `{to_stage}`\n"
+            f"Runner hooks at `{phase}` reported warnings.\n"
             f"report: `{report_path.relative_to(root)}`"
         ),
     )
-
-
-def _requeue_after_failed_after_merge_check(
-    root: Path,
-    task: TaskRecord,
-    *,
-    event: Reject,
-    pipeline_mode: _PipelineMode,
-) -> TaskRecord:
-    from litehive.state.persist import load_state, persist_task_and_state
-    from litehive.tasks.queue import prepare_completed_task_for_recovery
-
-    reason = event.reason
-    failure_message = _after_merge_failure_message(reason)
-    prepare_completed_task_for_recovery(task, recovery_stage="implementing")
-
-    state = load_state(root)
-    if state.active_task_id == task.id:
-        state.active_task_id = None
-    state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
-    state.queue.insert(0, task.id)
-    persist_task_and_state(
-        root,
-        task=task,
-        state=state,
-        journal_message=failure_message,
-    )
-    _record_hook_reject(
-        root,
-        task,
-        event=event,
-        from_stage="after_merge",
-        to_stage="implementing",
-        activity_stage="implementing",
-    )
-    persistence = SqlitePersistence(root)
-    persistence.reset(task.id)
-    pipeline_state = persistence.initialize(
-        task.id,
-        pipeline_mode=pipeline_mode,
-        stage="implementing",
-    )
-    pipeline_state.last_rejection_by_stage["implementing"] = LastRejection(
-        source="hook",
-        reason=failure_message,
-        raised_at_phase="after_merge",
-    )
-    persistence.save(pipeline_state)
-    return task
 
 
 def run_task(
@@ -618,7 +497,6 @@ def run_task(
             pre_exec_recovery_node=pre_exec_recovery_node,
             prompt_context=prompt_context,
             hook_specs=hook_specs,
-            hook_execution_mode=_hook_execution_mode_from_config(config),
             retry_budget=retry_budget,
             retry_on=tuple(config.retry_on),
         )
@@ -649,35 +527,19 @@ def run_task(
 
         # 4. Mirror terminal state back to the v1 TaskRecord.
         updated_task = _sync_back(final_state, root) or task
-        after_merge_failure: Reject | None = None
         if final_state.stage in {"done", "failed"}:
             _clear_terminal_task_from_workspace_state(root, updated_task.id)
             try:
                 _cleanup_terminal_worktree(root, updated_task)
             except GitError:
                 pass
-        if final_state.stage == "done":
-            after_merge_failure = _run_after_merge_hooks(
-                root,
-                task_id=updated_task.id,
-                pipeline_mode=final_state.pipeline_mode,
-                config=config,
-                hook_runner=hook_runner,
-            )
-            if after_merge_failure is not None:
-                updated_task = _requeue_after_failed_after_merge_check(
-                    root,
-                    updated_task,
-                    event=after_merge_failure,
-                    pipeline_mode=final_state.pipeline_mode,
-                )
 
     return ExecutionResult(
         task=updated_task,
         final_state=final_state,
-        final_stage=updated_task.pipeline_status if after_merge_failure is not None else final_state.stage,
-        failed_reason="after_merge_hook_failed" if after_merge_failure is not None else final_state.failed_reason,
-        failed_message=(after_merge_failure.reason if after_merge_failure is not None else final_state.failed_message),
+        final_stage=final_state.stage,
+        failed_reason=final_state.failed_reason,
+        failed_message=final_state.failed_message,
     )
 
 
@@ -685,18 +547,18 @@ def _observe_transition(
     root: Path,
     state: TaskState,
     from_stage: str,
-    event: Reject | object,
+    event: object,
     trans: Transition,
 ) -> None:
-    if not isinstance(event, Reject) or event.source != "hook":
+    del trans
+    if not isinstance(event, HookOk) or not event.warnings:
         return
     task = get_task(root, state.task_id)
     if task is None:
         return
-    _record_hook_reject(
+    _record_hook_warnings(
         root,
         task,
-        event=event,
-        from_stage=from_stage,
-        to_stage=trans.next,
+        phase=from_stage,
+        warnings=event.warnings,
     )

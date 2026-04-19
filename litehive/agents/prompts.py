@@ -12,7 +12,7 @@ from litehive.tasks.normalization import (
 )
 
 
-_REJECTING_HOOK_POINTS: dict[str, str] = {
+_RUNNER_HOOK_POINTS: dict[str, str] = {
     "implementing": "after_implementing",
     "testing": "after_testing",
 }
@@ -294,22 +294,25 @@ def _stage_owner_for_stage(stage: str) -> str:
 def _runner_hook_prompt_lines(stage: str, config: LitehiveConfig | None) -> list[str]:
     if config is None:
         return []
-    hook_point = _REJECTING_HOOK_POINTS.get(stage)
+    hook_point = _RUNNER_HOOK_POINTS.get(stage)
     if hook_point is None:
         return []
     hooks = config.runner_hooks.get(hook_point, [])
-    rejecting = [h for h in hooks if h.reject_on_failure]
-    if not rejecting:
+    if not hooks:
         return []
     lines: list[str] = []
-    for hook in rejecting:
+    for hook in hooks:
         lines.append(f"- {_format_runner_hook_prompt_entry(hook)}")
     return lines
 
 
 def _format_runner_hook_prompt_entry(hook: object) -> str:
-    description = getattr(hook, "description", None)
-    command = getattr(hook, "command")
+    if isinstance(hook, dict):
+        description = hook.get("description")
+        command = hook.get("command")
+    else:
+        description = getattr(hook, "description", None)
+        command = getattr(hook, "command")
     if description:
         return f"{command} ({description})"
     return command

@@ -34,7 +34,6 @@ from .events import (
     Timeout,
 )
 from .guards import (
-    hook_reject_loop_detected,
     mode,
     recovery_budget_available,
     recovery_budget_exhausted,
@@ -152,7 +151,7 @@ RULES: list[Rule] = [
     Rule(
         from_state=S.AFTER_IMPLEMENTING,
         on_event=HookOk,
-        transition_to=S.BEFORE_COMMIT,
+        transition_to=S.COMMIT,
         when=mode("single"),
     ),
     Rule(
@@ -191,14 +190,9 @@ RULES: list[Rule] = [
     Rule(
         from_state=S.AFTER_ACCEPTING,
         on_event=HookOk,
-        transition_to=S.BEFORE_COMMIT,
-    ),
-    # ── commit ─────────────────────────────────────────────
-    Rule(
-        from_state=S.BEFORE_COMMIT,
-        on_event=HookOk,
         transition_to=S.COMMIT,
     ),
+    # ── commit ─────────────────────────────────────────────
     Rule(
         from_state=S.COMMIT,
         on_event=Pass,
@@ -227,12 +221,6 @@ RULES: list[Rule] = [
     *_recovery_rules(S.MERGE_RESOLVING, Timeout),
     # ── rejections: grooming (no retry) ─────────────────────────────────────────────
     *[rule for p in S.GROOMING_EPOCH for rule in _recovery_rules(p, Reject)],
-    # ── same-hook reject circuit breaker ─────────────────────────────────────────────
-    *[
-        rule
-        for phase in (*S.IMPLEMENTING_EPOCH, *S.TESTING_EPOCH, *S.ACCEPTING_EPOCH)
-        for rule in _recovery_rules(phase, Reject, when=hook_reject_loop_detected())
-    ],
     # ── rejections: implementing / testing / accepting (retry then recover) ─────────────────────────────────────────────
     *retry_epoch_rules(
         S.IMPLEMENTING, S.IMPLEMENTING_EPOCH, retry_target=S.IMPLEMENTING, recovering_stage=S.RECOVERING

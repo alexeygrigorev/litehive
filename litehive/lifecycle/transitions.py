@@ -34,6 +34,10 @@ ToFn = Callable[[TaskState, Event], NodeName]
 ToSpec = NodeName | ToFn | Stage
 
 
+def _entry_phase(stage: NodeName) -> NodeName:
+    return "commit" if stage == "commit" else f"before_{stage}"
+
+
 @dataclass(frozen=True)
 class Rule:
     from_state: NodeName | frozenset | Stage
@@ -103,24 +107,24 @@ def resume_from_origin(state: TaskState, event: Event) -> NodeName:
     if not e.resume:
         trigger = state.active_recovery_trigger
         if trigger is not None and trigger.origin_stage in STAGES:
-            return f"before_{trigger.origin_stage}"
+            return _entry_phase(trigger.origin_stage)
         raise ValueError("RecoverySucceeded missing resume destination")
     if e.resume in STAGES:
-        return f"before_{e.resume}"
+        return _entry_phase(e.resume)
     return e.resume
 
 
 def resume_from_pre_exec(state: TaskState, event: Event) -> NodeName:
     e: PreExecRecoverySucceeded = event  # type: ignore[assignment]
     if e.resume_stage in STAGES:
-        return f"before_{e.resume_stage}"
+        return _entry_phase(e.resume_stage)
     return e.resume_stage
 
 
 def entry_from_worktree_sync(state: TaskState, event: Event) -> NodeName:
     del event
     if state.entry_stage in STAGES:
-        return f"before_{state.entry_stage}"
+        return _entry_phase(state.entry_stage)
     if state.entry_stage:
         return state.entry_stage
     if state.pipeline_mode == "single":

@@ -146,9 +146,8 @@ class RoleAgent(AgentNode):
         raw_hooks = (config.runner_hooks or {}).get(after_phase, [])
         return [
             {
-                "command": hook.command,
-                "description": hook.description or "",
-                "reject_on_failure": bool(hook.reject_on_failure),
+                "command": str(hook.get("command", "")),
+                "description": str(hook.get("description", "") or ""),
             }
             for hook in raw_hooks
         ]

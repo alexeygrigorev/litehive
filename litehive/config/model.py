@@ -26,23 +26,18 @@ VALID_RUNNER_HOOK_POINTS = frozenset(
         "before_accepting",
         "after_accepting",
         "after_commit",
-        "after_merge",
     }
 )
-REJECTABLE_HOOK_POINTS = frozenset(
+VALID_RUNNER_HOOK_ENTRY_KEYS = frozenset(
     {
-        "before_implementing",
-        "after_implementing",
-        "before_testing",
-        "after_testing",
-        "before_accepting",
-        "after_accepting",
-        "after_commit",
-        "after_merge",
+        "command",
+        "timeout_seconds",
+        "description",
+        "instructions_on_failure",
+        "reject_on_failure",
+        "blocking",
     }
 )
-
-RUNNER_HOOK_EXECUTION_MODES = {"run_all", "fail_fast"}
 DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS = 300.0
 
 
@@ -92,16 +87,6 @@ class ExternalEngineSandboxConfig:
     engine_policies: dict[str, ExternalEngineSandboxPolicy] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
-class RunnerHookConfig:
-    command: str
-    reject_on_failure: bool | None = None
-    blocking: bool | None = None
-    description: str | None = None
-    timeout_seconds: float | None = None
-    instructions_on_failure: str | None = None
-
-
 # --- primary config ---
 
 
@@ -128,8 +113,7 @@ class LitehiveConfig:
     pool_stop_on_dirty_git: bool = False
     pool_stop_on_attention: bool = False
     pool_selection_policy: str = "dependency_aware"
-    runner_hook_execution_mode: str = "run_all"
-    runner_hooks: dict[str, list[RunnerHookConfig]] = field(default_factory=dict)
+    runner_hooks: dict[str, list[dict[str, object]]] = field(default_factory=dict)
     subagent_inactivity_timeout_seconds: float = DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS
     inactivity_timeout_seconds: float | None = None
     external_engine_sandbox: ExternalEngineSandboxConfig = field(default_factory=ExternalEngineSandboxConfig)
@@ -148,10 +132,6 @@ class LitehiveConfig:
         )
         self.agent_startup_guidance = normalize_agent_startup_guidance(self.agent_startup_guidance)
         self.retry_on = normalize_retry_on(self.retry_on)
-        self.runner_hook_execution_mode = str(self.runner_hook_execution_mode).strip().lower()
-        if self.runner_hook_execution_mode not in RUNNER_HOOK_EXECUTION_MODES:
-            allowed = ", ".join(sorted(RUNNER_HOOK_EXECUTION_MODES))
-            raise ValueError(f"runner_hook_execution_mode must be one of: {allowed}")
         self.runner_hooks = normalize_runner_hooks(self.runner_hooks)
         self.subagent_inactivity_timeout_seconds = float(self.subagent_inactivity_timeout_seconds)
         if self.subagent_inactivity_timeout_seconds <= 0:
@@ -225,64 +205,65 @@ def normalize_retry_on(
     return normalized
 
 
-def _normalize_runner_hook_config(
-    raw_hook: RunnerHookConfig | Mapping[str, object],
+def _normalize_runner_hook(
+    raw_hook: str | Mapping[str, object],
     *,
     field_name: str,
-    point: str,
-) -> RunnerHookConfig:
-    hook = raw_hook if isinstance(raw_hook, RunnerHookConfig) else RunnerHookConfig(**dict(raw_hook))
-    hook.command = hook.command.strip()
-    if not hook.command:
+) -> dict[str, object]:
+    if isinstance(raw_hook, str):
+        command = raw_hook.strip()
+        if not command:
+            raise ValueError(f"{field_name} must not be empty")
+        return {"command": command}
+    if not isinstance(raw_hook, Mapping):
+        raise ValueError(f"{field_name} must be a command string or mapping")
+
+    unknown_keys = sorted(set(raw_hook) - VALID_RUNNER_HOOK_ENTRY_KEYS)
+    if unknown_keys:
+        joined = ", ".join(unknown_keys)
+        raise ValueError(f"{field_name} contains unsupported keys: {joined}")
+
+    command = str(raw_hook.get("command", "")).strip()
+    if not command:
         raise ValueError(f"{field_name}.command must not be empty")
-    if hook.reject_on_failure is not None and not isinstance(hook.reject_on_failure, bool):
-        raise ValueError(f"{field_name}.reject_on_failure must be a boolean")
-    if hook.blocking is not None and not isinstance(hook.blocking, bool):
-        raise ValueError(f"{field_name}.blocking must be a boolean")
-    if hook.blocking is not None:
-        if (
-            hook.reject_on_failure is not None
-            and hook.reject_on_failure != hook.blocking
-        ):
-            raise ValueError(
-                f"{field_name}.blocking must match {field_name}.reject_on_failure when both are set"
-            )
-        hook.reject_on_failure = hook.blocking
-    if hook.reject_on_failure is None:
-        hook.reject_on_failure = False
-    if hook.description is not None:
-        hook.description = hook.description.strip() or None
-    if hook.instructions_on_failure is not None:
-        hook.instructions_on_failure = hook.instructions_on_failure.strip() or None
-    if hook.timeout_seconds is not None:
-        hook.timeout_seconds = float(hook.timeout_seconds)
-        if hook.timeout_seconds <= 0:
+
+    hook: dict[str, object] = {"command": command}
+    description = raw_hook.get("description")
+    if description is not None:
+        cleaned = str(description).strip()
+        if cleaned:
+            hook["description"] = cleaned
+    instructions = raw_hook.get("instructions_on_failure")
+    if instructions is not None:
+        cleaned = str(instructions).strip()
+        if cleaned:
+            hook["instructions_on_failure"] = cleaned
+    timeout_seconds = raw_hook.get("timeout_seconds")
+    if timeout_seconds is not None:
+        timeout_value = float(timeout_seconds)
+        if timeout_value <= 0:
             raise ValueError(f"{field_name}.timeout_seconds must be greater than 0")
-    if hook.reject_on_failure and point not in REJECTABLE_HOOK_POINTS:
-        allowed = ", ".join(sorted(REJECTABLE_HOOK_POINTS))
-        field_label = "blocking" if hook.blocking is not None else "reject_on_failure"
-        raise ValueError(
-            f"{field_name}.{field_label} is only valid for: {allowed} (got {point})"
-        )
+        hook["timeout_seconds"] = timeout_value
     return hook
 
 
 def normalize_runner_hooks(
-    raw_hooks: Mapping[str, Sequence[RunnerHookConfig | Mapping[str, object]]] | None,
-) -> dict[str, list[RunnerHookConfig]]:
+    raw_hooks: Mapping[str, Sequence[str | Mapping[str, object]]] | None,
+) -> dict[str, list[dict[str, object]]]:
     if raw_hooks is None:
         return {}
 
-    normalized: dict[str, list[RunnerHookConfig]] = {}
+    normalized: dict[str, list[dict[str, object]]] = {}
     for point, hooks in raw_hooks.items():
         if point not in VALID_RUNNER_HOOK_POINTS:
             allowed = ", ".join(sorted(VALID_RUNNER_HOOK_POINTS))
             raise ValueError(f"runner_hooks key must be one of: {allowed}")
+        if not hooks:
+            continue
         normalized[point] = [
-            _normalize_runner_hook_config(
+            _normalize_runner_hook(
                 hook,
                 field_name=f"runner_hooks[{point}][{index}]",
-                point=point,
             )
             for index, hook in enumerate(hooks)
         ]

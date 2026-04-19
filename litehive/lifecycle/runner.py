@@ -188,6 +188,6 @@ def _pipeline_stage_for_phase(phase: str) -> str:
         return "testing"
     if phase in {"before_accepting", "accepting", "after_accepting"}:
         return "accepting"
-    if phase in {"before_commit", "commit", "after_commit", "merge_resolving"}:
+    if phase in {"commit", "after_commit", "merge_resolving"}:
         return "commit_to_git"
     return phase

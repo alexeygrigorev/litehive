@@ -35,7 +35,22 @@ def after(stage: NodeName) -> NodeName:
     return f"after_{stage}"
 
 
-STAGE_PHASES: tuple[NodeName, ...] = tuple(phase for stage in STAGES for phase in (before(stage), stage, after(stage)))
+STAGE_PHASES: tuple[NodeName, ...] = (
+    "before_grooming",
+    "grooming",
+    "after_grooming",
+    "before_implementing",
+    "implementing",
+    "after_implementing",
+    "before_testing",
+    "testing",
+    "after_testing",
+    "before_accepting",
+    "accepting",
+    "after_accepting",
+    "commit",
+    "after_commit",
+)
 
 ANY_STAGE_PHASE: frozenset[NodeName] = frozenset(STAGE_PHASES)
 

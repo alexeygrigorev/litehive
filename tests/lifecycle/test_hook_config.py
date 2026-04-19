@@ -1,26 +1,23 @@
-"""Verify workspace runner_hooks config is translated into v2 HookSpec lists."""
+"""Verify workspace runner_hooks config is translated into HookSpec lists."""
 
 from types import SimpleNamespace
 
-from litehive.lifecycle.nodes.hook import ExecutionMode, HookSpec
-from litehive.lifecycle.orchestration import _hook_execution_mode_from_config, hook_specs_from_config
-
-
-def _fake_hook(command: str, *, reject: bool = True, timeout: int = 60) -> SimpleNamespace:
-    return SimpleNamespace(
-        command=command,
-        reject_on_failure=reject,
-        timeout_seconds=timeout,
-        description="",
-        instructions_on_failure="",
-    )
+from litehive.lifecycle.nodes.hook import HookSpec
+from litehive.lifecycle.orchestration import hook_specs_from_config
 
 
 def test_hook_specs_from_config_copies_known_fields() -> None:
     config = SimpleNamespace(
         runner_hooks={
-            "before_grooming": [_fake_hook("echo pre-groom", reject=False, timeout=30)],
-            "after_implementing": [_fake_hook("pytest -q", reject=True, timeout=120)],
+            "before_grooming": [{"command": "echo pre-groom", "timeout_seconds": 30}],
+            "after_implementing": [
+                {
+                    "command": "pytest -q",
+                    "timeout_seconds": 120,
+                    "description": "full suite",
+                    "instructions_on_failure": "fix tests",
+                }
+            ],
         }
     )
 
@@ -29,28 +26,24 @@ def test_hook_specs_from_config_copies_known_fields() -> None:
     assert set(out.keys()) == {"before_grooming", "after_implementing"}
     assert isinstance(out["before_grooming"][0], HookSpec)
     assert out["before_grooming"][0].command == "echo pre-groom"
-    assert out["before_grooming"][0].reject_on_failure is False
     assert out["before_grooming"][0].timeout_seconds == 30
-    assert out["before_grooming"][0].description == ""
+    assert out["before_grooming"][0].description is None
     assert out["after_implementing"][0].command == "pytest -q"
-    assert out["after_implementing"][0].reject_on_failure is True
     assert out["after_implementing"][0].timeout_seconds == 120
-    assert out["after_implementing"][0].description == ""
+    assert out["after_implementing"][0].description == "full suite"
+    assert out["after_implementing"][0].instructions_on_failure == "fix tests"
+
+
+def test_hook_specs_from_config_supports_string_commands() -> None:
+    config = SimpleNamespace(runner_hooks={"after_implementing": ["uv run ruff check ."]})
+
+    out = hook_specs_from_config(config)
+
+    assert out["after_implementing"][0] == HookSpec(command="uv run ruff check .")
 
 
 def test_hook_specs_from_config_skips_empty_phases_and_missing_attr() -> None:
-    # Missing runner_hooks entirely
     assert hook_specs_from_config(SimpleNamespace()) == {}
 
-    # Empty per-phase lists are dropped (no empty-list pollution in registry)
     config = SimpleNamespace(runner_hooks={"before_grooming": [], "after_testing": None})
     assert hook_specs_from_config(config) == {}
-
-
-def test_hook_execution_mode_defaults_to_run_all() -> None:
-    assert _hook_execution_mode_from_config(SimpleNamespace()) is ExecutionMode.RUN_ALL
-
-
-def test_hook_execution_mode_honors_fail_fast_override() -> None:
-    config = SimpleNamespace(runner_hook_execution_mode="fail_fast")
-    assert _hook_execution_mode_from_config(config) is ExecutionMode.FAIL_FAST

@@ -7,9 +7,9 @@ import pytest
 
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
-from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass, Reject
+from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass
 from litehive.lifecycle.nodes.agent import AgentVerdict
-from litehive.lifecycle.nodes.hook import ExecutionMode, HookNode, HookResult, HookRunner, HookSpec, SubprocessHookRunner
+from litehive.lifecycle.nodes.hook import HookNode, HookResult, HookRunner, HookSpec, SubprocessHookRunner
 from litehive.lifecycle.nodes.system import GitCommitNode, StubCommitNode
 from litehive.lifecycle.orchestration import run_task
 from litehive.lifecycle.persistence import SqlitePersistence, TaskState
@@ -29,21 +29,13 @@ def make_state(stage: str = "before_grooming", task_id: str = "T-0001") -> TaskS
 
 
 class SequenceHookRunner(HookRunner):
-    def __init__(self, outcomes: dict[str, HookResult]) -> None:
+    def __init__(self, outcomes: dict[str, HookResult | None]) -> None:
         self.outcomes = outcomes
         self.calls: list[str] = []
 
-    def run(self, spec: HookSpec, state: TaskState) -> HookResult:
+    def run(self, spec: HookSpec, state: TaskState) -> HookResult | None:
         self.calls.append(spec.command)
-        outcome = self.outcomes[spec.command]
-        return HookResult(
-            spec=spec,
-            ok=outcome.ok,
-            output=outcome.output,
-            exit_code=outcome.exit_code,
-            stdout=outcome.stdout,
-            stderr=outcome.stderr,
-        )
+        return self.outcomes[spec.command]
 
 
 # ── SubprocessHookRunner ────────────────────────────────────────────────
@@ -52,31 +44,32 @@ class SequenceHookRunner(HookRunner):
 def test_hook_passing_command_returns_ok(tmp_path: Path) -> None:
     runner = SubprocessHookRunner(tmp_path)
     result = runner.run(HookSpec(command="true"), make_state())
-    assert result.ok is True
+    assert result is None
 
 
 def test_hook_failing_command_returns_not_ok_with_output(tmp_path: Path) -> None:
     runner = SubprocessHookRunner(tmp_path)
     result = runner.run(HookSpec(command="echo nope && exit 2"), make_state())
-    assert result.ok is False
-    assert "nope" in result.output
+    assert result is not None
+    assert result.exit_code == 2
+    assert result.stdout == "nope"
 
 
 def test_hook_timeout_is_reported_as_not_ok(tmp_path: Path) -> None:
     runner = SubprocessHookRunner(tmp_path)
     result = runner.run(HookSpec(command="sleep 5", timeout_seconds=1), make_state())
-    assert result.ok is False
-    assert "timeout" in result.output.lower()
+    assert result is not None
+    assert result.exit_code == 124
+    assert "timeout" in result.stderr.lower()
 
 
 def test_hook_environment_contains_task_id_and_stage(tmp_path: Path) -> None:
     runner = SubprocessHookRunner(tmp_path)
     result = runner.run(
-        HookSpec(command='echo "$LITEHIVE_TASK_ID:$LITEHIVE_STAGE"'),
+        HookSpec(command='test "$LITEHIVE_TASK_ID:$LITEHIVE_STAGE" = "T-0042:grooming"'),
         make_state(stage="grooming", task_id="T-0042"),
     )
-    assert result.ok is True
-    assert "T-0042:grooming" in result.output
+    assert result is None
 
 
 def test_hook_node_with_passing_spec_emits_hook_ok(tmp_path: Path) -> None:
@@ -87,20 +80,22 @@ def test_hook_node_with_passing_spec_emits_hook_ok(tmp_path: Path) -> None:
     )
     event = node.run(make_state())
     assert isinstance(event, HookOk)
+    assert event.warnings == []
 
 
-def test_hook_node_with_failing_spec_emits_reject(tmp_path: Path) -> None:
+def test_hook_node_with_failing_spec_emits_warning_only(tmp_path: Path) -> None:
     node = HookNode(
         "before_grooming",
         hooks=[HookSpec(command="false")],
         runner=SubprocessHookRunner(tmp_path),
     )
     event = node.run(make_state())
-    assert isinstance(event, Reject)
-    assert event.source == "hook"
+    assert isinstance(event, HookOk)
+    assert len(event.warnings) == 1
+    assert "Runner hook warning" in event.warnings[0]
 
 
-def test_hook_node_reject_includes_command_exit_code_and_streams(tmp_path: Path) -> None:
+def test_hook_node_warning_includes_command_exit_code_and_streams(tmp_path: Path) -> None:
     node = HookNode(
         "after_implementing",
         hooks=[
@@ -115,90 +110,39 @@ def test_hook_node_reject_includes_command_exit_code_and_streams(tmp_path: Path)
 
     event = node.run(make_state(stage="after_implementing"))
 
-    assert isinstance(event, Reject)
-    assert event.source == "hook"
-    assert "Command: sh -c 'echo stdout-line && echo stderr-line >&2 && exit 3'" in event.reason
-    assert "Exit code: 3" in event.reason
-    assert "stdout-line" in event.reason
-    assert "stderr-line" in event.reason
-    assert event.metadata["hook_results"][0]["command"] == "sh -c 'echo stdout-line && echo stderr-line >&2 && exit 3'"
-    assert event.metadata["hook_results"][0]["exit_code"] == 3
-    assert event.metadata["hook_results"][0]["stdout"] == "stdout-line"
-    assert event.metadata["hook_results"][0]["stderr"] == "stderr-line"
+    assert isinstance(event, HookOk)
+    assert "sh -c 'echo stdout-line && echo stderr-line >&2 && exit 3'" in event.warnings[0]
+    assert "exited with 3" in event.warnings[0]
+    assert "stdout-line" in event.warnings[0]
+    assert "stderr-line" in event.warnings[0]
 
 
-def test_hook_node_default_runs_all_hooks_and_reports_all_blocking_failures() -> None:
+def test_hook_node_runs_all_hooks_and_collects_warnings() -> None:
     hooks = [
-        HookSpec(command="first", reject_on_failure=True, description="lint"),
-        HookSpec(command="second", reject_on_failure=True, description="tests"),
-        HookSpec(command="third", reject_on_failure=True, description="typing"),
+        HookSpec(command="first", description="lint"),
+        HookSpec(command="second", description="tests"),
+        HookSpec(command="third", description="typing"),
     ]
     runner = SequenceHookRunner(
         {
-            "first": HookResult(
-                spec=hooks[0],
-                ok=False,
-                exit_code=1,
-                stdout="lint stdout",
-                stderr="lint stderr",
-            ),
-            "second": HookResult(
-                spec=hooks[1],
-                ok=False,
-                exit_code=2,
-                stdout="tests stdout",
-                stderr="tests stderr",
-            ),
-            "third": HookResult(
-                spec=hooks[2],
-                ok=True,
-                exit_code=0,
-                stdout="typing ok",
-            ),
+            "first": HookResult(exit_code=1, stdout="lint stdout", stderr="lint stderr"),
+            "second": HookResult(exit_code=2, stdout="tests stdout", stderr="tests stderr"),
+            "third": None,
         }
     )
     node = HookNode("after_implementing", hooks=hooks, runner=runner)
 
     event = node.run(make_state(stage="after_implementing"))
 
-    assert isinstance(event, Reject)
+    assert isinstance(event, HookOk)
     assert runner.calls == ["first", "second", "third"]
-    assert len(event.metadata["hook_results"]) == 2
-    assert [result["command"] for result in event.metadata["hook_results"]] == ["first", "second"]
-    assert "Command: first" in event.reason
-    assert "lint stdout" in event.reason
-    assert "lint stderr" in event.reason
-    assert "Command: second" in event.reason
-    assert "tests stdout" in event.reason
-    assert "tests stderr" in event.reason
-
-
-def test_hook_node_fail_fast_stops_on_first_blocking_failure() -> None:
-    hooks = [
-        HookSpec(command="first", reject_on_failure=True),
-        HookSpec(command="second", reject_on_failure=True),
-    ]
-    runner = SequenceHookRunner(
-        {
-            "first": HookResult(spec=hooks[0], ok=False, exit_code=1, stderr="first failed"),
-            "second": HookResult(spec=hooks[1], ok=False, exit_code=2, stderr="second failed"),
-        }
-    )
-    node = HookNode(
-        "after_implementing",
-        hooks=hooks,
-        runner=runner,
-        execution_mode=ExecutionMode.FAIL_FAST,
-    )
-
-    event = node.run(make_state(stage="after_implementing"))
-
-    assert isinstance(event, Reject)
-    assert runner.calls == ["first"]
-    assert len(event.metadata["hook_results"]) == 1
-    assert event.metadata["hook_results"][0]["command"] == "first"
-    assert "first failed" in event.reason
-    assert "second failed" not in event.reason
+    assert len(event.warnings) == 2
+    assert "first" in event.warnings[0]
+    assert "lint stdout" in event.warnings[0]
+    assert "lint stderr" in event.warnings[0]
+    assert "second" in event.warnings[1]
+    assert "tests stdout" in event.warnings[1]
+    assert "tests stderr" in event.warnings[1]
 
 
 # ── GitCommitNode ───────────────────────────────────────────────────────
@@ -571,15 +515,14 @@ def test_run_task_single_mode_executes_only_implementing_then_finishes(tmp_path:
     assert task.id not in workspace_state.queue
 
 
-def test_run_task_runs_after_merge_hook_on_main_and_finishes(tmp_path: Path) -> None:
+def test_run_task_runs_after_commit_hook_on_main_and_finishes(tmp_path: Path) -> None:
     _init_workspace_git_repo(
         tmp_path,
         config=LitehiveConfig(
             runner_hooks={
-                "after_merge": [
+                "after_commit": [
                     {
-                        "command": "git branch --show-current > after_merge_branch.txt && test -f merged.txt",
-                        "blocking": True,
+                        "command": "git branch --show-current > after_commit_branch.txt && test -f merged.txt",
                     }
                 ]
             }
@@ -602,25 +545,24 @@ def test_run_task_runs_after_merge_hook_on_main_and_finishes(tmp_path: Path) -> 
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
     assert (tmp_path / "merged.txt").read_text() == "merged\n"
-    assert (tmp_path / "after_merge_branch.txt").read_text().strip() == "main"
+    assert (tmp_path / "after_commit_branch.txt").read_text().strip() == "main"
     assert not worktree.exists()
 
 
-def test_run_task_requeues_implementing_when_after_merge_hook_fails(tmp_path: Path) -> None:
+def test_run_task_records_after_commit_hook_warning_and_finishes(tmp_path: Path) -> None:
     _init_workspace_git_repo(
         tmp_path,
         config=LitehiveConfig(
             runner_hooks={
-                "after_merge": [
+                "after_commit": [
                     {
-                        "command": "git branch --show-current > after_merge_branch.txt && echo fail && exit 1",
-                        "blocking": True,
+                        "command": "git branch --show-current > after_commit_branch.txt && echo fail && exit 1",
                     }
                 ]
             }
         ),
     )
-    create_task(tmp_path, title="After merge fail")
+    create_task(tmp_path, title="After commit warning")
     task = dequeue_next_task(tmp_path)
     assert task is not None
     worktree = _prepare_committed_task_worktree(tmp_path, task)
@@ -631,49 +573,35 @@ def test_run_task_requeues_implementing_when_after_merge_hook_fails(tmp_path: Pa
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
     refreshed = get_task(tmp_path, task.id)
-    state = load_state(tmp_path)
-    pipeline_state = SqlitePersistence(tmp_path).load(task.id)
 
-    assert result.final_stage == "implementing"
-    assert result.failed_reason == "after_merge_hook_failed"
+    assert result.final_stage == "done"
     assert refreshed is not None
-    assert refreshed.status == "queued"
-    assert refreshed.pipeline_status == "implementing"
-    assert refreshed.runtime.git.commit_sha is None
-    assert refreshed.runtime.git.worktree_path is None
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
     assert (tmp_path / "merged.txt").read_text() == "merged\n"
-    assert (tmp_path / "after_merge_branch.txt").read_text().strip() == "main"
+    assert (tmp_path / "after_commit_branch.txt").read_text().strip() == "main"
     assert not worktree.exists()
-    assert state.active_task_id is None
-    assert state.queue[0] == task.id
-    assert pipeline_state.stage == "implementing"
-    assert pipeline_state.last_rejection_by_stage["implementing"].source == "hook"
-    assert pipeline_state.last_rejection_by_stage["implementing"].raised_at_phase == "after_merge"
-    assert "After-merge verification failed on `main`" in (
-        pipeline_state.last_rejection_by_stage["implementing"].reason
-    )
-    assert "echo fail && exit 1" in pipeline_state.last_rejection_by_stage["implementing"].reason
 
     thread = load_task_activity(tmp_path, refreshed)
     assert thread[-1].role == "hook"
-    assert thread[-1].stage == "implementing"
-    assert thread[-1].verdict == "reject"
-    assert "fix the merged state" not in thread[-1].message
-    assert "routing: implementing" in thread[-1].message
+    assert thread[-1].stage == "commit_to_git"
+    assert thread[-1].verdict == "comment"
+    assert "Runner hooks at `after_commit` completed with warnings." in thread[-1].message
+    assert "echo fail && exit 1" in thread[-1].message
 
     reports = load_stage_reports(tmp_path, refreshed)
     hook_reports = [report for report in reports if report.source == "hook"]
     assert hook_reports
     assert hook_reports[-1].stage == "commit_to_git"
-    assert hook_reports[-1].verdict == "reject"
+    assert hook_reports[-1].verdict == "pass"
     assert hook_reports[-1].source == "hook"
-    assert hook_reports[-1].failure_diagnostics["phase"] == "after_merge"
-    assert hook_reports[-1].failure_diagnostics["routed_to"] == "implementing"
-    assert "Exit code: 1" in hook_reports[-1].feedback
+    assert hook_reports[-1].failure_diagnostics["phase"] == "after_commit"
     assert "echo fail && exit 1" in hook_reports[-1].feedback
+    assert "exit code" not in hook_reports[-1].feedback.lower()
+    assert hook_reports[-1].warnings
 
 
-def test_run_task_before_accepting_hook_retries_back_to_implementing_and_records_hook_report(
+def test_run_task_before_accepting_hook_warns_and_continues(
     tmp_path: Path,
 ) -> None:
     _init_workspace_git_repo(
@@ -689,14 +617,13 @@ def test_run_task_before_accepting_hook_retries_back_to_implementing_and_records
                             "exit 1; "
                             "fi"
                         ),
-                        "blocking": True,
                         "description": "ensures acceptance starts from a lint-clean checkout",
                     }
                 ]
             }
         ),
     )
-    create_task(tmp_path, title="Before accepting hook retry")
+    create_task(tmp_path, title="Before accepting hook warning")
     task = dequeue_next_task(tmp_path)
     assert task is not None
 
@@ -712,38 +639,29 @@ def test_run_task_before_accepting_hook_retries_back_to_implementing_and_records
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
 
-    transitions = SqlitePersistence(tmp_path).load(task.id)
-    assert transitions.stage == "done"
-    assert transitions.last_rejection_by_stage["accepting"].source == "hook"
-    assert transitions.last_rejection_by_stage["accepting"].raised_at_phase == "before_accepting"
-
     thread = load_task_activity(tmp_path, refreshed)
     hook_entries = [entry for entry in thread if entry.role == "hook"]
     assert hook_entries
     assert hook_entries[-1].stage == "accepting"
-    assert hook_entries[-1].verdict == "reject"
-    assert "routing: implementing" in hook_entries[-1].message
+    assert hook_entries[-1].verdict == "comment"
+    assert "lint failed" in hook_entries[-1].message
 
     reports = load_stage_reports(tmp_path, refreshed)
     hook_reports = [report for report in reports if report.source == "hook"]
     assert hook_reports
     report = hook_reports[-1]
     assert report.stage == "accepting"
-    assert report.verdict == "reject"
+    assert report.verdict == "pass"
     assert report.source == "hook"
     assert report.failure_diagnostics["phase"] == "before_accepting"
-    assert report.failure_diagnostics["routed_to"] == "implementing"
-    assert report.hook_results[0]["exit_code"] == 1
-    assert report.hook_results[0]["stderr"] == "lint failed"
-    assert "Exit code: 1" in report.feedback
+    assert report.warnings
     assert "lint failed" in report.feedback
 
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
-    assert "Runner hook at `before_accepting` rejected the task." in journal
-    assert "routing: `implementing`" in journal
+    assert "Runner hooks at `before_accepting` reported warnings." in journal
 
 
-def test_run_task_aggregates_all_stage_hook_failures_by_default(tmp_path: Path) -> None:
+def test_run_task_runs_all_stage_hooks_and_records_all_warnings(tmp_path: Path) -> None:
     first_command = (
         "printf 'first\\n' >> .hook_calls && "
         "if [ ! -f .first_hook_seen ]; then "
@@ -765,13 +683,13 @@ def test_run_task_aggregates_all_stage_hook_failures_by_default(tmp_path: Path) 
         config=LitehiveConfig(
             runner_hooks={
                 "after_implementing": [
-                    {"command": first_command, "blocking": True, "description": "first blocking hook"},
-                    {"command": second_command, "blocking": True, "description": "second blocking hook"},
+                    {"command": first_command, "description": "first hook"},
+                    {"command": second_command, "description": "second hook"},
                 ]
             }
         ),
     )
-    create_task(tmp_path, title="Run-all stage hook aggregation")
+    create_task(tmp_path, title="Sequential stage hook warnings")
     task = dequeue_next_task(tmp_path)
     assert task is not None
 
@@ -786,89 +704,26 @@ def test_run_task_aggregates_all_stage_hook_failures_by_default(tmp_path: Path) 
     assert result.final_stage == "done"
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
-    assert (tmp_path / ".hook_calls").read_text(encoding="utf-8") == "first\nsecond\nfirst\nsecond\n"
+    assert (tmp_path / ".hook_calls").read_text(encoding="utf-8") == "first\nsecond\n"
 
     reports = load_stage_reports(tmp_path, refreshed)
     hook_reports = [report for report in reports if report.source == "hook"]
     assert len(hook_reports) == 1
     report = hook_reports[0]
     assert report.stage == "implementing"
+    assert report.verdict == "pass"
     assert report.failure_diagnostics["phase"] == "after_implementing"
-    assert [result["command"] for result in report.hook_results] == [first_command, second_command]
-    assert report.hook_results[0]["stderr"] == "first failed"
-    assert report.hook_results[1]["stderr"] == "second failed"
+    assert len(report.warnings) == 2
     assert "first failed" in report.feedback
     assert "second failed" in report.feedback
 
 
-def test_run_task_honors_fail_fast_stage_hook_mode_from_config(tmp_path: Path) -> None:
+def test_run_task_skips_after_commit_when_hook_not_configured(tmp_path: Path) -> None:
     _init_workspace_git_repo(
         tmp_path,
-        config=LitehiveConfig(
-            runner_hook_execution_mode="fail_fast",
-            runner_hooks={
-                "after_implementing": [
-                    {
-                        "command": (
-                            "printf 'first\\n' >> .hook_calls && "
-                            "if [ ! -f .first_hook_seen ]; then "
-                            "touch .first_hook_seen; "
-                            "echo first failed >&2; "
-                            "exit 1; "
-                            "fi"
-                        ),
-                        "blocking": True,
-                        "description": "first blocking hook",
-                    },
-                    {
-                        "command": "printf 'second\\n' >> .hook_calls",
-                        "blocking": True,
-                        "description": "second blocking hook",
-                    },
-                ]
-            },
-        ),
+        config=LitehiveConfig(),
     )
-    create_task(tmp_path, title="Fail-fast stage hook wiring")
-    task = dequeue_next_task(tmp_path)
-    assert task is not None
-
-    result = run_task(
-        tmp_path,
-        task,
-        engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
-    )
-    refreshed = get_task(tmp_path, task.id)
-    assert refreshed is not None
-
-    assert result.final_stage == "done"
-    assert refreshed.status == "done"
-    assert refreshed.pipeline_status == "done"
-    assert (tmp_path / ".hook_calls").read_text(encoding="utf-8") == "first\nfirst\nsecond\n"
-
-    reports = load_stage_reports(tmp_path, refreshed)
-    hook_reports = [report for report in reports if report.source == "hook"]
-    assert len(hook_reports) == 1
-    report = hook_reports[0]
-    assert report.stage == "implementing"
-    assert report.failure_diagnostics["phase"] == "after_implementing"
-    assert len(report.hook_results) == 1
-    assert report.hook_results[0]["command"] == (
-        "printf 'first\\n' >> .hook_calls && "
-        "if [ ! -f .first_hook_seen ]; then "
-        "touch .first_hook_seen; "
-        "echo first failed >&2; "
-        "exit 1; "
-        "fi"
-    )
-    assert report.hook_results[0]["stderr"] == "first failed"
-    assert "first failed" in report.feedback
-    assert "second" not in report.feedback
-
-
-def test_run_task_skips_after_merge_when_hook_not_configured(tmp_path: Path) -> None:
-    _init_workspace_git_repo(tmp_path, config=LitehiveConfig())
-    create_task(tmp_path, title="After merge skipped")
+    create_task(tmp_path, title="After commit skipped")
     task = dequeue_next_task(tmp_path)
     assert task is not None
     worktree = _prepare_committed_task_worktree(tmp_path, task)
@@ -879,11 +734,10 @@ def test_run_task_skips_after_merge_when_hook_not_configured(tmp_path: Path) -> 
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
     refreshed = get_task(tmp_path, task.id)
-
     assert result.final_stage == "done"
     assert refreshed is not None
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
     assert (tmp_path / "merged.txt").read_text() == "merged\n"
-    assert not (tmp_path / "after_merge_branch.txt").exists()
+    assert not (tmp_path / "after_commit_branch.txt").exists()
     assert not worktree.exists()

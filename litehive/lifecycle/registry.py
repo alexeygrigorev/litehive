@@ -6,8 +6,7 @@ one instance of every node the transition table can route to:
 
   - ``ready`` (system probe)
   - ``recovering_pre_exec`` (system probe)
-  - 10 hook nodes: ``before_/after_`` × ``grooming/implementing/testing/
-    accepting/commit``
+  - 9 hook nodes at the supported stage boundaries
   - 4 stage agent nodes: grooming/implementing/testing/accepting
   - ``commit`` (system)
   - ``recovering`` (recovery agent)
@@ -26,7 +25,7 @@ from litehive.roles.recovery import RecoveryAgent
 from litehive.roles.reviewer import ReviewerAgent
 from litehive.roles.swe import SWEAgent
 from .nodes.base import NodeRegistry
-from .nodes.hook import ExecutionMode, HookNode, HookRunner, HookSpec
+from .nodes.hook import HookNode, HookRunner, HookSpec
 from .nodes.system import (
     CommitNode,
     NoopWorktreeSyncNode,
@@ -38,22 +37,21 @@ from .nodes.terminal import TerminalNode
 from .nodes.agent import EngineSelector, SessionProvider
 from .types import NodeName
 
-PHASES: tuple[tuple[NodeName, NodeName], ...] = (
-    ("before_grooming", "after_grooming"),
-    ("before_implementing", "after_implementing"),
-    ("before_testing", "after_testing"),
-    ("before_accepting", "after_accepting"),
-    ("before_commit", "after_commit"),
+HOOK_PHASES: tuple[NodeName, ...] = (
+    "before_grooming",
+    "after_grooming",
+    "before_implementing",
+    "after_implementing",
+    "before_testing",
+    "after_testing",
+    "before_accepting",
+    "after_accepting",
+    "after_commit",
 )
 
 
-def _phase_hook_node(
-    name: NodeName,
-    hooks: list[HookSpec],
-    runner: HookRunner,
-    execution_mode: ExecutionMode,
-) -> HookNode:
-    return HookNode(name, hooks=hooks, runner=runner, execution_mode=execution_mode)
+def _phase_hook_node(name: NodeName, hooks: list[HookSpec], runner: HookRunner) -> HookNode:
+    return HookNode(name, hooks=hooks, runner=runner)
 
 
 def build_registry(
@@ -67,7 +65,6 @@ def build_registry(
     pre_exec_recovery_node: PreExecRecoveryNode | None = None,
     prompt_context: PromptContext | None = None,
     hook_specs: dict[NodeName, list[HookSpec]] | None = None,
-    hook_execution_mode: ExecutionMode = ExecutionMode.RUN_ALL,
     retry_budget: int = 3,
     retry_on: tuple[str, ...] = ("execution_limit", "timeout"),
     retry_backoff_seconds: float = 0.0,
@@ -93,22 +90,13 @@ def build_registry(
     registry.register(pre_exec_recovery_node or PreExecRecoveryNode())
     registry.register(worktree_sync_node or NoopWorktreeSyncNode())
 
-    # 10 hook phases (before/after × 5 stages)
-    for before_name, after_name in PHASES:
+    # 9 supported hook phases
+    for phase_name in HOOK_PHASES:
         registry.register(
             _phase_hook_node(
-                before_name,
-                hook_specs.get(before_name, []),
+                phase_name,
+                hook_specs.get(phase_name, []),
                 hook_runner,
-                hook_execution_mode,
-            )
-        )
-        registry.register(
-            _phase_hook_node(
-                after_name,
-                hook_specs.get(after_name, []),
-                hook_runner,
-                hook_execution_mode,
             )
         )
 

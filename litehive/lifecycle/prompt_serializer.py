@@ -351,20 +351,14 @@ def _thread_section(
 def _runner_hooks_section(stage: str | None, hooks: list[dict[str, Any]]) -> str:
     stage_label = _human_stage_label(stage)
     lines = [f"After {stage_label}, these checks will run:"]
-    has_blocking_hook = False
     for hook in hooks:
         cmd = hook.get("command", "")
         desc = hook.get("description", "")
-        if hook.get("reject_on_failure"):
-            has_blocking_hook = True
         if desc:
             lines.append(f"- {cmd} ({desc})")
         else:
             lines.append(f"- {cmd}")
-    if has_blocking_hook:
-        lines.append(
-            "Blocking hooks will reject your work if they fail. Run these checks yourself before submitting your verdict."
-        )
+    lines.append("Hook failures are logged as warnings only. Run these checks yourself before submitting your verdict.")
     return "\n".join(lines)
 
 

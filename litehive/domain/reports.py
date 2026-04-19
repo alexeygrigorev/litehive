@@ -51,7 +51,6 @@ class StageReport(BaseModel):
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)
     resource_limit_event: ResourceLimitEvent | None = None
     duration_seconds: int = 0
-    hook_results: list[dict[str, str | int | bool | None]] = Field(default_factory=list)
     created_at: str = Field(default_factory=utcnow)
 
 

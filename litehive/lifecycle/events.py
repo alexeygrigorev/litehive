@@ -52,13 +52,14 @@ class Pass(Event):
 
 @dataclass(frozen=True)
 class HookOk(Event):
-    """All hooks in the current phase ran without a rejecting failure.
+    """The current hook phase finished and execution should continue.
 
-    Fired only by ``HookNode``. A hook that fails with
-    ``reject_on_failure=False`` does NOT prevent ``HookOk`` — it's logged
-    but not surfaced as a rejection. Empty hook lists also produce
-    ``HookOk`` immediately.
+    Fired only by ``HookNode``. Empty hook lists produce ``HookOk``
+    immediately. Hook command failures are recorded as warnings on the
+    event and logged, but they never stop the pipeline.
     """
+
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -90,8 +91,6 @@ class Reject(Event):
     Fired by any node that can produce a rejection:
       - agent nodes → ``source="agent"`` (reviewer finds a bug, QA's
         tests fail, planner can't produce a plan, etc.).
-      - hook nodes → ``source="hook"`` (a pre/post-stage hook failed
-        with ``reject_on_failure=True``).
       - guards → ``source="guard"`` (e.g. a future ``no_hallucinated_files``
         guard catches the SWE claiming a file it didn't touch).
       - system nodes → ``source="system"`` (currently unused — the

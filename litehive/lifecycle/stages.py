@@ -70,7 +70,6 @@ class Stages:
     AFTER_ACCEPTING = Stage("after_accepting", HookNode)
 
     # commit
-    BEFORE_COMMIT = Stage("before_commit", HookNode)
     COMMIT = Stage("commit", CommitNode)
     AFTER_COMMIT = Stage("after_commit", HookNode)
     MERGE_RESOLVING = Stage("merge_resolving", MergeAgent)
@@ -95,7 +94,6 @@ class Stages:
             BEFORE_ACCEPTING,
             ACCEPTING,
             AFTER_ACCEPTING,
-            BEFORE_COMMIT,
             COMMIT,
             AFTER_COMMIT,
         }
@@ -105,4 +103,4 @@ class Stages:
     IMPLEMENTING_EPOCH = (BEFORE_IMPLEMENTING, IMPLEMENTING, AFTER_IMPLEMENTING)
     TESTING_EPOCH = (BEFORE_TESTING, TESTING, AFTER_TESTING)
     ACCEPTING_EPOCH = (BEFORE_ACCEPTING, ACCEPTING, AFTER_ACCEPTING)
-    COMMIT_EPOCH = (BEFORE_COMMIT, COMMIT, AFTER_COMMIT)
+    COMMIT_EPOCH = (COMMIT, AFTER_COMMIT)

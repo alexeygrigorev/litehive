@@ -7,41 +7,38 @@ from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
 
 
-def test_configure_persists_runner_hooks(tmp_path: Path) -> None:
+def test_load_config_normalizes_runner_hooks_without_dataclasses(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
             {
                 "runner_hooks": {
-                    "before_implementing": [{"command": "echo pre"}],
-                    "after_implementing": [{"command": "echo post", "reject_on_failure": True}],
-                    "before_accepting": [{"command": "echo review"}],
-                    "after_accepting": [{"command": "echo accepted"}],
-                    "after_commit": [{"command": "echo verify", "reject_on_failure": True}],
-                    "after_merge": [{"command": "echo post-merge", "blocking": True}],
+                    "before_implementing": ["echo pre"],
+                    "after_implementing": [
+                        {"command": "echo post", "reject_on_failure": True},
+                        {"command": "uv run pytest -q", "timeout_seconds": 300, "description": "full suite"},
+                    ],
+                    "after_commit": [{"command": "echo verify", "blocking": True}],
                 }
             },
             sort_keys=False,
         ),
         encoding="utf-8",
     )
+
     config = load_config(tmp_path)
 
-    assert config.runner_hooks["before_implementing"][0].reject_on_failure is False
-    assert config.runner_hooks["after_implementing"][0].command == "echo post"
-    assert config.runner_hooks["after_implementing"][0].reject_on_failure is True
-    assert config.runner_hook_execution_mode == "run_all"
-    assert config.runner_hooks["before_accepting"][0].command == "echo review"
-    assert config.runner_hooks["before_accepting"][0].reject_on_failure is False
-    assert config.runner_hooks["after_accepting"][0].reject_on_failure is False
-    assert config.runner_hooks["after_commit"][0].command == "echo verify"
-    assert config.runner_hooks["after_commit"][0].reject_on_failure is True
-    assert config.runner_hooks["after_merge"][0].command == "echo post-merge"
-    assert config.runner_hooks["after_merge"][0].reject_on_failure is True
-    assert config.runner_hooks["after_merge"][0].blocking is True
+    assert config.runner_hooks == {
+        "before_implementing": [{"command": "echo pre"}],
+        "after_implementing": [
+            {"command": "echo post"},
+            {"command": "uv run pytest -q", "timeout_seconds": 300.0, "description": "full suite"},
+        ],
+        "after_commit": [{"command": "echo verify"}],
+    }
 
 
-def test_load_config_preserves_runner_hook_descriptions(tmp_path: Path) -> None:
+def test_load_config_preserves_runner_hook_descriptions_and_instructions(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
@@ -50,8 +47,8 @@ def test_load_config_preserves_runner_hook_descriptions(tmp_path: Path) -> None:
                     "after_implementing": [
                         {
                             "command": "uv run ruff check .",
-                            "reject_on_failure": True,
                             "description": "ensures lint passes before acceptance",
+                            "instructions_on_failure": "fix lint first",
                         }
                     ]
                 }
@@ -63,23 +60,17 @@ def test_load_config_preserves_runner_hook_descriptions(tmp_path: Path) -> None:
 
     config = load_config(tmp_path)
 
-    assert config.runner_hooks["after_implementing"][0].description == ("ensures lint passes before acceptance")
+    assert config.runner_hooks["after_implementing"][0]["description"] == "ensures lint passes before acceptance"
+    assert config.runner_hooks["after_implementing"][0]["instructions_on_failure"] == "fix lint first"
 
 
-def test_load_config_allows_blocking_before_accepting_hooks(tmp_path: Path) -> None:
+def test_load_config_ignores_legacy_runner_hook_execution_mode(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
             {
-                "runner_hooks": {
-                    "before_accepting": [
-                        {
-                            "command": "uv run ruff check .",
-                            "blocking": True,
-                            "description": "ensures lint passes before acceptance",
-                        }
-                    ]
-                }
+                "runner_hook_execution_mode": "fail_fast",
+                "runner_hooks": {"after_implementing": [{"command": "echo ok"}]},
             },
             sort_keys=False,
         ),
@@ -88,53 +79,20 @@ def test_load_config_allows_blocking_before_accepting_hooks(tmp_path: Path) -> N
 
     config = load_config(tmp_path)
 
-    assert config.runner_hooks["before_accepting"][0].reject_on_failure is True
+    assert config.runner_hooks["after_implementing"] == [{"command": "echo ok"}]
 
 
-def test_load_config_rejects_conflicting_runner_hook_blocking_flags(tmp_path: Path) -> None:
+def test_configure_rejects_removed_runner_hook_points(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
-            {
-                "runner_hooks": {
-                    "after_merge": [
-                        {
-                            "command": "uv run pytest -q",
-                            "blocking": True,
-                            "reject_on_failure": False,
-                        }
-                    ]
-                }
-            },
+            {"runner_hooks": {"after_merge": [{"command": "echo nope"}]}},
             sort_keys=False,
         ),
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="blocking must match .*reject_on_failure"):
-        load_config(tmp_path)
-
-
-def test_load_config_preserves_runner_hook_execution_mode(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    (tmp_path / ".litehive" / "config.yaml").write_text(
-        yaml.safe_dump({"runner_hook_execution_mode": "fail_fast"}, sort_keys=False),
-        encoding="utf-8",
-    )
-
-    config = load_config(tmp_path)
-
-    assert config.runner_hook_execution_mode == "fail_fast"
-
-
-def test_load_config_rejects_invalid_runner_hook_execution_mode(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    (tmp_path / ".litehive" / "config.yaml").write_text(
-        yaml.safe_dump({"runner_hook_execution_mode": "sometimes"}, sort_keys=False),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ValueError, match="runner_hook_execution_mode must be one of:"):
+    with pytest.raises(ValueError, match="runner_hooks key must be one of:"):
         load_config(tmp_path)
 
 

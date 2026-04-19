@@ -85,8 +85,7 @@ FULL_HAPPY_PATH = [
     ("after_testing", HookOk(), "before_accepting"),
     ("before_accepting", HookOk(), "accepting"),
     ("accepting", Pass(), "after_accepting"),
-    ("after_accepting", HookOk(), "before_commit"),
-    ("before_commit", HookOk(), "commit"),
+    ("after_accepting", HookOk(), "commit"),
     ("commit", Pass(), "after_commit"),
     ("after_commit", HookOk(), "done"),
 ]
@@ -109,7 +108,7 @@ def test_single_mode_entry_skips_grooming_testing_accepting():
 
 def test_single_mode_after_implementing_goes_to_commit():
     state = make_state("after_implementing", mode=PipelineMode.SINGLE, files_changed=5)
-    assert step("after_implementing", HookOk(), state).next == "before_commit"
+    assert step("after_implementing", HookOk(), state).next == "commit"
 
 
 def test_single_mode_zero_change_shortcut_to_done():
@@ -413,6 +412,7 @@ def test_all_stages_referenced_in_rules():
         else:
             refs.add(rule.from_state)
     for stage in STAGES:
-        assert f"before_{stage}" in refs
+        if stage != "commit":
+            assert f"before_{stage}" in refs
         assert stage in refs
         assert f"after_{stage}" in refs
