@@ -41,17 +41,14 @@ class TaskPlan:
 class WorkspaceRepairSummary:
     mutated: bool = False
     stale_runner_recovered: bool = False
-    stale_unmerged_worktrees_removed: int = 0
     cleared_active_task_id: str | None = None
     requeued_task_ids: list[str] = field(default_factory=list)
-    removed_queue_entries: list[str] = field(default_factory=list)
-    deduped_queue_entries: list[str] = field(default_factory=list)
-    restored_queue_entries: list[str] = field(default_factory=list)
-    finalized_commit_task_ids: list[str] = field(default_factory=list)
     stale_process_task_ids: list[str] = field(default_factory=list)
-    inactivity_recovered_task_ids: list[str] = field(default_factory=list)
-    reassigned_duplicate_ids: list[str] = field(default_factory=list)
     broken_venv_binaries: list[str] = field(default_factory=list)
+
+    @property
+    def repaired(self) -> bool:
+        return self.mutated
 
 
 class WorkspaceConflictError(ValueError):

@@ -14,7 +14,7 @@ role_model: "orchestrator-as-manager: `planner` owns grooming, `reviewer` owns a
 tdd_expectations: prefer test-first or test-tight changes and explain deviations.
 verification_discipline: verification should be explicit, focused, and independent enough to catch regressions.
 acceptance_flow: implementation must pass verification before acceptance.
-commit_recovery: successful tasks checkpoint to git; rollback and recover should remain deterministic.
+commit_recovery: successful tasks checkpoint to git; recover should remain deterministic.
 prompt_scaffold:
   - "- Start from the shared process contract, then add repository context and task data."
   - "- Combine the generic base prompt with the selected project overlay instead of replacing the base."

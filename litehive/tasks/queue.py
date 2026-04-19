@@ -140,6 +140,14 @@ def _is_recovery_budget_exhausted(task: TaskRecord) -> bool:
     }
 
 
+def _should_requeue_commit_stage_task(task: TaskRecord) -> bool:
+    return task.pipeline_status == "commit_to_git" and task.status in {
+        "queued",
+        "in_progress",
+        "interrupted",
+    }
+
+
 def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
     from litehive.state.records import require_task
     from litehive.state.locking import workspace_lock, workspace_mutation_guard
@@ -541,7 +549,6 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
     from litehive.state.records import get_task
     from litehive.state.locking import workspace_mutation_guard
     from litehive.state.persist import save_state
-    from litehive.recovery.detection import should_requeue_commit_stage_task
     from litehive.recovery.workspace_repair import (
         prepare_interrupted_task,
         stale_interruption_reason,
@@ -556,7 +563,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
             return state
 
         task = get_task(root, state.active_task_id)
-        if task is not None and should_requeue_commit_stage_task(task):
+        if task is not None and _should_requeue_commit_stage_task(task):
             prepare_interrupted_task(
                 root,
                 task,

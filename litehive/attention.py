@@ -518,9 +518,9 @@ def _human_checkpoint_item(
         task_id = task.id
     action = (
         f"Run `litehive task debug {task_id} --worktree` to inspect the task, then continue with `litehive run`"
-        " or roll it back with `litehive rollback`."
+        " when you are ready to commit."
         if task_id
-        else "Inspect the active task and then continue with `litehive run` or `litehive rollback`."
+        else "Inspect the active task and then continue with `litehive run` when you are ready to commit."
     )
     return AttentionItem(
         task_id=task_id,

@@ -8,7 +8,7 @@ role_model: "`planner` owns task shaping, `reviewer` owns final PM-style accepta
 tdd_expectations: default to regression-first or test-first implementation and explain any exception.
 verification_discipline: verification should be independent enough to catch behavioral regressions, not just restate implementation intent.
 acceptance_flow: only accept after focused verification and explicit comparison against task acceptance.
-commit_recovery: "accepted tasks commit by default at commit_to_git using `litehive: complete <task-id> <task-slug>`; reruns append `(attempt N)`, rollback reverts that checkpoint into a new rollback commit, and recover requeues without reverting code."
+commit_recovery: "accepted tasks commit by default at commit_to_git using `litehive: complete <task-id> <task-slug>`; reruns append `(attempt N)`, and recover requeues a completed task without reverting code."
 specifics_heading: "## Codehive-style specifics"
 specifics:
   - "- Preserve execution visibility through task reports, subagent transcripts, and recent progress."

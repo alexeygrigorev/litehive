@@ -11,7 +11,6 @@ from typer.testing import CliRunner
 from litehive.cli.app import app
 from litehive.cli.workspace import (
     _collect_quota_health,
-    _print_doctor_snapshot,
     _health_daemon_status,
     _quota_health,
     _repair_summary_lines,
@@ -22,10 +21,8 @@ from litehive.config.paths import worktree_root
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
-from litehive.domain.task import UnmergedWorktree, WorkspaceState
+from litehive.domain.task import WorkspaceState
 from litehive.domain.task_ops import WorkspaceRepairSummary
-from litehive.state.persist import load_state, save_state
-from litehive.state.records import create_task, save_task
 
 _RUNNER = CliRunner()
 
@@ -62,7 +59,7 @@ def test_health_daemon_status_reports_running_pid(tmp_path: Path, monkeypatch) -
     assert _health_daemon_status(tmp_path) == ("running", "4242")
 
 
-def test_repair_summary_lines_omit_empty_fields_for_doctor_mode() -> None:
+def test_repair_summary_lines_omit_empty_fields() -> None:
     summary = WorkspaceRepairSummary(
         mutated=True,
         stale_runner_recovered=True,
@@ -71,13 +68,13 @@ def test_repair_summary_lines_omit_empty_fields_for_doctor_mode() -> None:
 
     lines = _repair_summary_lines(
         summary,
-        result_label="doctor_repaired",
+        result_label="repaired",
         include_empty=False,
         include_extended_fields=False,
     )
 
     assert lines == [
-        "doctor_repaired: yes",
+        "repaired: yes",
         "stale_runner_recovered: yes",
         "requeued_tasks: T-0002",
     ]
@@ -96,16 +93,10 @@ def test_repair_summary_lines_include_empty_fields_for_repair_mode() -> None:
     assert lines == [
         "repaired: no",
         "stale_runner_recovered: no",
-        "stale_unmerged_worktrees_removed: 0",
         "cleared_active_task_id: -",
         "requeued_tasks: -",
-        "removed_queue_entries: -",
-        "deduped_queue_entries: -",
         "broken_venv_binaries: -",
-        "restored_queue_entries: -",
-        "finalized_commit_tasks: -",
         "stale_process_tasks: -",
-        "reassigned_duplicate_ids: -",
     ]
 
 
@@ -160,77 +151,22 @@ def test_collect_quota_health_reuses_shared_statuses(monkeypatch) -> None:
     assert by_engine["opencode"].summary == "short=10.0% remaining long=5.0% remaining"
 
 
-def test_print_doctor_snapshot_reports_clean_workspace(tmp_path: Path, monkeypatch, capsys) -> None:
-    monkeypatch.setattr(
-        "litehive.cli.workspace.collect_status_snapshot",
-        lambda root: type("Snapshot", (), {"issues": []})(),
-    )
-
-    exit_code = _print_doctor_snapshot(tmp_path)
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert f"doctor: clean workspace={tmp_path}" in output
-
-
-def test_doctor_reports_broken_workspace_and_worktree_venvs_without_claiming_fix(tmp_path: Path) -> None:
+def test_repair_reports_broken_workspace_and_worktree_venvs(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     cache_root = tmp_path / "fake-home" / ".cache" / "uv"
     _create_broken_venv_binary(tmp_path, "ruff", cache_root)
     worktree_path = worktree_root(tmp_path) / "T-0001-demo"
     _create_broken_venv_binary(worktree_path, "pytest", cache_root)
 
-    result = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
+    result = _RUNNER.invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
 
     assert result.return_value == 1
-    assert "stale_unmerged_worktrees_removed: 0" in result.output
+    assert "repaired: no" in result.output
+    assert "stale_runner_recovered: no" in result.output
     assert f"venv_health: BROKEN binary=ruff venv={tmp_path / '.venv'}" in result.output
     assert f"venv={worktree_path / '.venv'} checkout={worktree_path}" in result.output
+    assert f"broken_venv_binaries: {tmp_path / '.venv'}:ruff {worktree_path / '.venv'}:pytest" in result.output
     assert "uv venv --clear .venv && uv sync --extra dev" in result.output
-
-    fix_result = _RUNNER.invoke(app, ["doctor", "--fix", "--workspace", str(tmp_path)], standalone_mode=False)
-
-    assert fix_result.return_value == 1
-    assert "stale_unmerged_worktrees_removed: 0" in fix_result.output
-    assert "doctor_repaired: no" in fix_result.output
-    assert f"broken_venv_binaries: {tmp_path / '.venv'}:ruff {worktree_path / '.venv'}:pytest" in fix_result.output
-    assert "uv venv --clear .venv && uv sync --extra dev" in fix_result.output
-
-
-def test_doctor_removes_stale_unmerged_worktree_entries(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    done_task = create_task(tmp_path, title="Done worktree cleanup")
-    done_task.status = "done"
-    done_task.pipeline_status = "done"
-    save_task(tmp_path, done_task)
-
-    queued_task = create_task(tmp_path, title="Missing worktree cleanup")
-
-    existing_worktree = worktree_root(tmp_path) / f"{done_task.id}-{done_task.slug}"
-    existing_worktree.mkdir(parents=True)
-    missing_worktree = worktree_root(tmp_path) / f"{queued_task.id}-{queued_task.slug}"
-
-    state = load_state(tmp_path)
-    state.active_task_id = None
-    state.queue = []
-    state.unmerged_worktrees = [
-        UnmergedWorktree(task_id=done_task.id, worktree_path=str(existing_worktree.resolve())),
-        UnmergedWorktree(task_id=queued_task.id, worktree_path=str(missing_worktree.resolve())),
-    ]
-    save_state(tmp_path, state)
-
-    result = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
-
-    assert result.return_value == 0
-    assert "stale_unmerged_worktrees_removed: 2" in result.output
-    assert f"doctor: clean workspace={tmp_path}" in result.output
-    assert load_state(tmp_path).unmerged_worktrees == []
-
-    clean_result = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
-
-    assert clean_result.return_value == 0
-    assert "stale_unmerged_worktrees_removed: 0" in clean_result.output
-    assert f"doctor: clean workspace={tmp_path}" in clean_result.output
 
 
 def test_documented_clear_and_sync_fix_restores_broken_symlink_after_uv_cache_clean(tmp_path: Path) -> None:
@@ -262,9 +198,9 @@ def test_documented_clear_and_sync_fix_restores_broken_symlink_after_uv_cache_cl
         broken = None
     assert broken is None or broken.returncode != 0
 
-    doctor = _RUNNER.invoke(app, ["doctor", "--workspace", str(workspace)], standalone_mode=False)
-    assert doctor.return_value == 1
-    assert "uv venv --clear .venv && uv sync --extra dev" in doctor.output
+    repair = _RUNNER.invoke(app, ["repair", "--workspace", str(workspace)], standalone_mode=False)
+    assert repair.return_value == 1
+    assert "uv venv --clear .venv && uv sync --extra dev" in repair.output
 
     subprocess.run(["uv", "venv", "--clear", ".venv"], cwd=workspace, env=env, check=True, capture_output=True, text=True)
     subprocess.run(["uv", "sync", "--extra", "dev"], cwd=workspace, env=env, check=True, capture_output=True, text=True)

@@ -122,7 +122,7 @@ Recovery:
 
 ```bash
 litehive repair                           # fix stale state
-litehive rollback T-0001                  # revert a completed task
+litehive recover T-0001                   # requeue a completed task for another pass
 litehive queue requeue T-0001                   # requeue without reverting
 litehive queue resume T-0002                    # resume an interrupted task
 ```
@@ -135,7 +135,7 @@ litehive switch T-0002 gemini --reason "Need larger context window"
 litehive prioritize T-0007 T-0003 T-0009  # move queued tasks to the front in this exact order
 ```
 
-Use `litehive recover <task_id>` when a completed task needs another pipeline pass but the accepted code should remain in the workspace and git history. Use `litehive rollback <task_id>` instead when you need to revert the code before retrying.
+Use `litehive recover <task_id>` when a completed task needs another pipeline pass but the accepted code should remain in the workspace and git history.
 
 Use `litehive switch <task_id> <engine> --reason "..."` when the task should continue on a different engine next time it runs. Litehive records the handoff reason, stops or detaches the current run if needed, and requeues the task for the next iteration.
 
@@ -313,7 +313,7 @@ Commit format: `litehive: complete T-0001 task-slug`
 To undo a completed task:
 
 ```bash
-litehive rollback T-0001     # reverts the commit and requeues the task
+litehive recover T-0001      # requeues the task without reverting the accepted code
 litehive queue requeue T-0001      # requeues without reverting (keeps the code)
 ```
 

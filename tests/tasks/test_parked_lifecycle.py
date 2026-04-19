@@ -1,14 +1,19 @@
 from pathlib import Path
 
+import pytest
 import yaml
 from typer.testing import CliRunner
 
 from litehive.cli.app import app as cli_app
 from litehive.config.workspace import ensure_workspace
+from litehive.lifecycle.journal import SqliteJournal
+from litehive.lifecycle.nodes.agent import AgentVerdict
+from litehive.lifecycle.nodes.system import StubCommitNode
+from litehive.lifecycle.orchestration import run_task
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, list_tasks, save_task
-from litehive.tasks.queue import restore_missing_queued_tasks
-from litehive.tasks.status import stop_current_task
+from litehive.tasks.queue import dequeue_next_task, restore_missing_queued_tasks
+from litehive.tasks.status import resume_task, stop_current_task
 from litehive.tasks.worktrees import inspect_dirty_worktree_gate
 
 
@@ -20,6 +25,14 @@ def _set_running_task(task, *, stage: str = "implementing") -> None:
     task.runtime.current_stage.stage = stage
     task.runtime.current_stage.status = "running"
     task.runtime.current_stage.started_at = "2026-04-12T10:00:00Z"
+
+
+class _PassEngine:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def run_turn(self, session, prompt, state) -> AgentVerdict:  # type: ignore[no-untyped-def]
+        return AgentVerdict(outcome="pass")
 
 
 def test_stop_current_task_marks_active_work_as_parked(tmp_path: Path) -> None:
@@ -85,6 +98,32 @@ def test_restore_missing_queued_tasks_skips_parked_and_restores_interrupted(
     assert parked.id not in state.queue
 
 
+@pytest.mark.parametrize("execution_status", ["interrupted", "idle"])
+def test_resume_task_allows_stranded_in_progress_task(tmp_path: Path, execution_status: str) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Resume stranded task")
+    task.status = "in_progress"
+    task.pipeline_status = "grooming"
+    task.runtime.execution_status = execution_status
+    task.runtime.current_stage.stage = "grooming"
+    task.runtime.current_stage.status = execution_status
+    save_task(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = [item for item in state.queue if item != task.id]
+    save_state(tmp_path, state)
+
+    resumed = resume_task(tmp_path, task.id, front=True)
+
+    assert resumed.status == "queued"
+    assert resumed.pipeline_status == "grooming"
+    assert resumed.runtime.execution_status == "idle"
+    assert resumed.runtime.current_stage.stage == "grooming"
+    assert resumed.runtime.current_stage.status == "idle"
+    assert load_state(tmp_path).queue[0] == task.id
+
+
 def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
     tmp_path: Path,
     monkeypatch,
@@ -119,13 +158,44 @@ def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
     assert interrupted_report.findings[0].ownership == "task-owned"
     assert interrupted_report.findings[0].task_id == task.id
 
-    task.status = "parked"
-    save_task(tmp_path, task)
-    parked_report = inspect_dirty_worktree_gate(tmp_path)
 
-    assert parked_report.blocks_pool is True
-    assert parked_report.findings[0].ownership == "main-checkout"
-    assert parked_report.findings[0].task_id is None
+def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Restart saved stage",
+        acceptance_criteria=["resume in testing without replaying earlier stages"],
+    )
+    task.status = "parked"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "paused"
+    task.runtime.current_stage.stage = "testing"
+    task.runtime.current_stage.status = "paused"
+    save_task(tmp_path, task)
+
+    resumed = resume_task(tmp_path, task.id, front=True)
+    assert resumed.runtime.current_stage.stage == "testing"
+    assert resumed.runtime.current_stage.status == "idle"
+
+    monkeypatch.setattr(
+        "litehive.lifecycle.orchestration._build_commit_node",
+        lambda root: StubCommitNode(),
+    )
+
+    queued = dequeue_next_task(tmp_path)
+    assert queued is not None
+
+    result = run_task(
+        tmp_path,
+        queued,
+        engine_factory=lambda name: _PassEngine(name),
+    )
+    routed_stages = [row["to_stage"] for row in SqliteJournal(tmp_path).load_transitions(task.id)]
+
+    assert result.final_stage == "done"
+    assert routed_stages[:2] == ["worktree_sync", "before_testing"]
+    assert "before_grooming" not in routed_stages
+    assert "before_implementing" not in routed_stages
 
 
 def test_queue_resume_and_requeue_keep_parked_semantics_explicit(

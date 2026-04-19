@@ -406,7 +406,7 @@ def test_recovery_engine_uses_shared_select_engine(
     default_engine: str,
     expected_kwargs: dict[str, object],
 ) -> None:
-    from litehive.recovery.execution_recovery import resolve_recovery_engine
+    from litehive.tasks.recovery_engine import resolve_recovery_engine
 
     captured: dict[str, object] = {}
     ensure_workspace(
@@ -446,7 +446,7 @@ def test_recovery_engine_uses_shared_select_engine(
 
 def test_recovery_auto_engine_respects_shared_selector_blocked_result(tmp_path: Path) -> None:
     from litehive.config.engine_models import select_engine
-    from litehive.recovery.execution_recovery import resolve_recovery_engine
+    from litehive.tasks.recovery_engine import resolve_recovery_engine
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     ensure_workspace(
@@ -484,7 +484,7 @@ def test_recovery_non_auto_branches_skip_frozen_engines(
     selector_kwargs: dict[str, object],
 ) -> None:
     from litehive.config.engine_models import select_engine
-    from litehive.recovery.execution_recovery import resolve_recovery_engine
+    from litehive.tasks.recovery_engine import resolve_recovery_engine
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     ensure_workspace(

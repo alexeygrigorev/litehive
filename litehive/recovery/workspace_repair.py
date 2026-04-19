@@ -1,6 +1,7 @@
 """Workspace-level recovery and stale-runner repair."""
 
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 from litehive.agents.session_store import (
@@ -19,7 +20,8 @@ from litehive.domain.runtime import (
 )
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import WorkspaceRepairSummary
-from litehive.recovery.venv_health import probe_broken_venv_executables
+from litehive.observability.events import last_event_timestamp
+from litehive.observability.venv_health import probe_broken_venv_executables
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,
@@ -32,17 +34,6 @@ from litehive.tasks.runtime import (
     idle_stage_state,
     summarize_transcript,
 )
-
-from .detection import has_inactive_running_tasks, is_stranded_commit_task, should_requeue_commit_stage_task
-
-_TERMINAL_UNMERGED_WORKTREE_TASK_STATUSES = {
-    "done",
-    "abandoned",
-    "cancelled",
-    "wont_do",
-    "duplicate",
-    "deferred",
-}
 
 
 def _running_task_ids(root: Path) -> list[str]:
@@ -63,18 +54,33 @@ def _running_task_ids(root: Path) -> list[str]:
     return [str(row["task_id"]) for row in rows]
 
 
-def prepare_interrupted_task_for_requeue(task: TaskRecord) -> None:
-    now = clear_task_run_activity(task, execution_status="idle")
-    task.status = "queued"
-    if task.runtime.current_stage.stage is None:
-        task.runtime.current_stage = idle_stage_state(updated_at=now)
-        return
-    task.runtime.current_stage = task.runtime.current_stage.model_copy(
-        update={"status": "interrupted", "updated_at": now}
-    )
+def _should_requeue_commit_stage_task(task: TaskRecord) -> bool:
+    return task.pipeline_status == "commit_to_git" and task.status in {"queued", "in_progress", "interrupted"}
 
 
-def canonicalize_resumable_task(task: TaskRecord, *, stage: str) -> None:
+def _has_inactive_running_tasks(
+    root: Path,
+    tasks_by_id: dict[str, TaskRecord],
+    timeout_seconds: float,
+) -> bool:
+    for task in tasks_by_id.values():
+        if task.runtime.execution_status != "running":
+            continue
+        ts_str = last_event_timestamp(root, task)
+        if ts_str is None:
+            continue
+        try:
+            event_time = datetime.fromisoformat(ts_str)
+        except (ValueError, TypeError):
+            continue
+        if event_time.tzinfo is None:
+            event_time = event_time.replace(tzinfo=UTC)
+        if (datetime.now(UTC) - event_time).total_seconds() > timeout_seconds:
+            return True
+    return False
+
+
+def _canonicalize_resumable_task(task: TaskRecord, *, stage: str) -> None:
     now = clear_task_run_activity(task, execution_status="idle")
     task.status = "queued"
     task.pipeline_status = stage
@@ -345,17 +351,17 @@ def _can_attempt_stale_runner_recovery(
             config = load_config(root)
             if config.inactivity_timeout_seconds is None:
                 return False
-            if not has_inactive_running_tasks(root, tasks_by_id, config.inactivity_timeout_seconds):
+            if not _has_inactive_running_tasks(root, tasks_by_id, config.inactivity_timeout_seconds):
                 return False
     return True
 
 
-def _record_commit_stale_recovery(
+def _record_stale_recovery(
     root: Path,
     task: TaskRecord,
     *,
+    stage: str,
     journal_message: str,
-    finalized: bool,
     summary: WorkspaceRepairSummary | None,
     stale_pid: bool,
 ) -> None:
@@ -365,43 +371,20 @@ def _record_commit_stale_recovery(
         root,
         task,
         trigger_event_kind=TriggerEventKind.STALE_RUNNER_RECOVERY,
-        origin_stage="commit_to_git",
+        origin_stage=stage,
         summary=journal_message,
         runnable_state="runnable",
         failure_classification="stale_runner",
-        actions=_commit_stale_recovery_actions(task, finalized=finalized),
+        actions=[
+            RecoveryAction(action="clear_stale_active_state", summary="Cleared stale active runner state for the task."),
+            RecoveryAction(action="requeue_stage", summary=f"Requeued the task at {stage}.", metadata={"stage": stage}),
+        ],
         warnings=["stale subagent pid detected"] if stale_pid else [],
     )
-    if finalized:
-        if summary is not None and task.id not in summary.finalized_commit_task_ids:
-            summary.finalized_commit_task_ids.append(task.id)
-    elif summary is not None and task.id not in summary.requeued_task_ids:
+    if summary is not None and task.id not in summary.requeued_task_ids:
         summary.requeued_task_ids.append(task.id)
     if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:
         summary.stale_process_task_ids.append(task.id)
-
-
-def _commit_stale_recovery_actions(task: TaskRecord, *, finalized: bool) -> list[RecoveryAction]:
-    actions = [
-        RecoveryAction(action="clear_stale_active_state", summary="Cleared stale active runner state for the task.")
-    ]
-    if finalized:
-        actions.append(
-            RecoveryAction(
-                action="finalize_existing_checkpoint",
-                summary="Recorded the existing checkpoint commit and finalized the task.",
-                metadata={"commit_sha": task.git.commit_sha},
-            )
-        )
-        return actions
-    actions.append(
-        RecoveryAction(
-            action="requeue_stage",
-            summary="Requeued the task at commit_to_git.",
-            metadata={"stage": "commit_to_git"},
-        )
-    )
-    return actions
 
 
 def _recover_stale_running_task(
@@ -416,28 +399,7 @@ def _recover_stale_running_task(
     if not is_task_eligible_for_execution(task):
         return False, None, False
     stale_pid = subagent_process_is_stale(task)
-    if is_stranded_commit_task(task):
-        return False, None, stale_pid
     stage = task.pipeline_status
-    if should_requeue_commit_stage_task(task):
-        prepare_interrupted_task(
-            root,
-            task,
-            stage="commit_to_git",
-            summary="Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`.",
-            reason=stale_interruption_reason(task, "commit_to_git", stale_pid=stale_pid),
-        )
-        canonicalize_resumable_task(task, stage="commit_to_git")
-        journal_message = interruption_journal_message(task)
-        _record_commit_stale_recovery(
-            root,
-            task,
-            journal_message=journal_message,
-            finalized=task.pipeline_status == "done",
-            summary=summary,
-            stale_pid=stale_pid,
-        )
-        return True, journal_message, task.status == "queued"
     prepare_interrupted_task(
         root,
         task,
@@ -445,34 +407,24 @@ def _recover_stale_running_task(
         summary=f"Interrupted run recovered after stale runner detection. Resume from `{stage}`.",
         reason=stale_interruption_reason(task, stage, stale_pid=stale_pid),
     )
-    canonicalize_resumable_task(task, stage=stage)
-    from litehive.tasks.reports import record_recovery_report
-
-    record_recovery_report(
+    _canonicalize_resumable_task(task, stage=stage)
+    _record_stale_recovery(
         root,
         task,
-        trigger_event_kind=TriggerEventKind.STALE_RUNNER_RECOVERY,
-        origin_stage=task.pipeline_status,
-        summary=f"Recovered stale runner state and returned the task to `{task.pipeline_status}`.",
-        runnable_state="runnable",
-        failure_classification="stale_runner",
-        actions=[
-            RecoveryAction(
-                action="clear_stale_active_state", summary="Cleared stale active runner state for the task."
-            ),
-            RecoveryAction(
-                action="requeue_stage",
-                summary=f"Requeued the task at {task.pipeline_status}.",
-                metadata={"stage": task.pipeline_status},
-            ),
-        ],
-        warnings=["stale subagent pid detected"] if stale_pid else [],
+        stage=stage,
+        journal_message=f"Recovered stale runner state and returned the task to `{stage}`.",
+        summary=summary,
+        stale_pid=stale_pid,
     )
-    if summary is not None and task.id not in summary.requeued_task_ids:
-        summary.requeued_task_ids.append(task.id)
-    if stale_pid and summary is not None and task.id not in summary.stale_process_task_ids:
-        summary.stale_process_task_ids.append(task.id)
     return True, interruption_journal_message(task), True
+
+
+def _is_stranded_commit_task(task: TaskRecord) -> bool:
+    return task.pipeline_status == "done" and task.git.commit_sha is None and task.git.checkpoint_attempts > 0
+
+
+should_requeue_commit_stage_task = _should_requeue_commit_stage_task
+is_stranded_commit_task = _is_stranded_commit_task
 
 
 def recover_stale_runner_state(
@@ -571,58 +523,14 @@ def recover_stale_runner_state(
         return mutated
 
 
-def _is_stale_unmerged_worktree_entry(root: Path, task_id: str, worktree_path: str) -> bool:
-    from litehive.state.records import get_task_record
-    from litehive.tasks.worktrees import resolve_recorded_worktree_path
-
-    task = get_task_record(root, task_id)
-    if task is not None and task.status in _TERMINAL_UNMERGED_WORKTREE_TASK_STATUSES:
-        return True
-    resolved_worktree = resolve_recorded_worktree_path(root, worktree_path)
-    if resolved_worktree is None:
-        return True
-    try:
-        return not resolved_worktree.exists()
-    except OSError:
-        return True
-
-
-def repair_stale_unmerged_worktrees(root: Path, *, summary: WorkspaceRepairSummary | None = None) -> int:
-    from litehive.state.locking import workspace_lock
-    from litehive.state.persist import load_state, save_state_without_runner_guard
-
-    root = root.resolve()
-    with workspace_lock(root):
-        state = load_state(root)
-        if not state.unmerged_worktrees:
-            return 0
-        remaining = []
-        removed = 0
-        for entry in state.unmerged_worktrees:
-            if _is_stale_unmerged_worktree_entry(root, entry.task_id, entry.worktree_path):
-                removed += 1
-                continue
-            remaining.append(entry)
-        if removed:
-            state.unmerged_worktrees = remaining
-            save_state_without_runner_guard(root, state)
-    if summary is not None:
-        summary.stale_unmerged_worktrees_removed += removed
-    return removed
-
-
 def repair_workspace_state(root: Path, *, repair_broken_venvs_in_checkouts: bool = False) -> WorkspaceRepairSummary:
     summary = WorkspaceRepairSummary()
-    repair_stale_unmerged_worktrees(root, summary=summary)
     if repair_broken_venvs_in_checkouts:
-        # Tradeoff: broken venv entrypoints are reported and block the daemon,
-        # but we do not auto-clear and rebuild `.venv` from `doctor --fix` or
-        # `repair`. Recreating the entire environment is a larger mutation than
-        # our usual deterministic state repairs, so we surface the exact venv
-        # and a verified operator remediation instead.
+        # Broken venv entrypoints are reported and block the daemon, but `repair`
+        # does not auto-rebuild `.venv`; it only reports the exact remediation target.
         summary.broken_venv_binaries = [
             f"{finding.checkout.venv_path}:{finding.binary_name}" for finding in probe_broken_venv_executables(root)
         ]
     summary.stale_runner_recovered = recover_stale_runner_state(root, summary=summary)
-    summary.mutated = summary.stale_runner_recovered or summary.stale_unmerged_worktrees_removed > 0
+    summary.mutated = summary.stale_runner_recovered
     return summary
