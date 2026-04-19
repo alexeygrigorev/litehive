@@ -4,25 +4,17 @@ from typing import Annotated
 import typer
 from dataclasses import dataclass
 
-import yaml
-
 from heru.quota.claude_quota import check_claude_quota
 from heru.quota.codex_quota import check_codex_quota
 from heru.quota.copilot_quota import check_copilot_quota
 from heru.quota import UsageStatus
 from heru.quota.zai_quota import check_zai_quota
 
-from heru import ENGINE_CHOICES, get_engine
+from heru import ENGINE_CHOICES
 from litehive.attention import waiting_for_you_lines
+from litehive.cli.engine import engine_command
 from litehive.cli.display import format_retry_on
-from litehive.cli.common import WorkspaceOption, choice
-from litehive.config.engine_models import (
-    clear_persisted_engine_freeze,
-    parse_engine_freeze_until,
-    persist_engine_freeze_iso,
-)
-from litehive.config.loading import load_config
-from litehive.config.paths import config_path
+from litehive.cli.common import WorkspaceOption
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.registry import daemon_metadata
 from litehive.observability.engine_monitoring import render_engine_monitoring_lines
@@ -69,59 +61,6 @@ def register_root_commands(app: typer.Typer) -> None:
     app.command("health", help="Show workspace health diagnostics")(health_command)
     app.command("engine", help="Manage engine freezes and status")(engine_command)
     app.command("repair", help="Repair stale active tasks, interrupted runs, and queue inconsistencies")(repair_command)
-
-
-def _config(root):
-    ensure_workspace(root)
-    path = config_path(root)
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    return load_config(root), path, data if isinstance(data, dict) else {}
-
-
-def _engine_status_line(config) -> str:
-    frozen = ", ".join(f"{k}={v}" for k, v in sorted(config.engine_freeze.items())) or "-"
-    engines = ", ".join(
-        f"{name}(available={'yes' if c.available else 'no'}, model_override={'yes' if c.supports_model_override else 'no'}, strips_env={'yes' if c.strips_environment else 'no'})"
-        for name in ENGINE_CHOICES
-        for c in [get_engine(name).capabilities]
-    )
-    return f"default_engine: {config.default_engine} | engine_freeze: {frozen} | engines: {engines}"
-
-
-def engine_command(
-    workspace: WorkspaceOption = Path.cwd(),
-    engine_action: Annotated[
-        str, typer.Argument(click_type=choice(["freeze", "unfreeze", "status"]), help="Subcommand")
-    ] = ...,
-    engine_name: Annotated[str | None, typer.Argument(click_type=choice(ENGINE_CHOICES), help="Engine name")] = None,
-    until: Annotated[str | None, typer.Option(help="Freeze until this ISO date (YYYY-MM-DD)")] = None,
-    reason: Annotated[str | None, typer.Option(help="Optional operator note")] = None,
-) -> int:
-    if engine_action == "status":
-        if engine_name:
-            print("engine status: does not take an engine name")
-            return 1
-        config, _, _ = _config(workspace)
-        print(_engine_status_line(config))
-        return 0
-    name = engine_name
-    if name not in ENGINE_CHOICES:
-        print(f"engine {engine_action}: unknown engine '{name}'")
-        return 1
-    root = workspace.resolve()
-    if engine_action == "freeze":
-        normalized_until = parse_engine_freeze_until(until)
-        if normalized_until is None:
-            print("engine freeze: --until must be ISO date YYYY-MM-DD")
-            return 1
-        persist_engine_freeze_iso(root, engine_name=name, freeze_iso=normalized_until)
-        print(f"engine_frozen: {name} until {normalized_until}" + (f" reason={reason}" if reason else ""))
-        return 0
-    if not clear_persisted_engine_freeze(root, engine_name=name):
-        print(f"engine unfreeze: {name} is not frozen")
-        return 1
-    print(f"engine_unfrozen: {name}")
-    return 0
 
 
 def _safe_active_task(root, task_id):
@@ -391,5 +330,4 @@ def _quota_health(
 
 cmd_status = status_command
 cmd_health = health_command
-cmd_engine = engine_command
 cmd_repair = repair_command
