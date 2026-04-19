@@ -6,8 +6,7 @@ from typer.testing import CliRunner
 
 from litehive.agents.session_store import load_subagent_report, save_subagent_artifacts
 from litehive.cli.app import app
-from litehive.config.paths import worktree_root
-from litehive.config.paths import workspace_database_path
+from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task
 from litehive.db.schema import Migration, MigrationApplyError, apply_pending_migrations, available_migrations
@@ -59,7 +58,7 @@ def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeyp
     assert "dry_run: yes" in dry_run.output
     assert "would_apply: 0002_add_marker.sql" in dry_run.output
 
-    with sqlite3.connect(workspace_database_path(tmp_path)) as connection:
+    with sqlite3.connect(workspace_path(tmp_path, "data.db")) as connection:
         marker = connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'marker'"
         ).fetchone()
@@ -81,7 +80,7 @@ def test_apply_pending_migrations_rolls_back_failed_migration(tmp_path: Path, mo
     with pytest.raises(MigrationApplyError):
         apply_pending_migrations(tmp_path)
 
-    with sqlite3.connect(workspace_database_path(tmp_path)) as connection:
+    with sqlite3.connect(workspace_path(tmp_path, "data.db")) as connection:
         applied_versions = [
             row[0] for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
         ]
@@ -117,7 +116,7 @@ def test_daemon_run_applies_pending_migrations_before_start(
 
     assert result.return_value == 0
     assert "daemon_status: running" in output
-    with sqlite3.connect(workspace_database_path(tmp_path)) as connection:
+    with sqlite3.connect(workspace_path(tmp_path, "data.db")) as connection:
         applied_versions = [
             row[0] for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
         ]
@@ -133,7 +132,7 @@ def test_daemon_run_reports_broken_worktree_venv_before_start(
 ) -> None:
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Queued work")
-    broken_worktree = worktree_root(tmp_path) / "T-0001-demo"
+    broken_worktree = workspace_path(tmp_path, "worktrees") / "T-0001-demo"
     _create_broken_venv_binary(broken_worktree, "ruff", tmp_path / "fake-home" / ".cache" / "uv")
 
     result = CliRunner().invoke(
@@ -152,7 +151,7 @@ def test_daemon_run_reports_broken_worktree_venv_before_start(
 def test_legacy_workspace_db_is_rebuilt_from_task_yaml_only(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Keep me")
-    db_path = workspace_database_path(tmp_path)
+    db_path = workspace_path(tmp_path, "data.db")
     db_path.unlink()
 
     with sqlite3.connect(db_path) as connection:
@@ -194,7 +193,7 @@ def test_legacy_workspace_db_is_rebuilt_from_task_yaml_only(tmp_path: Path) -> N
 
 def test_connect_workspace_db_rebuilds_replaced_cached_db(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    db_path = workspace_database_path(tmp_path)
+    db_path = workspace_path(tmp_path, "data.db")
 
     save_subagent_artifacts(
         tmp_path,

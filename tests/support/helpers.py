@@ -4,7 +4,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from litehive.cli.app import app as cli_app
-from litehive.config.paths import worktree_root
+from litehive.config.paths import workspace_path
 
 
 _runner = CliRunner()
@@ -115,4 +115,4 @@ def _run(cmd: list[str], cwd: Path) -> str:
 
 
 def _task_worktree_path(root: Path, task) -> Path:
-    return worktree_root(root) / f"{task.id}-{task.slug}"
+    return workspace_path(root, "worktrees") / f"{task.id}-{task.slug}"

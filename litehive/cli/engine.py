@@ -8,7 +8,7 @@ from heru import ENGINE_CHOICES, get_engine
 from litehive.cli.common import WorkspaceOption, choice
 from litehive.config.engine_models import parse_engine_freeze_until
 from litehive.config.loading import load_config
-from litehive.config.paths import config_path
+from litehive.config.workspace_files import config_path
 
 def _config(root: Path):
     root = root.resolve(); config = load_config(root); path = config_path(root)

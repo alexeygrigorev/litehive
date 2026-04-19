@@ -8,7 +8,7 @@ from litehive.config.model import (
     DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS,
     LitehiveConfig,
 )
-from litehive.config.paths import global_config_path
+from litehive.config.paths import litehive_root
 from litehive.config.workspace import ensure_workspace
 
 
@@ -57,7 +57,7 @@ def test_load_config_uses_global_defaults_when_workspace_config_is_empty(
 ) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
-    global_path = global_config_path()
+    global_path = litehive_root() / "config.yaml"
     global_path.parent.mkdir(parents=True, exist_ok=True)
     global_path.write_text(
         yaml.safe_dump(
@@ -85,7 +85,7 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
 ) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
-    global_path = global_config_path()
+    global_path = litehive_root() / "config.yaml"
     global_path.parent.mkdir(parents=True, exist_ok=True)
     global_path.write_text(
         yaml.safe_dump(
@@ -120,7 +120,7 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
 def test_load_config_deep_merges_global_and_workspace_mappings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
-    global_path = global_config_path()
+    global_path = litehive_root() / "config.yaml"
     global_path.parent.mkdir(parents=True, exist_ok=True)
     global_path.write_text(
         yaml.safe_dump(

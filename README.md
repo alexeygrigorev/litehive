@@ -169,7 +169,9 @@ recovery_engine: claude
 
 ## Configuration
 
-Workspace config lives in `.litehive/config.yaml`. Global defaults go in `~/.config/litehive/config.yaml`. Workspace settings take precedence.
+Workspace config lives in `.litehive/config.yaml`. Global defaults live in `${LITEHIVE_HOME:-$XDG_DATA_HOME/litehive}/config.yaml` (default `~/.local/share/litehive/config.yaml`). Workspace settings take precedence.
+
+On first run after upgrade, Litehive migrates legacy `~/.config/litehive/{config,workspaces,daemons}.yaml` files into the unified root and prints a deprecation notice.
 
 ```yaml
 default_engine: codex
@@ -213,6 +215,8 @@ Litehive bootstraps `.litehive/config.yaml` and `.litehive/context.md` on first 
 
 ## Workspace layout
 
+Repo-local control files stay in the repository:
+
 ```
 .litehive/
   config.yaml          # workspace configuration
@@ -227,16 +231,32 @@ Litehive bootstraps `.litehive/config.yaml` and `.litehive/context.md` on first 
       subagents/       # execution artifacts (gitignored)
       comments.yaml    # agent discussion history (gitignored)
       journal.md       # event log (gitignored)
-  worktrees/           # git worktrees for task isolation (gitignored)
-  logs/                # daemon and run-all logs (gitignored)
-  runtime/             # live coordination state (gitignored)
 ```
+
+Global Litehive state lives under one XDG root:
+
+```
+~/.local/share/litehive/
+  config.yaml          # global defaults
+  workspaces.yaml      # registered workspaces
+  daemons.yaml         # running daemon index
+  <workspace-id>/
+    data.db            # workspace runtime database
+    backups/           # compressed database backups
+    logs/
+      run-all/         # daemon/run iterations
+    runtime/           # lock files and live coordination state
+    subagents/         # shared subagent session data
+    worktrees/         # git worktrees for task isolation
+```
+
+Set `LITEHIVE_HOME=/custom/path` to override that root for tests or alternate installs.
 
 Each task runs in its own git worktree. When it passes all stages, the worktree is merged into main and cleaned up.
 
 ## Querying workspace data
 
-Pipeline state lives in a single SQLite database outside the repo so it doesn't pollute git history. The path is derived from a hash of the workspace path:
+Pipeline state lives in a single SQLite database under the unified Litehive root so it doesn't pollute git history. The workspace directory name is derived from a hash of the workspace path:
 
 ```
 ~/.local/share/litehive/<workspace-hash>/data.db
@@ -245,7 +265,7 @@ Pipeline state lives in a single SQLite database outside the repo so it doesn't 
 For the current workspace, resolve it with:
 
 ```bash
-python -c "from pathlib import Path; from litehive.config.paths import workspace_database_path; print(workspace_database_path(Path.cwd()))"
+python -c "from pathlib import Path; from litehive.config.paths import workspace_path; print(workspace_path(Path.cwd(), 'data.db'))"
 ```
 
 Useful tables: `pipeline_transitions`, `task_state`, `pipeline_journal`, `queue`, `stage_reports`, `subagent_sessions`, `engine_monitoring`, `attention`, `worktrees`.
@@ -253,7 +273,7 @@ Useful tables: `pipeline_transitions`, `task_state`, `pipeline_journal`, `queue`
 Example — transitions + duration + status for every task touched in the last 24h (single query, instant):
 
 ```bash
-DB=$(python -c "from pathlib import Path; from litehive.config.paths import workspace_database_path; print(workspace_database_path(Path.cwd()))")
+DB=$(python -c "from pathlib import Path; from litehive.config.paths import workspace_path; print(workspace_path(Path.cwd(), 'data.db'))")
 sqlite3 "$DB" <<'SQL'
 .mode column
 .headers on
@@ -336,7 +356,7 @@ litehive start
 litehive daemon instances
 ```
 
-All instances share quota tracking at `~/.config/litehive/quota.yaml` so they coordinate engine usage across projects.
+All global Litehive metadata for every project now lives under `${LITEHIVE_HOME:-$XDG_DATA_HOME/litehive}` so backup, cleanup, and debugging only require inspecting one root directory.
 
 All commands default to the current directory. If you need to target a different project without changing directories, use `--workspace /path/to/project`.
 

@@ -1,99 +1,103 @@
-"""Filesystem paths for repo-local and split global Litehive state."""
+"""Filesystem paths for repo-local and unified global Litehive state."""
 
 import hashlib
 import os
 from pathlib import Path
+import shutil
+import sys
+
+_LEGACY_GLOBAL_FILENAMES = ("config.yaml", "workspaces.yaml", "daemons.yaml")
 
 
-def workspace_dir(root: Path) -> Path:
-    return root / ".litehive"
-
-
-def config_path(root: Path) -> Path:
-    return workspace_dir(root) / "config.yaml"
-
-
-def context_path(root: Path) -> Path:
-    return workspace_dir(root) / "context.md"
-
-
-def workspace_gitignore_path(root: Path) -> Path:
-    return workspace_dir(root) / ".gitignore"
-
-
-def litehive_config_root() -> Path:
+def _legacy_litehive_root() -> Path:
     config_home = os.environ.get("XDG_CONFIG_HOME")
     base = Path(config_home).expanduser() if config_home else Path.home() / ".config"
     return base / "litehive"
 
 
-def litehive_root() -> Path:
+def _configured_litehive_root() -> Path:
     override = os.environ.get("LITEHIVE_HOME")
     if override:
-        root = Path(override).expanduser()
-    else:
-        data_home = os.environ.get("XDG_DATA_HOME")
-        root = (Path(data_home) if data_home else Path.home() / ".local" / "share") / "litehive"
-    return root.expanduser()
+        return Path(override).expanduser()
+    data_home = os.environ.get("XDG_DATA_HOME")
+    base = Path(data_home).expanduser() if data_home else Path.home() / ".local" / "share"
+    return base / "litehive"
 
 
-def global_config_path() -> Path:
-    return litehive_config_root() / "config.yaml"
+def _print_migration_notice(root: Path, migrated: list[tuple[Path, Path]]) -> None:
+    if not migrated:
+        return
+    print(
+        "litehive: migrated legacy global state into "
+        f"{root}. The ~/.config/litehive location is deprecated.",
+        file=sys.stderr,
+    )
+    for source, target in migrated:
+        print(f"  {source} -> {target}", file=sys.stderr)
 
 
-def litehive_database_path() -> Path:
-    return litehive_root() / "litehive.db"
+def _migration_marker_path(root: Path) -> Path:
+    return root / ".legacy-global-state-migrated"
 
 
-def workspace_id(root: Path) -> str:
+def _files_match(left: Path, right: Path) -> bool:
+    if not left.exists() or not right.exists():
+        return False
+    try:
+        return left.read_bytes() == right.read_bytes()
+    except OSError:
+        return False
+
+
+def _copy_file(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+
+
+def _migrate_legacy_global_state(root: Path) -> None:
+    legacy_root = _legacy_litehive_root()
+    migrated: list[tuple[Path, Path]] = []
+    migration_marker = _migration_marker_path(root)
+    first_migration = not migration_marker.exists()
+    if legacy_root.resolve() != root.resolve():
+        for filename in _LEGACY_GLOBAL_FILENAMES:
+            source = legacy_root / filename
+            target = root / filename
+            if not source.exists():
+                continue
+            try:
+                if first_migration:
+                    if not target.exists() or not _files_match(source, target):
+                        _copy_file(source, target)
+                    migrated.append((source, target))
+                    continue
+                if not target.exists():
+                    _copy_file(source, target)
+                    continue
+                if not _files_match(source, target):
+                    _copy_file(target, source)
+            except OSError:
+                continue
+        if first_migration and migrated:
+            migration_marker.write_text("legacy global state migrated\n", encoding="utf-8")
+    _print_migration_notice(root, migrated)
+
+
+def litehive_root() -> Path:
+    root = _configured_litehive_root().expanduser()
+    root.mkdir(parents=True, exist_ok=True)
+    _migrate_legacy_global_state(root)
+    return root
+
+
+def _workspace_id(root: Path) -> str:
     canonical = str(root.expanduser().resolve()).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()[:16]
 
 
 def workspace_data_dir(root: Path) -> Path:
-    return litehive_root() / workspace_id(root)
+    return litehive_root() / _workspace_id(root)
 
 
-def workspace_runtime_dir(root: Path) -> Path:
-    return workspace_data_dir(root) / "runtime"
-
-
-def workspace_database_path(root: Path) -> Path:
-    return workspace_data_dir(root) / "data.db"
-
-
-def workspace_backups_dir(root: Path) -> Path:
-    return workspace_data_dir(root) / "backups"
-
-
-def workspace_logs_dir(root: Path) -> Path:
-    return workspace_data_dir(root) / "logs"
-
-
-def workspace_worktrees_dir(root: Path) -> Path:
-    return workspace_data_dir(root) / "worktrees"
-
-
-def worktree_root(root: Path) -> Path:
-    return workspace_worktrees_dir(root)
-
-
-def workspace_subagents_dir(
-    root: Path,
-    task_id: str | None = None,
-    subagent_id: str | None = None,
-) -> Path:
-    path = workspace_data_dir(root) / "subagents"
-    if task_id is not None:
-        path /= task_id
-    if subagent_id is not None:
-        path /= subagent_id
-    return path
-
-
-def workspace_runner_lock_path(root: Path) -> Path:
-    return workspace_runtime_dir(root) / ".runner.lock"
-
-
-def workspace_daemon_lock_path(root: Path) -> Path:
-    return workspace_runtime_dir(root) / ".daemon.lock"
+def workspace_path(root: Path, *parts: str) -> Path:
+    return workspace_data_dir(root).joinpath(*parts)

@@ -4,7 +4,8 @@ import gzip
 import re
 from pathlib import Path
 
-from litehive.config.paths import workspace_dir, workspace_logs_dir, workspace_runner_lock_path
+from litehive.config.paths import workspace_path
+from litehive.config.workspace_files import workspace_dir
 from litehive.config.workspace import ensure_workspace, normalize_workspace_root, registered_workspace_root
 from litehive.domain.task import TaskRecord
 
@@ -33,7 +34,7 @@ def tasks_root(root: Path, *, bootstrap: bool = True) -> Path:
 def runner_lock_path(root: Path) -> Path:
     root = normalize_workspace_root(root, source="runner_lock_path")
     ensure_workspace(root)
-    return workspace_runner_lock_path(root)
+    return workspace_path(root, "runtime", ".runner.lock")
 
 
 def slugify(value: str, max_length: int = 50) -> str:
@@ -90,7 +91,7 @@ def read_text_artifact(path: Path) -> str:
 
 
 def latest_run_all_log_path(root: Path) -> Path | None:
-    logs_root = workspace_logs_dir(root.resolve()) / "run-all"
+    logs_root = workspace_path(root.resolve(), "logs", "run-all")
     if not logs_root.exists():
         return None
     candidates = [

@@ -1,8 +1,8 @@
 from concurrent.futures import ProcessPoolExecutor
+import fcntl
 import multiprocessing
 import os
 from pathlib import Path
-import sqlite3
 import threading
 import time
 
@@ -51,39 +51,31 @@ def _hold_registry_write_lock(
     os.environ["LITEHIVE_REGISTRY_LOCK_RETRIES"] = str(lock_retries)
     os.environ["LITEHIVE_REGISTRY_LOCK_RETRY_DELAY_MS"] = str(lock_retry_delay_ms)
 
-    from litehive.config.paths import litehive_database_path, workspace_id
-    from litehive.domain.common import utcnow
-
     root = Path(workspace_root)
+    del busy_timeout_ms
     ensure_workspace(root)
-    with sqlite3.connect(litehive_database_path(), timeout=30) as connection:
-        connection.execute("PRAGMA journal_mode = WAL")
-        connection.execute("BEGIN IMMEDIATE")
-        connection.execute(
-            """
-            INSERT INTO workspaces (workspace_id, path, last_seen)
-            VALUES (?, ?, ?)
-            ON CONFLICT(workspace_id) DO UPDATE SET
-                path = excluded.path,
-                last_seen = excluded.last_seen
-            """,
-            (workspace_id(root), str(root.resolve()), utcnow()),
-        )
+    from litehive.config.paths import litehive_root
+
+    lock_path = litehive_root() / ".workspaces.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         Path(ready_path).write_text("ready", encoding="utf-8")
         time.sleep(hold_seconds)
-        connection.commit()
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _legacy_registry_path(config_home: Path) -> Path:
     return ((config_home / "litehive") / "workspaces").with_suffix(".yaml")
 
 
-def _registered_paths(db_path: Path) -> list[str]:
-    with sqlite3.connect(db_path) as connection:
-        return [
-            str(row[0])
-            for row in connection.execute("SELECT path FROM workspaces ORDER BY last_seen DESC, path ASC").fetchall()
-        ]
+def _registry_path(data_home: Path) -> Path:
+    return data_home / "litehive" / "workspaces.yaml"
+
+
+def _registered_paths(registry_path: Path) -> list[str]:
+    payload = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or []
+    return [str(Path(entry).expanduser().resolve()) for entry in payload if isinstance(entry, str)]
 
 
 def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
@@ -102,41 +94,23 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, mon
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    from litehive.config.paths import (
-        global_config_path,
-        litehive_database_path,
-        worktree_root,
-        workspace_backups_dir,
-        workspace_database_path,
-        workspace_id,
-        workspace_logs_dir,
-        workspace_subagents_dir,
-        workspace_worktrees_dir,
-    )
+    from litehive.config.paths import litehive_root, workspace_data_dir, workspace_path
     from litehive.db.schema import connect_workspace_db
 
     ensure_workspace(tmp_path)
 
-    wid = workspace_id(tmp_path)
-    assert workspace_database_path(tmp_path) == data_home / "litehive" / wid / "data.db"
-    assert workspace_backups_dir(tmp_path) == data_home / "litehive" / wid / "backups"
-    assert workspace_logs_dir(tmp_path) == data_home / "litehive" / wid / "logs"
-    assert workspace_worktrees_dir(tmp_path) == data_home / "litehive" / wid / "worktrees"
-    assert worktree_root(tmp_path) == data_home / "litehive" / wid / "worktrees"
-    assert workspace_subagents_dir(tmp_path, "T-0001", "agent-1") == (
+    wid = workspace_data_dir(tmp_path).name
+    assert workspace_path(tmp_path, "data.db") == data_home / "litehive" / wid / "data.db"
+    assert workspace_path(tmp_path, "backups") == data_home / "litehive" / wid / "backups"
+    assert workspace_path(tmp_path, "logs") == data_home / "litehive" / wid / "logs"
+    assert workspace_path(tmp_path, "worktrees") == data_home / "litehive" / wid / "worktrees"
+    assert workspace_path(tmp_path, "subagents", "T-0001", "agent-1") == (
         data_home / "litehive" / wid / "subagents" / "T-0001" / "agent-1"
     )
-    assert workspace_database_path(tmp_path).exists()
-    assert litehive_database_path() == data_home / "litehive" / "litehive.db"
-    assert global_config_path() == config_home / "litehive" / "config.yaml"
-    with sqlite3.connect(litehive_database_path()) as connection:
-        columns = [str(row[1]) for row in connection.execute("PRAGMA table_info(workspaces)").fetchall()]
-        rows = connection.execute("SELECT workspace_id, path, last_seen FROM workspaces").fetchall()
-    assert columns == ["workspace_id", "path", "last_seen"]
-    assert len(rows) == 1
-    assert str(rows[0][0]) == wid
-    assert Path(str(rows[0][1])) == tmp_path.resolve()
-    assert str(rows[0][2])
+    assert workspace_path(tmp_path, "data.db").exists()
+    assert litehive_root() == data_home / "litehive"
+    assert litehive_root() / "config.yaml" == data_home / "litehive" / "config.yaml"
+    assert _registered_paths(_registry_path(data_home)) == [str(tmp_path.resolve())]
 
     with connect_workspace_db(tmp_path) as connection:
         tables = {
@@ -170,8 +144,6 @@ def test_workspace_registry_handles_parallel_registration(tmp_path: Path, monkey
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    from litehive.config.paths import litehive_database_path
-
     workspaces = []
     for index in range(8):
         root = tmp_path / f"workspace-{index}"
@@ -187,7 +159,7 @@ def test_workspace_registry_handles_parallel_registration(tmp_path: Path, monkey
         )
 
     assert {Path(path) for path in results} == set(workspaces)
-    registry_paths = _registered_paths(litehive_database_path())
+    registry_paths = _registered_paths(_registry_path(data_home))
     assert set(registry_paths) == {str(root.resolve()) for root in workspaces}
     assert len(registry_paths) == len(workspaces)
 
@@ -204,8 +176,6 @@ def test_workspace_registry_retries_lock_contention_without_rebuilding(
     monkeypatch.setenv("LITEHIVE_REGISTRY_BUSY_TIMEOUT_MS", "50")
     monkeypatch.setenv("LITEHIVE_REGISTRY_LOCK_RETRIES", "20")
     monkeypatch.setenv("LITEHIVE_REGISTRY_LOCK_RETRY_DELAY_MS", "25")
-
-    from litehive.config.paths import litehive_database_path
 
     workspace_one = tmp_path / "workspace-one"
     workspace_two = tmp_path / "workspace-two"
@@ -247,13 +217,13 @@ def test_workspace_registry_retries_lock_contention_without_rebuilding(
             holder.join(timeout=1)
 
     assert holder.exitcode == 0
-    assert set(_registered_paths(litehive_database_path())) == {
+    assert set(_registered_paths(_registry_path(data_home))) == {
         str(workspace_one.resolve()),
         str(workspace_two.resolve()),
     }
 
 
-def test_workspace_registry_migrates_legacy_yaml_and_removes_it(
+def test_workspace_registry_migrates_legacy_yaml_and_preserves_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_home = tmp_path / "xdg-config"
@@ -263,7 +233,6 @@ def test_workspace_registry_migrates_legacy_yaml_and_removes_it(
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    from litehive.config.paths import litehive_database_path
     from litehive.config.registry import list_registered_workspace_paths
 
     workspace_one = tmp_path / "workspace-one"
@@ -281,8 +250,8 @@ def test_workspace_registry_migrates_legacy_yaml_and_removes_it(
     migrated = list_registered_workspace_paths()
 
     assert set(migrated) == {workspace_one.resolve(), workspace_two.resolve()}
-    assert not legacy_path.exists()
-    assert set(_registered_paths(litehive_database_path())) == {
+    assert legacy_path.exists()
+    assert set(_registered_paths(_registry_path(data_home))) == {
         str(workspace_one.resolve()),
         str(workspace_two.resolve()),
     }
@@ -296,14 +265,13 @@ def test_workspace_registry_rebuilds_after_corruption(tmp_path: Path, monkeypatc
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    from litehive.config.paths import litehive_database_path
-
-    litehive_database_path().parent.mkdir(parents=True, exist_ok=True)
-    litehive_database_path().write_bytes(b"not a sqlite database")
+    registry_path = _registry_path(data_home)
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_bytes(b"not a sqlite database")
 
     ensure_workspace(tmp_path)
 
-    assert _registered_paths(litehive_database_path()) == [str(tmp_path.resolve())]
+    assert _registered_paths(registry_path) == [str(tmp_path.resolve())]
 
 
 def test_workspace_registry_is_available_from_other_threads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -325,6 +293,130 @@ def test_workspace_registry_is_available_from_other_threads(tmp_path: Path, monk
 
     assert not thread.is_alive()
     assert results == [[tmp_path.resolve()]]
+
+
+def test_legacy_global_state_migrates_once_with_notice(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_home = tmp_path / "xdg-config"
+    data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+
+    legacy_root = config_home / "litehive"
+    legacy_root.mkdir(parents=True, exist_ok=True)
+    (legacy_root / "config.yaml").write_text("default_engine: gemini\n", encoding="utf-8")
+    (legacy_root / "workspaces.yaml").write_text("- /tmp/workspace-one\n", encoding="utf-8")
+    (legacy_root / "daemons.yaml").write_text("- workspace: /tmp/workspace-one\n", encoding="utf-8")
+
+    ensure_workspace(tmp_path)
+    stderr = capsys.readouterr().err
+
+    assert "migrated legacy global state into" in stderr
+    assert "config.yaml" in stderr
+    assert "workspaces.yaml" in stderr
+    assert "daemons.yaml" in stderr
+    assert (legacy_root / "config.yaml").exists()
+    assert (legacy_root / "workspaces.yaml").exists()
+    assert (legacy_root / "daemons.yaml").exists()
+    assert (data_home / "litehive" / "config.yaml").exists()
+    assert (data_home / "litehive" / "workspaces.yaml").exists()
+    assert (data_home / "litehive" / "daemons.yaml").exists()
+
+    ensure_workspace(tmp_path)
+    assert capsys.readouterr().err == ""
+    assert (legacy_root / "config.yaml").read_text(encoding="utf-8") == (
+        data_home / "litehive" / "config.yaml"
+    ).read_text(encoding="utf-8")
+    assert (legacy_root / "workspaces.yaml").read_text(encoding="utf-8") == (
+        data_home / "litehive" / "workspaces.yaml"
+    ).read_text(encoding="utf-8")
+    assert (legacy_root / "daemons.yaml").read_text(encoding="utf-8") == (
+        data_home / "litehive" / "daemons.yaml"
+    ).read_text(encoding="utf-8")
+
+
+def test_legacy_global_state_notice_and_sync_when_targets_already_exist(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_home = tmp_path / "xdg-config"
+    data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+
+    legacy_root = config_home / "litehive"
+    new_root = data_home / "litehive"
+    legacy_root.mkdir(parents=True, exist_ok=True)
+    new_root.mkdir(parents=True, exist_ok=True)
+
+    (legacy_root / "config.yaml").write_text("default_engine: gemini\n", encoding="utf-8")
+    (legacy_root / "workspaces.yaml").write_text("- /tmp/legacy-workspace\n", encoding="utf-8")
+    (legacy_root / "daemons.yaml").write_text("- workspace: /tmp/legacy-workspace\n", encoding="utf-8")
+
+    (new_root / "config.yaml").write_text("default_engine: codex\n", encoding="utf-8")
+    (new_root / "workspaces.yaml").write_text("- /tmp/new-workspace\n", encoding="utf-8")
+    (new_root / "daemons.yaml").write_text("- workspace: /tmp/new-workspace\n", encoding="utf-8")
+
+    ensure_workspace(tmp_path)
+    stderr = capsys.readouterr().err
+
+    assert "migrated legacy global state into" in stderr
+    assert "config.yaml" in stderr
+    assert "workspaces.yaml" in stderr
+    assert "daemons.yaml" in stderr
+    assert (new_root / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
+    assert (new_root / "daemons.yaml").read_text(encoding="utf-8") == "- workspace: /tmp/legacy-workspace\n"
+
+    ensure_workspace(tmp_path)
+    assert capsys.readouterr().err == ""
+    assert (legacy_root / "config.yaml").read_text(encoding="utf-8") == (
+        new_root / "config.yaml"
+    ).read_text(encoding="utf-8")
+    assert (legacy_root / "workspaces.yaml").read_text(encoding="utf-8") == (
+        new_root / "workspaces.yaml"
+    ).read_text(encoding="utf-8")
+    assert (legacy_root / "daemons.yaml").read_text(encoding="utf-8") == (
+        new_root / "daemons.yaml"
+    ).read_text(encoding="utf-8")
+
+
+def test_legacy_global_state_repopulates_missing_canonical_files_after_notice(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_home = tmp_path / "xdg-config"
+    data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+
+    legacy_root = config_home / "litehive"
+    new_root = data_home / "litehive"
+    legacy_root.mkdir(parents=True, exist_ok=True)
+
+    (legacy_root / "config.yaml").write_text("default_engine: gemini\n", encoding="utf-8")
+    (legacy_root / "workspaces.yaml").write_text("- /tmp/legacy-workspace\n", encoding="utf-8")
+    (legacy_root / "daemons.yaml").write_text("- workspace: /tmp/legacy-workspace\n", encoding="utf-8")
+
+    ensure_workspace(tmp_path)
+    assert "migrated legacy global state into" in capsys.readouterr().err
+
+    for filename in ("config.yaml", "workspaces.yaml", "daemons.yaml"):
+        (new_root / filename).unlink()
+
+    ensure_workspace(tmp_path)
+    assert capsys.readouterr().err == ""
+    assert (new_root / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
+    assert (new_root / "workspaces.yaml").read_text(encoding="utf-8") == (
+        legacy_root / "workspaces.yaml"
+    ).read_text(encoding="utf-8")
+    assert (new_root / "daemons.yaml").read_text(encoding="utf-8") == (
+        legacy_root / "daemons.yaml"
+    ).read_text(encoding="utf-8")
 
 
 def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
@@ -356,28 +448,19 @@ def test_ensure_workspace_skips_disk_scan_for_bootstrapped_empty_workspace(
 
 def test_litehive_home_overrides_default_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     custom_home = tmp_path / "custom-home"
-    config_home = tmp_path / "xdg-config"
     monkeypatch.setenv("LITEHIVE_HOME", str(custom_home))
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "ignored-data"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "ignored-state"))
 
-    from litehive.config.paths import (
-        global_config_path,
-        litehive_database_path,
-        litehive_root,
-        workspace_database_path,
-        workspace_id,
-    )
+    from litehive.config.paths import litehive_root, workspace_data_dir, workspace_path
 
     ensure_workspace(tmp_path)
 
-    wid = workspace_id(tmp_path)
+    wid = workspace_data_dir(tmp_path).name
     assert litehive_root() == custom_home
-    assert litehive_database_path() == custom_home / "litehive.db"
-    assert global_config_path() == config_home / "litehive" / "config.yaml"
-    assert workspace_database_path(tmp_path) == custom_home / wid / "data.db"
-    assert _registered_paths(litehive_database_path()) == [str(tmp_path.resolve())]
+    assert litehive_root() / "config.yaml" == custom_home / "config.yaml"
+    assert workspace_path(tmp_path, "data.db") == custom_home / wid / "data.db"
+    assert _registered_paths(custom_home / "workspaces.yaml") == [str(tmp_path.resolve())]
 
 
 def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None:

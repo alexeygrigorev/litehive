@@ -14,7 +14,7 @@ from typing import TextIO
 
 from litehive.attention import list_attention
 from litehive.config.loading import load_config
-from litehive.config.paths import workspace_logs_dir
+from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import apply_pending_migrations
 from litehive.observability.status import render_runner_status_line
@@ -268,7 +268,7 @@ def run_daemon_loop(
         return 1
     command_prefix = _default_command_prefix()
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    log_base = workspace_logs_dir(workspace) / "run-all"
+    log_base = workspace_path(workspace, "logs", "run-all")
     log_root = session_dir or (log_base / timestamp)
     log_root.mkdir(parents=True, exist_ok=True)
     prune_run_all_log_dirs(log_base)

@@ -8,7 +8,7 @@ import yaml
 from litehive.attention import list_attention, record_attention, resolve_attention, waiting_for_you_lines
 from litehive.cli.attention import cmd_attention_list, cmd_attention_resolve
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import litehive_database_path, worktree_root
+from litehive.config.paths import litehive_root, workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.execution import run_daemon_loop
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
@@ -126,7 +126,7 @@ def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, mon
     stale = create_task(tmp_path, title="Stale worktree")
     stale.status = "done"
     stale.pipeline_status = "done"
-    missing_worktree = worktree_root(tmp_path) / "stale-task"
+    missing_worktree = workspace_path(tmp_path, "worktrees") / "stale-task"
     stale.runtime.git.worktree_path = str(missing_worktree)
     save_task(tmp_path, stale)
     missing_worktree.mkdir(parents=True)
@@ -371,7 +371,7 @@ def test_daemon_loop_rebuilds_corrupt_global_registry_without_exiting(tmp_path: 
     from litehive.config import registry as registry_mod
 
     registry_mod._close_all_registry_connections()
-    litehive_database_path().write_bytes(b"not a sqlite database")
+    (litehive_root() / "workspaces.yaml").write_bytes(b"not a sqlite database")
 
     calls: list[tuple[str, ...]] = []
 
@@ -397,15 +397,14 @@ def test_daemon_loop_rebuilds_corrupt_global_registry_without_exiting(tmp_path: 
     assert any("run" in command for command in calls)
     assert "== iteration 1 ==" in output
 
-    with sqlite3.connect(litehive_database_path()) as connection:
-        paths = [str(row[0]) for row in connection.execute("SELECT path FROM workspaces").fetchall()]
+    paths = yaml.safe_load((litehive_root() / "workspaces.yaml").read_text(encoding="utf-8"))
     assert paths == [str(tmp_path.resolve())]
 
 
 def test_pool_refuses_to_start_when_worktree_venv_is_broken(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Queued work")
-    broken_worktree = worktree_root(tmp_path) / "T-0001-demo"
+    broken_worktree = workspace_path(tmp_path, "worktrees") / "T-0001-demo"
     _create_broken_venv_binary(broken_worktree, "ruff", tmp_path / "fake-home" / ".cache" / "uv")
 
     calls: list[tuple[str, ...]] = []

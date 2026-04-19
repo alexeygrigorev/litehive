@@ -9,7 +9,7 @@ import typer
 
 from litehive.cli.common import WorkspaceOption, choice, require_subcommand
 from litehive.config.loading import load_config
-from litehive.config.paths import workspace_database_path
+from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
 from heru import ENGINE_CHOICES
 from litehive.daemon.execution import (
@@ -418,7 +418,7 @@ def backup_restore(
     if runner.status in {"running", "late"}:
         print("backup restore failed: workspace runner is active")
         return 1
-    database_path = workspace_database_path(workspace)
+    database_path = workspace_path(workspace, "data.db")
     if not yes:
         confirmed = click.confirm(f"Restore backup {timestamp} and overwrite {database_path}?", default=False)
         if not confirmed:

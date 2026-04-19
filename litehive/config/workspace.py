@@ -8,14 +8,8 @@ from pathlib import Path
 import yaml
 
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import (
-    config_path,
-    context_path,
-    worktree_root,
-    workspace_database_path,
-    workspace_dir,
-    workspace_gitignore_path,
-)
+from litehive.config.paths import workspace_path
+from litehive.config.workspace_files import config_path, context_path, workspace_dir, workspace_gitignore_path
 from litehive.config.profiles.rendering import render_context_template
 from litehive.config.registry import (
     list_registered_workspace_paths,
@@ -45,7 +39,7 @@ def registered_workspace_root(path: Path) -> Path | None:
         return None
     for root in list_registered_workspace_paths():
         try:
-            if resolved.is_relative_to(worktree_root(root).resolve()):
+            if resolved.is_relative_to(workspace_path(root, "worktrees").resolve()):
                 return root.resolve()
         except OSError:
             continue
@@ -200,6 +194,6 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
     from litehive.state.store import runtime_store
 
     runtime_store(root).bootstrap()
-    workspace_database_path(root).parent.mkdir(parents=True, exist_ok=True)
+    workspace_path(root, "data.db").parent.mkdir(parents=True, exist_ok=True)
 
     return base

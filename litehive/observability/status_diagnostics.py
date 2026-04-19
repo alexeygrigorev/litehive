@@ -12,13 +12,8 @@ from pydantic import ValidationError
 
 from litehive.config.loading import drop_ignored_legacy_config_keys, merge_config_layers
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import (
-    config_path,
-    global_config_path,
-    workspace_database_path,
-    workspace_runner_lock_path,
-    workspace_dir,
-)
+from litehive.config.paths import litehive_root, workspace_path
+from litehive.config.workspace_files import config_path, workspace_dir
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.daemon.registry import daemon_metadata, pid_is_alive
 from litehive.domain.engine import WorkspaceEngineMonitoring
@@ -96,7 +91,7 @@ def render_issue_lines(issues: list[StatusIssue]) -> list[str]:
 def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssue]]:
     issues: list[StatusIssue] = []
     data = asdict(LitehiveConfig())
-    for path, key in ((global_config_path(), "global_config"), (config_path(root), "config")):
+    for path, key in ((litehive_root() / "config.yaml", "global_config"), (config_path(root), "config")):
         mapping, issue = _safe_yaml_mapping(
             path,
             key=key,
@@ -127,7 +122,7 @@ def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssu
 
 def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue]]:
     issues: list[StatusIssue] = []
-    db_path = workspace_database_path(root)
+    db_path = workspace_path(root, "data.db")
     if db_path.exists():
         try:
             with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
@@ -201,7 +196,7 @@ def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusS
     issues: list[StatusIssue] = []
     active_task_id = runner.active_task_id or state.active_task_id
     live_pid = runner_pid_is_alive(runner.pid)
-    lock_path = workspace_runner_lock_path(root)
+    lock_path = workspace_path(root, "runtime", ".runner.lock")
 
     if live_pid:
         heartbeat_age_seconds = _heartbeat_age_seconds(runner.heartbeat_at)
@@ -373,7 +368,7 @@ def _safe_yaml_document(
 
 
 def _load_runner_status_for_status(root: Path) -> tuple[RunnerStatusState, StatusIssue | None]:
-    path = workspace_runner_lock_path(root)
+    path = workspace_path(root, "runtime", ".runner.lock")
     mapping, issue = _safe_yaml_mapping(
         path,
         key="runner_state",

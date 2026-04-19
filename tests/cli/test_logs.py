@@ -9,6 +9,7 @@ import pytest
 from heru.types import SubagentRef
 
 from litehive.agents.session_store import save_subagent_artifacts
+from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.runtime import RuntimeSubagentState
 from litehive.state.records import create_task, save_task, save_task_runtime
@@ -80,9 +81,8 @@ def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
 
 def test_logs_defaults_to_latest_daemon_run_tail(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
-    from litehive.config.paths import workspace_logs_dir
 
-    log_dir = workspace_logs_dir(tmp_path) / "run-all" / "20260409T120000Z"
+    log_dir = workspace_path(tmp_path, "logs", "run-all", "20260409T120000Z")
     log_dir.mkdir(parents=True, exist_ok=True)
     (log_dir / "0001-run.log").write_text("line one\nline two\n", encoding="utf-8")
 
@@ -97,9 +97,8 @@ def test_logs_defaults_to_latest_daemon_run_tail(tmp_path: Path, capsys: pytest.
 
 def test_logs_daemon_lists_latest_sessions_with_outcomes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
-    from litehive.config.paths import workspace_logs_dir
 
-    logs_root = workspace_logs_dir(tmp_path) / "run-all"
+    logs_root = workspace_path(tmp_path, "logs", "run-all")
     logs_root.mkdir(parents=True, exist_ok=True)
     for index in range(6):
         name = f"20260409T12000{index}Z"

@@ -8,8 +8,9 @@ import yaml
 
 from litehive.config.model import VALID_POOL_SELECTION_POLICIES
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import config_path, context_path, global_config_path
+from litehive.config.paths import litehive_root
 from litehive.config.profiles.loader import PROCESS_PROFILES
+from litehive.config.workspace_files import config_path, context_path
 from litehive.config.workspace import ensure_workspace
 
 _LEGACY_UNSUPPORTED_KEYS = {
@@ -46,7 +47,7 @@ def merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> 
 
 def load_effective_config_data(root: Path) -> dict[str, Any]:
     data = asdict(LitehiveConfig())
-    for path in (global_config_path(), config_path(root)):
+    for path in (litehive_root() / "config.yaml", config_path(root)):
         data = merge_config_layers(data, read_config_mapping(path))
     return data
 

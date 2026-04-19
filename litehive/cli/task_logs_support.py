@@ -5,7 +5,7 @@ from pathlib import Path
 import time
 
 from litehive.agents.session_store import load_subagent_session
-from litehive.config.paths import workspace_logs_dir
+from litehive.config.paths import workspace_path
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.state.records import get_task_record, list_tasks
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
@@ -27,7 +27,7 @@ def _show_latest_daemon_log(root: Path) -> int:
 
 
 def _list_daemon_sessions(root: Path) -> int:
-    logs_root = workspace_logs_dir(root.resolve()) / "run-all"
+    logs_root = workspace_path(root.resolve(), "logs", "run-all")
     if not logs_root.exists():
         print("No daemon run logs found.")
         return 0

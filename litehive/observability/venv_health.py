@@ -9,7 +9,7 @@ from pathlib import Path
 import stat
 import subprocess
 
-from litehive.config.paths import worktree_root
+from litehive.config.paths import workspace_path
 
 _PROBE_TIMEOUT_SECONDS = 1.0
 _MISSING_TARGET_ERRNOS = {errno.ENOENT, errno.ENOTDIR}
@@ -39,7 +39,7 @@ def discover_workspace_venvs(root: Path) -> list[VenvCheckout]:
     if main_venv.is_dir():
         checkouts[root] = VenvCheckout(checkout_root=root, venv_path=main_venv)
 
-    worktrees_dir = worktree_root(root)
+    worktrees_dir = workspace_path(root, "worktrees")
     if worktrees_dir.exists():
         for venv_path in sorted(worktrees_dir.glob("*/.venv")):
             checkout_root = venv_path.parent.resolve()

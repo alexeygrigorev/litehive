@@ -9,7 +9,7 @@ import yaml
 from litehive.agents.manager import SubagentManager
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import worktree_root
+from litehive.config.paths import workspace_path
 from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import (
@@ -30,7 +30,7 @@ from litehive.tasks.journal import append_journal
 
 
 def task_worktree_path(root: Path, task: TaskRecord) -> Path:
-    return worktree_root(root) / f"{task.id}-{task.slug}"
+    return workspace_path(root, "worktrees") / f"{task.id}-{task.slug}"
 
 
 def task_worktree_branch(task: TaskRecord) -> str:
@@ -44,7 +44,7 @@ def is_managed_worktree_path(root: Path, worktree_path: str | None) -> bool:
     if not path.is_absolute():
         return False
     try:
-        return path.resolve().is_relative_to(worktree_root(root).resolve())
+        return path.resolve().is_relative_to(workspace_path(root, "worktrees").resolve())
     except OSError:
         return False
 

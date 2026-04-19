@@ -5,6 +5,10 @@ Status: completed.
 This document is kept as a historical record of the final cleanup that landed
 after the package-structure refactor. It is no longer an active to-do list.
 
+Note: parts of this historical snapshot were later superseded by T-0342, which
+consolidated all user-global Litehive state under `${LITEHIVE_HOME}` and
+restored root-level `workspaces.yaml`/`daemons.yaml` indices for visibility.
+
 ## Landed outcomes
 
 - Legacy global/runtime path migration code was removed.
@@ -17,7 +21,8 @@ after the package-structure refactor. It is no longer an active to-do list.
   - `comments.yaml` is the only supported discussion file
   - `thread.yaml` is not migrated or read
 - Repo-local workspace state no longer uses `.litehive/state.yaml`.
-- The global daemon registry no longer uses `daemons.yaml`.
+- Daemon exclusivity is enforced by per-workspace runtime lock files, while the
+  unified global root now also keeps a visible `daemons.yaml` index.
 - Runner and daemon PID metadata now live under the unified per-workspace
   runtime root:
   - `${LITEHIVE_HOME}/<workspace_id>/runtime/.runner.lock`

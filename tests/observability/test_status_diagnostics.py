@@ -7,13 +7,8 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config.paths import (
-    workspace_daemon_lock_path,
-    workspace_database_path,
-    workspace_runner_lock_path,
-    workspace_dir,
-    workspace_logs_dir,
-)
+from litehive.config.paths import workspace_path
+from litehive.config.workspace_files import workspace_dir
 from litehive.domain.task import WorkspaceState
 from litehive.main import _fast_status
 from litehive.config.workspace import ensure_workspace
@@ -35,7 +30,7 @@ def _run_full_status(workspace: Path, capsys) -> tuple[int, str]:
 def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     config_file = workspace_dir(tmp_path) / "config.yaml"
-    state_db = workspace_database_path(tmp_path)
+    state_db = workspace_path(tmp_path, "data.db")
 
     config_file.write_text("[", encoding="utf-8")
     state_db.write_text("not a sqlite database", encoding="utf-8")
@@ -124,8 +119,8 @@ def test_status_reports_never_started_runner_without_lock(tmp_path: Path, capsys
 def test_status_reports_stale_runner_lock(tmp_path: Path, capsys, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     save_state(tmp_path, WorkspaceState(active_task_id="T-0001"))
-    workspace_runner_lock_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
-    workspace_runner_lock_path(tmp_path).write_text(
+    workspace_path(tmp_path, "runtime", ".runner.lock").parent.mkdir(parents=True, exist_ok=True)
+    workspace_path(tmp_path, "runtime", ".runner.lock").write_text(
         yaml.safe_dump(
             {
                 "pid": 999999,
@@ -150,7 +145,7 @@ def test_status_reports_stale_runner_lock(tmp_path: Path, capsys, monkeypatch) -
 
 def test_full_status_reports_corrupt_runner_lock_without_raising(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
-    lock_path = workspace_runner_lock_path(tmp_path)
+    lock_path = workspace_path(tmp_path, "runtime", ".runner.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text("[", encoding="utf-8")
 
@@ -164,7 +159,7 @@ def test_full_status_reports_corrupt_runner_lock_without_raising(tmp_path: Path,
 
 def test_full_status_reports_invalid_runner_lock_schema(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
-    lock_path = workspace_runner_lock_path(tmp_path)
+    lock_path = workspace_path(tmp_path, "runtime", ".runner.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text("pid: nope\n", encoding="utf-8")
 
@@ -178,7 +173,7 @@ def test_full_status_reports_invalid_runner_lock_schema(tmp_path: Path, capsys) 
 
 def test_status_reports_stopped_runner_for_empty_lock_file(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
-    lock_path = workspace_runner_lock_path(tmp_path)
+    lock_path = workspace_path(tmp_path, "runtime", ".runner.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text("{}\n", encoding="utf-8")
 
@@ -191,8 +186,8 @@ def test_status_reports_stopped_runner_for_empty_lock_file(tmp_path: Path, capsy
 def test_status_reports_wedged_runner_heartbeat(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     stale_heartbeat = (datetime.now(UTC) - timedelta(minutes=11)).isoformat().replace("+00:00", "Z")
-    workspace_runner_lock_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
-    workspace_runner_lock_path(tmp_path).write_text(
+    workspace_path(tmp_path, "runtime", ".runner.lock").parent.mkdir(parents=True, exist_ok=True)
+    workspace_path(tmp_path, "runtime", ".runner.lock").write_text(
         yaml.safe_dump(
             {
                 "pid": os.getpid(),
@@ -214,7 +209,7 @@ def test_status_reports_wedged_runner_heartbeat(tmp_path: Path, capsys) -> None:
 
 def test_status_reports_dead_daemon_pid(tmp_path: Path, capsys, monkeypatch) -> None:
     ensure_workspace(tmp_path)
-    daemon_lock = workspace_daemon_lock_path(tmp_path)
+    daemon_lock = workspace_path(tmp_path, "runtime", ".daemon.lock")
     daemon_lock.parent.mkdir(parents=True, exist_ok=True)
     daemon_lock.write_text(
         yaml.safe_dump(
@@ -239,7 +234,7 @@ def test_status_reports_dead_daemon_pid(tmp_path: Path, capsys, monkeypatch) -> 
 
 def test_status_reports_failed_last_cycle(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
-    log_dir = workspace_logs_dir(tmp_path) / "run-all" / "20260412T010203Z"
+    log_dir = workspace_path(tmp_path, "logs", "run-all", "20260412T010203Z")
     log_dir.mkdir(parents=True, exist_ok=True)
     repair_log = log_dir / "0001-repair.log"
     repair_log.write_text("Traceback (most recent call last):\nboom\n", encoding="utf-8")

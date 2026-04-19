@@ -2,7 +2,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from litehive.config.paths import worktree_root
+from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.lifecycle.nodes.system import GitWorktreeSyncNode
 from litehive.lifecycle.persistence import TaskState
@@ -55,11 +55,11 @@ def test_worktree_sync_creates_missing_task_worktree(tmp_path: Path) -> None:
     task = create_task(workspace, title="Sync")
     node = GitWorktreeSyncNode(
         workspace_root=workspace,
-        worktree_resolver=lambda state: worktree_root(workspace) / f"{task.id}-{task.slug}",
+        worktree_resolver=lambda state: workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}",
     )
 
     changed = node._sync(_state(task.id))
-    recorded_path = worktree_root(workspace) / f"{task.id}-{task.slug}"
+    recorded_path = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
 
     assert changed is True
     assert recorded_path.exists()
@@ -86,7 +86,7 @@ def test_worktree_sync_skips_dirty_worktrees(tmp_path: Path) -> None:
     _configure_repo(workspace)
     ensure_workspace(workspace)
     task = create_task(workspace, title="Sync")
-    worktree = worktree_root(workspace) / f"{task.id}-{task.slug}"
+    worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
     worktree.parent.mkdir(parents=True, exist_ok=True)
     _git_ok(
         workspace,
@@ -133,7 +133,7 @@ def test_worktree_sync_prunes_stale_git_worktree_metadata_before_recreate(tmp_pa
     _git_ok(workspace, "commit", "-m", "initial")
 
     task = create_task(workspace, title="QA verify venv symlink")
-    worktree = worktree_root(workspace) / f"{task.id}-{task.slug}"
+    worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
     worktree.parent.mkdir(parents=True, exist_ok=True)
     _git_ok(
         workspace,
@@ -173,7 +173,7 @@ def test_worktree_sync_reuses_existing_branch_worktree_when_runtime_path_missing
     _git_ok(workspace, "commit", "-m", "initial")
 
     task = create_task(workspace, title="Recover existing task worktree")
-    worktree = worktree_root(workspace) / f"{task.id}-{task.slug}"
+    worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
     worktree.parent.mkdir(parents=True, exist_ok=True)
     _git_ok(
         workspace,

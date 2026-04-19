@@ -1,4 +1,5 @@
 import io
+from pathlib import Path
 
 import pytest
 
@@ -11,14 +12,14 @@ from litehive.tasks.reports import load_task_thread
 
 
 def test_daemon_loop_recovers_corrupt_workspaces_yaml_before_cycle_start(tmp_path: Path, monkeypatch) -> None:
+    data_home = tmp_path / "data-home"
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Queue head")
 
-    config_home = tmp_path / "config-home"
-    registry_path = config_home / "litehive" / "workspaces.yaml"
+    registry_path = data_home / "litehive" / "workspaces.yaml"
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     registry_path.write_text("broken: [\n", encoding="utf-8")
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
 
     calls: list[tuple[str, ...]] = []
 
@@ -42,9 +43,10 @@ def test_daemon_loop_recovers_corrupt_workspaces_yaml_before_cycle_start(tmp_pat
     assert exit_code == 0
     assert any("repair" in command for command in calls)
     assert any("run" in command for command in calls)
-    assert not registry_path.exists()
     backups = sorted(registry_path.parent.glob("workspaces.yaml.corrupt-*"))
     assert backups
+    assert registry_path.exists()
+    assert registry_path.read_text(encoding="utf-8").strip().startswith("- ")
     thread = load_task_thread(tmp_path, task)
     assert any(entry.role == "recovery" for entry in thread)
     assert "launch recovery fixed: cycle_start_failed" in stream.getvalue()

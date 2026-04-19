@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config.paths import workspace_gitignore_path
+from litehive.config.workspace_files import workspace_gitignore_path
 from litehive.config.workspace import ensure_workspace, render_workspace_gitignore
 from litehive.git.ops import default_commit_message
 from litehive.domain.common import utcnow

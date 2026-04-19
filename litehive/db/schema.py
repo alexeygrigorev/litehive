@@ -8,7 +8,7 @@ import sqlite3
 from pathlib import Path
 from typing import TypeAlias
 
-from litehive.config.paths import workspace_database_path
+from litehive.config.paths import workspace_path
 
 MIGRATIONS_PACKAGE = "litehive.db.migrations"
 _BASELINE_REQUIRED_TABLES = {
@@ -159,7 +159,7 @@ def _database_requires_rebuild(db_path: Path, migrations: tuple[Migration, ...])
 
 
 def migration_status(root: Path) -> MigrationStatus:
-    db_path = workspace_database_path(root)
+    db_path = workspace_path(root, "data.db")
     migrations = available_migrations()
     applied: list[Migration] = []
     pending: list[Migration] = []
@@ -179,7 +179,7 @@ def migration_status(root: Path) -> MigrationStatus:
 
 
 def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationPlan:
-    db_path = workspace_database_path(root)
+    db_path = workspace_path(root, "data.db")
     migrations = available_migrations()
     if _database_requires_rebuild(db_path, migrations):
         if dry_run:
@@ -233,7 +233,7 @@ _MIGRATED_DB_PATHS: dict[str, _DbFingerprint] = {}
 
 
 def connect_workspace_db(root: Path, *, migrate: bool = True) -> sqlite3.Connection:
-    db_path = workspace_database_path(root)
+    db_path = workspace_path(root, "data.db")
     if migrate:
         # In-process cache keyed on the absolute db_path (not root), because
         # XDG_DATA_HOME changes can move the db even when root stays the same.

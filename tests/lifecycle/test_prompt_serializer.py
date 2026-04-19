@@ -14,7 +14,7 @@ from litehive.roles.recovery import RecoveryAgent
 from litehive.roles.swe import SWEAgent
 from litehive.roles.base import PromptContext
 from litehive.config.workspace import ensure_workspace
-from litehive.config.paths import config_path
+from litehive.config.workspace_files import config_path
 from litehive.domain.lifecycle_deltas import StateDelta
 from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.events import HookOk, Pass, Reject

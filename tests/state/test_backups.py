@@ -6,14 +6,14 @@ import pytest
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
-from litehive.config.paths import workspace_backups_dir, workspace_database_path
+from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.runtime import RunnerStatusState
 from litehive.state.backup import create_workspace_backup, list_workspace_backups
 
 
 def _seed_workspace_db(root: Path, values: list[str]) -> None:
-    with sqlite3.connect(workspace_database_path(root)) as connection:
+    with sqlite3.connect(workspace_path(root, "data.db")) as connection:
         connection.execute("DROP TABLE IF EXISTS backup_test")
         connection.execute("CREATE TABLE backup_test (value TEXT NOT NULL)")
         connection.executemany(
@@ -24,7 +24,7 @@ def _seed_workspace_db(root: Path, values: list[str]) -> None:
 
 
 def _read_workspace_db_values(root: Path) -> list[str]:
-    with sqlite3.connect(workspace_database_path(root)) as connection:
+    with sqlite3.connect(workspace_path(root, "data.db")) as connection:
         rows = connection.execute("SELECT value FROM backup_test ORDER BY rowid").fetchall()
     return [row[0] for row in rows]
 
@@ -161,4 +161,4 @@ def test_daemon_loop_creates_scheduled_backup(tmp_path: Path, monkeypatch: pytes
     assert exit_code == 0
     backups = list_workspace_backups(workspace)
     assert len(backups) == 1
-    assert backups[0].path.parent == workspace_backups_dir(workspace)
+    assert backups[0].path.parent == workspace_path(workspace, "backups")

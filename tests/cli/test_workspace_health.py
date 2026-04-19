@@ -17,7 +17,7 @@ from litehive.cli.workspace import (
     status_command,
 )
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import worktree_root
+from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
@@ -155,7 +155,7 @@ def test_repair_reports_broken_workspace_and_worktree_venvs(tmp_path: Path) -> N
     ensure_workspace(tmp_path)
     cache_root = tmp_path / "fake-home" / ".cache" / "uv"
     _create_broken_venv_binary(tmp_path, "ruff", cache_root)
-    worktree_path = worktree_root(tmp_path) / "T-0001-demo"
+    worktree_path = workspace_path(tmp_path, "worktrees") / "T-0001-demo"
     _create_broken_venv_binary(worktree_path, "pytest", cache_root)
 
     result = _RUNNER.invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)

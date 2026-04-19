@@ -9,7 +9,7 @@ import re
 import sqlite3
 import tempfile
 
-from litehive.config.paths import workspace_backups_dir, workspace_database_path
+from litehive.config.paths import workspace_path
 
 _BACKUP_NAME_RE = re.compile(r"^data-(\d{4}-\d{2}-\d{2}T\d{2})\.db\.gz$")
 
@@ -27,7 +27,7 @@ def _backup_timestamp(when: datetime) -> str:
 
 
 def _backup_path(root: Path, when: datetime) -> Path:
-    return workspace_backups_dir(root) / f"data-{_backup_timestamp(when)}.db.gz"
+    return workspace_path(root, "backups") / f"data-{_backup_timestamp(when)}.db.gz"
 
 
 def _parse_backup_path(path: Path) -> WorkspaceBackup | None:
@@ -45,7 +45,7 @@ def _parse_backup_path(path: Path) -> WorkspaceBackup | None:
 
 
 def list_workspace_backups(root: Path) -> list[WorkspaceBackup]:
-    backup_dir = workspace_backups_dir(root)
+    backup_dir = workspace_path(root, "backups")
     if not backup_dir.exists():
         return []
     backups = [_parse_backup_path(path) for path in backup_dir.iterdir()]
@@ -88,7 +88,7 @@ def prune_workspace_backups(root: Path) -> list[Path]:
 
 def create_workspace_backup(root: Path, *, when: datetime | None = None) -> WorkspaceBackup:
     when = when or datetime.now(UTC)
-    backup_dir = workspace_backups_dir(root)
+    backup_dir = workspace_path(root, "backups")
     backup_dir.mkdir(parents=True, exist_ok=True)
     destination = _backup_path(root, when)
 
@@ -106,7 +106,7 @@ def create_workspace_backup(root: Path, *, when: datetime | None = None) -> Work
         temp_gz_path = Path(gz_handle.name)
 
     try:
-        source = sqlite3.connect(workspace_database_path(root))
+        source = sqlite3.connect(workspace_path(root, "data.db"))
         target = sqlite3.connect(temp_db_path)
         try:
             source.backup(target)
@@ -150,7 +150,7 @@ def restore_workspace_backup(root: Path, timestamp: str) -> WorkspaceBackup:
     if backup is None:
         raise ValueError(f"backup not found for timestamp {timestamp}")
 
-    database_path = workspace_database_path(root)
+    database_path = workspace_path(root, "data.db")
     database_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         suffix=".db",

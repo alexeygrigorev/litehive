@@ -11,7 +11,7 @@ from typing import TextIO
 
 import yaml
 
-from litehive.config.paths import workspace_dir
+from litehive.config.workspace_files import workspace_dir
 from litehive.domain.common import utcnow
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState

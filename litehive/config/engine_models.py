@@ -13,7 +13,7 @@ import yaml
 
 from heru import extract_engine_continuation, get_engine
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import config_path
+from litehive.config.workspace_files import config_path
 from litehive.domain.runtime import RuntimeContinuationHandoff
 from litehive.domain.task import TaskRecord
 from litehive.tasks.runtime import set_task_continuation_handoff

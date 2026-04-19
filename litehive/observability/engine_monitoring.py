@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config.paths import workspace_gitignore_path
+from litehive.config.workspace_files import workspace_gitignore_path
 from litehive.config.workspace import render_workspace_gitignore
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.domain.common import utcnow

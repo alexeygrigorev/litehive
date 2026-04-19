@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from litehive.attention import waiting_for_you_lines
-from litehive.config.paths import workspace_runner_lock_path
+from litehive.config.paths import workspace_path
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
 from litehive.domain.runtime import RunnerStatusState
 
@@ -26,7 +26,7 @@ def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
 def _fast_runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
     if runner.status in {"running", "late"}:
         return "running"
-    if not workspace_runner_lock_path(workspace).exists():
+    if not workspace_path(workspace, "runtime", ".runner.lock").exists():
         return "never_started"
     if runner.pid is None:
         return "stopped"

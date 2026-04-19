@@ -13,7 +13,7 @@ from typing import Literal
 import yaml
 
 from litehive.config.loading import load_config
-from litehive.config.paths import litehive_config_root, workspace_runner_lock_path
+from litehive.config.paths import litehive_root, workspace_path
 from litehive.domain.reports import RecoveryAction, TaskActivityEntry
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.task import TaskRecord
@@ -203,7 +203,7 @@ def _corrupt_task_candidate(store, task_dir: Path, task_yaml_path: Path, exc: Ex
 
 
 def detect_cycle_start_failure(root: Path) -> LaunchFailure | None:
-    path = litehive_config_root() / "workspaces.yaml"
+    path = litehive_root() / "workspaces.yaml"
     if not path.exists():
         return None
     try:
@@ -211,13 +211,13 @@ def detect_cycle_start_failure(root: Path) -> LaunchFailure | None:
     except yaml.YAMLError as exc:
         return LaunchFailure(
             context="cycle_start_failed",
-            summary=f"legacy workspace registry is corrupt at {path} ({_yaml_location(exc)})",
+            summary=f"workspace registry is corrupt at {path} ({_yaml_location(exc)})",
             diagnostics={"path": str(path)},
         )
     except OSError as exc:
         return LaunchFailure(
             context="cycle_start_failed",
-            summary=f"legacy workspace registry is unreadable at {path}: {exc}",
+            summary=f"workspace registry is unreadable at {path}: {exc}",
             diagnostics={"path": str(path)},
         )
     return None
@@ -448,7 +448,7 @@ def _quarantine_corrupt_task_yaml(
 
 
 def _repair_legacy_registry(*, actions: list[RecoveryAction], warnings: list[str]) -> None:
-    path = litehive_config_root() / "workspaces.yaml"
+    path = litehive_root() / "workspaces.yaml"
     if not path.exists():
         return
     try:
@@ -461,17 +461,17 @@ def _repair_legacy_registry(*, actions: list[RecoveryAction], warnings: list[str
         actions.append(
             RecoveryAction(
                 action="quarantine_corrupt_workspaces_registry",
-                summary=f"Moved corrupt legacy workspace registry aside to {backup}.",
+                summary=f"Moved corrupt workspace registry aside to {backup}.",
                 metadata={"path": str(path), "backup_path": str(backup)},
             )
         )
-        warnings.append(f"legacy workspaces.yaml was corrupt ({_yaml_location(exc)})")
+        warnings.append(f"workspaces.yaml was corrupt ({_yaml_location(exc)})")
     except OSError as exc:
-        warnings.append(f"failed to inspect legacy workspaces.yaml: {exc}")
+        warnings.append(f"failed to inspect workspaces.yaml: {exc}")
 
 
 def _repair_runner_lock(root: Path, *, actions: list[RecoveryAction], warnings: list[str]) -> None:
-    lock_path = workspace_runner_lock_path(root)
+    lock_path = workspace_path(root, "runtime", ".runner.lock")
     if not lock_path.exists():
         return
 

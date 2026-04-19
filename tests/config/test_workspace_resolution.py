@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
 from litehive.state.records import create_task
 
@@ -22,9 +23,7 @@ def test_resolve_workspace_walks_up_and_normalizes_worktree(tmp_path: Path, monk
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Walk up worktree")
 
-    from litehive.config.paths import worktree_root
-
-    nested = worktree_root(tmp_path) / task.id / "src"
+    nested = workspace_path(tmp_path, "worktrees") / task.id / "src"
     nested.mkdir(parents=True)
 
     monkeypatch.chdir(nested)
@@ -49,9 +48,7 @@ def test_resolve_workspace_prefers_current_unified_root_worktree_over_registry_t
 
     assert task_one.id == task_two.id == "T-0001"
 
-    from litehive.config.paths import worktree_root
-
-    nested = worktree_root(workspace_two) / task_two.id / "src"
+    nested = workspace_path(workspace_two, "worktrees") / task_two.id / "src"
     nested.mkdir(parents=True)
 
     monkeypatch.chdir(nested)
