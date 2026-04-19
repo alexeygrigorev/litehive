@@ -282,7 +282,11 @@ ModelOption = Annotated[str | None, typer.Option(help="Override the engine model
 MaxTurnsOption = Annotated[int | None, typer.Option(help="Limit the number of turns for the run.")]
 ResumeOption = Annotated[
     str | None,
-    typer.Option(help="Resume a prior engine session by continuation or session ID."),
+    typer.Option(
+        "--resume",
+        "--resume-session-id",
+        help="Resume a prior engine session by continuation or session ID.",
+    ),
 ]
 ContinueOption = Annotated[
     bool,
