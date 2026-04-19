@@ -215,14 +215,66 @@ def _nudge_section(prompt: dict[str, Any]) -> str:
 
 
 _MESSAGE_CAP = 500
+_TRUNCATION_MARKER = "…(truncated)"
 
 
 def _cap_message(entry: dict[str, Any]) -> dict[str, Any]:
-    """Return a shallow copy with message truncated to _MESSAGE_CAP chars."""
+    """Return a shallow copy with message capped to _MESSAGE_CAP chars total."""
     msg = entry.get("message", "")
     if len(msg) <= _MESSAGE_CAP:
         return entry
-    return {**entry, "message": msg[:_MESSAGE_CAP] + "…(truncated)"}
+    keep = max(_MESSAGE_CAP - len(_TRUNCATION_MARKER), 0)
+    return {**entry, "message": msg[:keep] + _TRUNCATION_MARKER}
+
+
+def _pipeline_stage_key(name: str | None) -> str | None:
+    if name in {"before_grooming", "grooming", "after_grooming"}:
+        return "grooming"
+    if name in {"before_implementing", "implementing", "after_implementing"}:
+        return "implementing"
+    if name in {"before_testing", "testing", "after_testing"}:
+        return "testing"
+    if name in {"before_accepting", "accepting", "after_accepting"}:
+        return "accepting"
+    if name in {"before_commit", "commit", "after_commit", "merge_resolving"}:
+        return "commit_to_git"
+    return name
+
+
+def _entry_sources(entry: dict[str, Any]) -> set[str]:
+    sources: set[str] = set()
+    explicit_source = str(entry.get("source") or "").strip()
+    if explicit_source:
+        sources.add(explicit_source)
+
+    role = str(entry.get("role") or "").strip()
+    if role:
+        sources.add(role)
+        if role == "hook":
+            sources.add("hook")
+        elif role != "recovery":
+            sources.add("agent")
+    return sources
+
+
+def _matches_last_rejection(entry: dict[str, Any], last_rejection: dict[str, Any]) -> bool:
+    if entry.get("verdict") != "reject":
+        return False
+
+    rejection_source = str(last_rejection.get("source") or "").strip()
+    if rejection_source and rejection_source not in _entry_sources(entry):
+        return False
+
+    rejection_stage = _pipeline_stage_key(str(last_rejection.get("raised_at_phase") or "").strip() or None)
+    entry_stage = _pipeline_stage_key(str(entry.get("stage") or "").strip() or None)
+    if rejection_stage and entry_stage and rejection_stage != entry_stage:
+        return False
+
+    rejection_reason = str(last_rejection.get("reason") or "")
+    message = str(entry.get("message") or "")
+    if not rejection_reason:
+        return False
+    return message == rejection_reason or rejection_reason in message
 
 
 def _trim_thread_for_prompt(
@@ -253,17 +305,7 @@ def _trim_thread_for_prompt(
 
     # Skip entries that duplicate last_rejection
     if last_rejection:
-        rej_reason = last_rejection.get("reason", "")
-        rej_source = last_rejection.get("source", "")
-        thread = [
-            e
-            for e in thread
-            if not (
-                e.get("verdict") == "reject"
-                and (e.get("source") or e.get("role", "")) == rej_source
-                and e.get("message", "") == rej_reason
-            )
-        ]
+        thread = [entry for entry in thread if not _matches_last_rejection(entry, last_rejection)]
 
     def _last_where(**match: str) -> dict[str, Any] | None:
         for e in reversed(thread):
@@ -338,6 +380,8 @@ def _thread_section(
     last_rejection: dict[str, Any] | None = None,
 ) -> str:
     trimmed = _trim_thread_for_prompt(thread, current_stage, last_rejection)
+    if not trimmed:
+        return ""
     blocks: list[str] = []
     for entry in trimmed:
         role = entry.get("role", "?")

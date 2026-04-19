@@ -388,7 +388,9 @@ def test_implementing_retry_thread_keeps_only_grooming_and_dedups_last_rejection
 
     text = serialize_prompt(prompt, task_record=task)
 
-    assert _discussion_lines(text) == [f"[grooming] planner (pass): {'scope ' + ('x' * 494)}…(truncated)"]
+    discussion = _discussion_lines(text)
+    assert discussion == [f"[grooming] planner (pass): {'scope ' + ('x' * 482)}…(truncated)"]
+    assert len(discussion[0].split(": ", 1)[1]) == 500
     assert "- Source: qa" in text
     assert "- Reason: tests fail" in text
     assert "bookkeeping" not in text
@@ -511,6 +513,112 @@ def test_thread_does_not_dedup_reject_when_source_differs(workspace: Path) -> No
         "[grooming] planner (pass): scope",
         "[accepting] reviewer (reject): same reason",
     ]
+
+
+def test_thread_dedups_agent_reject_when_last_rejection_uses_generic_agent_source(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    prompt = {
+        "task_id": task.id,
+        "stage": "custom",
+        "role": "swe",
+        "pipeline_mode": PipelineMode.FULL.value,
+        "instruction_layers": [],
+        "last_rejection": {
+            "source": "agent",
+            "reason": "same reason",
+            "raised_at_phase": "testing",
+        },
+        "thread": [
+            {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
+            {"role": "qa", "stage": "testing", "verdict": "reject", "message": "same reason"},
+        ],
+    }
+
+    text = serialize_prompt(prompt, task_record=task)
+
+    assert _discussion_lines(text) == [
+        "[grooming] planner (pass): scope",
+    ]
+
+
+def test_thread_does_not_dedup_generic_agent_reject_when_stage_differs(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    prompt = {
+        "task_id": task.id,
+        "stage": "custom",
+        "role": "swe",
+        "pipeline_mode": PipelineMode.FULL.value,
+        "instruction_layers": [],
+        "last_rejection": {
+            "source": "agent",
+            "reason": "same reason",
+            "raised_at_phase": "testing",
+        },
+        "thread": [
+            {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
+            {"role": "reviewer", "stage": "accepting", "verdict": "reject", "message": "same reason"},
+        ],
+    }
+
+    text = serialize_prompt(prompt, task_record=task)
+
+    assert _discussion_lines(text) == [
+        "[grooming] planner (pass): scope",
+        "[accepting] reviewer (reject): same reason",
+    ]
+
+
+def test_thread_dedups_hook_reject_when_reason_is_embedded_in_activity_message(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    prompt = {
+        "task_id": task.id,
+        "stage": "custom",
+        "role": "swe",
+        "pipeline_mode": PipelineMode.FULL.value,
+        "instruction_layers": [],
+        "last_rejection": {
+            "source": "hook",
+            "reason": "command failed",
+            "raised_at_phase": "after_implementing",
+        },
+        "thread": [
+            {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
+            {
+                "role": "hook",
+                "stage": "implementing",
+                "verdict": "reject",
+                "message": (
+                    "Runner hook at `after_implementing` rejected the stage.\n\n"
+                    "command failed\n\n"
+                    "report: .litehive/tasks/T-1/reports/implementing-001.yaml"
+                ),
+            },
+        ],
+    }
+
+    text = serialize_prompt(prompt, task_record=task)
+
+    assert _discussion_lines(text) == [
+        "[grooming] planner (pass): scope",
+    ]
+
+
+def test_thread_section_is_omitted_when_filtering_removes_all_entries(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    prompt = {
+        "task_id": task.id,
+        "stage": "testing",
+        "role": "qa",
+        "pipeline_mode": PipelineMode.FULL.value,
+        "instruction_layers": [],
+        "thread": [
+            {"role": "recovery", "stage": "recovering", "verdict": "comment", "message": "bookkeeping"},
+        ],
+    }
+
+    text = serialize_prompt(prompt, task_record=task)
+
+    assert "Discussion thread:" not in text
 
 
 def test_testing_thread_keeps_only_last_implementing_pass(workspace: Path) -> None:
