@@ -14,6 +14,7 @@ from pathlib import Path
 import selectors
 import shutil
 import subprocess
+import sys
 import time
 from typing import Callable, Iterable, Literal
 
@@ -32,6 +33,12 @@ logger = logging.getLogger("litehive.agents.base")
 
 TranscriptFormat = Literal["text", "jsonl"]
 _CALLER_WORKSPACE_ENV_VAR = "LITEHIVE_WORKSPACE_ROOT"
+_LITEHIVE_SESSION_ENV_VARS = (
+    "LITEHIVE_TASK_ID",
+    "LITEHIVE_WORKSPACE_ROOT",
+    "LITEHIVE_AGENT_ROLE",
+    "LITEHIVE_STAGE",
+)
 LATEST_CONTINUATION_SENTINEL = "__heru_continue_latest__"
 _INHERITED_PYTHON_ENV_VARS = (
     "VIRTUAL_ENV",
@@ -65,11 +72,24 @@ def build_invocation_env(
         if workspace_root is not None and not _is_within_workspace(cwd, workspace_root):
             for key in _INHERITED_PYTHON_ENV_VARS:
                 env.pop(key, None)
+            for key in _LITEHIVE_SESSION_ENV_VARS:
+                if extra_env is None or key not in extra_env:
+                    env.pop(key, None)
+    _prefer_current_python_bin_for_litehive(env)
     for key in stripped_env_vars:
         env.pop(key, None)
     if extra_env:
         env.update(extra_env)
     return env
+
+
+def _prefer_current_python_bin_for_litehive(env: dict[str, str]) -> None:
+    python_bin_dir = str(Path(sys.executable).parent)
+    if not shutil.which("litehive", path=python_bin_dir):
+        return
+    path_entries = [entry for entry in env.get("PATH", "").split(os.pathsep) if entry]
+    path_entries = [entry for entry in path_entries if entry != python_bin_dir]
+    env["PATH"] = os.pathsep.join([python_bin_dir, *path_entries]) if path_entries else python_bin_dir
 
 
 @dataclass(frozen=True, slots=True)

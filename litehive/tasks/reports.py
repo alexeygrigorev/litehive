@@ -265,6 +265,11 @@ def append_activity_entry(root: Path, task: TaskRecord, comment: "TaskActivityEn
     append_task_activity(root, task, comment)
 
 
+def load_task_thread(root: Path, task: TaskRecord) -> list["TaskActivityEntry"]:
+    """Compatibility alias for callers that still treat task activity as a thread."""
+    return load_task_activity(root, task)
+
+
 def write_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Path:
     reports_dir = task_dir(root, task) / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)

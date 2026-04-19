@@ -4,6 +4,7 @@ from dataclasses import replace
 import logging
 from pathlib import Path
 import re
+import sys
 
 from litehive.config.loading import load_config
 from heru import get_engine
@@ -194,6 +195,7 @@ class SubagentManager(SessionMixin):
                 "LITEHIVE_WORKSPACE_ROOT": str(self.root),
                 "LITEHIVE_AGENT_ROLE": role,
                 "LITEHIVE_STAGE": self._agent_stage_for_task(task, role),
+                "LITEHIVE_PYTHON_PATH": sys.executable,
             }
             if supports_live_execution(live_execution_probe):
                 run_live_callable = effective_engine_callable(execution_engine, "run_live")

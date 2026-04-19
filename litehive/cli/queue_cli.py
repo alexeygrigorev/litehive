@@ -226,6 +226,7 @@ def switch(task_id: str, engine: str, workspace: Path, reason: str) -> int:
     print(f"task: {summary.task.id} {summary.task.title}")
     print("status: queued")
     print(f"pipeline_stage: {summary.task.pipeline_status}")
+    print(f"pipeline_status: {summary.task.pipeline_status}")
     print(f"engine: {summary.previous_engine} -> {summary.new_engine}")
     print(f"was_active: {'yes' if summary.was_active else 'no'}")
     print(f"runner_pid: {summary.runner_pid if summary.runner_pid is not None else '-'}")

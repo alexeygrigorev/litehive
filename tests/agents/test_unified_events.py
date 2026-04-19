@@ -1,9 +1,14 @@
 import logging
 from pathlib import Path
 
-from heru import extract_engine_continuation, extract_engine_timeline, get_engine, render_execution_transcript
+from heru import (
+    extract_engine_continuation,
+    extract_engine_timeline,
+    get_engine,
+    parse_unified_execution,
+    render_execution_transcript,
+)
 from heru.base import CLIExecutionResult
-from litehive.agents.unified_events import parse_unified_execution
 
 
 def test_parse_unified_execution_logs_invalid_payload(caplog) -> None:

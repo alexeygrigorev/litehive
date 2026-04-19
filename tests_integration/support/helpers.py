@@ -20,6 +20,12 @@ TIMEOUT_ENV = "LITEHIVE_INTEGRATION_TIMEOUT_SECONDS"
 DEFAULT_TIMEOUT_SECONDS = 30
 ENGINE_MATRIX = tuple(sorted(VALID_ENGINE_NAMES))
 _GOZ_TRANSIENT_ERROR_MARKERS = ("ResponseNotRead",)
+_LITEHIVE_SESSION_ENV_VARS = (
+    "LITEHIVE_TASK_ID",
+    "LITEHIVE_WORKSPACE_ROOT",
+    "LITEHIVE_AGENT_ROLE",
+    "LITEHIVE_STAGE",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +66,9 @@ def _engine_quota_block_reason(engine_name: str) -> str | None:
 
 
 def require_real_engine(engine_name: str) -> None:
+    requested_engines = enabled_integration_engines()
+    if requested_engines and engine_name not in requested_engines:
+        pytest.skip(f"{engine_name} not selected in {INTEGRATION_ENV}")
     engine = get_engine(engine_name)
     if not engine.is_available():
         pytest.skip(f"{engine_name} binary not available on PATH")
@@ -239,7 +248,10 @@ def execute_engine_prompt(
             model=model,
             max_turns=max_turns,
             resume_session_id=resume_session_id,
-            extra_env=extra_env,
+            extra_env={
+                "LITEHIVE_PYTHON_PATH": sys.executable,
+                **(extra_env or {}),
+            },
         )
     )
     argv = list(invocation.argv)
@@ -409,7 +421,7 @@ def assert_nudge_verdict_submission(
         assert session.engine_name == engine_name, (session.engine_name, engine_name)
 
     report_command = (
-        "litehive report "
+        '"$LITEHIVE_PYTHON_PATH" -m litehive.main report '
         "--verdict pass "
         "--role swe "
         "--stage implementing "
@@ -421,7 +433,10 @@ def assert_nudge_verdict_submission(
     # Step 2: nudge — submit verdict via litehive report CLI
     _, nudge_run = execute_engine_prompt(
         engine_name,
-        prompt=f"Run {report_command} exactly once.",
+        prompt=(
+            f"Use the shell exactly once to run {report_command}. "
+            "Do not stop after inspection; the task is complete only after that command exits successfully."
+        ),
         cwd=session.cwd,
         max_turns=2 if engine_name == "claude" else None,
         resume_session_id=(
@@ -432,22 +447,36 @@ def assert_nudge_verdict_submission(
     )
 
     # Step 3: verify verdict persisted
-    thread = load_task_thread(session.cwd, require_task(session.cwd, session.task_id))
-    verdicts = [c for c in thread if c.verdict != "comment"]
-    if verdicts:
-        assert verdicts[-1].verdict == "pass"
-        assert verdicts[-1].role == "swe"
-        return
+    deadline = time.monotonic() + 3.0
+    while True:
+        thread = load_task_thread(session.cwd, require_task(session.cwd, session.task_id))
+        verdicts = [c for c in thread if c.verdict != "comment"]
+        if verdicts:
+            assert verdicts[-1].verdict == "pass"
+            assert verdicts[-1].role == "swe"
+            return
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(0.2)
     assert nudge_run.exit_code == 0, nudge_run.stderr
-    assert len(verdicts) >= 1, f"Expected verdict from {engine_name}, got: {thread}"
+    assert len(verdicts) >= 1, (
+        f"Expected verdict from {engine_name}, got: {thread}\n"
+        f"stdout:\n{nudge_run.stdout}\n"
+        f"stderr:\n{nudge_run.stderr}"
+    )
     assert verdicts[-1].verdict == "pass"
     assert verdicts[-1].role == "swe"
 
 
 def cli_command(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    for key in _LITEHIVE_SESSION_ENV_VARS:
+        env.pop(key, None)
+    env["LITEHIVE_PYTHON_PATH"] = sys.executable
     return subprocess.run(
         [sys.executable, "-m", "litehive.main", *args],
         cwd=cwd,
+        env=env,
         capture_output=True,
         text=True,
         check=False,

@@ -11,8 +11,7 @@ import heru.quota.copilot_quota as copilot_quota_mod
 import heru.quota.zai_quota as zai_quota_mod
 import yaml
 
-from heru import get_engine
-from litehive.agents._continuation import extract_execution_continuation
+from heru import extract_engine_continuation, get_engine
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import config_path
 from litehive.domain.runtime import RuntimeContinuationHandoff
@@ -412,7 +411,7 @@ def _set_continuation_handoff(
         session_path=None,
         report_path=None,
         transcript_path=f"{result.ref.path}/transcript.md",
-        continuation=extract_execution_continuation(from_engine, result.execution),
+        continuation=extract_engine_continuation(from_engine, result.execution),
     )
     set_task_continuation_handoff(root, task, handoff)
     return handoff

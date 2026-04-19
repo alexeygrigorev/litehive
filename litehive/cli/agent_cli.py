@@ -18,7 +18,7 @@ import typer
 
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 
-from litehive.config.workspace import resolve_workspace
+from litehive.config.workspace import normalize_workspace_root, resolve_workspace
 from litehive.domain.reports import TaskActivityEntry
 from litehive.state.records import get_task_record
 from litehive.state.persist import load_state
@@ -92,6 +92,10 @@ def agent_report_command(
         typer.Option("--step", hidden=True, help="Legacy alias for --stage"),
     ] = None,
     task_id: Annotated[str | None, typer.Option("--task-id", help="Override task id")] = None,
+    workspace: Annotated[
+        Path | None,
+        typer.Option("--workspace", help="Repository root containing .litehive/"),
+    ] = None,
     files_changed: Annotated[list[str] | None, typer.Option("--files-changed", help="Changed file paths")] = None,
 ) -> None:
     if message == "-":
@@ -123,7 +127,11 @@ def agent_report_command(
 
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
     try:
-        root = resolve_workspace(tid)
+        root = (
+            resolve_workspace(tid)
+            if workspace is None
+            else normalize_workspace_root(workspace, source="--workspace")
+        )
     except ValueError as exc:
         print(f"report failed: {exc}")
         raise SystemExit(1)

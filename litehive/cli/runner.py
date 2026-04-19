@@ -248,6 +248,10 @@ def report_command(
     stage: Annotated[str | None, typer.Option(help="Stage name")] = None,
     step: Annotated[str | None, typer.Option("--step", hidden=True)] = None,
     task_id: Annotated[str | None, typer.Option(help="Task ID")] = None,
+    workspace: Annotated[
+        Path | None,
+        typer.Option("--workspace", help="Repository root containing .litehive/"),
+    ] = None,
     files_changed: Annotated[list[str] | None, typer.Option(help="Changed paths; repeat for multiple")] = None,
 ) -> int:
     from litehive.cli.agent_cli import block_if_agent
@@ -260,7 +264,11 @@ def report_command(
     if not task_id:
         task_id = os.environ.get("LITEHIVE_TASK_ID")
     try:
-        root = resolve_workspace(task_id)
+        root = (
+            resolve_workspace(task_id)
+            if workspace is None
+            else normalize_workspace_root(workspace, source="--workspace")
+        )
     except ValueError as exc:
         print(f"report failed: {exc}")
         return 1

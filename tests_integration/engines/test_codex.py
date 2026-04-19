@@ -30,7 +30,7 @@ def test_codex_can_invoke_litehive_report_and_persist_thread_comment(integration
     task = create_task(integration_root, title="Integration report task", auto_commit=False)
     set_active_task(integration_root, task.id)
     prompt = (
-        f'Run `litehive report --verdict pass --role swe --stage implementing --task-id {task.id} '
+        f'Run `"$LITEHIVE_PYTHON_PATH" -m litehive.main report --verdict pass --role swe --stage implementing --task-id {task.id} '
         '--workspace . --message "integration report from codex"` exactly once.'
     )
     _, execution = execute_engine_prompt("codex", prompt=prompt, cwd=integration_root)

@@ -7,23 +7,22 @@ import signal
 import time
 from typing import Callable
 
-from heru import extract_engine_timeline, render_execution_transcript
-from litehive.agents._continuation import extract_execution_continuation
-from litehive.agents.session_store import (
-    load_subagent_session,
-    save_subagent_artifacts,
-)
+from heru import extract_engine_continuation, extract_engine_timeline, render_execution_transcript
 from heru.base import CLIExecutionResult
-from litehive.observability.events import append_event, append_session_log, ensure_session_log
 from heru.types import SubagentRef
-from litehive.domain.common import utcnow
-from litehive.domain.runtime import ResourceLimitEvent
-from litehive.domain.task import TaskRecord
 from litehive.agents.artifacts import (
     write_stream_artifact,
     write_text_artifact,
 )
+from litehive.agents.session_store import (
+    load_subagent_session,
+    save_subagent_artifacts,
+)
 from litehive.domain.agent import SubagentInactivityTimeout
+from litehive.domain.common import utcnow
+from litehive.domain.runtime import ResourceLimitEvent
+from litehive.domain.task import TaskRecord
+from litehive.observability.events import append_event, append_session_log, ensure_session_log
 from litehive.tasks.runtime import mark_subagent_pid
 
 _OPENCODE_INACTIVITY_TIMEOUT_SECONDS = 300.0
@@ -57,7 +56,7 @@ class SessionMixin:
         engine_name: str,
         execution: CLIExecutionResult | None,
     ):
-        return extract_execution_continuation(engine_name, execution)
+        return extract_engine_continuation(engine_name, execution)
 
     @staticmethod
     def _extract_execution_timeline(

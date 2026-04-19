@@ -549,6 +549,43 @@ def test_root_report_defaults_to_litehive_task_id_env(tmp_path: Path, monkeypatc
     assert comments[0].message == "root env task id"
 
 
+def test_root_report_accepts_workspace_override(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Root report workspace override")
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
+    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=str(outside)):
+        result = runner.invoke(
+            root_app,
+            [
+                "report",
+                "--workspace",
+                str(tmp_path),
+                "--task-id",
+                task.id,
+                "--role",
+                "swe",
+                "--verdict",
+                "pass",
+                "--message",
+                "root workspace override",
+            ],
+            standalone_mode=False,
+        )
+
+    assert result.exit_code == 0, result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    comments = load_task_activity(tmp_path, updated)
+    assert len(comments) == 1
+    assert comments[0].message == "root workspace override"
+
+
 def test_root_report_fails_clearly_when_workspace_cannot_be_resolved(tmp_path: Path, monkeypatch) -> None:
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -574,3 +611,36 @@ def test_root_report_fails_clearly_when_workspace_cannot_be_resolved(tmp_path: P
     assert result.exit_code == 0
     assert result.return_value == 1
     assert "report failed: unable to resolve workspace" in result.output
+
+
+def test_agent_report_accepts_workspace_override(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Agent report workspace override")
+    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "report",
+            "--workspace",
+            str(tmp_path),
+            "--task-id",
+            task.id,
+            "--role",
+            "swe",
+            "--stage",
+            "implementing",
+            "--verdict",
+            "pass",
+            "--message",
+            "agent workspace override",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    comments = load_task_activity(tmp_path, updated)
+    assert len(comments) == 1
+    assert comments[0].message == "agent workspace override"

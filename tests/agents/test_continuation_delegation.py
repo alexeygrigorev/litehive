@@ -1,11 +1,11 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-import heru
-from litehive.agents._continuation import extract_execution_continuation
+from heru import extract_engine_continuation, get_engine
 from heru.base import CLIExecutionResult
+from heru.types import RuntimeEngineContinuation
+from litehive.agents.session import SessionMixin
 from litehive.config.engine_models import _set_continuation_handoff
-from litehive.domain.runtime import RuntimeEngineContinuation
 from litehive.state.records import create_task
 
 
@@ -20,8 +20,8 @@ def _execution(stdout: str) -> CLIExecutionResult:
     )
 
 
-def test_extract_execution_continuation_prefers_unified_events(monkeypatch) -> None:
-    adapter = heru.ENGINE_REGISTRY["codex"]
+def test_heru_extract_engine_continuation_prefers_unified_events(monkeypatch) -> None:
+    adapter = get_engine("codex")
 
     def fail_if_called(execution):  # type: ignore[no-untyped-def]
         raise AssertionError("Adapter fallback should not run for codex")
@@ -37,13 +37,13 @@ def test_extract_execution_continuation_prefers_unified_events(monkeypatch) -> N
         '"usage_delta":{},"raw":{},"metadata":{}}\n'
     )
 
-    continuation = extract_execution_continuation("codex", execution)
+    continuation = extract_engine_continuation("codex", execution)
 
     assert continuation is not None
     assert continuation.resume_id == "session-42"
 
 
-def test_extract_execution_continuation_delegates_to_heru_for_supported_engines(monkeypatch) -> None:
+def test_session_mixin_extract_execution_continuation_delegates_to_heru_for_supported_engines(monkeypatch) -> None:
     captured: list[str] = []
 
     def fake_extract(engine_name, execution):  # type: ignore[no-untyped-def]
@@ -51,10 +51,10 @@ def test_extract_execution_continuation_delegates_to_heru_for_supported_engines(
         assert execution is not None
         return RuntimeEngineContinuation(session_id=f"{engine_name}-session")
 
-    monkeypatch.setattr("litehive.agents._continuation._extract_engine_continuation", fake_extract)
+    monkeypatch.setattr("litehive.agents.session.extract_engine_continuation", fake_extract)
 
     for engine_name in ("codex", "claude", "copilot", "gemini", "goz", "opencode"):
-        continuation = extract_execution_continuation(engine_name, _execution("plain stdout"))
+        continuation = SessionMixin._extract_execution_continuation(engine_name, _execution("plain stdout"))
         assert continuation is not None
         assert continuation.resume_id == f"{engine_name}-session"
 
@@ -120,7 +120,5 @@ def test_set_continuation_handoff_preserves_unified_continuation_payload(tmp_pat
 
     assert handoff.continuation is not None
     assert handoff.continuation.resume_id == "session-42"
-    # summary/warnings are no longer populated from adapter parse_stage_report —
-    # that path was deleted along with the STAGE_RESULT YAML block parser.
     assert captured["task_id"] == task.id
     assert captured["handoff"].continuation.resume_id == "session-42"
