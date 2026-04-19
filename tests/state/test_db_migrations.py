@@ -6,10 +6,26 @@ from typer.testing import CliRunner
 
 from litehive.agents.session_store import load_subagent_report, save_subagent_artifacts
 from litehive.cli.app import app
+from litehive.config.paths import worktree_root
 from litehive.config.paths import workspace_database_path
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task
 from litehive.db.schema import Migration, MigrationApplyError, apply_pending_migrations, available_migrations
+
+
+def _write_cache_tool(cache_target: Path) -> None:
+    cache_target.parent.mkdir(parents=True, exist_ok=True)
+    cache_target.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    cache_target.chmod(0o755)
+
+
+def _create_broken_venv_binary(checkout_root: Path, binary_name: str, cache_root: Path) -> None:
+    bin_dir = checkout_root / ".venv" / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    cache_target = cache_root / f"{binary_name}-tool"
+    _write_cache_tool(cache_target)
+    (bin_dir / binary_name).symlink_to(cache_target)
+    cache_target.unlink()
 
 
 def test_embedded_initial_migration_is_discoverable() -> None:
@@ -110,6 +126,27 @@ def test_daemon_run_applies_pending_migrations_before_start(
         ).fetchone()
     assert applied_versions == [1, 2]
     assert daemon_marker is not None
+
+
+def test_daemon_run_reports_broken_worktree_venv_before_start(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Queued work")
+    broken_worktree = worktree_root(tmp_path) / "T-0001-demo"
+    _create_broken_venv_binary(broken_worktree, "ruff", tmp_path / "fake-home" / ".cache" / "uv")
+
+    result = CliRunner().invoke(
+        app,
+        ["daemon", "run", "--workspace", str(tmp_path)],
+        standalone_mode=False,
+    )
+
+    assert result.return_value == 1
+    assert "daemon run failed: broken virtualenv entrypoints blocked pool start:" in result.output
+    assert "binary=ruff" in result.output
+    assert f"venv={broken_worktree / '.venv'} checkout={broken_worktree}" in result.output
+    assert "uv venv --clear .venv && uv sync --extra dev" in result.output
 
 
 def test_legacy_workspace_db_is_rebuilt_from_task_yaml_only(tmp_path: Path) -> None:

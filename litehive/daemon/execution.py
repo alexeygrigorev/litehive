@@ -17,6 +17,7 @@ from litehive.config.loading import load_config
 from litehive.config.paths import workspace_logs_dir
 from litehive.config.workspace import ensure_workspace
 from litehive.observability.status import render_runner_status_line
+from litehive.recovery.venv_health import daemon_broken_venv_message, probe_broken_venv_executables
 from litehive.state.backup import create_scheduled_workspace_backup
 from litehive.state.persist import load_state, set_pool_stop_reason
 from litehive.state.locking import runner_status
@@ -169,6 +170,16 @@ def _emit(message: str, *, stream: TextIO | None) -> None:
     stream.flush()
 
 
+def _ensure_workspace_venvs_ready(
+    workspace: Path,
+    *,
+    output_stream: TextIO | None,
+) -> None:
+    findings = probe_broken_venv_executables(workspace)
+    if findings:
+        raise RuntimeError(daemon_broken_venv_message(workspace, findings))
+
+
 def _maybe_run_workspace_backup(
     workspace: Path,
     *,
@@ -218,6 +229,11 @@ def run_daemon_loop(
 ) -> int:
     workspace = workspace.resolve()
     ensure_workspace(workspace)
+    try:
+        _ensure_workspace_venvs_ready(workspace, output_stream=output_stream)
+    except RuntimeError as exc:
+        _emit(str(exc), stream=output_stream)
+        return 1
     command_prefix = _default_command_prefix()
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     log_base = workspace_logs_dir(workspace) / "run-all"
@@ -272,6 +288,13 @@ def run_daemon_loop(
 
             _emit("", stream=output_stream)
             _emit(f"== iteration {iteration} ==", stream=output_stream)
+
+            if iteration > 1:
+                try:
+                    _ensure_workspace_venvs_ready(workspace, output_stream=output_stream)
+                except RuntimeError as exc:
+                    _emit(str(exc), stream=output_stream)
+                    return 1
 
             try:
                 _maybe_run_workspace_backup(workspace, stream=output_stream)
@@ -484,6 +507,7 @@ def start_background_daemon(workspace: Path) -> int:
         raise RuntimeError(f"daemon already running for {workspace}: pid={pid}")
     if existing is not None and existing.get("status") == "stale":
         unregister_daemon(workspace)
+    _ensure_workspace_venvs_ready(workspace, output_stream=None)
     project_root = Path(__file__).resolve().parents[2]
     process = subprocess.Popen(
         [

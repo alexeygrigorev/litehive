@@ -19,6 +19,21 @@ from litehive.state.records import create_task, save_task
 from litehive.state.persist import load_state, save_state, set_pool_stop_reason
 
 
+def _write_cache_tool(cache_target: Path) -> None:
+    cache_target.parent.mkdir(parents=True, exist_ok=True)
+    cache_target.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    cache_target.chmod(0o755)
+
+
+def _create_broken_venv_binary(checkout_root: Path, binary_name: str, cache_root: Path) -> None:
+    bin_dir = checkout_root / ".venv" / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    cache_target = cache_root / f"{binary_name}-tool"
+    _write_cache_tool(cache_target)
+    (bin_dir / binary_name).symlink_to(cache_target)
+    cache_target.unlink()
+
+
 def test_attention_list_and_resolve_persist_items(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     item = record_attention(
@@ -339,3 +354,32 @@ def test_pool_halts_immediately_when_local_main_diverges_from_origin(tmp_path: P
     assert "git fetch origin main" in output
     assert "git log --oneline --left-right main...origin/main" in output
     assert load_state(tmp_path).pool_stop_reason == "diverged_from_origin"
+
+
+def test_pool_refuses_to_start_when_worktree_venv_is_broken(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Queued work")
+    broken_worktree = worktree_root(tmp_path) / "T-0001-demo"
+    _create_broken_venv_binary(broken_worktree, "ruff", tmp_path / "fake-home" / ".cache" / "uv")
+
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_logged_subprocess(command, **kwargs):
+        calls.append(tuple(command))
+        raise AssertionError("daemon should stop before repair or run subprocesses")
+
+    monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
+    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
+
+    stream = io.StringIO()
+    exit_code = run_daemon_loop(tmp_path, output_stream=stream, session_dir=tmp_path / "logs")
+    output = stream.getvalue()
+
+    assert exit_code == 1
+    assert calls == []
+    assert "broken virtualenv entrypoints blocked pool start:" in output
+    assert f"venv={broken_worktree / '.venv'} checkout={broken_worktree}" in output
+    assert "binary=ruff" in output
+    assert "uv venv --clear .venv && uv sync --extra dev" in output

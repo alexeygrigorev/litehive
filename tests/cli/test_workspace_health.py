@@ -1,9 +1,14 @@
+import os
 from pathlib import Path
+import shutil
+import subprocess
 from types import SimpleNamespace
 
 from heru import ENGINE_CHOICES
 from heru.quota import UsageStatus, UsageWindow
+from typer.testing import CliRunner
 
+from litehive.cli.app import app
 from litehive.cli.workspace import (
     _collect_quota_health,
     _print_doctor_snapshot,
@@ -13,10 +18,31 @@ from litehive.cli.workspace import (
     status_command,
 )
 from litehive.config.model import LitehiveConfig
+from litehive.config.paths import worktree_root
+from litehive.config.workspace import ensure_workspace
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import WorkspaceState
 from litehive.domain.task_ops import WorkspaceRepairSummary
+
+_RUNNER = CliRunner()
+
+
+def _write_cache_tool(cache_target: Path) -> None:
+    cache_target.parent.mkdir(parents=True, exist_ok=True)
+    cache_target.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    cache_target.chmod(0o755)
+
+
+def _create_broken_venv_binary(checkout_root: Path, binary_name: str, cache_root: Path) -> Path:
+    bin_dir = checkout_root / ".venv" / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    cache_target = cache_root / f"{binary_name}-tool"
+    _write_cache_tool(cache_target)
+    binary_path = bin_dir / binary_name
+    binary_path.symlink_to(cache_target)
+    cache_target.unlink()
+    return binary_path
 
 
 def test_health_daemon_status_defaults_to_stopped(tmp_path: Path, monkeypatch) -> None:
@@ -72,6 +98,7 @@ def test_repair_summary_lines_include_empty_fields_for_repair_mode() -> None:
         "requeued_tasks: -",
         "removed_queue_entries: -",
         "deduped_queue_entries: -",
+        "broken_venv_binaries: -",
         "restored_queue_entries: -",
         "finalized_commit_tasks: -",
         "stale_process_tasks: -",
@@ -141,6 +168,69 @@ def test_print_doctor_snapshot_reports_clean_workspace(tmp_path: Path, monkeypat
 
     assert exit_code == 0
     assert f"doctor: clean workspace={tmp_path}" in output
+
+
+def test_doctor_reports_broken_workspace_and_worktree_venvs_without_claiming_fix(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    cache_root = tmp_path / "fake-home" / ".cache" / "uv"
+    _create_broken_venv_binary(tmp_path, "ruff", cache_root)
+    worktree_path = worktree_root(tmp_path) / "T-0001-demo"
+    _create_broken_venv_binary(worktree_path, "pytest", cache_root)
+
+    result = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
+
+    assert result.return_value == 1
+    assert f"venv_health: BROKEN binary=ruff venv={tmp_path / '.venv'}" in result.output
+    assert f"venv={worktree_path / '.venv'} checkout={worktree_path}" in result.output
+    assert "uv venv --clear .venv && uv sync --extra dev" in result.output
+
+    fix_result = _RUNNER.invoke(app, ["doctor", "--fix", "--workspace", str(tmp_path)], standalone_mode=False)
+
+    assert fix_result.return_value == 1
+    assert "doctor_repaired: no" in fix_result.output
+    assert f"broken_venv_binaries: {tmp_path / '.venv'}:ruff {worktree_path / '.venv'}:pytest" in fix_result.output
+    assert "uv venv --clear .venv && uv sync --extra dev" in fix_result.output
+
+
+def test_documented_clear_and_sync_fix_restores_broken_symlink_after_uv_cache_clean(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    workspace = tmp_path / "workspace"
+    cache_dir = tmp_path / "uv-cache"
+    workspace.mkdir()
+    shutil.copy(repo_root / "pyproject.toml", workspace / "pyproject.toml")
+    shutil.copy(repo_root / "uv.lock", workspace / "uv.lock")
+    shutil.copy(repo_root / "README.md", workspace / "README.md")
+    shutil.copytree(repo_root / "litehive", workspace / "litehive")
+    shutil.copytree(repo_root / "heru", workspace / "heru")
+    ensure_workspace(workspace)
+
+    env = {
+        **os.environ,
+        "UV_CACHE_DIR": str(cache_dir),
+        "UV_LINK_MODE": "symlink",
+    }
+
+    subprocess.run(["uv", "sync", "--extra", "dev"], cwd=workspace, env=env, check=True, capture_output=True, text=True)
+    ruff_path = workspace / ".venv" / "bin" / "ruff"
+    assert ruff_path.is_symlink()
+
+    subprocess.run(["uv", "cache", "clean"], cwd=workspace, env=env, check=True, capture_output=True, text=True)
+    try:
+        broken = subprocess.run([str(ruff_path), "--version"], cwd=workspace, capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        broken = None
+    assert broken is None or broken.returncode != 0
+
+    doctor = _RUNNER.invoke(app, ["doctor", "--workspace", str(workspace)], standalone_mode=False)
+    assert doctor.return_value == 1
+    assert "uv venv --clear .venv && uv sync --extra dev" in doctor.output
+
+    subprocess.run(["uv", "venv", "--clear", ".venv"], cwd=workspace, env=env, check=True, capture_output=True, text=True)
+    subprocess.run(["uv", "sync", "--extra", "dev"], cwd=workspace, env=env, check=True, capture_output=True, text=True)
+    repaired = subprocess.run([str(ruff_path), "--version"], cwd=workspace, capture_output=True, text=True, check=False)
+
+    assert repaired.returncode == 0
+    assert repaired.stdout.startswith("ruff ")
 
 
 def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatch, capsys) -> None:

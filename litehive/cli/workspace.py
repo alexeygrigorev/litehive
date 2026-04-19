@@ -47,10 +47,12 @@ from litehive.observability.status import (
     render_task_summary,
 )
 from litehive.observability.status_diagnostics import (
+    StatusIssue,
     collect_status_snapshot,
     render_issue_lines,
     status_has_problems,
 )
+from litehive.recovery.venv_health import broken_venv_issue_message, probe_broken_venv_executables
 from litehive.recovery.workspace_repair import repair_workspace_state
 from litehive.state.records import get_task, list_tasks_state_first
 from litehive.state.persist import load_state
@@ -154,6 +156,7 @@ def _repair_summary_lines(
         ("requeued_tasks", summary.requeued_task_ids),
         ("removed_queue_entries", summary.removed_queue_entries),
         ("deduped_queue_entries", summary.deduped_queue_entries),
+        ("broken_venv_binaries", summary.broken_venv_binaries),
     ]
     if include_extended_fields:
         items.extend(
@@ -170,12 +173,24 @@ def _repair_summary_lines(
     return lines
 
 
+def _doctor_venv_issues(root: Path) -> list[StatusIssue]:
+    return [
+        StatusIssue(
+            key="venv_health",
+            severity="ERROR",
+            message=broken_venv_issue_message(root, finding),
+        )
+        for finding in probe_broken_venv_executables(root)
+    ]
+
+
 def _print_doctor_snapshot(root: Path) -> int:
     snapshot = collect_status_snapshot(root)
-    if not snapshot.issues:
+    issues = [*snapshot.issues, *_doctor_venv_issues(root)]
+    if not issues:
         print(f"doctor: clean workspace={root}")
         return 0
-    for line in render_issue_lines(snapshot.issues):
+    for line in render_issue_lines(issues):
         print(line)
     return 1
 
@@ -188,7 +203,7 @@ def doctor_command(
     root = workspace.resolve()
     if fix:
         try:
-            summary = repair_workspace_state(root)
+            summary = repair_workspace_state(root, repair_broken_venvs_in_checkouts=True)
         except WorkspaceConflictError as exc:
             print(f"doctor failed: {exc}")
             return 1
@@ -275,7 +290,7 @@ def status_command(
 def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     ensure_workspace(workspace)
     try:
-        summary = repair_workspace_state(workspace)
+        summary = repair_workspace_state(workspace, repair_broken_venvs_in_checkouts=True)
     except WorkspaceConflictError as exc:
         print(f"repair failed: {exc}")
         return 1
@@ -289,6 +304,11 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(line)
     print(f"active_task_id: {state.active_task_id}")
     print(f"queue_length: {len(state.queue)}")
+    issues = _doctor_venv_issues(workspace)
+    if issues:
+        for line in render_issue_lines(issues):
+            print(line)
+        return 1
     return 0
 
 

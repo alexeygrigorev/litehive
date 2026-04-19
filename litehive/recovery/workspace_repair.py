@@ -19,6 +19,7 @@ from litehive.domain.runtime import (
 )
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import WorkspaceRepairSummary
+from litehive.recovery.venv_health import probe_broken_venv_executables
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,
@@ -561,8 +562,17 @@ def recover_stale_runner_state(
         return mutated
 
 
-def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
+def repair_workspace_state(root: Path, *, repair_broken_venvs_in_checkouts: bool = False) -> WorkspaceRepairSummary:
     summary = WorkspaceRepairSummary()
+    if repair_broken_venvs_in_checkouts:
+        # Tradeoff: broken venv entrypoints are reported and block the daemon,
+        # but we do not auto-clear and rebuild `.venv` from `doctor --fix` or
+        # `repair`. Recreating the entire environment is a larger mutation than
+        # our usual deterministic state repairs, so we surface the exact venv
+        # and a verified operator remediation instead.
+        summary.broken_venv_binaries = [
+            f"{finding.checkout.venv_path}:{finding.binary_name}" for finding in probe_broken_venv_executables(root)
+        ]
     summary.stale_runner_recovered = recover_stale_runner_state(root, summary=summary)
     summary.mutated = summary.stale_runner_recovered
     return summary
