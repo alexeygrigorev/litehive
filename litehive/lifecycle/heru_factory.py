@@ -19,6 +19,7 @@ translating to/from the v2 contract:
 
 from datetime import UTC, datetime
 from pathlib import Path
+import re
 from typing import Any
 
 from heru import resolve_engine_resume_session_id
@@ -27,6 +28,7 @@ from litehive.domain.agent import EngineFailure
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
 from litehive.state.records import get_task
 from litehive.tasks.activity import latest_task_activity_entry
+from litehive.tasks.reports import normalized_files_changed
 from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
 from .nodes.agent import (
@@ -72,6 +74,41 @@ def _execution_checkout_has_changes(workspace_root: Path, task_id: str) -> bool:
     return workspace_head != checkout_head
 
 
+_REPORT_RESULT_HINTS = (
+    "pytest",
+    "ruff",
+    "mypy",
+    "test",
+    "tests",
+    "passed",
+    "failed",
+    "error",
+    "ok",
+    "verification",
+    "verified",
+    "status --full",
+)
+
+
+def _extract_test_results(message: str) -> list[str]:
+    results: list[str] = []
+    seen: set[str] = set()
+    for raw_line in message.splitlines():
+        line = re.sub(r"^\s*(?:[-*]|\d+\.)\s*", "", raw_line).strip()
+        if not line:
+            continue
+        lower = line.lower()
+        if lower.startswith(("files changed:", "changed files:", "files:")):
+            continue
+        if not any(hint in lower for hint in _REPORT_RESULT_HINTS):
+            continue
+        if line in seen:
+            continue
+        seen.add(line)
+        results.append(line)
+    return results[:4]
+
+
 def _latest_verdict_after(
     workspace_root: Path,
     task_id: str,
@@ -107,12 +144,17 @@ def _latest_verdict_after(
                 "workspace base, so no work landed"
             ),
         )
+    changed_files = normalized_files_changed(latest.files_changed)
     return AgentVerdict(
         outcome=latest.verdict,
         reason=latest.message or "",
         metadata={
-            "files_changed": list(latest.files_changed),
+            "files_changed": changed_files,
             "target_stage": latest.target_stage,
+            "last_report": {
+                "changed_files": changed_files,
+                "test_results": _extract_test_results(latest.message or ""),
+            },
         },
     )
 

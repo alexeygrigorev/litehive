@@ -55,9 +55,24 @@ def test_agent_verdict_metadata_flows_into_pass_event() -> None:
 def test_runner_updates_state_last_report_from_pass_metadata() -> None:
     """Runner._apply_event_side_effects copies Pass.metadata into state.last_report."""
     state = TaskState(task_id="T-0001", stage="implementing", pipeline_mode=PipelineMode.FULL)
-    event = Pass(metadata={"files_changed": ["x.py", "y.py"], "tests_added": 3})
+    event = Pass(
+        metadata={
+            "files_changed": ["x.py", "y.py"],
+            "tests_added": 3,
+            "last_report": {
+                "changed_files": ["x.py", "y.py"],
+                "test_results": [
+                    "uv run pytest -q tests/lifecycle/test_prompt_serializer.py -> 3 passed",
+                ],
+            },
+        }
+    )
 
     StateMachineRunner._apply_event_side_effects(state, event)
 
     assert state.last_report.files_changed == 2
     assert state.last_report.tests_added == 3
+    assert state.last_report.changed_files == ["x.py", "y.py"]
+    assert state.last_report.test_results == [
+        "uv run pytest -q tests/lifecycle/test_prompt_serializer.py -> 3 passed",
+    ]

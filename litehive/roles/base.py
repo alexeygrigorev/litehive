@@ -94,6 +94,7 @@ class RoleAgent(AgentNode):
             "pipeline_mode": state.pipeline_mode.value,
             "stage_retry": state.stage_retry.get(self.NODE_NAME, 0),
             "instruction_layers": self._assemble_instruction_layers(),
+            "last_report": state.last_report.to_payload(),
             "last_rejection": (
                 {
                     "source": last_rejection.source,

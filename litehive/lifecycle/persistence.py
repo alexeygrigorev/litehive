@@ -23,18 +23,25 @@ class Limits:
 class LastReport:
     files_changed: int = 0
     tests_added: int = 0
+    changed_files: list[str] = field(default_factory=list)
+    test_results: list[str] = field(default_factory=list)
 
-    def to_payload(self) -> dict[str, int]:
+    def to_payload(self) -> dict[str, int | list[str]]:
         return {
             "files_changed": self.files_changed,
             "tests_added": self.tests_added,
+            "changed_files": list(self.changed_files),
+            "test_results": list(self.test_results),
         }
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "LastReport":
+        files_changed = payload.get("files_changed", 0)
         return cls(
-            files_changed=int(payload.get("files_changed", 0)),
+            files_changed=len(files_changed) if isinstance(files_changed, list) else int(files_changed),
             tests_added=int(payload.get("tests_added", 0)),
+            changed_files=_string_list(payload.get("changed_files")),
+            test_results=_string_list(payload.get("test_results")),
         )
 
 
@@ -190,6 +197,20 @@ class InMemoryPersistence:
 
     def load(self, task_id: str) -> TaskState:
         return self._states[task_id]
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        normalized.append(text)
+    return normalized
 
 
 # ── sqlite-backed persistence ────────────────────────────────────────────

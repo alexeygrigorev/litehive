@@ -508,6 +508,53 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
     assert verdict.outcome == "pass"
 
 
+def test_latest_verdict_after_includes_retry_summary_metadata(tmp_path, monkeypatch) -> None:
+    from litehive.state.records import create_task
+
+    task = create_task(tmp_path, title="retry summary")
+    append_activity_entry(
+        tmp_path,
+        task,
+        TaskActivityEntry(
+            role="swe",
+            stage="implementing",
+            verdict="pass",
+            message=(
+                "AC1: `uv run pytest -q tests/lifecycle/test_prompt_serializer.py` -> 8 passed\n"
+                "AC2: `uv run ruff check --select E402,F401 litehive tests` -> all checks passed"
+            ),
+            files_changed=[
+                "litehive/lifecycle/prompt_serializer.py",
+                "tests/lifecycle/test_prompt_serializer.py",
+            ],
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.lifecycle.heru_factory._execution_checkout_has_changes",
+        lambda workspace_root, task_id: True,
+    )
+
+    verdict = _latest_verdict_after(
+        tmp_path,
+        task.id,
+        "implementing",
+        datetime.now(UTC) - timedelta(minutes=1),
+    )
+
+    assert verdict is not None
+    assert verdict.outcome == "pass"
+    assert verdict.metadata["last_report"] == {
+        "changed_files": [
+            "litehive/lifecycle/prompt_serializer.py",
+            "tests/lifecycle/test_prompt_serializer.py",
+        ],
+        "test_results": [
+            "AC1: `uv run pytest -q tests/lifecycle/test_prompt_serializer.py` -> 8 passed",
+            "AC2: `uv run ruff check --select E402,F401 litehive tests` -> all checks passed",
+        ],
+    }
+
+
 def test_latest_verdict_after_accepts_recovery_resume(tmp_path) -> None:
     from litehive.state.records import create_task
 

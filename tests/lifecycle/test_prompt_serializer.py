@@ -19,7 +19,7 @@ from litehive.domain.lifecycle_deltas import StateDelta
 from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.events import HookOk, Pass, Reject
 from litehive.lifecycle.journal import SqliteJournal
-from litehive.lifecycle.persistence import LastRejection, TaskState
+from litehive.lifecycle.persistence import LastRejection, LastReport, TaskState
 from litehive.lifecycle.prompt_serializer import serialize_prompt
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task, save_task
@@ -222,6 +222,74 @@ def test_serialize_includes_last_rejection(workspace: Path) -> None:
     assert "- Source: qa" in text
     assert "- Raised at phase: testing" in text
     assert "tests fail with ImportError" in text
+
+
+def test_retry_prompt_includes_prior_work_summary_from_last_report(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+    state = make_state(task.id)
+    state.stage_retry["implementing"] = 1
+    state.last_report = LastReport(
+        files_changed=2,
+        changed_files=[
+            "litehive/lifecycle/prompt_serializer.py",
+            "tests/lifecycle/test_prompt_serializer.py",
+        ],
+        test_results=[
+            "uv run pytest -q tests/lifecycle/test_prompt_serializer.py -> 8 passed",
+            "uv run ruff check --select E402,F401 litehive tests -> all checks passed",
+        ],
+    )
+
+    text = serialize_prompt(agent.build_prompt(state), task_record=task)
+
+    assert "Prior work (last attempt):" in text
+    assert (
+        "- Changed files: litehive/lifecycle/prompt_serializer.py, "
+        "tests/lifecycle/test_prompt_serializer.py"
+    ) in text
+    assert (
+        "- Test results: uv run pytest -q tests/lifecycle/test_prompt_serializer.py -> 8 passed; "
+        "uv run ruff check --select E402,F401 litehive tests -> all checks passed"
+    ) in text
+
+
+def test_retry_prompt_omits_prior_work_when_last_report_has_no_retry_summary(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+    state = make_state(task.id)
+    state.stage_retry["implementing"] = 1
+
+    text = serialize_prompt(agent.build_prompt(state), task_record=task)
+
+    assert "Prior work (last attempt):" not in text
+
+
+def test_retry_prompt_filters_last_rejection_reason_from_prior_work(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+    state = make_state(task.id)
+    state.stage_retry["implementing"] = 1
+    state.last_report = LastReport(
+        files_changed=1,
+        changed_files=["litehive/lifecycle/prompt_serializer.py"],
+        test_results=[
+            "uv run pytest -q tests/lifecycle/test_prompt_serializer.py -> 8 passed",
+            "tests fail with ImportError",
+        ],
+    )
+    state.last_rejection_by_stage["implementing"] = LastRejection(
+        source="qa",
+        reason="tests fail with ImportError",
+        raised_at_phase="testing",
+    )
+
+    text = serialize_prompt(agent.build_prompt(state), task_record=task)
+
+    assert "Prior work (last attempt):" in text
+    assert "uv run pytest -q tests/lifecycle/test_prompt_serializer.py -> 8 passed" in text
+    assert "- Reason: tests fail with ImportError" in text
+    assert "- Test results: tests fail with ImportError" not in text
 
 
 def test_last_rejection_guidance_respects_repo_contract_and_opt_in_coverage(workspace: Path) -> None:

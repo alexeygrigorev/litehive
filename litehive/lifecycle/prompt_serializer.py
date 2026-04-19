@@ -65,6 +65,11 @@ def serialize_prompt(
     if last_rejection:
         sections.append(_last_rejection_section(last_rejection))
 
+    if (prompt.get("stage_retry") or 0) > 0:
+        prior_work = _prior_work_section(prompt.get("last_report") or {}, last_rejection)
+        if prior_work:
+            sections.append(prior_work)
+
     recovery_trigger = prompt.get("recovery_trigger")
     if recovery_trigger:
         sections.append(_recovery_trigger_section(recovery_trigger, prompt))
@@ -185,6 +190,29 @@ def _last_rejection_section(rejection: dict[str, Any]) -> str:
     )
 
 
+def _prior_work_section(last_report: dict[str, Any], last_rejection: dict[str, Any] | None = None) -> str:
+    changed_files = _string_list(last_report.get("changed_files"))
+    test_results = _string_list(last_report.get("test_results"))
+    rejection_reason = str((last_rejection or {}).get("reason") or "").strip()
+    if rejection_reason:
+        test_results = [result for result in test_results if rejection_reason not in result]
+
+    lines: list[str] = []
+    if changed_files:
+        lines.append(f"- Changed files: {_compact_list(changed_files, limit=4)}")
+    else:
+        files_changed = int(last_report.get("files_changed") or 0)
+        if files_changed:
+            lines.append(f"- Files changed: {files_changed}")
+
+    if test_results:
+        lines.append(f"- Test results: {_compact_list(test_results, limit=2, separator='; ')}")
+
+    if not lines:
+        return ""
+    return "Prior work (last attempt):\n" + "\n".join(lines)
+
+
 def _recovery_trigger_section(recovery_trigger: dict[str, Any], prompt: dict[str, Any]) -> str:
     lines = ["Recovery trigger (what sent the task into recovery):"]
     for key, value in recovery_trigger.items():
@@ -225,6 +253,27 @@ def _cap_message(entry: dict[str, Any]) -> dict[str, Any]:
         return entry
     keep = max(_MESSAGE_CAP - len(_TRUNCATION_MARKER), 0)
     return {**entry, "message": msg[:keep] + _TRUNCATION_MARKER}
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        normalized.append(text)
+    return normalized
+
+
+def _compact_list(items: list[str], *, limit: int, separator: str = ", ") -> str:
+    if len(items) <= limit:
+        return separator.join(items)
+    shown = separator.join(items[:limit])
+    return f"{shown}{separator}+{len(items) - limit} more"
 
 
 def _pipeline_stage_key(name: str | None) -> str | None:

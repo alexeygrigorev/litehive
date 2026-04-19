@@ -97,11 +97,20 @@ class StateMachineRunner:
         files_changed = meta.get("files_changed")
         if isinstance(files_changed, list):
             state.last_report.files_changed = len(files_changed)
+            state.last_report.changed_files = [str(path).strip() for path in files_changed if str(path).strip()]
         elif isinstance(files_changed, int):
             state.last_report.files_changed = files_changed
         tests_added = meta.get("tests_added")
         if isinstance(tests_added, int):
             state.last_report.tests_added = tests_added
+        last_report = meta.get("last_report")
+        if isinstance(last_report, dict):
+            changed_files = last_report.get("changed_files")
+            if isinstance(changed_files, list):
+                state.last_report.changed_files = [str(path).strip() for path in changed_files if str(path).strip()]
+            test_results = last_report.get("test_results")
+            if isinstance(test_results, list):
+                state.last_report.test_results = [str(item).strip() for item in test_results if str(item).strip()]
         commit_result = meta.get("commit_result")
         if isinstance(commit_result, dict):
             head_sha = commit_result.get("head_sha")

@@ -99,7 +99,12 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
             head_sha="abc123",
             reason="checkpoint_created",
         ),
-        last_report=LastReport(files_changed=7, tests_added=3),
+        last_report=LastReport(
+            files_changed=7,
+            tests_added=3,
+            changed_files=["litehive/lifecycle/prompt_serializer.py", "tests/lifecycle/test_prompt_serializer.py"],
+            test_results=["uv run pytest -q tests/lifecycle/test_prompt_serializer.py -> 12 passed"],
+        ),
         last_rejection_by_stage={
             "implementing": LastRejection(
                 source="qa",
@@ -138,6 +143,13 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
     assert loaded.commit_result.reason == "checkpoint_created"
     assert loaded.last_report.files_changed == 7
     assert loaded.last_report.tests_added == 3
+    assert loaded.last_report.changed_files == [
+        "litehive/lifecycle/prompt_serializer.py",
+        "tests/lifecycle/test_prompt_serializer.py",
+    ]
+    assert loaded.last_report.test_results == [
+        "uv run pytest -q tests/lifecycle/test_prompt_serializer.py -> 12 passed"
+    ]
     assert loaded.last_rejection_by_stage["implementing"].source == "qa"
     assert loaded.last_rejection_by_stage["implementing"].reason == "tests fail"
     assert loaded.consecutive_same_hook_rejects == 2
