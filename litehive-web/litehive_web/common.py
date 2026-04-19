@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from jinja2 import Environment, FileSystemLoader
 
 _POLL_INTERVAL_MS = 1500
 MAX_ARTIFACT_BYTES = 64 * 1024
@@ -20,12 +19,18 @@ WEB_REVIEWABLE_STAGES = {"testing", "accepting"}
 WEB_VERDICT_OPTIONS = ("pass", "reject", "comment")
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
-_jinja_env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=False)
+
+
+def _render_template(name: str, **context: Any) -> str:
+    from jinja2 import Environment, FileSystemLoader
+
+    environment = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=False)
+    return environment.get_template(name).render(**context)
 
 
 def render_index() -> str:
-    template = _jinja_env.get_template("index.html")
-    return template.render(
+    return _render_template(
+        "index.html",
         poll_interval_ms=_POLL_INTERVAL_MS,
         poll_seconds=f"{_POLL_INTERVAL_MS / 1000:.1f}",
     )

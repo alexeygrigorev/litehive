@@ -5,13 +5,18 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-import heru.quota.claude_quota as claude_quota_mod
-import heru.quota.codex_quota as codex_quota_mod
-import heru.quota.copilot_quota as copilot_quota_mod
-import heru.quota.zai_quota as zai_quota_mod
 import yaml
 
 from heru import extract_engine_continuation, get_engine
+from heru.quota import (
+    UsageStatus,
+    check_claude_quota,
+    check_codex_quota,
+    check_copilot_quota,
+    check_zai_quota,
+    preferred_reset_at,
+    usage_limit_block_reason,
+)
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace_files import config_path
 from litehive.domain.runtime import RuntimeContinuationHandoff
@@ -169,46 +174,31 @@ def _record_codex_quota_monitoring(root: Path, status: object) -> None:
         pass
 
 
+def _quota_checker(engine_name: str):
+    if engine_name == "codex":
+        return check_codex_quota
+    if engine_name == "claude":
+        return check_claude_quota
+    if engine_name == "copilot":
+        return check_copilot_quota
+    if engine_name in ("goz", "opencode"):
+        return check_zai_quota
+    return None
+
+
 def _engine_quota_block(
     root: Path,
     engine_name: str,
 ) -> tuple[str | None, datetime | None]:
+    checker = _quota_checker(engine_name)
+    if checker is None:
+        return None, None
+    status = checker()
     if engine_name == "codex":
-        status = codex_quota_mod.check_codex_quota()
         _record_codex_quota_monitoring(root, status)
-        if status.error is not None or not status.limit_reached:
-            return None, None
-        reset_at = _parse_datetime_utc(status.long_term.reset_at)
-        reset_info = f", resets {status.long_term.reset_at}" if status.long_term.reset_at else ""
-        return (
-            f"codex quota exhausted (long-term window at {status.long_term.used_percent:.0f}%{reset_info})",
-            reset_at,
-        )
-    if engine_name == "claude":
-        status = claude_quota_mod.check_claude_quota()
-        if status.error or not status.limit_reached:
-            return None, None
-        return (
-            f"claude usage limit reached (long-term window at {status.long_term.used_percent:.0f}%, resets {status.long_term.reset_at})",
-            _parse_datetime_utc(status.long_term.reset_at),
-        )
-    if engine_name == "copilot":
-        status = copilot_quota_mod.check_copilot_quota()
-        if status.error or not status.limit_reached:
-            return None, None
-        return (
-            f"copilot premium requests low ({status.long_term.percent_remaining:.0f}% remaining, resets {status.long_term.reset_at})",
-            _parse_datetime_utc(status.long_term.reset_at),
-        )
-    if engine_name in ("goz", "opencode"):
-        status = zai_quota_mod.check_zai_quota()
-        if status.error or not status.limit_reached:
-            return None, None
-        return (
-            f"zai usage limit reached (long-term window at {status.long_term.used_percent:.0f}%)",
-            _parse_datetime_utc(status.long_term.reset_at),
-        )
-    return None, None
+    if not isinstance(status, UsageStatus):
+        return None, None
+    return usage_limit_block_reason(engine_name, status), _parse_datetime_utc(preferred_reset_at(status))
 
 
 def select_engine(

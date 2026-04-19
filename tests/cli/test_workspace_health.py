@@ -103,8 +103,8 @@ def test_repair_summary_lines_include_empty_fields_for_repair_mode() -> None:
 def test_quota_health_formats_status_and_reset() -> None:
     status = UsageStatus(
         limit_reached=True,
-        short_term=UsageWindow(percent_remaining=12.5, reset_at="2026-04-14T12:00:00Z"),
-        long_term=UsageWindow(percent_remaining=45.0, reset_at="2026-04-15T00:00:00Z"),
+        hours=UsageWindow(percent_remaining=12.5, reset_at="2026-04-14T12:00:00Z"),
+        weeks=UsageWindow(percent_remaining=45.0, reset_at="2026-04-15T00:00:00Z"),
     )
 
     health = _quota_health("codex", status, reset_at="2026-04-15T00:00:00Z")
@@ -112,26 +112,26 @@ def test_quota_health_formats_status_and_reset() -> None:
     assert health.engine == "codex"
     assert health.status == "warning"
     assert health.problem is True
-    assert health.summary == "short=12.5% remaining long=45.0% remaining reset=2026-04-15T00:00:00Z"
+    assert health.summary == "hours remaining=12.5% weeks remaining=45.0% reset=2026-04-15T00:00:00Z"
 
 
 def test_collect_quota_health_reuses_shared_statuses(monkeypatch) -> None:
     claude_status = UsageStatus(
-        short_term=UsageWindow(percent_remaining=80.0, reset_at="2026-04-14T11:00:00Z"),
-        long_term=UsageWindow(percent_remaining=60.0),
+        hours=UsageWindow(percent_remaining=80.0, reset_at="2026-04-14T11:00:00Z"),
+        weeks=UsageWindow(percent_remaining=60.0),
     )
     codex_status = UsageStatus(
-        short_term=UsageWindow(percent_remaining=70.0),
-        long_term=UsageWindow(percent_remaining=50.0, reset_at="2026-04-15T00:00:00Z"),
+        hours=UsageWindow(percent_remaining=70.0),
+        weeks=UsageWindow(percent_remaining=50.0, reset_at="2026-04-15T00:00:00Z"),
     )
     copilot_status = UsageStatus(
-        short_term=UsageWindow(percent_remaining=65.0),
-        long_term=UsageWindow(percent_remaining=40.0, reset_at="2026-04-16T00:00:00Z"),
+        hours=UsageWindow(percent_remaining=65.0),
+        weeks=UsageWindow(percent_remaining=40.0, reset_at="2026-04-16T00:00:00Z"),
     )
     zai_status = UsageStatus(
         limit_reached=True,
-        short_term=UsageWindow(percent_remaining=10.0),
-        long_term=UsageWindow(percent_remaining=5.0),
+        hours=UsageWindow(percent_remaining=10.0),
+        weeks=UsageWindow(percent_remaining=5.0),
     )
 
     monkeypatch.setattr("litehive.cli.workspace.check_claude_quota", lambda: claude_status)
@@ -148,7 +148,7 @@ def test_collect_quota_health_reuses_shared_statuses(monkeypatch) -> None:
     assert by_engine["copilot"].summary.endswith("reset=2026-04-16T00:00:00Z")
     assert by_engine["gemini"].status == "unsupported"
     assert by_engine["goz"].problem is True
-    assert by_engine["opencode"].summary == "short=10.0% remaining long=5.0% remaining"
+    assert by_engine["opencode"].summary == "hours remaining=10.0% weeks remaining=5.0%"
 
 
 def test_repair_reports_broken_workspace_and_worktree_venvs(tmp_path: Path) -> None:

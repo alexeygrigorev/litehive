@@ -191,7 +191,7 @@ def record_codex_quota_check(
     status: object,
 ) -> None:
     """Record proactive codex quota status into engine monitoring."""
-    from heru.quota import UsageStatus
+    from heru.quota import UsageStatus, preferred_reset_at
 
     if not isinstance(status, UsageStatus):
         return
@@ -207,8 +207,8 @@ def record_codex_quota_check(
     record.provider = "openai"
     record.observed_at = utcnow()
 
-    used_pct = int(status.long_term.used_percent)
-    reset_at = status.long_term.reset_at
+    used_pct = int(status.weeks.used_percent)
+    reset_at = preferred_reset_at(status)
     record.usage = EngineUsageWindow(
         used=used_pct,
         limit=100,
@@ -217,18 +217,18 @@ def record_codex_quota_check(
         reset_at=reset_at,
     )
     if status.limit_reached:
-        record.last_limit_reason = "codex quota exhausted"
+        record.last_limit_reason = "codex usage limit reached"
         record.last_limit_kind = "quota"
     record.metadata = {
         **record.metadata,
-        "short_term_percent_remaining": int(status.short_term.percent_remaining),
-        "long_term_percent_remaining": int(status.long_term.percent_remaining),
+        "hours_percent_remaining": int(status.hours.percent_remaining),
+        "weeks_percent_remaining": int(status.weeks.percent_remaining),
         "quota_limit_reached": status.limit_reached,
     }
-    if status.short_term.reset_at:
-        record.metadata["short_term_reset_at"] = status.short_term.reset_at
-    if status.long_term.reset_at:
-        record.metadata["long_term_reset_at"] = status.long_term.reset_at
+    if status.hours.reset_at:
+        record.metadata["hours_reset_at"] = status.hours.reset_at
+    if status.weeks.reset_at:
+        record.metadata["weeks_reset_at"] = status.weeks.reset_at
 
     monitoring.engines["codex"] = record
     save_engine_monitoring(root, monitoring)

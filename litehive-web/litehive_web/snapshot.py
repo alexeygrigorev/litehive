@@ -9,17 +9,17 @@ from heru.quota import (
     check_zai_quota,
 )
 
-from litehive.config import load_config
-from litehive.models import TaskRecord
-from litehive.observability import load_engine_monitoring
+from litehive.config.loading import load_config
 from litehive.config.engine_models import active_engine_freezes
-from litehive.events import read_events
+from litehive.domain.task import TaskRecord
+from litehive.observability.engine_monitoring import load_engine_monitoring
+from litehive.observability.events import read_events
 from litehive.tasks.constants import VALID_TASK_ENGINES, VALID_TASK_PRIORITIES, VALID_TASK_TYPES
-from litehive.tasks.crud import list_tasks_state_first
+from litehive.state.records import list_tasks_state_first
 from litehive.tasks.paths import task_dir
-from litehive.tasks.persistence import load_state
+from litehive.state.locking import runner_status_readonly
+from litehive.state.persist import load_state
 from litehive.tasks.reports import load_task_thread
-from litehive.workspace.locking import runner_status_readonly
 
 from litehive_web.common import (
     MAX_ARTIFACT_BYTES,
@@ -109,9 +109,9 @@ def read_engine_dashboard(root: Path) -> dict[str, Any]:
                 "claude": config.claude_model,
                 "goz": config.goz_model,
             },
-            "engine_usage_caps": dict(config.engine_usage_caps),
-            "engine_budget_caps": dict(config.engine_budget_caps),
-            "engine_costs": dict(config.engine_costs),
+            "engine_usage_caps": dict(getattr(config, "engine_usage_caps", {})),
+            "engine_budget_caps": dict(getattr(config, "engine_budget_caps", {})),
+            "engine_costs": dict(getattr(config, "engine_costs", {})),
         },
         "routing": {
             "precedence": [
@@ -191,18 +191,18 @@ def _serialize_zai_quota(engine: str, status: Any) -> dict[str, Any]:
 
 def _serialize_unified_quota(status: Any, *, engine: str, provider: str) -> dict[str, Any]:
     error = getattr(status, "error", None)
-    short_term = getattr(status, "short_term", None)
-    long_term = getattr(status, "long_term", None)
+    hours = getattr(status, "hours", None)
+    weeks = getattr(status, "weeks", None)
     windows = [
         _build_percent_window(
-            "short_term",
-            None if short_term is None else 100.0 - getattr(short_term, "percent_remaining", 100.0),
-            getattr(short_term, "reset_at", None),
+            "hours",
+            None if hours is None else 100.0 - getattr(hours, "percent_remaining", 100.0),
+            getattr(hours, "reset_at", None),
         ),
         _build_percent_window(
-            "long_term",
-            None if long_term is None else 100.0 - getattr(long_term, "percent_remaining", 100.0),
-            getattr(long_term, "reset_at", None),
+            "weeks",
+            None if weeks is None else 100.0 - getattr(weeks, "percent_remaining", 100.0),
+            getattr(weeks, "reset_at", None),
         ),
     ]
     return {
@@ -210,7 +210,7 @@ def _serialize_unified_quota(status: Any, *, engine: str, provider: str) -> dict
         "provider": provider,
         "status": "unavailable" if error else "ok",
         "error": error,
-        "summary": "unavailable" if error else _max_window_summary(windows),
+        "summary": "unavailable" if error else _window_remaining_summary(windows),
         "windows": windows,
     }
 
@@ -247,12 +247,14 @@ def _format_percent(value: Any) -> str:
     return f"{rounded:.1f}%"
 
 
-def _max_window_summary(windows: list[dict[str, Any]]) -> str:
+def _window_remaining_summary(windows: list[dict[str, Any]]) -> str:
     available = [window for window in windows if window.get("used_percent") is not None]
     if not available:
         return "-"
-    highest = max(available, key=lambda item: float(item["used_percent"]))
-    return f"{highest['label']} {_format_percent(highest['used_percent'])} used"
+    return ", ".join(
+        f"{window['label']} remaining {_format_percent(window.get('remaining_percent'))}"
+        for window in available
+    )
 
 
 def list_recent_run_all_logs(

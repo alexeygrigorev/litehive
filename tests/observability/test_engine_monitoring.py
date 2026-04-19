@@ -2,10 +2,15 @@ from pathlib import Path
 
 from heru import get_engine
 from heru.base import AdapterCapabilities, CLIExecutionResult, ExternalCLIAdapter
+from heru.quota import UsageStatus, UsageWindow
 
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.engine import EngineUsageObservation, EngineUsageWindow
-from litehive.observability.engine_monitoring import load_engine_monitoring, record_engine_execution
+from litehive.observability.engine_monitoring import (
+    load_engine_monitoring,
+    record_codex_quota_check,
+    record_engine_execution,
+)
 
 
 def test_record_engine_execution_tracks_local_usage_fallback(tmp_path: Path) -> None:
@@ -213,3 +218,29 @@ def test_record_engine_execution_tracks_opencode_provider_usage_observation(tmp_
     assert record.usage.unit == "tokens"
     assert record.metadata["input_tokens"] == 10509
     assert record.metadata["finish_reason"] == "stop"
+
+
+def test_record_codex_quota_check_uses_unified_hours_weeks_windows(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    record_codex_quota_check(
+        tmp_path,
+        status=UsageStatus(
+            limit_reached=True,
+            hours=UsageWindow(percent_remaining=65.0, reset_at="2026-04-20T12:00:00Z"),
+            weeks=UsageWindow(percent_remaining=40.0, reset_at="2026-04-25T00:00:00Z"),
+        ),
+    )
+
+    monitoring = load_engine_monitoring(tmp_path)
+    record = monitoring.engines["codex"]
+
+    assert record.usage is not None
+    assert record.usage.used == 60
+    assert record.usage.remaining == 40
+    assert record.usage.reset_at == "2026-04-25T00:00:00Z"
+    assert record.last_limit_reason == "codex usage limit reached"
+    assert record.metadata["hours_percent_remaining"] == 65
+    assert record.metadata["weeks_percent_remaining"] == 40
+    assert record.metadata["hours_reset_at"] == "2026-04-20T12:00:00Z"
+    assert record.metadata["weeks_reset_at"] == "2026-04-25T00:00:00Z"

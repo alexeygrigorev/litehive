@@ -1,6 +1,5 @@
 """Proactive Claude quota checking via OAuth usage endpoint."""
 
-from dataclasses import dataclass, field
 import json
 import logging
 import os
@@ -10,44 +9,12 @@ from pathlib import Path
 import urllib.error
 import urllib.request
 
-from heru.quota._shared import UsageWindow, normalize_reset_at
+from heru.quota._shared import UsageStatus, UsageWindow, normalize_reset_at, usage_limit_block_reason
 
 logger = logging.getLogger(__name__)
 
 _USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 _CACHE_TTL_SECONDS = 60
-
-
-@dataclass(slots=True)
-class ClaudeQuotaWindow:
-    used_percent: float = 0.0
-    reset_at: str | None = None
-
-    def __post_init__(self) -> None:
-        self.used_percent = float(self.used_percent)
-        self.reset_at = normalize_reset_at(self.reset_at)
-
-    @property
-    def percent_remaining(self) -> float:
-        return max(0.0, 100.0 - self.used_percent)
-
-
-@dataclass(slots=True)
-class ClaudeQuotaStatus:
-    five_hour: ClaudeQuotaWindow = field(default_factory=ClaudeQuotaWindow)
-    seven_day: ClaudeQuotaWindow = field(default_factory=ClaudeQuotaWindow)
-    limit_reached: bool = False
-    checked_at: float = 0.0
-    error: str | None = None
-    subscription: str | None = None
-
-    @property
-    def short_term(self) -> UsageWindow:
-        return UsageWindow(percent_remaining=self.five_hour.percent_remaining, reset_at=self.five_hour.reset_at)
-
-    @property
-    def long_term(self) -> UsageWindow:
-        return UsageWindow(percent_remaining=self.seven_day.percent_remaining, reset_at=self.seven_day.reset_at)
 
 
 def _default_credentials_path() -> Path:
@@ -58,7 +25,7 @@ def _default_credentials_path() -> Path:
     return Path.home() / ".claude" / ".credentials.json"
 
 
-_cached_status: ClaudeQuotaStatus | None = None
+_cached_status: UsageStatus | None = None
 
 
 def _read_access_token(creds_path: Path | None = None) -> str | None:
@@ -79,7 +46,14 @@ def _read_access_token(creds_path: Path | None = None) -> str | None:
         return None
 
 
-def _parse_usage_response(data: dict) -> ClaudeQuotaStatus:
+def _usage_window(window_data: dict) -> UsageWindow:
+    return UsageWindow(
+        percent_remaining=max(0.0, 100.0 - float(window_data.get("utilization", 0))),
+        reset_at=normalize_reset_at(window_data.get("resets_at")),
+    )
+
+
+def _parse_usage_response(data: dict) -> UsageStatus:
     five_hour_data = data.get("five_hour")
     if not isinstance(five_hour_data, dict):
         five_hour_data = {}
@@ -87,26 +61,18 @@ def _parse_usage_response(data: dict) -> ClaudeQuotaStatus:
     if not isinstance(seven_day_data, dict):
         seven_day_data = {}
 
-    five_hour = ClaudeQuotaWindow(
-        used_percent=five_hour_data.get("utilization", 0),
-        reset_at=five_hour_data.get("resets_at"),
-    )
-    seven_day = ClaudeQuotaWindow(
-        used_percent=seven_day_data.get("utilization", 0),
-        reset_at=seven_day_data.get("resets_at"),
-    )
-    subscription = data.get("subscription")
+    hours = _usage_window(five_hour_data)
+    weeks = _usage_window(seven_day_data)
 
-    return ClaudeQuotaStatus(
-        five_hour=five_hour,
-        seven_day=seven_day,
-        limit_reached=seven_day.percent_remaining <= 5.0,
+    return UsageStatus(
+        hours=hours,
+        weeks=weeks,
+        limit_reached=weeks.percent_remaining <= 5.0,
         checked_at=time.monotonic(),
-        subscription=subscription if isinstance(subscription, str) and subscription else None,
     )
 
 
-def _fetch_usage(token: str, *, timeout: float = 10.0) -> ClaudeQuotaStatus:
+def _fetch_usage(token: str, *, timeout: float = 10.0) -> UsageStatus:
     req = urllib.request.Request(
         _USAGE_URL,
         headers={
@@ -121,7 +87,7 @@ def _fetch_usage(token: str, *, timeout: float = 10.0) -> ClaudeQuotaStatus:
         return _parse_usage_response(data)
     except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, OSError) as exc:
         logger.warning("claude quota check failed (fail-open): %s", exc)
-        return ClaudeQuotaStatus(checked_at=time.monotonic(), error=str(exc))
+        return UsageStatus(checked_at=time.monotonic(), error=str(exc))
 
 
 def check_claude_quota(
@@ -129,7 +95,7 @@ def check_claude_quota(
     creds_path: Path | None = None,
     cache_ttl: float = _CACHE_TTL_SECONDS,
     _fetch: object = None,
-) -> ClaudeQuotaStatus:
+) -> UsageStatus:
     """Check Claude quota proactively. Returns cached result within TTL.
 
     Fails open: if auth is missing or API call fails, returns a non-blocking status.
@@ -140,7 +106,7 @@ def check_claude_quota(
 
     token = _read_access_token(creds_path)
     if token is None:
-        return ClaudeQuotaStatus(checked_at=time.monotonic(), error="no-credentials")
+        return UsageStatus(checked_at=time.monotonic(), error="no-credentials")
 
     fetcher = _fetch if callable(_fetch) else _fetch_usage
     _cached_status = fetcher(token)
@@ -155,14 +121,7 @@ def claude_quota_block_reason(
 ) -> str | None:
     """Return a blocking reason string if Claude quota is reached, or None."""
     status = check_claude_quota(creds_path=creds_path, cache_ttl=cache_ttl, _fetch=_fetch)
-    if status.error:
-        return None  # fail-open
-    if status.limit_reached:
-        return (
-            f"claude usage limit reached "
-            f"(long-term window at {status.long_term.used_percent:.0f}%, resets {status.long_term.reset_at})"
-        )
-    return None
+    return usage_limit_block_reason("claude", status)
 
 
 def reset_cache() -> None:

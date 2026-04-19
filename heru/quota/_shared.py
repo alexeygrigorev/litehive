@@ -19,10 +19,30 @@ class UsageWindow:
 @dataclass(slots=True)
 class UsageStatus:
     limit_reached: bool = False
-    short_term: UsageWindow = field(default_factory=UsageWindow)
-    long_term: UsageWindow = field(default_factory=UsageWindow)
+    hours: UsageWindow = field(default_factory=UsageWindow)
+    weeks: UsageWindow = field(default_factory=UsageWindow)
     checked_at: float = 0.0
     error: str | None = None
+
+
+def usage_windows(status: UsageStatus) -> tuple[tuple[str, UsageWindow], tuple[str, UsageWindow]]:
+    return (("hours", status.hours), ("weeks", status.weeks))
+
+
+def most_constrained_window(status: UsageStatus) -> tuple[str, UsageWindow]:
+    return max(usage_windows(status), key=lambda item: item[1].used_percent)
+
+
+def preferred_reset_at(status: UsageStatus) -> str | None:
+    return status.weeks.reset_at or status.hours.reset_at
+
+
+def usage_limit_block_reason(engine_name: str, status: UsageStatus) -> str | None:
+    if status.error is not None or not status.limit_reached:
+        return None
+    window_name, window = most_constrained_window(status)
+    reset_info = f", resets {window.reset_at}" if window.reset_at else ""
+    return f"{engine_name} usage limit reached ({window_name} window at {window.used_percent:.0f}%{reset_info})"
 
 
 def normalize_reset_at(value: object) -> str | None:

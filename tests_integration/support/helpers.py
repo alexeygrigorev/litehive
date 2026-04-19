@@ -7,6 +7,13 @@ from pathlib import Path
 
 import pytest
 
+from heru.quota import (
+    check_claude_quota,
+    check_codex_quota,
+    check_copilot_quota,
+    check_zai_quota,
+    usage_limit_block_reason,
+)
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
@@ -48,18 +55,16 @@ def enabled_integration_engines() -> set[str]:
 def _engine_quota_block_reason(engine_name: str) -> str | None:
     """Check if an engine's quota is too high to run integration tests."""
     try:
-        if engine_name == "codex":
-            from heru.quota.codex_quota import codex_quota_block_reason
-            return codex_quota_block_reason()
-        if engine_name == "claude":
-            from heru.quota.claude_quota import claude_quota_block_reason
-            return claude_quota_block_reason()
-        if engine_name == "copilot":
-            from heru.quota.copilot_quota import copilot_quota_block_reason
-            return copilot_quota_block_reason()
-        if engine_name in ("goz", "opencode"):
-            from heru.quota.zai_quota import zai_quota_block_reason
-            return zai_quota_block_reason()
+        checker = {
+            "codex": check_codex_quota,
+            "claude": check_claude_quota,
+            "copilot": check_copilot_quota,
+            "goz": check_zai_quota,
+            "opencode": check_zai_quota,
+        }.get(engine_name)
+        if checker is None:
+            return None
+        return usage_limit_block_reason(engine_name, checker())
     except Exception:
         pass
     return None
