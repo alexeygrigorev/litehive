@@ -39,6 +39,16 @@ def litehive_database_path() -> Path:
     return litehive_root() / "litehive.db"
 
 
+def workspace_registry_path() -> Path:
+    override = os.environ.get("LITEHIVE_HOME")
+    if override:
+        return Path(override).expanduser() / "workspaces.yaml"
+    config_home = os.environ.get("XDG_CONFIG_HOME")
+    if config_home:
+        return Path(config_home).expanduser() / "litehive" / "workspaces.yaml"
+    return Path.home() / ".litehive" / "workspaces.yaml"
+
+
 def workspace_id(root: Path) -> str:
     canonical = str(root.expanduser().resolve()).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()[:16]

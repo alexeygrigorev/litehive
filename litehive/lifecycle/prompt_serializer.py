@@ -209,7 +209,7 @@ def _nudge_section(prompt: dict[str, Any]) -> str:
     if message:
         lines.append(message)
     lines.append(
-        "Do not continue exploratory work until you have submitted `litehive agent report` with the correct verdict."
+        "Do not continue exploratory work until you have submitted `litehive report` with the correct verdict."
     )
     return "\n".join(lines)
 
@@ -370,11 +370,13 @@ def _runner_hooks_section(stage: str | None, hooks: list[dict[str, Any]]) -> str
 
 def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
     verdicts = "<resume|advance|done|budget_hit|reject>" if prompt.get("role") == "recovery" else "<pass|reject>"
+    example_verdict = "resume" if prompt.get("role") == "recovery" else "pass"
+    role = prompt.get("role") or "swe"
     return (
         "IMPORTANT: when you are done, submit your verdict by running:\n"
-        "  echo 'your report text' > /tmp/verdict_msg.txt\n"
-        f"  litehive agent report --verdict {verdicts} --message-file /tmp/verdict_msg.txt\n\n"
-        "Always use --message-file to avoid shell quoting issues with backticks or special characters.\n"
+        f'  litehive report --verdict {example_verdict} --role {role} --message "your report text"\n'
+        f"Allowed verdicts for your role: {verdicts}.\n\n"
+        "If the message is multiline or contains shell-sensitive characters, write it to /tmp/verdict_msg.txt and pass --message-file /tmp/verdict_msg.txt instead.\n"
         "Your message is the primary signal the next agent receives — write it as if it's the only thing they read.\n"
         "On reject: include EXPECTED behavior, OBSERVED behavior, reproduction steps, and which acceptance criteria are not met."
     )

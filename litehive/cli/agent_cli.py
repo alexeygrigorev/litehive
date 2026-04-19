@@ -1,8 +1,9 @@
 """Restricted CLI for agents running inside the v2 pipeline.
 
-When ``LITEHIVE_AGENT_ROLE`` is set, agents use ``litehive agent report``
-instead of ``litehive report``. The verdict options are restricted per role
-so agents literally cannot submit verdicts they're not allowed to use.
+When ``LITEHIVE_AGENT_ROLE`` is set, top-level ``litehive report`` is routed
+through this restricted ``litehive agent report`` implementation. The verdict
+options are restricted per role so agents literally cannot submit verdicts
+they're not allowed to use.
 
 Also provides a guard function ``block_if_agent()`` that other CLI
 commands call at the top to prevent agents from using them.
@@ -91,7 +92,6 @@ def agent_report_command(
         typer.Option("--step", hidden=True, help="Legacy alias for --stage"),
     ] = None,
     task_id: Annotated[str | None, typer.Option("--task-id", help="Override task id")] = None,
-    workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
     files_changed: Annotated[list[str] | None, typer.Option("--files-changed", help="Changed file paths")] = None,
 ) -> None:
     if message == "-":
@@ -123,7 +123,7 @@ def agent_report_command(
 
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
     try:
-        root = resolve_workspace(tid, workspace=workspace)
+        root = resolve_workspace(tid)
     except ValueError as exc:
         print(f"report failed: {exc}")
         raise SystemExit(1)
@@ -177,7 +177,6 @@ def _require_role(allowed: set[str]) -> str:
 @agent_app.command("update", help="Update task fields (planner/reviewer only)")
 def agent_update_command(
     task_id: Annotated[str | None, typer.Option("--task-id")] = None,
-    workspace: Annotated[Path, typer.Option("--workspace")] = Path.cwd(),
     goal: Annotated[str | None, typer.Option("--goal")] = None,
     acceptance_criteria: Annotated[list[str] | None, typer.Option("--acceptance-criteria")] = None,
     plan: Annotated[list[str] | None, typer.Option("--plan-step")] = None,
@@ -192,7 +191,7 @@ def agent_update_command(
     if not tid:
         raise SystemExit(1)
     try:
-        root = resolve_workspace(tid, workspace=workspace)
+        root = resolve_workspace(tid)
     except ValueError:
         raise SystemExit(1)
 
@@ -214,7 +213,6 @@ def agent_update_command(
 @agent_app.command("close", help="Close a task (planner/reviewer only)")
 def agent_close_command(
     task_id: Annotated[str | None, typer.Option("--task-id")] = None,
-    workspace: Annotated[Path, typer.Option("--workspace")] = Path.cwd(),
     outcome: Annotated[str, typer.Option("--outcome", help="duplicate, deferred, or wont_do")] = "duplicate",
     reason: Annotated[str, typer.Option("--reason")] = "",
 ) -> None:
@@ -226,7 +224,7 @@ def agent_close_command(
     if not tid:
         raise SystemExit(1)
     try:
-        root = resolve_workspace(tid, workspace=workspace)
+        root = resolve_workspace(tid)
     except ValueError:
         raise SystemExit(1)
 

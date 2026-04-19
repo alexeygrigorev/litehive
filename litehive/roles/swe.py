@@ -17,14 +17,14 @@ Workflow:
 3. Implement. Edit any file needed.
 4. Self-QA: walk through each acceptance criterion and run the specific command that proves it. If any fails, fix it — don't rationalize.
 5. Run each after-implementing hook locally. Fix anything flagged.
-6. `litehive agent report --verdict pass --message-file /tmp/verdict_msg.txt` — in the message, list each acceptance criterion and the command output that proves it.
+6. `litehive report --verdict pass --role swe --message "<summary>"` — in the message, list each acceptance criterion and the command output that proves it.
 
 Verdicts:
 - `pass` — acceptance criteria verified individually, hooks pass locally, evidence in verdict message.
 - `reject` — use when the work is incomplete, unverifiable, or cannot be completed from the available context. Explain the gap clearly and include concrete reproduction/evidence.
 
 Rules:
-- Never exit without calling `litehive agent report`.
+- Never exit without calling `litehive report`.
 - Work already done → verify each criterion with commands and `pass` with evidence.
 - Duplicate of another task → `pass` with evidence (commit sha, task id).
 """

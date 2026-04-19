@@ -353,7 +353,7 @@ def test_nudge_budget_exhausted_returns_crash() -> None:
     event = node.run(make_state())
     assert isinstance(event, Crash)
     assert event.exc_type == "NudgeBudgetExhausted"
-    assert "litehive agent report" in event.message
+    assert "litehive report" in event.message
     # After first nudge the engine gets called a second time. If it nudges
     # again, budget is exhausted → crash. So we expect exactly 2 calls.
     assert engine.calls == 2

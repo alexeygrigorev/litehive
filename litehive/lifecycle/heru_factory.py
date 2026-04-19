@@ -12,7 +12,7 @@ translating to/from the v2 contract:
 
   - prompt dict → serialized string via ``serialize_prompt``
   - SubagentResult → ``AgentVerdict`` via the verdict reader, which checks
-    whether a fresh ``litehive agent report`` submission landed in the
+    whether a fresh ``litehive report`` submission landed in the
     workspace journal during this turn
   - heru exceptions → error taxonomy
 """
@@ -182,7 +182,7 @@ class HeruEngineAdapter:
         # Did the agent submit a verdict during this turn?
         verdict = _latest_verdict_after(self.workspace_root, state.task_id, stage, before_turn)
         if verdict is None:
-            raise NudgeRequired(f"{self.name} finished {stage} without a litehive agent report submission")
+            raise NudgeRequired(f"{self.name} finished {stage} without a litehive report submission")
 
         return verdict
 

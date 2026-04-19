@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from litehive.config.workspace import ensure_workspace, resolve_workspace
+from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
 from litehive.state.records import create_task
 
 
@@ -60,18 +60,7 @@ def test_resolve_workspace_prefers_current_unified_root_worktree_over_registry_t
     assert resolve_workspace(None) == workspace_two.resolve()
 
 
-def test_resolve_workspace_prefers_explicit_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    ensure_workspace(tmp_path)
-    outside = tmp_path / "outside"
-    outside.mkdir()
-
-    monkeypatch.chdir(outside)
-    monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(outside))
-
-    assert resolve_workspace(None, workspace=tmp_path) == tmp_path.resolve()
-
-
-def test_resolve_workspace_explicit_plain_root_skips_registry_lookup(
+def test_normalize_workspace_root_accepts_plain_root_without_registry_lookup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
@@ -81,7 +70,7 @@ def test_resolve_workspace_explicit_plain_root_skips_registry_lookup(
 
     monkeypatch.setattr("litehive.config.workspace.list_registered_workspace_paths", _boom)
 
-    assert resolve_workspace(None, workspace=tmp_path) == tmp_path.resolve()
+    assert normalize_workspace_root(tmp_path, source="test") == tmp_path.resolve()
 
 
 def test_resolve_workspace_uses_registry_from_outside_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -111,6 +100,35 @@ def test_resolve_workspace_rejects_unresolved_workspace_root_env(
         resolve_workspace(None)
 
 
+def test_resolve_workspace_rejects_nested_workspace_root_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Nested env probe")
+    legacy = tmp_path / ".litehive" / "worktrees" / f"{task.id}-bad" / "repo"
+    (legacy / ".litehive" / "tasks").mkdir(parents=True)
+
+    monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(legacy))
+    monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
+
+    with pytest.raises(ValueError, match="choose the real repo root"):
+        resolve_workspace(None)
+
+
+def test_resolve_workspace_fails_clearly_when_it_cannot_be_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    monkeypatch.chdir(outside)
+    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
+
+    with pytest.raises(ValueError, match="provide/set LITEHIVE_TASK_ID"):
+        resolve_workspace(None)
+
+
 def test_ensure_workspace_rejects_nested_workspace_root(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     nested_root = tmp_path / ".litehive" / "worktrees" / "T-0001"
@@ -132,6 +150,15 @@ def test_ensure_workspace_rejects_nested_litehive_control_directory(tmp_path: Pa
 
     with pytest.raises(ValueError, match="Litehive control directory.*choose the real repo root"):
         ensure_workspace(tmp_path / ".litehive" / ".litehive")
+
+
+def test_normalize_workspace_root_rejects_nested_control_tree(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    legacy = tmp_path / ".litehive" / "worktrees" / "T-0001-bad" / "repo"
+    (legacy / ".litehive" / "tasks").mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="choose the real repo root"):
+        normalize_workspace_root(legacy, source="test")
 
 
 def test_ensure_workspace_rejects_nested_subdirectory_of_existing_workspace(tmp_path: Path) -> None:

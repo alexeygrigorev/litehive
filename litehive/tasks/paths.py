@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 from litehive.config.paths import workspace_dir, workspace_logs_dir, workspace_runner_lock_path
-from litehive.config.workspace import ensure_workspace, resolve_workspace
+from litehive.config.workspace import ensure_workspace, normalize_workspace_root
 from litehive.config.registry import list_registered_workspace_paths
 from litehive.config.paths import worktree_root
 from litehive.domain.task import TaskRecord
@@ -38,7 +38,7 @@ def tasks_root(root: Path, *, bootstrap: bool = True) -> Path:
 
 
 def runner_lock_path(root: Path) -> Path:
-    root = resolve_workspace(None, workspace=root)
+    root = normalize_workspace_root(root, source="runner_lock_path")
     ensure_workspace(root)
     return workspace_runner_lock_path(root)
 

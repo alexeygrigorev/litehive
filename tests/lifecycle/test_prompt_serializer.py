@@ -103,9 +103,9 @@ def test_serialize_includes_role_instructions(workspace: Path) -> None:
     assert "Instructions:" in text
     assert "## Role guidance" in text
     assert "You are the SWE" in text  # from the swe.py INSTRUCTIONS
-    assert "litehive agent report --verdict pass --message-file /tmp/verdict_msg.txt" in text
-    assert "litehive report --verdict pass" not in text
-    assert "Never exit the stage without calling `litehive report`." not in text
+    assert 'litehive report --verdict pass --role swe --message "your report text"' in text
+    assert "litehive agent report" not in text
+    assert "Never exit without calling `litehive report`." in text
 
 
 def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
@@ -317,9 +317,8 @@ def test_serialize_works_without_task_record() -> None:
     assert "Task: T-XYZ" in text
     assert "Goal:\n(task record not loaded)" in text
     assert "Acceptance criteria:\n- (none defined)" in text
-    assert "litehive agent report" in text
-    assert "litehive agent report --verdict pass --message-file /tmp/verdict_msg.txt" in text
-    assert "litehive report --verdict pass" not in text
+    assert 'litehive report --verdict pass --role planner --message "your report text"' in text
+    assert "litehive agent report" not in text
 
 
 def test_serialize_verdict_instructions_match_role_and_stage(workspace: Path) -> None:
@@ -327,7 +326,7 @@ def test_serialize_verdict_instructions_match_role_and_stage(workspace: Path) ->
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
     text = serialize_prompt(agent.build_prompt(make_state(task.id)), task_record=task)
 
-    assert "litehive agent report --verdict <pass|reject>" in text
+    assert "Allowed verdicts for your role: <pass|reject>." in text
 
 
 def test_recovery_prompt_uses_recovery_verdict_contract(workspace: Path) -> None:
@@ -350,7 +349,7 @@ def test_recovery_prompt_uses_recovery_verdict_contract(workspace: Path) -> None
 
     text = serialize_prompt(agent.build_prompt(state), task_record=task)
 
-    assert "litehive agent report --verdict <resume|advance|done|budget_hit|reject>" in text
+    assert "Allowed verdicts for your role: <resume|advance|done|budget_hit|reject>." in text
 
 
 def test_serialize_includes_nudge_message_when_present(workspace: Path) -> None:
@@ -363,7 +362,7 @@ def test_serialize_includes_nudge_message_when_present(workspace: Path) -> None:
     assert "this is a nudge" in text
     assert "without a verdict submission" in text
     assert "Please review your work and submit your verdict now." in text
-    assert "litehive agent report --verdict <pass|reject>" in text
+    assert "litehive report --verdict <pass|reject> --role <role>" in text
 
 
 def test_implementing_retry_thread_keeps_only_grooming_and_dedups_last_rejection_by_source_and_reason(

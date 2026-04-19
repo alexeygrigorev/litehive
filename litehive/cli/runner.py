@@ -8,7 +8,7 @@ import typer
 
 from litehive.cli.common import WorkspaceOption, choice, require_subcommand
 from litehive.config.paths import workspace_database_path
-from litehive.config.workspace import ensure_workspace, resolve_workspace
+from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
 from heru import ENGINE_CHOICES
 from litehive.daemon.execution import (
     daemon_status_lines,
@@ -189,9 +189,9 @@ def rollback_command(
 
 
 def report_command(
-    workspace: Annotated[Path | None, typer.Option("--workspace", help="Repository root containing .litehive/")] = None,
     verdict: Annotated[str, typer.Option(click_type=choice(["pass", "reject", "comment", "fail"]))] = ...,
-    message: Annotated[str, typer.Option(help="Detailed explanation")] = ...,
+    message: Annotated[str, typer.Option(help="Detailed explanation (use - for stdin)")] = "",
+    message_file: Annotated[Path | None, typer.Option("--message-file", help="Read message from file")] = None,
     role: Annotated[str, typer.Option(help="Role submitting the report")] = "swe",
     stage: Annotated[str | None, typer.Option(help="Stage name")] = None,
     step: Annotated[str | None, typer.Option("--step", hidden=True)] = None,
@@ -201,10 +201,14 @@ def report_command(
     from litehive.cli.agent_cli import block_if_agent
 
     block_if_agent()
+    if message == "-":
+        message = sys.stdin.read()
+    elif message_file is not None:
+        message = message_file.read_text(encoding="utf-8")
     if not task_id:
         task_id = os.environ.get("LITEHIVE_TASK_ID")
     try:
-        root = resolve_workspace(task_id, workspace=workspace)
+        root = resolve_workspace(task_id)
     except ValueError as exc:
         print(f"report failed: {exc}")
         return 1
@@ -304,7 +308,7 @@ def db_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> Non
 
 
 def db_status(workspace: WorkspaceOption = Path.cwd()) -> int:
-    workspace = resolve_workspace(None, workspace=workspace)
+    workspace = normalize_workspace_root(workspace, source="--workspace")
     status = migration_status(workspace)
     print(f"workspace: {workspace}")
     print(f"schema_version: {status.current_version}")
@@ -319,7 +323,7 @@ def db_migrate(
     workspace: WorkspaceOption = Path.cwd(),
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show pending migrations only")] = False,
 ) -> int:
-    workspace = resolve_workspace(None, workspace=workspace)
+    workspace = normalize_workspace_root(workspace, source="--workspace")
     try:
         plan = apply_pending_migrations(workspace, dry_run=dry_run)
     except MigrationApplyError as exc:

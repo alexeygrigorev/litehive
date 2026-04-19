@@ -43,11 +43,7 @@ def render_workspace_gitignore() -> str:
 def _resolve_workspace_root(path: Path) -> Path:
     """Resolve back to the main workspace root if path is inside a worktree."""
     resolved = path.resolve()
-    parts = resolved.parts
-    for i, part in enumerate(parts):
-        if part == ".litehive" and i + 2 < len(parts) and parts[i + 1] == "worktrees":
-            return Path(*parts[:i])
-    if "worktrees" not in parts:
+    if "worktrees" not in resolved.parts:
         return resolved
     for registered_root in list_registered_workspace_paths():
         try:
@@ -110,12 +106,12 @@ def _validate_workspace_root(
     resolved_input = expanded.resolve()
     control_ancestor = _litehive_control_ancestor(resolved_input)
     managed_worktree = _managed_worktree_root(resolved_input)
-    if managed_worktree is not None and not allow_worktree_root_alias:
+    if managed_worktree is not None:
         raise ValueError(
             f"invalid workspace root from {source}: {resolved_input} is inside Litehive managed "
             f"worktrees at {managed_worktree}; choose the real repo root instead"
         )
-    if control_ancestor is not None and not allow_worktree_root_alias:
+    if control_ancestor is not None:
         raise ValueError(
             f"invalid workspace root from {source}: {resolved_input} is inside the Litehive "
             f"control directory {control_ancestor}; choose the real repo root instead"
@@ -157,27 +153,35 @@ def _registered_workspace_roots() -> list[Path]:
     return roots
 
 
+def normalize_workspace_root(
+    root: Path,
+    *,
+    source: str,
+    allow_worktree_root_alias: bool = True,
+) -> Path:
+    return _validate_workspace_root(
+        root,
+        source=source,
+        allow_worktree_root_alias=allow_worktree_root_alias,
+    )
+
+
 def resolve_workspace(
     task_id: str | None,
     *,
-    workspace: Path | None = None,
     cwd: Path | None = None,
 ) -> Path:
     effective_task_id = task_id or os.environ.get("LITEHIVE_TASK_ID")
-    if workspace is not None:
-        resolved = _validate_workspace_root(workspace, source="--workspace")
-        _register_workspace(resolved)
-        return resolved
 
     env_workspace = os.environ.get("LITEHIVE_WORKSPACE_ROOT")
     if env_workspace:
-        resolved_env_workspace = _validate_workspace_root(Path(env_workspace), source="LITEHIVE_WORKSPACE_ROOT")
+        resolved_env_workspace = normalize_workspace_root(Path(env_workspace), source="LITEHIVE_WORKSPACE_ROOT")
         if not effective_task_id or _task_exists(resolved_env_workspace, effective_task_id):
             _register_workspace(resolved_env_workspace)
             return resolved_env_workspace
 
     search_root = (cwd or Path.cwd()).resolve()
-    resolved_search_root = _validate_workspace_root(search_root, source=f"cwd:{search_root}")
+    resolved_search_root = normalize_workspace_root(search_root, source=f"cwd:{search_root}")
     if resolved_search_root != search_root:
         if not effective_task_id or _task_exists(resolved_search_root, effective_task_id):
             _register_workspace(resolved_search_root)
@@ -186,7 +190,7 @@ def resolve_workspace(
     for candidate in (search_root, *search_root.parents):
         if not workspace_dir(candidate).is_dir():
             continue
-        resolved = _validate_workspace_root(candidate, source=f"cwd:{search_root}")
+        resolved = normalize_workspace_root(candidate, source=f"cwd:{search_root}")
         if effective_task_id and not _task_exists(resolved, effective_task_id):
             continue
         _register_workspace(resolved)
@@ -199,8 +203,8 @@ def resolve_workspace(
                 return root
 
     raise ValueError(
-        "unable to resolve workspace: provide --workspace, set LITEHIVE_WORKSPACE_ROOT, "
-        "run inside a Litehive workspace, or set LITEHIVE_TASK_ID so the workspace registry can be used"
+        "unable to resolve workspace: set LITEHIVE_WORKSPACE_ROOT, run inside a Litehive workspace, "
+        "or provide/set LITEHIVE_TASK_ID so the workspace registry can be used"
     )
 
 

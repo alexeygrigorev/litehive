@@ -6,7 +6,7 @@ from pathlib import Path
 
 from litehive.attention import waiting_for_you_lines
 from litehive.config.paths import workspace_runner_lock_path
-from litehive.config.workspace import resolve_workspace
+from litehive.config.workspace import normalize_workspace_root, resolve_workspace
 from litehive.domain.runtime import RunnerStatusState
 
 
@@ -52,7 +52,11 @@ def _fast_status(argv: list[str]) -> int:
     )
 
     try:
-        workspace = resolve_workspace(None, workspace=_workspace_override_from_argv(argv))
+        explicit_workspace = _workspace_override_from_argv(argv)
+        if explicit_workspace is None:
+            workspace = resolve_workspace(None)
+        else:
+            workspace = normalize_workspace_root(explicit_workspace, source="--workspace")
     except ValueError as exc:
         print(f"status failed: {exc}")
         return 1

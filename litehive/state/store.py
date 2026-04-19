@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import sqlite3
 from pathlib import Path
 
@@ -21,6 +22,8 @@ _LEGACY_TASK_INTENT_KEYS = {
     "upstream_origin",
     "github_origin",
 }
+
+_TASK_DIR_RE = re.compile(r"^T-(\d{4})-")
 
 
 # Map subagent statuses that earlier versions of the runtime wrote into SQLite
@@ -53,8 +56,14 @@ class RuntimeStore:
     def bootstrap(self) -> None:
         with connect_workspace_db(self.root) as connection:
             self._ensure_workspace_state_rows(connection)
-            disk_task_ids = self._seed_task_state_rows_from_disk(connection)
-            self._seed_workspace_state_from_disk(connection, disk_task_ids)
+            disk_task_ids, highest_task_number = self._task_ids_on_disk()
+            if not self._runtime_state_is_current(
+                connection,
+                task_ids_on_disk=disk_task_ids,
+                highest_task_number=highest_task_number,
+            ):
+                seeded_task_ids = self._seed_task_state_rows_from_disk(connection)
+                self._seed_workspace_state_from_disk(connection, seeded_task_ids)
             connection.commit()
 
     def load_workspace_state(self) -> WorkspaceState | None:
@@ -195,6 +204,53 @@ class RuntimeStore:
             ("workspace", json.dumps([], sort_keys=True), now),
         )
         connection.commit()
+
+    def _task_ids_on_disk(self) -> tuple[list[str], int]:
+        task_ids: list[str] = []
+        highest_task_number = 0
+        tasks_dir = self.root / ".litehive" / "tasks"
+        if not tasks_dir.exists():
+            return task_ids, highest_task_number
+        for child in tasks_dir.iterdir():
+            if not child.is_dir():
+                continue
+            match = _TASK_DIR_RE.match(child.name)
+            if match is None:
+                continue
+            task_ids.append(f"T-{match.group(1)}")
+            highest_task_number = max(highest_task_number, int(match.group(1)))
+        task_ids.sort()
+        return task_ids, highest_task_number
+
+    def _runtime_state_is_current(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        task_ids_on_disk: list[str],
+        highest_task_number: int,
+    ) -> bool:
+        state_row = connection.execute(
+            "SELECT payload FROM pool_state WHERE workspace_key = ?",
+            ("workspace",),
+        ).fetchone()
+        queue_row = connection.execute(
+            "SELECT payload FROM queue WHERE workspace_key = ?",
+            ("workspace",),
+        ).fetchone()
+        if state_row is None or queue_row is None:
+            return False
+        if not task_ids_on_disk:
+            return True
+        task_state_count = int(connection.execute("SELECT COUNT(*) FROM task_state").fetchone()[0])
+        if task_state_count < len(task_ids_on_disk):
+            return False
+        payload = json.loads(state_row["payload"])
+        queue = json.loads(queue_row["payload"])
+        default_state_payload = WorkspaceState().model_dump(mode="json", exclude={"queue"})
+        fresh_workspace_state = payload == default_state_payload and queue == []
+        if fresh_workspace_state:
+            return False
+        return int(payload.get("next_task_number") or 0) >= highest_task_number
 
     def _seed_task_state_rows_from_disk(self, connection: sqlite3.Connection) -> list[str]:
         existing_rows = connection.execute("SELECT task_id FROM task_state").fetchall()

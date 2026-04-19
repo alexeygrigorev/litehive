@@ -195,7 +195,7 @@ def test_fast_status_prefers_runner_active_task_id(
         ),
     )
 
-    monkeypatch.setattr("litehive.main.resolve_workspace", lambda _arg, workspace=None: Path("/tmp/ws"))
+    monkeypatch.setattr("litehive.main.resolve_workspace", lambda _arg: Path("/tmp/ws"))
     monkeypatch.setattr("litehive.main.waiting_for_you_lines", lambda workspace: [])
     monkeypatch.setattr(
         "litehive.observability.status_diagnostics.collect_status_snapshot",
