@@ -578,6 +578,7 @@ def run_task(
                 event,
                 trans,
             ),
+            session_store=sessions,
         )
 
         # 3. Run under the heartbeat so `litehive status` sees the active task.

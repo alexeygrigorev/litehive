@@ -52,6 +52,22 @@ STAGE_PHASES: tuple[NodeName, ...] = (
     "after_commit",
 )
 
+
+def pipeline_stage_for_phase(phase: NodeName) -> NodeName:
+    if phase == "recovering":
+        return "grooming"
+    if phase in STAGES:
+        return phase
+    if phase.startswith("before_"):
+        candidate = phase.removeprefix("before_")
+        if candidate in STAGES:
+            return candidate
+    if phase.startswith("after_"):
+        candidate = phase.removeprefix("after_")
+        if candidate in STAGES:
+            return candidate
+    return phase
+
 ANY_STAGE_PHASE: frozenset[NodeName] = frozenset(STAGE_PHASES)
 
 TERMINAL_NODES: frozenset[NodeName] = frozenset({"done", "failed"})

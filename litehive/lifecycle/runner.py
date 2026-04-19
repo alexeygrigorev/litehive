@@ -2,13 +2,13 @@ from typing import Callable
 
 from litehive.lifecycle.persistence import CommitResult
 from litehive.domain.lifecycle_deltas import StateDelta
-from .events import Event, HookOk, Pass
+from .events import Event, HookOk, Pass, RecoverySucceeded, Reject
 from .journal import NullJournal, PipelineJournal
 from .nodes.base import NodeRegistry
 from .persistence import Persistence, TaskState
 from .transitions import Rule, Transition, evaluate
 from .rules import RULES
-from .types import TERMINAL_NODES
+from .types import AGENT_STAGES, TERMINAL_NODES, pipeline_stage_for_phase
 
 
 StopPredicate = Callable[[], bool]
@@ -39,6 +39,7 @@ class StateMachineRunner:
         *,
         rules: list[Rule] = RULES,
         journal: PipelineJournal | None = None,
+        session_store=None,
         stop_requested: StopPredicate | None = None,
         state_sync: StateSyncCallback | None = None,
         transition_observer: TransitionObserver | None = None,
@@ -47,6 +48,7 @@ class StateMachineRunner:
         self.persistence = persistence
         self.rules = rules
         self.journal = journal or NullJournal()
+        self.session_store = session_store
         self._stop_requested = stop_requested or (lambda: False)
         self._state_sync = state_sync
         self._transition_observer = transition_observer
@@ -62,6 +64,12 @@ class StateMachineRunner:
             self._apply_delta(state, trans.delta)
             self._apply_event_side_effects(state, event)
             state.stage = trans.next
+            self._reset_cross_agent_retry_sessions(
+                task_id=state.task_id,
+                from_stage=from_stage,
+                to_stage=trans.next,
+                event=event,
+            )
             self._reset_hook_reject_tracking_on_progress(state, from_stage, trans.next, event)
             self.persistence.save(state)
             if self._state_sync is not None:
@@ -129,7 +137,7 @@ class StateMachineRunner:
     ) -> None:
         if not isinstance(event, (Pass, HookOk)):
             return
-        if _pipeline_stage_for_phase(from_stage) == _pipeline_stage_for_phase(to_stage):
+        if pipeline_stage_for_phase(from_stage) == pipeline_stage_for_phase(to_stage):
             if from_stage not in {"commit", "merge_resolving"}:
                 return
         StateMachineRunner._clear_hook_reject_tracking(state, clear_recovery_invoked=True)
@@ -184,16 +192,20 @@ class StateMachineRunner:
         if delta.set_recovery_failure_explanation is not None:
             state.recovery_failure_explanation = delta.set_recovery_failure_explanation
 
-
-def _pipeline_stage_for_phase(phase: str) -> str:
-    if phase in {"before_grooming", "grooming", "after_grooming", "recovering"}:
-        return "grooming"
-    if phase in {"before_implementing", "implementing", "after_implementing"}:
-        return "implementing"
-    if phase in {"before_testing", "testing", "after_testing"}:
-        return "testing"
-    if phase in {"before_accepting", "accepting", "after_accepting"}:
-        return "accepting"
-    if phase in {"commit", "after_commit", "merge_resolving"}:
-        return "commit_to_git"
-    return phase
+    def _reset_cross_agent_retry_sessions(
+        self,
+        *,
+        task_id: str,
+        from_stage: str,
+        to_stage: str,
+        event: Event,
+    ) -> None:
+        if self.session_store is None or not isinstance(event, Reject) or event.source != "agent":
+            return
+        from_agent_stage = pipeline_stage_for_phase(from_stage)
+        to_agent_stage = pipeline_stage_for_phase(to_stage)
+        if from_agent_stage == to_agent_stage:
+            return
+        if from_agent_stage not in AGENT_STAGES or to_agent_stage not in AGENT_STAGES:
+            return
+        self.session_store.clear_node_sessions(task_id, to_agent_stage)
