@@ -2,7 +2,6 @@
 
 import logging
 import re
-import shutil
 from pathlib import Path
 
 import yaml
@@ -12,6 +11,7 @@ from litehive.config.workspace import ensure_workspace, render_workspace_gitigno
 from litehive.git.ops import default_commit_message
 from litehive.domain.common import utcnow
 from litehive.domain.reports import FollowUpTaskSpec
+from litehive.fs_cleanup import remove_tree_logged
 from litehive.domain.task import (
     TaskCreationSource,
     TaskRecord,
@@ -147,12 +147,14 @@ def _create_task_runtime_dirs(base: Path) -> None:
     (base / "artifacts").mkdir(parents=True, exist_ok=False)
 
 
-def _cleanup_created_task_dirs(paths: list[Path]) -> None:
+def _cleanup_created_task_dirs(paths: list[Path]) -> list[OSError]:
+    errors: list[OSError] = []
     for path in reversed(paths):
         try:
-            shutil.rmtree(path)
+            remove_tree_logged(path, logger=logger, target_label="created task directory")
         except OSError as cleanup_err:
-            logger.warning("Failed to clean up %s: %s", path, cleanup_err)
+            errors.append(cleanup_err)
+    return errors
 
 
 def _persist_created_tasks(
@@ -180,8 +182,13 @@ def _persist_created_tasks(
             )
 
         write_atomic_files_and_then(writes, callback)
-    except Exception:
-        _cleanup_created_task_dirs(cleanup_dirs)
+    except Exception as exc:
+        cleanup_errors = _cleanup_created_task_dirs(cleanup_dirs)
+        if cleanup_errors:
+            raise ExceptionGroup(
+                "failed to persist created tasks and roll back created task directories",
+                [exc, *cleanup_errors],
+            ) from exc
         raise
 
 
@@ -352,7 +359,7 @@ def discard_created_task(root: Path, task_id: str) -> None:
         if task is not None:
             td = task_dir(root, task)
             if td.exists():
-                shutil.rmtree(td)
+                remove_tree_logged(td, logger=logger, target_label="task directory")
 
 
 def _task_record_paths(root: Path) -> list[Path]:

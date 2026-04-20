@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+import logging
 import re
 import shutil
 import subprocess
@@ -17,6 +18,7 @@ from litehive.config.paths import litehive_root, workspace_path
 from litehive.domain.reports import RecoveryAction, TaskActivityEntry
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.task import TaskRecord
+from litehive.fs_cleanup import remove_tree_logged
 from litehive.git.ops import GitError, is_git_repo, remove_worktree
 from litehive.lifecycle.nodes.system import GitWorktreeSyncNode
 from litehive.state.locking import (
@@ -54,6 +56,8 @@ LaunchFailureContext = Literal[
     "venv_sync_failed",
     "pre_stage_setup_failed",
 ]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -535,14 +539,19 @@ def _reset_task_worktree(root: Path, task: TaskRecord, *, actions: list[Recovery
     branch = task_worktree_branch(task)
 
     if worktree.exists():
+        removed = False
         try:
             remove_worktree(root, worktree, force=True)
         except GitError:
-            try:
-                shutil.rmtree(worktree)
-            except OSError as exc:
-                warnings.append(f"failed to remove stale worktree {worktree}: {exc}")
+            remove_tree_logged(
+                worktree,
+                logger=logger,
+                target_label="stale task worktree directory",
+            )
+            removed = True
         else:
+            removed = True
+        if removed:
             actions.append(
                 RecoveryAction(
                     action="remove_stale_worktree",

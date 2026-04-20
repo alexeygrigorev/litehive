@@ -1,5 +1,6 @@
 """Archive and cleanup for done tasks."""
 
+import logging
 import re
 import shutil
 from collections.abc import Callable
@@ -9,11 +10,14 @@ import yaml
 
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord
+from litehive.fs_cleanup import remove_tree_logged
 
 from litehive.state.records import list_tasks, require_task
 from litehive.state.locking import workspace_lock
 from .paths import task_dir, tasks_root
 from litehive.state.persist import atomic_write_text
+
+logger = logging.getLogger(__name__)
 
 
 def archive_root(root: Path) -> Path:
@@ -151,6 +155,10 @@ def cleanup_archived_tasks(root: Path, older_than: str) -> list[TaskRecord]:
         age_seconds = (now - archived_dt).total_seconds()
         if age_seconds >= max_age_seconds:
             task = _load_archived_task_record(path)
-            shutil.rmtree(child)
+            remove_tree_logged(
+                child,
+                logger=logger,
+                target_label="archived task directory",
+            )
             deleted.append(task)
     return deleted

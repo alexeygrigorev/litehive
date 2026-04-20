@@ -1,5 +1,7 @@
 import argparse
+import logging
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -162,7 +164,10 @@ def test_archived_tasks_excluded_from_status(tmp_path: Path, capsys: pytest.Capt
 # ── cleanup_archived_tasks ───────────────────────────────────────────
 
 
-def test_cleanup_deletes_old_archived_tasks(tmp_path: Path) -> None:
+def test_cleanup_deletes_old_archived_tasks(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     ensure_workspace(tmp_path)
     task = _make_done_task(tmp_path, "Old task")
     archive_task(tmp_path, task.id)
@@ -176,11 +181,13 @@ def test_cleanup_deletes_old_archived_tasks(tmp_path: Path) -> None:
     data["archived_at"] = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
     task_yaml.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
-    deleted = cleanup_archived_tasks(tmp_path, "30d")
+    with caplog.at_level(logging.INFO, logger="litehive.tasks.archive"):
+        deleted = cleanup_archived_tasks(tmp_path, "30d")
 
     assert len(deleted) == 1
     assert deleted[0].id == task.id
     assert not archive_dir.exists()
+    assert f"Deleting archived task directory {archive_dir}" in caplog.text
 
 
 def test_cleanup_keeps_recent_archived_tasks(tmp_path: Path) -> None:
@@ -208,3 +215,28 @@ def test_cleanup_invalid_duration(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Invalid duration format"):
         cleanup_archived_tasks(tmp_path, "foobar")
+
+
+def test_cleanup_logs_target_and_raises_on_archived_task_cleanup_failure(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = _make_done_task(tmp_path, "Old archived task")
+    archive_task(tmp_path, task.id)
+
+    archive_dir = archive_root(tmp_path) / f"{task.id}-{task.slug}"
+    task_yaml = archive_dir / "task.yaml"
+    data = yaml.safe_load(task_yaml.read_text(encoding="utf-8"))
+    from datetime import datetime, timedelta, timezone
+
+    data["archived_at"] = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+    task_yaml.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
+        with caplog.at_level(logging.INFO, logger="litehive.tasks.archive"):
+            with pytest.raises(OSError, match="failed to delete archived task directory .*permission denied"):
+                cleanup_archived_tasks(tmp_path, "30d")
+
+    assert f"Deleting archived task directory {archive_dir}" in caplog.text
+    assert f"Failed to delete archived task directory {archive_dir}" in caplog.text

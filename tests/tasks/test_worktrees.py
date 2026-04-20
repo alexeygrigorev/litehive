@@ -1,9 +1,13 @@
+import logging
 import subprocess
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task
-from litehive.tasks.worktrees import resolve_task_execution_root
+from litehive.tasks.worktrees import ensure_worktree_venv_link, resolve_task_execution_root, task_worktree_path
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -46,3 +50,49 @@ def test_resolve_task_execution_root_links_worktree_venv_to_workspace_venv(tmp_p
 
     assert worktree.joinpath(".venv").is_symlink()
     assert worktree.joinpath(".venv").resolve() == workspace.joinpath(".venv").resolve()
+
+
+def test_ensure_worktree_venv_link_logs_target_and_raises_on_cleanup_failure(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / ".venv").mkdir()
+    worktree = workspace / "task-worktree"
+    (worktree / ".venv").mkdir(parents=True)
+
+    with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
+        with caplog.at_level(logging.INFO, logger="litehive.tasks.worktrees"):
+            with pytest.raises(OSError, match="failed to delete worktree venv directory .*permission denied"):
+                ensure_worktree_venv_link(workspace, worktree)
+
+    assert f"Deleting worktree venv directory {worktree / '.venv'}" in caplog.text
+    assert f"Failed to delete worktree venv directory {worktree / '.venv'}" in caplog.text
+
+
+def test_resolve_task_execution_root_logs_target_and_raises_on_worktree_cleanup_failure(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _git_ok(workspace, "init", "-b", "main")
+    _configure_repo(workspace)
+    ensure_workspace(workspace)
+
+    (workspace / "app.txt").write_text("base\n", encoding="utf-8")
+    _git_ok(workspace, "add", "app.txt")
+    _git_ok(workspace, "commit", "-m", "initial")
+
+    task = create_task(workspace, title="Cleanup stale worktree")
+    stale_worktree = task_worktree_path(workspace, task)
+    stale_worktree.mkdir(parents=True)
+
+    with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
+        with caplog.at_level(logging.INFO, logger="litehive.tasks.worktrees"):
+            with pytest.raises(OSError, match="failed to delete task worktree directory .*permission denied"):
+                resolve_task_execution_root(workspace, task)
+
+    assert f"Deleting task worktree directory {stale_worktree}" in caplog.text
+    assert f"Failed to delete task worktree directory {stale_worktree}" in caplog.text

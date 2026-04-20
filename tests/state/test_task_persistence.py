@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import pytest
@@ -78,3 +79,29 @@ def test_create_task_bootstraps_workspace_once_after_initialization(
     create_task(tmp_path, title="Single bootstrap task")
 
     assert bootstrap_calls == 1
+
+
+def test_create_task_surfaces_cleanup_failure_when_rollback_removal_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    ensure_workspace(tmp_path)
+
+    def fail_write_atomic_files_and_then(writes, callback) -> None:
+        del writes, callback
+        raise OSError("intent write failed")
+
+    def fail_rmtree(path: Path) -> None:
+        raise OSError(f"permission denied for {path}")
+
+    monkeypatch.setattr("litehive.state.records.write_atomic_files_and_then", fail_write_atomic_files_and_then)
+    monkeypatch.setattr("litehive.fs_cleanup.shutil.rmtree", fail_rmtree)
+
+    with caplog.at_level(logging.INFO, logger="litehive.state.records"):
+        with pytest.raises(ExceptionGroup, match="failed to persist created tasks and roll back created task directories") as excinfo:
+            create_task(tmp_path, title="Cleanup failure surfaces")
+
+    assert any("intent write failed" in str(error) for error in excinfo.value.exceptions)
+    assert any("failed to delete created task directory" in str(error) for error in excinfo.value.exceptions)
+    assert "Deleting created task directory" in caplog.text

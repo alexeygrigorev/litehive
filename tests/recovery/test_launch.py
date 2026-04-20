@@ -1,8 +1,13 @@
+import logging
 import subprocess
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 from litehive.config.workspace import ensure_workspace
-from litehive.recovery.launch import prepare_task_launch
+from litehive.git.ops import GitError
+from litehive.recovery.launch import LaunchFailure, attempt_launch_recovery, prepare_task_launch
 from litehive.state.records import create_task, get_task
 
 
@@ -49,3 +54,30 @@ def test_prepare_task_launch_links_worktree_venv_to_workspace_venv(tmp_path: Pat
     worktree = Path(refreshed.runtime.git.worktree_path)
     assert worktree.joinpath(".venv").is_symlink()
     assert worktree.joinpath(".venv").resolve() == workspace.joinpath(".venv").resolve()
+
+
+def test_attempt_launch_recovery_logs_target_and_raises_on_worktree_cleanup_failure(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Recover task worktree")
+    worktree = tmp_path / "stale-worktree"
+    worktree.mkdir()
+    task.runtime.git.worktree_path = str(worktree)
+
+    with patch("litehive.recovery.launch.remove_worktree", side_effect=GitError("registered worktree missing")):
+        with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
+            with caplog.at_level(logging.INFO, logger="litehive.recovery.launch"):
+                with pytest.raises(OSError, match="failed to delete stale task worktree directory .*permission denied"):
+                    attempt_launch_recovery(
+                        tmp_path,
+                        task,
+                        LaunchFailure(
+                            context="worktree_setup_failed",
+                            summary="git worktree add failed: stale metadata",
+                        ),
+                    )
+
+    assert f"Deleting stale task worktree directory {worktree}" in caplog.text
+    assert f"Failed to delete stale task worktree directory {worktree}" in caplog.text

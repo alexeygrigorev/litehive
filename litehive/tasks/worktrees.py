@@ -1,6 +1,6 @@
 """Task worktree helpers, inspection, and execution-root management."""
 
-import shutil
+import logging
 import subprocess
 from pathlib import Path, PurePosixPath
 
@@ -12,6 +12,7 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.paths import workspace_path
 from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
 from litehive.domain.task import TaskRecord
+from litehive.fs_cleanup import remove_tree_logged
 from litehive.git.ops import (
     GitError,
     add_worktree,
@@ -27,6 +28,8 @@ from litehive.state.records import (
     set_task_worktree_path,
 )
 from litehive.tasks.journal import append_journal
+
+logger = logging.getLogger(__name__)
 
 
 def task_worktree_path(root: Path, task: TaskRecord) -> Path:
@@ -73,7 +76,11 @@ def ensure_worktree_venv_link(root: Path, worktree_path: Path) -> Path | None:
 
     if worktree_venv.is_symlink() or worktree_venv.exists():
         if worktree_venv.is_dir() and not worktree_venv.is_symlink():
-            shutil.rmtree(worktree_venv)
+            remove_tree_logged(
+                worktree_venv,
+                logger=logger,
+                target_label="worktree venv directory",
+            )
         else:
             worktree_venv.unlink()
 
@@ -335,7 +342,11 @@ def resolve_task_execution_root(
     worktree_path = task_worktree_path(root, task)
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
     if worktree_path.exists():
-        shutil.rmtree(worktree_path)
+        remove_tree_logged(
+            worktree_path,
+            logger=logger,
+            target_label="task worktree directory",
+        )
     add_worktree(root, worktree_path, ref=current_head(root) or "HEAD")
     ensure_worktree_venv_link(root, worktree_path)
     _remove_origin_remote(worktree_path)
