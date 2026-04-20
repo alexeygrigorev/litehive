@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from litehive.config.paths import workspace_path
+from litehive.config.workspace_files import workspace_dir
 from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
 from litehive.state.records import create_task
 
@@ -183,3 +184,49 @@ def test_ensure_workspace_rejects_embedded_unresolved_shell_var() -> None:
 def test_ensure_workspace_rejects_braced_unresolved_shell_var() -> None:
     with pytest.raises(ValueError, match="unresolved shell variable syntax.*expanded absolute path"):
         ensure_workspace(Path("/tmp/${tmpdir}/project"))
+
+
+@pytest.mark.parametrize(
+    ("target_factory", "message"),
+    [
+        (lambda root: root / ".litehive", "Litehive control directory"),
+        (lambda root: root / ".litehive" / ".litehive", "Litehive control directory"),
+        (lambda root: root / ".litehive" / "worktrees" / "T-0001" / "repo", "managed worktrees"),
+        (lambda root: root / "packages" / "demo", "inside existing Litehive workspace"),
+    ],
+)
+def test_ensure_workspace_rejections_do_not_create_nested_workspace_side_effects(
+    tmp_path: Path,
+    target_factory,
+    message: str,
+) -> None:
+    ensure_workspace(tmp_path)
+    target = target_factory(tmp_path)
+    target.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(ValueError, match=message):
+        ensure_workspace(target)
+
+    assert not workspace_dir(target).exists()
+
+
+@pytest.mark.parametrize(
+    "target_factory",
+    [
+        lambda root: Path("$tmpdir/project"),
+        lambda root: root / "$tmpdir" / "project",
+        lambda root: root / "${tmpdir}" / "project",
+    ],
+)
+def test_ensure_workspace_unresolved_shell_var_rejections_do_not_create_side_effects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    target_factory,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    target = target_factory(tmp_path)
+
+    with pytest.raises(ValueError, match="unresolved shell variable syntax.*expanded absolute path"):
+        ensure_workspace(target)
+
+    assert not workspace_dir(target).exists()
