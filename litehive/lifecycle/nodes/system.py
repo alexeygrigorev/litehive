@@ -499,6 +499,11 @@ def _is_runner_owned_metadata(relpath: str, task_id: str) -> bool:
     return relpath == "uv.lock"
 
 
+def _is_main_checkout_cleanup_excluded(relpath: str) -> bool:
+    """Return True when ``relpath`` must stay out of the main cleanup commit."""
+    return relpath.startswith(".litehive/") and relpath.count("/") == 1 and relpath.endswith(".db")
+
+
 class GitCommitNode(CommitNode):
     """Real ``commit`` node — plain automatic merge, no agents.
 
@@ -543,10 +548,12 @@ class GitCommitNode(CommitNode):
             # Clean merge or "Already up to date" (which is the case when
             # the task has no dedicated worktree and branch_ref == current
             # HEAD). Either way, commit stage passes.
-            main_head_after = self._main_head()
-            if main_head_after is None:
+            merge_head_after = self._main_head()
+            if merge_head_after is None:
                 raise GitError("git merge completed but main HEAD could not be resolved")
-            if main_head_before == main_head_after:
+            cleanup_head = self._autocommit_main_checkout_changes(state)
+            main_head_after = cleanup_head or merge_head_after
+            if main_head_before == merge_head_after:
                 reason = "no_op"
                 if worktree_head != main_head_before and self._worktree_patch_already_on_main(
                     worktree_head,
@@ -611,27 +618,9 @@ class GitCommitNode(CommitNode):
         """
         if worktree == self.main_repo_root:
             return
-        status = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        if status.returncode != 0 or not status.stdout.strip():
+        dirty_paths = [path for _, path in self._git_status_entries(worktree)]
+        if not dirty_paths:
             return
-
-        dirty_paths: list[str] = []
-        for line in status.stdout.splitlines():
-            if not line.strip():
-                continue
-            # Porcelain format: "XY path" for most changes; "R  old -> new" for
-            # renames, "C  old -> new" for copies. Extract the new path for
-            # rename/copy entries — `git add -- "old -> new"` is not valid.
-            code = line[:2]
-            rest = line[3:]
-            if code[0] in {"R", "C"} and " -> " in rest:
-                rest = rest.split(" -> ", 1)[1]
-            dirty_paths.append(rest)
         committable = [p for p in dirty_paths if not _is_runner_owned_metadata(p, state.task_id)]
         if not committable:
             # Only runner-owned metadata is dirty — nothing to checkpoint.
@@ -654,6 +643,65 @@ class GitCommitNode(CommitNode):
         )
         if commit.returncode != 0:
             raise GitError(f"git commit failed in {worktree}: {commit.stderr.strip() or commit.stdout.strip()}")
+
+    def _autocommit_main_checkout_changes(self, state: TaskState) -> str | None:
+        """Commit any remaining dirty non-ignored files on main after a clean merge."""
+        entries = self._git_status_entries(self.main_repo_root)
+        committable = [
+            path
+            for code, path in entries
+            if code != "!!" and not _is_main_checkout_cleanup_excluded(path)
+        ]
+        if not committable:
+            return None
+
+        add = subprocess.run(
+            ["git", "add", "--all", "--", *committable],
+            cwd=str(self.main_repo_root),
+            capture_output=True,
+            text=True,
+        )
+        if add.returncode != 0:
+            raise GitError(f"git add failed in {self.main_repo_root}: {add.stderr.strip() or add.stdout.strip()}")
+        message = f"litehive {state.task_id}: auto-commit dirty main checkout"
+        commit = subprocess.run(
+            ["git", "commit", "-m", message],
+            cwd=str(self.main_repo_root),
+            capture_output=True,
+            text=True,
+        )
+        if commit.returncode != 0:
+            raise GitError(
+                f"git commit failed in {self.main_repo_root}: {commit.stderr.strip() or commit.stdout.strip()}"
+            )
+        head = self._main_head()
+        if head is None:
+            raise GitError("main cleanup commit completed but main HEAD could not be resolved")
+        return head
+
+    def _git_status_entries(self, repo_root: Path) -> list[tuple[str, str]]:
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+        )
+        if status.returncode != 0:
+            raise GitError(f"git status failed in {repo_root}: {status.stderr.strip() or status.stdout.strip()}")
+
+        entries: list[tuple[str, str]] = []
+        for line in status.stdout.splitlines():
+            if not line.strip():
+                continue
+            # Porcelain format: "XY path" for most changes; "R  old -> new" for
+            # renames, "C  old -> new" for copies. Extract the new path for
+            # rename/copy entries — `git add -- "old -> new"` is not valid.
+            code = line[:2]
+            path = line[3:]
+            if any(mark in {"R", "C"} for mark in code) and " -> " in path:
+                path = path.split(" -> ", 1)[1]
+            entries.append((code, path))
+        return entries
 
     def _worktree_head(self, worktree: Path) -> str:
         proc = subprocess.run(

@@ -7,6 +7,7 @@ import pytest
 
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
+from litehive.git.ops import has_non_litehive_changes
 from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass, Reject
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.hook import HookNode, HookResult, HookRunner, HookSpec, SubprocessHookRunner
@@ -313,6 +314,87 @@ def test_commit_node_autocommit_excludes_uv_lock(tmp_path: Path) -> None:
     assert (repo / "new.txt").read_text() == "agent wrote this\n"
     # Main's uv.lock must remain the main-side version — not overwritten by the worktree churn.
     assert (repo / "uv.lock").read_text() == "version = 1\n"
+
+
+def test_commit_node_autocommits_dirty_main_checkout_after_clean_merge(git_repo_with_branch) -> None:
+    main_repo, worktree = git_repo_with_branch
+
+    (main_repo / "tracked.txt").write_text("base\n")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=main_repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "tracked base"], cwd=main_repo, check=True)
+    (main_repo / "tracked.txt").write_text("dirty main\n")
+
+    node = GitCommitNode(
+        main_repo,
+        worktree_resolver=lambda state: worktree,
+    )
+
+    event = node.run(make_state(stage="commit"))
+
+    assert isinstance(event, Pass), event
+    assert (main_repo / "b.txt").read_text() == "feature\n"
+    assert (main_repo / "tracked.txt").read_text() == "dirty main\n"
+
+    status = subprocess.run(
+        ["git", "status", "--short"],
+        cwd=main_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert status.stdout.strip() == ""
+
+    subject = subprocess.run(
+        ["git", "log", "-1", "--pretty=%s"],
+        cwd=main_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert subject.stdout.strip() == "litehive T-0001: auto-commit dirty main checkout"
+
+
+def test_commit_node_autocommits_untracked_main_checkout_files_after_clean_merge(git_repo_with_branch) -> None:
+    main_repo, worktree = git_repo_with_branch
+
+    (main_repo / "generated.txt").write_text("generated\n")
+
+    node = GitCommitNode(
+        main_repo,
+        worktree_resolver=lambda state: worktree,
+    )
+
+    event = node.run(make_state(stage="commit"))
+
+    status = subprocess.run(
+        ["git", "status", "--short"],
+        cwd=main_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    changed_files = subprocess.run(
+        ["git", "show", "--name-only", "--format=", "HEAD"],
+        cwd=main_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    subject = subprocess.run(
+        ["git", "log", "-1", "--pretty=%s"],
+        cwd=main_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert isinstance(event, Pass), event
+    assert (main_repo / "b.txt").read_text() == "feature\n"
+    assert (main_repo / "generated.txt").read_text() == "generated\n"
+    assert status.stdout.strip() == ""
+    assert "generated.txt" in changed_files.stdout.splitlines()
+    assert subject.stdout.strip() == "litehive T-0001: auto-commit dirty main checkout"
+    assert has_non_litehive_changes(main_repo) is False
 
 
 def test_commit_node_reports_already_landed_noop_reconciliation(git_repo_with_branch, monkeypatch) -> None:
@@ -755,4 +837,84 @@ def test_run_task_skips_after_commit_when_hook_not_configured(tmp_path: Path) ->
     assert refreshed.pipeline_status == "done"
     assert (tmp_path / "merged.txt").read_text() == "merged\n"
     assert not (tmp_path / "after_commit_branch.txt").exists()
+    assert not worktree.exists()
+
+
+def test_run_task_auto_commit_cleanup_excludes_db_and_gitignored_files(tmp_path: Path) -> None:
+    hook_command = (
+        "printf 'hook update\\n' > tracked.txt && "
+        "printf 'generated\\n' > generated.txt && "
+        "printf 'db\\n' > .litehive/local.db && "
+        "printf 'ignored\\n' > ignored.log"
+    )
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            runner_hooks={
+                "after_implementing": [
+                    {
+                        "command": hook_command,
+                    }
+                ]
+            }
+        ),
+    )
+    create_task(tmp_path, title="Dirty main cleanup")
+    (tmp_path / ".gitignore").write_text("ignored.log\n")
+    (tmp_path / "tracked.txt").write_text("base\n")
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "seed"], cwd=tmp_path, check=True)
+
+    task = dequeue_next_task(tmp_path)
+    assert task is not None
+    worktree = _prepare_committed_task_worktree(tmp_path, task)
+
+    result = run_task(
+        tmp_path,
+        task,
+        engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
+    )
+    refreshed = get_task(tmp_path, task.id)
+
+    status = subprocess.run(
+        ["git", "status", "--short"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    changed_files = subprocess.run(
+        ["git", "show", "--name-only", "--format=", "HEAD"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    subject = subprocess.run(
+        ["git", "log", "-1", "--pretty=%s"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert result.final_stage == "done"
+    assert refreshed is not None
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert (tmp_path / "merged.txt").read_text() == "merged\n"
+    assert (tmp_path / "tracked.txt").read_text() == "hook update\n"
+    assert (tmp_path / "generated.txt").read_text() == "generated\n"
+    assert (tmp_path / ".litehive" / "local.db").read_text() == "db\n"
+    assert (tmp_path / "ignored.log").read_text() == "ignored\n"
+    assert status.stdout.strip() == "?? .litehive/local.db"
+    assert "generated.txt" in changed_files.stdout.splitlines()
+    assert "tracked.txt" in changed_files.stdout.splitlines()
+    assert ".litehive/local.db" not in changed_files.stdout.splitlines()
+    assert "ignored.log" not in changed_files.stdout.splitlines()
+    assert subject.stdout.strip() == f"litehive {task.id}: auto-commit dirty main checkout"
+    assert has_non_litehive_changes(tmp_path) is False
     assert not worktree.exists()
