@@ -1,9 +1,7 @@
 """Workspace-local daemon metadata backed by a lock file."""
 
 from contextlib import contextmanager
-import fcntl
 import logging
-import os
 from pathlib import Path
 import threading
 from typing import TextIO
@@ -13,6 +11,7 @@ import yaml
 from litehive.config.paths import litehive_root, workspace_path
 from litehive.config.registry import list_registered_workspace_paths
 from litehive.domain.common import utcnow
+from litehive.state.lock_manager import WorkspaceLockManager
 from litehive.state.locking import runner_pid_is_alive as pid_is_alive
 
 logger = logging.getLogger(__name__)
@@ -34,44 +33,43 @@ def _daemon_registry_lock_path() -> Path:
     return litehive_root() / ".daemons.lock"
 
 
+def _daemon_lock_is_held_in_process(workspace: Path) -> bool:
+    with _DAEMON_LOCKS_MUTEX:
+        return workspace in _DAEMON_LOCKS
+
+
+def _daemon_lock_manager(workspace: Path) -> WorkspaceLockManager:
+    workspace = workspace.resolve()
+    return WorkspaceLockManager(
+        daemon_lock_path(workspace),
+        pid_is_alive=pid_is_alive,
+        held_in_process=lambda: _daemon_lock_is_held_in_process(workspace),
+        fsync_writes=True,
+    )
+
+
 def _read_metadata(path: Path) -> dict[str, object] | None:
-    if not path.exists():
-        return None
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    return dict(data)
+    return WorkspaceLockManager(path, pid_is_alive=pid_is_alive, fsync_writes=True).read_metadata()
 
 
 def _read_locked_metadata(handle: TextIO) -> dict[str, object]:
-    handle.seek(0)
-    data = yaml.safe_load(handle.read()) or {}
-    if not isinstance(data, dict):
-        return {}
-    return dict(data)
+    return WorkspaceLockManager(Path(handle.name), pid_is_alive=pid_is_alive, fsync_writes=True).read_locked_metadata(handle)
 
 
 def _write_locked_metadata(handle: TextIO, payload: dict[str, object]) -> None:
-    handle.seek(0)
-    handle.truncate()
-    yaml.safe_dump(payload, handle, sort_keys=False)
-    handle.flush()
-    os.fsync(handle.fileno())
+    WorkspaceLockManager(Path(handle.name), pid_is_alive=pid_is_alive, fsync_writes=True).write_locked_metadata(handle, payload)
 
 
 @contextmanager
 def _locked_daemon_registry() -> TextIO:
     lock_path = _daemon_registry_lock_path()
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    manager = WorkspaceLockManager(lock_path, pid_is_alive=pid_is_alive, fsync_writes=True)
+    with manager.open() as handle:
+        manager.lock(handle, nonblocking=False)
         try:
             yield handle
         finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            manager.unlock(handle)
 
 
 def _read_daemon_registry() -> list[dict[str, object]]:
@@ -110,62 +108,22 @@ def _remove_daemon_registry_entry(workspace: Path) -> None:
 
 def daemon_lock_is_active(workspace: Path) -> bool:
     workspace = workspace.resolve()
-    with _DAEMON_LOCKS_MUTEX:
-        if workspace in _DAEMON_LOCKS:
-            return True
-    path = daemon_lock_path(workspace)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a+", encoding="utf-8") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return True
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-    return False
+    return _daemon_lock_manager(workspace).is_active()
 
 
 def _clear_stale_daemon_metadata(workspace: Path, *, pid: int | None = None) -> None:
     workspace = workspace.resolve()
-    path = daemon_lock_path(workspace)
-    if not path.exists():
-        return
-    with path.open("a+", encoding="utf-8") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return
-        metadata = _read_locked_metadata(handle)
-        metadata_pid = metadata.get("pid")
-        if pid is not None and metadata_pid != pid:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-            return
-        if isinstance(metadata_pid, int) and pid_is_alive(metadata_pid):
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-            return
-        handle.seek(0)
-        handle.truncate()
-        handle.flush()
-        os.fsync(handle.fileno())
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-    _remove_daemon_registry_entry(workspace)
+    if _daemon_lock_manager(workspace).clear_metadata_if_unlocked(expected_pid=pid, require_stale_pid=True):
+        _remove_daemon_registry_entry(workspace)
 
 
 def daemon_metadata(workspace: Path) -> dict[str, object] | None:
     workspace = workspace.resolve()
-    metadata = _read_metadata(daemon_lock_path(workspace))
-    if not metadata:
+    metadata, status = _daemon_lock_manager(workspace).metadata_status()
+    if metadata is None or status == "stopped":
         return None
-    pid = metadata.get("pid")
-    if daemon_lock_is_active(workspace):
-        payload = dict(metadata)
-        payload["status"] = "running"
-        return payload
-    if isinstance(pid, int) and pid_is_alive(pid):
-        payload = dict(metadata)
-        payload["status"] = "running"
-        return payload
     payload = dict(metadata)
-    payload["status"] = "stale"
+    payload["status"] = status
     return payload
 
 
@@ -178,24 +136,16 @@ def get_workspace_daemon(workspace: Path) -> dict[str, object] | None:
 
 def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
     workspace = workspace.resolve()
-    path = daemon_lock_path(workspace)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    manager = _daemon_lock_manager(workspace)
     # Remove stale lock file before opening — inherited FDs from dead
     # processes can hold flocks on the old inode indefinitely.
-    if path.exists():
-        existing = _read_metadata(path) or {}
-        existing_pid = existing.get("pid")
-        if isinstance(existing_pid, int) and not pid_is_alive(existing_pid):
-            try:
-                path.unlink(missing_ok=True)
-            except OSError:
-                pass
-    handle = path.open("a+", encoding="utf-8")
+    manager.remove_stale_lockfile()
+    handle = manager.open()
     try:
         try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            manager.lock(handle, nonblocking=True)
         except BlockingIOError:
-            existing = _read_locked_metadata(handle)
+            existing = manager.read_locked_metadata(handle)
             existing_pid = existing.get("pid")
             if isinstance(existing_pid, int) and pid_is_alive(existing_pid):
                 raise RuntimeError(f"daemon already running for {workspace}: pid={existing_pid}") from None
@@ -206,7 +156,7 @@ def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
             "started_at": utcnow(),
             "log_dir": str(log_dir),
         }
-        _write_locked_metadata(handle, payload)
+        manager.write_locked_metadata(handle, payload)
         with _DAEMON_LOCKS_MUTEX:
             existing_handle = _DAEMON_LOCKS.get(workspace)
             if existing_handle is not None:
@@ -215,7 +165,7 @@ def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
         _upsert_daemon_registry_entry(workspace, payload)
     except Exception:
         try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            manager.unlock(handle)
         except OSError:
             pass
         handle.close()
@@ -224,22 +174,16 @@ def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
 
 def unregister_daemon(workspace: Path, *, pid: int | None = None) -> None:
     workspace = workspace.resolve()
+    manager = _daemon_lock_manager(workspace)
     with _DAEMON_LOCKS_MUTEX:
         handle = _DAEMON_LOCKS.pop(workspace, None)
     if handle is not None:
         try:
-            metadata = _read_locked_metadata(handle)
+            metadata = manager.read_locked_metadata(handle)
             if pid is not None and metadata.get("pid") != pid:
                 return
-            handle.seek(0)
-            handle.truncate()
-            handle.flush()
-            os.fsync(handle.fileno())
         finally:
-            try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-            finally:
-                handle.close()
+            manager.release(handle, clear_metadata=True)
         _remove_daemon_registry_entry(workspace)
         return
     _clear_stale_daemon_metadata(workspace, pid=pid)

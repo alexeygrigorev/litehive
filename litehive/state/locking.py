@@ -1,20 +1,19 @@
 """Workspace locking, runner guards, and mutation helpers."""
 
-import fcntl
 import logging
 import os
 import sys
 import threading
 from contextlib import contextmanager
 from pathlib import Path
+from collections.abc import Callable
 from typing import TextIO
-
-import yaml
 
 from litehive.config.workspace_files import workspace_dir
 from litehive.domain.common import utcnow
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
+from litehive.state.lock_manager import WorkspaceLockManager
 
 from litehive.tasks.constants import (
     HEARTBEAT_LATE_THRESHOLD_SECONDS,
@@ -28,31 +27,41 @@ from litehive.tasks.paths import runner_lock_path, task_dir, task_file
 logger = logging.getLogger(__name__)
 
 
+def _runner_lock_manager(
+    root: Path,
+    *,
+    held_in_process: Callable[[], bool] | None = None,
+) -> WorkspaceLockManager:
+    return WorkspaceLockManager(
+        runner_lock_path(root),
+        pid_is_alive=runner_pid_is_alive,
+        held_in_process=held_in_process,
+    )
+
+
 @contextmanager
 def workspace_lock(root: Path):
     lock_path = workspace_dir(root) / ".lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("w", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        manager = WorkspaceLockManager(lock_path, pid_is_alive=runner_pid_is_alive)
+        manager.lock(handle, nonblocking=False)
         try:
             yield
         finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            manager.unlock(handle)
 
 
 def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> None:
-    handle.seek(0)
-    handle.truncate()
-    handle.write(yaml.safe_dump(status.model_dump(mode="json"), sort_keys=False))
-    handle.flush()
+    WorkspaceLockManager(Path(handle.name), pid_is_alive=runner_pid_is_alive).write_locked_metadata(
+        handle,
+        status.model_dump(mode="json"),
+    )
 
 
 def read_runner_lock_metadata(root: Path) -> RunnerStatusState:
-    lock_path = runner_lock_path(root)
-    if not lock_path.exists():
-        return RunnerStatusState()
-    data = yaml.safe_load(lock_path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
+    data = _runner_lock_manager(root.resolve()).read_metadata(strict=True)
+    if data is None:
         return RunnerStatusState()
     return RunnerStatusState(**data)
 
@@ -72,17 +81,7 @@ def runner_metadata_present(status: RunnerStatusState) -> bool:
 
 def runner_lock_is_active(root: Path) -> bool:
     root = root.resolve()
-    if root in RUNNER_LOCKS:
-        return True
-    lock_path = runner_lock_path(root)
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return True
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-        return False
+    return _runner_lock_manager(root, held_in_process=lambda: root in RUNNER_LOCKS).is_active()
 
 
 def runner_status_needs_reconciliation(root: Path) -> bool:
@@ -97,20 +96,7 @@ def runner_status_needs_reconciliation(root: Path) -> bool:
 
 def clear_runner_lock_metadata(root: Path) -> None:
     root = root.resolve()
-    if root in RUNNER_LOCKS:
-        return
-    lock_path = runner_lock_path(root)
-    if not lock_path.exists():
-        return
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return
-        handle.seek(0)
-        handle.truncate()
-        handle.flush()
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    _runner_lock_manager(root, held_in_process=lambda: root in RUNNER_LOCKS).clear_metadata_if_unlocked()
 
 
 def heartbeat_is_late(heartbeat_at: str | None) -> bool:
@@ -237,25 +223,12 @@ def subagent_process_is_stale(task: "TaskRecord") -> bool:
 
 def runner_lock_pid_is_stale(root: Path) -> bool:
     """Return True if the runner lock metadata records a PID that is no longer alive."""
-    metadata = read_runner_lock_metadata(root)
-    pid = metadata.pid
-    if pid is None:
-        return False
-    return not runner_pid_is_alive(pid)
+    return _runner_lock_manager(root.resolve()).pid_is_stale()
 
 
 def runner_lock_is_held(root: Path) -> bool:
-    if current_thread_owns_runner_guard(root):
-        return True
-    lock_path = runner_lock_path(root)
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return True
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-        return False
+    root = root.resolve()
+    return _runner_lock_manager(root, held_in_process=lambda: current_thread_owns_runner_guard(root)).is_active()
 
 
 def runner_conflict_message(root: Path) -> str:
@@ -309,6 +282,7 @@ def _auto_repair_stale_state(root: Path) -> None:
 def workspace_runner_guard(root: Path):
     root = root.resolve()
     owner_thread_id = threading.get_ident()
+    manager = _runner_lock_manager(root, held_in_process=lambda: root in RUNNER_LOCKS)
     with RUNNER_LOCKS_MUTEX:
         existing = RUNNER_LOCKS.get(root)
         if existing is not None:
@@ -328,20 +302,12 @@ def workspace_runner_guard(root: Path):
                     lock_state.depth -= 1
                     should_close = False
             if should_close:
-                handle = lock_state.handle
-                handle.seek(0)
-                handle.truncate()
-                handle.flush()
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-                handle.close()
+                manager.release(lock_state.handle, clear_metadata=True)
         return
 
-    lock_path = runner_lock_path(root)
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    handle = lock_path.open("a+", encoding="utf-8")
     try:
         try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            handle = manager.acquire(nonblocking=True)
         except BlockingIOError as exc:
             raise WorkspaceConflictError(runner_conflict_message(root)) from exc
         # Auto-repair stale state left by a crashed runner.  We hold the
@@ -361,7 +327,8 @@ def workspace_runner_guard(root: Path):
         with RUNNER_LOCKS_MUTEX:
             RUNNER_LOCKS[root] = RunnerLockState(handle=handle, depth=1, status=status, owner_thread_id=owner_thread_id)
     except Exception:
-        handle.close()
+        if "handle" in locals() and not handle.closed:
+            handle.close()
         raise
 
     try:
@@ -369,11 +336,7 @@ def workspace_runner_guard(root: Path):
     finally:
         with RUNNER_LOCKS_MUTEX:
             RUNNER_LOCKS.pop(root, None)
-        handle.seek(0)
-        handle.truncate()
-        handle.flush()
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-        handle.close()
+        manager.release(handle, clear_metadata=True)
 
 
 @contextmanager

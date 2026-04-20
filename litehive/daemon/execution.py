@@ -615,6 +615,10 @@ def start_background_daemon(workspace: Path) -> int:
         unregister_daemon(workspace)
     _ensure_workspace_venvs_ready(workspace, output_stream=None)
     project_root = Path(__file__).resolve().parents[2]
+    child_env = os.environ.copy()
+    for key in ("LITEHIVE_AGENT_ROLE", "LITEHIVE_STAGE", "LITEHIVE_TASK_ID"):
+        child_env.pop(key, None)
+    child_env["LITEHIVE_WORKSPACE_ROOT"] = str(workspace)
     process = subprocess.Popen(
         [
             sys.executable,
@@ -626,6 +630,7 @@ def start_background_daemon(workspace: Path) -> int:
             str(workspace),
         ],
         cwd=project_root,
+        env=child_env,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
