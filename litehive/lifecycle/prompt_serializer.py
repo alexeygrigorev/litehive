@@ -74,6 +74,10 @@ def serialize_prompt(
     if recovery_trigger:
         sections.append(_recovery_trigger_section(recovery_trigger, prompt))
 
+    scope_analysis = prompt.get("scope_analysis")
+    if scope_analysis:
+        sections.append(_scope_analysis_section(scope_analysis))
+
     conflict_files = prompt.get("conflict_files")
     if conflict_files:
         sections.append(_merge_conflict_section(conflict_files, prompt.get("merge_attempt")))
@@ -220,6 +224,34 @@ def _recovery_trigger_section(recovery_trigger: dict[str, Any], prompt: dict[str
     explanation = prompt.get("recovery_failure_explanation")
     if explanation:
         lines.append(f"- recovery_failure_explanation: {explanation}")
+    return "\n".join(lines)
+
+
+def _scope_analysis_section(scope_analysis: dict[str, Any]) -> str:
+    """Build scope analysis section for recovery agent prompts."""
+    lines = ["Scope analysis (operator cleanup vs SWE scope creep):"]
+
+    is_operator_cleanup = scope_analysis.get("is_operator_cleanup", False)
+    classification = "OPERATOR CLEANUP" if is_operator_cleanup else "POTENTIAL SCOPE CREEP"
+    lines.append(f"- Classification: {classification}")
+
+    reasoning = scope_analysis.get("reasoning", "No analysis available")
+    lines.append(f"- Reasoning: {reasoning}")
+
+    deleted_files = scope_analysis.get("deleted_files", [])
+    if deleted_files:
+        lines.append(f"- Deleted files ({len(deleted_files)}): {', '.join(deleted_files)}")
+
+        broken_on_main = scope_analysis.get("broken_on_main", [])
+        if broken_on_main:
+            lines.append(f"- Files broken on main ({len(broken_on_main)}): {', '.join(broken_on_main)}")
+
+        healthy_on_main = scope_analysis.get("healthy_on_main", [])
+        if healthy_on_main:
+            lines.append(f"- Files healthy on main ({len(healthy_on_main)}): {', '.join(healthy_on_main)}")
+    else:
+        lines.append("- No files deleted")
+
     return "\n".join(lines)
 
 
