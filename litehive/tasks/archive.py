@@ -29,6 +29,10 @@ def _load_archived_task_record(path: Path) -> TaskRecord:
     if not isinstance(data, dict):
         raise ValueError(f"Archived task file must contain a mapping: {path}")
     data = dict(data)
+    # Legacy archived task.yaml files predate persisted runtime fields.
+    # Archived tasks are always done, so default missing fields accordingly.
+    data.setdefault("status", "done")
+    data.setdefault("pipeline_status", "done")
     data.pop("archived_at", None)
     data.pop("updated_at", None)
     return TaskRecord(**data)
@@ -58,6 +62,8 @@ def _update_archive_index(root: Path, tasks: list[TaskRecord]) -> None:
 
 def archive_task(root: Path, task_id: str) -> TaskRecord:
     """Move a single done task to the archive directory."""
+    from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
+
     with workspace_lock(root):
         task = require_task(root, task_id)
         if task.status != "done":
@@ -72,11 +78,14 @@ def archive_task(root: Path, task_id: str) -> TaskRecord:
         task_yaml_path = src / "task.yaml"
         data = yaml.safe_load(task_yaml_path.read_text(encoding="utf-8")) or {}
         data["archived_at"] = now
+        data["status"] = str(task.status)
+        data["pipeline_status"] = str(task.pipeline_status)
         data["updated_at"] = now
         atomic_write_text(task_yaml_path, yaml.safe_dump(data, sort_keys=False))
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(dst))
         _update_archive_index(root, [task])
+        refresh_duplicate_task_index_if_initialized(root)
         return task
 
 
@@ -131,6 +140,7 @@ def _parse_duration(duration_str: str) -> int:
 def cleanup_archived_tasks(root: Path, older_than: str) -> list[TaskRecord]:
     """Delete archived tasks older than the given duration."""
     from datetime import datetime, timezone
+    from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
 
     max_age_seconds = _parse_duration(older_than)
     now = datetime.now(timezone.utc)
@@ -161,4 +171,6 @@ def cleanup_archived_tasks(root: Path, older_than: str) -> list[TaskRecord]:
                 target_label="archived task directory",
             )
             deleted.append(task)
+    if deleted:
+        refresh_duplicate_task_index_if_initialized(root)
     return deleted
