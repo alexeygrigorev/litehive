@@ -19,6 +19,8 @@ dependencies = [
 dev = [
     "pytest>=8.4.0",
     "pytest-timeout>=2.4.0",
+    "pycodestyle>=2.14.0",
+    "pyflakes>=3.4.0",
     "ruff>=0.12.0",
 ]
 
@@ -48,6 +50,8 @@ extend-select = ["E402", "F401"]
 
 [dependency-groups]
 dev = [
+    "pycodestyle>=2.14.0",
+    "pyflakes>=3.4.0",
     "pytest>=8.4.0",
     "pytest-timeout>=2.4.0",
     "ruff>=0.12.0",

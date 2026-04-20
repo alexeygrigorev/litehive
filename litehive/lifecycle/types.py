@@ -78,6 +78,7 @@ READY: NodeName = "ready"
 
 
 class FailedReason(StringEnum):
+    REJECTION_LOOP_DETECTED = "rejection_loop_detected"
     RECOVERY_EXHAUSTED = "recovery_exhausted"
     RECOVERY_BUDGET_HIT = "recovery_budget_hit"
     RECOVERY_CRASHED = "recovery_crashed"

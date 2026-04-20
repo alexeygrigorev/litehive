@@ -29,7 +29,7 @@ from litehive.lifecycle.events import (
     Reject,
     Timeout,
 )
-from litehive.lifecycle.persistence import LastReport, Limits, TaskState
+from litehive.lifecycle.persistence import LastReport, Limits, RejectionLoop, TaskState
 from litehive.lifecycle.transitions import NoTransitionError
 from litehive.lifecycle.types import (
     ANY_STAGE_PHASE,
@@ -46,10 +46,12 @@ def make_state(
     *,
     mode: PipelineMode = PipelineMode.FULL,
     stage_retry: dict[str, int] | None = None,
+    rejection_loop: RejectionLoop | None = None,
     pre_exec_recovery_attempt: int = 0,
     files_changed: int = 1,
     tests_added: int = 0,
     stage_retry_limit: int = 3,
+    rejection_loop_limit: int = 3,
     active_recovery_trigger: RecoveryTrigger | None = None,
     recovery_history: list[RecoveryOutcome] | None = None,
     hook_reject_recovery_invoked: bool = False,
@@ -59,12 +61,16 @@ def make_state(
         stage=stage,
         pipeline_mode=mode,
         stage_retry=stage_retry or {},
+        rejection_loop=rejection_loop,
         active_recovery_trigger=active_recovery_trigger,
         recovery_history=list(recovery_history or []),
         hook_reject_recovery_invoked=hook_reject_recovery_invoked,
         pre_exec_recovery_attempt=pre_exec_recovery_attempt,
         last_report=LastReport(files_changed=files_changed, tests_added=tests_added),
-        limits=Limits(stage_retry_limit=stage_retry_limit),
+        limits=Limits(
+            stage_retry_limit=stage_retry_limit,
+            rejection_loop_limit=rejection_loop_limit,
+        ),
     )
 
 
@@ -218,6 +224,10 @@ def test_testing_reject_routes_back_to_implementing():
     trans = step("testing", Reject(source="agent", reason="x"), state)
     assert trans.next == "implementing"
     assert trans.delta.inc_stage_retry == "testing"
+    assert trans.delta.set_rejection_loop is not None
+    assert trans.delta.set_rejection_loop.rejection_stage == "testing"
+    assert trans.delta.set_rejection_loop.retry_target_stage == "implementing"
+    assert trans.delta.set_rejection_loop.count == 1
 
 
 def test_accepting_reject_routes_back_to_implementing():
@@ -225,6 +235,57 @@ def test_accepting_reject_routes_back_to_implementing():
     trans = step("accepting", Reject(source="agent", reason="x"), state)
     assert trans.next == "implementing"
     assert trans.delta.inc_stage_retry == "accepting"
+
+
+def test_third_testing_reject_hits_rejection_loop_cap() -> None:
+    state = make_state(
+        "testing",
+        stage_retry={"testing": 0},
+        rejection_loop=RejectionLoop(
+            rejection_stage="testing",
+            retry_target_stage="implementing",
+            count=2,
+        ),
+    )
+
+    trans = step("testing", Reject(source="agent", reason="still broken"), state)
+
+    assert trans.next == "failed"
+    assert trans.delta.failed_reason == "rejection_loop_detected"
+    assert trans.delta.set_rejection_loop is not None
+    assert trans.delta.set_rejection_loop.count == 3
+
+
+def test_testing_pass_clears_completed_rejection_loop() -> None:
+    state = make_state(
+        "testing",
+        rejection_loop=RejectionLoop(
+            rejection_stage="testing",
+            retry_target_stage="implementing",
+            count=2,
+        ),
+    )
+
+    trans = step("testing", Pass(), state)
+
+    assert trans.next == "after_testing"
+    assert trans.delta.clear_rejection_loop is True
+
+
+def test_testing_pass_does_not_clear_accepting_rejection_loop() -> None:
+    state = make_state(
+        "testing",
+        rejection_loop=RejectionLoop(
+            rejection_stage="accepting",
+            retry_target_stage="implementing",
+            count=2,
+        ),
+    )
+
+    trans = step("testing", Pass(), state)
+
+    assert trans.next == "after_testing"
+    assert trans.delta.clear_rejection_loop is False
 
 
 def test_commit_reject_goes_to_recovering():

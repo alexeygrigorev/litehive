@@ -14,6 +14,7 @@ from .types import FailedReason, NodeName, PipelineMode
 class Limits:
     stage_retry_limit: int = 3
     same_hook_reject_limit: int = 3
+    rejection_loop_limit: int = 3
     same_engine_retry_limit: int = 3
     overall_retry_limit: int = 30
     grace_period_seconds: int = 120
@@ -140,6 +141,28 @@ class CommitResult:
 
 
 @dataclass
+class RejectionLoop:
+    rejection_stage: NodeName
+    retry_target_stage: NodeName
+    count: int = 0
+
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "rejection_stage": self.rejection_stage,
+            "retry_target_stage": self.retry_target_stage,
+            "count": self.count,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> "RejectionLoop":
+        return cls(
+            rejection_stage=payload["rejection_stage"],
+            retry_target_stage=payload["retry_target_stage"],
+            count=int(payload.get("count") or 0),
+        )
+
+
+@dataclass
 class TaskState:
     """Single source of truth for task state the machine reads and writes.
 
@@ -163,6 +186,7 @@ class TaskState:
     commit_result: CommitResult | None = None
     last_report: LastReport = field(default_factory=LastReport)
     last_rejection_by_stage: dict[NodeName, LastRejection] = field(default_factory=dict)
+    rejection_loop: RejectionLoop | None = None
     consecutive_same_hook_rejects: int = 0
     last_hook_reject_fingerprint: HookRejectFingerprint | None = None
     hook_reject_recovery_invoked: bool = False
@@ -229,6 +253,7 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
         "commit_result": (state.commit_result.to_payload() if state.commit_result is not None else None),
         "last_report": state.last_report.to_payload(),
         "last_rejection_by_stage": {stage: rej.to_payload() for stage, rej in state.last_rejection_by_stage.items()},
+        "rejection_loop": (state.rejection_loop.to_payload() if state.rejection_loop is not None else None),
         "consecutive_same_hook_rejects": state.consecutive_same_hook_rejects,
         "last_hook_reject_fingerprint": (
             state.last_hook_reject_fingerprint.to_payload() if state.last_hook_reject_fingerprint is not None else None
@@ -254,6 +279,7 @@ def _state_from_row(
     recovery_history = payload.get("recovery_history")
     merge_context = payload.get("merge_context")
     commit_result = payload.get("commit_result")
+    rejection_loop = payload.get("rejection_loop")
     return TaskState(
         task_id=task_id,
         stage=stage,
@@ -275,6 +301,7 @@ def _state_from_row(
         last_rejection_by_stage={
             stage_name: LastRejection.from_payload(rej) for stage_name, rej in last_rejections_data.items()
         },
+        rejection_loop=(RejectionLoop.from_payload(dict(rejection_loop)) if isinstance(rejection_loop, dict) else None),
         consecutive_same_hook_rejects=int(payload.get("consecutive_same_hook_rejects") or 0),
         last_hook_reject_fingerprint=(
             HookRejectFingerprint.from_payload(hook_fingerprint_data) if hook_fingerprint_data is not None else None

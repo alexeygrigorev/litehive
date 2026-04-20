@@ -7,6 +7,7 @@ Ctrl+click any S.STAGE to see the node that runs there.
 """
 
 from litehive.domain.lifecycle_deltas import (
+    clear_completed_rejection_loop,
     clear_recovery_attempt,
     enter_pre_exec_recovery,
     enter_recovery,
@@ -125,6 +126,7 @@ RULES: list[Rule] = [
         from_state=S.GROOMING,
         on_event=Pass,
         transition_to=S.AFTER_GROOMING,
+        with_effect=clear_completed_rejection_loop,
     ),
     Rule(
         from_state=S.AFTER_GROOMING,
@@ -141,6 +143,7 @@ RULES: list[Rule] = [
         from_state=S.IMPLEMENTING,
         on_event=Pass,
         transition_to=S.AFTER_IMPLEMENTING,
+        with_effect=clear_completed_rejection_loop,
     ),
     Rule(
         from_state=S.AFTER_IMPLEMENTING,
@@ -170,6 +173,7 @@ RULES: list[Rule] = [
         from_state=S.TESTING,
         on_event=Pass,
         transition_to=S.AFTER_TESTING,
+        with_effect=clear_completed_rejection_loop,
     ),
     Rule(
         from_state=S.AFTER_TESTING,
@@ -186,6 +190,7 @@ RULES: list[Rule] = [
         from_state=S.ACCEPTING,
         on_event=Pass,
         transition_to=S.AFTER_ACCEPTING,
+        with_effect=clear_completed_rejection_loop,
     ),
     Rule(
         from_state=S.AFTER_ACCEPTING,

@@ -171,3 +171,28 @@ def test_peek_next_task_restores_missing_unfinished_tasks_to_queue_on_restart(
     repaired_state = load_state(tmp_path)
     assert repaired_state.active_task_id is None
     assert repaired_state.queue == [later.id, unfinished.id]
+
+
+def test_dequeue_skips_flagged_rejection_loop_tasks_pending_manual_intervention(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    blocked = create_task(tmp_path, title="Needs manual review")
+    runnable = create_task(tmp_path, title="Runnable next task")
+
+    blocked_task = require_task(tmp_path, blocked.id)
+    blocked_task.status = "flagged"
+    blocked_task.pipeline_status = "flagged"
+    blocked_task.flag_reason = "rejection_loop_detected"
+    save_task(tmp_path, blocked_task)
+
+    state = load_state(tmp_path)
+    state.queue = [blocked.id, runnable.id]
+    save_state(tmp_path, state)
+
+    selection = dequeue_next_task_selection(tmp_path)
+
+    assert selection.task is not None
+    assert selection.task.id == runnable.id
+
+    repaired_state = load_state(tmp_path)
+    assert repaired_state.active_task_id == runnable.id
+    assert blocked.id in repaired_state.queue

@@ -129,8 +129,11 @@ def prepare_completed_task_for_recovery(task: TaskRecord, *, recovery_stage: str
 # --- selection ---
 
 
-def _is_hook_reject_loop_flagged(task: TaskRecord) -> bool:
-    return task.status == "flagged" and task.flag_reason == "hook_reject_loop"
+def _needs_manual_intervention(task: TaskRecord) -> bool:
+    return task.status == "flagged" and task.flag_reason in {
+        "hook_reject_loop",
+        "rejection_loop_detected",
+    }
 
 
 def _is_recovery_budget_exhausted(task: TaskRecord) -> bool:
@@ -251,7 +254,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
             mutated = True
         if mutated:
             if next_task.status == "flagged":
-                if _is_hook_reject_loop_flagged(next_task) or _is_recovery_budget_exhausted(next_task):
+                if _needs_manual_intervention(next_task) or _is_recovery_budget_exhausted(next_task):
                     if state.active_task_id == next_task.id:
                         state.active_task_id = None
                     if mutated:
@@ -308,7 +311,7 @@ def _is_parked_task(task: TaskRecord) -> bool:
 def is_task_eligible_for_execution(task: TaskRecord) -> bool:
     if task.pipeline_status == "done":
         return False
-    if _is_hook_reject_loop_flagged(task):
+    if _needs_manual_intervention(task):
         return False
     if _is_recovery_budget_exhausted(task):
         return False

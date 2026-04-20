@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable
 
-from litehive.domain.lifecycle_deltas import recovery_trigger_from_event
+from litehive.domain.lifecycle_deltas import _rejection_loop_detected, recovery_trigger_from_event
 from .events import Event, RecoverySucceeded, Reject
 from .persistence import TaskState
 from .types import NodeName, PipelineMode
@@ -75,6 +75,13 @@ def hook_reject_loop_detected() -> Guard:
         return isinstance(count, int) and count >= state.limits.same_hook_reject_limit
 
     return Guard(check, "hook_reject_loop_detected")
+
+
+def rejection_loop_detected(retry_target_stage: NodeName) -> Guard:
+    def check(state: TaskState, event: Event) -> bool:
+        return _rejection_loop_detected(state, event, retry_target_stage=retry_target_stage)
+
+    return Guard(check, f"rejection_loop_detected({retry_target_stage})")
 
 
 def zero_change_shortcut() -> Guard:

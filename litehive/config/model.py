@@ -108,6 +108,7 @@ class LitehiveConfig:
     default_retry_limit: int = 3
     retry_on: list[str] = field(default_factory=lambda: ["execution_limit", "timeout"])
     default_stage_retry_limit: int = 2
+    default_rejection_loop_limit: int = 3
     pool_stop_on_failure: bool = False
     pool_max_tasks: int | None = None
     pool_stop_on_dirty_git: bool = False
@@ -133,6 +134,8 @@ class LitehiveConfig:
         self.agent_startup_guidance = normalize_agent_startup_guidance(self.agent_startup_guidance)
         self.retry_on = normalize_retry_on(self.retry_on)
         self.runner_hooks = normalize_runner_hooks(self.runner_hooks)
+        if self.default_rejection_loop_limit < 1:
+            raise ValueError("default_rejection_loop_limit must be greater than 0")
         self.subagent_inactivity_timeout_seconds = float(self.subagent_inactivity_timeout_seconds)
         if self.subagent_inactivity_timeout_seconds <= 0:
             raise ValueError("subagent_inactivity_timeout_seconds must be greater than 0")

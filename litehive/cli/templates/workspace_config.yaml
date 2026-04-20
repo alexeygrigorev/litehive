@@ -36,6 +36,9 @@ retry_on:
 # Stage-local retry budget before the pipeline escalates.
 default_stage_retry_limit: 2
 
+# Consecutive QA/reviewer rejection loop cap before manual intervention.
+default_rejection_loop_limit: 3
+
 # Pool runner defaults for `litehive run --drain`.
 pool_stop_on_failure: false
 pool_max_tasks: null

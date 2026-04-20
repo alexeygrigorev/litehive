@@ -15,6 +15,7 @@ from .runtime import SubagentRef, TaskRuntime
 class TaskRetryPolicy(BaseModel):
     max_retries: int | None = None
     stage_retry_limit: int | None = None
+    rejection_loop_limit: int | None = None
 
 
 class TaskCreationSource(BaseModel):

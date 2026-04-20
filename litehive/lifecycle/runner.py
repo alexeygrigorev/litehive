@@ -175,6 +175,10 @@ class StateMachineRunner:
         if delta.set_last_rejection is not None:
             stage, rejection = delta.set_last_rejection
             state.last_rejection_by_stage[stage] = rejection
+        if delta.clear_rejection_loop:
+            state.rejection_loop = None
+        if delta.set_rejection_loop is not None:
+            state.rejection_loop = delta.set_rejection_loop
         if delta.clear_hook_reject_tracking:
             StateMachineRunner._clear_hook_reject_tracking(state, clear_recovery_invoked=False)
         if delta.set_consecutive_same_hook_rejects is not None:

@@ -24,6 +24,7 @@ from litehive.lifecycle.persistence import (
     MergeContext,
     CommitResult,
     Limits,
+    RejectionLoop,
     SqlitePersistence,
     TaskNotFound,
     TaskState,
@@ -112,6 +113,11 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
                 raised_at_phase="testing",
             ),
         },
+        rejection_loop=RejectionLoop(
+            rejection_stage="testing",
+            retry_target_stage="implementing",
+            count=2,
+        ),
         consecutive_same_hook_rejects=2,
         last_hook_reject_fingerprint=HookRejectFingerprint(
             point="after_implementing",
@@ -152,6 +158,10 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
     ]
     assert loaded.last_rejection_by_stage["implementing"].source == "qa"
     assert loaded.last_rejection_by_stage["implementing"].reason == "tests fail"
+    assert loaded.rejection_loop is not None
+    assert loaded.rejection_loop.rejection_stage == "testing"
+    assert loaded.rejection_loop.retry_target_stage == "implementing"
+    assert loaded.rejection_loop.count == 2
     assert loaded.consecutive_same_hook_rejects == 2
     assert loaded.last_hook_reject_fingerprint is not None
     assert loaded.last_hook_reject_fingerprint.command == "pytest -q"

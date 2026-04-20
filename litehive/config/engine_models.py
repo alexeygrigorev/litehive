@@ -363,6 +363,12 @@ def _resolve_stage_retry_limit(task: TaskRecord, config: LitehiveConfig) -> int:
     return config.default_stage_retry_limit
 
 
+def resolve_task_rejection_loop_limit(task: TaskRecord, config: LitehiveConfig) -> int:
+    if task.retry_policy.rejection_loop_limit is not None:
+        return task.retry_policy.rejection_loop_limit
+    return config.default_rejection_loop_limit
+
+
 def _set_continuation_handoff(
     root: Path,
     task: TaskRecord,

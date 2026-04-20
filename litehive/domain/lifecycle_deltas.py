@@ -25,6 +25,7 @@ from litehive.lifecycle.persistence import (
     HookRejectFingerprint,
     LastRejection,
     MergeContext,
+    RejectionLoop,
     TaskState,
 )
 from litehive.lifecycle.types import FailedReason, NodeName
@@ -49,6 +50,8 @@ class StateDelta:
     set_merge_context: MergeContext | None = None
     clear_merge_context: bool = False
     set_last_rejection: tuple[NodeName, LastRejection] | None = None
+    set_rejection_loop: RejectionLoop | None = None
+    clear_rejection_loop: bool = False
     set_consecutive_same_hook_rejects: int | None = None
     set_last_hook_reject_fingerprint: HookRejectFingerprint | None = None
     clear_hook_reject_tracking: bool = False
@@ -227,6 +230,45 @@ def _hook_reject_delta(state: TaskState, event: Event, *, recovery_invoked: bool
     )
 
 
+def _next_rejection_loop(state: TaskState, event: Event, *, retry_target_stage: NodeName | None) -> RejectionLoop | None:
+    if not isinstance(event, Reject) or event.source != "agent":
+        return None
+    rejection_stage = _pipeline_stage_key(state.stage)
+    target_stage = _pipeline_stage_key(retry_target_stage)
+    if rejection_stage not in {"testing", "accepting"} or target_stage != "implementing":
+        return None
+    if state.rejection_loop is None:
+        return RejectionLoop(
+            rejection_stage=rejection_stage,
+            retry_target_stage=target_stage,
+            count=1,
+        )
+    if (
+        state.rejection_loop.rejection_stage == rejection_stage
+        and state.rejection_loop.retry_target_stage == target_stage
+    ):
+        count = state.rejection_loop.count + 1
+    else:
+        count = 1
+    return RejectionLoop(
+        rejection_stage=rejection_stage,
+        retry_target_stage=target_stage,
+        count=count,
+    )
+
+
+def _rejection_loop_detected(state: TaskState, event: Event, *, retry_target_stage: NodeName | None) -> bool:
+    loop = _next_rejection_loop(state, event, retry_target_stage=retry_target_stage)
+    return loop is not None and loop.count >= state.limits.rejection_loop_limit
+
+
+def _rejection_loop_delta(state: TaskState, event: Event, *, retry_target_stage: NodeName | None) -> StateDelta:
+    loop = _next_rejection_loop(state, event, retry_target_stage=retry_target_stage)
+    if loop is None:
+        return StateDelta(clear_rejection_loop=True)
+    return StateDelta(set_rejection_loop=loop)
+
+
 def enter_recovery(state: TaskState, event: Event) -> StateDelta:
     trigger = recovery_trigger_from_event(state, event)
     hook_delta = _hook_reject_delta(
@@ -240,6 +282,7 @@ def enter_recovery(state: TaskState, event: Event) -> StateDelta:
         set_last_hook_reject_fingerprint=hook_delta.set_last_hook_reject_fingerprint,
         clear_hook_reject_tracking=hook_delta.clear_hook_reject_tracking,
         set_hook_reject_recovery_invoked=hook_delta.set_hook_reject_recovery_invoked,
+        clear_rejection_loop=True,
         clear_recovery_failure_explanation=True,
     )
 
@@ -303,11 +346,12 @@ def clear_recovery_attempt(state: TaskState, event: Event) -> StateDelta:
         append_recovery_outcome=outcome,
         clear_hook_reject_tracking=not preserve_hook_tracking,
         set_hook_reject_recovery_invoked=False if not preserve_hook_tracking else True,
+        clear_rejection_loop=True,
         clear_recovery_failure_explanation=True,
     )
 
 
-def inc_stage_retry(stage: NodeName) -> EffectFn:
+def inc_stage_retry(stage: NodeName, *, retry_target_stage: NodeName | None = None) -> EffectFn:
     """Effect for reject-retry rules.
 
     Bumps the stage's retry counter AND captures the rejection so the next
@@ -318,9 +362,12 @@ def inc_stage_retry(stage: NodeName) -> EffectFn:
         rejection = _rejection_from_event(state, event)
         set_rej = (stage, rejection) if rejection is not None else None
         hook_delta = _hook_reject_delta(state, event, recovery_invoked=False)
+        rejection_loop_delta = _rejection_loop_delta(state, event, retry_target_stage=retry_target_stage)
         return StateDelta(
             inc_stage_retry=stage,
             set_last_rejection=set_rej,
+            set_rejection_loop=rejection_loop_delta.set_rejection_loop,
+            clear_rejection_loop=rejection_loop_delta.clear_rejection_loop,
             set_consecutive_same_hook_rejects=hook_delta.set_consecutive_same_hook_rejects,
             set_last_hook_reject_fingerprint=hook_delta.set_last_hook_reject_fingerprint,
             clear_hook_reject_tracking=hook_delta.clear_hook_reject_tracking,
@@ -328,6 +375,33 @@ def inc_stage_retry(stage: NodeName) -> EffectFn:
         )
 
     return _effect
+
+
+def fail_rejection_loop(stage: NodeName, *, retry_target_stage: NodeName) -> EffectFn:
+    def _effect(state: TaskState, event: Event) -> StateDelta:
+        rejection = _rejection_from_event(state, event)
+        set_rej = (stage, rejection) if rejection is not None else None
+        rejection_loop_delta = _rejection_loop_delta(state, event, retry_target_stage=retry_target_stage)
+        message = event.reason if isinstance(event, Reject) else ""
+        return StateDelta(
+            set_last_rejection=set_rej,
+            set_rejection_loop=rejection_loop_delta.set_rejection_loop,
+            clear_rejection_loop=rejection_loop_delta.clear_rejection_loop,
+            failed_reason=FailedReason.REJECTION_LOOP_DETECTED,
+            failed_message=message,
+        )
+
+    return _effect
+
+
+def clear_completed_rejection_loop(state: TaskState, event: Event) -> StateDelta:
+    del event
+    if state.rejection_loop is None:
+        return EMPTY_DELTA
+    current_stage = _pipeline_stage_key(state.stage)
+    if current_stage != state.rejection_loop.rejection_stage:
+        return EMPTY_DELTA
+    return StateDelta(clear_rejection_loop=True)
 
 
 def stash_conflict_files(state: TaskState, event: Event) -> StateDelta:
@@ -378,6 +452,7 @@ def fail(reason: FailedReason) -> EffectFn:
             failed_message=message,
             append_recovery_outcome=outcome,
             clear_active_recovery_trigger=state.stage == "recovering",
+            clear_rejection_loop=True,
             set_recovery_failure_explanation=explanation,
         )
 
@@ -401,6 +476,7 @@ def exhaust_recovery_budget(state: TaskState, event: Event) -> StateDelta:
             FailedReason.RECOVERY_BUDGET_HIT,
             trigger.message,
         ),
+        clear_rejection_loop=True,
     )
 
 

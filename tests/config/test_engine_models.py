@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from litehive.config.engine_models import resolve_engine_name, resolve_engine_plan, resolve_model
+from litehive.config.engine_models import (
+    resolve_engine_name,
+    resolve_engine_plan,
+    resolve_model,
+    resolve_task_rejection_loop_limit,
+)
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
@@ -152,3 +157,20 @@ def test_resolve_engine_name_ignores_stage_mismatched_engine_switch(tmp_path: Pa
 
     assert resolve_engine_name(task, config) == "codex"
     assert resolve_engine_plan(task, config) == ["codex"]
+
+
+def test_resolve_task_rejection_loop_limit_uses_workspace_default(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_rejection_loop_limit=4))
+    config = load_config(tmp_path)
+    task = create_task(tmp_path, title="Workspace loop cap")
+
+    assert resolve_task_rejection_loop_limit(task, config) == 4
+
+
+def test_resolve_task_rejection_loop_limit_prefers_task_override(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_rejection_loop_limit=5))
+    config = load_config(tmp_path)
+    task = create_task(tmp_path, title="Task loop cap")
+    task.retry_policy.rejection_loop_limit = 2
+
+    assert resolve_task_rejection_loop_limit(task, config) == 2

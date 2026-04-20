@@ -21,12 +21,12 @@ Returns a small ``ExecutionResult`` named-tuple-ish dataclass the
 caller can render.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 import subprocess
 
 from litehive.config.loading import load_config
-from litehive.config.engine_models import resolve_task_retry_policy
+from litehive.config.engine_models import resolve_task_rejection_loop_limit, resolve_task_retry_policy
 from litehive.git.ops import GitError, remove_worktree
 from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.domain.task import TaskRecord
@@ -59,7 +59,7 @@ from .nodes.system import (
     PreExecRecoveryNode,
     ReadyNode,
 )
-from .persistence import SqlitePersistence, TaskState
+from .persistence import Limits, SqlitePersistence, TaskState
 from .registry import build_registry
 from .runner import StateMachineRunner
 from .sessions import SqliteSessionStore
@@ -199,6 +199,8 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
             task_record.pipeline_status = "flagged"
             if trigger is not None and trigger.reason_code == "hook_reject_loop":
                 task_record.flag_reason = "hook_reject_loop"
+            elif failed_reason == "rejection_loop_detected":
+                task_record.flag_reason = "rejection_loop_detected"
             elif failed_reason == "recovery_budget_hit":
                 trigger_kind = trigger.trigger_event_kind.value if trigger is not None else None
                 task_record.flag_reason = (
@@ -331,6 +333,8 @@ def _mark_task_interrupted_on_crash(root: Path, task: TaskRecord, persistence: o
 
 def _cleanup_terminal_worktree(root: Path, task: TaskRecord | None) -> None:
     if task is None:
+        return
+    if task.status == "flagged" and task.flag_reason == "rejection_loop_detected":
         return
     worktree_rel = get_task_worktree_path(task)
     if not worktree_rel:
@@ -528,7 +532,13 @@ def run_task(
     config = load_config(root)
 
     with workspace_runner_guard(root):
-        persistence = SqlitePersistence(root)
+        persistence = SqlitePersistence(
+            root,
+            limits=replace(
+                Limits(),
+                rejection_loop_limit=resolve_task_rejection_loop_limit(task, config),
+            ),
+        )
         _load_or_initialize(task.id, root, persistence)
 
         factory = engine_factory or heru_engine_factory(root)
