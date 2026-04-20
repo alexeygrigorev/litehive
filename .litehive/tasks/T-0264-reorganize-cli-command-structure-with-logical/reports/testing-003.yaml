@@ -1,58 +1,35 @@
 task_id: T-0264
-step: testing
+stage: testing
 verdict: pass
 source: agent
-summary: 'Verified the CLI reorganization against the acceptance criteria. Public
-  help exposes grouped commands task, queue, import, worktree, and archive plus top-level
-  start, stop, and restart, while removed or internal names are absent from top-level
-  help. I checked uv run litehive --help, uv run litehive task --help, uv run litehive
-  queue --help, uv run litehive import --help, uv run litehive start --help, uv run
-  litehive stop --help, uv run litehive restart --help, and uv run litehive run --help;
-  run remains the foreground runner path. Backward-compat aliases still execute directly
-  through their hidden parsers, including daemon, import-issue, prioritize, and switch,
-  but they stay hidden from public help. Verified litehive queue still reports queue
-  state: on a fresh configured workspace it printed active_task_id None, queue_length
-  0, and resumable_tasks 0; on the populated repo workspace it returned the full queue
-  listing in about 15 seconds. I scanned current user-facing docs, prompts, config
-  guidance, and web code for stale command references with rg; remaining matches were
-  internal compatibility routes such as /api/daemon and /api/queue/prioritize or generic
-  prose about daemon logs, not stale public CLI commands. Focused regression slice
-  passed with uv run pytest -q tests/test_run_cli.py tests/test_web_daemon_monitor.py
-  tests/test_web_task_actions.py tests/test_web_snapshot_and_verdicts.py tests/test_runner_workflow.py
-  -q. Full suite passed with uv run pytest -q: 910 passed in 133.89s. Evidence supports
-  the acceptance criteria for grouped CLI names, hidden legacy aliases, updated docs
-  and prompts, aligned web terminology, and passing tests.'
-feedback: 'Verified the CLI reorganization against the acceptance criteria. Public
-  help exposes grouped commands task, queue, import, worktree, and archive plus top-level
-  start, stop, and restart, while removed or internal names are absent from top-level
-  help. I checked uv run litehive --help, uv run litehive task --help, uv run litehive
-  queue --help, uv run litehive import --help, uv run litehive start --help, uv run
-  litehive stop --help, uv run litehive restart --help, and uv run litehive run --help;
-  run remains the foreground runner path. Backward-compat aliases still execute directly
-  through their hidden parsers, including daemon, import-issue, prioritize, and switch,
-  but they stay hidden from public help. Verified litehive queue still reports queue
-  state: on a fresh configured workspace it printed active_task_id None, queue_length
-  0, and resumable_tasks 0; on the populated repo workspace it returned the full queue
-  listing in about 15 seconds. I scanned current user-facing docs, prompts, config
-  guidance, and web code for stale command references with rg; remaining matches were
-  internal compatibility routes such as /api/daemon and /api/queue/prioritize or generic
-  prose about daemon logs, not stale public CLI commands. Focused regression slice
-  passed with uv run pytest -q tests/test_run_cli.py tests/test_web_daemon_monitor.py
-  tests/test_web_task_actions.py tests/test_web_snapshot_and_verdicts.py tests/test_runner_workflow.py
-  -q. Full suite passed with uv run pytest -q: 910 passed in 133.89s. Evidence supports
-  the acceptance criteria for grouped CLI names, hidden legacy aliases, updated docs
-  and prompts, aligned web terminology, and passing tests.'
+summary: PASS
+feedback: "PASS\n\nVerified the rejection fix directly in the current checkout.\n\n\
+  Docs/configure fix:\n- `sed -n '58,124p' docs/README.md` now uses `litehive status`\
+  \ for workspace bootstrap and explicitly says: `The first Litehive command bootstraps\
+  \ .litehive/ in the current repository.`\n- `env -u LITEHIVE_AGENT_ROLE .venv/bin/litehive\
+  \ configure --help` still fails with `Error: No such command 'configure'.`\n- `rg\
+  \ -n \"litehive configure|\\bconfigure\\b\" README.md docs .litehive/config.yaml\
+  \ .litehive/context.md prompts litehive/agents litehive/cli/templates/workspace_config.yaml\
+  \ -S` found only non-stale mentions:\n  - `litehive/cli/templates/workspace_config.yaml`\
+  \ comment: Litehive does not provide a `configure` command anymore.\n  - `README.md`\
+  \ prose heading `Configure the recovery engine:` followed by YAML config, not a\
+  \ CLI command.\n\nCurrent CLI surface still matches the regrouped contract:\n- `env\
+  \ -u LITEHIVE_AGENT_ROLE uv run litehive --help` shows the grouped public surface\
+  \ with `start`, `stop`, `restart`, `run`, `report`, `task`, `queue`, `import`, `archive`,\
+  \ `worktree`, and `engine`.\n- `uv run litehive --help` in agent mode still advertises\
+  \ only `litehive report`, `litehive task add`, `litehive task update`, and `litehive\
+  \ task close`.\n\nChecks run:\n- `uv run ruff check --select E402,F401 litehive\
+  \ tests` \u2705\n- `uv run pytest -q` \u2705 (`493 passed`)\n\nNo blocking issues\
+  \ found after the rejection fix. QA verdict: pass.\n"
 submitted_via_cli: true
 files_changed: []
 created_follow_up_task_ids: []
-task_update: {}
 tests:
   added: 0
   passing: 0
 warnings: []
 retry_count: 0
-retry_limit: 3
-retry_source: global
+retry_limit: 0
 retry_decision: continue
 outcome: null
 outcome_reason_code: null
@@ -60,6 +37,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 343
+duration_seconds: 0
 hook_results: []
-created_at: '2026-04-10T00:25:58+00:00'
+created_at: '2026-04-18T17:10:38+00:00'

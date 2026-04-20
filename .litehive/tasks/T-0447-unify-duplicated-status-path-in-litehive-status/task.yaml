@@ -1,0 +1,23 @@
+id: T-0447
+slug: unify-duplicated-status-path-in-litehive-status
+title: Unify duplicated status path in litehive status output
+created_at: '2026-04-20T06:36:31+00:00'
+task_type: null
+pipeline_mode: full
+priority: low
+depends_on: []
+goal: Per docs/plans/codebase-deletion-plan.md, the status-rendering path is duplicated
+  across CLI, web, and report layers with different field projections. Consolidate
+  to one status query + one renderer; target ~180-280 LOC reduction. Investigate litehive/cli/status*,
+  litehive/reports/, and any web status endpoints.
+acceptance_criteria:
+- One canonical function produces the task-pipeline status data
+- CLI, web, and report consumers all read from that single source (possibly with per-consumer
+  formatters)
+- Existing litehive status command output is unchanged (tests + manual check)
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0447 unify-duplicated-status-path-in-litehive-status'
+created_from: null

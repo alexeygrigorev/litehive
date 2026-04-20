@@ -43,9 +43,6 @@ runner_hooks:
       \ to your change, still fix them \u2014\n  you cannot leave the tree in a broken\
       \ state.\n\nAfter fixing, re-run `uv run pytest -q` locally and confirm it completes\n\
       in under 5 minutes before submitting.\n"
-# Litehive kills a stalled live Codex subprocess after 300 seconds without new
-# stdout, then lets the normal stage retry flow restart that stage.
-# `inactivity_timeout_seconds` is separate daemon/runner stale-state handling.
 subagent_inactivity_timeout_seconds: 300.0
 inactivity_timeout_seconds: null
 external_engine_sandbox:
@@ -134,8 +131,6 @@ external_engine_sandbox:
       - /home/alexey/.config/opencode
       setenv:
         HOME: /home/alexey
-engine_freeze:
-  claude: '2026-04-10T09:00:00Z'
 engine_preference:
 - codex
 - claude

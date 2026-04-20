@@ -1,83 +1,58 @@
 task_id: T-0262
-step: implementing
+stage: implementing
 verdict: pass
 source: agent
-summary: 'Implemented pass/reject-only agent verdict flow. Updated agent prompts and
-  report guidance to offer only pass or reject, including grooming guidance that now
-  tells planners to reject when context/criteria are insufficient instead of emitting
-  blocked. Normalized agent-submitted legacy fail to reject across structured STAGE_RESULT
-  parsing, litehive report CLI ingestion, task thread comments, and web verdict submission;
-  agent-submitted blocked in structured stage results is also coerced away from agent-facing
-  paths so blocked remains system-owned. Kept runner/system fail and blocked semantics
-  intact for infrastructure errors, resource limits, and commit/recovery flows. Verified
-  QA reject and reviewer reject both route back to implementing, and added regression
-  coverage for legacy fail alias handling in parser/web flows plus updated engine/crash-resume
-  expectations for reject-on-no-agent-verdict behavior. Verification: uv run pytest
-  -q tests/test_stage_result_submission.py tests/test_web_snapshot_and_verdicts.py
-  tests/test_runner_workflow.py (149 passed); uv run ruff check --select E402,F401
-  litehive tests (passed); forbidden noqa gate check (passed); uv run pytest -q (903
-  passed). Acceptance criteria met: agent prompts now advertise pass/reject only;
-  litehive report accepts pass/reject and normalizes legacy fail to reject; blocked
-  no longer appears on agent-facing verdict surfaces and remains system-generated;
-  QA reject requeues to implementing same as acceptance reject; full suite passes.'
-feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
-  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
-  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
-  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
-  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
-  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
-  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
-  \nImplemented pass/reject-only agent verdict flow. Updated agent prompts and report\
-  \ guidance to offer only pass or reject, including grooming guidance that now tells\
-  \ planners to reject when context/criteria are insufficient instead of emitting\
-  \ blocked. Normalized agent-submitted legacy fail to reject across structured STAGE_RESULT\
-  \ parsing, litehive report CLI ingestion, task thread comments, and web verdict\
-  \ submission; agent-submitted blocked in structured stage results is also coerced\
-  \ away from agent-facing paths so blocked remains system-owned. Kept runner/system\
-  \ fail and blocked semantics intact for infrastructure errors, resource limits,\
-  \ and commit/recovery flows. Verified QA reject and reviewer reject both route back\
-  \ to implementing, and added regression coverage for legacy fail alias handling\
-  \ in parser/web flows plus updated engine/crash-resume expectations for reject-on-no-agent-verdict\
-  \ behavior. Verification: uv run pytest -q tests/test_stage_result_submission.py\
-  \ tests/test_web_snapshot_and_verdicts.py tests/test_runner_workflow.py (149 passed);\
-  \ uv run ruff check --select E402,F401 litehive tests (passed); forbidden noqa gate\
-  \ check (passed); uv run pytest -q (903 passed). Acceptance criteria met: agent\
-  \ prompts now advertise pass/reject only; litehive report accepts pass/reject and\
-  \ normalizes legacy fail to reject;\n\n\u2026 [truncated \u2014 full transcript\
-  \ in subagent artifacts]"
+summary: 'Follow-up after QA rejection: fixed the remaining stale prompt surface in
+  `prompts/pipeline-monitor.md` and added a regression test (`tests/agents/test_prompts.py::test_pipeline_monitor_prompt_does_not_advertise_blocked_for_swe`).
+  Non-recovery agent verdicts remain `pass` / `reject` only in the runtime prompt
+  and CLI surfaces, legacy `fail` still normalizes to `reject`, and blocked remains
+  system-only.'
+feedback: "Follow-up after QA rejection: fixed the remaining stale prompt surface\
+  \ in `prompts/pipeline-monitor.md` and added a regression test (`tests/agents/test_prompts.py::test_pipeline_monitor_prompt_does_not_advertise_blocked_for_swe`).\
+  \ Non-recovery agent verdicts remain `pass` / `reject` only in the runtime prompt\
+  \ and CLI surfaces, legacy `fail` still normalizes to `reject`, and blocked remains\
+  \ system-only.\n\nAcceptance criteria:\n1. Agent prompt only offers pass and reject\
+  \ as verdict options.\n   Commands:\n   - `rg -n \"pass/blocked|pass\\\\|blocked\"\
+  \ prompts litehive`\n     Output: no matches\n   - `nl -ba prompts/pipeline-monitor.md\
+  \ | sed -n '14,20p'`\n     Output includes: `18  - Agent CLI enforces role-based\
+  \ verdicts (non-recovery agents use pass/reject only)`\n   - `uv run pytest -q tests/agents/test_prompts.py::test_stage_prompt_only_advertises_pass_and_reject_for_non_recovery_agents\
+  \ tests/agents/test_prompts.py::test_pipeline_monitor_prompt_does_not_advertise_blocked_for_swe\
+  \ tests/lifecycle/test_prompt_serializer.py::test_serialize_verdict_instructions_match_role_and_stage\
+  \ tests/lifecycle/test_prompt_serializer.py::test_serialize_includes_nudge_message_when_present`\n\
+  \     Output: `4 passed in 0.23s`\n2. `litehive agent report` accepts pass and reject\
+  \ from agents.\n   Command: `uv run pytest -q tests/cli/test_agent_report.py::test_agent_report_accepts_hidden_step_alias\
+  \ tests/cli/test_agent_report.py::test_agent_report_prefers_env_stage_over_stale_pipeline_stage\
+  \ tests/cli/test_agent_report.py::test_agent_report_normalizes_legacy_fail_to_reject\
+  \ tests/cli/test_agent_report.py::test_root_report_normalizes_legacy_fail_to_reject\
+  \ tests/cli/test_agent_report.py::test_agent_report_rejects_agent_blocked_verdict\
+  \ tests/agents/test_stage_report_feedback.py::test_stage_report_from_subagent_normalizes_legacy_fail_to_reject\
+  \ tests/lifecycle/test_transitions.py::test_testing_reject_routes_back_to_implementing\
+  \ tests/lifecycle/test_transitions.py::test_accepting_reject_routes_back_to_implementing`\n\
+  \   Output: `8 passed, 2 warnings in 0.65s`\n3. If an agent submits `fail`, it is\
+  \ treated as `reject` (backward compat).\n   Command: same targeted CLI/regression\
+  \ suite above.\n   Evidence in suite: `test_agent_report_normalizes_legacy_fail_to_reject`,\
+  \ `test_root_report_normalizes_legacy_fail_to_reject`, `test_stage_report_from_subagent_normalizes_legacy_fail_to_reject`\n\
+  \   Output: `8 passed, 2 warnings in 0.65s`\n4. `blocked` verdict only comes from\
+  \ system (hooks, missing deps, quota), never from agents.\n   Commands:\n   - `rg\
+  \ -n \"pass/blocked|pass\\\\|blocked\" prompts litehive`\n     Output: no matches\n\
+  \   - targeted suite above\n   Evidence in suite: `test_agent_report_rejects_agent_blocked_verdict`\n\
+  \   Output: `8 passed, 2 warnings in 0.65s`\n5. QA reject routes back to implementing,\
+  \ same as acceptance reject.\n   Command: same targeted CLI/regression suite above.\n\
+  \   Evidence in suite: `test_testing_reject_routes_back_to_implementing`, `test_accepting_reject_routes_back_to_implementing`\n\
+  \   Output: `8 passed, 2 warnings in 0.65s`\n6. All existing tests pass.\n   Command:\
+  \ `uv run pytest -q`\n   Output: `484 passed, 22 warnings in 112.14s (0:01:52)`\n\
+  \nAfter-implementing hooks:\n- `uv run ruff check --select E402,F401 litehive tests`\
+  \ -> `All checks passed!`\n- Forbidden `noqa` grep hook -> no output, exit 0\n-\
+  \ `uv run pytest -q` -> `484 passed, 22 warnings in 112.14s (0:01:52)`\n"
 submitted_via_cli: true
-files_changed:
-- litehive/agents/_parsing.py
-- litehive/agents/_prompts.py
-- litehive/agents/base.py
-- litehive/cli/parsers/report.py
-- litehive/cli/report.py
-- litehive/models/report_models.py
-- litehive/web/actions.py
-- litehive/web/common.py
-- litehive/web/templates/index.html
-- tests/test_crash_resume.py
-- tests/test_engine_variants_and_timeline.py
-- tests/test_feedback_cap.py
-- tests/test_runner_workflow.py
-- tests/test_stage_result_submission.py
-- tests/test_web_snapshot_and_verdicts.py
+files_changed: []
 created_follow_up_task_ids: []
-task_update: {}
 tests:
   added: 0
   passing: 0
-warnings:
-- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
-  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
-- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
-  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
-  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
-  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
-  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+warnings: []
 retry_count: 0
-retry_limit: 3
-retry_source: global
+retry_limit: 0
 retry_decision: continue
 outcome: null
 outcome_reason_code: null
@@ -85,34 +60,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 679
-hook_results:
-- point: after_implementing
-  command: uv run ruff check --select E402,F401 litehive tests
-  reject_on_failure: true
-  description: null
-  exit_code: 0
-  status: passed
-  artifact: artifacts/after_implementing-001.yaml
-  stdout: 'All checks passed!
-
-    '
-  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
-    project environment path `.venv` and will be ignored; use `--active` to target
-    the active environment instead
-
-    '
-- point: after_implementing
-  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
-    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
-    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
-    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
-    \  exit 1\nfi"
-  reject_on_failure: true
-  description: null
-  exit_code: 0
-  status: passed
-  artifact: artifacts/after_implementing-002.yaml
-  stdout: ''
-  stderr: ''
-created_at: '2026-04-09T23:37:23+00:00'
+duration_seconds: 0
+hook_results: []
+created_at: '2026-04-18T15:41:32+00:00'

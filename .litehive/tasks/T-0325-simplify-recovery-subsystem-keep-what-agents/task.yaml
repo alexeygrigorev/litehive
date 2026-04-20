@@ -3,11 +3,8 @@ slug: simplify-recovery-subsystem-keep-what-agents
 title: 'Simplify recovery subsystem: keep what agents actually use, cut the rest'
 created_at: '2026-04-10T20:23:35+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: complex
-planned_effort: m
 depends_on: []
 goal: "Recovery is load-bearing \u2014 the system must self-heal. The goal is SIMPLIFY,\
   \ not delete.\n\nTarget state machine on stage failure:\n  break -> attempt recovery\
@@ -49,10 +46,7 @@ acceptance_criteria:
 - Recovery subsystem reduced by at least 40% in LOC (code + tests)
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0325 simplify-recovery-subsystem-keep-what-agents'
 created_from: null
-upstream_origin: null
-github_origin: null

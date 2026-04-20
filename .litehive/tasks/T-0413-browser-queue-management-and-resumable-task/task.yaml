@@ -1,0 +1,25 @@
+id: T-0413
+slug: browser-queue-management-and-resumable-task
+title: Browser queue management and resumable-task controls
+created_at: '2026-04-17T12:38:44+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on:
+- T-0409
+goal: 'Expose the queue operator flows from litehive queue: active task, queued tasks,
+  resumable tasks, and reorder or promote or prioritize actions.'
+acceptance_criteria:
+- Queue view shows active task, queued tasks, and resumable interrupted or parked
+  tasks with dependency and priority context.
+- Browser can move, promote, and prioritize queued tasks using the same queue functions
+  as the CLI.
+- Browser can resume or front-queue eligible interrupted or flagged tasks from the
+  queue view.
+- UI reflects queue mutations immediately after success.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0413 browser-queue-management-and-resumable-task'
+created_from: null

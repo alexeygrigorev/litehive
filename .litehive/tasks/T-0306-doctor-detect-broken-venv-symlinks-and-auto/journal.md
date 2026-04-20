@@ -8,3 +8,6 @@ Task closed: wont_do. Obsoleted by T-0302 sandbox enforcement. Once subagents ru
 
 ## 2026-04-13T10:46:29+00:00
 Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=cancelled. See T-0366.
+
+## 2026-04-19T01:14:48+00:00
+Task metadata updated via CLI.

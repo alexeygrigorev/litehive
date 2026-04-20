@@ -8,3 +8,6 @@ Interrupted runner execution while `flagged` was running. Reason: Task stopped v
 
 ## 2026-04-13T20:15:50+00:00
 Task closed: deferred. Failed under bwrap sandbox because codex could not find ~/.codex inside the sandbox (HOME was set to workspace root, not the operator home, and ~/.codex was not bind-mounted). Every subagent died with 'No such file or directory'. Sandbox rolled back until proper CODEX_HOME + bind is wired (see new task).
+
+## 2026-04-19T18:11:54+00:00
+Task metadata updated via CLI.

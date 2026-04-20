@@ -1,0 +1,25 @@
+id: T-0451
+slug: collapse-worktree-repair-rescue-inspection-into
+title: Collapse worktree repair/rescue/inspection into one owner module
+created_at: '2026-04-20T06:36:53+00:00'
+task_type: null
+pipeline_mode: full
+priority: low
+depends_on: []
+goal: Per docs/plans/codebase-deletion-plan.md, worktree management is scattered across
+  litehive/tasks/worktrees.py, litehive/recovery/workspace_repair.py, litehive/cli/worktree_cli.py,
+  litehive/cli/worktree_support.py with overlapping create/remove/probe/rescue/list
+  logic. Consolidate into one owner module with clear entry points. ~200-400 LOC deletion
+  possible.
+acceptance_criteria:
+- Single module owns the worktree lifecycle (create, remove, probe, rescue, list)
+- CLI commands in worktree_cli.py delegate to the owner module without re-implementing
+  logic
+- Recovery paths call into the owner module instead of duplicating probe/rescue code
+- litehive worktree clean / rescue / list CLIs continue to work; existing tests pass
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0451 collapse-worktree-repair-rescue-inspection-into'
+created_from: null

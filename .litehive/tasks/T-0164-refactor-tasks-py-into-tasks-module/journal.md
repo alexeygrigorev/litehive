@@ -65,3 +65,9 @@ Task closed: deferred. Planner crash loop — same daemon instability pattern.
 
 ## 2026-04-17T05:11:51+00:00
 Task resumed from `grooming`.
+
+## 2026-04-17T19:50:40+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T19:50:51+00:00
+Task closed: duplicate. Duplicate of T-0204: litehive/tasks.py was already split into the litehive/tasks/ package in commit 60675504, so no further refactor or code changes belong under T-0164.

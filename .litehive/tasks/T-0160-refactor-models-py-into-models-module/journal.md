@@ -59,3 +59,24 @@ Task closed: deferred. Planner crash loop — 4 starts with no completion. Same 
 
 ## 2026-04-17T05:11:46+00:00
 Task resumed from `grooming`.
+
+## 2026-04-17T19:37:13+00:00
+Interrupted subagent execution while `grooming` was running. Reason: Stale runner detected while `grooming` was still marked running.. Subagent `SA-0011` (planner/codex, pid=1935952, path `subagents/SA-0011-planner`) stopped with status `interrupted`. Last snippet: grooming rejected: agent did not submit verdict via litehive report CLI. Resume from `grooming`.
+
+## 2026-04-17T19:39:30+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T19:42:56+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T19:44:26+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T19:44:45+00:00
+Task metadata updated via CLI.
+
+## 2026-04-17T19:46:02+00:00
+Interrupted subagent execution while `grooming` was running. Reason: Task stopped via CLI. Subagent `SA-0015` (planner/codex, pid=3512100, path `subagents/SA-0015-planner`) stopped with status `interrupted`. Last snippet: grooming rejected: agent did not submit verdict via litehive report CLI. Resume from `grooming`.
+
+## 2026-04-17T19:46:07+00:00
+Task closed: wont_do. Obsolete: shared model boundary now lives in litehive/domain/ not litehive/models/. Per the task's own acceptance criteria, the requested refactor would conflict with current architecture (domain consolidation completed in commit 222732c6). Planner stuck in 7-run loop unable to self-close.

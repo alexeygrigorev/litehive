@@ -3,11 +3,8 @@ slug: add-litehive-show-deps-to-display-dependency
 title: Add litehive show --deps to display dependency status
 created_at: '2026-04-09T08:37:19+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: litehive show T-XXXX should display each dependency with its current status
   (done/queued/flagged/archived). Currently deps show as bare task IDs with no status,
@@ -20,10 +17,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0245 add-litehive-show-deps-to-display-dependency'
 created_from: null
-upstream_origin: null
-github_origin: null

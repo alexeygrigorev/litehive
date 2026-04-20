@@ -3,11 +3,8 @@ slug: clean-up-unused-imports-across-the-codebase
 title: Clean up unused imports across the codebase
 created_at: '2026-04-07T21:01:44+00:00'
 task_type: refactor
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: moderate
-planned_effort: m
 depends_on: []
 goal: Remove unused imports from Python files under litehive/ and tests/ while preserving
   current public module exports and test behavior.
@@ -23,10 +20,7 @@ plan:
   public API surface.
 - Run targeted verification for ruff F401 and the existing test suite, then capture
   any remaining risk if full verification is limited by runtime.
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0217 clean-up-unused-imports-across-the-codebase'
 created_from: null
-upstream_origin: null
-github_origin: null

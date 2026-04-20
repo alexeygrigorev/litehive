@@ -3,11 +3,8 @@ slug: move-logic-out-of-config-init-py-into-submodules
 title: Move logic out of config/__init__.py into submodules
 created_at: '2026-04-07T21:05:47+00:00'
 task_type: refactor
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: moderate
-planned_effort: m
 depends_on: []
 goal: Move the remaining logic out of litehive/config/__init__.py so it becomes a
   thin package facade that only imports and re-exports the public config API from
@@ -31,10 +28,7 @@ plan:
   public API exposed from litehive.config.
 - Add or adjust targeted tests that prove the re-export surface still works and run
   the affected config/workspace regression suite.
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0219 move-logic-out-of-config-init-py-into-submodules'
 created_from: null
-upstream_origin: null
-github_origin: null

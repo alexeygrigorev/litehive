@@ -3,11 +3,8 @@ slug: simplify-global-project-config-merge-keep-both
 title: Simplify global+project config merge (keep both layers, kill registry archeology)
 created_at: '2026-04-10T20:34:00+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: low
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: "litehive is used from multiple project directories, so global + project config\
   \ is the right model. But the current implementation has schema archeology and multiple\
@@ -50,10 +47,7 @@ acceptance_criteria:
 - All tests pass; tests for deleted fallback schemas removed
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0332 simplify-global-project-config-merge-keep-both'
 created_from: null
-upstream_origin: null
-github_origin: null

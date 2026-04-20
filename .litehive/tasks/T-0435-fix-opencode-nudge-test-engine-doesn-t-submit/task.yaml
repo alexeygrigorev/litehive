@@ -1,0 +1,23 @@
+id: T-0435
+slug: fix-opencode-nudge-test-engine-doesn-t-submit
+title: 'Fix opencode nudge test: engine doesn''t submit verdict via CLI on nudge'
+created_at: '2026-04-17T16:17:16+00:00'
+task_type: bugfix
+pipeline_mode: full
+priority: high
+depends_on: []
+goal: 'test_opencode_nudge_submits_verdict_via_cli fails with ''Expected verdict from
+  opencode, got: []''. The opencode engine is being nudged but no verdict is persisted
+  to the activity thread. Either the nudge mechanism doesn''t invoke opencode correctly,
+  or opencode''s CLI doesn''t call litehive agent report on nudge as expected. Debug
+  and fix the underlying integration so the nudge actually produces a verdict.'
+acceptance_criteria:
+- test_opencode_nudge_submits_verdict_via_cli passes
+- "Root cause identified and fixed (nudge \u2192 opencode \u2192 litehive agent report\
+  \ path works end-to-end)"
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0435 fix-opencode-nudge-test-engine-doesn-t-submit'
+created_from: null

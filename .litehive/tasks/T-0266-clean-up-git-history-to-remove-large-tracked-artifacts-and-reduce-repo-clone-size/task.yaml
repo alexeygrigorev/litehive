@@ -4,11 +4,8 @@ title: Clean up git history to remove large tracked artifacts and reduce repo cl
   size
 created_at: '2026-04-04T16:38:25+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: complex
-planned_effort: m
 depends_on: []
 goal: Rewrite git history to remove the subagent artifacts, event logs, and other
   execution residue that was tracked before the gitignore fix, so fresh clones are
@@ -38,11 +35,7 @@ plan:
 - Force-push the rewritten refs to origin only after local verification succeeds,
   then record the exact verification commands and resulting size metrics in the task
   report.
-human_checkpoints:
-- before_commit
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0143 clean-up-git-history-to-remove-large-tracked-artifacts-and-reduce-repo-clone-size'
 created_from: null
-upstream_origin: null
-github_origin: null

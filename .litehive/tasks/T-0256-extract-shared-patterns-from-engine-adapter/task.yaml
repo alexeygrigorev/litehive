@@ -3,11 +3,8 @@ slug: extract-shared-patterns-from-engine-adapter
 title: Extract shared patterns from engine adapter classes to reduce duplication
 created_at: '2026-04-09T09:16:18+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: low
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: '6 adapter files (300-470 lines each) duplicate patterns: transcript extraction,
   error classification, continuation parsing, usage observation. Extract common patterns
@@ -19,10 +16,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0256 extract-shared-patterns-from-engine-adapter'
 created_from: null
-upstream_origin: null
-github_origin: null

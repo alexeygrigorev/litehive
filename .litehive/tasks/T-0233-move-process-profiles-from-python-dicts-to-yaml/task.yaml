@@ -3,11 +3,8 @@ slug: move-process-profiles-from-python-dicts-to-yaml
 title: Move process profiles from Python dicts to YAML files
 created_at: '2026-04-08T07:13:06+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: "profiles.py is 425 lines of hardcoded Python dicts with no logic \u2014 pure\
   \ data. Move each profile to a YAML file under litehive/config/profiles/ (e.g. _shared.yaml,\
@@ -21,10 +18,7 @@ acceptance_criteria:
 - litehive configure --process-profile still works as before
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0233 move-process-profiles-from-python-dicts-to-yaml'
 created_from: null
-upstream_origin: null
-github_origin: null

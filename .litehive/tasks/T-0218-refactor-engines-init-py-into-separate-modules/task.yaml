@@ -3,27 +3,42 @@ slug: refactor-engines-init-py-into-separate-modules
 title: Refactor engines/__init__.py into separate modules
 created_at: '2026-04-07T21:03:40+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
-goal: Split the 2400-line engines/__init__.py into separate files per engine adapter
-  (claude.py, codex.py, copilot.py, gemini.py, opencode.py, goz.py) plus shared utilities
-  (base.py, monitoring.py, etc). Re-export from __init__.py for backward compatibility.
+goal: Retire this stale task by recording that the current repository has no `litehive/engines`
+  package and no `engines/__init__.py` barrel to refactor. Litehive now owns only
+  engine selection and configuration in `litehive/lifecycle/engines.py` and the generic
+  Heru-backed runtime wrapper in `litehive/lifecycle/heru_factory.py`; provider-specific
+  adapters belong behind `heru.adapters` under the T-0269 extraction path.
 acceptance_criteria:
-- Each engine adapter lives in its own file under litehive/engines/
-- Shared utilities (limit patterns, monitoring, base classes) are in dedicated files
-- engines/__init__.py re-exports all public names so existing imports keep working
-- All existing tests pass without modification
-- __init__.py is under 100 lines (just imports and re-exports)
-constraints: []
-plan: []
-human_checkpoints: []
+- Task metadata states that the current repository has no `litehive/engines` package
+  and no `engines/__init__.py` target, so the requested split is not actionable as
+  written.
+- 'The shaped task identifies the current Litehive engine boundary correctly: `litehive/lifecycle/engines.py`
+  owns engine selection and configuration behavior, while `litehive/lifecycle/heru_factory.py`
+  owns the generic Heru-backed `Engine` wrapper used at runtime.'
+- Any provider-specific adapter work is directed to `heru.adapters` under the T-0269
+  extraction lineage instead of introducing new per-provider engine modules inside
+  Litehive.
+- T-0218 is positioned for closure as a duplicate or superseded refactor rather than
+  for implementation.
+constraints:
+- Do not implement code under this task; grooming is limited to task metadata and
+  closure.
+- Do not reopen provider-specific adapter extraction work already moved behind `heru.adapters`
+  under T-0269.
+plan:
+- Verify the current repository layout has no `litehive/engines` package and no `engines/__init__.py`
+  barrel to refactor.
+- 'Rewrite T-0218 so it documents the current Litehive-owned boundary: selector/configuration
+  in `litehive/lifecycle/engines.py` and the generic Heru-backed runtime wrapper in
+  `litehive/lifecycle/heru_factory.py`.'
+- Route provider-specific adapter work to `heru.adapters` under T-0269 instead of
+  creating new per-provider engine modules inside Litehive.
+- Close T-0218 as a duplicate or superseded refactor once the task metadata reflects
+  the current architecture.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0218 refactor-engines-init-py-into-separate-modules'
 created_from: null
-upstream_origin: null
-github_origin: null

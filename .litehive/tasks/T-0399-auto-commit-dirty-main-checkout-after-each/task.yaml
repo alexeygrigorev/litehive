@@ -1,0 +1,19 @@
+id: T-0399
+slug: auto-commit-dirty-main-checkout-after-each
+title: Auto-commit dirty main checkout after each successful task merge
+created_at: '2026-04-16T17:42:23+00:00'
+task_type: bugfix
+pipeline_mode: full
+priority: high
+depends_on: []
+goal: After the commit stage successfully merges a task branch, automatically commit
+  any remaining dirty files on main so the next task starts with a clean checkout.
+acceptance_criteria:
+- After a successful merge, git status shows no modified tracked files
+- The auto-commit excludes .litehive/*.db and other gitignored files
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0399 auto-commit-dirty-main-checkout-after-each'
+created_from: null

@@ -3,11 +3,8 @@ slug: agent-must-submit-verdict-even-when-task-is
 title: Agent must submit verdict even when task is already complete - never exit silently
 created_at: '2026-04-09T08:01:46+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'When an SWE agent discovers the task is already implemented (code exists, tests
   pass), it must submit a pass verdict with evidence, not exit silently. Currently
@@ -29,10 +26,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0243 agent-must-submit-verdict-even-when-task-is'
 created_from: null
-upstream_origin: null
-github_origin: null

@@ -1,0 +1,26 @@
+id: T-0411
+slug: browser-task-actions-create-update-close-requeue
+title: 'Browser task actions: create, update, close, requeue, resume, abandon, stop'
+created_at: '2026-04-17T12:38:37+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on:
+- T-0409
+goal: Add browser-backed mutation endpoints and forms for the task operations operators
+  already have in litehive task and litehive queue stop.
+acceptance_criteria:
+- Browser UI can create a task with title, goal, acceptance criteria, dependencies,
+  priority, and pipeline mode.
+- Browser UI can update goal, acceptance criteria, constraints, plan, priority, and
+  dependencies for an existing task.
+- Browser UI can close, requeue, resume, abandon, and stop tasks using the same underlying
+  mutation functions as the CLI.
+- Mutation responses surface validation and workspace-conflict errors clearly in the
+  UI.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0411 browser-task-actions-create-update-close-requeue'
+created_from: null

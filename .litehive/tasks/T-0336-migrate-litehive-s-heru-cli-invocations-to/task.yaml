@@ -3,11 +3,8 @@ slug: migrate-litehive-s-heru-cli-invocations-to
 title: Migrate litehive's heru CLI invocations to positional engine argument form
 created_at: '2026-04-10T20:48:22+00:00'
 task_type: refactor
-mode: tasks
 pipeline_mode: full
 priority: low
-pm_complexity: simple
-planned_effort: xs
 depends_on: []
 goal: Migrate Litehive-owned direct `heru` CLI invocations from the legacy engine-flag
   form to Heru's preferred positional engine form (`heru <engine> "prompt"`). Scope
@@ -34,10 +31,7 @@ plan:
   edits while preserving forwarded arguments and runtime behavior.
 - Run focused Heru CLI verification, then run the full `tests/` suite and confirm
   any direct-doc examples are consistent.
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0336 migrate-litehive-s-heru-cli-invocations-to'
 created_from: null
-upstream_origin: null
-github_origin: null

@@ -3,11 +3,8 @@ slug: encapsulate-engine-adapter-internals-proper-oop
 title: Encapsulate engine adapter internals - proper OOP design
 created_at: '2026-04-08T06:51:09+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Engine adapters expose private implementation details (like _OPENCODE_STRIPPED_ENV_VARS)
   that leak into the registry in engines/__init__.py. Each adapter should encapsulate
@@ -28,10 +25,7 @@ acceptance_criteria:
 - Public API (get_engine, ENGINES dict) unchanged
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0231 encapsulate-engine-adapter-internals-proper-oop'
 created_from: null
-upstream_origin: null
-github_origin: null

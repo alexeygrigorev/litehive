@@ -1,0 +1,34 @@
+id: T-0404
+slug: finalize-claude-oauth-quota-checker-contract-in
+title: Finalize Claude OAuth quota checker contract in heru
+created_at: '2026-04-17T06:00:31+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on:
+- T-0192
+goal: 'Align Claude proactive quota detection with the validated Claude Code contract.
+  Use GET https://api.anthropic.com/api/oauth/usage with Authorization: Bearer <claudeAiOauth.accessToken>
+  and anthropic-beta: oauth-2025-04-20, sourced from ~/.claude/.credentials.json via
+  Claude.ai OAuth. Implement or adjust the Claude quota module so it parses five_hour,
+  seven_day, optional seven_day_oauth_apps, seven_day_opus, seven_day_sonnet, and
+  extra_usage correctly, treats utilization as 0..100 percentages, and handles missing
+  or expired OAuth state gracefully. Keep this scoped to the quota contract itself;
+  downstream UI tasks like engine-status rendering stay separate.'
+acceptance_criteria:
+- 'Claude quota checker uses GET https://api.anthropic.com/api/oauth/usage with OAuth
+  bearer auth from ~/.claude/.credentials.json and sends anthropic-beta: oauth-2025-04-20'
+- Parser covers five_hour, seven_day, optional seven_day_oauth_apps, seven_day_opus,
+  seven_day_sonnet, and extra_usage with resets_at timestamps and 0..100 utilization
+  semantics
+- Implementation distinguishes API-backed usage data from header-derived live rate-limit
+  warnings and does not substitute one for the other silently
+- Expired or missing Claude.ai OAuth credentials return a graceful unavailable or
+  not-authenticated result instead of a crash
+- Unit tests cover the request contract, response parsing, and failure modes
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0404 finalize-claude-oauth-quota-checker-contract-in'
+created_from: null

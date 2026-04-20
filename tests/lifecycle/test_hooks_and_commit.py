@@ -231,6 +231,42 @@ def test_commit_node_autocommits_uncommitted_worktree_edits(tmp_path: Path) -> N
     assert (repo / "new.txt").read_text() == "agent wrote this\n"
 
 
+def test_commit_node_autocommits_staged_worktree_deletions(tmp_path: Path) -> None:
+    repo = tmp_path / "main"
+    worktree = tmp_path / "wt"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=repo, check=True)
+    (repo / "obsolete.txt").write_text("remove me\n")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "seed"], cwd=repo, check=True)
+
+    subprocess.run(
+        ["git", "worktree", "add", "-q", "-b", "feature", str(worktree), "HEAD"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=worktree, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=worktree, check=True)
+    subprocess.run(["git", "rm", "-q", "--", "obsolete.txt"], cwd=worktree, check=True)
+
+    node = GitCommitNode(repo, worktree_resolver=lambda state: worktree)
+    event = node.run(make_state(stage="commit"))
+
+    status = subprocess.run(
+        ["git", "status", "--short"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert isinstance(event, Pass), event
+    assert not (repo / "obsolete.txt").exists()
+    assert status.stdout.strip() == ""
+
+
 def test_commit_node_autocommit_excludes_runner_owned_task_metadata(tmp_path: Path) -> None:
     """Runner-owned task metadata must never be captured in the auto-commit.
 
@@ -395,6 +431,51 @@ def test_commit_node_autocommits_untracked_main_checkout_files_after_clean_merge
     assert "generated.txt" in changed_files.stdout.splitlines()
     assert subject.stdout.strip() == "litehive T-0001: auto-commit dirty main checkout"
     assert has_non_litehive_changes(main_repo) is False
+
+
+def test_commit_node_main_checkout_autocommit_skips_stale_missing_pathspecs(
+    git_repo_with_branch,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    main_repo, worktree = git_repo_with_branch
+
+    (main_repo / "generated.txt").write_text("generated\n")
+
+    node = GitCommitNode(
+        main_repo,
+        worktree_resolver=lambda state: worktree,
+    )
+
+    monkeypatch.setattr(
+        node,
+        "_git_status_entries",
+        lambda repo_root: (
+            [("??", "generated.txt"), (" D", "tmp_review_probe/.litehive/.gitignore")]
+            if repo_root == main_repo
+            else GitCommitNode._git_status_entries(node, repo_root)
+        ),
+    )
+
+    cleanup_head = node._autocommit_main_checkout_changes(make_state(stage="commit"))
+
+    status = subprocess.run(
+        ["git", "status", "--short"],
+        cwd=main_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    changed_files = subprocess.run(
+        ["git", "show", "--name-only", "--format=", "HEAD"],
+        cwd=main_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert cleanup_head is not None
+    assert status.stdout.strip() == ""
+    assert "generated.txt" in changed_files.stdout.splitlines()
 
 
 def test_commit_node_reports_already_landed_noop_reconciliation(git_repo_with_branch, monkeypatch) -> None:
@@ -918,3 +999,85 @@ def test_run_task_auto_commit_cleanup_excludes_db_and_gitignored_files(tmp_path:
     assert subject.stdout.strip() == f"litehive {task.id}: auto-commit worktree changes"
     assert has_non_litehive_changes(tmp_path) is False
     assert not worktree.exists()
+
+
+def test_main_checkout_cleanup_skips_tracked_ignored_task_reports(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    gitignore = tmp_path / ".gitignore"
+    existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
+    gitignore.write_text(existing + ".litehive/tasks/*/reports/\n", encoding="utf-8")
+    seed_task = create_task(tmp_path, title="Tracked ignored report")
+    report_path = task_dir(tmp_path, seed_task) / "reports" / "testing-001.yaml"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text("stage: testing\nsummary: seed\n", encoding="utf-8")
+    (tmp_path / "tracked.txt").write_text("base\n")
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "-f", "--", str(report_path.relative_to(tmp_path))], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "seed"], cwd=tmp_path, check=True)
+
+    (tmp_path / "tracked.txt").write_text("updated\n")
+    report_path.write_text("stage: testing\nsummary: updated\n", encoding="utf-8")
+
+    node = GitCommitNode(main_repo_root=tmp_path, worktree_resolver=lambda state: tmp_path)
+    head = node._autocommit_main_checkout_changes(make_state(stage="commit_to_git", task_id=seed_task.id))
+
+    status = subprocess.run(
+        ["git", "status", "--short"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    changed_files = subprocess.run(
+        ["git", "show", "--name-only", "--format=", head],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert head is not None
+    assert str(report_path.relative_to(tmp_path)) not in changed_files.stdout.splitlines()
+    assert "tracked.txt" in changed_files.stdout.splitlines()
+    assert status.stdout.strip() == f"M {report_path.relative_to(tmp_path)}"
+    assert has_non_litehive_changes(tmp_path) is False
+
+
+def test_main_checkout_cleanup_commits_already_staged_deletions(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    probe_file = tmp_path / "tmp_review_probe" / ".litehive" / ".gitignore"
+    probe_file.parent.mkdir(parents=True, exist_ok=True)
+    probe_file.write_text(".lock\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "seed"], cwd=tmp_path, check=True)
+
+    subprocess.run(["git", "rm", "-q", "--", str(probe_file.relative_to(tmp_path))], cwd=tmp_path, check=True)
+
+    node = GitCommitNode(main_repo_root=tmp_path, worktree_resolver=lambda state: tmp_path)
+    head = node._autocommit_main_checkout_changes(make_state(stage="commit", task_id="T-0429"))
+
+    status = subprocess.run(
+        ["git", "status", "--short"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    changed_files = subprocess.run(
+        ["git", "show", "--name-status", "--format=", head],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert head is not None
+    assert not probe_file.exists()
+    assert f"D\t{probe_file.relative_to(tmp_path)}" in changed_files.stdout.splitlines()
+    assert status.stdout.strip() == ""

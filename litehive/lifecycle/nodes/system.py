@@ -505,6 +505,43 @@ def _is_main_checkout_cleanup_excluded(relpath: str) -> bool:
     return relpath.startswith(".litehive/") and relpath.count("/") == 1 and relpath.endswith(".db")
 
 
+def _is_ignored_even_if_tracked(repo_root: Path, relpath: str) -> bool:
+    """Return whether Git ignore rules exclude ``relpath`` in ``repo_root``.
+
+    ``git add --all -- <path>`` still errors on tracked paths that now match an
+    ignore rule (for example old task report artifacts under
+    ``.litehive/tasks/*/reports``). ``git check-ignore --no-index`` asks Git to
+    evaluate ignore rules for the path regardless of index state so the main
+    cleanup commit can skip those runtime artifacts safely.
+    """
+
+    proc = subprocess.run(
+        ["git", "check-ignore", "--quiet", "--no-index", "--", relpath],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode == 0:
+        return True
+    if proc.returncode == 1:
+        return False
+    raise GitError(f"git check-ignore failed in {repo_root}: {proc.stderr.strip() or proc.stdout.strip()}")
+
+
+def _status_entry_needs_git_add(code: str) -> bool:
+    """Return whether a porcelain status entry still needs `git add`.
+
+    Staged-only entries such as ``"D "`` already live in the index and can be
+    committed directly. Re-running ``git add -- <path>`` on a staged deletion
+    whose path no longer exists raises ``pathspec did not match any files``,
+    which is what crashed T-0429's commit stage.
+    """
+
+    index_state = code[0] if len(code) >= 1 else " "
+    worktree_state = code[1] if len(code) >= 2 else " "
+    return worktree_state != " " or index_state in {"?", "U"}
+
+
 class GitCommitNode(CommitNode):
     """Real ``commit`` node — plain automatic merge, no agents.
 
@@ -621,27 +658,29 @@ class GitCommitNode(CommitNode):
         """
         if worktree == self.main_repo_root:
             return
-        dirty_paths = [path for _, path in self._git_status_entries(worktree)]
-        if not dirty_paths:
+        entries = self._git_status_entries(worktree)
+        if not entries:
             return
         committable = [
-            path
-            for path in dirty_paths
+            (code, path)
+            for code, path in entries
             if not _is_runner_owned_metadata(path, state.task_id)
             and not _is_main_checkout_cleanup_excluded(path)
         ]
         if not committable:
             # Only runner-owned metadata is dirty — nothing to checkpoint.
             return
+        needs_add = [path for code, path in committable if _status_entry_needs_git_add(code)]
 
-        add = subprocess.run(
-            ["git", "add", "--", *committable],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        if add.returncode != 0:
-            raise GitError(f"git add failed in {worktree}: {add.stderr.strip()}")
+        if needs_add:
+            add = subprocess.run(
+                ["git", "add", "--", *needs_add],
+                cwd=str(worktree),
+                capture_output=True,
+                text=True,
+            )
+            if add.returncode != 0:
+                raise GitError(f"git add failed in {worktree}: {add.stderr.strip()}")
         message = f"litehive {state.task_id}: auto-commit worktree changes"
         commit = subprocess.run(
             ["git", "commit", "-m", message],
@@ -656,21 +695,26 @@ class GitCommitNode(CommitNode):
         """Commit any remaining dirty non-ignored files on main after a clean merge."""
         entries = self._git_status_entries(self.main_repo_root)
         committable = [
-            path
+            (code, path)
             for code, path in entries
-            if code != "!!" and not _is_main_checkout_cleanup_excluded(path)
+            if code != "!!"
+            and not _is_main_checkout_cleanup_excluded(path)
+            and not _is_ignored_even_if_tracked(self.main_repo_root, path)
         ]
         if not committable:
             return None
+        needs_add = [path for code, path in committable if _status_entry_needs_git_add(code)]
+        needs_add = self._filter_stageable_paths(self.main_repo_root, needs_add)
 
-        add = subprocess.run(
-            ["git", "add", "--all", "--", *committable],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
-        if add.returncode != 0:
-            raise GitError(f"git add failed in {self.main_repo_root}: {add.stderr.strip() or add.stdout.strip()}")
+        if needs_add:
+            add = subprocess.run(
+                ["git", "add", "--all", "--", *needs_add],
+                cwd=str(self.main_repo_root),
+                capture_output=True,
+                text=True,
+            )
+            if add.returncode != 0:
+                raise GitError(f"git add failed in {self.main_repo_root}: {add.stderr.strip() or add.stdout.strip()}")
         message = f"litehive {state.task_id}: auto-commit dirty main checkout"
         commit = subprocess.run(
             ["git", "commit", "-m", message],
@@ -689,6 +733,30 @@ class GitCommitNode(CommitNode):
 
     def _git_status_entries(self, repo_root: Path) -> list[tuple[str, str]]:
         return self._git_status_entries_with_options(repo_root)
+
+    def _filter_stageable_paths(self, repo_root: Path, paths: list[str]) -> list[str]:
+        """Drop stale pathspecs so one vanished path cannot abort the batch add.
+
+        `git status` and the subsequent `git add` are separate steps. If a path
+        disappears in between and is no longer tracked, `git add -- <path>`
+        fails the entire command with a pathspec error. Existing files and
+        tracked deletions are safe to pass through.
+        """
+        filtered: list[str] = []
+        for relpath in paths:
+            candidate = repo_root / relpath
+            if candidate.exists() or candidate.is_symlink():
+                filtered.append(relpath)
+                continue
+            tracked = subprocess.run(
+                ["git", "ls-files", "--error-unmatch", "--", relpath],
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+            )
+            if tracked.returncode == 0:
+                filtered.append(relpath)
+        return filtered
 
     def _git_status_entries_with_options(
         self,

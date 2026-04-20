@@ -1,0 +1,21 @@
+id: T-0401
+slug: cap-implement-review-rejection-cycles-to-prevent
+title: Cap implement-review rejection cycles to prevent infinite loops
+created_at: '2026-04-16T17:42:50+00:00'
+task_type: bugfix
+pipeline_mode: full
+priority: high
+depends_on: []
+goal: "After 3 consecutive rejections between the same two stages (e.g. implementing\u2192\
+  testing\u2192implementing), escalate the task to flagged instead of continuing the\
+  \ loop. The SWE's last working branch is preserved."
+acceptance_criteria:
+- After 3 rejections from the same stage, the task is flagged with reason rejection_loop_detected
+- The rejection cap is configurable per-task and in workspace config
+- Flagged tasks preserve their worktree for manual intervention
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0401 cap-implement-review-rejection-cycles-to-prevent'
+created_from: null

@@ -1,0 +1,22 @@
+id: T-0402
+slug: revert-dry-run-mode-added-by-t-0002
+title: Revert dry-run mode added by T-0002
+created_at: '2026-04-16T21:35:24+00:00'
+task_type: refactor
+pipeline_mode: full
+priority: critical
+depends_on: []
+goal: Remove the dry-run mode feature from litehive run. Revert the changes from commit
+  6b846697 (litehive/cli/runner.py, litehive/lifecycle/engines.py, litehive/lifecycle/heru_factory.py,
+  litehive/lifecycle/orchestration.py) and delete the test files (tests/cli/test_runner_dry_run.py,
+  tests/lifecycle/test_engines.py). The feature is not needed.
+acceptance_criteria:
+- litehive run no longer accepts --dry-run flag
+- test_runner_dry_run.py and test_engines.py are deleted
+- All remaining tests pass
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0402 revert-dry-run-mode-added-by-t-0002'
+created_from: null

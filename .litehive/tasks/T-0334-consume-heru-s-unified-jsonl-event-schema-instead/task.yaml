@@ -3,11 +3,8 @@ slug: consume-heru-s-unified-jsonl-event-schema-instead
 title: Consume heru's unified JSONL event schema instead of per-engine parsing
 created_at: '2026-04-10T20:48:10+00:00'
 task_type: refactor
-mode: tasks
 pipeline_mode: full
 priority: high
-pm_complexity: complex
-planned_effort: l
 depends_on: []
 goal: Refactor Litehive's subagent execution/session pipeline to consume heru's unified
   JSONL event contract as the source of truth, instead of relying on Litehive-side
@@ -28,10 +25,7 @@ plan:
 - Identify the narrow seam to refactor and the behavior that must stay stable.
 - Restructure the code in small, reviewable steps.
 - Run focused verification to confirm behavior is preserved.
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0334 consume-heru-s-unified-jsonl-event-schema-instead'
 created_from: null
-upstream_origin: null
-github_origin: null

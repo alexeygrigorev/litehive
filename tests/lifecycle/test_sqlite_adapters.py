@@ -105,6 +105,7 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
             tests_added=3,
             changed_files=["litehive/lifecycle/prompt_serializer.py", "tests/lifecycle/test_prompt_serializer.py"],
             test_results=["uv run pytest -q tests/lifecycle/test_prompt_serializer.py -> 12 passed"],
+            hook_ok=True,
         ),
         last_rejection_by_stage={
             "implementing": LastRejection(
@@ -156,6 +157,7 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
     assert loaded.last_report.test_results == [
         "uv run pytest -q tests/lifecycle/test_prompt_serializer.py -> 12 passed"
     ]
+    assert loaded.last_report.hook_ok is True
     assert loaded.last_rejection_by_stage["implementing"].source == "qa"
     assert loaded.last_rejection_by_stage["implementing"].reason == "tests fail"
     assert loaded.rejection_loop is not None

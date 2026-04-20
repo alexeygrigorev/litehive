@@ -6,9 +6,8 @@ task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: Record that the historical litehive/models.py to litehive/models/ refactor is
-  obsolete because the active shared model boundary now lives in litehive/domain/,
-  then close the task without implementation.
+goal: 'Historical cleanup only: record that the shared model boundary now lives in
+  litehive/domain/ rather than litehive/models/, and close this task without implementation.'
 acceptance_criteria:
 - The task record states that the active shared model boundary is litehive/domain/,
   with task models in litehive/domain/task.py, report models in litehive/domain/reports.py,
@@ -22,14 +21,10 @@ constraints:
 - Keep this task scoped to task-record cleanup only; do not make code changes.
 - Do not recreate litehive/models/ or add compatibility shims as part of this task.
 plan:
-- Verify the current repository has no active litehive/models/ package or top-level
-  models.py and that shared model definitions now live in litehive/domain/task.py,
-  litehive/domain/reports.py, litehive/domain/runtime.py, and litehive/domain/engine.py.
-- Use git history to confirm litehive/models/ was introduced as an intermediate refactor
-  in commit b4a6183c and later replaced by the litehive/domain/ consolidation in commit
-  222732c6.
-- Close T-0160 as wont_do with a reason that cites litehive/domain/ as the current
-  architectural source of truth and explicitly rejects reintroducing litehive/models/.
+- 'Historical note: b4a6183c introduced litehive/models/ as a temporary intermediate
+  package before the current domain boundary existed.'
+- 'Architectural note: 222732c6 consolidated those shared dataclasses into litehive/domain/,
+  which is now the source of truth for task, report, runtime, and engine models.'
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0160 refactor-models-py-into-models-module'

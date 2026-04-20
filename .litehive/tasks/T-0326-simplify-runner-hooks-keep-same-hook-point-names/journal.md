@@ -11,3 +11,9 @@ Interrupted runner execution while `flagged` was running. Reason: Task stopped v
 
 ## 2026-04-13T19:44:48+00:00
 Task closed: deferred. Flagged with recovery_crashed after 27 subagents. Recovery agent silent-exit class (same as T-0242). Close and requeue manually — the underlying CLI-hook simplification is still wanted; will refile a smaller-scoped version.
+
+## 2026-04-19T08:39:24+00:00
+Task metadata updated via CLI.
+
+## 2026-04-19T08:40:56+00:00
+Task metadata updated via CLI.

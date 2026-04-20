@@ -3,11 +3,8 @@ slug: split-litehive-cli-init-py-into-sibling-modules
 title: Split litehive/cli/__init__.py into sibling modules (no code in __init__)
 created_at: '2026-04-10T19:45:37+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: "litehive/cli/__init__.py is 1060 lines of typer wiring wrapped around legacy\
   \ argparse handlers. The core problem is the `_ns(**locals())` shim that converts\
@@ -87,10 +84,7 @@ acceptance_criteria:
   by T-0320)
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0317 split-litehive-cli-init-py-into-sibling-modules'
 created_from: null
-upstream_origin: null
-github_origin: null

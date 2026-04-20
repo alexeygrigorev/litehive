@@ -1,0 +1,29 @@
+id: T-0454
+slug: add-sqlitesearch-backed-issue-search
+title: Add sqlitesearch-backed issue search
+created_at: '2026-04-20T06:42:24+00:00'
+task_type: null
+pipeline_mode: full
+priority: medium
+depends_on:
+- T-0430
+- T-0456
+goal: After sqlitesearch is integrated for duplicate detection, expose a user-facing
+  way to search Litehive issues/tasks by natural-language query without scanning task
+  files. Reuse the same maintained sqlitesearch index rather than building a second
+  search path.
+acceptance_criteria:
+- A CLI entrypoint lets the user search issues/tasks with a free-text query and returns
+  ranked matches with task ID and title.
+- Search reads from the sqlitesearch-backed index introduced by T-0430 rather than
+  scanning task YAML files on each query.
+- Results include enough context to decide whether an existing issue/task already
+  covers the query (for example title plus a short goal/snippet).
+- Focused tests cover indexing/querying behavior, empty-result handling, and regression
+  against the existing duplicate-detection index maintenance path.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0454 add-sqlitesearch-backed-issue-search'
+created_from: null

@@ -1,54 +1,57 @@
 task_id: T-0265
-step: implementing
+stage: implementing
 verdict: pass
 source: agent
-summary: Implemented and verified the single-agent pipeline contract for T-0265, plus
-  one required entrypoint fix so the real CLI path works with the Typer version in
-  this environment.
-feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
-  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
-  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
-  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
-  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
-  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
-  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
-  \nImplemented and verified the single-agent pipeline contract for T-0265, plus one\
-  \ required entrypoint fix so the real CLI path works with the Typer version in this\
-  \ environment.\n\nWhat changed:\n- The pipeline-mode work is present and verified:\
-  \ `litehive add --mode` selects `full|single` and defaults to `full`; task record\
-  \ shaping remains independent via `--record-mode`; single-mode prompt framing tells\
-  \ the lone implementing agent it owns the full outcome and may finish at `done`\
-  \ with no file changes or continue to `commit_to_git` when files changed.\n- I fixed\
-  \ the actual `litehive add` Typer entrypoint in `litehive/cli/__init__.py` to use\
-  \ injected `typer.Context` instead of `typer.get_current_context()`, which does\
-  \ not exist in Typer 0.24.1. Before this fix, `uv run litehive add ...` crashed\
-  \ before task creation.\n\nAcceptance-criteria evidence:\n- `litehive add --mode\
-  \ single` now creates a task whose `task.yaml` contains `mode: implementation` and\
-  \ `pipeline_mode: single`.\n- `litehive add` default / `--mode full` create full-pipeline\
-  \ tasks, and `--record-mode tasks` still independently creates `mode: tasks`; verified\
-  \ directly with `uv run litehive add ... --mode full --record-mode tasks --task-type\
-  \ review`, whose `task.yaml` contains `mode: tasks` and `pipeline_mode: full`.\n\
-  - Single mode remains a one-worker pipeline plus opti\n\n\u2026 [truncated \u2014\
-  \ full transcript in subagent artifacts]"
+summary: Implemented T-0265 by making `--mode` the user-facing pipeline flag for task
+  creation, keeping `--pipeline-mode` as a compatibility alias, and adding terminal
+  workspace cleanup so completed runs clear stale `active_task_id`/queue state. Added
+  regression coverage for task creation defaults, explicit mode persistence, CLI mode
+  parsing, and single-mode orchestration.
+feedback: "Implemented T-0265 by making `--mode` the user-facing pipeline flag for\
+  \ task creation, keeping `--pipeline-mode` as a compatibility alias, and adding\
+  \ terminal workspace cleanup so completed runs clear stale `active_task_id`/queue\
+  \ state. Added regression coverage for task creation defaults, explicit mode persistence,\
+  \ CLI mode parsing, and single-mode orchestration.\n\nAcceptance criteria evidence\n\
+  \n1. `litehive add --mode single` creates a task that runs one agent and completes.\n\
+  Command used:\n`python - <<'PY' ...` (scratch workspace: root CLI add, then `run_task(...,\
+  \ engine_factory=RecordingEngine)`)\nObserved output:\n- `single_created_pipeline_mode:\
+  \ single`\n- `single_goal: Research the repo`\n- `single_acceptance: ['Task completes\
+  \ in one pass']`\n- `single_calls: [('implementing', 'swe', 'single')]`\n- `single_final_stage:\
+  \ done`\n- `single_task_status: done/done`\n- `single_workspace_active_task_id:\
+  \ None`\nThis proves the CLI persisted `single`, the task carried goal + acceptance\
+  \ criteria, exactly one agent stage ran (`implementing`/`swe`), and the run completed\
+  \ cleanly.\n\n2. `litehive add --mode full` creates a task with the full pipeline\
+  \ (default).\nCommand used:\n`env -u LITEHIVE_AGENT_ROLE -u LITEHIVE_AGENT_TASK_ID\
+  \ uv run --with-editable <repo> litehive add \"Full CLI task\" --mode full`\nObserved\
+  \ output:\n- CLI printed `pipeline_mode: full`\n- persisted `task.yaml` contained\
+  \ `pipeline_mode: full`\nCommand used:\n`env -u LITEHIVE_AGENT_ROLE -u LITEHIVE_AGENT_TASK_ID\
+  \ uv run --with-editable <repo> litehive add \"Default CLI task\"`\nObserved output:\n\
+  - CLI printed `pipeline_mode: full`\n- persisted `task.yaml` contained `pipeline_mode:\
+  \ full`\n\n3. Single mode runs one agent with the goal and acceptance criteria then\
+  \ marks done or commits.\nSame scratch-workspace proof as criterion 1.\nKey output:\n\
+  - `single_goal: Research the repo`\n- `single_acceptance: ['Task completes in one\
+  \ pass']`\n- `single_calls: [('implementing', 'swe', 'single')]`\n- `single_final_stage:\
+  \ done`\n- `single_task_status: done/done`\n\n4. Full mode is unchanged from current\
+  \ behavior.\nCommand used:\n`python - <<'PY' ...` (scratch git workspace: root CLI\
+  \ add for explicit full and default full, then `run_task(..., engine_factory=RecordingEngine)`)\n\
+  Observed output:\n- `full_cli_mode: full`\n- `default_cli_mode: full`\n- `full_calls:\
+  \ [('grooming', 'planner', 'full'), ('implementing', 'swe', 'full'), ('testing',\
+  \ 'qa', 'full'), ('accepting', 'reviewer', 'full')]`\n- `full_final_stage: done`\n\
+  - `full_task_status: done/done`\n- `full_workspace_active_task_id: None`\nThis matches\
+  \ the existing multi-stage pipeline behavior and confirms the terminal workspace\
+  \ cleanup is correct.\n\nSubmission gates run locally\n\n- `uv run ruff check --select\
+  \ E402,F401 litehive tests`\n  Output: `All checks passed!`\n- forbidden-noqa hook\
+  \ command from task prompt\n  Output: none; exit 0\n- `uv run pytest -q`\n  Output:\
+  \ `490 passed, 23 warnings in 109.19s (0:01:49)`\n"
 submitted_via_cli: true
-files_changed:
-- litehive/cli/__init__.py
+files_changed: []
 created_follow_up_task_ids: []
-task_update: {}
 tests:
   added: 0
   passing: 0
-warnings:
-- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
-  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
-- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
-  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
-  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
-  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
-  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+warnings: []
 retry_count: 0
-retry_limit: 3
-retry_source: global
+retry_limit: 0
 retry_decision: continue
 outcome: null
 outcome_reason_code: null
@@ -56,34 +59,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 160
-hook_results:
-- point: after_implementing
-  command: uv run ruff check --select E402,F401 litehive tests
-  reject_on_failure: true
-  description: null
-  exit_code: 0
-  status: passed
-  artifact: artifacts/after_implementing-001.yaml
-  stdout: 'All checks passed!
-
-    '
-  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
-    project environment path `.venv` and will be ignored; use `--active` to target
-    the active environment instead
-
-    '
-- point: after_implementing
-  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
-    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
-    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
-    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
-    \  exit 1\nfi"
-  reject_on_failure: true
-  description: null
-  exit_code: 0
-  status: passed
-  artifact: artifacts/after_implementing-002.yaml
-  stdout: ''
-  stderr: ''
-created_at: '2026-04-10T14:44:23+00:00'
+duration_seconds: 0
+hook_results: []
+created_at: '2026-04-18T17:42:14+00:00'

@@ -13,8 +13,8 @@ from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.orchestration import run_task as run_pipeline_task
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.state.persist import load_state
-from litehive.state.records import create_task, get_task
-from litehive.tasks.worktrees import resolve_recorded_worktree_path
+from litehive.state.records import create_task, get_task, get_task_worktree_path
+from litehive.tasks.worktrees import resolve_recorded_worktree_path, task_worktree_path
 
 pytestmark = pytest.mark.integration
 
@@ -39,12 +39,25 @@ class _RecoveryScenarioEngine:
             return AgentVerdict(outcome="pass")
         self.recovery_calls.append(state.task_id)
         if self.recovery_mode == "fix":
-            task = get_task(self.workspace, state.task_id)
-            recorded = None if task is None else task.runtime.git.worktree_path
-            execution_root = resolve_recorded_worktree_path(self.workspace, recorded) or self.workspace
-            (execution_root / ".hook_fixed").write_text("fixed\n", encoding="utf-8")
+            _task_execution_root(self.workspace, state.task_id).joinpath(".hook_fixed").write_text(
+                "fixed\n",
+                encoding="utf-8",
+            )
             return AgentVerdict(outcome="resume", metadata={"target_stage": "implementing"})
         return AgentVerdict(outcome="reject", reason="recovery could not fix the hook loop")
+
+
+def _task_execution_root(workspace: Path, task_id: str) -> Path:
+    task = get_task(workspace, task_id)
+    if task is None:
+        return workspace
+    recorded = get_task_worktree_path(task)
+    if recorded:
+        resolved = resolve_recorded_worktree_path(workspace, recorded)
+        if resolved is not None and resolved.exists():
+            return resolved
+    expected = task_worktree_path(workspace, task)
+    return expected if expected.exists() else workspace
 
 
 def _init_workspace_git_repo(root: Path, *, config: LitehiveConfig | None = None) -> None:
@@ -121,7 +134,7 @@ def test_same_hook_reject_circuit_breaker_recovers_once_and_resumes(tmp_path: Pa
     assert refreshed is not None
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
-    assert (tmp_path / ".hook_reject_count").read_text(encoding="utf-8") == "3"
+    assert _task_execution_root(tmp_path, task.id).joinpath(".hook_reject_count").read_text(encoding="utf-8") == "3"
     assert pipeline_state.consecutive_same_hook_rejects == 0
     assert pipeline_state.last_hook_reject_fingerprint is None
     assert pipeline_state.hook_reject_recovery_invoked is False
@@ -227,7 +240,7 @@ def test_successful_stage_progress_resets_same_hook_reject_tracking(tmp_path: Pa
     assert result.final_stage == "done"
     assert refreshed is not None
     assert refreshed.status == "done"
-    assert (tmp_path / ".hook_reject_count").read_text(encoding="utf-8") == "3"
+    assert _task_execution_root(tmp_path, task.id).joinpath(".hook_reject_count").read_text(encoding="utf-8") == "3"
     assert pipeline_state.consecutive_same_hook_rejects == 0
     assert pipeline_state.last_hook_reject_fingerprint is None
     assert pipeline_state.hook_reject_recovery_invoked is False

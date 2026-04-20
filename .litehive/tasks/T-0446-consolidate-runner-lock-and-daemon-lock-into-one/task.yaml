@@ -1,0 +1,24 @@
+id: T-0446
+slug: consolidate-runner-lock-and-daemon-lock-into-one
+title: Consolidate runner lock and daemon lock into one lock manager
+created_at: '2026-04-20T06:36:30+00:00'
+task_type: null
+pipeline_mode: full
+priority: low
+depends_on: []
+goal: 'litehive/state/locking.py and litehive/daemon/registry.py manage separate flock-based
+  lock files (.runner.lock and .daemon.lock) with duplicated acquire/release/stale-detect
+  logic. Consolidate into one lock manager that handles both lock purposes, or merge
+  them if their lifetimes are compatible. Per docs/plans/codebase-deletion-plan.md:
+  ~120-180 LOC deletion possible.'
+acceptance_criteria:
+- Single lock-management abstraction handles both runner and daemon locks (or merged
+  into one lock if safe)
+- Stale-lock detection and cleanup logic exists only once
+- All existing lock-related tests pass; no regression in daemon startup/shutdown
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0446 consolidate-runner-lock-and-daemon-lock-into-one'
+created_from: null

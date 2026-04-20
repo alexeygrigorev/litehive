@@ -1,0 +1,16 @@
+id: T-0441
+slug: t
+title: t
+created_at: '2026-04-19T18:27:11+00:00'
+task_type: null
+pipeline_mode: full
+priority: medium
+depends_on: []
+goal: g
+acceptance_criteria: []
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0441 t'
+created_from: null

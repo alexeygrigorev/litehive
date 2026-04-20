@@ -6,37 +6,30 @@ task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: Retire this stale task by recording that T-0269 already moved provider-specific
-  engine adapters behind `heru.adapters`, so there is no remaining per-provider file
-  split to perform inside Litehive. The local Litehive boundary today is selector/configuration
-  logic in `litehive/lifecycle/engines.py` plus the generic Heru-backed runtime wrapper
-  in `litehive/lifecycle/heru_factory.py`; future engine-specific work belongs in
-  `heru.adapters`, or in a narrow Litehive integration follow-up only if a concrete
-  local gap is found.
+goal: Record that T-0269 already moved provider-specific engine adapter ownership
+  behind heru.adapters, making the old request to split Litehive into per-provider
+  engine files non-actionable in this repository.
 acceptance_criteria:
-- Task metadata states that T-0269 moved provider-specific adapters behind `heru.adapters`
-  and that T-0159 is no longer an actionable refactor inside this repository.
-- 'The shaped task identifies the current Litehive boundary correctly: `litehive/lifecycle/engines.py`
-  only selects and configures engines, while `litehive/lifecycle/heru_factory.py`
-  provides the generic Heru-backed `Engine` wrapper used at runtime.'
-- Any remaining provider-specific work is directed to `heru.adapters`, or to a narrow
+- Task metadata states that T-0269 moved provider-specific adapters behind heru.adapters,
+  so T-0159 is no longer an actionable refactor inside this repository.
+- 'Task metadata identifies the remaining Litehive boundary correctly: litehive/lifecycle/engines.py
+  only selects and configures engines, while litehive/lifecycle/heru_factory.py provides
+  the generic Heru-backed Engine wrapper used at runtime.'
+- Any remaining provider-specific work is directed to heru.adapters, or to a narrow
   Litehive integration task only when a concrete local defect or gap is identified,
-  not to splitting `litehive/lifecycle/engines.py` into per-provider files.
+  not to splitting litehive/lifecycle/engines.py into per-provider files.
 constraints:
 - Do not implement code under this task.
-- Keep grooming scoped to task metadata and closure; do not duplicate the adapter
-  extraction already completed under T-0269.
+- Do not split litehive/lifecycle/engines.py into per-provider files or duplicate
+  the adapter extraction already completed under T-0269.
 plan:
-- Verify the current Litehive engine boundary and prior task history, including T-0269
-  and the current `heru` ownership path.
-- 'Rewrite T-0159 so the goal and acceptance criteria match the existing Litehive
-  boundary: selector/configuration in `litehive/lifecycle/engines.py` plus the generic
-  wrapper in `litehive/lifecycle/heru_factory.py`.'
-- Close T-0159 as `wont_do` with a reason pointing to T-0269 and `heru.adapters` as
-  the provider-specific ownership boundary.
-- Report grooming `pass` with the closure rationale and the correct follow-up direction;
-  do not open a new Litehive split task unless a concrete local integration gap is
-  identified.
+- 'Verify the live boundary: litehive/lifecycle/engines.py contains selector/configuration
+  logic and litehive/lifecycle/heru_factory.py contains the generic Heru-backed runtime
+  wrapper.'
+- Record in T-0159 that T-0269 already moved provider-specific adapter ownership behind
+  heru.adapters, so the requested per-provider split is stale.
+- Close T-0159 as wont_do; future engine-specific work belongs in heru.adapters or
+  in a narrow Litehive integration follow-up only if a concrete local gap is found.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0159 refactor-engines-py-into-engines-module-with-one-file-per-adapter'

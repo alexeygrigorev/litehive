@@ -1,0 +1,27 @@
+id: T-0444
+slug: delete-duplicate-task-transition-logic-from
+title: Delete duplicate task transition logic from update_task()
+created_at: '2026-04-20T06:36:16+00:00'
+task_type: null
+pipeline_mode: full
+priority: low
+depends_on: []
+goal: 'litehive/tasks/status.py has duplicate task state transition logic. The dedicated
+  functions requeue_task(), abandon_task(), close_task(), park_task() are re-implemented
+  inside update_task() via outcome/action branches. Delete the duplicated branches
+  in update_task() and have it delegate to the dedicated functions. Target: 60-80
+  LOC deletion.'
+acceptance_criteria:
+- Outcome branch at litehive/tasks/status.py:619-640 (close logic duplicate) is replaced
+  with a call to close_task() or the underlying helper
+- Action branches at litehive/tasks/status.py:642-684 (park/requeue/abandon duplicates)
+  are replaced with calls to park_task/requeue_task/abandon_task or their helpers
+- All callers of update_task that trigger outcomes/actions still work; existing tests
+  pass
+- No logic is re-implemented twice; helpers are the single source of truth
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0444 delete-duplicate-task-transition-logic-from'
+created_from: null

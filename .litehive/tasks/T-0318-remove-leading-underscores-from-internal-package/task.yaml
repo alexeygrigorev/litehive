@@ -3,11 +3,8 @@ slug: remove-leading-underscores-from-internal-package
 title: Remove leading underscores from internal package and function names
 created_at: '2026-04-10T19:55:09+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: "This is a single-user repo. Everything is 'private' by the only convention\
   \ that matters (I am the only consumer). Leading underscores on module names, function\
@@ -46,10 +43,7 @@ acceptance_criteria:
 - heru/ repo is not modified
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0318 remove-leading-underscores-from-internal-package'
 created_from: null
-upstream_origin: null
-github_origin: null

@@ -3,11 +3,8 @@ slug: shrink-cli-engine-py-from-347-loc-to-30-loc
 title: Shrink cli/engine.py from 347 LOC to ~30 LOC
 created_at: '2026-04-10T20:27:20+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: "litehive/cli/engine.py is 347 lines for what is effectively 'edit a dict in\
   \ yaml'. Keep the useful commands (freeze / unfreeze / status) but implement them\
@@ -31,10 +28,7 @@ acceptance_criteria:
 - All existing tests for freeze/unfreeze behavior pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0327 shrink-cli-engine-py-from-347-loc-to-30-loc'
 created_from: null
-upstream_origin: null
-github_origin: null

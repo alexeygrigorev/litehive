@@ -1,0 +1,26 @@
+id: T-0437
+slug: move-web-and-observability-report-readers-off-yaml
+title: Move web and observability report readers off YAML
+created_at: '2026-04-17T21:09:00+00:00'
+task_type: refactor
+pipeline_mode: full
+priority: medium
+depends_on:
+- T-0381
+- T-0456
+goal: After T-0381 makes SQLite the canonical store for stage and recovery reports,
+  migrate the remaining snapshot and analytics surfaces that still scan task report
+  YAML.
+acceptance_criteria:
+- No active litehive-web snapshot code reads task report or recovery YAML directories
+  for structured report data.
+- Pool and status observability code no longer scans task report YAML for stage outcomes
+  or duration estimates and instead uses the SQLite-backed report store.
+- Focused snapshot and observability tests cover equivalent report summaries and metrics
+  from the new store.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0437 move-web-and-observability-report-readers-off-yaml'
+created_from: null

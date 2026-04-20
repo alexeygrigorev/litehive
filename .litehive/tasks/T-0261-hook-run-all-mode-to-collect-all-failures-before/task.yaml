@@ -3,11 +3,8 @@ slug: hook-run-all-mode-to-collect-all-failures-before
 title: Hook run-all mode to collect all failures before rejecting
 created_at: '2026-04-09T09:50:39+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: moderate
-planned_effort: s
 depends_on: []
 goal: When multiple hooks run for a stage, collect all failures into one combined
   reject report instead of stopping on first. Also support fail-fast mode. Default
@@ -20,10 +17,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0261 hook-run-all-mode-to-collect-all-failures-before'
 created_from: null
-upstream_origin: null
-github_origin: null

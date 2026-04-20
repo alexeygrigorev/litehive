@@ -8,3 +8,6 @@ Task closed: wont_do. Superseded by the combined heru task (T-0014 in heru works
 
 ## 2026-04-13T10:46:42+00:00
 Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=cancelled. See T-0366.
+
+## 2026-04-19T16:15:34+00:00
+Task metadata updated via CLI.

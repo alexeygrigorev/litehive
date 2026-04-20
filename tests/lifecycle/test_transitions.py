@@ -55,6 +55,7 @@ def make_state(
     active_recovery_trigger: RecoveryTrigger | None = None,
     recovery_history: list[RecoveryOutcome] | None = None,
     hook_reject_recovery_invoked: bool = False,
+    hook_ok: bool = False,
 ) -> TaskState:
     return TaskState(
         task_id="T-0001",
@@ -66,7 +67,7 @@ def make_state(
         recovery_history=list(recovery_history or []),
         hook_reject_recovery_invoked=hook_reject_recovery_invoked,
         pre_exec_recovery_attempt=pre_exec_recovery_attempt,
-        last_report=LastReport(files_changed=files_changed, tests_added=tests_added),
+        last_report=LastReport(files_changed=files_changed, tests_added=tests_added, hook_ok=hook_ok),
         limits=Limits(
             stage_retry_limit=stage_retry_limit,
             rejection_loop_limit=rejection_loop_limit,
@@ -228,6 +229,32 @@ def test_testing_reject_routes_back_to_implementing():
     assert trans.delta.set_rejection_loop.rejection_stage == "testing"
     assert trans.delta.set_rejection_loop.retry_target_stage == "implementing"
     assert trans.delta.set_rejection_loop.count == 1
+
+
+def test_testing_reject_bypasses_to_accepting_after_qa_retries_when_hooks_green():
+    state = make_state("testing", stage_retry={"testing": 2}, stage_retry_limit=2, hook_ok=True)
+
+    qa_reject = step("testing", Reject(source="agent", reason="style nit"), state)
+
+    assert qa_reject.next == "accepting"
+    assert qa_reject.delta.inc_stage_retry is None
+    assert qa_reject.delta.set_last_rejection is not None
+    routed_stage, rejection = qa_reject.delta.set_last_rejection
+    assert routed_stage == "accepting"
+    assert rejection is not None
+    assert rejection.reason == "style nit"
+    assert rejection.raised_at_phase == "testing"
+
+    accepting_state = make_state("accepting", stage_retry={"testing": 2}, stage_retry_limit=2, hook_ok=True)
+    assert step("accepting", Pass(), accepting_state).next == "after_accepting"
+    after_accepting_state = make_state("after_accepting", stage_retry={"testing": 2}, stage_retry_limit=2, hook_ok=True)
+    assert step("after_accepting", HookOk(), after_accepting_state).next == "commit"
+
+
+def test_testing_reject_still_routes_to_recovering_when_hooks_are_not_green():
+    state = make_state("testing", stage_retry={"testing": 2}, stage_retry_limit=2, hook_ok=False)
+    trans = step("testing", Reject(source="agent", reason="x"), state)
+    assert trans.next == "recovering"
 
 
 def test_accepting_reject_routes_back_to_implementing():

@@ -1,0 +1,24 @@
+id: T-0414
+slug: browser-engine-monitoring-default-engine-control
+title: Browser engine monitoring, default-engine control, and task switching
+created_at: '2026-04-17T12:38:48+00:00'
+task_type: null
+pipeline_mode: full
+priority: medium
+depends_on:
+- T-0409
+goal: Expose the current engine status surface from litehive status, litehive health,
+  and litehive engine, plus per-task engine switching.
+acceptance_criteria:
+- Browser shows default engine, engine freeze state, quota or usage summaries, and
+  monitoring lines using existing workspace helpers.
+- Browser can change the default engine using the same persistence path as litehive
+  engine.
+- Browser can queue a per-task engine switch with operator-supplied reason using the
+  same behavior as litehive switch.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0414 browser-engine-monitoring-default-engine-control'
+created_from: null

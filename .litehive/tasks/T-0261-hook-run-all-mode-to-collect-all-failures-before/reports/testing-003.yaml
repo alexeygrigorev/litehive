@@ -1,59 +1,52 @@
 task_id: T-0261
-step: testing
-verdict: reject
+stage: testing
+verdict: pass
 source: agent
-summary: 'EXPECTED behavior: the implementation should satisfy the hook-mode acceptance
-  criteria and the new regression tests should also meet the testing-stage constraints,
-  including rejecting tests longer than 50 lines unless a shorter structure is genuinely
-  impossible.'
-feedback: 'EXPECTED behavior: the implementation should satisfy the hook-mode acceptance
-  criteria and the new regression tests should also meet the testing-stage constraints,
-  including rejecting tests longer than 50 lines unless a shorter structure is genuinely
-  impossible.
-
-
-  OBSERVED behavior: functional verification passed, but the two new regression tests
-  in tests/test_task_commands_and_daemon.py exceed the allowed size without a demonstrated
-  need: test_run_task_collects_all_blocking_runner_hook_failures_by_default spans
-  lines 3806-3869 (64 lines) and test_run_task_stops_on_first_blocking_runner_hook_failure_in_fail_fast_mode
-  spans lines 3872-3932 (61 lines). The behavior covered is valid, but the tests should
-  be factored into shared setup/helpers instead of shipping oversized cases.
-
-
-  Steps to reproduce:
-
-  1. Run `nl -ba tests/test_task_commands_and_daemon.py | sed -n ''3806,3932p''` and
-  count the lines for each new test.
-
-  2. Run `uv run pytest -q tests/test_task_commands_and_daemon.py -k ''collects_all_blocking_runner_hook_failures_by_default
-  or stops_on_first_blocking_runner_hook_failure_in_fail_fast_mode''`.
-
-  3. Run `uv run pytest -q`.
-
-
-  Acceptance criteria status: all product acceptance criteria are satisfied by the
-  current implementation (default run_all, combined reject report with all failed
-  hooks/output, opt-in fail_fast, existing suite green at 894 passed), but the testing-stage
-  constraints are not met because the added tests are over 50 lines and should be
-  shortened before this stage can pass.'
+summary: PASS
+feedback: "PASS\n\nVerified the updated fix at the real lifecycle boundary, not just\
+  \ `HookNode` in isolation.\n\nAcceptance criteria:\n- `run-all` mode runs all hooks\
+  \ even if earlier ones fail: confirmed by direct `run_task()` probe with default\
+  \ config. Observed call log was `first,second,first,second`, showing both blocking\
+  \ hooks ran before the stage rejected and retried.\n- Combined reject report lists\
+  \ all failed hooks with their output: confirmed by direct `run_task()` probe and\
+  \ `tests/lifecycle/test_hooks_and_commit.py::test_run_task_aggregates_all_stage_hook_failures_by_default`.\
+  \ The recorded hook report contained both failed hook commands, with `first failed`\
+  \ and `second failed` present in the feedback/output.\n- `fail-fast` mode stops\
+  \ on first blocking failure (opt-in): confirmed by direct `run_task()` probe with\
+  \ `runner_hook_execution_mode='fail_fast'` and `tests/lifecycle/test_hooks_and_commit.py::test_run_task_honors_fail_fast_stage_hook_mode_from_config`.\
+  \ Observed call log was `first,first,second`, and the recorded reject report contained\
+  \ only the first failed hook.\n- Default is `run_all`: confirmed by `_hook_execution_mode_from_config(SimpleNamespace())`\
+  \ behavior covered in `tests/lifecycle/test_hook_config.py`, plus the direct default-config\
+  \ `run_task()` probe above.\n- All existing tests pass: `/usr/bin/time -p uv run\
+  \ pytest tests/ -q` passed with `477 passed, 17 warnings in 87.98s` and `real 88.74`,\
+  \ under the README 3-minute threshold for `tests/`.\n\nCommands run:\n- `uv run\
+  \ pytest -q tests/config/test_runner_hooks.py tests/lifecycle/test_hook_config.py\
+  \ tests/lifecycle/test_hooks_and_commit.py -k 'run_task_aggregates_all_stage_hook_failures_by_default\
+  \ or run_task_honors_fail_fast_stage_hook_mode_from_config or runs_all_hooks or\
+  \ fail_fast or reject_includes_command_exit_code_and_streams or hook_execution_mode'`\
+  \ -> `9 passed`\n- `uv run python - <<'PY' ...` direct runtime probe through `run_task()`\
+  \ ->\n  - default: `default_final_stage=done`, `default_calls=first,second,first,second,`,\
+  \ `default_feedback_has_first=True`, `default_feedback_has_second=True`\n  - fail-fast:\
+  \ `fail_fast_final_stage=done`, `fail_fast_calls=first,first,second,`, `fail_fast_feedback_has_second=False`\n\
+  - `/usr/bin/time -p uv run pytest tests/ -q` -> `477 passed, 17 warnings in 87.98s`;\
+  \ `real 88.74`\n- `uv run ruff check --select E402,F401 litehive tests` -> `All\
+  \ checks passed!`\n"
 submitted_via_cli: true
 files_changed: []
 created_follow_up_task_ids: []
-task_update: {}
 tests:
   added: 0
   passing: 0
 warnings: []
-retry_count: 1
-retry_limit: 3
-retry_source: global
-retry_decision: retry
+retry_count: 0
+retry_limit: 0
+retry_decision: continue
 outcome: null
 outcome_reason_code: null
 outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 230
+duration_seconds: 0
 hook_results: []
-created_at: '2026-04-09T21:39:23+00:00'
+created_at: '2026-04-18T15:09:31+00:00'

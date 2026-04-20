@@ -4,11 +4,8 @@ title: 'Daemon-level recovery: if a task can''t be launched, attempt one recover
   session'
 created_at: '2026-04-11T05:38:12+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: critical
-pm_complexity: null
-planned_effort: null
 depends_on:
 - T-0325
 goal: "Recovery agent today only fires from INSIDE a running stage loop (core.py:382,\
@@ -58,10 +55,7 @@ acceptance_criteria:
 - "Bounded to one recovery attempt per cycle \u2014 no infinite recovery loops"
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0341 daemon-level-recovery-if-a-task-can-t-be-launched'
 created_from: null
-upstream_origin: null
-github_origin: null

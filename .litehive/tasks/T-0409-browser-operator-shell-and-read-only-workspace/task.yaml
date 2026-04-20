@@ -1,0 +1,28 @@
+id: T-0409
+slug: browser-operator-shell-and-read-only-workspace
+title: Browser operator shell and read-only workspace snapshot
+created_at: '2026-04-17T12:38:29+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on: []
+goal: Create the initial browser surface for Litehive. Add a web package or clearly
+  named browser entrypoint plus a read-only snapshot API backed by existing status,
+  state, and activity helpers. This task establishes the HTML shell, routing, and
+  JSON contracts that later operator actions build on.
+acceptance_criteria:
+- A browser entrypoint exists under litehive/web or another clearly named package
+  and serves a basic operator page.
+- A read-only snapshot API returns active task, queue summary, recent activity, waiting-for-you
+  state, engine health, runner or daemon state, and linkable task summaries derived
+  from current CLI or state helpers.
+- The initial page renders the same high-level sections as litehive status without
+  requiring terminal access.
+- The implementation uses non-blocking, read-only workspace reads for dashboard polling
+  or streaming paths.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0409 browser-operator-shell-and-read-only-workspace'
+created_from: null

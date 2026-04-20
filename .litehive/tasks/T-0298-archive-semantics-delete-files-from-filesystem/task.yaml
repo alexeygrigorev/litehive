@@ -3,11 +3,8 @@ slug: archive-semantics-delete-files-from-filesystem
 title: 'Archive semantics: delete files from filesystem, retain full record in DB'
 created_at: '2026-04-10T06:49:30+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on:
 - T-0291
 - T-0295
@@ -29,10 +26,7 @@ acceptance_criteria:
 - All tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0298 archive-semantics-delete-files-from-filesystem'
 created_from: null
-upstream_origin: null
-github_origin: null

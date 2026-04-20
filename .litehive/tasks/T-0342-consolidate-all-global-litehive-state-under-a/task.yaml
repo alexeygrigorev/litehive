@@ -4,11 +4,8 @@ title: Consolidate all global litehive state under a single XDG_DATA_HOME/litehi
   root
 created_at: '2026-04-11T05:41:14+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on:
 - T-0332
 goal: "Global litehive state is scattered across multiple XDG directories and that\
@@ -54,10 +51,7 @@ acceptance_criteria:
 - Documentation updated to reflect the single-root layout
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0342 consolidate-all-global-litehive-state-under-a'
 created_from: null
-upstream_origin: null
-github_origin: null

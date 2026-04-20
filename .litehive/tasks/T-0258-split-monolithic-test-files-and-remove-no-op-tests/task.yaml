@@ -3,31 +3,36 @@ slug: split-monolithic-test-files-and-remove-no-op-tests
 title: Split monolithic test files and remove no-op tests
 created_at: '2026-04-09T09:21:39+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
-goal: Several test files are too large or contain tests that don't test anything meaningful.
-  Split, remove, or rewrite as identified in the test quality analysis.
+goal: 'Treat T-0258 as stale cleanup history rather than a live implementation target:
+  verify the April 9, 2026 test-splitting/no-op-removal work was already completed,
+  reconcile that evidence against the current repository layout, and close this task
+  instead of reopening obsolete filenames.'
 acceptance_criteria:
-- test_retry_commit_and_recovery.py (4069 lines) split into focused files by concern
-- test_config_and_run_cli.py (1625 lines) split into config tests and CLI tests
-- test_web_snapshot_lockfree.py (1110 lines) split by web feature area
-- 'Monolithic multi-assertion tests split: test_web_daemon_api_supports_status_start_stop_restart_and_dashboard_markup,
-  test_web_task_action_endpoints_mutate_tasks'
-- 'Remove no-op tests: test_slugify_exactly_50_unchanged (identity test), test_cli_report_message_stored_as_is
-  (tests nothing), duplicate flag_count test'
-- Remove subprocess-based test in test_tasks_and_subagents.py (test_workspace_transition_writes_preserve_task_added_after_state_snapshot)
-  - replace with direct function call
-- All remaining tests pass within 60s timeout and full suite under 3 minutes
-constraints: []
-plan: []
-human_checkpoints: []
+- Verify tests/test_retry_commit_and_recovery.py, tests/test_config_and_run_cli.py,
+  and tests/test_web_snapshot_lockfree.py are absent from the current workspace.
+- Verify test_workspace_transition_writes_preserve_task_added_after_state_snapshot
+  now resolves to tests/state/test_task_persistence.py::test_workspace_transition_writes_preserve_task_added_after_state_snapshot
+  in the current tree.
+- Verify the other named T-0258 cleanup targets are already removed or relocated and
+  do not justify reopening the obsolete filenames from the April 9, 2026 prompt.
+- Cite the April 9, 2026 T-0258 implementing/testing/accepting reports plus current
+  repo drift in the duplicate closure reason.
+- Direct any future test-splitting work into a fresh task against current large modules
+  rather than retargeting T-0258.
+constraints:
+- Do not implement code in this grooming pass.
+- Do not retarget stale filenames to unrelated current test files inside T-0258.
+plan:
+- Audit the current test tree for the obsolete filenames and named tests from the
+  original T-0258 scope.
+- Compare the current tree with the repo-local April 9, 2026 T-0258 implementing/testing/accepting
+  reports to confirm the cleanup already landed.
+- Close T-0258 as duplicate based on executed April 9 work plus subsequent repo drift,
+  and note that any new splitting should be tracked separately against current modules.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0258 split-monolithic-test-files-and-remove-no-op-tests'
 created_from: null
-upstream_origin: null
-github_origin: null

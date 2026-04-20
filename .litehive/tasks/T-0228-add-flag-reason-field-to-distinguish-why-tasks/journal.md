@@ -19,3 +19,9 @@ CommitToGit complete. Commit: ab00d219866e0f8f8fb1a94f3faae97e27d7f913
 
 ## 2026-04-13T10:27:48+00:00
 Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.
+
+## 2026-04-18T02:01:29+00:00
+Interrupted runner execution while `grooming` was running. Reason: Stale runner detected while `grooming` was still marked running.. Resume from `grooming`.
+
+## 2026-04-18T02:04:18+00:00
+Task metadata updated via CLI.

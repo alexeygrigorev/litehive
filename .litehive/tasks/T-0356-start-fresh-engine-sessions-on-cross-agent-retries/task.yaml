@@ -3,11 +3,8 @@ slug: start-fresh-engine-sessions-on-cross-agent-retries
 title: Start fresh engine sessions on cross-agent retries
 created_at: '2026-04-12T23:28:08+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on:
 - T-0353
 goal: Prevent stale engine context from accumulating across QA or reviewer rejections
@@ -20,10 +17,7 @@ acceptance_criteria:
 - Pipeline tests cover the cross-agent retry reset behavior.
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0356 start-fresh-engine-sessions-on-cross-agent-retries'
 created_from: null
-upstream_origin: null
-github_origin: null

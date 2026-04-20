@@ -3,11 +3,8 @@ slug: slim-tasks-init-py-barrel-file-to-curated-public
 title: Slim tasks/__init__.py barrel file to curated public API
 created_at: '2026-04-09T09:16:15+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: tasks/__init__.py re-exports ~100 items from 8+ submodules in 499 lines. Reduce
   to a curated public API of ~20 essential items. Internal code should import from
@@ -19,10 +16,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0254 slim-tasks-init-py-barrel-file-to-curated-public'
 created_from: null
-upstream_origin: null
-github_origin: null

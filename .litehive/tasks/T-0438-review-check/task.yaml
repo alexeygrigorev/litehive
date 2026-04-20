@@ -1,0 +1,16 @@
+id: T-0438
+slug: review-check
+title: review check
+created_at: '2026-04-18T01:13:30+00:00'
+task_type: null
+pipeline_mode: full
+priority: medium
+depends_on: []
+goal: ''
+acceptance_criteria: []
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0438 review-check'
+created_from: null

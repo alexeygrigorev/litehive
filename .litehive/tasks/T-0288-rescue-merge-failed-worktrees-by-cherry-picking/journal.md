@@ -45,3 +45,42 @@ upstream, see 'push.autoSetupRemote' in 'git help config'.
 
 ## 2026-04-13T10:32:55+00:00
 Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.
+
+## 2026-04-18T22:18:45+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T22:21:34+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T22:23:59+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T22:26:15+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T22:31:54+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T22:40:02+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T22:42:57+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T22:43:50+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T22:46:39+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T22:47:01+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T22:51:58+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T22:52:53+00:00
+Interrupted subagent execution while `grooming` was running. Reason: Task stopped via CLI. Subagent `SA-0013` (planner/codex, pid=1843502, path `subagents/SA-0013-planner`) stopped with status `interrupted`. Last snippet: grooming rejected: agent did not submit verdict via litehive report CLI. Resume from `grooming`.
+
+## 2026-04-18T22:52:59+00:00
+Task closed: duplicate. Duplicate of T-0305 (rescue-finalization follow-up scope). Per T-0288's own acceptance criteria: rescue flow already shipped. Planner stuck in 9-run loop unable to self-close.

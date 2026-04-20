@@ -3,11 +3,8 @@ slug: housekeeping-dead-stubs-empty-dirs-shim-dirs-dep
 title: 'Housekeeping: dead stubs, empty dirs, shim dirs, dep audit'
 created_at: '2026-04-10T20:34:52+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: low
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: Complete a low-risk housekeeping pass that removes confirmed compatibility shims
   and empty directories, and cleans up direct dependency declarations without changing
@@ -22,10 +19,7 @@ acceptance_criteria:
 - All tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0333 housekeeping-dead-stubs-empty-dirs-shim-dirs-dep'
 created_from: null
-upstream_origin: null
-github_origin: null

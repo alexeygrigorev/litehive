@@ -6,3 +6,6 @@ Task created.
 ## 2026-04-12T13:07:31+00:00
 Task record updated from grooming output:
 - goal: `Complete a low-risk housekeeping pass that removes confirmed compatibility shims and empty directories, and cleans up direct dependency declarations without changing behavior.`
+
+## 2026-04-17T18:28:59+00:00
+Task metadata updated via CLI.

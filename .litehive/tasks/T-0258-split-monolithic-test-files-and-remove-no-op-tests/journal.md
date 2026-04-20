@@ -107,3 +107,18 @@ CommitToGit complete. Commit: e69e240c813f619664b86d7d853b1bb7e4810646
 
 ## 2026-04-13T10:30:53+00:00
 Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See T-0366.
+
+## 2026-04-18T12:24:13+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T12:27:28+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T12:30:23+00:00
+Task metadata updated via CLI.
+
+## 2026-04-18T12:32:10+00:00
+Interrupted subagent execution while `grooming` was running. Reason: Task stopped via CLI. Subagent `SA-0013` (planner/codex, pid=907931, path `subagents/SA-0013-planner`) stopped with status `interrupted`. Last snippet: grooming rejected: agent did not submit verdict via litehive report CLI. Resume from `grooming`.
+
+## 2026-04-18T12:32:17+00:00
+Task closed: duplicate. Stale cleanup history. Per T-0258's own goal: the April 9, 2026 test-splitting work was already completed. Planner stuck in 4-run loop trying to self-close.

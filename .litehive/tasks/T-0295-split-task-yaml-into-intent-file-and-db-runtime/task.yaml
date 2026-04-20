@@ -3,11 +3,8 @@ slug: split-task-yaml-into-intent-file-and-db-runtime
 title: Split task.yaml into intent file and DB runtime state
 created_at: '2026-04-10T06:48:43+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on:
 - T-0291
 goal: Today task.yaml mixes intent (goal, acceptance_criteria, plan, constraints,
@@ -28,10 +25,7 @@ acceptance_criteria:
 - All tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0295 split-task-yaml-into-intent-file-and-db-runtime'
 created_from: null
-upstream_origin: null
-github_origin: null

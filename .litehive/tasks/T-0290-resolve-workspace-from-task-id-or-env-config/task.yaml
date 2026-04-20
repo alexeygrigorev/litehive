@@ -3,11 +3,8 @@ slug: resolve-workspace-from-task-id-or-env-config
 title: Resolve workspace from task ID or env/config instead of --workspace path
 created_at: '2026-04-10T06:15:31+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'Remove the ambiguity of --workspace path arguments. Agents should only need
   to pass --task-id T-XXXX or rely on LITEHIVE_TASK_ID env var (which we already inject).
@@ -31,10 +28,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0290 resolve-workspace-from-task-id-or-env-config'
 created_from: null
-upstream_origin: null
-github_origin: null

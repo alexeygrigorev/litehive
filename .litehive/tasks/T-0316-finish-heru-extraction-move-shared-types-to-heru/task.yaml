@@ -4,11 +4,8 @@ title: 'Finish heru extraction: move shared types to heru, delete litehive compa
   shims'
 created_at: '2026-04-10T17:48:27+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: moderate
-planned_effort: m
 depends_on: []
 goal: "The T-0269 heru extraction physically moved engine adapters out of litehive/agents/\
   \ into heru/, but two loose ends remain that keep heru coupled to litehive and prevent\
@@ -40,10 +37,7 @@ acceptance_criteria:
   a clean import)
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0316 finish-heru-extraction-move-shared-types-to-heru'
 created_from: null
-upstream_origin: null
-github_origin: null

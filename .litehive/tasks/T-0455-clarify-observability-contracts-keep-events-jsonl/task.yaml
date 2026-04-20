@@ -1,0 +1,33 @@
+id: T-0455
+slug: clarify-observability-contracts-keep-events-jsonl
+title: 'Clarify observability contracts: keep events.jsonl, narrow transcript.md to
+  a derived human view'
+created_at: '2026-04-20T08:17:52+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on:
+- T-0456
+goal: Keep events.jsonl as Litehive's stable append-only task/subagent activity feed,
+  and simplify transcript handling by removing transcript.md from live/status responsibilities
+  unless it is a derived human-readable view or cached final snapshot.
+acceptance_criteria:
+- events.jsonl remains present and documented as the structured append-only activity
+  feed for task and subagent lifecycle events; transcript payloads are not moved into
+  it.
+- CLI and web transcript views still work for active and completed runs without requiring
+  a live-written transcript.md file.
+- Completed-run transcript views continue to work from a final cached transcript or
+  on-demand derivation from raw execution artifacts such as stdout/stderr or structured
+  engine snapshots.
+- Recovery interruption snippets, handoff flows, and operator debugging continue to
+  work when transcript.md is absent for an interrupted or still-running subagent.
+- The duplicate live-progress transcript write path is removed, and focused tests
+  cover active runs, interrupted recovery, gzip snapshots, and plain-text engines
+  without a structured timeline.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0455 clarify-observability-contracts-keep-events-jsonl'
+created_from: null

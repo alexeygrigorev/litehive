@@ -4,11 +4,8 @@ title: Recovery agent must diagnose and fix litehive infrastructure bugs, not re
   failed agent work
 created_at: '2026-04-08T15:16:20+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'The recovery agent''s job is to analyze WHY an agent failed (check logs, stdout,
   stderr, session.yaml, exit codes), identify the bug in litehive''s own code, fix
@@ -47,10 +44,7 @@ plan:
 - Add clear examples in the prompt of what recovery should do vs what it should NOT
   do
 - Test with a mock failure scenario
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0235 recovery-agent-must-diagnose-and-fix-litehive'
 created_from: null
-upstream_origin: null
-github_origin: null

@@ -3,11 +3,8 @@ slug: wire-live-quota-data-into-litehive-engine-status
 title: Wire live quota data into litehive engine status output
 created_at: '2026-04-09T08:53:54+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: high
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: litehive engine status shows monitoring data but not live quota from the quota
   APIs we built (claude 5h/7d, codex windows, copilot premium, zai api/tokens). Add
@@ -23,10 +20,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0250 wire-live-quota-data-into-litehive-engine-status'
 created_from: null
-upstream_origin: null
-github_origin: null

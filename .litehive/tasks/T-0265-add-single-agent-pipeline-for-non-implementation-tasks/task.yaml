@@ -3,11 +3,8 @@ slug: add-single-agent-pipeline-for-non-implementation-tasks
 title: Add single-agent pipeline for non-implementation tasks
 created_at: '2026-04-04T18:14:37+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'Add two pipeline modes: ''full'' (grooming, implementing, testing, accepting,
   commit_to_git) and ''single'' (one agent executes, then done). Tasks default to
@@ -20,10 +17,7 @@ acceptance_criteria:
 - full mode is unchanged from current behavior
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0143 add-single-agent-pipeline-for-non-implementation-tasks'
 created_from: null
-upstream_origin: null
-github_origin: null

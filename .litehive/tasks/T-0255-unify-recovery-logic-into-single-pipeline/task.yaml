@@ -3,11 +3,8 @@ slug: unify-recovery-logic-into-single-pipeline
 title: Unify recovery logic into single pipeline/recovery/ package
 created_at: '2026-04-09T09:16:17+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'Recovery is split between workspace/recovery.py (1037 lines, startup repair)
   and pipeline/_recovery.py (747 lines, execution recovery). Merge into pipeline/recovery/
@@ -19,10 +16,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0255 unify-recovery-logic-into-single-pipeline'
 created_from: null
-upstream_origin: null
-github_origin: null

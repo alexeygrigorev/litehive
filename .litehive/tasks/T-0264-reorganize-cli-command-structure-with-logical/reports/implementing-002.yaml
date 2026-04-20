@@ -1,88 +1,105 @@
 task_id: T-0264
-step: implementing
+stage: implementing
 verdict: pass
 source: agent
-summary: 'Implemented the CLI surface reorganization and aligned the web/docs/prompts
-  to it. Public parser now exposes grouped task, queue, and import commands plus top-level
-  start/stop/restart; legacy flat names remain available as hidden compatibility parsers.
-  queue requeue now covers completed-task recover semantics, run remains foreground-only,
-  daemon and other removed/internal names are no longer in public help, and the web
-  dashboard now uses /api/runner/*, /api/queue/requeue, and /api/queue/stop on the
-  public surface. Updated README, affected docs, and agent prompt guidance to use
-  litehive report, litehive task add, litehive task update, and litehive task close
-  terminology. Verification: uv run litehive --help, uv run litehive task --help,
-  uv run litehive queue --help, and uv run litehive import --help showed the new grouped
-  public surface; uv run ruff check --select E402,F401 litehive tests passed; focused
-  regressions passed for CLI/web/prompt coverage (uv run pytest -q tests/test_run_cli.py
-  tests/test_web_daemon_monitor.py tests/test_web_task_actions.py tests/test_web_snapshot_and_verdicts.py
-  tests/test_runner_workflow.py -q); full suite passed with uv run pytest -q (910
-  passed).'
-feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
-  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
-  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
-  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
-  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
-  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
-  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
-  \nImplemented the CLI surface reorganization and aligned the web/docs/prompts to\
-  \ it. Public parser now exposes grouped task, queue, and import commands plus top-level\
-  \ start/stop/restart; legacy flat names remain available as hidden compatibility\
-  \ parsers. queue requeue now covers completed-task recover semantics, run remains\
-  \ foreground-only, daemon and other removed/internal names are no longer in public\
-  \ help, and the web dashboard now uses /api/runner/*, /api/queue/requeue, and /api/queue/stop\
-  \ on the public surface. Updated README, affected docs, and agent prompt guidance\
-  \ to use litehive report, litehive task add, litehive task update, and litehive\
-  \ task close terminology. Verification: uv run litehive --help, uv run litehive\
-  \ task --help, uv run litehive queue --help, and uv run litehive import --help showed\
-  \ the new grouped public surface; uv run ruff check --select E402,F401 litehive\
-  \ tests passed; focused regressions passed for CLI/web/prompt coverage (uv run pytest\
-  \ -q tests/test_run_cli.py tests/test_web_daemon_monitor.py tests/test_web_task_actions.py\
-  \ tests/test_web_snapshot_and_verdicts.py tests/test_runner_workflow.py -q); full\
-  \ suite passed with uv run pytest -q (910 passed)."
+summary: T-0264 pass after the rejection fix.
+feedback: 'T-0264 pass after the rejection fix.
+
+
+  Rejection fix:
+
+  - `docs/README.md` no longer tells users to run `litehive configure`. `sed -n ''58,124p''
+  docs/README.md` now shows `litehive status` in both bootstrap snippets and adds
+  `The first Litehive command bootstraps .litehive/ in the current repository.`
+
+  - `env -u LITEHIVE_AGENT_ROLE .venv/bin/litehive configure --help` still returns
+  `Error: No such command ''configure''.`
+
+  - `rg -n "litehive configure|\bconfigure\b" docs/README.md README.md docs prompts
+  .litehive/config.yaml .litehive/context.md litehive/cli/templates/workspace_config.yaml
+  litehive/agents/prompts.py` now only matches `litehive/cli/templates/workspace_config.yaml:3`,
+  which explicitly says Litehive does not provide a `configure` command anymore.
+
+
+  Acceptance criteria evidence:
+
+  - `start/stop/restart` replace daemon lifecycle: `env -u LITEHIVE_AGENT_ROLE uv
+  run litehive --help` listed `start`, `stop`, `restart` and omitted `daemon`; `.venv/bin/litehive
+  start --help` => `Start the background Litehive runner`; `.venv/bin/litehive restart
+  --help` => `Restart the background Litehive runner`.
+
+  - `task ...` group: `env -u LITEHIVE_AGENT_ROLE uv run litehive task --help` listed
+  `add`, `debug`, `logs`, `list`, `show`, `abandon`, `close`, `update`.
+
+  - `queue ...` group: `env -u LITEHIVE_AGENT_ROLE uv run litehive queue --help` listed
+  `move`, `promote`, `requeue`, `resume`, `stop`.
+
+  - `import github/spec` replace old intake/issue commands: `env -u LITEHIVE_AGENT_ROLE
+  uv run litehive import --help` listed `spec` and `github`; smoke test `litehive
+  import spec <tmp>/spec.yaml --workspace <tmp>` created `T-0001`; hidden alias `litehive
+  intake <tmp>/spec.yaml --workspace <tmp>` created `T-0002`; `litehive task list
+  --workspace <tmp>` showed both queued tasks.
+
+  - `run` is foreground, `start` is background: disposable workspace `litehive start
+  --workspace <tmp>` returned immediately with `runner_status: running` and `pid:
+  1293606`; `.venv/bin/litehive run --help` => `Run the next task once`; `litehive
+  run --workspace <tmp>` on an empty queue returned `No queued task.`
+
+  - `dirty-worktree-gate` removed from public CLI: `env -u LITEHIVE_AGENT_ROLE uv
+  run litehive dirty-worktree-gate --help` => `Error: No such command ''dirty-worktree-gate''.`
+
+  - `recover/prioritize/switch` removed from public CLI and covered by grouped commands:
+  root `litehive --help` omitted them; `litehive queue --help` exposes `promote`/`requeue`;
+  `litehive engine switch --help` exposes `switch`.
+
+  - Old command names kept as hidden aliases: `litehive daemon run --help`, `litehive
+  recover --help`, `litehive prioritize --help`, `litehive switch --help`, `litehive
+  issue --help`, `litehive import-issue --help`, `litehive import-issues --help` all
+  succeeded while root help omitted them.
+
+  - Agent-facing API = 4 commands: `LITEHIVE_AGENT_ROLE=swe uv run litehive --help`
+  printed only `litehive report`, `litehive task add`, `litehive task update`, `litehive
+  task close`; `LITEHIVE_AGENT_ROLE=swe .venv/bin/litehive task --help` printed only
+  those three task subcommands; `LITEHIVE_AGENT_ROLE=swe .venv/bin/litehive task add
+  --help` usage is `litehive task add`.
+
+  - README/docs/prompts/config/context updated: `rg -n "litehive start|litehive import
+  spec|litehive import github|litehive task update|litehive task close|litehive report"
+  README.md` hit updated examples; `rg -n "litehive report|litehive task update|litehive
+  task close|litehive task add" litehive/agents/prompts.py .litehive/config.yaml litehive/cli/templates/workspace_config.yaml
+  .litehive/context.md prompts/pipeline-monitor.md docs/README.md` hit updated prompt/config/template/docs
+  lines; `rg -n "queue requeue|rollback and queue requeue" .litehive/context.md litehive/config/profiles/_shared.yaml
+  litehive/config/profiles/codehive.yaml` confirmed the context/profile wording update.
+
+  - No stale public-command references remained in public docs/prompts/config/template:
+  `rg -n "litehive agent report|litehive agent update|litehive agent close|litehive
+  agent add|litehive daemon|daemon run|daemon stop|daemon restart|litehive recover|litehive
+  prioritize|litehive switch|import-issue|import-issues|dirty-worktree-gate|task park"
+  README.md docs prompts .litehive/config.yaml .litehive/context.md litehive/cli/templates/workspace_config.yaml`
+  returned no matches.
+
+  - Hooks/tests: `uv run ruff check --select E402,F401 litehive tests` => `All checks
+  passed!`; forbidden-noqa gate on the current diff exited 0; `uv run pytest -q` =>
+  `493 passed, 17 warnings in 89.65s (0:01:29)`.
+
+
+  Scope note:
+
+  - The prompt discussion thread narrowed this task to the repo-owned CLI/help/docs/prompts/config/templates
+  surface and explicitly moved browser/dashboard work to T-0423..T-0428. Repo check
+  `rg --files | rg ''(^|/)(web|dashboard|frontend|ui)(/|$)|\.tsx$|\.jsx$|package\.json$|vite\.config|next\.config|tailwind\.config''`
+  returned no matches.
+
+  '
 submitted_via_cli: true
-files_changed:
-- README.md
-- docs/README.md
-- docs/cli.md
-- docs/configuration.md
-- docs/contributing-back.md
-- docs/engines.md
-- docs/pipeline.md
-- docs/recovery.md
-- litehive/agents/_prompts.py
-- litehive/cli/__init__.py
-- litehive/cli/github_import.py
-- litehive/cli/parser.py
-- litehive/cli/parsers/__init__.py
-- litehive/cli/parsers/archive.py
-- litehive/cli/parsers/import_group.py
-- litehive/cli/parsers/lifecycle.py
-- litehive/cli/parsers/queue.py
-- litehive/cli/parsers/task.py
-- litehive/cli/queue.py
-- litehive/web/server.py
-- litehive/web/templates/index.html
-- tests/test_run_cli.py
-- tests/test_runner_workflow.py
-- tests/test_web_daemon_monitor.py
-- tests/test_web_snapshot_and_verdicts.py
-- tests/test_web_task_actions.py
+files_changed: []
 created_follow_up_task_ids: []
-task_update: {}
 tests:
   added: 0
   passing: 0
-warnings:
-- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
-  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
-- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
-  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
-  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
-  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
-  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+warnings: []
 retry_count: 0
-retry_limit: 3
-retry_source: global
+retry_limit: 0
 retry_decision: continue
 outcome: null
 outcome_reason_code: null
@@ -90,34 +107,6 @@ outcome_reason: ''
 failure_classification: null
 failure_diagnostics: {}
 resource_limit_event: null
-duration_seconds: 1131
-hook_results:
-- point: after_implementing
-  command: uv run ruff check --select E402,F401 litehive tests
-  reject_on_failure: true
-  description: null
-  exit_code: 0
-  status: passed
-  artifact: artifacts/after_implementing-001.yaml
-  stdout: 'All checks passed!
-
-    '
-  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
-    project environment path `.venv` and will be ignored; use `--active` to target
-    the active environment instead
-
-    '
-- point: after_implementing
-  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
-    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
-    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
-    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
-    \  exit 1\nfi"
-  reject_on_failure: true
-  description: null
-  exit_code: 0
-  status: passed
-  artifact: artifacts/after_implementing-002.yaml
-  stdout: ''
-  stderr: ''
-created_at: '2026-04-10T00:20:14+00:00'
+duration_seconds: 0
+hook_results: []
+created_at: '2026-04-18T17:04:49+00:00'

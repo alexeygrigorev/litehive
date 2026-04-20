@@ -1,0 +1,21 @@
+id: T-0400
+slug: add-task-level-time-budget-with-auto-flag-after
+title: Add task-level time budget with auto-flag after 60 minutes
+created_at: '2026-04-16T17:42:37+00:00'
+task_type: bugfix
+pipeline_mode: full
+priority: high
+depends_on: []
+goal: If a task exceeds 60 minutes of wall-clock time across all subagent invocations
+  without reaching the commit stage, automatically flag it and move to the next task
+  instead of looping indefinitely.
+acceptance_criteria:
+- Tasks exceeding the time budget are flagged with reason time_budget_exceeded
+- Flagged tasks preserve their worktree and branch for manual review
+- The time budget is configurable in workspace config
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0400 add-task-level-time-budget-with-auto-flag-after'
+created_from: null

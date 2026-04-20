@@ -3,11 +3,8 @@ slug: ensure-subagent-stdout-stderr-are-always-written
 title: Ensure subagent stdout/stderr are always written even on short or empty runs
 created_at: '2026-04-09T07:46:52+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: simple
-planned_effort: xs
 depends_on: []
 goal: Some subagent runs produce no stdout/transcript artifacts (only session.yaml
   and report.yaml). This makes debugging impossible. Ensure stdout.txt and stderr.txt
@@ -20,10 +17,7 @@ acceptance_criteria:
 - All existing tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0239 ensure-subagent-stdout-stderr-are-always-written'
 created_from: null
-upstream_origin: null
-github_origin: null

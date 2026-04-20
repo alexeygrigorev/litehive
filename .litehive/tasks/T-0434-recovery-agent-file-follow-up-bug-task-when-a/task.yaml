@@ -1,0 +1,28 @@
+id: T-0434
+slug: recovery-agent-file-follow-up-bug-task-when-a
+title: 'Recovery agent: file follow-up bug task when a specific test failure blocks
+  an unrelated task'
+created_at: '2026-04-17T16:17:03+00:00'
+task_type: bugfix
+pipeline_mode: full
+priority: high
+depends_on: []
+goal: 'When the recovery agent (or SWE) keeps rejecting a task because of a failing
+  test that has nothing to do with the task''s acceptance criteria, the outcome is
+  infinite retry loops. Recovery should recognize ''this failure is not in the task''s
+  changed surface'' and do two things: (1) file a follow-up bugfix task for the failing
+  test itself, and (2) either skip that test for this task''s acceptance gate or flag
+  this task as blocked-on-follow-up. T-0429 burned 23 subagents because two unrelated
+  integration tests kept failing.'
+acceptance_criteria:
+- 'Recovery can attribute a failing test to: (a) the current task''s changed surface,
+  or (b) pre-existing / unrelated breakage'
+- For case (b), recovery files a follow-up bugfix task and either flags the current
+  task or continues with a narrower acceptance gate
+- Test covers both attribution branches
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0434 recovery-agent-file-follow-up-bug-task-when-a'
+created_from: null

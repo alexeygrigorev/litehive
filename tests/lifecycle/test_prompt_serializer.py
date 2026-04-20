@@ -11,6 +11,7 @@ from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, Trigge
 from litehive.roles.planner import PlannerAgent
 from litehive.roles.qa import QAAgent
 from litehive.roles.recovery import RecoveryAgent
+from litehive.roles.reviewer import ReviewerAgent
 from litehive.roles.swe import SWEAgent
 from litehive.roles.base import PromptContext
 from litehive.config.workspace import ensure_workspace
@@ -321,6 +322,23 @@ def test_qa_prompt_includes_default_vs_opt_in_verification_guidance(workspace: P
     assert "repo's documented verification flow" in text
     assert "default deterministic test suite and targeted checks first" in text
     assert "opt-in, external-boundary, or authenticated integration coverage" in text
+
+
+def test_reviewer_prompt_calls_out_qa_override_with_last_testing_rejection(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    agent = ReviewerAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+    state = make_state(task.id, stage="accepting")
+    state.last_rejection_by_stage["accepting"] = LastRejection(
+        source="agent",
+        reason="qa asked for style-only cleanup",
+        raised_at_phase="testing",
+    )
+
+    text = serialize_prompt(agent.build_prompt(state), task_record=task)
+
+    assert "- Raised at phase: testing" in text
+    assert "- Reason: qa asked for style-only cleanup" in text
+    assert "You can override QA if the work materially meets intent — tests pass and hooks are green." in text
 
 
 def test_build_prompt_ignores_corrupt_hook_config(workspace: Path) -> None:

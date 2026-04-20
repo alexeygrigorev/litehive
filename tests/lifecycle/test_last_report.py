@@ -7,7 +7,7 @@ transition so guards like ``zero_change_shortcut`` see real numbers.
 
 from typing import Any
 
-from litehive.lifecycle.events import Pass
+from litehive.lifecycle.events import HookOk, Pass, Reject
 from litehive.lifecycle.nodes.agent import AgentNode, AgentVerdict
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.runner import StateMachineRunner
@@ -76,3 +76,13 @@ def test_runner_updates_state_last_report_from_pass_metadata() -> None:
     assert state.last_report.test_results == [
         "uv run pytest -q tests/lifecycle/test_prompt_serializer.py -> 3 passed",
     ]
+
+
+def test_runner_tracks_hook_ok_state_for_latest_hook_result() -> None:
+    state = TaskState(task_id="T-0001", stage="after_implementing", pipeline_mode=PipelineMode.FULL)
+
+    StateMachineRunner._apply_event_side_effects(state, HookOk())
+    assert state.last_report.hook_ok is True
+
+    StateMachineRunner._apply_event_side_effects(state, Reject(source="hook", reason="ruff failed"))
+    assert state.last_report.hook_ok is False

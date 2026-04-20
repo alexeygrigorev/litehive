@@ -3,11 +3,8 @@ slug: add-tests-for-crash-resume-and-verdict-nudge
 title: Add tests for crash resume and verdict nudge across engines
 created_at: '2026-04-09T08:01:10+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: medium
-pm_complexity: null
-planned_effort: null
 depends_on: []
 goal: 'The crash resume and verdict nudge logic in _builder.py has no dedicated test
   coverage for multi-engine scenarios. Add unit tests that verify: crash resume fires
@@ -22,10 +19,7 @@ acceptance_criteria:
 - All tests pass within 60s timeout
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0242 add-tests-for-crash-resume-and-verdict-nudge'
 created_from: null
-upstream_origin: null
-github_origin: null
