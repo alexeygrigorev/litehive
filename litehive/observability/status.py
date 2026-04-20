@@ -1,12 +1,14 @@
 """Shared task observability formatting helpers."""
 
 import json
-from pathlib import Path
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
 
+from litehive.config.paths import workspace_path
 from litehive.config.engine_models import active_engine_freezes
 from litehive.config.model import LitehiveConfig
 from litehive.domain.engine import WorkspaceEngineMonitoring
@@ -14,8 +16,107 @@ from litehive.domain.reports import ExecutionEstimate
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
 
+if TYPE_CHECKING:
+    from litehive.observability.status_diagnostics import StatusIssue
+
 # Ordered pipeline stages for remaining-time estimation.
 _PIPELINE_STAGES = ["grooming", "implementing", "testing", "accepting", "commit_to_git"]
+
+StatusRenderMode = Literal["fast", "full"]
+
+
+@dataclass(slots=True)
+class TaskPipelineStatusData:
+    root: Path
+    config: LitehiveConfig
+    state: WorkspaceState
+    runner: RunnerStatusState
+    monitoring: WorkspaceEngineMonitoring
+    issues: list["StatusIssue"]
+    active_task_id: str | None
+    active_task: TaskRecord | None
+    queue_head: str | None
+    waiting_lines: list[str]
+    fast_runner_status: str
+
+
+def collect_task_pipeline_status(root: Path) -> TaskPipelineStatusData:
+    from litehive.attention import waiting_for_you_lines
+    from litehive.observability.status_diagnostics import collect_status_snapshot
+    from litehive.state.records import get_task
+
+    resolved_root = root.resolve()
+    snapshot = collect_status_snapshot(resolved_root)
+    active_task_id = snapshot.runner.active_task_id or snapshot.state.active_task_id
+    active_task = get_task(resolved_root, active_task_id) if active_task_id else None
+    return TaskPipelineStatusData(
+        root=resolved_root,
+        config=snapshot.config,
+        state=snapshot.state,
+        runner=snapshot.runner,
+        monitoring=snapshot.monitoring,
+        issues=snapshot.issues,
+        active_task_id=active_task_id,
+        active_task=active_task,
+        queue_head=snapshot.state.queue[0] if snapshot.state.queue else None,
+        waiting_lines=waiting_for_you_lines(resolved_root),
+        fast_runner_status=_fast_runner_state_label(resolved_root, snapshot.runner),
+    )
+
+
+def render_task_pipeline_status_lines(
+    status: TaskPipelineStatusData,
+    *,
+    workspace: Path,
+    mode: StatusRenderMode,
+    retry_on_label: str | None = None,
+) -> list[str]:
+    from litehive.observability.engine_monitoring import render_engine_monitoring_lines
+
+    if mode == "full":
+        lines = render_full_status_header_lines(workspace, status.config, status.state, status.runner)
+    else:
+        lines = [
+            f"workspace: {workspace}",
+            f"default_engine: {status.config.default_engine}",
+            "mode: implementation",
+            f"active_task_id: {status.active_task_id if status.active_task_id is not None else 'None'}",
+            f"queued_tasks: {len(status.state.queue)}",
+            f"pool_stop_reason: {status.state.pool_stop_reason if status.state.pool_stop_reason is not None else 'None'}",
+        ]
+
+    lines.extend(status.waiting_lines)
+    if status.queue_head is not None:
+        lines.append(f"queue_head: {status.queue_head}")
+
+    if mode == "fast":
+        lines.append(f"runner_status: {status.fast_runner_status}")
+        if status.runner.pid is not None:
+            lines.append(f"runner_pid: {status.runner.pid}")
+        if status.runner.started_at:
+            lines.append(f"runner_started_at: {status.runner.started_at}")
+        if status.runner.heartbeat_at:
+            lines.append(f"runner_heartbeat_at: {status.runner.heartbeat_at}")
+
+    lines.extend(render_active_task_detail_lines(status.active_task, status.config.default_engine))
+    lines.extend(render_engine_monitoring_lines(status.monitoring))
+
+    if mode == "full":
+        if retry_on_label is None:
+            raise ValueError("retry_on_label is required when rendering full status output")
+        lines.extend(render_runtime_policy_lines(status.config, retry_on_label))
+
+    return lines
+
+
+def _fast_runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
+    if runner.status in {"running", "late"}:
+        return "running"
+    if not workspace_path(workspace, "runtime", ".runner.lock").exists():
+        return "never_started"
+    if runner.pid is None:
+        return "stopped"
+    return "dead"
 
 
 def estimate_task_execution(root: Path, task: TaskRecord) -> ExecutionEstimate:

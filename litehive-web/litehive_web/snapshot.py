@@ -15,10 +15,10 @@ from litehive.heru_compat import quota_long_term, quota_short_term
 from litehive.domain.task import TaskRecord
 from litehive.observability.engine_monitoring import load_engine_monitoring
 from litehive.observability.events import read_events
+from litehive.observability.status import collect_task_pipeline_status
 from litehive.tasks.constants import VALID_TASK_ENGINES, VALID_TASK_PRIORITIES, VALID_TASK_TYPES
 from litehive.state.records import list_tasks_state_first
 from litehive.tasks.paths import task_dir
-from litehive.state.locking import runner_status_readonly
 from litehive.state.persist import load_state
 from litehive.tasks.reports import load_task_thread
 
@@ -42,25 +42,23 @@ from litehive_web.common import (
 
 def build_workspace_snapshot(root: Path) -> dict[str, Any]:
     root = root.resolve()
-    state = load_state(root)
-    runner = runner_status_readonly(root)
-    tasks = list_tasks_state_first(root, state=state, include_runtime=True)
-    tasks_payload = [serialize_task(root, task, state.active_task_id) for task in tasks]
-    active_task = next((task for task in tasks if task.id == state.active_task_id), None)
+    status = collect_task_pipeline_status(root)
+    tasks = list_tasks_state_first(root, state=status.state, include_runtime=True)
+    tasks_payload = [serialize_task(root, task, status.active_task_id) for task in tasks]
     return {
         "workspace": str(root),
         "generated_at": read_iso_now(),
-        "runner": runner.model_dump(mode="python"),
+        "runner": status.runner.model_dump(mode="python"),
         "daemon": build_daemon_status_payload(root),
-        "state": state.model_dump(mode="python"),
+        "state": status.state.model_dump(mode="python"),
         "editable_fields": {
             "priority_options": sorted(VALID_TASK_PRIORITIES),
         },
-        "queue": list(state.queue),
-        "active_task_id": state.active_task_id,
+        "queue": list(status.state.queue),
+        "active_task_id": status.active_task_id,
         "active_task": None
-        if active_task is None
-        else serialize_task(root, active_task, state.active_task_id),
+        if status.active_task is None
+        else serialize_task(root, status.active_task, status.active_task_id),
         "tasks": tasks_payload,
         "run_all_logs": list_recent_run_all_logs(root),
     }

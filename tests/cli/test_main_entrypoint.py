@@ -237,41 +237,21 @@ def test_fast_status_prefers_runner_active_task_id(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    snapshot = SimpleNamespace(
-        state=SimpleNamespace(active_task_id=None, queue=["T-0382"], pool_stop_reason=None),
-        runner=SimpleNamespace(
-            status="running",
-            pid=123,
-            started_at="2026-04-16T03:15:43Z",
-            heartbeat_at="2026-04-16T03:21:53Z",
-            active_task_id="T-0381",
-        ),
-        monitoring=SimpleNamespace(),
-        config=SimpleNamespace(default_engine="codex"),
-        issues=[],
-    )
-    task = SimpleNamespace(
-        title="Move stage and recovery reports off YAML storage",
-        status="in_progress",
-        pipeline_status="implementing",
-        runtime=SimpleNamespace(
-            active_subagent=None,
-            last_subagent=None,
-            current_stage=SimpleNamespace(stage="implementing"),
-        ),
-    )
+    status = SimpleNamespace(issues=[])
 
     monkeypatch.setattr("litehive.main.resolve_workspace", lambda _arg: Path("/tmp/ws"))
-    monkeypatch.setattr("litehive.main.waiting_for_you_lines", lambda workspace: [])
     monkeypatch.setattr(
-        "litehive.observability.status_diagnostics.collect_status_snapshot",
-        lambda workspace: snapshot,
+        "litehive.observability.status.collect_task_pipeline_status",
+        lambda workspace: status,
     )
     monkeypatch.setattr("litehive.observability.status_diagnostics.status_has_problems", lambda issues: False)
     monkeypatch.setattr(
-        "litehive.observability.engine_monitoring.render_engine_monitoring_lines", lambda monitoring: []
+        "litehive.observability.status.render_task_pipeline_status_lines",
+        lambda task_status, *, workspace, mode: [
+            "active_task_id: T-0381",
+            "active_task_status: in_progress/implementing",
+        ],
     )
-    monkeypatch.setattr("litehive.state.records.get_task", lambda workspace, task_id: task)
 
     exit_code = main_module._fast_status([])
     output = capsys.readouterr().out

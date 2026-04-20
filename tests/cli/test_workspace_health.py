@@ -224,9 +224,13 @@ def test_documented_clear_and_sync_fix_restores_broken_symlink_after_uv_cache_cl
 
 
 def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatch, capsys) -> None:
-    snapshot = SimpleNamespace(
+    status = SimpleNamespace(
         config=LitehiveConfig(default_engine="codex"),
         state=WorkspaceState(active_task_id=None, queue=["T-0382"]),
+        monitoring=WorkspaceEngineMonitoring(),
+        active_task_id="T-0381",
+        waiting_lines=[],
+        issues=[],
         runner=RunnerStatusState(
             status="running",
             pid=123,
@@ -234,8 +238,6 @@ def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatc
             heartbeat_at="2026-04-16T03:21:53Z",
             active_task_id="T-0381",
         ),
-        monitoring=WorkspaceEngineMonitoring(),
-        issues=[],
     )
     active_task = SimpleNamespace(
         id="T-0381",
@@ -252,15 +254,11 @@ def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatc
             ),
         ),
     )
+    status.active_task = active_task
 
-    monkeypatch.setattr("litehive.cli.workspace.collect_status_snapshot", lambda root: snapshot)
-    monkeypatch.setattr(
-        "litehive.cli.workspace._safe_active_task",
-        lambda workspace, task_id: active_task if task_id == "T-0381" else None,
-    )
+    monkeypatch.setattr("litehive.cli.workspace.collect_task_pipeline_status", lambda root: status)
     monkeypatch.setattr("litehive.cli.workspace.list_tasks_state_first", lambda workspace, state=None: [])
     monkeypatch.setattr("litehive.cli.workspace.find_last_completed_task", lambda tasks: None)
-    monkeypatch.setattr("litehive.cli.workspace.waiting_for_you_lines", lambda root: [])
     monkeypatch.setattr("litehive.cli.workspace.collect_recent_activity", lambda root: [])
     monkeypatch.setattr("litehive.cli.workspace.render_engine_health_section", lambda monitoring: [])
     monkeypatch.setattr("litehive.cli.workspace.render_engine_monitoring_lines", lambda monitoring: [])
@@ -272,3 +270,30 @@ def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatc
 
     assert exit_code == 0
     assert "T-0381 implementing with codex" in output
+
+
+def test_full_status_command_lists_tasks_with_strict_false(tmp_path: Path, monkeypatch) -> None:
+    status = SimpleNamespace(
+        config=LitehiveConfig(default_engine="codex"),
+        active_task_id="T-0381",
+        issues=[],
+    )
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr("litehive.cli.workspace.collect_task_pipeline_status", lambda root: status)
+    monkeypatch.setattr(
+        "litehive.cli.workspace.render_task_pipeline_status_lines",
+        lambda task_status, *, workspace, mode, retry_on_label=None: ["workspace: demo"],
+    )
+
+    def fake_list_tasks(workspace, *, strict=True):
+        captured["strict"] = strict
+        return []
+
+    monkeypatch.setattr("litehive.cli.workspace.list_tasks", fake_list_tasks)
+    monkeypatch.setattr("litehive.cli.workspace._print_status_issues", lambda issues: 0)
+
+    exit_code = status_command(tmp_path, full=True)
+
+    assert exit_code == 0
+    assert captured["strict"] is False

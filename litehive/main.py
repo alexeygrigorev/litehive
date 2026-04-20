@@ -4,10 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-from litehive.attention import waiting_for_you_lines
-from litehive.config.paths import workspace_path
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
-from litehive.domain.runtime import RunnerStatusState
 
 
 _AGENT_ALLOWED_OPERATOR_ROOT_COMMANDS: set[tuple[str, ...]] = {
@@ -35,16 +32,6 @@ def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
     }
 
 
-def _fast_runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
-    if runner.status in {"running", "late"}:
-        return "running"
-    if not workspace_path(workspace, "runtime", ".runner.lock").exists():
-        return "never_started"
-    if runner.pid is None:
-        return "stopped"
-    return "dead"
-
-
 def _workspace_override_from_argv(argv: list[str]) -> Path | None:
     for index, arg in enumerate(argv):
         if arg == "--workspace" and index + 1 < len(argv):
@@ -59,13 +46,11 @@ def _requests_help(argv: list[str]) -> bool:
 
 
 def _fast_status(argv: list[str]) -> int:
-    from litehive.observability.engine_monitoring import render_engine_monitoring_lines
-    from litehive.observability.status import render_active_task_detail_lines
     from litehive.observability.status_diagnostics import (
-        collect_status_snapshot,
         render_issue_lines,
         status_has_problems,
     )
+    from litehive.observability.status import collect_task_pipeline_status, render_task_pipeline_status_lines
 
     try:
         explicit_workspace = _workspace_override_from_argv(argv)
@@ -76,47 +61,12 @@ def _fast_status(argv: list[str]) -> int:
     except ValueError as exc:
         print(f"status failed: {exc}")
         return 1
-    snapshot = collect_status_snapshot(workspace)
-    state = snapshot.state
-    runner = snapshot.runner
-    monitoring = snapshot.monitoring
-
-    active_task_id = runner.active_task_id or state.active_task_id
-    queue = state.queue
-    stop_reason = state.pool_stop_reason
-    default_engine = snapshot.config.default_engine
-
-    print(f"workspace: {workspace}")
-    print(f"default_engine: {default_engine}")
-    print("mode: implementation")
-    print(f"active_task_id: {active_task_id if active_task_id is not None else 'None'}")
-    print(f"queued_tasks: {len(queue)}")
-    print(f"pool_stop_reason: {stop_reason if stop_reason is not None else 'None'}")
-    for line in waiting_for_you_lines(workspace):
+    status = collect_task_pipeline_status(workspace)
+    for line in render_task_pipeline_status_lines(status, workspace=workspace, mode="fast"):
         print(line)
-    if queue:
-        print(f"queue_head: {queue[0]}")
-
-    runner_state = _fast_runner_state_label(workspace, runner)
-    print(f"runner_status: {runner_state}")
-    if runner.pid is not None:
-        print(f"runner_pid: {runner.pid}")
-    if runner.started_at:
-        print(f"runner_started_at: {runner.started_at}")
-    if runner.heartbeat_at:
-        print(f"runner_heartbeat_at: {runner.heartbeat_at}")
-
-    if active_task_id is not None:
-        from litehive.state.records import get_task
-
-        task = get_task(workspace, active_task_id)
-        for line in render_active_task_detail_lines(task, default_engine):
-            print(line)
-    for line in render_engine_monitoring_lines(monitoring):
-        print(line)
-    if status_has_problems(snapshot.issues):
+    if status_has_problems(status.issues):
         print()
-        for line in render_issue_lines(snapshot.issues):
+        for line in render_issue_lines(status.issues):
             print(line)
         return 1
     return 0
