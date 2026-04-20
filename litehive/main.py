@@ -10,10 +10,22 @@ from litehive.config.workspace import normalize_workspace_root, resolve_workspac
 from litehive.domain.runtime import RunnerStatusState
 
 
+_AGENT_ALLOWED_OPERATOR_ROOT_COMMANDS: set[tuple[str, ...]] = {
+    ("switch",),
+}
+
+
 def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
-    """Return whether an agent role may invoke a non-`agent` command."""
+    """Return whether an agent role may invoke a non-`agent` command.
+
+    `switch` is an operator queue-management shortcut, so it must keep working
+    even when the environment still carries an inherited `LITEHIVE_AGENT_ROLE`.
+    Recovery keeps its small diagnostic allowlist; other commands stay blocked.
+    """
     if not argv:
         return False
+    if tuple(argv[:1]) in _AGENT_ALLOWED_OPERATOR_ROOT_COMMANDS:
+        return True
     if role != "recovery":
         return False
     return tuple(argv[:2]) in {

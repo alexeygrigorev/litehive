@@ -81,6 +81,36 @@ def test_main_blocks_non_recovery_diagnostic_commands(
     assert "You are not authorized to perform this command." in capsys.readouterr().out
 
 
+def test_main_allows_switch_operator_shortcut_for_agent_roles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_cli_main() -> int:
+        captured["argv"] = list(sys.argv)
+        return 10
+
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
+    monkeypatch.setattr(cli_app_module, "main", fake_cli_main)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["litehive", "switch", "T-0001", "gemini", "--reason", "Need larger context window"],
+    )
+
+    exit_code = main_module.main()
+
+    assert exit_code == 10
+    assert captured["argv"] == [
+        "litehive",
+        "switch",
+        "T-0001",
+        "gemini",
+        "--reason",
+        "Need larger context window",
+    ]
+
+
 def test_main_routes_root_help_for_agent_roles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
