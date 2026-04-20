@@ -1,0 +1,28 @@
+id: T-0457
+slug: make-worktree-clean-clear-stale-records-without
+title: Make worktree clean clear stale records without tripping the runner lock
+created_at: '2026-04-20T22:46:09+00:00'
+task_type: null
+pipeline_mode: full
+priority: critical
+depends_on: []
+goal: litehive worktree clean can remove stale managed worktree directories, but when
+  it tries to clear the recorded task/worktree path it enters workspace_mutation_guard
+  and fails with WorkspaceConflictError if the live runner holds the workspace lock.
+  Cleanup should either batch the metadata mutation safely, use a cleanup-specific
+  path that cooperates with the runner lock, or defer metadata clearing cleanly without
+  crashing.
+acceptance_criteria:
+- Running litehive worktree clean while a runner is active does not crash with WorkspaceConflictError
+  when only stale closed-task worktrees are being cleaned.
+- Recorded task worktree paths for cleaned stale worktrees are cleared correctly,
+  or explicitly deferred in a way that removes the attention item on the next reconciliation
+  pass.
+- Existing worktree clean / attention reconciliation tests pass, with regression coverage
+  for the active-runner cleanup case.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0457 make-worktree-clean-clear-stale-records-without'
+created_from: null
