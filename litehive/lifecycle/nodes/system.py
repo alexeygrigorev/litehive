@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 from abc import abstractmethod
 from pathlib import Path
@@ -532,6 +533,7 @@ class GitCommitNode(CommitNode):
     def _merge_worktree(self, state: TaskState) -> dict[str, object] | None:
         worktree = self.worktree_resolver(state)
         self._autocommit_worktree_changes(worktree, state)
+        local_only_paths = self._worktree_local_only_paths(worktree)
         main_head_before = self._main_head()
         branch_ref = self._worktree_branch(worktree) or self._worktree_head(worktree)
         worktree_head = self._worktree_head(worktree)
@@ -551,6 +553,7 @@ class GitCommitNode(CommitNode):
             merge_head_after = self._main_head()
             if merge_head_after is None:
                 raise GitError("git merge completed but main HEAD could not be resolved")
+            self._restore_local_only_paths(worktree, local_only_paths)
             cleanup_head = self._autocommit_main_checkout_changes(state)
             main_head_after = cleanup_head or merge_head_after
             if main_head_before == merge_head_after:
@@ -621,7 +624,12 @@ class GitCommitNode(CommitNode):
         dirty_paths = [path for _, path in self._git_status_entries(worktree)]
         if not dirty_paths:
             return
-        committable = [p for p in dirty_paths if not _is_runner_owned_metadata(p, state.task_id)]
+        committable = [
+            path
+            for path in dirty_paths
+            if not _is_runner_owned_metadata(path, state.task_id)
+            and not _is_main_checkout_cleanup_excluded(path)
+        ]
         if not committable:
             # Only runner-owned metadata is dirty — nothing to checkpoint.
             return
@@ -680,8 +688,19 @@ class GitCommitNode(CommitNode):
         return head
 
     def _git_status_entries(self, repo_root: Path) -> list[tuple[str, str]]:
+        return self._git_status_entries_with_options(repo_root)
+
+    def _git_status_entries_with_options(
+        self,
+        repo_root: Path,
+        *,
+        include_ignored: bool = False,
+    ) -> list[tuple[str, str]]:
+        command = ["git", "status", "--porcelain"]
+        if include_ignored:
+            command.extend(["--ignored", "--untracked-files=all"])
         status = subprocess.run(
-            ["git", "status", "--porcelain"],
+            command,
             cwd=str(repo_root),
             capture_output=True,
             text=True,
@@ -702,6 +721,26 @@ class GitCommitNode(CommitNode):
                 path = path.split(" -> ", 1)[1]
             entries.append((code, path))
         return entries
+
+    def _worktree_local_only_paths(self, worktree: Path) -> list[str]:
+        entries = self._git_status_entries_with_options(worktree, include_ignored=True)
+        return [
+            path
+            for code, path in entries
+            if code == "!!" or _is_main_checkout_cleanup_excluded(path)
+        ]
+
+    def _restore_local_only_paths(self, worktree: Path, relpaths: list[str]) -> None:
+        for relpath in relpaths:
+            source = worktree / relpath
+            if not source.exists():
+                continue
+            destination = self.main_repo_root / relpath
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if source.is_dir():
+                shutil.copytree(source, destination, dirs_exist_ok=True)
+                continue
+            shutil.copy2(source, destination)
 
     def _worktree_head(self, worktree: Path) -> str:
         proc = subprocess.run(

@@ -14,6 +14,7 @@ from litehive.lifecycle.orchestration import run_task as run_pipeline_task
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task
+from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
 pytestmark = pytest.mark.integration
 
@@ -38,7 +39,10 @@ class _RecoveryScenarioEngine:
             return AgentVerdict(outcome="pass")
         self.recovery_calls.append(state.task_id)
         if self.recovery_mode == "fix":
-            (self.workspace / ".hook_fixed").write_text("fixed\n", encoding="utf-8")
+            task = get_task(self.workspace, state.task_id)
+            recorded = None if task is None else task.runtime.git.worktree_path
+            execution_root = resolve_recorded_worktree_path(self.workspace, recorded) or self.workspace
+            (execution_root / ".hook_fixed").write_text("fixed\n", encoding="utf-8")
             return AgentVerdict(outcome="resume", metadata={"target_stage": "implementing"})
         return AgentVerdict(outcome="reject", reason="recovery could not fix the hook loop")
 

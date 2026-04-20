@@ -915,6 +915,6 @@ def test_run_task_auto_commit_cleanup_excludes_db_and_gitignored_files(tmp_path:
     assert "tracked.txt" in changed_files.stdout.splitlines()
     assert ".litehive/local.db" not in changed_files.stdout.splitlines()
     assert "ignored.log" not in changed_files.stdout.splitlines()
-    assert subject.stdout.strip() == f"litehive {task.id}: auto-commit dirty main checkout"
+    assert subject.stdout.strip() == f"litehive {task.id}: auto-commit worktree changes"
     assert has_non_litehive_changes(tmp_path) is False
     assert not worktree.exists()
