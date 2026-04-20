@@ -11,8 +11,8 @@ import shutil
 import sys
 from typing import Mapping
 
-from heru._sandbox import (
-    SandboxedAdapter as HeruSandboxedAdapter,
+from litehive.agents._sandbox import (
+    SandboxedAdapter as LitehiveSandboxedAdapter,
     forced_engine_rw_state_dirs as _forced_engine_rw_state_dirs,
     sanitize_path_env as _sanitize_path_env,
 )
@@ -27,7 +27,7 @@ class SandboxProfile(str, Enum):
     MERGE_RESOLVER = "merge_resolver"
 
 
-SandboxedAdapter = HeruSandboxedAdapter
+SandboxedAdapter = LitehiveSandboxedAdapter
 
 
 def sandbox_profile_for_role(role: str) -> SandboxProfile:

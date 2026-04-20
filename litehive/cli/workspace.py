@@ -41,6 +41,8 @@ from litehive.observability.status_diagnostics import (
 )
 from litehive.observability.venv_health import broken_venv_issue_message, probe_broken_venv_executables
 from litehive.recovery.workspace_repair import repair_workspace_state
+from litehive.heru_compat import preferred_reset_at as heru_preferred_reset_at
+from litehive.heru_compat import quota_long_term, quota_short_term
 from litehive.state.records import get_task, list_tasks_state_first
 from litehive.state.persist import load_state
 from litehive.state.records import list_tasks
@@ -279,7 +281,7 @@ def _collect_quota_health() -> list[_QuotaHealth]:
         "claude": _quota_health(
             "claude",
             claude_status,
-            reset_at=_preferred_reset_at(claude_status, include_hours_fallback=True),
+            reset_at=_preferred_reset_at(claude_status, include_short_term_fallback=True),
         ),
         "codex": _quota_health("codex", codex_status, reset_at=_preferred_reset_at(codex_status)),
         "copilot": _quota_health(
@@ -301,9 +303,9 @@ def _unsupported_quota_health(engine: str) -> _QuotaHealth:
 def _preferred_reset_at(
     status: UsageStatus,
     *,
-    include_hours_fallback: bool = False,
+    include_short_term_fallback: bool = False,
 ) -> str | None:
-    return status.weeks.reset_at or (status.hours.reset_at if include_hours_fallback else None)
+    return heru_preferred_reset_at(status, include_short_term_fallback=include_short_term_fallback)
 
 
 def _quota_health(
@@ -314,9 +316,11 @@ def _quota_health(
 ) -> _QuotaHealth:
     if status.error is not None:
         return _QuotaHealth(engine, "unavailable", status.error)
+    short_term = quota_short_term(status)
+    long_term = quota_long_term(status)
     summary = (
-        f"hours remaining={status.hours.percent_remaining:.1f}% "
-        f"weeks remaining={status.weeks.percent_remaining:.1f}%"
+        f"hours remaining={short_term.percent_remaining:.1f}% "
+        f"weeks remaining={long_term.percent_remaining:.1f}%"
     )
     if reset_at is not None:
         summary += f" reset={reset_at}"

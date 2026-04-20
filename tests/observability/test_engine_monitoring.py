@@ -227,8 +227,8 @@ def test_record_codex_quota_check_uses_unified_hours_weeks_windows(tmp_path: Pat
         tmp_path,
         status=UsageStatus(
             limit_reached=True,
-            hours=UsageWindow(percent_remaining=65.0, reset_at="2026-04-20T12:00:00Z"),
-            weeks=UsageWindow(percent_remaining=40.0, reset_at="2026-04-25T00:00:00Z"),
+            short_term=UsageWindow(percent_remaining=65.0, reset_at="2026-04-20T12:00:00Z"),
+            long_term=UsageWindow(percent_remaining=40.0, reset_at="2026-04-25T00:00:00Z"),
         ),
     )
 

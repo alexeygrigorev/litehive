@@ -1,11 +1,12 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from heru import extract_engine_continuation, get_engine
+from heru import get_engine
 from heru.base import CLIExecutionResult
 from heru.types import RuntimeEngineContinuation
 from litehive.agents.session import SessionMixin
 from litehive.config.engine_models import _set_continuation_handoff
+from litehive.heru_compat import extract_engine_continuation
 from litehive.state.records import create_task
 
 

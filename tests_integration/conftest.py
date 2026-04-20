@@ -21,15 +21,25 @@ def _use_session_xdg_dirs(tmp_path_factory: pytest.TempPathFactory):
         "XDG_STATE_HOME": xdg_root / "state",
     }
     previous = {key: os.environ.get(key) for key in paths}
+    real_paths = {
+        "XDG_CONFIG_HOME": previous["XDG_CONFIG_HOME"] or str(Path.home() / ".config"),
+        "XDG_DATA_HOME": previous["XDG_DATA_HOME"] or str(Path.home() / ".local" / "share"),
+        "XDG_STATE_HOME": previous["XDG_STATE_HOME"] or str(Path.home() / ".local" / "state"),
+    }
     for key, value in paths.items():
         os.environ[key] = str(value)
         value.mkdir(parents=True, exist_ok=True)
+    for key, value in real_paths.items():
+        os.environ[f"LITEHIVE_REAL_{key}"] = value
+
     yield
     for key, value in previous.items():
         if value is None:
             os.environ.pop(key, None)
         else:
             os.environ[key] = value
+    for key in real_paths:
+        os.environ.pop(f"LITEHIVE_REAL_{key}", None)
 
 
 @pytest.fixture

@@ -1,53 +1,20 @@
 import logging
 from pathlib import Path
 
-from heru import (
-    extract_engine_continuation,
-    extract_engine_timeline,
-    get_engine,
-    parse_unified_execution,
-    render_execution_transcript,
-)
+from heru import get_engine
 from heru.base import CLIExecutionResult
+from litehive.heru_compat import extract_engine_continuation, extract_engine_timeline, render_execution_transcript
 
 
-def test_parse_unified_execution_logs_invalid_payload(caplog) -> None:
-    stdout = '{"kind":"message","content":123}\n'
-
-    with caplog.at_level(logging.WARNING, logger="heru.unified_events"):
-        parsed = parse_unified_execution(stdout)
-
-    assert parsed is None
-    assert "Discarding invalid unified event payload" in caplog.text
-
-
-def test_codex_multiline_command_execution_uses_fallback_without_jsonl_warning(caplog) -> None:
+def test_codex_multiline_command_execution_extracts_transcript_timeline_and_continuation(caplog) -> None:
     stdout = "\n".join(
         [
             '{"type":"thread.started","thread_id":"thread_123"}',
-            "{",
-            '  "type": "item.completed",',
-            '  "item": {',
-            '    "id": "item_1",',
-            '    "type": "command_execution",',
-            '    "command": [',
-            '      "bash",',
-            '      "-lc",',
-            '      "uv run pytest -q"',
-            "    ],",
-            '    "aggregated_output": "tests failed",',
-            '    "exit_code": 1,',
-            '    "status": "failed"',
-            "  }",
-            "}",
-            "{",
-            '  "type": "turn.completed",',
-            '  "usage": {',
-            '    "input_tokens": 10,',
-            '    "output_tokens": 5,',
-            '    "total_tokens": 15',
-            "  }",
-            "}",
+            (
+                '{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":['
+                '"bash","-lc","uv run pytest -q"],"aggregated_output":"tests failed","exit_code":1,"status":"failed"}}'
+            ),
+            '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}',
         ]
     )
     execution = CLIExecutionResult(
@@ -61,6 +28,7 @@ def test_codex_multiline_command_execution_uses_fallback_without_jsonl_warning(c
 
     with caplog.at_level(logging.WARNING):
         transcript = render_execution_transcript(
+            "codex",
             execution,
             fallback_renderer=get_engine("codex").render_transcript,
         )

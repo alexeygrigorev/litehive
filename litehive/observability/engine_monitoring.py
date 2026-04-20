@@ -14,6 +14,7 @@ from litehive.domain.engine import (
     EngineUsageWindow,
     WorkspaceEngineMonitoring,
 )
+from litehive.heru_compat import preferred_reset_at, quota_long_term, quota_short_term
 from litehive.state.persist import atomic_write_text
 from litehive.state.locking import workspace_mutation_guard
 
@@ -191,7 +192,7 @@ def record_codex_quota_check(
     status: object,
 ) -> None:
     """Record proactive codex quota status into engine monitoring."""
-    from heru.quota import UsageStatus, preferred_reset_at
+    from heru.quota import UsageStatus
 
     if not isinstance(status, UsageStatus):
         return
@@ -207,7 +208,9 @@ def record_codex_quota_check(
     record.provider = "openai"
     record.observed_at = utcnow()
 
-    used_pct = int(status.weeks.used_percent)
+    short_term = quota_short_term(status)
+    long_term = quota_long_term(status)
+    used_pct = int(long_term.used_percent)
     reset_at = preferred_reset_at(status)
     record.usage = EngineUsageWindow(
         used=used_pct,
@@ -221,14 +224,14 @@ def record_codex_quota_check(
         record.last_limit_kind = "quota"
     record.metadata = {
         **record.metadata,
-        "hours_percent_remaining": int(status.hours.percent_remaining),
-        "weeks_percent_remaining": int(status.weeks.percent_remaining),
+        "hours_percent_remaining": int(short_term.percent_remaining),
+        "weeks_percent_remaining": int(long_term.percent_remaining),
         "quota_limit_reached": status.limit_reached,
     }
-    if status.hours.reset_at:
-        record.metadata["hours_reset_at"] = status.hours.reset_at
-    if status.weeks.reset_at:
-        record.metadata["weeks_reset_at"] = status.weeks.reset_at
+    if short_term.reset_at:
+        record.metadata["hours_reset_at"] = short_term.reset_at
+    if long_term.reset_at:
+        record.metadata["weeks_reset_at"] = long_term.reset_at
 
     monitoring.engines["codex"] = record
     save_engine_monitoring(root, monitoring)

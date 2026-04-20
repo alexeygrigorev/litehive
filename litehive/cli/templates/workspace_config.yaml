@@ -16,7 +16,7 @@ process_profile: generic
 
 # Per-engine default model overrides. Leave null to use adapter defaults.
 codex_model: null
-opencode_model: zai-coding-plan/glm-5.1
+opencode_model: zai-coding-plan/glm-5-turbo
 goz_model: glm-5-turbo
 gemini_model: null
 copilot_model: null

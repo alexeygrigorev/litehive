@@ -22,10 +22,10 @@ from pathlib import Path
 import re
 from typing import Any
 
-from heru import resolve_engine_resume_session_id
 from litehive.agents.manager import SubagentManager
 from litehive.domain.agent import EngineFailure
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
+from litehive.heru_compat import resolve_engine_resume_session_id
 from litehive.state.records import get_task
 from litehive.tasks.activity import latest_task_activity_entry
 from litehive.tasks.reports import normalized_files_changed

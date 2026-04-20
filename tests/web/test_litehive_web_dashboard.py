@@ -18,8 +18,8 @@ def test_litehive_web_import_and_dashboard_use_unified_hours_weeks(tmp_path: Pat
 
     snapshot = importlib.import_module("litehive_web.snapshot")
     status = UsageStatus(
-        hours=UsageWindow(percent_remaining=80.0, reset_at="2026-04-20T10:00:00Z"),
-        weeks=UsageWindow(percent_remaining=35.0, reset_at="2026-04-27T00:00:00Z"),
+        short_term=UsageWindow(percent_remaining=80.0, reset_at="2026-04-20T10:00:00Z"),
+        long_term=UsageWindow(percent_remaining=35.0, reset_at="2026-04-27T00:00:00Z"),
     )
     monkeypatch.setattr(snapshot, "check_codex_quota", lambda: status)
     monkeypatch.setattr(snapshot, "check_claude_quota", lambda: status)

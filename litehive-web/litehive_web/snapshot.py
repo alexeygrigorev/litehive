@@ -11,6 +11,7 @@ from heru.quota import (
 
 from litehive.config.loading import load_config
 from litehive.config.engine_models import active_engine_freezes
+from litehive.heru_compat import quota_long_term, quota_short_term
 from litehive.domain.task import TaskRecord
 from litehive.observability.engine_monitoring import load_engine_monitoring
 from litehive.observability.events import read_events
@@ -191,18 +192,18 @@ def _serialize_zai_quota(engine: str, status: Any) -> dict[str, Any]:
 
 def _serialize_unified_quota(status: Any, *, engine: str, provider: str) -> dict[str, Any]:
     error = getattr(status, "error", None)
-    hours = getattr(status, "hours", None)
-    weeks = getattr(status, "weeks", None)
+    short_term = quota_short_term(status)
+    long_term = quota_long_term(status)
     windows = [
         _build_percent_window(
             "hours",
-            None if hours is None else 100.0 - getattr(hours, "percent_remaining", 100.0),
-            getattr(hours, "reset_at", None),
+            100.0 - short_term.percent_remaining,
+            short_term.reset_at,
         ),
         _build_percent_window(
             "weeks",
-            None if weeks is None else 100.0 - getattr(weeks, "percent_remaining", 100.0),
-            getattr(weeks, "reset_at", None),
+            100.0 - long_term.percent_remaining,
+            long_term.reset_at,
         ),
     ]
     return {

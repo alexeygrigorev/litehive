@@ -26,7 +26,7 @@ def test_resolve_model_prefers_run_override_then_task_then_workspace_default(
         tmp_path,
         LitehiveConfig(
             default_engine="opencode",
-            opencode_model="zai-coding-plan/glm-5.1",
+            opencode_model="zai-coding-plan/glm-5-turbo",
         ),
     )
     config = load_config(tmp_path)
@@ -36,7 +36,7 @@ def test_resolve_model_prefers_run_override_then_task_then_workspace_default(
     assert resolve_model(task, config, engine_name="opencode") == "custom-task-model"
 
     task.model = None
-    assert resolve_model(task, config, engine_name="opencode") == "zai-coding-plan/glm-5.1"
+    assert resolve_model(task, config, engine_name="opencode") == "zai-coding-plan/glm-5-turbo"
 
 
 def test_resolve_model_skips_unsupported_engine_override(tmp_path: Path) -> None:

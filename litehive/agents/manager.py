@@ -16,6 +16,7 @@ from heru.adapters import (
 )
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.agents.sandbox import SandboxError, SandboxLauncher
+from litehive.heru_compat import resume_safe_model_override
 from litehive.observability.events import append_event
 from heru.types import SubagentRef
 from litehive.domain.common import cap_feedback
@@ -197,6 +198,11 @@ class SubagentManager(SessionMixin):
                 "LITEHIVE_STAGE": self._agent_stage_for_task(task, role),
                 "LITEHIVE_PYTHON_PATH": sys.executable,
             }
+            effective_model = resume_safe_model_override(
+                engine_name,
+                model,
+                resume_session_id=resume_session_id,
+            )
             if supports_live_execution(live_execution_probe):
                 run_live_callable = effective_engine_callable(execution_engine, "run_live")
                 if not callable(run_live_callable):
@@ -204,7 +210,7 @@ class SubagentManager(SessionMixin):
                 inactivity_timeout_seconds = self._subagent_inactivity_timeout_seconds(engine_name)
                 live_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
-                    "model": model,
+                    "model": effective_model,
                     "emit_unified": True,
                     "extra_env": task_env,
                     "on_update": _safe_on_update,
@@ -227,7 +233,7 @@ class SubagentManager(SessionMixin):
                     run_callable = execution_engine.run
                 run_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
-                    "model": model,
+                    "model": effective_model,
                     "emit_unified": True,
                     "extra_env": task_env,
                 }

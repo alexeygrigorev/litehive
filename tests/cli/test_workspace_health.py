@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import tomllib
 from types import SimpleNamespace
 
 from heru import ENGINE_CHOICES
@@ -42,6 +43,18 @@ def _create_broken_venv_binary(checkout_root: Path, binary_name: str, cache_root
     binary_path.symlink_to(cache_target)
     cache_target.unlink()
     return binary_path
+
+
+def _copy_heru_dependency(repo_root: Path, workspace: Path) -> None:
+    pyproject_data = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
+    heru_source = (((pyproject_data.get("tool") or {}).get("uv") or {}).get("sources") or {}).get("heru")
+    assert isinstance(heru_source, dict)
+    configured_path = heru_source.get("path")
+    assert isinstance(configured_path, str) and configured_path
+    source_root = (repo_root / configured_path).resolve()
+    destination = (workspace / configured_path).resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source_root, destination)
 
 
 def test_health_daemon_status_defaults_to_stopped(tmp_path: Path, monkeypatch) -> None:
@@ -103,8 +116,8 @@ def test_repair_summary_lines_include_empty_fields_for_repair_mode() -> None:
 def test_quota_health_formats_status_and_reset() -> None:
     status = UsageStatus(
         limit_reached=True,
-        hours=UsageWindow(percent_remaining=12.5, reset_at="2026-04-14T12:00:00Z"),
-        weeks=UsageWindow(percent_remaining=45.0, reset_at="2026-04-15T00:00:00Z"),
+        short_term=UsageWindow(percent_remaining=12.5, reset_at="2026-04-14T12:00:00Z"),
+        long_term=UsageWindow(percent_remaining=45.0, reset_at="2026-04-15T00:00:00Z"),
     )
 
     health = _quota_health("codex", status, reset_at="2026-04-15T00:00:00Z")
@@ -117,21 +130,21 @@ def test_quota_health_formats_status_and_reset() -> None:
 
 def test_collect_quota_health_reuses_shared_statuses(monkeypatch) -> None:
     claude_status = UsageStatus(
-        hours=UsageWindow(percent_remaining=80.0, reset_at="2026-04-14T11:00:00Z"),
-        weeks=UsageWindow(percent_remaining=60.0),
+        short_term=UsageWindow(percent_remaining=80.0, reset_at="2026-04-14T11:00:00Z"),
+        long_term=UsageWindow(percent_remaining=60.0),
     )
     codex_status = UsageStatus(
-        hours=UsageWindow(percent_remaining=70.0),
-        weeks=UsageWindow(percent_remaining=50.0, reset_at="2026-04-15T00:00:00Z"),
+        short_term=UsageWindow(percent_remaining=70.0),
+        long_term=UsageWindow(percent_remaining=50.0, reset_at="2026-04-15T00:00:00Z"),
     )
     copilot_status = UsageStatus(
-        hours=UsageWindow(percent_remaining=65.0),
-        weeks=UsageWindow(percent_remaining=40.0, reset_at="2026-04-16T00:00:00Z"),
+        short_term=UsageWindow(percent_remaining=65.0),
+        long_term=UsageWindow(percent_remaining=40.0, reset_at="2026-04-16T00:00:00Z"),
     )
     zai_status = UsageStatus(
         limit_reached=True,
-        hours=UsageWindow(percent_remaining=10.0),
-        weeks=UsageWindow(percent_remaining=5.0),
+        short_term=UsageWindow(percent_remaining=10.0),
+        long_term=UsageWindow(percent_remaining=5.0),
     )
 
     monkeypatch.setattr("litehive.cli.workspace.check_claude_quota", lambda: claude_status)
@@ -178,7 +191,7 @@ def test_documented_clear_and_sync_fix_restores_broken_symlink_after_uv_cache_cl
     shutil.copy(repo_root / "uv.lock", workspace / "uv.lock")
     shutil.copy(repo_root / "README.md", workspace / "README.md")
     shutil.copytree(repo_root / "litehive", workspace / "litehive")
-    shutil.copytree(repo_root / "heru", workspace / "heru")
+    _copy_heru_dependency(repo_root, workspace)
     ensure_workspace(workspace)
 
     env = {

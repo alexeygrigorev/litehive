@@ -12,14 +12,20 @@ from heru.quota import (
     check_codex_quota,
     check_copilot_quota,
     check_zai_quota,
-    usage_limit_block_reason,
 )
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
+from litehive.config.paths import litehive_root
 from litehive.config.workspace import ensure_workspace
 from litehive.config.model import VALID_ENGINE_NAMES
-from heru import extract_engine_continuation, get_engine, resolve_engine_resume_session_id
+from heru import get_engine
 from heru.base import CLIExecutionResult
+from litehive.heru_compat import (
+    extract_engine_continuation,
+    resume_safe_model_override,
+    resolve_engine_resume_session_id,
+    usage_limit_block_reason,
+)
 
 
 INTEGRATION_ENV = "LITEHIVE_INTEGRATION_ENGINES"
@@ -32,6 +38,11 @@ _LITEHIVE_SESSION_ENV_VARS = (
     "LITEHIVE_WORKSPACE_ROOT",
     "LITEHIVE_AGENT_ROLE",
     "LITEHIVE_STAGE",
+)
+_REAL_XDG_ENV_VARS = (
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_STATE_HOME",
 )
 
 
@@ -87,7 +98,7 @@ def integration_workspace(root: Path) -> Path:
         root,
         LitehiveConfig(
             default_engine="codex",
-            opencode_model="zai-coding-plan/glm-5.1",
+            opencode_model="zai-coding-plan/glm-5-turbo",
             gemini_model="gemini-2.5-flash-lite",
             claude_model="claude-sonnet-4-20250514",
         ),
@@ -204,7 +215,7 @@ def sandboxed_integration_workspace(root: Path) -> Path:
         root,
         LitehiveConfig(
             default_engine="codex",
-            opencode_model="zai-coding-plan/glm-5.1",
+            opencode_model="zai-coding-plan/glm-5-turbo",
             gemini_model="gemini-2.5-flash-lite",
             claude_model="claude-sonnet-4-20250514",
             external_engine_sandbox=ExternalEngineSandboxConfig(
@@ -246,6 +257,7 @@ def execute_engine_prompt(
         "copilot": config.copilot_model,
         "claude": config.claude_model,
     }.get(engine_name)
+    model = resume_safe_model_override(engine_name, model, resume_session_id=resume_session_id)
     invocation = engine.finalize_invocation(
         engine.build_invocation(
             prompt,
@@ -255,6 +267,17 @@ def execute_engine_prompt(
             resume_session_id=resume_session_id,
             extra_env={
                 "LITEHIVE_PYTHON_PATH": sys.executable,
+                # Opencode needs access to the operator's real XDG config,
+                # but nested `litehive` CLI calls must keep using the test
+                # process's Litehive home so they write into the same DB.
+                "LITEHIVE_HOME": str(litehive_root()),
+                **(
+                    {
+                        key: os.environ[f"LITEHIVE_REAL_{key}"]
+                        for key in _REAL_XDG_ENV_VARS
+                        if engine_name == "opencode" and os.environ.get(f"LITEHIVE_REAL_{key}")
+                    }
+                ),
                 **(extra_env or {}),
             },
         )
