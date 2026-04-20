@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 from heru import ENGINE_CHOICES
 from heru.quota import UsageStatus, check_claude_quota, check_codex_quota, check_copilot_quota, check_zai_quota
-from litehive.attention import waiting_for_you_lines
 from litehive.cli.engine import engine_command
 from litehive.cli.display import format_retry_on
 from litehive.cli.common import WorkspaceOption
@@ -14,12 +13,11 @@ from litehive.config.workspace import ensure_workspace
 from litehive.daemon.registry import daemon_metadata
 from litehive.observability.engine_monitoring import render_engine_monitoring_lines
 from litehive.observability.status import (
+    collect_task_pipeline_status,
     collect_recent_activity,
     find_last_completed_task,
-    render_active_task_detail_lines,
     render_active_task_section,
     render_engine_health_section,
-    render_full_status_header_lines,
     render_health_active_task_lines,
     render_health_daemon_lines,
     render_health_flagged_task_lines,
@@ -30,12 +28,11 @@ from litehive.observability.status import (
     render_last_completed_section,
     render_queue_section,
     render_recent_activity_section,
-    render_runtime_policy_lines,
+    render_task_pipeline_status_lines,
     render_task_summary,
 )
 from litehive.observability.status_diagnostics import (
     StatusIssue,
-    collect_status_snapshot,
     render_issue_lines,
     status_has_problems,
 )
@@ -58,10 +55,6 @@ def register_root_commands(app: typer.Typer) -> None:
     app.command("health", help="Show workspace health diagnostics")(health_command)
     app.command("engine", help="Manage engine freezes and status")(engine_command)
     app.command("repair", help="Repair stale active tasks, interrupted runs, and queue inconsistencies")(repair_command)
-
-
-def _safe_active_task(root, task_id):
-    return get_task(root, task_id) if task_id else None
 
 
 def _print_status_issues(issues) -> int:
@@ -110,66 +103,49 @@ def _venv_issues(root: Path) -> list[StatusIssue]:
     ]
 
 
-def status_full(workspace, root, config, state, runner, monitoring, issues):
-    active_task_id = runner.active_task_id or state.active_task_id
-    for line in render_full_status_header_lines(workspace, config, state, runner):
-        print(line)
-    for line in waiting_for_you_lines(root):
-        print(line)
-    if state.queue:
-        print(f"queue_head: {state.queue[0]}")
-    active_task = _safe_active_task(workspace, active_task_id)
-    for line in render_active_task_detail_lines(active_task, config.default_engine):
-        print(line)
-    for line in render_engine_monitoring_lines(monitoring):
-        print(line)
-    for line in render_runtime_policy_lines(config, format_retry_on(config)):
-        print(line)
-    tasks = list_tasks(workspace)
-    if tasks:
-        print()
-        for task in tasks:
-            for line in render_task_summary(task, active=task.id == active_task_id, root=root):
-                print(line)
-    return _print_status_issues(issues)
-
-
 def status_command(
     workspace: WorkspaceOption = Path.cwd(),
     full: Annotated[bool, typer.Option(help="Include the full per-task status dump.")] = False,
 ) -> int:
     root = workspace.resolve()
-    snapshot = collect_status_snapshot(root)
-    config = snapshot.config
-    state = snapshot.state
-    runner = snapshot.runner
-    monitoring = snapshot.monitoring
+    status = collect_task_pipeline_status(root)
     if full:
-        return status_full(workspace, root, config, state, runner, monitoring, snapshot.issues)
+        for line in render_task_pipeline_status_lines(
+            status,
+            workspace=workspace,
+            mode="full",
+            retry_on_label=format_retry_on(status.config),
+        ):
+            print(line)
+        tasks = list_tasks(workspace, strict=False)
+        if tasks:
+            print()
+            for task in tasks:
+                for line in render_task_summary(task, active=task.id == status.active_task_id, root=root):
+                    print(line)
+        return _print_status_issues(status.issues)
 
-    active_task_id = runner.active_task_id or state.active_task_id
-    active_task = _safe_active_task(workspace, active_task_id)
-    for line in render_active_task_section(active_task, config.default_engine):
+    for line in render_active_task_section(status.active_task, status.config.default_engine):
         print(line)
 
-    all_tasks = list_tasks_state_first(workspace, state=state)
+    all_tasks = list_tasks_state_first(workspace, state=status.state)
     last_done = find_last_completed_task(all_tasks)
     print()
     for line in render_last_completed_section(last_done):
         print(line)
 
     print()
-    for line in render_queue_section(state.queue, all_tasks):
+    for line in render_queue_section(status.state.queue, all_tasks):
         print(line)
 
     print()
-    for line in waiting_for_you_lines(root):
+    for line in status.waiting_lines:
         print(line)
 
     print()
-    for line in render_engine_health_section(monitoring):
+    for line in render_engine_health_section(status.monitoring):
         print(line)
-    for line_text in render_engine_monitoring_lines(monitoring):
+    for line_text in render_engine_monitoring_lines(status.monitoring):
         print(line_text)
 
     print()
@@ -177,7 +153,7 @@ def status_command(
     for line in render_recent_activity_section(events):
         print(line)
 
-    return _print_status_issues(snapshot.issues)
+    return _print_status_issues(status.issues)
 
 
 def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:

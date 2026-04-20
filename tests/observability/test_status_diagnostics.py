@@ -8,10 +8,10 @@ from pathlib import Path
 import yaml
 
 from litehive.config.paths import workspace_path
+from litehive.config.workspace import ensure_workspace
 from litehive.config.workspace_files import workspace_dir
 from litehive.domain.task import WorkspaceState
 from litehive.main import _fast_status
-from litehive.config.workspace import ensure_workspace
 from litehive.state.persist import save_state
 
 from tests.support.helpers import _cmd_status
