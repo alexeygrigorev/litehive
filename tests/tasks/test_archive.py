@@ -113,6 +113,25 @@ def test_list_archived_tasks(tmp_path: Path) -> None:
     assert archived[0].id == task.id
 
 
+def test_list_archived_tasks_defaults_legacy_records_to_done(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = _make_done_task(tmp_path, "Legacy archive")
+    archive_task(tmp_path, task.id)
+
+    archive_dir = archive_root(tmp_path) / f"{task.id}-{task.slug}"
+    task_yaml = archive_dir / "task.yaml"
+    data = yaml.safe_load(task_yaml.read_text(encoding="utf-8"))
+    data.pop("status", None)
+    data.pop("pipeline_status", None)
+    task_yaml.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    archived = list_archived_tasks(tmp_path)
+
+    assert len(archived) == 1
+    assert archived[0].status == "done"
+    assert archived[0].pipeline_status == "done"
+
+
 def test_list_archived_tasks_empty(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 

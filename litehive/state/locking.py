@@ -435,6 +435,7 @@ def persist_future_task_update(
     from litehive.state.store import runtime_store
     from litehive.state.records import ensure_runtime_ignored, serialize_task_record, task_state_for_storage
     from litehive.state.persist import write_atomic_files_and_then
+    from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
 
     task.updated_at = utcnow()
     writes = {
@@ -449,3 +450,4 @@ def persist_future_task_update(
         lambda: runtime_store(root).save_runtime_transaction(task_states={task.id: task_state_for_storage(task)}),
     )
     ensure_runtime_ignored(root)
+    refresh_duplicate_task_index_if_initialized(root)

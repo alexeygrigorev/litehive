@@ -17,6 +17,7 @@ from litehive.state.records import create_task, list_tasks as load_tasks, requir
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
+from litehive.tasks.duplicates import DuplicateTaskMatch, find_potential_duplicate_tasks
 from litehive.tasks.status import abandon_task, close_task, update_task_metadata
 
 app = make_typer(invoke_without_command=True)
@@ -49,6 +50,14 @@ def _show_dependency_label(root, task) -> str:
     return ", ".join(labels)
 
 
+def _print_duplicate_task_warning(matches: list[DuplicateTaskMatch]) -> None:
+    if not matches:
+        return
+    print("warning: potential duplicate tasks found:")
+    for match in matches:
+        print(f"  - {match.task_id} [{match.status}] {match.title}")
+
+
 @app.command("add", help="Create a queued task")
 def add(
     title: Annotated[str, typer.Argument(help="Task title")],
@@ -68,6 +77,7 @@ def add(
     try:
         depends_on = parse_dependency_ids(depends_on)
         acceptance_criteria = parse_acceptance_criteria(acceptance_criteria)
+        _print_duplicate_task_warning(find_potential_duplicate_tasks(workspace, title=title, goal=goal))
         task = create_task(
             workspace,
             title=title,

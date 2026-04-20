@@ -4,7 +4,9 @@ import sys
 from pathlib import Path
 
 import pytest
+from sqlitesearch import TextSearchIndex
 from typer.testing import CliRunner
+import yaml
 
 import litehive.state.records as tasks_crud
 from litehive.cli.task_cli import app as task_app
@@ -12,7 +14,23 @@ from litehive.config.workspace import ensure_workspace
 from litehive.domain.reports import FollowUpTaskSpec
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_follow_up_tasks, create_task, get_task, list_tasks, save_task
+from litehive.tasks.archive import archive_task
+from litehive.tasks.duplicates import duplicate_index_path, rebuild_duplicate_task_index
 from litehive.tasks.status import update_task_metadata
+
+
+def _search_duplicate_index(root: Path, query: str) -> list[dict[str, str]]:
+    index = TextSearchIndex(
+        text_fields=["title", "goal"],
+        keyword_fields=["task_id", "status"],
+        id_field="task_id",
+        db_path=str(duplicate_index_path(root)),
+        stemming=True,
+    )
+    try:
+        return index.search(query, num_results=10)
+    finally:
+        index.close()
 
 
 def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
@@ -131,6 +149,90 @@ def test_task_add_cli_defaults_to_full_pipeline_mode(tmp_path: Path) -> None:
     persisted = get_task(tmp_path, "T-0001")
     assert persisted is not None
     assert persisted.pipeline_mode == "full"
+
+
+def test_task_add_cli_warns_about_similar_tasks_in_supported_statuses(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    queued = create_task(
+        tmp_path,
+        title="Build web dashboard for task status",
+        goal="Show queued tasks in the dashboard",
+    )
+    in_progress = create_task(
+        tmp_path,
+        title="Build web dashboard for task queue",
+        goal="Show in progress tasks in the dashboard",
+    )
+    in_progress.status = "in_progress"
+    save_task(tmp_path, in_progress)
+    done = create_task(
+        tmp_path,
+        title="Build web dashboard for tasks",
+        goal="Show done tasks in the dashboard",
+    )
+    done.status = "done"
+    done.pipeline_status = "done"
+    save_task(tmp_path, done)
+
+    result = CliRunner().invoke(
+        task_app,
+        [
+            "add",
+            "Build web dashboard for task tracking",
+            "--workspace",
+            str(tmp_path),
+            "--goal",
+            "Show queued in progress and done tasks in the dashboard",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "warning: potential duplicate tasks found:" in result.output
+    assert f"{queued.id} [queued] {queued.title}" in result.output
+    assert f"{in_progress.id} [in_progress] {in_progress.title}" in result.output
+    assert f"{done.id} [done] {done.title}" in result.output
+    assert "Created task T-0004" in result.output
+
+
+def test_task_add_cli_shows_done_for_legacy_archived_duplicate(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    archived = create_task(
+        tmp_path,
+        title="Build web dashboard for tasks",
+        goal="Show done tasks in the dashboard",
+    )
+    archived.status = "done"
+    archived.pipeline_status = "done"
+    save_task(tmp_path, archived)
+    archive_task(tmp_path, archived.id)
+
+    archive_dir = tmp_path / ".litehive" / "tasks" / "archive" / f"{archived.id}-{archived.slug}"
+    task_yaml = archive_dir / "task.yaml"
+    data = yaml.safe_load(task_yaml.read_text(encoding="utf-8"))
+    data.pop("status", None)
+    data.pop("pipeline_status", None)
+    task_yaml.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    result = CliRunner().invoke(
+        task_app,
+        [
+            "add",
+            "Build web dashboard for task tracking",
+            "--workspace",
+            str(tmp_path),
+            "--goal",
+            "Show queued in progress and done tasks in the dashboard",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert f"{archived.id} [done] {archived.title}" in result.output
+    assert f"{archived.id} [queued] {archived.title}" not in result.output
+    assert "Created task T-0002" in result.output
 
 
 def test_task_update_help_matches_trimmed_option_surface() -> None:
@@ -342,3 +444,45 @@ def test_create_follow_up_tasks_persists_queue_and_creation_source(tmp_path: Pat
     assert follow_up.created_from.stage == "accepting"
     assert follow_up.created_from.blocking is True
     assert load_state(tmp_path).queue[-1] == created[0].id
+
+
+def test_duplicate_index_tracks_created_updated_and_archived_tasks(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Seed task", goal="Bootstrap duplicate search")
+    rebuild_duplicate_task_index(tmp_path)
+
+    task = create_task(
+        tmp_path,
+        title="Dashboard cleanup",
+        goal="Remove duplicate web dashboard cards",
+    )
+
+    created_matches = _search_duplicate_index(tmp_path, "duplicate dashboard cards")
+    created_match = next(match for match in created_matches if match["task_id"] == task.id)
+    assert created_match["title"] == "Dashboard cleanup"
+    assert created_match["goal"] == "Remove duplicate web dashboard cards"
+    assert created_match["status"] == "queued"
+
+    update_task_metadata(
+        tmp_path,
+        task.id,
+        title="Dashboard duplicate cleanup",
+        goal="Remove duplicate web dashboard widgets",
+    )
+    updated_matches = _search_duplicate_index(tmp_path, "duplicate dashboard widgets")
+    updated_match = next(match for match in updated_matches if match["task_id"] == task.id)
+    assert updated_match["title"] == "Dashboard duplicate cleanup"
+    assert updated_match["goal"] == "Remove duplicate web dashboard widgets"
+
+    task = get_task(tmp_path, task.id)
+    assert task is not None
+    task.status = "done"
+    task.pipeline_status = "done"
+    save_task(tmp_path, task)
+    archive_task(tmp_path, task.id)
+
+    archived_matches = _search_duplicate_index(tmp_path, "duplicate dashboard widgets")
+    archived_match = next(match for match in archived_matches if match["task_id"] == task.id)
+    assert archived_match["status"] == "done"
+    assert archived_match["title"] == "Dashboard duplicate cleanup"
+    assert archived_match["goal"] == "Remove duplicate web dashboard widgets"

@@ -166,6 +166,7 @@ def _persist_created_tasks(
     cleanup_dirs: list[Path],
 ) -> None:
     from litehive.state.persist import merged_state_for_runner_owned_write, skip_bootstrap_load_state
+    from litehive.tasks.duplicates import add_tasks_to_duplicate_index
 
     with skip_bootstrap_load_state():
         merged_state = merged_state_for_runner_owned_write(
@@ -182,6 +183,7 @@ def _persist_created_tasks(
             )
 
         write_atomic_files_and_then(writes, callback)
+        add_tasks_to_duplicate_index(root, tasks)
     except Exception as exc:
         cleanup_errors = _cleanup_created_task_dirs(cleanup_dirs)
         if cleanup_errors:
@@ -349,6 +351,8 @@ def create_follow_up_tasks(
 
 
 def discard_created_task(root: Path, task_id: str) -> None:
+    from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
+
     with workspace_lock(root):
         task = get_task(root, task_id)
         state = load_state(root)
@@ -360,6 +364,7 @@ def discard_created_task(root: Path, task_id: str) -> None:
             td = task_dir(root, task)
             if td.exists():
                 remove_tree_logged(td, logger=logger, target_label="task directory")
+        refresh_duplicate_task_index_if_initialized(root)
 
 
 def _task_record_paths(root: Path) -> list[Path]:
@@ -460,6 +465,7 @@ def require_task(root: Path, task_id: str) -> TaskRecord:
 
 def save_task(root: Path, task: TaskRecord) -> None:
     from litehive.state.persist import workspace_transition_writes
+    from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
 
     task.updated_at = utcnow()
     with workspace_mutation_guard(root):
@@ -469,3 +475,4 @@ def save_task(root: Path, task: TaskRecord) -> None:
             lambda: runtime_store(root).save_runtime_transaction(task_states={task.id: task_state_for_storage(task)}),
         )
         ensure_runtime_ignored(root)
+        refresh_duplicate_task_index_if_initialized(root)
