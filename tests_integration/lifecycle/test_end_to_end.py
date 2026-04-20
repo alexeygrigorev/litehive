@@ -31,7 +31,7 @@ from litehive.lifecycle.nodes.hook import HookResult, HookRunner
 from litehive.lifecycle.nodes.system import CommitNode, StubCommitNode
 from litehive.lifecycle.nodes.agent import AgentVerdict, Engine, TransientError
 from litehive.lifecycle.nodes.system import MergeConflict
-from litehive.lifecycle.persistence import SqlitePersistence
+from litehive.lifecycle.persistence import Limits, SqlitePersistence
 from litehive.lifecycle.sessions import InMemorySessionStore
 from litehive.lifecycle.types import PipelineMode
 from litehive.domain.recovery import RecoveryTrigger
@@ -476,15 +476,18 @@ def test_merge_conflict_routes_to_merge_agent_then_back_to_after_commit(
     assert ("merge_resolving", "after_commit") in from_to_pairs
 
 
-def test_reject_from_testing_triggers_retry_then_recovery(workspace: Path) -> None:
-    """Testing rejects until its retry budget is exhausted, then recovery resumes."""
-    persistence = SqlitePersistence(workspace)
+def test_reject_from_implementing_triggers_retry_then_recovery(workspace: Path) -> None:
+    """Implementing rejects until its retry budget is exhausted, then recovery completes."""
+    persistence = SqlitePersistence(
+        workspace,
+        limits=Limits(stage_retry_limit=2),
+    )
     journal = SqliteJournal(workspace)
     sessions = InMemorySessionStore()
 
     plan = {
-        "testing": "reject",     # always reject; retries will exhaust
-        "recovering": "resume",  # recovery decides to resume at origin
+        "implementing": "reject",  # always reject; retries will exhaust
+        "recovering": "done",
     }
     registry = build_registry(
         selector=_FixedSelector(_RecoveringEngine(plan)),
@@ -495,25 +498,15 @@ def test_reject_from_testing_triggers_retry_then_recovery(workspace: Path) -> No
     runner = StateMachineRunner(registry, persistence, journal=journal)
     persistence.initialize("T-E2E-RECOVER", pipeline_mode=PipelineMode.FULL)
 
-    # The task will loop between testing rejects and implementing retries until
-    # the testing retry budget exhausts, then route to recovering. Recovery
-    # succeeds and resumes testing — which still rejects — so second retry
-    # cycle follows... but without a different recovery behavior this would
-    # loop forever. For this test we make recovery advance to "done".
-    plan["recovering"] = "done"
-
     final_state = runner.run_task("T-E2E-RECOVER")
 
-    # Recovery shortcut → done
     assert final_state.stage == "done"
 
-    # The journal should show at least one reject -> retry transition and the
-    # recovering entry.
     transitions = journal.load_transitions("T-E2E-RECOVER")
-    seen_testing_reject = any(
-        row["from_stage"] == "testing" and row["event_type"] == "Reject"
+    seen_implementing_reject = any(
+        row["from_stage"] == "implementing" and row["event_type"] == "Reject"
         for row in transitions
     )
     seen_recovering = any(row["to_stage"] == "recovering" for row in transitions)
-    assert seen_testing_reject
+    assert seen_implementing_reject
     assert seen_recovering
