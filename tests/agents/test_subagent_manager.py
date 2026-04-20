@@ -6,7 +6,7 @@ import pytest
 
 from heru.base import CLIExecutionResult
 
-from litehive.agents.manager import SubagentManager
+from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.agents.session_store import (
     load_subagent_report,
     load_subagent_session,
@@ -373,6 +373,108 @@ def test_subagent_manager_prefers_bound_instance_run_override_over_inherited_run
 
     assert calls == ["run"]
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
+
+
+def test_subagent_manager_wraps_unexpected_pre_start_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Startup failure")
+    manager = SubagentManager(tmp_path)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            on_started=None,
+            **kwargs,
+        ) -> CLIExecutionResult:
+            del prompt, cwd, model, on_started, kwargs
+            raise RuntimeError("clobbered heru stub")
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+
+    with pytest.raises(SubagentStartupError, match="RuntimeError: clobbered heru stub"):
+        manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+
+def test_subagent_manager_wraps_unavailable_engine_as_startup_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Unavailable engine")
+    manager = SubagentManager(tmp_path)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "missing-codex"
+
+        def is_available(self) -> bool:
+            return False
+
+        def run(self, *args, **kwargs) -> CLIExecutionResult:
+            del args, kwargs
+            raise AssertionError("unavailable engines must not run")
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+
+    with pytest.raises(
+        SubagentStartupError,
+        match="EngineError: Engine 'codex' is unavailable: missing binary 'missing-codex'",
+    ):
+        manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+
+def test_subagent_manager_preserves_started_run_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Started failure")
+    manager = SubagentManager(tmp_path)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            on_started=None,
+            **kwargs,
+        ) -> CLIExecutionResult:
+            del prompt, cwd, model, kwargs
+            assert on_started is not None
+            on_started(4242)
+            raise RuntimeError("started run exploded")
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+
+    with pytest.raises(RuntimeError, match="started run exploded"):
+        manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
 
 def test_subagent_manager_kills_stale_live_codex_output_after_timeout(

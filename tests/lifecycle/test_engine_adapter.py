@@ -3,10 +3,13 @@ from pathlib import Path
 
 import pytest
 
+from heru.base import CLIExecutionResult
 from litehive.domain.agent import EngineFailure, SubagentResult
 from litehive.domain.reports import TaskActivityEntry
+from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
+from litehive.agents.manager import SubagentStartupError
 from litehive.lifecycle.heru_factory import HeruEngineAdapter, _latest_verdict_after
-from litehive.lifecycle.nodes.agent import AgentVerdict, NudgeRequired, TransientError
+from litehive.lifecycle.nodes.agent import AgentVerdict, NudgeRequired, TransientError, UnrecoverableError
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.sessions import Session
 from litehive.lifecycle.types import PipelineMode
@@ -159,6 +162,12 @@ class _ScriptedManager(_StubManager):
         return _ScriptedManager.script[index]
 
 
+class _StartupFailureManager(_StubManager):
+    def run(self, task, **kwargs) -> SubagentResult:
+        del task, kwargs
+        raise SubagentStartupError(AttributeError("clobbered heru stub"))
+
+
 def _heru_prompt(task_id: str) -> dict[str, object]:
     return {
         "task_id": task_id,
@@ -194,11 +203,298 @@ def _subagent_result(
     )
 
 
+def _recovery_prompt(task_id: str) -> dict[str, object]:
+    return {
+        "task_id": task_id,
+        "stage": "recovering",
+        "role": "recovery",
+        "pipeline_mode": "full",
+        "instructions": [],
+    }
+
+
 @pytest.fixture(autouse=True)
 def _reset_stub_manager_state() -> None:
     _StubManager.last_init = None
     _StubManager.last_kwargs = None
     _TimeoutThenResumeManager.calls = 0
+    _ScriptedManager.calls = 0
+    _ScriptedManager.last_kwargs = []
+
+
+def test_heru_engine_adapter_launches_direct_recovery_turn_on_pre_start_subagent_failure(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from litehive.state.records import create_task
+
+    task = create_task(tmp_path, title="direct recovery handoff", goal="recover startup failures")
+    session = Session()
+    state = TaskState(task_id=task.id, stage="implementing", pipeline_mode=PipelineMode.FULL)
+    adapter = HeruEngineAdapter("codex", tmp_path)
+    captured: dict[str, object] = {}
+
+    class FakeCodexAdapter:
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            extra_env: dict[str, str] | None = None,
+        ) -> CLIExecutionResult:
+            del model
+            captured["prompt"] = prompt
+            captured["cwd"] = cwd
+            captured["extra_env"] = extra_env
+            append_activity_entry(
+                tmp_path,
+                task,
+                TaskActivityEntry(
+                    role="recovery",
+                    stage="recovering",
+                    verdict="resume",
+                    target_stage="implementing",
+                    message="repaired the startup path",
+                ),
+            )
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="",
+                stderr="",
+                pid=4242,
+            )
+
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StartupFailureManager)
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.CodexCLIAdapter", FakeCodexAdapter)
+
+    with pytest.raises(UnrecoverableError, match="AttributeError: clobbered heru stub"):
+        adapter.run_turn(session, _heru_prompt(task.id), state)
+
+    assert captured["extra_env"] == {
+        "LITEHIVE_TASK_ID": task.id,
+        "LITEHIVE_WORKSPACE_ROOT": str(tmp_path),
+        "LITEHIVE_AGENT_ROLE": "recovery",
+        "LITEHIVE_STAGE": "recovering",
+    }
+    assert captured["cwd"] == tmp_path
+    assert "Role: recovery" in captured["prompt"]
+    assert "Stage: recovering" in captured["prompt"]
+    assert "Litehive cannot start its own subagents" in captured["prompt"]
+    assert "AttributeError: clobbered heru stub" in captured["prompt"]
+
+
+def test_heru_engine_adapter_launches_direct_recovery_turn_when_engine_is_unavailable(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from litehive.state.records import create_task
+
+    task = create_task(tmp_path, title="missing binary handoff", goal="recover unavailable engine")
+    session = Session()
+    state = TaskState(task_id=task.id, stage="implementing", pipeline_mode=PipelineMode.FULL)
+    adapter = HeruEngineAdapter("codex", tmp_path)
+    captured: dict[str, object] = {}
+
+    class FakeEngine:
+        name = "codex"
+        binary = "missing-codex"
+
+        def is_available(self) -> bool:
+            return False
+
+        def run(self, *args, **kwargs) -> CLIExecutionResult:
+            del args, kwargs
+            raise AssertionError("unavailable engines must not run")
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    class FakeCodexAdapter:
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            extra_env: dict[str, str] | None = None,
+        ) -> CLIExecutionResult:
+            del model
+            captured["prompt"] = prompt
+            captured["cwd"] = cwd
+            captured["extra_env"] = extra_env
+            append_activity_entry(
+                tmp_path,
+                task,
+                TaskActivityEntry(
+                    role="recovery",
+                    stage="recovering",
+                    verdict="resume",
+                    target_stage="implementing",
+                    message="repaired missing engine configuration",
+                ),
+            )
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="",
+                stderr="",
+                pid=4242,
+            )
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.CodexCLIAdapter", FakeCodexAdapter)
+
+    with pytest.raises(
+        UnrecoverableError,
+        match="EngineError: Engine 'codex' is unavailable: missing binary 'missing-codex'",
+    ):
+        adapter.run_turn(session, _heru_prompt(task.id), state)
+
+    assert captured["extra_env"] == {
+        "LITEHIVE_TASK_ID": task.id,
+        "LITEHIVE_WORKSPACE_ROOT": str(tmp_path),
+        "LITEHIVE_AGENT_ROLE": "recovery",
+        "LITEHIVE_STAGE": "recovering",
+    }
+    assert captured["cwd"] == tmp_path
+    assert "Role: recovery" in captured["prompt"]
+    assert "Stage: recovering" in captured["prompt"]
+    assert "Litehive cannot start its own subagents" in captured["prompt"]
+    assert "EngineError: Engine 'codex' is unavailable: missing binary 'missing-codex'" in captured["prompt"]
+
+
+def test_heru_engine_adapter_does_not_launch_direct_recovery_after_started_run_failure(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from litehive.state.records import create_task
+
+    task = create_task(tmp_path, title="started failure", goal="preserve post-start failures")
+    session = Session()
+    state = TaskState(task_id=task.id, stage="implementing", pipeline_mode=PipelineMode.FULL)
+    adapter = HeruEngineAdapter("codex", tmp_path)
+    captured = {"called": False}
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            on_started=None,
+            **kwargs,
+        ) -> CLIExecutionResult:
+            del prompt, cwd, model, kwargs
+            assert on_started is not None
+            on_started(4242)
+            raise RuntimeError("started run exploded")
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    class FakeCodexAdapter:
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            extra_env: dict[str, str] | None = None,
+        ) -> CLIExecutionResult:
+            del prompt, cwd, model, extra_env
+            captured["called"] = True
+            raise AssertionError("direct recovery must not run after the engine started")
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.CodexCLIAdapter", FakeCodexAdapter)
+
+    with pytest.raises(UnrecoverableError, match="RuntimeError: started run exploded"):
+        adapter.run_turn(session, _heru_prompt(task.id), state)
+
+    assert captured["called"] is False
+
+
+def test_heru_engine_adapter_returns_direct_recovery_verdict_during_recovering_stage(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from litehive.state.records import create_task
+
+    task = create_task(tmp_path, title="recovery stage handoff", goal="return recovery verdict")
+    session = Session()
+    state = TaskState(
+        task_id=task.id,
+        stage="recovering",
+        pipeline_mode=PipelineMode.FULL,
+        active_recovery_trigger=RecoveryTrigger(
+            origin_stage="implementing",
+            trigger_event_kind=TriggerEventKind.CRASH,
+            failure_fingerprint=FailureFingerprint(
+                fingerprint="implementing-crash",
+                classification="engine_crash",
+            ),
+            reason_code="stage_exception",
+            message="implementing crashed",
+        ),
+    )
+    adapter = HeruEngineAdapter("codex", tmp_path)
+    captured: dict[str, object] = {}
+
+    class FakeCodexAdapter:
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            extra_env: dict[str, str] | None = None,
+        ) -> CLIExecutionResult:
+            del model, extra_env
+            captured["prompt"] = prompt
+            append_activity_entry(
+                tmp_path,
+                task,
+                TaskActivityEntry(
+                    role="recovery",
+                    stage="recovering",
+                    verdict="resume",
+                    target_stage="testing",
+                    message="fixed the runner startup path",
+                ),
+            )
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="",
+                stderr="",
+                pid=4242,
+            )
+
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StartupFailureManager)
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.CodexCLIAdapter", FakeCodexAdapter)
+
+    verdict = adapter.run_turn(session, _recovery_prompt(task.id), state)
+
+    assert verdict.outcome == "resume"
+    assert verdict.reason == "fixed the runner startup path"
+    assert verdict.metadata["target_stage"] == "testing"
+    assert "origin_stage: implementing" in captured["prompt"]
+    assert "AttributeError: clobbered heru stub" in captured["prompt"]
 
 
 def test_heru_engine_adapter_reuses_failed_turn_continuation_on_retry(tmp_path, monkeypatch) -> None:

@@ -17,20 +17,27 @@ translating to/from the v2 contract:
   - heru exceptions → error taxonomy
 """
 
+from dataclasses import replace
 from datetime import UTC, datetime
+import logging
 from pathlib import Path
 import re
 from typing import Any
 
-from litehive.agents.manager import SubagentManager
+from heru.adapters import CodexCLIAdapter
+from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.domain.agent import EngineFailure
+from litehive.domain.lifecycle_deltas import recovery_trigger_from_event
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
 from litehive.heru_compat import resolve_engine_resume_session_id
+from litehive.roles.base import PromptContext
+from litehive.roles.recovery import RecoveryAgent
 from litehive.state.records import get_task
 from litehive.tasks.activity import latest_task_activity_entry
 from litehive.tasks.reports import normalized_files_changed
 from litehive.tasks.worktrees import resolve_recorded_worktree_path
 
+from .events import Crash
 from .nodes.agent import (
     AgentVerdict,
     Engine,
@@ -47,6 +54,24 @@ from .sessions import Session
 
 class _MissingThreadComment(Exception):
     """Internal: agent finished without producing a fresh thread comment."""
+
+
+logger = logging.getLogger(__name__)
+
+
+class _NullSelector:
+    def select(self, state, node_name, excluded):
+        del state, node_name, excluded
+        return None
+
+
+class _NullSessions:
+    def get_or_create(self, task_id, node_name, engine_name):
+        del task_id, node_name, engine_name
+        return Session()
+
+    def persist(self, task_id, node_name, engine_name, session):
+        del task_id, node_name, engine_name, session
 
 
 def _allowed_verdicts_for_stage(stage: str) -> set[str]:
@@ -200,14 +225,35 @@ class HeruEngineAdapter:
         )
 
         before_turn = datetime.now(UTC)
-        manager = SubagentManager(self.workspace_root, execution_root=execution_root)
-        result = self._run_with_crash_resume(
-            manager,
-            task,
-            role=role,
-            prompt_text=prompt_text,
-            session=session,
-        )
+        try:
+            manager = SubagentManager(self.workspace_root, execution_root=execution_root)
+        except Exception as exc:
+            return self._handle_startup_failure(
+                state=state,
+                task=task,
+                role=role,
+                execution_root=execution_root,
+                startup_message=f"{type(exc).__name__}: {exc}",
+                original_exc=exc,
+            )
+
+        try:
+            result = self._run_with_crash_resume(
+                manager,
+                task,
+                role=role,
+                prompt_text=prompt_text,
+                session=session,
+            )
+        except SubagentStartupError as exc:
+            return self._handle_startup_failure(
+                state=state,
+                task=task,
+                role=role,
+                execution_root=execution_root,
+                startup_message=exc.startup_message,
+                original_exc=exc.original,
+            )
 
         if result.failure is not None:
             self._reraise_failure(result.failure)
@@ -244,6 +290,8 @@ class HeruEngineAdapter:
                     model=self.model_name,
                     resume_session_id=resume_session_id,
                 )
+            except SubagentStartupError:
+                raise
             except Exception as exc:
                 self._reraise(exc)
                 raise  # unreachable
@@ -268,6 +316,120 @@ class HeruEngineAdapter:
     @classmethod
     def _crash_resume_prompt(cls, prompt_text: str) -> str:
         return f"{cls._CRASH_RESUME_PROMPT_PREFIX}{prompt_text}"
+
+    def _handle_startup_failure(
+        self,
+        *,
+        state: TaskState,
+        task,
+        role: str,
+        execution_root: Path,
+        startup_message: str,
+        original_exc: Exception,
+    ) -> AgentVerdict:
+        try:
+            recovery_verdict = self._attempt_direct_recovery_handoff(
+                state=state,
+                task=task,
+                execution_root=execution_root,
+                startup_message=startup_message,
+            )
+        except Exception:
+            logger.exception("Direct recovery handoff failed after subagent startup failure")
+        else:
+            if role == "recovery" and recovery_verdict is not None:
+                return recovery_verdict
+        self._reraise(original_exc)
+        raise AssertionError("unreachable")
+
+    def _attempt_direct_recovery_handoff(
+        self,
+        *,
+        state: TaskState,
+        task,
+        execution_root: Path,
+        startup_message: str,
+    ) -> AgentVerdict | None:
+        recovery_prompt = self._direct_recovery_prompt(task=task, state=state, startup_message=startup_message)
+        after_ts = datetime.min.replace(tzinfo=UTC)
+        if state.stage == "recovering":
+            previous_recovery = latest_task_activity_entry(
+                self.workspace_root,
+                task,
+                stage="recovering",
+                verdicts=_allowed_verdicts_for_stage("recovering"),
+            )
+            if previous_recovery is not None:
+                after_ts = previous_recovery.created_at
+        self._run_direct_recovery_turn(
+            task_id=state.task_id,
+            execution_root=execution_root,
+            prompt_text=recovery_prompt,
+        )
+        if state.stage != "recovering":
+            return None
+        return _latest_verdict_after(self.workspace_root, state.task_id, "recovering", after_ts)
+
+    def _direct_recovery_prompt(self, *, task, state: TaskState, startup_message: str) -> str:
+        recovery_state = self._direct_recovery_state(state, startup_message)
+        recovery_agent = RecoveryAgent(
+            _NullSelector(),
+            _NullSessions(),
+            prompt_context=PromptContext(workspace_root=self.workspace_root),
+        )
+        prompt = recovery_agent.build_prompt(recovery_state)
+        return serialize_prompt(prompt, task_record=task, workspace_root=self.workspace_root)
+
+    def _direct_recovery_state(self, state: TaskState, startup_message: str) -> TaskState:
+        trigger = state.active_recovery_trigger
+        if trigger is None:
+            trigger = recovery_trigger_from_event(
+                state,
+                Crash(
+                    exc_type="SubagentStartupError",
+                    message=startup_message,
+                ),
+            )
+        return replace(
+            state,
+            stage="recovering",
+            active_recovery_trigger=trigger,
+            recovery_failure_explanation=self._direct_recovery_explanation(
+                state.recovery_failure_explanation,
+                startup_message,
+            ),
+        )
+
+    @staticmethod
+    def _direct_recovery_explanation(existing: str | None, startup_message: str) -> str:
+        handoff = (
+            "Litehive cannot start its own subagents for this task, so this recovery turn bypassed "
+            f"SubagentManager and launched Codex directly. Startup failure: {startup_message}"
+        )
+        if not existing:
+            return handoff
+        if handoff in existing:
+            return existing
+        return f"{existing} {handoff}"
+
+    def _run_direct_recovery_turn(
+        self,
+        *,
+        task_id: str,
+        execution_root: Path,
+        prompt_text: str,
+    ):
+        adapter = CodexCLIAdapter()
+        return adapter.run(
+            prompt_text,
+            cwd=execution_root,
+            extra_env={
+                "LITEHIVE_TASK_ID": task_id,
+                "LITEHIVE_WORKSPACE_ROOT": str(self.workspace_root),
+                "LITEHIVE_AGENT_ROLE": "recovery",
+                "LITEHIVE_STAGE": "recovering",
+            },
+        )
 
     @staticmethod
     def _extract_continuation_id(result, fallback: str | None) -> str | None:

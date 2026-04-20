@@ -62,6 +62,15 @@ _DEFAULT_STAGE_FOR_ROLE = {
 logger = logging.getLogger(__name__)
 
 
+class SubagentStartupError(RuntimeError):
+    """Unexpected failure before the engine subprocess started."""
+
+    def __init__(self, exc: Exception) -> None:
+        self.original = exc
+        self.startup_message = f"{type(exc).__name__}: {exc}"
+        super().__init__(self.startup_message)
+
+
 class SubagentManager(SessionMixin):
     """Run external CLI subagents inside a task-scoped folder."""
 
@@ -152,8 +161,11 @@ class SubagentManager(SessionMixin):
         self._write_session_start(task, base, ref, prompt)
         failure: EngineFailure | None = None
         callback_warnings: list[str] = []
+        engine_started = False
 
         def _safe_on_started(pid: int) -> None:
+            nonlocal engine_started
+            engine_started = True
             try:
                 self._record_subagent_pid(task, base, ref, pid)
             except Exception as exc:  # callback failures must not crash the runner
@@ -165,6 +177,9 @@ class SubagentManager(SessionMixin):
                 )
 
         def _safe_on_update(execution: CLIExecutionResult) -> None:
+            nonlocal engine_started
+            if execution.pid is not None:
+                engine_started = True
             try:
                 self._write_session_progress(
                     task,
@@ -313,11 +328,17 @@ class SubagentManager(SessionMixin):
                 classification="timeout",
             )
         except (EngineError, SandboxError) as exc:
+            if not engine_started:
+                raise SubagentStartupError(exc) from exc
             transcript = str(exc)
             proc = None
             continuation = None
             ref.status = "blocked"
             failure = EngineFailure(kind="engine_error", reason=str(exc))
+        except Exception as exc:
+            if not engine_started:
+                raise SubagentStartupError(exc) from exc
+            raise
 
         save_task(self.root, task)
         mark_subagent_finished(
