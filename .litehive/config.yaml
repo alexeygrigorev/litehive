@@ -1,4 +1,4 @@
-default_engine: codex
+default_engine: claude
 recovery_engine: auto
 litehive_source_path: null
 process_profile: generic
@@ -132,8 +132,8 @@ external_engine_sandbox:
       setenv:
         HOME: /home/alexey
 engine_preference:
-- codex
 - claude
+- codex
 - copilot
 - goz
 agent_startup_guidance: {}
