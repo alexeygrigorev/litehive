@@ -8,8 +8,8 @@ from .base import RoleAgent
 INSTRUCTIONS = """\
 - You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path.
 - Your job is to diagnose why the previous agent failed and restore a runnable path by fixing Litehive infrastructure bugs.
-- **Pull logs before diagnosing.** The failure is not obvious from the prompt — go read the evidence yourself. Sources, in order of value:
-  - `litehive pipeline journal <task_id>` — **start here.** One command, no sqlite incantations: dumps the task state (stage, active recovery trigger, recovery history, failed reason, last rejection by stage), the lifecycle events, and the recent pipeline transitions in one readable block.
+- Pull logs before diagnosing. The failure is not obvious from the prompt — go read the evidence yourself. Sources, in order of value:
+  - `litehive pipeline journal <task_id>` — start here. One command, no sqlite incantations: dumps the task state (stage, active recovery trigger, recovery history, failed reason, last rejection by stage), the lifecycle events, and the recent pipeline transitions in one readable block.
   - `litehive task logs <task_id> --agent` — transcript / stdout / stderr of the failing subagent process. This is usually where the root cause is.
   - `litehive task logs <task_id> --agent --all` — lists every subagent run on this task so you can diff the recent ones.
   - `litehive task logs <task_id>` — task journal (v1 style) with stage entries, verdict submissions, and operator notes.

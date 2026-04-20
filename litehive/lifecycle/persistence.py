@@ -26,13 +26,15 @@ class LastReport:
     tests_added: int = 0
     changed_files: list[str] = field(default_factory=list)
     test_results: list[str] = field(default_factory=list)
+    hook_ok: bool = False
 
-    def to_payload(self) -> dict[str, int | list[str]]:
+    def to_payload(self) -> dict[str, int | list[str] | bool]:
         return {
             "files_changed": self.files_changed,
             "tests_added": self.tests_added,
             "changed_files": list(self.changed_files),
             "test_results": list(self.test_results),
+            "hook_ok": self.hook_ok,
         }
 
     @classmethod
@@ -43,6 +45,7 @@ class LastReport:
             tests_added=int(payload.get("tests_added", 0)),
             changed_files=_string_list(payload.get("changed_files")),
             test_results=_string_list(payload.get("test_results")),
+            hook_ok=bool(payload.get("hook_ok", False)),
         )
 
 

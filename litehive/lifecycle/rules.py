@@ -13,6 +13,7 @@ from litehive.domain.lifecycle_deltas import (
     enter_recovery,
     exhaust_recovery_budget,
     fail,
+    remember_rejection,
     stash_conflict_files,
 )
 from .events import (
@@ -35,10 +36,12 @@ from .events import (
     Timeout,
 )
 from .guards import (
+    last_hook_ok,
     mode,
     recovery_budget_available,
     recovery_budget_exhausted,
     recovery_resume_is_concrete,
+    stage_retries_exhausted,
     zero_change_shortcut,
 )
 from .stages import Stages as S
@@ -229,6 +232,13 @@ RULES: list[Rule] = [
     # ── rejections: implementing / testing / accepting (retry then recover) ─────────────────────────────────────────────
     *retry_epoch_rules(
         S.IMPLEMENTING, S.IMPLEMENTING_EPOCH, retry_target=S.IMPLEMENTING, recovering_stage=S.RECOVERING
+    ),
+    Rule(
+        from_state=S.TESTING,
+        on_event=Reject,
+        transition_to=S.ACCEPTING,
+        when=stage_retries_exhausted("testing") & last_hook_ok(),
+        with_effect=remember_rejection("accepting"),
     ),
     *retry_epoch_rules(S.TESTING, S.TESTING_EPOCH, retry_target=S.IMPLEMENTING, recovering_stage=S.RECOVERING),
     *retry_epoch_rules(S.ACCEPTING, S.ACCEPTING_EPOCH, retry_target=S.IMPLEMENTING, recovering_stage=S.RECOVERING),

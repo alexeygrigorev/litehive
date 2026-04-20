@@ -259,6 +259,13 @@ def _resolve_worktree(root: Path, state: TaskState) -> Path:
     return worktree_path or root
 
 
+def _resolve_hook_execution_root(root: Path, state: TaskState) -> Path:
+    """Run stage hooks inside the task checkout, but keep after_commit on main."""
+    if state.stage == "after_commit":
+        return root
+    return _resolve_worktree(root, state)
+
+
 def _task_recorded_worktree(root: Path, task_id: str) -> tuple[TaskRecord | None, Path | None]:
     task = get_task(root, task_id)
     if task is None:
@@ -551,7 +558,10 @@ def run_task(
         )
         sessions = SqliteSessionStore(root)
         journal = SqliteJournal(root)
-        hook_runner = SubprocessHookRunner(root)
+        hook_runner = SubprocessHookRunner(
+            root,
+            execution_root_resolver=lambda state: _resolve_hook_execution_root(root, state),
+        )
         commit_node = _build_commit_node(root)
         worktree_sync_node = _build_worktree_sync_node(root)
         ready_node = ReadyNode(probes=[_missing_worktree_probe(root)])

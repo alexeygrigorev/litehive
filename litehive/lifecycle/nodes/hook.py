@@ -3,6 +3,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from litehive.domain.common import cap_feedback
 
@@ -34,24 +35,35 @@ class HookRunner:
         raise NotImplementedError
 
 
+ExecutionRootResolver = Callable[[TaskState], Path]
+
+
 class SubprocessHookRunner(HookRunner):
-    def __init__(self, workspace_root: Path, *, extra_env: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        workspace_root: Path,
+        *,
+        execution_root_resolver: ExecutionRootResolver | None = None,
+        extra_env: dict[str, str] | None = None,
+    ) -> None:
         self.workspace_root = Path(workspace_root)
+        self.execution_root_resolver = execution_root_resolver
         self.extra_env = dict(extra_env or {})
 
     def run(self, spec: HookSpec, state: TaskState) -> HookResult | None:
+        execution_root = self._execution_root(state)
         env = {
             **os.environ,
             **self.extra_env,
             "LITEHIVE_TASK_ID": state.task_id,
             "LITEHIVE_STAGE": state.stage,
-            "LITEHIVE_WORKSPACE": str(self.workspace_root),
+            "LITEHIVE_WORKSPACE": str(execution_root),
         }
         try:
             proc = subprocess.run(
                 spec.command,
                 shell=True,
-                cwd=str(self.workspace_root),
+                cwd=str(execution_root),
                 timeout=spec.timeout_seconds,
                 capture_output=True,
                 text=True,
@@ -73,6 +85,11 @@ class SubprocessHookRunner(HookRunner):
             stdout=(proc.stdout or "").strip(),
             stderr=(proc.stderr or "").strip(),
         )
+
+    def _execution_root(self, state: TaskState) -> Path:
+        if self.execution_root_resolver is None:
+            return self.workspace_root
+        return Path(self.execution_root_resolver(state))
 
 
 class HookNode(Node):

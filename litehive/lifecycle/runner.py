@@ -94,11 +94,17 @@ class StateMachineRunner:
     def _apply_event_side_effects(state: TaskState, event: Event) -> None:
         """Apply metadata that rides on the event rather than a StateDelta.
 
-        Currently only ``Pass.metadata`` is consulted: agents report
-        ``files_changed`` / ``tests_added`` via the verdict submission,
-        and the Runner keeps ``state.last_report`` in sync so guards
-        like ``zero_change_shortcut`` see real numbers.
+        ``HookOk`` marks the latest hook run as green; hook Rejects clear
+        that bit. ``Pass.metadata`` carries agent-reported ``files_changed`` /
+        ``tests_added``, and the Runner keeps ``state.last_report`` in sync so
+        downstream guards see real numbers instead of defaults.
         """
+        if isinstance(event, HookOk):
+            state.last_report.hook_ok = True
+            return
+        if isinstance(event, Reject) and event.source == "hook":
+            state.last_report.hook_ok = False
+            return
         if not isinstance(event, Pass):
             return
         meta = event.metadata or {}

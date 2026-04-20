@@ -67,6 +67,13 @@ def stage_retries_exhausted(stage: NodeName) -> Guard:
     return Guard(check, f"stage_retries_exhausted({stage})")
 
 
+def last_hook_ok() -> Guard:
+    def check(state: TaskState, event: Event) -> bool:
+        return state.last_report.hook_ok is True
+
+    return Guard(check, "last_hook_ok")
+
+
 def hook_reject_loop_detected() -> Guard:
     def check(state: TaskState, event: Event) -> bool:
         if not isinstance(event, Reject) or event.source != "hook":
