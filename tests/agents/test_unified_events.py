@@ -40,4 +40,138 @@ def test_codex_multiline_command_execution_extracts_transcript_timeline_and_cont
     assert [event.kind for event in timeline.events] == ["tool_result", "usage"]
     assert continuation is not None
     assert continuation.resume_id == "thread_123"
+    assert not caplog.records
     assert not any("iter_jsonl_payloads" in record.message for record in caplog.records)
+
+
+def test_unified_output_logs_parse_failures_with_line_context(caplog) -> None:
+    stdout = "\n".join(
+        [
+            "not-json",
+            '{"kind":"message","engine":"codex","content":"step 1"}',
+            '{"kind":"message","content":"missing engine"}',
+            '{"kind":"continuation","engine":"codex","continuation_id":"thread_456"}',
+            '{"kind":"status","engine":"codex","content":"step 2"}',
+        ]
+    )
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec"),
+        cwd=Path.cwd(),
+        exit_code=0,
+        stdout=stdout,
+        stderr="",
+    )
+
+    with caplog.at_level(logging.WARNING):
+        transcript = render_execution_transcript(
+            "codex",
+            execution,
+            fallback_renderer=get_engine("codex").render_transcript,
+        )
+        timeline = extract_engine_timeline("codex", stdout)
+        continuation = extract_engine_continuation("codex", execution)
+
+    assert transcript == "step 1\n\nstep 2"
+    assert timeline is not None
+    assert [event.kind for event in timeline.events] == ["message", "continuation", "status"]
+    assert continuation is not None
+    assert continuation.resume_id == "thread_456"
+
+    messages = [record.message for record in caplog.records]
+    assert any("unparseable JSONL line 1" in message and "not-json" in message for message in messages)
+    assert any("invalid unified event at line 3" in message and "engine: Field required" in message for message in messages)
+
+
+def test_invalid_unified_output_logs_warning_before_fallback_transcript(caplog) -> None:
+    stdout = '{"kind":"message","content":"missing engine"}'
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec"),
+        cwd=Path.cwd(),
+        exit_code=0,
+        stdout=stdout,
+        stderr="",
+    )
+
+    def fallback_renderer(_: CLIExecutionResult) -> str:
+        return "fallback transcript"
+
+    with caplog.at_level(logging.WARNING):
+        transcript = render_execution_transcript("codex", execution, fallback_renderer=fallback_renderer)
+
+    assert transcript == "fallback transcript"
+    messages = [record.message for record in caplog.records]
+    assert any("invalid unified event at line 1" in message and "engine: Field required" in message for message in messages)
+    assert any("found no valid events" in message for message in messages)
+
+
+def test_plain_text_output_falls_back_without_unified_parse_warnings(caplog) -> None:
+    stdout = "tests failed\nsee details below"
+    execution = CLIExecutionResult(
+        adapter="codex",
+        argv=("codex", "exec"),
+        cwd=Path.cwd(),
+        exit_code=0,
+        stdout=stdout,
+        stderr="",
+    )
+
+    def fallback_renderer(execution: CLIExecutionResult) -> str:
+        return execution.transcript
+
+    with caplog.at_level(logging.WARNING):
+        transcript = render_execution_transcript("codex", execution, fallback_renderer=fallback_renderer)
+        timeline = extract_engine_timeline("codex", stdout)
+        continuation = extract_engine_continuation("codex", execution)
+
+    assert transcript == stdout
+    assert timeline is None
+    assert continuation is None
+    assert not [record for record in caplog.records if record.name == "litehive.heru_compat"]
+
+
+def test_malformed_jsonl_without_unified_candidates_logs_warnings_before_fallback(caplog) -> None:
+    def fallback_renderer(_: CLIExecutionResult) -> str:
+        return "fallback transcript"
+
+    cases = [
+        (
+            '{"foo":"bar"}\n42',
+            (
+                "without unified event kind at line 1",
+                "non-object JSONL line 2",
+            ),
+        ),
+        (
+            '{"foo":"bar"}\nnot-json',
+            (
+                "without unified event kind at line 1",
+                "unparseable JSONL line 2",
+            ),
+        ),
+    ]
+
+    for stdout, expected_fragments in cases:
+        execution = CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=Path.cwd(),
+            exit_code=0,
+            stdout=stdout,
+            stderr="",
+        )
+
+        caplog.clear()
+        with caplog.at_level(logging.WARNING):
+            transcript = render_execution_transcript("codex", execution, fallback_renderer=fallback_renderer)
+            timeline = extract_engine_timeline("codex", stdout)
+            continuation = extract_engine_continuation("codex", execution)
+
+        assert transcript == "fallback transcript"
+        assert timeline is None
+        assert continuation is None
+
+        messages = [record.message for record in caplog.records]
+        for fragment in expected_fragments:
+            assert any(fragment in message for message in messages)

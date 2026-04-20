@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import logging
 from typing import Callable
 
 from pydantic import ValidationError
@@ -13,9 +14,11 @@ from heru import (
     extract_engine_timeline as _extract_engine_timeline_from_adapter,
     get_engine,
 )
-from heru.base import CLIExecutionResult, LATEST_CONTINUATION_SENTINEL, iter_jsonl_payloads
+from heru.base import CLIExecutionResult, LATEST_CONTINUATION_SENTINEL
 from heru.quota import UsageStatus, UsageWindow
 from heru.types import LiveEvent, LiveTimeline, RuntimeEngineContinuation, UnifiedEvent
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,17 +60,49 @@ class UnifiedExecutionView:
         return "\n\n".join(parts)
 
 
+@dataclass(frozen=True, slots=True)
+class _UnifiedJsonlLine:
+    line_number: int
+    raw_line: str
+    payload: dict[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class _UnifiedParseWarning:
+    message: str
+    context: tuple[object, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _UnifiedJsonlScan:
+    candidate_lines: tuple[_UnifiedJsonlLine, ...]
+    warnings: tuple[_UnifiedParseWarning, ...]
+
+
 def parse_unified_execution(stdout: str) -> UnifiedExecutionView | None:
-    if not _looks_like_unified_jsonl(stdout):
+    scan = _collect_unified_jsonl_candidates(stdout)
+    for warning in scan.warnings:
+        logger.warning(warning.message, *warning.context)
+
+    if not scan.candidate_lines:
         return None
+
     events: list[UnifiedEvent] = []
-    for payload in iter_jsonl_payloads(stdout):
+    for item_index, candidate in enumerate(scan.candidate_lines, 1):
         try:
-            event = UnifiedEvent.model_validate(payload)
-        except ValidationError:
+            event = UnifiedEvent.model_validate(candidate.payload)
+        except ValidationError as exc:
+            logger.warning(
+                "parse_unified_execution: skipping invalid unified event at line %d (item %d): %s (content: %.200s)",
+                candidate.line_number,
+                item_index,
+                _summarize_validation_error(exc),
+                candidate.raw_line,
+            )
             continue
         events.append(event)
     if not events:
+        logger.warning("parse_unified_execution: detected unified JSONL output but found no valid events")
         return None
     return UnifiedExecutionView(tuple(events))
 
@@ -205,17 +240,13 @@ def usage_limit_block_reason(engine_name: str, status: UsageStatus) -> str | Non
     return None
 
 
-def _looks_like_unified_jsonl(stdout: str) -> bool:
-    for raw_line in stdout.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        try:
-            payload = json.loads(line)
-        except (json.JSONDecodeError, ValueError):
-            return False
-        return isinstance(payload, dict) and "kind" in payload
-    return False
+def _summarize_validation_error(exc: ValidationError) -> str:
+    details: list[str] = []
+    for error in exc.errors(include_url=False):
+        location = ".".join(str(part) for part in error.get("loc", ())) or "<root>"
+        message = error.get("msg", "validation error")
+        details.append(f"{location}: {message}")
+    return "; ".join(details) if details else str(exc)
 
 
 def _render_event_for_transcript(event: UnifiedEvent) -> str:
@@ -240,3 +271,68 @@ def _render_event_for_transcript(event: UnifiedEvent) -> str:
         lines.append(event.error.rstrip())
     lines.append("```")
     return "\n".join(lines)
+
+
+def _collect_unified_jsonl_candidates(stdout: str) -> _UnifiedJsonlScan:
+    candidates: list[_UnifiedJsonlLine] = []
+    rejected_lines: list[_UnifiedParseWarning] = []
+    native_lines: list[_UnifiedParseWarning] = []
+    saw_jsonl_like_content = False
+
+    for line_number, raw_line in enumerate(stdout.splitlines(), 1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        looks_like_jsonl = line.startswith("{") or line.startswith("[")
+        try:
+            payload = json.loads(line)
+        except (json.JSONDecodeError, ValueError) as exc:
+            if looks_like_jsonl:
+                saw_jsonl_like_content = True
+            rejected_lines.append(
+                _UnifiedParseWarning(
+                    "parse_unified_execution: skipping unparseable JSONL line %d: %s (content: %.200s)",
+                    (line_number, exc, line),
+                )
+            )
+            continue
+        saw_jsonl_like_content = True
+        if not isinstance(payload, dict):
+            rejected_lines.append(
+                _UnifiedParseWarning(
+                    "parse_unified_execution: skipping non-object JSONL line %d (type=%s, content: %.200s)",
+                    (line_number, type(payload).__name__, line),
+                )
+            )
+            continue
+        if "kind" in payload:
+            candidates.append(_UnifiedJsonlLine(line_number=line_number, raw_line=line, payload=payload))
+            continue
+        if _is_native_engine_payload(payload):
+            native_lines.append(
+                _UnifiedParseWarning(
+                    "parse_unified_execution: skipping native engine payload at line %d while parsing unified output (content: %.200s)",
+                    (line_number, line),
+                )
+            )
+            continue
+        rejected_lines.append(
+            _UnifiedParseWarning(
+                "parse_unified_execution: skipping JSON object without unified event kind at line %d (content: %.200s)",
+                (line_number, line),
+            )
+        )
+        continue
+
+    warnings: list[_UnifiedParseWarning] = []
+    if candidates:
+        warnings.extend(rejected_lines)
+        warnings.extend(native_lines)
+    elif saw_jsonl_like_content and not native_lines:
+        warnings.extend(rejected_lines)
+
+    return _UnifiedJsonlScan(candidate_lines=tuple(candidates), warnings=tuple(warnings))
+
+
+def _is_native_engine_payload(payload: dict[str, object]) -> bool:
+    return "type" in payload or isinstance(payload.get("event"), dict)
