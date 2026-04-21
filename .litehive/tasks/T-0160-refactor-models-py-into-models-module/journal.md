@@ -80,3 +80,6 @@ Interrupted subagent execution while `grooming` was running. Reason: Task stoppe
 
 ## 2026-04-17T19:46:07+00:00
 Task closed: wont_do. Obsolete: shared model boundary now lives in litehive/domain/ not litehive/models/. Per the task's own acceptance criteria, the requested refactor would conflict with current architecture (domain consolidation completed in commit 222732c6). Planner stuck in 7-run loop unable to self-close.
+
+## 2026-04-21T08:39:31+00:00
+Task metadata updated via CLI.

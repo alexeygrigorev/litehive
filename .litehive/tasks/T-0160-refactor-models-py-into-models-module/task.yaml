@@ -6,17 +6,19 @@ task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: 'Historical cleanup only: record that the shared model boundary now lives in
-  litehive/domain/ rather than litehive/models/, and close this task without implementation.'
+goal: 'Historical cleanup: record that the shared model boundary now lives in litehive/domain/
+  rather than litehive/models/, and close this task without implementation.'
 acceptance_criteria:
-- The task record states that the active shared model boundary is litehive/domain/,
+- '- The task record states that the active shared model boundary is litehive/domain/,
   with task models in litehive/domain/task.py, report models in litehive/domain/reports.py,
   runtime models in litehive/domain/runtime.py, and engine models in litehive/domain/engine.py.
-- The plan explains that litehive/models/ was a historical intermediate state introduced
+
+  - The plan explains that litehive/models/ was a historical intermediate state introduced
   by commit b4a6183c and superseded by the litehive/domain/ consolidation in commit
   222732c6, so recreating litehive/models/ would conflict with the current architecture.
-- T-0160 is closed as wont_do because the requested litehive/models/ layout is obsolete
-  in the current codebase.
+
+  - T-0160 is closed as wont_do because the requested litehive/models/ layout is obsolete
+  in the current codebase.'
 constraints:
 - Keep this task scoped to task-record cleanup only; do not make code changes.
 - Do not recreate litehive/models/ or add compatibility shims as part of this task.
