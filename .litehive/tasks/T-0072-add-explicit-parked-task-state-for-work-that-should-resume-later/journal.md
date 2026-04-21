@@ -2928,3 +2928,6 @@ Task metadata updated via CLI.
 
 ## 2026-04-16T17:16:32+00:00
 Task metadata updated via CLI.
+
+## 2026-04-21T05:07:03+00:00
+Interrupted subagent execution while `grooming` was running. Reason: Stale runner detected while subagent `SA-0337` (planner/claude, pid 2611681 no longer alive) was still marked running in `grooming`.. Subagent `SA-0337` (planner/claude, pid=2611681, path `subagents/SA-0337-planner`) stopped with status `interrupted`. Last snippet: runner interrupted before subagent completion. Resume from `grooming`.
