@@ -33,7 +33,7 @@ from litehive.tasks.paths import latest_subagent_base, task_dir
 from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
 
 
-def _reset_pipeline_state_for_requeue(root: Path, task_id: str) -> None:
+def _reset_pipeline_state(root: Path, task_id: str) -> None:
     from litehive.lifecycle.persistence import SqlitePersistence
 
     SqlitePersistence(root).reset(task_id)
@@ -356,7 +356,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
             pipeline_status=implementation_entry_stage(task),
             clear_last_outcome=task.status not in {"flagged", "merge_failed", "parked"},
         )
-        _reset_pipeline_state_for_requeue(root, task.id)
+        _reset_pipeline_state(root, task.id)
         _queue_task(state, task.id, front=front)
         persist_task_and_state_without_runner_guard(
             root,
@@ -404,7 +404,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             and not stranded_in_progress,
             preserve_continuation_handoff=task.status in {"interrupted", "parked"} or stranded_in_progress,
         )
-        _reset_pipeline_state_for_requeue(root, task.id)
+        _reset_pipeline_state(root, task.id)
         _queue_task(state, task.id, front=front)
         persist_task_and_state_without_runner_guard(
             root,
@@ -435,6 +435,7 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
             state=state,
             journal_message=f"Task abandoned via CLI at stage `{task.pipeline_status}`.",
         )
+        _reset_pipeline_state(root, task.id)
         return task
 
 
@@ -564,6 +565,7 @@ def close_task(
             state=state,
             journal_message=journal_message,
         )
+        _reset_pipeline_state(root, task.id)
         return task
 
 
@@ -659,6 +661,7 @@ def update_task(
                 state=state,
                 journal_message=close_msg,
             )
+            _reset_pipeline_state(root, task.id)
             return task
 
         if action is not ... and action is not None:
@@ -683,7 +686,7 @@ def update_task(
                     pipeline_status=implementation_entry_stage(task),
                     clear_last_outcome=task.status not in {"flagged", "merge_failed", "parked"},
                 )
-                _reset_pipeline_state_for_requeue(root, task.id)
+                _reset_pipeline_state(root, task.id)
                 _queue_task(state, task.id)
                 persist_task_and_state_without_runner_guard(
                     root,
@@ -703,6 +706,7 @@ def update_task(
                     state=state,
                     journal_message=f"Task abandoned via structured report at stage `{task.pipeline_status}`.",
                 )
+                _reset_pipeline_state(root, task.id)
                 return task
             raise ValueError(f"Unsupported action '{action}'")
 

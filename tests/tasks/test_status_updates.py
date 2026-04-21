@@ -13,6 +13,10 @@ from litehive.tasks.status import close_task, update_task
 def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Close me")
+    persistence = SqlitePersistence(tmp_path)
+    state = persistence.initialize(task.id)
+    state.stage = "recovering"
+    persistence.save(state)
 
     update_task(
         tmp_path,
@@ -31,6 +35,8 @@ def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None
     assert refreshed.runtime.last_outcome.reason == "not worth it"
     assert state.active_task_id is None
     assert task.id not in state.queue
+    with pytest.raises(TaskNotFound):
+        persistence.load(task.id)
 
 
 def test_update_task_parks_task_with_structured_action(tmp_path: Path) -> None:
@@ -76,6 +82,10 @@ def test_update_task_requeues_task_with_structured_action(tmp_path: Path) -> Non
 def test_update_task_abandons_task_with_structured_action(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Stop me")
+    persistence = SqlitePersistence(tmp_path)
+    state = persistence.initialize(task.id)
+    state.stage = "testing"
+    persistence.save(state)
     task.status = "parked"
     task.pipeline_status = "testing"
     save_task(tmp_path, task)
@@ -91,6 +101,8 @@ def test_update_task_abandons_task_with_structured_action(tmp_path: Path) -> Non
     assert refreshed.runtime.last_outcome.reason == "Task abandoned via structured report."
     assert state.active_task_id is None
     assert task.id not in state.queue
+    with pytest.raises(TaskNotFound):
+        persistence.load(task.id)
 
 
 def test_update_task_ignores_unrelated_missing_runtime_rows(tmp_path: Path) -> None:
@@ -179,3 +191,20 @@ def test_close_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path)
     refreshed = require_task(tmp_path, "T-0001")
     assert refreshed.status == "duplicate"
     assert refreshed.runtime.last_outcome.reason == "duplicate umbrella"
+
+
+def test_close_task_resets_pipeline_state_row(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Close and clear pipeline state")
+    persistence = SqlitePersistence(tmp_path)
+    state = persistence.initialize(task.id)
+    state.stage = "recovering"
+    persistence.save(state)
+
+    close_task(tmp_path, task.id, outcome="duplicate", reason="duplicate umbrella")
+
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.status == "duplicate"
+    assert refreshed.runtime.last_outcome.reason == "duplicate umbrella"
+    with pytest.raises(TaskNotFound):
+        persistence.load(task.id)
