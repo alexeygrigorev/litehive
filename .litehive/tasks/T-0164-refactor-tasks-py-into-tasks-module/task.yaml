@@ -6,15 +6,13 @@ task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: The original split from the monolithic litehive/tasks.py into the litehive/tasks/
-  package is already complete in the current codebase under T-0204 / commit 60675504.
-  This task should only correct the stale record and remain closed as a duplicate
-  of T-0204 instead of sending more implementation work.
+goal: 'ALREADY COMPLETED: The refactoring of monolithic litehive/tasks.py into litehive/tasks/
+  package was completed under T-0204 / commit 60675504. This task should be closed
+  as duplicate.'
 acceptance_criteria:
-- Task metadata states that the package split already landed under T-0204 / commit
-  60675504.
-- T-0164 is closed as duplicate with a reason pointing to T-0204.
-- No additional refactor or code changes are requested under T-0164.
+- Task metadata acknowledges that the package split already landed under T-0204 /
+  commit 60675504. T-0164 is closed as duplicate with reason pointing to T-0204. No
+  additional refactor or code changes are needed since the work is complete.
 constraints:
 - Do not expand scope into further decomposition of litehive/tasks/status.py, queue.py,
   runtime.py, or other task-domain modules under this task.
