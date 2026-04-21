@@ -287,9 +287,78 @@ class UnmergedWorktree(BaseModel):
     worktree_path: str
 
 
+class ActiveTask(BaseModel):
+    """Represents an actively running task with its execution context."""
+    task_id: str
+    worktree_path: str | None = None
+    started_at: str = Field(default_factory=lambda: utcnow())
+    integration_order: int | None = None  # Order for deterministic integration
+
+
 class WorkspaceState(BaseModel):
+    # Legacy field for backward compatibility - will be None when parallel execution is active
     active_task_id: str | None = None
+    # New parallel execution tracking
+    active_tasks: list[ActiveTask] = Field(default_factory=list)
+    max_parallel_tasks: int = 1  # Default to 1 for backward compatibility
     queue: list[str] = Field(default_factory=list)
     pool_stop_reason: str | None = None
     next_task_number: int = 0
+    # Integration state
+    integration_queue: list[str] = Field(default_factory=list)  # Tasks ready for integration
+    integrating_task_id: str | None = None  # Currently being integrated
     unmerged_worktrees: list[UnmergedWorktree] = Field(default_factory=list)
+
+    @property
+    def is_parallel_mode(self) -> bool:
+        """True if workspace is using parallel execution mode."""
+        return self.max_parallel_tasks > 1 or len(self.active_tasks) > 1
+
+    @property
+    def running_task_ids(self) -> list[str]:
+        """Get list of currently running task IDs."""
+        return [task.task_id for task in self.active_tasks]
+
+    @property
+    def has_capacity_for_new_task(self) -> bool:
+        """True if workspace can start another parallel task."""
+        return len(self.active_tasks) < self.max_parallel_tasks
+
+    def get_active_task(self, task_id: str) -> ActiveTask | None:
+        """Get active task info by ID."""
+        for task in self.active_tasks:
+            if task.task_id == task_id:
+                return task
+        return None
+
+    def add_active_task(self, task_id: str, worktree_path: str | None = None) -> ActiveTask:
+        """Add a task to active execution."""
+        if self.get_active_task(task_id) is not None:
+            raise ValueError(f"Task {task_id} is already active")
+
+        # Determine integration order for deterministic merging
+        integration_order = max((task.integration_order or 0 for task in self.active_tasks), default=0) + 1
+
+        active_task = ActiveTask(
+            task_id=task_id,
+            worktree_path=worktree_path,
+            integration_order=integration_order
+        )
+        self.active_tasks.append(active_task)
+
+        # Maintain legacy field for backward compatibility if in single-task mode
+        if self.max_parallel_tasks == 1 and not self.active_task_id:
+            self.active_task_id = task_id
+
+        return active_task
+
+    def remove_active_task(self, task_id: str) -> bool:
+        """Remove a task from active execution. Returns True if found and removed."""
+        initial_length = len(self.active_tasks)
+        self.active_tasks = [task for task in self.active_tasks if task.task_id != task_id]
+
+        # Clear legacy field if this was the only active task
+        if self.active_task_id == task_id:
+            self.active_task_id = None
+
+        return len(self.active_tasks) < initial_length

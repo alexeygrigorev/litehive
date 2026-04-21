@@ -31,6 +31,8 @@ from litehive.state.persist import load_state, set_pool_stop_reason
 from litehive.state.locking import runner_status
 
 from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir
+from .parallel import ParallelTaskManager, run_parallel_iteration
+from .integration import run_integration_iteration
 from .registry import (
     daemon_metadata,
     pid_is_alive,
@@ -140,15 +142,35 @@ def _append_attention_log(workspace: Path, message: str) -> None:
 def _state_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
     state = load_state(workspace).model_dump(mode="python")
     active_task_id = state.get("active_task_id")
+    active_tasks = state.get("active_tasks", [])
     queue = state.get("queue", []) or []
+    integration_queue = state.get("integration_queue", [])
+    integrating_task_id = state.get("integrating_task_id")
     stop_reason = state.get("pool_stop_reason")
+    max_parallel = state.get("max_parallel_tasks", 1)
+
     lines = [
         f"active_task_id: {active_task_id if active_task_id is not None else 'None'}",
+        f"active_tasks: {len(active_tasks)}",
+        f"max_parallel_tasks: {max_parallel}",
         f"queued_tasks: {len(queue)}",
+        f"integration_queue: {len(integration_queue)}",
+        f"integrating_task_id: {integrating_task_id if integrating_task_id is not None else 'None'}",
         f"pool_stop_reason: {stop_reason if stop_reason is not None else 'None'}",
     ]
+
+    if active_tasks:
+        for i, task in enumerate(active_tasks):
+            task_id = task.get("task_id", "unknown")
+            worktree = task.get("worktree_path", "None")
+            lines.append(f"active_task_{i+1}: {task_id} (worktree: {worktree})")
+
     if queue:
         lines.append(f"queue_head: {queue[0]}")
+
+    if integration_queue:
+        lines.append(f"integration_head: {integration_queue[0]}")
+
     return state, "\n".join(lines) + "\n"
 
 
@@ -286,6 +308,7 @@ def run_daemon_loop(
 
     stop_requested = False
     current_child: dict[str, subprocess.Popen[str] | None] = {"process": None}
+    parallel_manager: ParallelTaskManager | None = None
 
     def _handle_signal(signum: int, _frame: object) -> None:
         nonlocal stop_requested
@@ -293,6 +316,9 @@ def run_daemon_loop(
         child = current_child["process"]
         if child is not None and child.poll() is None:
             child.terminate()
+        # Terminate all parallel tasks
+        if parallel_manager is not None:
+            parallel_manager.terminate_all()
 
     previous_term = signal.signal(signal.SIGTERM, _handle_signal)
     previous_int = signal.signal(signal.SIGINT, _handle_signal)
@@ -499,10 +525,21 @@ def run_daemon_loop(
             _emit(pre_snapshot, stream=output_stream)
 
             active_task_id = pre_state.get("active_task_id")
+            active_tasks = pre_state.get("active_tasks", [])
             queue = pre_state.get("queue", []) or []
+            integration_queue = pre_state.get("integration_queue", [])
+            integrating_task_id = pre_state.get("integrating_task_id")
             stop_reason_before = pre_state.get("pool_stop_reason")
 
-            if active_task_id is None and not queue:
+            # Check if there's any work to do - either active tasks, queued tasks, or integration work
+            has_active_work = (
+                active_task_id is not None or
+                active_tasks or
+                integrating_task_id is not None
+            )
+            has_pending_work = queue or integration_queue
+
+            if not has_active_work and not has_pending_work:
                 _emit("No active or queued tasks remain. Stopping.", stream=output_stream)
                 return 0
             if stop_reason_before == "blocked_tasks_remaining":
@@ -522,13 +559,39 @@ def run_daemon_loop(
                     return 0
 
             try:
-                run_rc = _run_logged_subprocess(
-                    [*command_prefix, "run", "--workspace", str(workspace)],
-                    cwd=workspace,
-                    log_path=run_file,
-                    output_stream=output_stream,
-                    current_child=current_child,
-                )
+                # Check if we should use parallel execution or fall back to sequential
+                state = load_state(workspace)
+                config = load_config(workspace)
+                max_parallel = getattr(config, 'max_parallel_tasks', 1)
+
+                if max_parallel > 1 or state.is_parallel_mode:
+                    # Use parallel task management
+                    parallel_manager = run_parallel_iteration(
+                        workspace,
+                        command_prefix,
+                        manager=parallel_manager,
+                        output_stream=output_stream,
+                    )
+
+                    # Process integration queue for completed parallel tasks
+                    integration_progress = run_integration_iteration(
+                        workspace,
+                        output_stream=output_stream,
+                    )
+
+                    if integration_progress:
+                        _emit("Integration progress made", stream=output_stream)
+
+                    run_rc = 0  # Parallel iteration always "succeeds" at the daemon level
+                else:
+                    # Fall back to sequential execution
+                    run_rc = _run_logged_subprocess(
+                        [*command_prefix, "run", "--workspace", str(workspace)],
+                        cwd=workspace,
+                        log_path=run_file,
+                        output_stream=output_stream,
+                        current_child=current_child,
+                    )
             except Exception as exc:
                 logger.exception("run subprocess raised")
                 _emit(f"run raised: {exc}", stream=output_stream)
@@ -579,10 +642,21 @@ def run_daemon_loop(
             _emit(post_snapshot, stream=output_stream)
 
             active_after = post_state.get("active_task_id")
+            active_tasks_after = post_state.get("active_tasks", [])
             queue_after = post_state.get("queue", []) or []
+            integration_queue_after = post_state.get("integration_queue", [])
+            integrating_after = post_state.get("integrating_task_id")
             stop_reason = post_state.get("pool_stop_reason")
 
-            if active_after is None and not queue_after:
+            # Check if there's any work remaining after this iteration
+            has_active_work_after = (
+                active_after is not None or
+                active_tasks_after or
+                integrating_after is not None
+            )
+            has_pending_work_after = queue_after or integration_queue_after
+
+            if not has_active_work_after and not has_pending_work_after:
                 _emit("No active or queued tasks remain. Stopping.", stream=output_stream)
                 return 0
             if stop_reason == "blocked_tasks_remaining":
@@ -602,6 +676,9 @@ def run_daemon_loop(
     finally:
         signal.signal(signal.SIGTERM, previous_term)
         signal.signal(signal.SIGINT, previous_int)
+        # Clean up parallel task manager
+        if parallel_manager is not None:
+            parallel_manager.terminate_all()
         unregister_daemon(workspace, pid=os.getpid())
 
 
@@ -681,7 +758,8 @@ def daemon_status_lines(workspace: Path) -> list[str]:
         lines.append(f"started_at: {entry.get('started_at')}")
         lines.append(f"log_dir: {entry.get('log_dir')}")
     runner = runner_status(workspace)
-    lines.append(render_runner_status_line(runner))
+    state = load_state(workspace)
+    lines.append(render_runner_status_line(runner, state))
     latest_dir = latest_run_all_log_dir(workspace)
     lines.append(f"latest_run_all_dir: {latest_dir if latest_dir is not None else '-'}")
     latest_post = latest_matching(latest_dir, "*-post-status.log")
