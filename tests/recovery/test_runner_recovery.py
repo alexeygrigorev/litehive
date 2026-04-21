@@ -7,7 +7,7 @@ from litehive.agents.session_store import (
 )
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.runtime import RuntimeSubagentState
-from litehive.recovery.workspace_repair import (
+from litehive.recovery.execution_recovery import (
     prepare_interrupted_task,
     recover_stale_runner_state,
 )

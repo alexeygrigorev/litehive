@@ -5,7 +5,7 @@ import pytest
 
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.execution import run_daemon_loop
-from litehive.recovery.launch import LaunchFailure
+from litehive.recovery.detection import LaunchFailure
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task
 from litehive.tasks.reports import load_task_thread

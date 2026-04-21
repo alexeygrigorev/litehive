@@ -9,7 +9,7 @@ from litehive.agents.manager import SubagentManager
 from litehive.agents.session_store import load_subagent_report, load_subagent_timeline
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
-from litehive.recovery.workspace_repair import mark_interrupted_subagent
+from litehive.recovery.execution_recovery import mark_interrupted_subagent
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.paths import task_dir
 from litehive.tasks.runtime import mark_subagent_started

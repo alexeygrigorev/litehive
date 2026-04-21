@@ -19,11 +19,13 @@ from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import apply_pending_migrations
 from litehive.observability.status import render_runner_status_line
 from litehive.observability.venv_health import daemon_broken_venv_message, probe_broken_venv_executables
-from litehive.recovery.launch import (
+from litehive.recovery.detection import (
     LaunchFailure,
-    attempt_launch_recovery,
     best_effort_recovery_task,
     detect_cycle_start_failure,
+)
+from litehive.recovery.execution_recovery import (
+    attempt_launch_recovery,
     flag_task_after_failed_launch_recovery,
 )
 from litehive.state.backup import create_scheduled_workspace_backup

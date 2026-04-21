@@ -124,7 +124,7 @@ def stop_current_task(
         runner_lock_is_held,
         runner_pid_is_alive,
     )
-    from litehive.recovery.workspace_repair import recover_stale_runner_state
+    from litehive.recovery.execution_recovery import recover_stale_runner_state
 
     state = load_state(root)
     active_task_id = _active_task_id_for_stop(root, state)

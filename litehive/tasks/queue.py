@@ -178,7 +178,7 @@ def peek_next_task(root: Path) -> TaskRecord | None:
 def peek_next_task_selection(root: Path) -> TaskSelection:
     from litehive.state.locking import workspace_lock, workspace_mutation_guard
     from litehive.state.persist import load_state, save_state
-    from litehive.recovery.workspace_repair import recover_stale_runner_state
+    from litehive.recovery.execution_recovery import recover_stale_runner_state
 
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), workspace_lock(root):
@@ -194,7 +194,7 @@ def plan_task_selections(root: Path) -> TaskPlan:
     from litehive.state.records import list_tasks
     from litehive.state.locking import workspace_lock, workspace_mutation_guard
     from litehive.state.persist import load_state
-    from litehive.recovery.workspace_repair import recover_stale_runner_state
+    from litehive.recovery.execution_recovery import recover_stale_runner_state
 
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), workspace_lock(root):
@@ -227,7 +227,7 @@ def dequeue_next_task(root: Path) -> TaskRecord | None:
 def dequeue_next_task_selection(root: Path) -> TaskSelection:
     from litehive.state.locking import workspace_mutation_guard
     from litehive.state.persist import save_state
-    from litehive.recovery.workspace_repair import recover_stale_runner_state
+    from litehive.recovery.execution_recovery import recover_stale_runner_state
     from .reports import record_recovery_report
     from litehive.state.persist import persist_task_and_state
 
@@ -533,7 +533,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
     from litehive.state.records import get_task
     from litehive.state.locking import workspace_mutation_guard
     from litehive.state.persist import save_state
-    from litehive.recovery.workspace_repair import (
+    from litehive.recovery.execution_recovery import (
         prepare_interrupted_task,
         stale_interruption_reason,
         interruption_journal_message,

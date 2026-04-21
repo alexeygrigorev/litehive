@@ -24,12 +24,14 @@ from litehive.git.ops import has_non_litehive_changes, is_git_repo
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.lifecycle.orchestration import run_task
-from litehive.recovery.launch import (
+from litehive.recovery.detection import (
     LaunchFailure,
     TaskLaunchFailure,
-    attempt_launch_recovery,
     best_effort_recovery_task,
     corrupt_task_launch_diagnostics,
+)
+from litehive.recovery.execution_recovery import (
+    attempt_launch_recovery,
     flag_task_after_failed_launch_recovery,
     prepare_task_launch,
 )

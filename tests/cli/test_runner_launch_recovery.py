@@ -4,7 +4,8 @@ from pathlib import Path
 from litehive.cli.runner import _run_once, daemon_worker
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.recovery import TriggerEventKind
-from litehive.recovery.launch import LaunchFailure, LaunchRecoveryResult, TaskLaunchFailure
+from litehive.recovery.detection import LaunchFailure, TaskLaunchFailure
+from litehive.recovery.execution_recovery import LaunchRecoveryResult
 from litehive.state.records import create_task, get_task
 from litehive.tasks.normalization import implementation_entry_stage
 from litehive.tasks.reports import load_task_thread, record_recovery_report

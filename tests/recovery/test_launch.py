@@ -7,7 +7,8 @@ import pytest
 
 from litehive.config.workspace import ensure_workspace
 from litehive.git.ops import GitError
-from litehive.recovery.launch import LaunchFailure, attempt_launch_recovery, prepare_task_launch
+from litehive.recovery.detection import LaunchFailure
+from litehive.recovery.execution_recovery import attempt_launch_recovery, prepare_task_launch
 from litehive.state.records import create_task, get_task
 
 
@@ -66,9 +67,9 @@ def test_attempt_launch_recovery_logs_target_and_raises_on_worktree_cleanup_fail
     worktree.mkdir()
     task.runtime.git.worktree_path = str(worktree)
 
-    with patch("litehive.recovery.launch.remove_worktree", side_effect=GitError("registered worktree missing")):
+    with patch("litehive.recovery.execution_recovery.remove_worktree", side_effect=GitError("registered worktree missing")):
         with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
-            with caplog.at_level(logging.INFO, logger="litehive.recovery.launch"):
+            with caplog.at_level(logging.INFO, logger="litehive.recovery.execution_recovery"):
                 with pytest.raises(OSError, match="failed to delete stale task worktree directory .*permission denied"):
                     attempt_launch_recovery(
                         tmp_path,

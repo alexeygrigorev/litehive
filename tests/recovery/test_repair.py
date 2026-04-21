@@ -4,7 +4,7 @@ from typer.testing import CliRunner
 
 from litehive.cli.app import app
 from litehive.config.workspace import ensure_workspace
-from litehive.recovery.workspace_repair import recover_stale_runner_state
+from litehive.recovery.execution_recovery import recover_stale_runner_state
 from litehive.state.records import create_task
 
 
