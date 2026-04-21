@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 import re
 import sys
+import time
 
 from litehive.config.loading import load_config
 from heru import get_engine
@@ -60,6 +61,46 @@ _DEFAULT_STAGE_FOR_ROLE = {
 }
 
 logger = logging.getLogger(__name__)
+
+
+def _check_engine_availability_with_retry(engine, max_retries: int = 2, delay: float = 0.5) -> bool:
+    """Check engine availability with retry logic for transient failures.
+
+    Some engine availability checks can fail transiently due to filesystem
+    or PATH issues during subprocess execution. This adds retry logic to
+    avoid task failures due to temporary environmental problems.
+
+    Args:
+        engine: The engine instance to check
+        max_retries: Maximum number of retry attempts
+        delay: Delay between retries in seconds
+
+    Returns:
+        True if engine is available, False otherwise
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            if engine.is_available():
+                if attempt > 0:
+                    logger.info(f"Engine {engine.name} availability check succeeded on retry {attempt}")
+                return True
+        except Exception as exc:
+            if attempt < max_retries:
+                logger.warning(
+                    f"Engine {engine.name} availability check failed (attempt {attempt + 1}/{max_retries + 1}): {exc}. Retrying..."
+                )
+                time.sleep(delay)
+            else:
+                logger.warning(f"Engine {engine.name} availability check failed after {max_retries + 1} attempts: {exc}")
+                return False
+
+        if attempt < max_retries:
+            logger.warning(
+                f"Engine {engine.name} reported unavailable (attempt {attempt + 1}/{max_retries + 1}). Retrying..."
+            )
+            time.sleep(delay)
+
+    return False
 
 
 class SubagentStartupError(RuntimeError):
@@ -197,7 +238,7 @@ class SubagentManager(SessionMixin):
                 )
 
         try:
-            if not engine.is_available():
+            if not _check_engine_availability_with_retry(engine):
                 raise EngineError(f"Engine '{engine.name}' is unavailable: missing binary '{engine.binary}'")
             if isinstance(engine, ExternalCLIAdapter) and sandbox_summary.enabled:
                 execution_engine = SandboxedAdapter(engine, self.sandbox, engine_name, role)

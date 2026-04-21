@@ -46,3 +46,6 @@ Task metadata updated via CLI.
 
 ## 2026-04-20T10:48:36+00:00
 Task closed: duplicate. Verified duplicate of existing shared live-engine behavior: Copilot inherits Heru ExternalCLIAdapter build_invocation/run_live and shared resume_session_id handling; Litehive already applies the shared 300s subagent inactivity timeout, classifies no-new-stdout kills as transient timeout, and retries the same engine with persisted continuation or resume ids when available. No Copilot-specific runtime logic is needed.
+
+## 2026-04-21T06:31:47+00:00
+Interrupted subagent execution while `grooming` was running. Reason: Stale runner detected while subagent `SA-0016` (planner/claude, pid 2745196 no longer alive) was still marked running in `grooming`.. Subagent `SA-0016` (planner/claude, pid=2745196, path `subagents/SA-0016-planner`) stopped with status `interrupted`. Last snippet: grooming rejected: agent did not submit verdict via litehive report CLI. Resume from `grooming`.
