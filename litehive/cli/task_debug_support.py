@@ -13,7 +13,7 @@ from litehive.tasks.paths import (
 )
 from litehive.tasks.activity import latest_task_activity_entry
 from litehive.tasks.reports import latest_stage_report
-from litehive.tasks.worktrees import resolve_recorded_worktree_path
+from litehive.worktree import resolve_recorded_worktree_path
 
 
 def _debug_all(root: Path, task):

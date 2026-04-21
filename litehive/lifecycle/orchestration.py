@@ -39,7 +39,7 @@ from litehive.state.records import (
     save_task,
     set_task_commit_sha,
 )
-from litehive.tasks.worktrees import resolve_recorded_worktree_path, task_worktree_branch
+from litehive.worktree import resolve_recorded_worktree_path, task_worktree_branch
 from litehive.tasks.activity import append_task_activity
 from litehive.tasks.journal import append_journal
 from litehive.tasks.reports import record_stage_report

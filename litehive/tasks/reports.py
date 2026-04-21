@@ -44,7 +44,7 @@ def collect_recovery_evidence(
     from litehive.observability.engine_monitoring import engine_monitoring_file, load_engine_monitoring
 
     from litehive.state.records import get_task_worktree_path
-    from .worktrees import resolve_recorded_worktree_path
+    from litehive.worktree import resolve_recorded_worktree_path
 
     evidence: list[RecoveryEvidenceItem] = []
     task_path = task_file(root, task)

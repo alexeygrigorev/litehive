@@ -7,7 +7,7 @@ import pytest
 
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task
-from litehive.tasks.worktrees import ensure_worktree_venv_link, resolve_task_execution_root, task_worktree_path
+from litehive.worktree import ensure_worktree_venv_link, resolve_task_execution_root, task_worktree_path
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -63,7 +63,7 @@ def test_ensure_worktree_venv_link_logs_target_and_raises_on_cleanup_failure(
     (worktree / ".venv").mkdir(parents=True)
 
     with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
-        with caplog.at_level(logging.INFO, logger="litehive.tasks.worktrees"):
+        with caplog.at_level(logging.INFO, logger="litehive.worktree"):
             with pytest.raises(OSError, match="failed to delete worktree venv directory .*permission denied"):
                 ensure_worktree_venv_link(workspace, worktree)
 
@@ -90,7 +90,7 @@ def test_resolve_task_execution_root_logs_target_and_raises_on_worktree_cleanup_
     stale_worktree.mkdir(parents=True)
 
     with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
-        with caplog.at_level(logging.INFO, logger="litehive.tasks.worktrees"):
+        with caplog.at_level(logging.INFO, logger="litehive.worktree"):
             with pytest.raises(OSError, match="failed to delete task worktree directory .*permission denied"):
                 resolve_task_execution_root(workspace, task)
 

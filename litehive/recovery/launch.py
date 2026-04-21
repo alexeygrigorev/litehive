@@ -40,7 +40,7 @@ from litehive.tasks.normalization import implementation_entry_stage
 from litehive.tasks.paths import tasks_root
 from litehive.tasks.reports import record_recovery_report
 from litehive.tasks.runtime import apply_task_outcome, finish_task_run_transition
-from litehive.tasks.worktrees import (
+from litehive.worktree import (
     ensure_worktree_venv_link,
     resolve_recorded_worktree_path,
     serialize_worktree_path,

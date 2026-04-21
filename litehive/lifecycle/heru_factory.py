@@ -35,7 +35,7 @@ from litehive.roles.recovery import RecoveryAgent
 from litehive.state.records import get_task
 from litehive.tasks.activity import latest_task_activity_entry
 from litehive.tasks.reports import normalized_files_changed
-from litehive.tasks.worktrees import resolve_recorded_worktree_path
+from litehive.worktree import resolve_recorded_worktree_path
 
 from .events import Crash
 from .nodes.agent import (

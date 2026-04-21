@@ -45,9 +45,7 @@ from litehive.state.persist import load_state
 from litehive.state.records import list_tasks
 from litehive.domain.task_ops import WorkspaceConflictError, WorkspaceRepairSummary
 from litehive.state.persist import load_state as load_runtime_state
-from litehive.tasks.worktrees import inspect_dirty_worktree_gate
-
-from litehive.cli.worktree_support import collect_managed_worktrees
+from litehive.worktree import collect_managed_worktrees, inspect_dirty_worktree_gate
 
 
 def register_root_commands(app: typer.Typer) -> None:

@@ -6,7 +6,7 @@ from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.persistence import TaskState
 from litehive.recovery.scope_analysis import analyze_scope_changes
 from litehive.state.records import get_task_record
-from litehive.tasks.worktrees import task_worktree_path
+from litehive.worktree import task_worktree_path
 from .base import RoleAgent
 
 INSTRUCTIONS = """\

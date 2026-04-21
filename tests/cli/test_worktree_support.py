@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from litehive.cli.worktree_support import collect_managed_worktrees
+from litehive.worktree import collect_managed_worktrees
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.state.persist import load_state, save_state

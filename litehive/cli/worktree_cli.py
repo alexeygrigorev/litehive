@@ -3,18 +3,16 @@ from typing import Annotated
 
 import typer
 
-from litehive.attention import record_attention
 from litehive.cli.common import WorkspaceOption, make_typer, require_subcommand
-from litehive.cli.worktree_support import (
-    _apply_rescue_candidate,
-    _collect_rescue_candidates,
-    _require_clean_main_checkout,
-    collect_managed_worktrees,
-)
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.task_ops import WorkspaceConflictError
-from litehive.git.ops import GitError, remove_worktree
-from litehive.state.records import clear_task_worktree_path, get_task, save_task
+from litehive.git.ops import GitError
+from litehive.worktree import (
+    apply_rescue_candidate,
+    collect_managed_worktrees,
+    collect_rescue_candidates,
+    remove_cleanable_worktrees,
+    require_clean_main_checkout,
+)
 
 app = make_typer(invoke_without_command=True)
 
@@ -49,12 +47,17 @@ def clean(
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show planned removals only")] = False,
 ) -> int:
     ensure_workspace(workspace)
-    worktrees = collect_managed_worktrees(workspace)
-    candidates = [item for item in worktrees if item.cleanable]
-    skipped_active = [item for item in worktrees if item.active]
+    results = remove_cleanable_worktrees(workspace, dry_run=dry_run)
+
+    candidates = results["candidates"]
+    skipped_active = results["skipped_active"]
+    removed = results["removed"]
+    deferred = results["deferred"]
+    failures = results["failures"]
 
     print(f"workspace: {workspace}")
     print(f"dry_run: {'yes' if dry_run else 'no'}")
+
     for item in candidates:
         print(f"would_remove: {item.task_id} {item.status} {item.worktree_rel}")
     for item in skipped_active:
@@ -64,34 +67,6 @@ def clean(
         print("removed_count: 0")
         print(f"would_remove_count: {len(candidates)}")
         return 0
-
-    failures = []
-    removed = []
-    deferred = []
-    for item in candidates:
-        try:
-            remove_worktree(workspace, item.worktree_path, force=True)
-            task = get_task(workspace, item.task_id)
-            if task is not None:
-                clear_task_worktree_path(task)
-                try:
-                    save_task(workspace, task)
-                except WorkspaceConflictError:
-                    # Defer metadata clearing when workspace is locked by active runner
-                    record_attention(
-                        workspace,
-                        kind="stale_worktree_metadata",
-                        title=f"Deferred worktree metadata clearing for {item.task_id}",
-                        reason=f"Worktree removed but task metadata clearing deferred due to active runner lock",
-                        suggested_action="Wait for runner to finish, then run attention reconciliation",
-                        task_id=item.task_id,
-                        metadata={"worktree_path": item.worktree_rel, "deferred_operation": "clear_worktree_path"}
-                    )
-                    deferred.append(item)
-                    continue
-            removed.append(item)
-        except GitError as exc:
-            failures.append((item, str(exc)))
 
     for item in removed:
         print(f"removed: {item.task_id} {item.status} {item.worktree_rel}")
@@ -110,7 +85,7 @@ def rescue(
     apply: Annotated[bool, typer.Option(help="Cherry-pick eligible commits onto main")] = False,
 ) -> int:
     ensure_workspace(workspace)
-    candidates = _collect_rescue_candidates(workspace)
+    candidates = collect_rescue_candidates(workspace)
 
     print(f"workspace: {workspace}")
     print(f"candidate_count: {len(candidates)}")
@@ -134,12 +109,12 @@ def rescue(
         return 0
 
     try:
-        _require_clean_main_checkout(workspace)
+        require_clean_main_checkout(workspace)
     except GitError as exc:
         print(f"apply_error: {exc}")
         return 1
 
-    results = [_apply_rescue_candidate(workspace, candidate) for candidate in candidates]
+    results = [apply_rescue_candidate(workspace, candidate) for candidate in candidates]
     clean_count = sum(1 for item in results if item.status == "clean")
     already_landed_count = sum(1 for item in results if item.status == "already_landed")
     manual_conflict_count = sum(1 for item in results if item.status == "manual_conflict")

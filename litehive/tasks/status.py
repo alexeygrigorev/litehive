@@ -283,7 +283,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
         is_retractable_pass_entry,
         retract_activity_entry,
     )
-    from litehive.tasks.worktrees import resolve_recorded_worktree_path
+    from litehive.worktree import resolve_recorded_worktree_path
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     def _task_checkout_path(task: TaskRecord) -> Path:

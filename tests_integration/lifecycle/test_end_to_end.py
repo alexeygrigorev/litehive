@@ -36,7 +36,7 @@ from litehive.lifecycle.sessions import InMemorySessionStore
 from litehive.lifecycle.types import PipelineMode
 from litehive.domain.recovery import RecoveryTrigger
 from litehive.state.records import get_task, get_task_worktree_path
-from litehive.tasks.worktrees import resolve_recorded_worktree_path
+from litehive.worktree import resolve_recorded_worktree_path
 
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace

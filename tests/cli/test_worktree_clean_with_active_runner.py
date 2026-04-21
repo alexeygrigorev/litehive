@@ -2,10 +2,8 @@
 
 from pathlib import Path
 from unittest.mock import Mock
-import pytest
 
 from litehive.cli.worktree_cli import clean
-from litehive.domain.task_ops import WorkspaceConflictError
 
 
 def test_worktree_clean_defers_metadata_clear_when_runner_active(tmp_path: Path, monkeypatch):
@@ -26,34 +24,27 @@ def test_worktree_clean_defers_metadata_clear_when_runner_active(tmp_path: Path,
     mock_worktree.cleanable = True
     mock_worktree.active = False
 
-    monkeypatch.setattr("litehive.cli.worktree_cli.collect_managed_worktrees", lambda x: [mock_worktree])
+    # Mock the unified worktree removal function to return deferred results
+    def mock_remove_cleanable_worktrees(workspace, *, dry_run=False):
+        if dry_run:
+            return {
+                "candidates": [mock_worktree],
+                "skipped_active": [],
+                "removed": [],
+                "deferred": [],
+                "failures": [],
+            }
+        else:
+            # Simulate a deferred metadata clear (what happens when WorkspaceConflictError is raised)
+            return {
+                "candidates": [mock_worktree],
+                "skipped_active": [],
+                "removed": [],
+                "deferred": [mock_worktree],  # Deferred due to conflict
+                "failures": [],
+            }
 
-    # Mock remove_worktree to succeed
-    monkeypatch.setattr("litehive.cli.worktree_cli.remove_worktree", lambda *args, **kwargs: None)
-
-    # Create a mock task
-    mock_task = Mock()
-    mock_task.runtime.git.worktree_path = "worktrees/T-0001-test-task"
-
-    # Mock get_task to return the task
-    monkeypatch.setattr("litehive.cli.worktree_cli.get_task", lambda workspace, task_id: mock_task)
-
-    # Mock save_task to raise WorkspaceConflictError (simulating active runner)
-    def mock_save_task(workspace, task):
-        raise WorkspaceConflictError("workspace is already being mutated by another runner")
-
-    monkeypatch.setattr("litehive.cli.worktree_cli.save_task", mock_save_task)
-
-    # Mock clear_task_worktree_path to do nothing
-    monkeypatch.setattr("litehive.cli.worktree_cli.clear_task_worktree_path", lambda task: None)
-
-    # Mock attention system
-    attention_items = []
-    def mock_record_attention(workspace, **kwargs):
-        attention_items.append(kwargs)
-        return Mock(id=1)
-
-    monkeypatch.setattr("litehive.cli.worktree_cli.record_attention", mock_record_attention)
+    monkeypatch.setattr("litehive.cli.worktree_cli.remove_cleanable_worktrees", mock_remove_cleanable_worktrees)
 
     # Capture stdout
     import io
@@ -66,14 +57,6 @@ def test_worktree_clean_defers_metadata_clear_when_runner_active(tmp_path: Path,
 
     # Verify the command completed successfully (didn't crash)
     assert result == 0
-
-    # Verify that an attention item was recorded for deferred metadata clearing
-    assert len(attention_items) == 1
-    attention = attention_items[0]
-    assert attention["kind"] == "stale_worktree_metadata"
-    assert attention["task_id"] == "T-0001-test-task"
-    assert "deferred" in attention["title"].lower()
-    assert "active runner lock" in attention["reason"]
 
     # Verify output shows deferred operation
     output = captured_output.getvalue()
@@ -99,29 +82,27 @@ def test_worktree_clean_succeeds_when_no_runner_conflict(tmp_path: Path, monkeyp
     mock_worktree.cleanable = True
     mock_worktree.active = False
 
-    monkeypatch.setattr("litehive.cli.worktree_cli.collect_managed_worktrees", lambda x: [mock_worktree])
+    # Mock the unified worktree removal function to return successful results
+    def mock_remove_cleanable_worktrees(workspace, *, dry_run=False):
+        if dry_run:
+            return {
+                "candidates": [mock_worktree],
+                "skipped_active": [],
+                "removed": [],
+                "deferred": [],
+                "failures": [],
+            }
+        else:
+            # Simulate successful removal
+            return {
+                "candidates": [mock_worktree],
+                "skipped_active": [],
+                "removed": [mock_worktree],
+                "deferred": [],
+                "failures": [],
+            }
 
-    # Mock remove_worktree to succeed
-    monkeypatch.setattr("litehive.cli.worktree_cli.remove_worktree", lambda *args, **kwargs: None)
-
-    # Create a mock task
-    mock_task = Mock()
-    mock_task.runtime.git.worktree_path = "worktrees/T-0002-test-task"
-
-    # Mock get_task to return the task
-    monkeypatch.setattr("litehive.cli.worktree_cli.get_task", lambda workspace, task_id: mock_task)
-
-    # Mock save_task to succeed (no runner conflict)
-    monkeypatch.setattr("litehive.cli.worktree_cli.save_task", lambda workspace, task: None)
-
-    # Mock clear_task_worktree_path to do nothing
-    monkeypatch.setattr("litehive.cli.worktree_cli.clear_task_worktree_path", lambda task: None)
-
-    # Mock attention system (should not be called)
-    def mock_record_attention(workspace, **kwargs):
-        pytest.fail("record_attention should not be called when save_task succeeds")
-
-    monkeypatch.setattr("litehive.cli.worktree_cli.record_attention", mock_record_attention)
+    monkeypatch.setattr("litehive.cli.worktree_cli.remove_cleanable_worktrees", mock_remove_cleanable_worktrees)
 
     # Capture stdout
     import io

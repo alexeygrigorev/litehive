@@ -8,7 +8,7 @@ from litehive.lifecycle.nodes.system import GitWorktreeSyncNode
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task, get_task, save_task
-from litehive.tasks.worktrees import task_worktree_branch
+from litehive.worktree import task_worktree_branch
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:

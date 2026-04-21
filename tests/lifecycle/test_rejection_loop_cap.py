@@ -12,7 +12,7 @@ from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.orchestration import run_task as run_pipeline_task
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.state.records import create_task, get_task, save_task
-from litehive.tasks.worktrees import resolve_recorded_worktree_path, task_worktree_branch
+from litehive.worktree import resolve_recorded_worktree_path, task_worktree_branch
 
 pytestmark = pytest.mark.integration
 
