@@ -24,6 +24,7 @@ DETECTABLE_ATTENTION_KINDS = {
     "merge_failed_task",
     "origin_divergence",
     "stale_worktree",
+    "stale_worktree_metadata",
 }
 
 ATTENTION_PRIORITIES = {
@@ -33,6 +34,7 @@ ATTENTION_PRIORITIES = {
     "merge_failed_task": 3,
     "duplicate_task_id": 4,
     "stale_worktree": 5,
+    "stale_worktree_metadata": 5,
     "flagged_task": 6,
 }
 
@@ -261,11 +263,14 @@ def resolve_attention(root: Path, item_id: int) -> AttentionItem | None:
     return attention_store(root).resolve(item_id, resolution="resolved by operator")
 
 
-def reconcile_attention(root: Path) -> list[AttentionItem]:
+def reconcile_attention(root: Path, *, auto_resolve: bool = True) -> list[AttentionItem]:
     ensure_workspace(root)
     state = load_state(root)
     _import_attention_log_events(root)
     detected = _detect_attention_items(root, state.pool_stop_reason)
+    # Auto-resolve deferred worktree metadata items when safe to do so (only during explicit reconciliation)
+    if auto_resolve:
+        _auto_resolve_stale_worktree_metadata_items(root)
     unresolved = attention_store(root).reconcile(detected)
     if state.pool_stop_reason == "attention_required" and not unresolved:
         set_pool_stop_reason(root, None)
@@ -274,7 +279,8 @@ def reconcile_attention(root: Path) -> list[AttentionItem]:
 
 def waiting_for_you_lines(root: Path, *, limit: int = 5) -> list[str]:
     try:
-        items = list_attention(root)
+        # Use read-only listing for status display to avoid side effects during status collection
+        items = list_attention(root, reconcile=False)
     except sqlite3.Error:
         return ["attention_items: unavailable"]
     lines = [f"attention_items: {len(items)}"]
@@ -294,6 +300,7 @@ def _detect_attention_items(root: Path, pool_stop_reason: str | None) -> list[At
     detected.extend(_duplicate_id_items(root))
     detected.extend(_flagged_and_merge_failed_items(root, tasks))
     detected.extend(_stale_worktree_items(root, tasks, state))
+    detected.extend(_stale_worktree_metadata_items(root, tasks))
     divergence = _origin_divergence_item(root)
     if divergence is not None:
         detected.append(divergence)
@@ -530,6 +537,53 @@ def _human_checkpoint_item(
         suggested_action=action,
         dedupe_key=f"human_checkpoint_before_commit:{task_id or 'workspace'}",
     )
+
+
+def _stale_worktree_metadata_items(root: Path, tasks: list[TaskRecord]) -> list[AttentionItem]:
+    """Return existing deferred worktree metadata attention items for status reporting."""
+    # Get existing deferred metadata attention items
+    store = attention_store(root)
+    existing_items = store.list_items(include_resolved=True)
+    deferred_items = [item for item in existing_items if item.kind == "stale_worktree_metadata" and item.status == "pending"]
+
+    # This is a read-only function for status reporting - auto-resolution happens elsewhere
+    return deferred_items
+
+
+def _auto_resolve_stale_worktree_metadata_items(root: Path) -> None:
+    """Auto-resolve deferred worktree metadata clearing operations when safe to do so."""
+    from litehive.state.locking import runner_lock_is_active
+    from litehive.state.records import get_task, save_task, clear_task_worktree_path
+    from litehive.domain.task_ops import WorkspaceConflictError
+
+    # If runner is still active, can't process deferred items yet
+    if runner_lock_is_active(root):
+        return
+
+    # Get existing deferred metadata attention items
+    store = attention_store(root)
+    existing_items = store.list_items(include_resolved=True)
+    deferred_items = [item for item in existing_items if item.kind == "stale_worktree_metadata" and item.status == "pending"]
+
+    # Try to process each deferred item
+    for item in deferred_items:
+        if item.task_id is None:
+            continue
+
+        try:
+            task = get_task(root, item.task_id)
+            if task is not None and task.runtime.git.worktree_path is not None:
+                # Task still has worktree path recorded, try to clear it
+                clear_task_worktree_path(task)
+                save_task(root, task)
+                # If successful, resolve the attention item
+                store.resolve(item.id, resolution="auto-resolved: worktree metadata cleared")
+        except WorkspaceConflictError:
+            # Still can't clear, keep the item pending
+            continue
+        except Exception:
+            # Task might not exist anymore or other issue - resolve the item
+            store.resolve(item.id, resolution="auto-resolved: task no longer exists or clearing not needed")
 
 
 def _default_dedupe_key(kind: str, *, task_id: str | None, title: str, reason: str) -> str:

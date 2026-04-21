@@ -3,6 +3,7 @@ from typing import Annotated
 
 import typer
 
+from litehive.attention import record_attention
 from litehive.cli.common import WorkspaceOption, make_typer, require_subcommand
 from litehive.cli.worktree_support import (
     _apply_rescue_candidate,
@@ -11,6 +12,7 @@ from litehive.cli.worktree_support import (
     collect_managed_worktrees,
 )
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.git.ops import GitError, remove_worktree
 from litehive.state.records import clear_task_worktree_path, get_task, save_task
 
@@ -65,22 +67,40 @@ def clean(
 
     failures = []
     removed = []
+    deferred = []
     for item in candidates:
         try:
             remove_worktree(workspace, item.worktree_path, force=True)
             task = get_task(workspace, item.task_id)
             if task is not None:
                 clear_task_worktree_path(task)
-                save_task(workspace, task)
+                try:
+                    save_task(workspace, task)
+                except WorkspaceConflictError:
+                    # Defer metadata clearing when workspace is locked by active runner
+                    record_attention(
+                        workspace,
+                        kind="stale_worktree_metadata",
+                        title=f"Deferred worktree metadata clearing for {item.task_id}",
+                        reason=f"Worktree removed but task metadata clearing deferred due to active runner lock",
+                        suggested_action="Wait for runner to finish, then run attention reconciliation",
+                        task_id=item.task_id,
+                        metadata={"worktree_path": item.worktree_rel, "deferred_operation": "clear_worktree_path"}
+                    )
+                    deferred.append(item)
+                    continue
             removed.append(item)
         except GitError as exc:
             failures.append((item, str(exc)))
 
     for item in removed:
         print(f"removed: {item.task_id} {item.status} {item.worktree_rel}")
+    for item in deferred:
+        print(f"deferred_metadata_clear: {item.task_id} {item.status} {item.worktree_rel}")
     for item, message in failures:
         print(f"remove_failed: {item.task_id} {message}")
     print(f"removed_count: {len(removed)}")
+    print(f"deferred_count: {len(deferred)}")
     return 1 if failures else 0
 
 
