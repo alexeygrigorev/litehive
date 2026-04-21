@@ -3,14 +3,10 @@ slug: audit-litehive-models-for-unused-types-and-dead
 title: Audit litehive/models/ for unused types and dead fields
 created_at: '2026-04-10T20:27:59+00:00'
 task_type: null
-mode: implementation
 pipeline_mode: full
 priority: low
-pm_complexity: null
-planned_effort: null
 depends_on:
 - T-0323
-- T-0324
 goal: "Keep the 5-file split in litehive/models/ (common.py, engine_models.py, report_models.py,\
   \ runtime_models.py, task_models.py) \u2014 separate files are fine. But audit for\
   \ unused types and dead fields.\n\n### Scope\n1. Every class defined in litehive/models/\
@@ -38,10 +34,7 @@ acceptance_criteria:
 - All tests pass
 constraints: []
 plan: []
-human_checkpoints: []
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0330 audit-litehive-models-for-unused-types-and-dead'
 created_from: null
-upstream_origin: null
-github_origin: null

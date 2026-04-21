@@ -6,7 +6,6 @@ task_type: null
 pipeline_mode: full
 priority: low
 depends_on:
-- T-0324
 - T-0325
 goal: 'TaskRuntime has 14 fields tracking engine/stage/subagent state, several of
   which duplicate other fields or serve features being cut.

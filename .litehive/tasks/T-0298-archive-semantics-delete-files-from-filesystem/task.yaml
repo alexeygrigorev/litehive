@@ -6,8 +6,7 @@ task_type: null
 pipeline_mode: full
 priority: high
 depends_on:
-- T-0291
-- T-0295
+- T-0429
 goal: 'Change litehive close/archive to: 1) sync the task''s intent and state to DB,
   2) git rm -r the task directory from .litehive/tasks/, 3) commit the deletion. The
   DB retains everything forever. Archived tasks are accessible via litehive archive
