@@ -14,7 +14,6 @@ from typing import Mapping
 from litehive.agents._sandbox import (
     SandboxedAdapter as LitehiveSandboxedAdapter,
     forced_engine_rw_state_dirs as _forced_engine_rw_state_dirs,
-    sanitize_path_env as _sanitize_path_env,
 )
 from heru.base import CLIInvocation
 from litehive.config.model import LitehiveConfig
@@ -134,24 +133,16 @@ class SandboxLauncher:
         if binary_path is None:
             raise SandboxError(f"Engine '{engine_name}' is unavailable: missing binary '{binary_name}'")
 
-        return (
-            self._wrap_docker(
-                engine_name,
-                role,
-                binary_name,
-                binary_path,
-                invocation,
-                summary,
-            )
-            if runtime_config.backend == "docker"
-            else self._wrap_bubblewrap(
-                engine_name,
-                role,
-                binary_name,
-                binary_path,
-                invocation,
-                summary,
-            )
+        if runtime_config.backend != "docker":
+            raise SandboxError(f"Unsupported sandbox backend '{runtime_config.backend}' for engine '{engine_name}'")
+
+        return self._wrap_docker(
+            engine_name,
+            role,
+            binary_name,
+            binary_path,
+            invocation,
+            summary,
         )
 
     def _wrap_docker(
@@ -208,7 +199,8 @@ class SandboxLauncher:
             ]
         )
 
-        del role  # role no longer drives profile selection under docker
+        # Set up git wrapper for role-based git protection
+        profile = sandbox_profile_for_role(role)
         allowed_env: dict[str, str] = {}
         for env_name in () if policy is None else policy.environment:
             value = invocation.env.get(env_name)
@@ -237,6 +229,43 @@ class SandboxLauncher:
             )
             allowed_env[credential.env_var] = credential.mount_path
 
+        # Set up git wrapper for git operation protection
+        wrapper_paths = self._ensure_docker_git_wrappers()
+        real_git_path = shutil.which("git")
+
+        if profile == SandboxProfile.NO_GIT:
+            # Block all git commands
+            argv.extend([
+                "--mount",
+                self._bind_mount_spec(wrapper_paths["no_git"], PurePosixPath("/usr/local/bin/git"), read_only=True),
+            ])
+            allowed_env["PATH"] = "/usr/local/bin:/usr/bin:/bin"
+        elif profile == SandboxProfile.MERGE_RESOLVER and real_git_path is not None:
+            # Allow git commands but with protection wrapper
+            argv.extend([
+                "--mount",
+                self._bind_mount_spec(wrapper_paths["merge_git"], PurePosixPath("/usr/local/bin/git"), read_only=True),
+                "--mount",
+                self._bind_mount_spec(Path(real_git_path).resolve(), PurePosixPath("/litehive/bin/git.real"), read_only=True),
+            ])
+            # Mount litehive source code for the wrapper
+            source_root = Path(__file__).resolve().parents[2]
+            argv.extend([
+                "--mount",
+                self._bind_mount_spec(source_root, PurePosixPath(str(source_root)), read_only=True),
+            ])
+            allowed_env["PATH"] = "/usr/local/bin:/usr/bin:/bin"
+            allowed_env["LITEHIVE_REAL_GIT_PATH"] = "/litehive/bin/git.real"
+            allowed_env["LITEHIVE_WORKSPACE_ROOT"] = str(workspace_mount)
+            allowed_env["LITEHIVE_SOURCE_ROOT"] = str(source_root)
+            allowed_env["LITEHIVE_PYTHON_PATH"] = sys.executable
+            # Mount Python executable
+            python_path = Path(sys.executable).resolve()
+            argv.extend([
+                "--mount",
+                self._bind_mount_spec(python_path, PurePosixPath(sys.executable), read_only=True),
+            ])
+
         for env_name, value in sorted(allowed_env.items()):
             argv.extend(["--env", f"{env_name}={value}"])
 
@@ -244,117 +273,16 @@ class SandboxLauncher:
         argv.extend(container_argv)
         return CLIInvocation(argv=tuple(argv), cwd=invocation.cwd, env=invocation.env)
 
-    def _wrap_bubblewrap(
-        self,
-        engine_name: str,
-        role: str,
-        binary_name: str,
-        binary_path: str,
-        invocation: CLIInvocation,
-        summary: SandboxPolicySummary,
-    ) -> CLIInvocation:
-        runtime_config = self.config.external_engine_sandbox
-        policy = self._policy_for_engine(engine_name)
-        profile = sandbox_profile_for_role(role)
-        env = dict(invocation.env)
-        if policy is not None:
-            env.update(policy.setenv)
 
-        argv: list[str] = [
-            runtime_config.runtime_binary,
-            "--die-with-parent",
-            "--new-session",
-            "--unshare-all",
-        ]
-        if summary.network_mode in {"host", "bridge"}:
-            argv.append("--share-net")
-        argv.extend(["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"])
 
-        for system_path in ("/usr", "/bin", "/lib", "/lib64", "/sbin", "/etc"):
-            host_path = Path(system_path)
-            if not host_path.exists():
-                continue
-            self._ensure_bubblewrap_target(argv, PurePosixPath(system_path), is_dir=True)
-            argv.extend(["--ro-bind", system_path, system_path])
-        for system_file in ("/etc/resolv.conf",):
-            host_file = Path(system_file)
-            try:
-                resolved_file = host_file.resolve(strict=True)
-            except OSError:
-                continue
-            if resolved_file == host_file:
-                continue
-            target = PurePosixPath(str(resolved_file))
-            self._ensure_bubblewrap_target(argv, target, is_dir=False)
-            argv.extend(["--ro-bind", str(resolved_file), str(target)])
-
-        self._ensure_bubblewrap_target(argv, PurePosixPath(str(self.root)), is_dir=True)
-        argv.extend(["--bind", str(self.root), str(self.root)])
-
-        for host_path in self._resolved_extra_ro_binds(engine_name, policy, env):
-            target = PurePosixPath(str(host_path))
-            self._ensure_bubblewrap_target(argv, target, is_dir=host_path.is_dir())
-            argv.extend(["--ro-bind", str(host_path), str(target)])
-        for host_path in self._resolved_extra_rw_binds(engine_name, policy, env):
-            target = PurePosixPath(str(host_path))
-            self._ensure_bubblewrap_target(argv, target, is_dir=host_path.is_dir())
-            argv.extend(["--bind", str(host_path), str(target)])
-
-        wrapper_paths = self._ensure_bubblewrap_wrappers()
-        real_git_path = shutil.which("git")
-        if profile is SandboxProfile.NO_GIT:
-            env["PATH"] = f"{wrapper_paths['no_git_bin']}{os.pathsep}{env.get('PATH', '')}"
-            self._ensure_bubblewrap_target(argv, PurePosixPath("/usr/bin/git"), is_dir=False)
-            argv.extend(["--bind", str(wrapper_paths["no_git"]), "/usr/bin/git"])
-        elif profile is SandboxProfile.MERGE_RESOLVER and real_git_path is not None:
-            env["PATH"] = f"{wrapper_paths['merge_bin']}{os.pathsep}{env.get('PATH', '')}"
-            env["LITEHIVE_REAL_GIT_PATH"] = "/litehive/bin/git.real"
-            env["LITEHIVE_WORKSPACE_ROOT"] = str(self.root)
-            env["LITEHIVE_SOURCE_ROOT"] = str(Path(__file__).resolve().parents[2])
-            env["LITEHIVE_PYTHON_PATH"] = sys.executable
-            self._ensure_bubblewrap_target(argv, PurePosixPath("/litehive/bin/git.real"), is_dir=False)
-            argv.extend(["--ro-bind", real_git_path, "/litehive/bin/git.real"])
-            source_root = Path(env["LITEHIVE_SOURCE_ROOT"]).resolve()
-            self._ensure_bubblewrap_target(argv, PurePosixPath(str(source_root)), is_dir=True)
-            argv.extend(["--ro-bind", str(source_root), str(source_root)])
-
-        sanitized_path = _sanitize_path_env(env.get("PATH", ""))
-        if sanitized_path:
-            env["PATH"] = sanitized_path
-
-        argv.append("--")
-        argv.extend(invocation.argv)
-        return CLIInvocation(argv=tuple(argv), cwd=invocation.cwd, env=env)
-
-    @staticmethod
-    def _ensure_bubblewrap_target(
-        argv: list[str],
-        target: PurePosixPath,
-        *,
-        is_dir: bool,
-    ) -> None:
-        candidates = list(target.parents)[::-1]
-        if is_dir:
-            candidates.append(target)
-        else:
-            candidates.append(target.parent)
-        seen: set[str] = set()
-        for candidate in candidates:
-            text = str(candidate)
-            if text in {"", "/"} or text in seen:
-                continue
-            seen.add(text)
-            argv.extend(["--dir", text])
-
-    def _ensure_bubblewrap_wrappers(self) -> dict[str, Path]:
+    def _ensure_docker_git_wrappers(self) -> dict[str, Path]:
+        """Create git wrapper scripts for Docker sandbox."""
         runtime_dir = self.root / ".litehive" / "runtime" / "sandbox"
         runtime_dir.mkdir(parents=True, exist_ok=True)
-        merge_bin = runtime_dir / "merge-bin"
-        no_git_bin = runtime_dir / "no-git-bin"
-        merge_bin.mkdir(parents=True, exist_ok=True)
-        no_git_bin.mkdir(parents=True, exist_ok=True)
-        merge_git = merge_bin / "git"
-        no_git = no_git_bin / "git"
+
+        merge_git = runtime_dir / "merge-git"
+        no_git = runtime_dir / "no-git"
+
         merge_git.write_text(
             """#!/bin/sh
 export PYTHONPATH="${LITEHIVE_SOURCE_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
@@ -369,13 +297,13 @@ exit 127
 """,
             encoding="utf-8",
         )
+
         for path in (merge_git, no_git):
             path.chmod(0o755)
+
         return {
             "merge_git": merge_git,
-            "merge_bin": merge_bin,
             "no_git": no_git,
-            "no_git_bin": no_git_bin,
         }
 
     def _policy_for_engine(self, engine_name: str) -> ExternalEngineSandboxPolicy | None:
