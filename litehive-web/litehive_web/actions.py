@@ -4,6 +4,7 @@ from typing import Any
 import yaml
 
 from litehive.config import config_path, load_config
+from litehive.domain.common import cap_feedback
 from litehive.models import StageReport, TaskRecord, TaskThreadComment
 from litehive.config.pipeline_states import ROUTES
 from litehive.tasks.constants import VALID_TASK_ENGINES
@@ -172,7 +173,7 @@ def submit_stage_verdict_via_web(
             step=step,  # type: ignore[arg-type]
             verdict=normalized_verdict,  # type: ignore[arg-type]
             summary=cleaned_message,
-            feedback=cleaned_message,
+            feedback=cap_feedback(cleaned_message),
         )
         _write_stage_report(root, task, report)
         apply_stage_finished(task, report)

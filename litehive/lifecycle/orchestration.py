@@ -31,7 +31,7 @@ from litehive.git.ops import GitError, remove_worktree
 from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.domain.runtime import RuntimeHookRejectFingerprint
-from litehive.domain.common import utcnow
+from litehive.domain.common import cap_feedback, utcnow
 from litehive.state.records import (
     clear_task_worktree_path,
     get_task,
@@ -419,7 +419,7 @@ def _record_hook_warnings(
         verdict="pass",
         source="hook",
         summary=summary,
-        feedback=feedback,
+        feedback=cap_feedback(feedback),
         warnings=warnings,
         failure_diagnostics={
             "phase": phase,
@@ -486,7 +486,7 @@ def _record_hook_reject(
         verdict="reject",
         source="hook",
         summary=summary,
-        feedback=feedback,
+        feedback=cap_feedback(feedback),
         warnings=warnings,
         failure_classification="hook_reject",
         failure_diagnostics=failure_diagnostics,
