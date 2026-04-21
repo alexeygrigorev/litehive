@@ -230,3 +230,26 @@ def test_ensure_workspace_unresolved_shell_var_rejections_do_not_create_side_eff
         ensure_workspace(target)
 
     assert not workspace_dir(target).exists()
+
+
+def test_ensure_workspace_comprehensive_nested_litehive_rejection(tmp_path: Path) -> None:
+    """Test comprehensive rejection of nested .litehive directories and edge cases."""
+    ensure_workspace(tmp_path)
+
+    # Test the specific .litehive/.litehive/ case mentioned in the goal
+    nested_litehive = tmp_path / ".litehive" / ".litehive"
+    nested_litehive.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(ValueError, match="Litehive control directory.*choose the real repo root"):
+        ensure_workspace(nested_litehive)
+
+    # Test deeply nested .litehive case
+    deep_nested = tmp_path / ".litehive" / "subdir" / "another" / ".litehive"
+    deep_nested.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(ValueError, match="Litehive control directory.*choose the real repo root"):
+        ensure_workspace(deep_nested)
+
+    # Ensure no workspace directories were created in rejected paths
+    assert not workspace_dir(nested_litehive).exists()
+    assert not workspace_dir(deep_nested).exists()

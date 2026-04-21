@@ -47,6 +47,7 @@ def registered_workspace_root(path: Path) -> Path | None:
 
 
 def _reject_invalid_workspace_path(path: Path | str, *, source: str) -> None:
+    """Reject workspace paths containing unresolved shell variables."""
     raw = str(path).strip()
     match = _UNRESOLVED_SHELL_VAR_RE.search(raw)
     if match is not None:
@@ -70,28 +71,43 @@ def _task_matches(root: Path, task_id: str | None) -> bool:
     return task_id is None or _task_exists(root, task_id)
 
 
-def normalize_workspace_root(root: Path, *, source: str) -> Path:
-    _reject_invalid_workspace_path(root, source=source)
-    resolved_input = Path(root).expanduser().resolve()
-    resolved_root = registered_workspace_root(resolved_input) or resolved_input
+def _reject_litehive_control_paths(path: Path, *, source: str) -> None:
+    """Reject workspace paths inside .litehive control directories or managed worktrees."""
+    resolved_path = path.resolve()
+
+    # Check if path is inside managed worktrees
     managed_worktree = next(
-        (ancestor for ancestor in (resolved_input, *resolved_input.parents) if ancestor.name == "worktrees" and ancestor.parent.name == ".litehive"),
+        (ancestor for ancestor in (resolved_path, *resolved_path.parents)
+         if ancestor.name == "worktrees" and ancestor.parent.name == ".litehive"),
         None,
     )
     if managed_worktree is not None:
         raise ValueError(
-            f"invalid workspace root from {source}: {resolved_input} is inside Litehive managed "
+            f"invalid workspace root from {source}: {resolved_path} is inside Litehive managed "
             f"worktrees at {managed_worktree}; choose the real repo root instead"
         )
+
+    # Check if path is inside any .litehive control directory
     control_ancestor = next(
-        (ancestor for ancestor in (resolved_input, *resolved_input.parents) if ancestor.name == ".litehive"),
+        (ancestor for ancestor in (resolved_path, *resolved_path.parents)
+         if ancestor.name == ".litehive"),
         None,
     )
     if control_ancestor is not None:
         raise ValueError(
-            f"invalid workspace root from {source}: {resolved_input} is inside the Litehive "
+            f"invalid workspace root from {source}: {resolved_path} is inside the Litehive "
             f"control directory {control_ancestor}; choose the real repo root instead"
         )
+
+
+def normalize_workspace_root(root: Path, *, source: str) -> Path:
+    _reject_invalid_workspace_path(root, source=source)
+    resolved_input = Path(root).expanduser().resolve()
+    _reject_litehive_control_paths(resolved_input, source=source)
+
+    resolved_root = registered_workspace_root(resolved_input) or resolved_input
+
+    # Additional check for nested .litehive trees in resolved root
     if any(ancestor.name == ".litehive" for ancestor in resolved_root.parents):
         raise ValueError(
             f"invalid workspace root from {source}: {resolved_root} is nested inside another .litehive tree"
@@ -100,6 +116,7 @@ def normalize_workspace_root(root: Path, *, source: str) -> Path:
 
 
 def _reject_nested_workspace_bootstrap(root: Path, *, source: str) -> None:
+    """Reject workspace creation inside existing Litehive workspace directories."""
     parent_workspace = _workspace_parent_root(root)
     if parent_workspace is None:
         return
