@@ -25,12 +25,6 @@ class GhAuthError(RuntimeError):
     pass
 
 
-LABEL_TO_TASK_TYPE: dict[str, str] = {
-    "bug": "bugfix",
-    "documentation": "docs",
-    "enhancement": "refactor",
-    "question": "research",
-}
 
 LABEL_TO_PRIORITY: dict[str, str] = {
     "priority: critical": "critical",
@@ -47,16 +41,13 @@ def import_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) ->
     require_subcommand(ctx)
 
 
-def map_labels(labels: list[str]) -> tuple[str | None, str | None]:
-    task_type = None
+def map_labels(labels: list[str]) -> str | None:
     priority = None
     for label in labels:
         lowered = label.lower()
-        if lowered in LABEL_TO_TASK_TYPE and task_type is None:
-            task_type = LABEL_TO_TASK_TYPE[lowered]
         if lowered in LABEL_TO_PRIORITY and priority is None:
             priority = LABEL_TO_PRIORITY[lowered]
-    return task_type, priority
+    return priority
 
 
 def run_gh(args: list[str], cwd: Path | None = None) -> str:
@@ -178,12 +169,11 @@ def import_single_issue(root: Path, repo: str, issue_number: int, cwd: Path | No
         return existing, "skipped"
     issue_data = fetch_issue(repo, issue_number, cwd=cwd)
     labels = [label["name"] for label in issue_data.get("labels", [])]
-    task_type, priority = map_labels(labels)
+    priority = map_labels(labels)
     task = create_task(
         root,
         title=issue_data["title"],
         goal=_render_github_goal(repo, issue_data),
-        task_type=task_type,
         priority=priority,
     )
     brief_lines = [

@@ -109,7 +109,7 @@ def test_import_github_creates_task_from_issue(tmp_path: Path, monkeypatch) -> N
     assert "Created task T-0001 from owner/repo#10" in result.output
     task = list_tasks(tmp_path)[0]
     assert task.title == "Fix login redirect"
-    assert task.task_type == "bugfix"
+    assert task.task_type is None  # No longer auto-classified
     assert task.priority == "high"
     assert "Imported from GitHub issue: owner/repo#10" in task.goal
 
