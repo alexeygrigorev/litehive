@@ -256,18 +256,6 @@ def test_load_config_rejects_unknown_process_profile(tmp_path: Path) -> None:
         load_config(tmp_path)
 
 
-def test_load_config_rejects_unknown_pool_selection_policy(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
-    raw_config["pool_selection_policy"] = "unknown_policy"
-    (tmp_path / ".litehive" / "config.yaml").write_text(
-        yaml.safe_dump(raw_config, sort_keys=False),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ValueError, match="unknown pool_selection_policy 'unknown_policy'"):
-        load_config(tmp_path)
-
 
 def test_load_config_still_rejects_unknown_keys(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)

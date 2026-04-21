@@ -165,7 +165,6 @@ def test_render_runtime_policy_lines_uses_preformatted_retry_label() -> None:
         pool_max_tasks=7,
         pool_stop_on_dirty_git=True,
         pool_stop_on_attention=True,
-        pool_selection_policy="fifo",
         process_profile="python",
     )
 
@@ -178,7 +177,6 @@ def test_render_runtime_policy_lines_uses_preformatted_retry_label() -> None:
         "pool_max_tasks: 7",
         "pool_stop_on_dirty_git: True",
         "pool_stop_on_attention: True",
-        "pool_selection_policy: fifo",
         "process_profile: python",
     ]
 

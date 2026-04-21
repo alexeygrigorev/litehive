@@ -6,7 +6,6 @@ from typing import Any, Mapping
 
 import yaml
 
-from litehive.config.model import VALID_POOL_SELECTION_POLICIES
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import litehive_root
 from litehive.config.profiles.loader import PROCESS_PROFILES
@@ -70,9 +69,6 @@ def load_config(root: Path) -> LitehiveConfig:
     if "process_profile" in data and data["process_profile"] not in PROCESS_PROFILES:
         available_profiles = ", ".join(sorted(PROCESS_PROFILES.keys()))
         raise ValueError(f"unknown process_profile {data['process_profile']!r}; must be one of: {available_profiles}")
-    if "pool_selection_policy" in data and data["pool_selection_policy"] not in VALID_POOL_SELECTION_POLICIES:
-        available_policies = ", ".join(sorted(VALID_POOL_SELECTION_POLICIES))
-        raise ValueError(f"unknown pool_selection_policy {data['pool_selection_policy']!r}; must be one of: {available_policies}")
     valid_keys = {f.name for f in fields(LitehiveConfig)}
     for key in list(data):
         if key not in valid_keys:

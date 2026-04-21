@@ -1,9 +1,7 @@
 from pathlib import Path
 
 import pytest
-import yaml
 
-from litehive.config.model import VALID_POOL_SELECTION_POLICIES
 from litehive.config.workspace import ensure_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
@@ -19,20 +17,11 @@ def _persist_task_status(root: Path, task_id: str, *, status: str, pipeline_stat
     save_task(root, task)
 
 
-def _set_pool_selection_policy(root: Path, policy: str) -> None:
-    config_path = root / ".litehive" / "config.yaml"
-    config_data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    config_data["pool_selection_policy"] = policy
-    config_path.write_text(yaml.safe_dump(config_data, sort_keys=False), encoding="utf-8")
 
-
-@pytest.mark.parametrize("policy", sorted(VALID_POOL_SELECTION_POLICIES))
 def test_dequeue_next_task_reclaims_missing_in_progress_task_before_handoff(
     tmp_path: Path,
-    policy: str,
 ) -> None:
     ensure_workspace(tmp_path)
-    _set_pool_selection_policy(tmp_path, policy)
     unfinished = create_task(tmp_path, title="Unfinished active task")
     later = create_task(tmp_path, title="Later queued task")
     _persist_task_status(
@@ -60,13 +49,10 @@ def test_dequeue_next_task_reclaims_missing_in_progress_task_before_handoff(
     assert repaired_state.queue == [later.id]
 
 
-@pytest.mark.parametrize("policy", sorted(VALID_POOL_SELECTION_POLICIES))
 def test_dequeue_next_task_ignores_stale_active_marker_when_reclaiming_missing_work(
     tmp_path: Path,
-    policy: str,
 ) -> None:
     ensure_workspace(tmp_path)
-    _set_pool_selection_policy(tmp_path, policy)
     stale = create_task(tmp_path, title="Stale active task")
     unfinished = create_task(tmp_path, title="Unfinished active task")
     later = create_task(tmp_path, title="Later queued task")
@@ -112,7 +98,6 @@ def test_dequeue_next_task_preserves_missing_resumed_work_on_restart(
     pipeline_status: str,
 ) -> None:
     ensure_workspace(tmp_path)
-    _set_pool_selection_policy(tmp_path, "dependency_aware")
     unfinished = create_task(tmp_path, title="Unfinished task")
     later = create_task(tmp_path, title="Later queued task")
     _persist_task_status(

@@ -44,7 +44,6 @@ pool_stop_on_failure: false
 pool_max_tasks: null
 pool_stop_on_dirty_git: false
 pool_stop_on_attention: false
-pool_selection_policy: dependency_aware
 
 # Lifecycle hooks keyed by hook point.
 # Supported keys:

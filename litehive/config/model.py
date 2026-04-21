@@ -8,7 +8,6 @@ from typing import Mapping, Sequence
 
 # --- validation constants ---
 
-VALID_POOL_SELECTION_POLICIES = {"fifo", "priority_first", "dependency_aware"}
 VALID_ENGINE_NAMES = frozenset({"codex", "opencode", "gemini", "copilot", "claude", "goz"})
 VALID_AGENT_STARTUP_GUIDANCE_KEYS = frozenset({"all", "planner", "swe", "qa", "reviewer", "recovery"})
 VALID_RETRY_ON_FAILURE_KINDS = frozenset({"execution_limit", "timeout", "network", "service"})
@@ -113,7 +112,6 @@ class LitehiveConfig:
     pool_max_tasks: int | None = None
     pool_stop_on_dirty_git: bool = False
     pool_stop_on_attention: bool = False
-    pool_selection_policy: str = "dependency_aware"
     runner_hooks: dict[str, list[dict[str, object]]] = field(default_factory=dict)
     subagent_inactivity_timeout_seconds: float = DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS
     inactivity_timeout_seconds: float | None = None

@@ -14,7 +14,6 @@ default_stage_retry_limit: 2
 pool_stop_on_failure: false
 pool_max_tasks: null
 pool_stop_on_dirty_git: false
-pool_selection_policy: dependency_aware
 runner_hooks:
   after_implementing:
   - command: uv run ruff check --select E402,F401 litehive tests

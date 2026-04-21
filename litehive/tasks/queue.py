@@ -4,15 +4,12 @@ logic (dequeue, block, dep-resolve)."""
 import logging
 from pathlib import Path
 
-from litehive.config.loading import load_config
-from litehive.config.model import VALID_POOL_SELECTION_POLICIES
 from litehive.domain.common import utcnow
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.runtime import TaskOutcomeState
 from litehive.domain.task import TaskRecord, WorkspaceState
 
-from .constants import TASK_PRIORITY_ORDER
 from litehive.state.records import set_task_commit_sha
 from litehive.domain.task_ops import BlockedTask, TaskPlan, TaskSelection, WorkspaceConflictError
 from litehive.state.persist import load_state, save_state_without_runner_guard
@@ -204,9 +201,6 @@ def plan_task_selections(root: Path) -> TaskPlan:
         state = load_state(root)
         validate_single_active_task(root, state)
         tasks_by_id = {task.id: task.model_copy(deep=True) for task in list_tasks(root)}
-        policy = load_config(root).pool_selection_policy
-        if policy not in VALID_POOL_SELECTION_POLICIES:
-            policy = "dependency_aware"
 
         planned: list[TaskRecord] = []
         simulated_state = state.model_copy(deep=True)
@@ -214,7 +208,6 @@ def plan_task_selections(root: Path) -> TaskPlan:
             next_task, blocked, _ = _resolve_next_task_from_snapshot(
                 simulated_state,
                 tasks_by_id,
-                policy=policy,
             )
             if next_task is None:
                 return TaskPlan(tasks=planned, blocked=blocked)
@@ -420,21 +413,14 @@ def _task_selection_key(
     queue_index: int,
     queue: list[str],
     tasks_by_id: dict[str, TaskRecord],
-    policy: str,
 ) -> tuple[int | str, ...]:
     interrupted_rank = 0 if _is_interrupted_task(task) else 1
-    if policy == "fifo":
-        return (interrupted_rank, queue_index, task.id)
-    if policy == "priority_first":
-        return (interrupted_rank, TASK_PRIORITY_ORDER.get(task.priority, 2), queue_index, task.id)
-    if policy == "dependency_aware":
-        return (
-            queue_index,
-            -_dependent_task_count(task.id, queue, tasks_by_id),
-            interrupted_rank,
-            task.id,
-        )
-    raise ValueError(f"Unsupported pool selection policy '{policy}'")
+    return (
+        queue_index,
+        -_dependent_task_count(task.id, queue, tasks_by_id),
+        interrupted_rank,
+        task.id,
+    )
 
 
 def _resolve_next_task_from_state(
@@ -443,10 +429,7 @@ def _resolve_next_task_from_state(
     from litehive.state.records import list_tasks
 
     tasks_by_id = {task.id: task for task in list_tasks(root)}
-    policy = load_config(root).pool_selection_policy
-    if policy not in VALID_POOL_SELECTION_POLICIES:
-        policy = "dependency_aware"
-    next_task, blocked, snapshot_mutated = _resolve_next_task_from_snapshot(state, tasks_by_id, policy=policy)
+    next_task, blocked, snapshot_mutated = _resolve_next_task_from_snapshot(state, tasks_by_id)
     return next_task, blocked, snapshot_mutated
 
 
@@ -477,8 +460,6 @@ def restore_missing_queued_tasks(
 def _resolve_next_task_from_snapshot(
     state: WorkspaceState,
     tasks_by_id: dict[str, TaskRecord],
-    *,
-    policy: str,
 ) -> tuple[TaskRecord | None, list[BlockedTask], bool]:
     mutated = False
     blocked: list[BlockedTask] = []
@@ -532,7 +513,6 @@ def _resolve_next_task_from_snapshot(
                     queue_index=index,
                     queue=list(state.queue),
                     tasks_by_id=tasks_by_id,
-                    policy=policy,
                 ),
                 next_task,
             )

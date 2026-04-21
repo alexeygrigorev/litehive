@@ -488,7 +488,6 @@ def render_runtime_policy_lines(config: LitehiveConfig, retry_on_label: str) -> 
         f"pool_max_tasks: {config.pool_max_tasks}",
         f"pool_stop_on_dirty_git: {config.pool_stop_on_dirty_git}",
         f"pool_stop_on_attention: {config.pool_stop_on_attention}",
-        f"pool_selection_policy: {config.pool_selection_policy}",
         f"process_profile: {config.process_profile}",
     ]
 
