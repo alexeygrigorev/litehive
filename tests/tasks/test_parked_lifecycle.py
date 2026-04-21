@@ -54,8 +54,15 @@ def test_stop_current_task_marks_active_work_as_parked(tmp_path: Path) -> None:
 
     assert summary.task.status == "parked"
     assert summary.task.pipeline_status == "implementing"
+    assert summary.task.runtime.execution_status == "idle"
+    assert summary.task.runtime.run_started_at is None
+    assert summary.task.runtime.active_subagent is None
+
+    # Parked tasks have minimal interruption metadata for resume functionality
     assert summary.task.runtime.interruption is not None
-    assert summary.task.runtime.interruption.reason == "Task stopped via CLI"
+    assert summary.task.runtime.interruption.resume_stage == "implementing"
+    assert summary.task.runtime.interruption.reason == "Task parked via CLI command from implementing stage"
+    # No longer using the magic string "Task stopped via CLI"
 
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None

@@ -53,7 +53,6 @@ def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
 def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskRecord:
     from litehive.state.records import require_task
     from litehive.state.persist import load_state
-    from litehive.recovery.workspace_repair import prepare_interrupted_task, interruption_journal_message
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):
@@ -65,25 +64,48 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
         if task.pipeline_status == "done":
             raise ValueError(f"Task {task.id} is already done")
         stage = task.runtime.current_stage.stage or task.pipeline_status
-        prepare_interrupted_task(
-            root,
-            task,
-            stage=stage,
-            summary=f"Execution interrupted via `litehive stop`. Resume from `{stage}`.",
-            reason="Task stopped via CLI",
-        )
+
+        # Park the task - this is intentional operator action, not system interruption
+        from litehive.domain.common import utcnow
+        from litehive.domain.runtime import RuntimeInterruptionState
+
+        now = utcnow()
         task.status = "parked"
+        task.runtime.execution_status = "idle"
+        task.runtime.run_started_at = None
+        task.runtime.updated_at = now
+        task.runtime.active_subagent = None
+
+        # Set minimal interruption metadata for resume functionality
+        # Use "operator" source to distinguish from system interruptions
+        task.runtime.interruption = RuntimeInterruptionState(
+            source="runner",  # CLI command execution context
+            stage=stage,
+            resume_stage=stage,
+            pipeline_status=task.pipeline_status,
+            reason=f"Task parked via CLI command from {stage} stage",
+            summary=f"Task execution parked via `litehive stop`. Resume from `{stage}`.",
+            interrupted_at=now,
+        )
+
+        # Special case: tasks at commit_to_git stage remain queued instead of parked
         if stage == "commit_to_git":
             task.status = "queued"
+
+        # Remove from active/queue state
         state.active_task_id = None
         state.queue = [item for item in state.queue if item != task.id]
+
+        # Re-add to queue front if remaining queued
         if task.status == "queued" and task.pipeline_status != "done":
             state.queue.insert(0, task.id)
+
+        journal_message = f"Task execution stopped via CLI from `{stage}` stage. Status: {task.status}."
         persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,
-            journal_message=interruption_journal_message(task),
+            journal_message=journal_message,
         )
         return task
 
