@@ -64,7 +64,7 @@ def test_load_config_preserves_runner_hook_descriptions_and_instructions(tmp_pat
     assert config.runner_hooks["after_implementing"][0]["instructions_on_failure"] == "fix lint first"
 
 
-def test_load_config_ignores_legacy_runner_hook_execution_mode(tmp_path: Path) -> None:
+def test_load_config_rejects_legacy_runner_hook_execution_mode(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
@@ -77,9 +77,8 @@ def test_load_config_ignores_legacy_runner_hook_execution_mode(tmp_path: Path) -
         encoding="utf-8",
     )
 
-    config = load_config(tmp_path)
-
-    assert config.runner_hooks["after_implementing"] == [{"command": "echo ok"}]
+    with pytest.raises(ValueError, match="runner_hook_execution_mode is no longer supported"):
+        load_config(tmp_path)
 
 
 def test_configure_rejects_removed_runner_hook_points(tmp_path: Path) -> None:

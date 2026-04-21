@@ -10,7 +10,7 @@ from typing import Any, Literal, Mapping
 import yaml
 from pydantic import ValidationError
 
-from litehive.config.loading import drop_ignored_legacy_config_keys, merge_config_layers
+from litehive.config.loading import merge_config_layers
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import litehive_root, workspace_path
 from litehive.config.workspace_files import config_path, workspace_dir
@@ -102,7 +102,6 @@ def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssu
             continue
         if mapping is not None:
             data = merge_config_layers(data, mapping)
-    data = drop_ignored_legacy_config_keys(data)
     try:
         config = LitehiveConfig(**data)
     except (TypeError, ValidationError) as exc:

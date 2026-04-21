@@ -214,7 +214,7 @@ def test_load_config_rejects_legacy_task_engine_routing(tmp_path: Path) -> None:
         load_config(tmp_path)
 
 
-def test_load_config_ignores_legacy_engine_fallbacks_key(tmp_path: Path) -> None:
+def test_load_config_rejects_legacy_engine_fallbacks_key(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
     raw_config["engine_fallbacks"] = {
@@ -226,9 +226,47 @@ def test_load_config_ignores_legacy_engine_fallbacks_key(tmp_path: Path) -> None
         encoding="utf-8",
     )
 
-    config = load_config(tmp_path)
+    with pytest.raises(ValueError, match="engine_fallbacks is no longer supported"):
+        load_config(tmp_path)
 
-    assert config.engine_preference == ["codex", "opencode", "gemini", "copilot", "goz"]
+
+def test_load_config_rejects_legacy_runner_hook_execution_mode_key(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
+    raw_config["runner_hook_execution_mode"] = "async"
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(raw_config, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="runner_hook_execution_mode is no longer supported"):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_unknown_process_profile(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
+    raw_config["process_profile"] = "unknown_profile"
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(raw_config, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="unknown process_profile 'unknown_profile'"):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_unknown_pool_selection_policy(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
+    raw_config["pool_selection_policy"] = "unknown_policy"
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(raw_config, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="unknown pool_selection_policy 'unknown_policy'"):
+        load_config(tmp_path)
 
 
 def test_load_config_still_rejects_unknown_keys(tmp_path: Path) -> None:

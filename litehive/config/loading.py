@@ -22,8 +22,15 @@ _LEGACY_UNSUPPORTED_KEYS = {
         "Engine selection now comes only from default_engine, explicit runtime engine switches, "
         "or CLI --engine."
     ),
+    "engine_fallbacks": (
+        "engine_fallbacks is no longer supported. "
+        "Use engine_preference to specify engine ordering instead."
+    ),
+    "runner_hook_execution_mode": (
+        "runner_hook_execution_mode is no longer supported. "
+        "Hook execution mode is now always synchronous."
+    ),
 }
-_LEGACY_IGNORED_KEYS = frozenset({"engine_fallbacks", "runner_hook_execution_mode"})
 
 
 def read_config_mapping(path: Path) -> dict[str, Any]:
@@ -52,23 +59,20 @@ def load_effective_config_data(root: Path) -> dict[str, Any]:
     return data
 
 
-def drop_ignored_legacy_config_keys(data: Mapping[str, Any]) -> dict[str, Any]:
-    cleaned = dict(data)
-    for key in _LEGACY_IGNORED_KEYS:
-        cleaned.pop(key, None)
-    return cleaned
 
 
 def load_config(root: Path) -> LitehiveConfig:
     ensure_workspace(root)
-    data = drop_ignored_legacy_config_keys(load_effective_config_data(root))
-    if data.get("process_profile") not in PROCESS_PROFILES:
-        data["process_profile"] = "generic"
-    if data.get("pool_selection_policy") not in VALID_POOL_SELECTION_POLICIES:
-        data["pool_selection_policy"] = "dependency_aware"
+    data = load_effective_config_data(root)
     for key, message in _LEGACY_UNSUPPORTED_KEYS.items():
         if key in data:
             raise ValueError(message)
+    if "process_profile" in data and data["process_profile"] not in PROCESS_PROFILES:
+        available_profiles = ", ".join(sorted(PROCESS_PROFILES.keys()))
+        raise ValueError(f"unknown process_profile {data['process_profile']!r}; must be one of: {available_profiles}")
+    if "pool_selection_policy" in data and data["pool_selection_policy"] not in VALID_POOL_SELECTION_POLICIES:
+        available_policies = ", ".join(sorted(VALID_POOL_SELECTION_POLICIES))
+        raise ValueError(f"unknown pool_selection_policy {data['pool_selection_policy']!r}; must be one of: {available_policies}")
     valid_keys = {f.name for f in fields(LitehiveConfig)}
     for key in list(data):
         if key not in valid_keys:

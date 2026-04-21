@@ -520,3 +520,8 @@ def test_resolve_process_profile_merges_shared_process_with_overlay() -> None:
     assert profile["role_model"]
     assert profile["prompt_scaffold"]
     assert profile["stage_overlay"]["accepting"]
+
+
+def test_resolve_process_profile_rejects_unknown_profile() -> None:
+    with pytest.raises(ValueError, match="unknown process profile 'unknown_profile'"):
+        resolve_process_profile("unknown_profile")

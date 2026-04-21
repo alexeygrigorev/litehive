@@ -42,7 +42,10 @@ def resolve_process_profile(name: str | None) -> dict[str, Any]:
     if name is None:
         overlay: dict[str, Any] = {}
     else:
-        overlay = profiles.get(name, profiles["generic"])
+        if name not in profiles:
+            available_profiles = ", ".join(sorted(profiles.keys()))
+            raise ValueError(f"unknown process profile {name!r}; must be one of: {available_profiles}")
+        overlay = profiles[name]
     for key, value in overlay.items():
         if key in _LIST_KEYS:
             profile[key].extend(deepcopy(value))
