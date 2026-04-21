@@ -56,3 +56,9 @@ Interrupted subagent execution while `grooming` was running. Reason: Task stoppe
 
 ## 2026-04-17T19:36:28+00:00
 Task closed: duplicate. Duplicate of T-0269 (Extract engine adapter layer into heru module). Per T-0159's own recorded goal, the provider-specific engine adapter split was/will be done under T-0269. T-0159 planner loop: 9 planner runs unable to submit verdict.
+
+## 2026-04-21T08:22:42+00:00
+Task metadata updated via CLI.
+
+## 2026-04-21T08:27:03+00:00
+Task metadata updated via CLI.
