@@ -1,0 +1,42 @@
+task_id: T-0222
+stage: grooming
+verdict: reject
+source: agent
+summary: 'REJECT: Web dashboard infrastructure was completely removed from litehive.
+  EXPECTED: Task should implement web dashboard queue management API endpoints. OBSERVED:
+  No web infrastructure exists in current codebase. Key findings: 1) docs/web-operator-dashboard-gap-analysis.md
+  states ''Web work is paused indefinitely. Do not create new web dashboard tasks''
+  2) Task T-0324 already deleted entire litehive/web/ package (~4000 LOC) 3) No litehive/web/
+  directory exists in current checkout 4) Task journal shows T-0222 was already closed
+  twice as duplicate and wont_do. The acceptance criteria reference web endpoints
+  but web server infrastructure no longer exists. Queue management exists in CLI but
+  task requires web dashboard endpoints incompatible with current architecture. This
+  task should remain closed as wont_do since web dashboard moved to separate project.'
+feedback: 'REJECT: Web dashboard infrastructure was completely removed from litehive.
+  EXPECTED: Task should implement web dashboard queue management API endpoints. OBSERVED:
+  No web infrastructure exists in current codebase. Key findings: 1) docs/web-operator-dashboard-gap-analysis.md
+  states ''Web work is paused indefinitely. Do not create new web dashboard tasks''
+  2) Task T-0324 already deleted entire litehive/web/ package (~4000 LOC) 3) No litehive/web/
+  directory exists in current checkout 4) Task journal shows T-0222 was already closed
+  twice as duplicate and wont_do. The acceptance criteria reference web endpoints
+  but web server infrastructure no longer exists. Queue management exists in CLI but
+  task requires web dashboard endpoints incompatible with current architecture. This
+  task should remain closed as wont_do since web dashboard moved to separate project.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 0
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 0
+created_at: '2026-04-21T15:48:21+00:00'

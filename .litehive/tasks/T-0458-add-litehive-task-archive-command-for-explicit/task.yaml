@@ -1,0 +1,28 @@
+id: T-0458
+slug: add-litehive-task-archive-command-for-explicit
+title: Add litehive task archive command for explicit task IDs and closed tasks
+created_at: '2026-04-21T20:47:03+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on:
+- T-0234
+goal: Add a task-level archive command that archives one or more explicit task IDs,
+  including closed terminal tasks such as cancelled, wont_do, duplicate, or deferred,
+  without requiring ad hoc filesystem moves.
+acceptance_criteria:
+- A CLI command exists to archive one or more explicit task IDs, e.g. litehive task
+  archive T-0106 T-0108.
+- The command accepts done tasks and closed terminal tasks (cancelled, wont_do, duplicate,
+  deferred) and preserves their true status in archived metadata and INDEX.csv.
+- The command refuses to archive in-progress or queued tasks with a clear error instead
+  of mutating live queue state.
+- Archiving by ID moves the task directory into .litehive/tasks/archive/ using the
+  same on-disk format expected by existing archive tooling.
+- Tests cover explicit-ID archiving for both done and closed tasks.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0458 add-litehive-task-archive-command-for-explicit'
+created_from: null

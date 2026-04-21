@@ -1,0 +1,30 @@
+id: T-0460
+slug: add-db-audit-log-for-requeues-and-queue-lifecycle
+title: Add durable DB audit log for all task lifecycle actions
+created_at: '2026-04-21T20:48:51+00:00'
+task_type: null
+pipeline_mode: full
+priority: medium
+depends_on: []
+goal: Persist an append-only audit log in the Litehive database for every significant
+  task action, including create, metadata update, status change, failure, requeue,
+  close, archive, removal, and operator/manual queue mutations, with enough actor/source/context
+  to reconstruct what happened later. Audit records must survive runner restarts,
+  task archival, and task deletion/removal so old tasks cannot silently resurface
+  without a history trail.
+acceptance_criteria:
+- Requeue operations write a durable audit-log record to the workspace database with
+  at least task_id, timestamp, action type, and source/context.
+- The audit log distinguishes major queue mutation paths such as requeue, resume,
+  abandon, close, and operator/manual queue movement when applicable.
+- Audit records are queryable through an existing or new inspection surface so operators
+  can see when a task was requeued without searching free-form reports.
+- Requeue audit data survives runner restarts and task archival because it is persisted
+  in the database, not only task-local files.
+- Tests cover at least one requeue path and verify the expected audit record is written.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0460 add-db-audit-log-for-requeues-and-queue-lifecycle'
+created_from: null

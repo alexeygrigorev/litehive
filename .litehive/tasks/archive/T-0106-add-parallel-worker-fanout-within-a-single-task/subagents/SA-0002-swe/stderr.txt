@@ -1,0 +1,14 @@
+Reading additional input from stdin...
+2026-04-03T05:48:40.113717Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /home/alexey/git/litehive/.litehive/worktrees/T-0106-add-parallel-worker-fanout-within-a-single-task/litehive/subagents.py:
+    def _record_subagent_pid(self, task: TaskRecord, base: Path, ref: SubagentRef, pid: int | None) -> None:
+        if pid is None:
+            return
+        mark_subagent_pid(self.root, task, pid)
+        self._write_session_metadata(
+            base,
+            ref,
+2026-04-03T05:52:57.374084Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /home/alexey/git/litehive/.litehive/worktrees/T-0106-add-parallel-worker-fanout-within-a-single-task/tests/test_workspace.py:
+    assert any("subagent=SA-0001 swe/codex running pid=4242" in line for line in lines)
+2026-04-03T05:54:08.208784Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /home/alexey/git/litehive/.litehive/worktrees/T-0106-add-parallel-worker-fanout-within-a-single-task/tests/test_workspace.py:
+def test_recover_stale_runner_state_when_subagent_is_active(tmp_path: Path) -> None:
+2026-04-03T06:00:30.812693Z ERROR codex_core::tools::router: error=write_stdin failed: stdin is closed for this session; rerun exec_command with tty=true to keep stdin open

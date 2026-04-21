@@ -1,0 +1,28 @@
+id: T-0462
+slug: add-cli-command-to-browse-tasks-by-creation-time
+title: Add CLI command to browse tasks by creation time and provenance
+created_at: '2026-04-21T20:50:56+00:00'
+task_type: null
+pipeline_mode: full
+priority: medium
+depends_on:
+- T-0459
+goal: Add a CLI command that lists tasks created in a configurable recent period and
+  shows task id, title, created time, and provenance/source metadata, including parent
+  task context when the task was created by a Litehive agent.
+acceptance_criteria:
+- A command exists to browse tasks created in a configurable recent period such as
+  the last 24 hours, with a default period and an override flag like --since.
+- Each output row includes at least task id, title, created timestamp, and provenance/source.
+- When provenance metadata is available, the command also shows parent/current task
+  context for agent-created tasks.
+- The implementation uses persisted task metadata / database state and does not require
+  per-task manual inspection.
+- Tests cover at least one recent-period listing case and verify created time and
+  provenance fields are rendered.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0462 add-cli-command-to-browse-tasks-by-creation-time'
+created_from: null

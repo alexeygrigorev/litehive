@@ -1,0 +1,57 @@
+task_id: T-0203
+stage: recovering
+verdict: resume
+source: agent
+summary: '**Root cause diagnosed and fixed:**'
+feedback: '**Root cause diagnosed and fixed:**
+
+
+  The grooming stage crashed with NudgeBudgetExhausted because unresolved Git merge
+  conflicts in `/home/alexey/git/litehive/litehive/domain/lifecycle_deltas.py` caused
+  a Python syntax error that prevented the Litehive CLI from starting at all.
+
+
+  **Infrastructure fix applied:**
+
+  - Resolved 3 merge conflicts in `lifecycle_deltas.py` lines 362-406
+
+  - Conflicts were about code formatting (multi-line vs single-line function calls)
+  and function signature (adding default parameter value)
+
+  - Chose the incoming branch''s approach for consistency: single-line calls and `retry_target_stage:
+  NodeName | None = None`
+
+
+  **Verification:**
+
+  - CLI now starts successfully: `litehive pipeline journal T-0203` works
+
+  - Python imports work: `from litehive.domain.lifecycle_deltas import recovery_trigger_from_event`
+  succeeds
+
+
+  **Why grooming should retry:**
+
+  The original grooming agent never actually ran due to the infrastructure bug - it
+  couldn''t even start because the CLI was broken. With the merge conflicts resolved,
+  the grooming stage can now run normally and submit its verdict via `litehive report`.
+
+  '
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 0
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 0
+created_at: '2026-04-21T12:42:50+00:00'

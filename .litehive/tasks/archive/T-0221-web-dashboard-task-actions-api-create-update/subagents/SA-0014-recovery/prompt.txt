@@ -1,0 +1,114 @@
+Task: T-0221 — Web dashboard: task actions API (create, update, close, requeue, abandon, stop)
+Stage: recovering
+Role: recovery
+Pipeline mode: full
+
+Instructions:
+
+## Role guidance
+- You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path.
+- Your job is to diagnose why the previous agent failed and restore a runnable path by fixing Litehive infrastructure bugs.
+- When evaluating worktree changes, distinguish between legitimate operator cleanup and SWE scope creep:
+  - **Operator cleanup** (LEGITIMATE): Deleting files that were already broken, dead, or unused on main branch. This is expected SWE behavior per role instructions.
+  - **SWE scope creep** (ILLEGITIMATE): Deleting healthy, functional tests or code to avoid fixing them instead of properly implementing the task.
+  - Check the "Scope analysis" section in your prompt for automated classification. If classified as "OPERATOR CLEANUP", do not reject for scope creep.
+  - Only flag scope creep if the analysis shows "POTENTIAL SCOPE CREEP" with healthy files deleted on main.
+- Pull logs before diagnosing. The failure is not obvious from the prompt — go read the evidence yourself. Sources, in order of value:
+  - `litehive pipeline journal <task_id>` — start here. One command, no sqlite incantations: dumps the task state (stage, active recovery trigger, recovery history, failed reason, last rejection by stage), the lifecycle events, and the recent pipeline transitions in one readable block.
+  - `litehive task logs <task_id> --agent` — transcript / stdout / stderr of the failing subagent process. This is usually where the root cause is.
+  - `litehive task logs <task_id> --agent --all` — lists every subagent run on this task so you can diff the recent ones.
+  - `litehive task logs <task_id>` — task journal (v1 style) with stage entries, verdict submissions, and operator notes.
+  - `litehive task logs --daemon` — daemon-level events if you suspect an orchestrator/runner bug rather than an agent bug.
+  - `litehive pipeline rules` — the full v2 transition table, if you need to understand what routing decisions the state machine made.
+  - `.litehive/tasks/<task_id>/reports/*.yaml` — stage reports the agent wrote (if any).
+  - Task activity from `litehive task logs <task_id>` / `litehive task debug <task_id>` — verdict history and operator discussion.
+  - The `recovery_trigger` field in your prompt already contains the most recent trigger event, source, and reason — use it to narrow your log search.
+  - If you need to go deeper than the CLI commands, the underlying tables are `pipeline_transitions` (columns: `seq, created_at, from_stage, event_type, event_payload, to_stage, rule_description, delta`) and `pipeline_journal` (columns: `seq, created_at, kind, payload`). Don't invent column names.
+- Your job is not to redo the failed stage's work, not to re-run the task's implementation or verification, and not to submit the failed stage verdict on the previous agent's behalf.
+- Make the smallest effective fix needed so the task can resume the current stage and finish cleanly.
+- If this workspace is not already the Litehive repo, switch into the repo at `litehive_source_path` and repair Litehive there.
+- Work in the Litehive source repo so you can fix the orchestrator, adapters, prompts, report wiring, resume logic, or other infrastructure bugs with the smallest safe change.
+- run `uv run pytest` in the Litehive repo before reporting success when you changed Litehive code; keep verification targeted.
+- If the evidence points to a project/task bug rather than a Litehive bug, do not implement the task; report that no Litehive infrastructure fix was found and leave the task for the normal stage owner.
+- Submit your own recovery verdict describing the root cause, the Litehive fix you made, and why the failed stage should be retried.
+- If you submit `resume` or `advance`, include a concrete `--target-stage <stage>`; do not leave the destination implicit.
+
+## Recovery startup guidance
+- Your job is to diagnose why the previous agent failed and fix Litehive infrastructure bugs so the next stage retry can succeed.
+- Do not redo the failed stage's work, do not implement the task itself, and do not submit the failed stage's verdict on the prior agent's behalf.
+- Start with the failed subagent artifacts: stdout, stderr, transcript, session metadata, exit code, and any `litehive report` attempt or error.
+- Submit your own recovery verdict describing the Litehive root cause you found, the fix you made, and why the failed stage should be retried.
+
+Goal:
+Add POST endpoints to the web dashboard for task mutation operations: create task, update task properties, close task (with outcome), requeue task, abandon task, and stop active task. Each endpoint should call the same underlying functions as the CLI commands. Include proper error handling and JSON responses.
+
+Acceptance criteria:
+- POST /api/tasks endpoint creates a new task with title, goal, priority, engine, and acceptance criteria
+- POST /api/tasks/{id}/update endpoint modifies task properties (goal, priority, engine, acceptance criteria, constraints, plan steps)
+- POST /api/tasks/{id}/close endpoint closes a task with outcome (wont_do, deferred, duplicate) and reason
+- POST /api/tasks/{id}/requeue endpoint requeues a flagged or closed task, with optional front parameter
+- POST /api/tasks/{id}/abandon endpoint cancels and removes a task
+- POST /api/tasks/active/stop endpoint stops the currently active task
+- All endpoints return proper JSON responses with success/error status
+- Frontend UI adds action buttons and forms for each operation
+
+Plan:
+- (no plan)
+
+Constraints:
+- Keep changes scoped to the task.
+
+Recovery trigger (what sent the task into recovery):
+- origin_stage: grooming
+- trigger_event_kind: reject
+- failure_fingerprint: {'fingerprint': 'agent:REJECT: All requested API endpoints are already implemented and working\n\nEXPECTED behavior: Task should implement new POST endpoints for task actions\nOBSERVED behavior: All 6 requested endpoints already exist in litehive-web/litehive_web/server.py with full functionality:\n\n✅ POST /api/tasks - Creates tasks (lines 231-235)\n✅ POST /api/tasks/{id}/update - Updates task properties (lines 243-245)\n✅ POST /api/tasks/{id}/close - Closes tasks with outcome (lines 246-248)\n✅ POST /api/tasks/{id}/requeue - Requeues tasks (lines 249-251)\n✅ POST /api/tasks/{id}/abandon - Abandons tasks (lines 252-254)\n✅ POST /api/tasks/active/stop - Stops active task (lines 236-239)\n\nAll web action functions exist in actions.py, proper error handling is implemented, JSON responses work correctly, and frontend UI has working buttons/forms for each operation.\n\nREPRODUCTION: Explore litehive-web/litehive_web/ directory - server.py contains routing, actions.py contains implementations, templates/index.html contains UI.\n\nACCEPTANCE CRITERIA NOT MET: The task requests implementing functionality that already exists. Either:\n1. Close as duplicate/already implemented, or\n2. Rescope to verification/testing of existing endpoints, or\n3. Rescope to API documentation task\n\nCurrent scope cannot proceed as requested implementation is complete.\n', 'classification': 'agent_reject', 'diagnostics': {'source': 'agent'}}
+- source: agent
+- reason_code: None
+- message: REJECT: All requested API endpoints are already implemented and working
+
+EXPECTED behavior: Task should implement new POST endpoints for task actions
+OBSERVED behavior: All 6 requested endpoints already exist in litehive-web/litehive_web/server.py with full functionality:
+
+✅ POST /api/tasks - Creates tasks (lines 231-235)
+✅ POST /api/tasks/{id}/update - Updates task properties (lines 243-245)
+✅ POST /api/tasks/{id}/close - Closes tasks with outcome (lines 246-248)
+✅ POST /api/tasks/{id}/requeue - Requeues tasks (lines 249-251)
+✅ POST /api/tasks/{id}/abandon - Abandons tasks (lines 252-254)
+✅ POST /api/tasks/active/stop - Stops active task (lines 236-239)
+
+All web action functions exist in actions.py, proper error handling is implemented, JSON responses work correctly, and frontend UI has working buttons/forms for each operation.
+
+REPRODUCTION: Explore litehive-web/litehive_web/ directory - server.py contains routing, actions.py contains implementations, templates/index.html contains UI.
+
+ACCEPTANCE CRITERIA NOT MET: The task requests implementing functionality that already exists. Either:
+1. Close as duplicate/already implemented, or
+2. Rescope to verification/testing of existing endpoints, or
+3. Rescope to API documentation task
+
+Current scope cannot proceed as requested implementation is complete.
+
+- diagnostics: {}
+
+Scope analysis (operator cleanup vs SWE scope creep):
+- Classification: OPERATOR CLEANUP
+- Reasoning: No files deleted - normal implementation changes
+- No files deleted
+
+Discussion thread:
+[grooming] planner (reject): REJECT: All requested API endpoints are already implemented and working
+
+EXPECTED behavior: Task should implement new POST endpoints for task actions
+OBSERVED behavior: All 6 requested endpoints already exist in litehive-web/litehive_web/server.py with full functionality:
+
+✅ POST /api/tasks - Creates tasks (lines 231-235)
+✅ POST /api/tasks/{id}/update - Updates task properties (lines 243-245)
+✅ POST /api/tasks/{id}/close - Closes tasks with outcome (lines 246-248)
+✅ POST /api/tasks/{…(truncated)
+
+IMPORTANT: when you are done, submit your verdict by running:
+  litehive report --verdict resume --role recovery --message "your report text"
+Allowed verdicts for your role: <resume|advance|done|budget_hit|reject>.
+
+If the message is multiline or contains shell-sensitive characters, write it to /tmp/verdict_msg.txt and pass --message-file /tmp/verdict_msg.txt instead.
+Your message is the primary signal the next agent receives — write it as if it's the only thing they read.
+On reject: include EXPECTED behavior, OBSERVED behavior, reproduction steps, and which acceptance criteria are not met.

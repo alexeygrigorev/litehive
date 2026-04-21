@@ -1,0 +1,32 @@
+id: T-0464
+slug: add-hard-delete-semantics-that-remove-task
+title: Add hard-delete semantics that remove task records but keep audit history
+created_at: '2026-04-21T21:22:39+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on:
+- T-0460
+- T-0463
+goal: Define deletion as a true removal of the task from persistent live task records,
+  but only after the task has first been archived. Deleting a task should require
+  archived status as a precondition, then remove the task from the live workspace
+  database and task store while preserving durable audit-log/tombstone history so
+  operators can still see that the task once existed, was archived, and was later
+  deleted.
+acceptance_criteria:
+- Delete is rejected unless the task is already archived.
+- Delete removes the archived task from live task records, queue state, and normal
+  task listing surfaces.
+- Delete keeps durable audit history with at least task id, title, archive timestamp,
+  deletion timestamp, and deletion reason.
+- Deleted tasks cannot be requeued or resumed because they no longer exist as live
+  task records.
+- Tests cover the delete-precondition failure path and deleting archived tasks while
+  audit history remains queryable afterward.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0464 add-hard-delete-semantics-that-remove-task'
+created_from: null

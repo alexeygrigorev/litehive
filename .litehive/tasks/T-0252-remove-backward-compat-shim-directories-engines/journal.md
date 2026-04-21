@@ -48,3 +48,6 @@ Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See
 
 ## 2026-04-17T16:52:22+00:00
 Task metadata updated via CLI.
+
+## 2026-04-21T21:29:38+00:00
+Task closed: wont_do. User does not want backwards-compatibility or legacy-migration work in Litehive backlog.

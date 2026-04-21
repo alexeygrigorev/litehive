@@ -1,0 +1,67 @@
+git:
+  commit_sha: null
+  worktree_path: null
+execution_status: cancelled
+run_started_at: null
+updated_at: '2026-04-09T21:31:01+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+stage_retry_counts: {}
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: '2026-04-09T00:27:49+00:00'
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: commit_to_git
+  status: fail
+  started_at: '2026-04-09T00:27:35+00:00'
+  completed_at: '2026-04-09T00:27:49+00:00'
+  updated_at: '2026-04-09T00:27:49+00:00'
+  duration_seconds: 14
+  verdict: fail
+  summary: 'CommitToGit failed: merge did not produce new commits on main'
+active_subagent: null
+last_subagent:
+  id: SA-0010
+  role: merge-resolver
+  engine: claude
+  status: completed
+  path: subagents/SA-0010-merge-resolver
+  pid: 1022710
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-09T00:27:35+00:00'
+  updated_at: '2026-04-09T00:27:48+00:00'
+  completed_at: '2026-04-09T00:27:48+00:00'
+  exit_code: 0
+  transcript_snippet: "The working tree is clean \u2014 there's no active merge conflict.\
+    \ The detached HEAD state and recent commit `7a0e2e0a` (\"..."
+  interruption_reason: ''
+  resource_limit_event: null
+  continuation:
+    session_id: 5b81623c-7272-468b-8991-649411e045d4
+    thread_id: null
+    metadata: {}
+    updated_at: '2026-04-09T00:27:48+00:00'
+interruption: null
+continuation_handoff: null
+last_engine_switch: null
+last_outcome:
+  kind: deferred
+  stage: merge_failed
+  reason_code: deferred
+  reason: Worktree too stale to merge, recreate when web dashboard work resumes
+  failure_classification: merge_conflict
+  failure_diagnostics: {}
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: '2026-04-09T21:31:01+00:00'
+self_heal_traceback_fingerprints: []

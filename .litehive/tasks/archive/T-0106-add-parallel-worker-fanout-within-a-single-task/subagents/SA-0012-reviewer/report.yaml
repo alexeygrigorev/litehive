@@ -1,0 +1,44 @@
+status: completed
+summary: Parallel fanout mostly works, but failed-worker fanout is not recoverable
+  at `implementing` and lacks focused test coverage.
+files_changed:
+- litehive/cli.py
+- litehive/main.py
+- litehive/models.py
+- litehive/observability.py
+- litehive/runtime.py
+- litehive/subagents.py
+- litehive/tasks.py
+- litehive/web.py
+- tests/test_observability_and_status.py
+- tests/test_runner_workflow.py
+- tests/test_tasks_and_subagents.py
+tests:
+  added: 4
+  passing: 4
+warnings:
+- Reproduced a failed-fanout path where one worker failure leaves the task `flagged`
+  instead of recoverable at `implementing` (`final_status=flagged`, `task_status=flagged`,
+  `pipeline_status=implementing`, `runtime_last_outcome_kind=flagged`).
+- Initial `litehive report` used workspace `active_task_id` (`T-0077`); I resubmitted
+  with `--task-id T-0106` so the reviewer verdict is attached to the correct task.
+resource_control:
+  enabled: false
+  backend: null
+  runtime: null
+  image: null
+  network_mode: null
+  workspace_mode: null
+  memory_mb: null
+  cpu_count: null
+  process_limit: null
+  environment: []
+  credential_inputs: []
+  propagated_mounts: []
+interruption_reason: null
+resource_limit_event: null
+continuation:
+  session_id: null
+  thread_id: 019d5bb7-51c3-7411-b5f9-9171cc3c08a2
+  metadata: {}
+  updated_at: '2026-04-05T03:42:04+00:00'

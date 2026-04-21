@@ -1,0 +1,136 @@
+git:
+  commit_sha: null
+  worktree_path: null
+execution_status: cancelled
+run_started_at: null
+updated_at: '2026-04-05T03:50:29+00:00'
+retry_count: 0
+retry_limit: 3
+retry_source: global
+stage_retry_counts: {}
+current_stage:
+  step: testing
+  status: interrupted
+  started_at: '2026-04-05T03:46:24+00:00'
+  completed_at: '2026-04-05T03:47:56+00:00'
+  updated_at: '2026-04-05T03:47:56+00:00'
+  duration_seconds: 92
+  verdict: blocked
+  summary: Interrupted run recovered after stale runner detection. Resume from `testing`.
+last_stage:
+  step: implementing
+  status: completed
+  started_at: '2026-04-05T03:42:28+00:00'
+  completed_at: '2026-04-05T03:46:24+00:00'
+  updated_at: '2026-04-05T03:46:24+00:00'
+  duration_seconds: 236
+  verdict: pass
+  summary: "I\u2019m starting from the task-local artifacts and the runner/runtime\
+    \ code paths implicated by single-worker state. Next I\u2019ll identify how implementing\
+    \ currently launches and tracks a single SWE subagent, then patch the minimal\
+    \ path to support deterministic fanout and recovery."
+active_subagent: null
+last_subagent:
+  id: SA-0014
+  role: qa
+  engine: codex
+  status: interrupted
+  path: subagents/SA-0014-qa
+  pid: 1737754
+  sandboxed: false
+  sandbox_summary: host
+  started_at: '2026-04-05T03:46:24+00:00'
+  updated_at: '2026-04-05T03:47:56+00:00'
+  completed_at: '2026-04-05T03:47:56+00:00'
+  exit_code: null
+  transcript_snippet: "I\u2019m validating the testing stage for T-0106 by checking\
+    \ the task-local artifacts first, then I\u2019ll run focused verification around\
+    \ multi-worker fanout, persisted live worker state, status output, and recovery\
+    \ behavior."
+  interruption_reason: Stale runner detected while subagent `SA-0014` (qa/codex, pid
+    1737754 no longer alive) was still marked running in `testing`.
+  resource_limit_event: null
+  continuation:
+    session_id: null
+    thread_id: 019d5bbf-b809-7a12-93e9-f75aceaf38ae
+    metadata: {}
+    updated_at: '2026-04-05T03:47:52+00:00'
+interruption:
+  source: subagent
+  stage: testing
+  pipeline_status: testing
+  resume_stage: testing
+  reason: Stale runner detected while subagent `SA-0014` (qa/codex, pid 1737754 no
+    longer alive) was still marked running in `testing`.
+  summary: Interrupted run recovered after stale runner detection. Resume from `testing`.
+  interrupted_at: '2026-04-05T03:47:53+00:00'
+  detected_at: '2026-04-05T03:47:56+00:00'
+  run_started_at: '2026-04-05T03:42:28+00:00'
+  stage_started_at: '2026-04-05T03:46:24+00:00'
+  subagent:
+    id: SA-0014
+    role: qa
+    engine: codex
+    status: interrupted
+    path: subagents/SA-0014-qa
+    pid: 1737754
+    sandboxed: false
+    sandbox_summary: host
+    started_at: '2026-04-05T03:46:24+00:00'
+    updated_at: '2026-04-05T03:47:56+00:00'
+    completed_at: '2026-04-05T03:47:56+00:00'
+    exit_code: null
+    transcript_snippet: "I\u2019m validating the testing stage for T-0106 by checking\
+      \ the task-local artifacts first, then I\u2019ll run focused verification around\
+      \ multi-worker fanout, persisted live worker state, status output, and recovery\
+      \ behavior."
+    interruption_reason: Stale runner detected while subagent `SA-0014` (qa/codex,
+      pid 1737754 no longer alive) was still marked running in `testing`.
+    resource_limit_event: null
+    continuation:
+      session_id: null
+      thread_id: 019d5bbf-b809-7a12-93e9-f75aceaf38ae
+      metadata: {}
+      updated_at: '2026-04-05T03:47:52+00:00'
+continuation_handoff:
+  step: testing
+  kind: restart
+  reason: Stale runner detected while subagent `SA-0014` (qa/codex, pid 1737754 no
+    longer alive) was still marked running in `testing`.
+  from_engine: codex
+  to_engine: codex
+  from_model: null
+  to_model: null
+  subagent_id: SA-0014
+  subagent_path: subagents/SA-0014-qa
+  status: interrupted
+  attempt: null
+  summary: Interrupted run recovered after stale runner detection. Resume from `testing`.
+  transcript_snippet: "I\u2019m validating the testing stage for T-0106 by checking\
+    \ the task-local artifacts first, then I\u2019ll run focused verification around\
+    \ multi-worker fanout, persisted live worker state, status output, and recovery\
+    \ behavior."
+  warnings: []
+  session_path: subagents/SA-0014-qa/session.yaml
+  report_path: subagents/SA-0014-qa/report.yaml
+  transcript_path: subagents/SA-0014-qa/transcript.md
+  continuation:
+    session_id: null
+    thread_id: 019d5bbf-b809-7a12-93e9-f75aceaf38ae
+    metadata: {}
+    updated_at: '2026-04-05T03:47:52+00:00'
+  updated_at: '2026-04-05T03:47:56+00:00'
+last_engine_switch: null
+last_outcome:
+  kind: wont_do
+  stage: testing
+  reason_code: wont_do
+  reason: Not needed - parallel fanout adds unnecessary complexity
+  failure_classification: null
+  failure_diagnostics: {}
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: '2026-04-05T03:50:29+00:00'
+self_heal_traceback_fingerprints: []

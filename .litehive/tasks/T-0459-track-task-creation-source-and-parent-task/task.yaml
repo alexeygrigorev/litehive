@@ -1,0 +1,27 @@
+id: T-0459
+slug: track-task-creation-source-and-parent-task
+title: Track task creation source and parent task provenance
+created_at: '2026-04-21T20:48:29+00:00'
+task_type: null
+pipeline_mode: full
+priority: medium
+depends_on: []
+goal: Record where each task was created from, including whether it was created by
+  an in-Litehive agent session or outside Litehive, and when created by an agent capture
+  the current parent task context derived from Litehive agent environment variables.
+acceptance_criteria:
+- New tasks persist creation provenance metadata that distinguishes agent-created
+  tasks from tasks created outside Litehive.
+- When a task is created by an in-Litehive agent, the persisted metadata includes
+  the parent/current task ID that was active for that agent at creation time.
+- The provenance metadata is available through existing task inspection surfaces such
+  as litehive task show and/or task.yaml/runtime state.
+- Task creation paths that run outside Litehive explicitly record an external/manual
+  source instead of leaving provenance blank.
+- Tests cover both agent-created and external/manual task creation paths.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0459 track-task-creation-source-and-parent-task'
+created_from: null

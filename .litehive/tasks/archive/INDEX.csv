@@ -171,3 +171,14 @@ T-0208,"Add worktree merge agent tests and merge_failed task status",done,2026-0
 T-0211,"Add retry limit for merge agent in commit_to_git",done,2026-04-07
 T-0213,"Remove files_changed from agent report format - use git as source of truth",done,2026-04-07
 T-0214,"Fix web dashboard hanging when runner is active",done,2026-04-07
+T-0106,"Add parallel worker fanout within a single task",cancelled,2026-04-01
+T-0108,"Add worktree-per-worker execution for parallel task slices",cancelled,2026-04-01
+T-0203,"Remove legacy pre_acceptance_command and legacy_artifact_name compat",cancelled,2026-04-06
+T-0221,"Web dashboard: task actions API (create, update, close, requeue, abandon, stop)",cancelled,2026-04-08
+T-0222,"Web dashboard: queue management API (move, promote, prioritize)",cancelled,2026-04-08
+T-0223,"Web dashboard: daemon control API (start, stop, restart, status)",cancelled,2026-04-08
+T-0224,"Web dashboard: enhanced task detail views with edit capabilities",cancelled,2026-04-08
+T-0225,"Web dashboard: live agent output streaming via SSE",cancelled,2026-04-08
+T-0226,"Web dashboard: engine monitoring and configuration",cancelled,2026-04-08
+T-0227,"Web dashboard: report and verdict submission",cancelled,2026-04-08
+T-0231,"Encapsulate engine adapter internals - proper OOP design",cancelled,2026-04-08

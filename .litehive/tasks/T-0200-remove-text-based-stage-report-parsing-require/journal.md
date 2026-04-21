@@ -23,3 +23,7 @@ Interrupted subagent execution while `grooming` was running. Reason: Task stoppe
 
 ## 2026-04-17T09:30:20+00:00
 Task closed: deferred. Planner budget exhaustion — codex planner cannot complete grooming.
+
+## 2026-04-21T12:19:01+00:00
+Runner hook at `after_implementing` rejected the stage.
+report: `.litehive/tasks/T-0200-remove-text-based-stage-report-parsing-require/reports/implementing-002.yaml`

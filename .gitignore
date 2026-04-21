@@ -15,9 +15,15 @@ $tmpdir/
 # Litehive runtime artifacts (execution residue, not project state)
 .litehive/tasks/*/subagents/
 .litehive/tasks/*/events.jsonl
+.litehive/tasks/*/artifacts/
 .litehive/tasks/*/recovery/
 .litehive/tasks/*/comments.yaml
 .litehive/tasks/*/reports/
+.litehive/.engine-monitoring*.tmp-*
+.litehive/*.db
+.litehive/*.db3
+.litehive/*.sqlite
+.litehive/*.sqlite3
 .litehive/litehive.db
 .litehive/state.db
 .litehive/logs/

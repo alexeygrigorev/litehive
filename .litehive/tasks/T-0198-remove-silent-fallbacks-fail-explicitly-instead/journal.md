@@ -59,3 +59,25 @@ Interrupted subagent execution while `grooming` was running. Reason: Task stoppe
 
 ## 2026-04-17T09:15:43+00:00
 Task closed: deferred. Planner budget exhaustion — 5 attempts.
+
+## 2026-04-21T11:37:14+00:00
+Runner hook at `after_implementing` rejected the stage.
+report: `.litehive/tasks/T-0198-remove-silent-fallbacks-fail-explicitly-instead/reports/implementing-002.yaml`
+
+## 2026-04-21T11:45:37+00:00
+Runner hook at `after_implementing` rejected the stage.
+report: `.litehive/tasks/T-0198-remove-silent-fallbacks-fail-explicitly-instead/reports/implementing-004.yaml`
+
+## 2026-04-21T11:54:53+00:00
+Runner hook at `after_implementing` rejected the stage.
+report: `.litehive/tasks/T-0198-remove-silent-fallbacks-fail-explicitly-instead/reports/implementing-006.yaml`
+
+## 2026-04-21T12:08:54+00:00
+Runner hook at `after_implementing` rejected the stage.
+report: `.litehive/tasks/T-0198-remove-silent-fallbacks-fail-explicitly-instead/reports/implementing-007.yaml`
+
+## 2026-04-21T19:43:40+00:00
+Task metadata updated via CLI.
+
+## 2026-04-21T19:43:45+00:00
+Task requeued for another implementation pass.

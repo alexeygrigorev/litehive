@@ -1,0 +1,46 @@
+task_id: T-0222
+stage: recovering
+verdict: resume
+source: agent
+summary: 'LITEHIVE INFRASTRUCTURE BUG FIXED: Grooming agent correctly analyzed task
+  should be rejected (web infrastructure was removed by T-0324, documentation states
+  ''Web work paused indefinitely'', task already closed twice), but failed to submit
+  reject verdict due to missing CLI command guidance.'
+feedback: 'LITEHIVE INFRASTRUCTURE BUG FIXED: Grooming agent correctly analyzed task
+  should be rejected (web infrastructure was removed by T-0324, documentation states
+  ''Web work paused indefinitely'', task already closed twice), but failed to submit
+  reject verdict due to missing CLI command guidance.
+
+
+  ROOT CAUSE: litehive/roles/planner.py instructions showed only ''litehive report
+  --verdict pass'' example but not ''litehive report --verdict reject'' command format.
+  Agent determined correct outcome but had no proper guidance for reject submission.
+
+
+  FIX APPLIED: Updated planner role instructions to include both pass and reject CLI
+  command examples: ''litehive report --verdict reject --role planner --message "<rejection
+  reason>"''
+
+
+  RECOMMENDATION: Retry grooming stage. The previous agent''s analysis was correct
+  and thorough - web infrastructure doesn''t exist, task requirements are incompatible
+  with CLI-first architecture, and task should remain closed as wont_do. With fixed
+  instructions, grooming agent will now be able to submit the reject verdict properly.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 0
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 0
+created_at: '2026-04-21T15:51:44+00:00'

@@ -1,0 +1,29 @@
+status: interrupted
+summary: "I\u2019m inspecting the current runner, runtime persistence, and status/reporting\
+  \ paths to see how single-worker execution is modeled now, then I\u2019ll patch\
+  \ in deterministic fanout with focused lifecycle coverage."
+files_changed: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+resource_control:
+  enabled: false
+  runtime: null
+  image: null
+  network_mode: null
+  workspace_mode: null
+  memory_mb: null
+  cpu_count: null
+  process_limit: null
+  environment: []
+  credential_inputs: []
+resource_limit_event: null
+continuation:
+  session_id: null
+  thread_id: 019d520e-7e16-7a13-bac9-175436b16556
+  metadata: {}
+  updated_at: '2026-04-03T06:36:55+00:00'
+interruption_reason: Stale runner detected while subagent `SA-0007` (swe/codex) was
+  still marked running in `implementing`.
+resume_stage: implementing

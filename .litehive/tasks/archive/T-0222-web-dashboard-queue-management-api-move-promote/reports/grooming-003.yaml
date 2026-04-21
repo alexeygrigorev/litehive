@@ -1,0 +1,40 @@
+task_id: T-0222
+stage: grooming
+verdict: reject
+source: agent
+summary: 'REJECT: Web dashboard infrastructure missing. EXPECTED: Implement POST /api/queue
+  endpoints and frontend controls. OBSERVED: No litehive/web/ directory exists, deleted
+  by T-0324 (~4000 LOC removed). GAPS: 1) No web server framework 2) No API routing
+  3) No frontend components 4) docs/web-operator-dashboard-gap-analysis.md states
+  ''Web work is paused indefinitely'' 5) Task journal shows already closed as wont_do
+  ''Web dashboard moving to separate project''. Queue functionality exists in CLI
+  (move_queued_task, prioritize_queued_tasks) but task requires web APIs incompatible
+  with CLI-first architecture. Cannot implement web endpoints without rebuilding entire
+  web infrastructure.'
+feedback: 'REJECT: Web dashboard infrastructure missing. EXPECTED: Implement POST
+  /api/queue endpoints and frontend controls. OBSERVED: No litehive/web/ directory
+  exists, deleted by T-0324 (~4000 LOC removed). GAPS: 1) No web server framework
+  2) No API routing 3) No frontend components 4) docs/web-operator-dashboard-gap-analysis.md
+  states ''Web work is paused indefinitely'' 5) Task journal shows already closed
+  as wont_do ''Web dashboard moving to separate project''. Queue functionality exists
+  in CLI (move_queued_task, prioritize_queued_tasks) but task requires web APIs incompatible
+  with CLI-first architecture. Cannot implement web endpoints without rebuilding entire
+  web infrastructure.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 0
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 0
+created_at: '2026-04-21T15:52:30+00:00'

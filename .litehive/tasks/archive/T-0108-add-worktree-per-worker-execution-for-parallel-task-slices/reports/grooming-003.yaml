@@ -1,0 +1,43 @@
+task_id: T-0108
+stage: grooming
+verdict: reject
+source: agent
+summary: 'REJECT: Task requests functionality that already exists in the current codebase.'
+feedback: "REJECT: Task requests functionality that already exists in the current\
+  \ codebase.\n\nEXPECTED: Task should identify missing functionality or improvements\
+  \ needed in the parallel execution system.\n\nOBSERVED: \n1. Parallel task execution\
+  \ with worktree-per-task already implemented in litehive/daemon/parallel.py\n2.\
+  \ ParallelTaskManager creates separate worktrees and processes for each parallel\
+  \ task\n3. WorkspaceState supports max_parallel_tasks configuration and active_tasks\
+  \ tracking  \n4. Daemon switches to parallel mode when max_parallel_tasks > 1\n\
+  5. Integration system (TaskIntegrator) merges completed parallel tasks\n6. Comprehensive\
+  \ test coverage in tests/daemon/test_parallel_execution.py\n\nREPRODUCTION:\n1.\
+  \ Check litehive/daemon/parallel.py - ParallelTaskManager._create_task_worktree()\
+  \ creates worktree per task\n2. Check litehive/daemon/parallel.py - _spawn_task_process()\
+  \ creates worker process per task  \n3. Check litehive/domain/task.py - WorkspaceState.active_tasks\
+  \ tracks multiple parallel tasks\n4. Check litehive/daemon/execution.py:567 - daemon\
+  \ uses parallel execution when max_parallel > 1\n5. Check config: max_parallel_tasks\
+  \ defaults to 1, can be increased to enable parallel execution\n\nCURRENT ARCHITECTURE\
+  \ ALREADY PROVIDES:\n- Worktree per parallel task execution \u2705\n- Separate worker\
+  \ processes for parallel tasks \u2705  \n- Task-level parallelism with isolated\
+  \ worktrees \u2705\n- Integration of completed parallel tasks \u2705\n\nTask cannot\
+  \ be groomed because the requested functionality is already fully implemented and\
+  \ tested. This appears to be a duplicate or obsolete task.\n"
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 0
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 0
+created_at: '2026-04-21T20:32:23+00:00'

@@ -14,3 +14,15 @@ Task requeued for another implementation pass.
 
 ## 2026-04-20T12:57:44+00:00
 Task metadata updated via CLI.
+
+## 2026-04-21T21:03:58+00:00
+Task closed: wont_do. Web/browser dashboard work is not wanted; remove leftover backlog so it does not resurface.
+
+## 2026-04-21T21:06:23+00:00
+Task closed: wont_do. Web/browser dashboard work is not wanted; remove leftover backlog so it does not resurface.
+
+## 2026-04-21T21:06:32+00:00
+Task abandoned via CLI at stage `backlog`.
+
+## 2026-04-21T21:06:41+00:00
+Task abandoned via CLI at stage `backlog`.

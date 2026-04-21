@@ -1,0 +1,40 @@
+task_id: T-0108
+stage: grooming
+verdict: reject
+source: agent
+summary: 'REJECT: Cannot complete grooming due to insufficient task context and authorization
+  restrictions.'
+feedback: "REJECT: Cannot complete grooming due to insufficient task context and authorization\
+  \ restrictions.\n\nEXPECTED: Task with clear scope that aligns with current architecture,\
+  \ or ability to rewrite task metadata to clarify intent.\n\nOBSERVED:\n1. Task requests\
+  \ \"worktree-per-worker execution for parallel task slices\" which refers to obsolete\
+  \ architecture deleted in T-0321\n2. No acceptance criteria defined to clarify actual\
+  \ intent  \n3. No plan provided\n4. Cannot update task metadata (litehive task update\
+  \ command unauthorized)\n5. Current architecture already provides worktree-per-task\
+  \ execution (T-0354)\n\nREPRODUCTION:\n1. Check git history: T-0321 deleted parallel\
+  \ worker system\n2. Check T-0354: per-task worktrees already implemented  \n3. Try\
+  \ `litehive task update T-0108` - returns authorization error\n\nGAPS PREVENTING\
+  \ GROOMING:\n- Task title references deleted architecture without clarification\
+  \ of actual intent\n- Zero acceptance criteria to work with\n- Cannot rewrite metadata\
+  \ to clarify scope per role guidance\n- Passing an underspecified task violates\
+  \ role guidance\n\nTask needs to be rewritten by authorized user to clarify whether\
+  \ it wants task-level parallelism (T-0129 direction) or some other enhancement to\
+  \ current worktree system.\n"
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 0
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 0
+created_at: '2026-04-21T07:35:08+00:00'

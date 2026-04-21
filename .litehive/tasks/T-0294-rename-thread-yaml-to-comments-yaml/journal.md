@@ -105,3 +105,6 @@ Recovered interrupted run and requeued the task at `flagged`.
 
 ## 2026-04-17T13:21:27+00:00
 Task closed: wont_do. Already done
+
+## 2026-04-21T21:30:01+00:00
+Task closed: wont_do. User does not want backwards-compatibility or legacy-migration work in Litehive backlog.

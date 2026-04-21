@@ -1,0 +1,50 @@
+task_id: T-0231
+stage: recovering
+verdict: reject
+source: agent
+summary: 'No Litehive infrastructure bug found. The grooming agent correctly rejected
+  this task because the task description references code structures that no longer
+  exist in the codebase. ROOT CAUSE: Task T-0231 was created April 8, 2026 referencing
+  internal engine adapter structures (_OPENCODE_STRIPPED_ENV_VARS, engines/__init__.py
+  registry, _codex_live_events functions). However, T-0269 completed April 13, 2026
+  extracted all engine adapters to external heru package. The current architecture
+  uses external heru imports, HeruEngineAdapter wrapper, and ConfigBackedEngineSelector
+  - none of the structures mentioned in the task description exist anymore. EVIDENCE:
+  The only references to _OPENCODE_STRIPPED_ENV_VARS, _codex_live_events, and engines
+  registry are in this task''s own YAML file. The codebase uses ''from heru import
+  get_engine'' and external heru package. RECOMMENDATION: This is a project/task issue
+  (obsolete task description) not a Litehive infrastructure bug. The task should be
+  updated to reflect current architecture or marked as obsolete. The grooming agent
+  functioned correctly.'
+feedback: 'No Litehive infrastructure bug found. The grooming agent correctly rejected
+  this task because the task description references code structures that no longer
+  exist in the codebase. ROOT CAUSE: Task T-0231 was created April 8, 2026 referencing
+  internal engine adapter structures (_OPENCODE_STRIPPED_ENV_VARS, engines/__init__.py
+  registry, _codex_live_events functions). However, T-0269 completed April 13, 2026
+  extracted all engine adapters to external heru package. The current architecture
+  uses external heru imports, HeruEngineAdapter wrapper, and ConfigBackedEngineSelector
+  - none of the structures mentioned in the task description exist anymore. EVIDENCE:
+  The only references to _OPENCODE_STRIPPED_ENV_VARS, _codex_live_events, and engines
+  registry are in this task''s own YAML file. The codebase uses ''from heru import
+  get_engine'' and external heru package. RECOMMENDATION: This is a project/task issue
+  (obsolete task description) not a Litehive infrastructure bug. The task should be
+  updated to reflect current architecture or marked as obsolete. The grooming agent
+  functioned correctly.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 0
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 0
+created_at: '2026-04-21T17:33:22+00:00'

@@ -1,0 +1,30 @@
+id: SA-0008
+role: reviewer
+engine: codex
+status: completed
+sandboxed: false
+sandbox: host
+created_at: '2026-04-08T21:00:21+00:00'
+updated_at: '2026-04-08T21:08:27+00:00'
+pid: 664416
+exit_code: 0
+interruption_reason: null
+resource_control:
+  enabled: false
+  backend: null
+  runtime: null
+  image: null
+  network_mode: null
+  workspace_mode: null
+  memory_mb: null
+  cpu_count: null
+  process_limit: null
+  environment: []
+  credential_inputs: []
+  propagated_mounts: []
+resource_limit_event: null
+continuation:
+  session_id: null
+  thread_id: 019d6ee5-6b3a-7ff0-b280-efab7e17208d
+  metadata: {}
+  updated_at: '2026-04-08T21:08:26+00:00'

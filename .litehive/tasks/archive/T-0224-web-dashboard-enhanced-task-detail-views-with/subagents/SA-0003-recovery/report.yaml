@@ -1,0 +1,30 @@
+status: completed
+summary: "I\u2019m treating this as a task-recovery run: first I\u2019ll inspect the\
+  \ task-local state, the prior subagent artifacts, and the `litehive report` path\
+  \ so I can classify why grooming failed and make the smallest safe repair."
+files_changed: []
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Agent did not submit verdict via litehive report CLI.
+resource_control:
+  enabled: false
+  backend: null
+  runtime: null
+  image: null
+  network_mode: null
+  workspace_mode: null
+  memory_mb: null
+  cpu_count: null
+  process_limit: null
+  environment: []
+  credential_inputs: []
+  propagated_mounts: []
+interruption_reason: null
+resource_limit_event: null
+continuation:
+  session_id: null
+  thread_id: 019d6e4d-b620-7dd2-9953-cb485dfd53be
+  metadata: {}
+  updated_at: '2026-04-08T18:18:45+00:00'

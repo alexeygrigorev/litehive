@@ -1,0 +1,45 @@
+status: completed
+summary: Added implementing-stage worker fanout, persisted multi-worker runtime state,
+  and multi-worker status rendering, but the full workspace test suite still has regressions
+  to resolve.
+files_changed:
+- litehive/cli.py
+- litehive/main.py
+- litehive/models.py
+- litehive/observability.py
+- litehive/runtime.py
+- litehive/subagents.py
+- litehive/tasks.py
+- tests/test_workspace.py
+tests:
+  added: 4
+  passing: 7
+warnings:
+- '`uv run pytest -q tests/test_workspace.py -k ''subagent_manager_persists_planner_and_reviewer_artifacts
+  or render_task_summary_includes_active_subagent_pid or render_task_summary_and_status_show_parallel_workers
+  or recover_stale_runner_state_recovers_running_task_without_runner_lock_record or
+  recover_stale_runner_state_marks_parallel_workers_interrupted or run_next_task_creates_checkpoint_commit_and_persists_policy
+  or run_next_task_executes_stage_in_task_worktree''` passed'
+- '`uv run pytest -q tests/test_workspace.py -k ''parallel_workers or multiple_runtime_workers
+  or stale_runner_state_marks_parallel_workers''` passed'
+- '`uv run pytest -q tests/test_workspace.py` failed with 33 regressions, including
+  queue/runner lifecycle expectations and several single-worker retry/fallback expectation
+  mismatches'
+resource_control:
+  enabled: false
+  runtime: null
+  image: null
+  network_mode: null
+  workspace_mode: null
+  memory_mb: null
+  cpu_count: null
+  process_limit: null
+  environment: []
+  credential_inputs: []
+interruption_reason: null
+resource_limit_event: null
+continuation:
+  session_id: null
+  thread_id: 019d51df-07f7-7e53-8429-410c4987d335
+  metadata: {}
+  updated_at: '2026-04-03T06:04:08+00:00'

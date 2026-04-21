@@ -17,3 +17,15 @@ Normalized stale queued/flagged state; reset task to `implementing` without chan
 
 ## 2026-04-20T21:47:49+00:00
 Task requeued for another implementation pass.
+
+## 2026-04-21T21:03:49+00:00
+Task closed: wont_do. Web/browser dashboard work is not wanted; remove leftover backlog so it does not resurface.
+
+## 2026-04-21T21:06:05+00:00
+Task closed: wont_do. Web/browser dashboard work is not wanted; remove leftover backlog so it does not resurface.
+
+## 2026-04-21T21:06:14+00:00
+Task abandoned via CLI at stage `backlog`.
+
+## 2026-04-21T21:06:36+00:00
+Task abandoned via CLI at stage `backlog`.

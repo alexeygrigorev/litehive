@@ -1,0 +1,29 @@
+status: completed
+summary: Let me read the HTML template and check the refactored module structure on
+  main.
+files_changed: []
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Agent did not submit verdict via litehive report CLI.
+resource_control:
+  enabled: false
+  backend: null
+  runtime: null
+  image: null
+  network_mode: null
+  workspace_mode: null
+  memory_mb: null
+  cpu_count: null
+  process_limit: null
+  environment: []
+  credential_inputs: []
+  propagated_mounts: []
+interruption_reason: null
+resource_limit_event: null
+continuation:
+  session_id: b5766ed1-0b0a-4bbc-b3f8-7c44e3886578
+  thread_id: null
+  metadata: {}
+  updated_at: '2026-04-09T00:03:32+00:00'

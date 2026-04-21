@@ -4,7 +4,7 @@ title: Remove silent fallbacks - fail explicitly instead of guessing
 created_at: '2026-04-06T20:30:57+00:00'
 task_type: null
 pipeline_mode: full
-priority: medium
+priority: high
 depends_on: []
 goal: 'Keep T-0198 as a historical umbrella record for the silent-fallback cleanup
   split. Do not implement under this task. Route execution through the focused tasks

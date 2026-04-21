@@ -1,0 +1,39 @@
+git:
+  commit_sha: null
+execution_status: cancelled
+run_started_at: null
+updated_at: '2026-04-01T15:43:54+00:00'
+retry_count: 0
+retry_limit: 0
+retry_source: global
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: null
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: null
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+active_subagent: null
+last_subagent: null
+last_engine_switch: null
+last_outcome:
+  kind: cancelled
+  stage: backlog
+  reason_code: duplicate
+  reason: Covered by T-0070 for baseline worktree execution; parallel worker fanout
+    and integration remain in T-0106 and T-0107.
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: '2026-04-01T15:43:54+00:00'

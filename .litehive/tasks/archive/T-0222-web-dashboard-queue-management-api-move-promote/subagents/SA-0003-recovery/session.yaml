@@ -1,0 +1,30 @@
+id: SA-0003
+role: recovery
+engine: codex
+status: completed
+sandboxed: false
+sandbox: host
+created_at: '2026-04-08T17:55:30+00:00'
+updated_at: '2026-04-08T17:57:15+00:00'
+pid: 317809
+exit_code: 0
+interruption_reason: null
+resource_control:
+  enabled: false
+  backend: null
+  runtime: null
+  image: null
+  network_mode: null
+  workspace_mode: null
+  memory_mb: null
+  cpu_count: null
+  process_limit: null
+  environment: []
+  credential_inputs: []
+  propagated_mounts: []
+resource_limit_event: null
+continuation:
+  session_id: null
+  thread_id: 019d6e3c-2e3d-7da0-ba00-778c9e2e1b4a
+  metadata: {}
+  updated_at: '2026-04-08T17:57:15+00:00'
