@@ -169,9 +169,40 @@ class RejectionLoop:
 class TaskState:
     """Single source of truth for task state the machine reads and writes.
 
-    Guards, rule targets, and effect factories all receive a ``TaskState`` by
-    convention read-only. The Runner is the only place that mutates it, via
-    ``StateDelta`` patches.
+    OWNERSHIP PATHS:
+
+    TaskState is owned by the pipeline state machine and Runner:
+    - Guards, rule targets, and effect factories receive TaskState read-only
+    - Runner is the ONLY component that mutates TaskState via StateDelta patches
+    - Pipeline transition rules determine valid state changes
+    - Recovery logic reads/writes recovery-specific fields
+
+    DIVERGENCE FROM TASKRUNTIME:
+
+    TaskState and TaskRuntime serve different purposes and diverge in scope:
+
+    TaskState (this class) tracks:
+    - High-level pipeline position (stage, pipeline_mode)
+    - Retry counts and recovery state (stage_retry, recovery_history)
+    - Terminal failure state (failed_reason, failed_message)
+    - Merge and commit state (merge_context, commit_result)
+    - Core pipeline state machine data
+
+    TaskRuntime tracks:
+    - Detailed execution state (active subagents, continuations)
+    - Engine switches and interruption context
+    - Runtime-only data that may not persist across restarts
+
+    WHEN THEY DIVERGE:
+
+    - TaskState persists across task restarts and represents the canonical
+      machine state that the pipeline runner must respect
+    - TaskRuntime may be reconstructed or reset during task restarts,
+      losing detailed execution context while preserving core pipeline position
+    - TaskState drives pipeline routing decisions; TaskRuntime provides
+      execution context and debugging information
+
+    PERSISTENCE NOTES:
 
     ``limits`` is runtime config (not persisted) — real persistence adapters
     should omit it on save and re-inject it on load.

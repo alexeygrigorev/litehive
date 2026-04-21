@@ -10,20 +10,31 @@ from litehive.domain.runtime import ResourceLimitEvent
 
 @dataclass(slots=True)
 class EngineFailure:
-    kind: str
-    reason: str
-    classification: str | None = None
-    resource_limit_event: ResourceLimitEvent | None = None
+    """Details about a subagent engine failure.
+
+    Captures the specifics of why a subagent failed, including
+    classification for recovery decisions and resource limit context.
+    """
+    kind: str                                           # Type of failure
+    reason: str                                         # Human-readable failure reason
+    classification: str | None = None                   # Failure category for recovery routing
+    resource_limit_event: ResourceLimitEvent | None = None  # Resource limit that was hit
 
 
 @dataclass(slots=True)
 class SubagentResult:
-    ref: SubagentRef
-    execution: CLIExecutionResult | None
-    transcript: str
-    exit_code: int
-    failure: EngineFailure | None = None
-    continuation: RuntimeEngineContinuation | None = None
+    """Complete result of a subagent execution.
+
+    Contains all the information about what happened during subagent
+    execution, including success/failure details and context for
+    potential continuation or recovery.
+    """
+    ref: SubagentRef                                    # Reference to the subagent that ran
+    execution: CLIExecutionResult | None               # Low-level execution results
+    transcript: str                                     # Subagent conversation transcript
+    exit_code: int                                      # Process exit code
+    failure: EngineFailure | None = None               # Failure details if subagent failed
+    continuation: RuntimeEngineContinuation | None = None  # Context for resuming if interrupted
 
 
 class SubagentInactivityTimeout(RuntimeError):
