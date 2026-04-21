@@ -1,63 +1,13 @@
 id: T-0317
 slug: split-litehive-cli-init-py-into-sibling-modules
-title: Split litehive/cli/__init__.py into sibling modules (no code in __init__)
+title: Finish CLI flattening and remove legacy root shortcuts
 created_at: '2026-04-10T19:45:37+00:00'
 task_type: null
 pipeline_mode: full
 priority: high
 depends_on: []
-goal: "litehive/cli/__init__.py is 1060 lines of typer wiring wrapped around legacy\
-  \ argparse handlers. The core problem is the `_ns(**locals())` shim that converts\
-  \ typer-parsed options into an argparse.Namespace, so handlers defensively do `getattr(args,\
-  \ 'fix', False)` for parameters typer already typed. Use typer properly: each command\
-  \ is ONE function with plain-Python parameters; delete the `_cmd_*` wrapper layer\
-  \ entirely.\n\n### Goal\nReduce litehive/cli/ surface layer from ~2400 lines (1060\
-  \ in __init__.py + 1264 in parsers/) to ~300 lines total.\n\n### Cuts\n\n1. Delete\
-  \ litehive/cli/parsers/ entirely \u2014 dead argparse subsystem, runtime-unreferenced.\
-  \ Only tests touch it via build_parser; port those to typer.testing.CliRunner or\
-  \ delete.\n\n2. Delete all wrapper scaffolding in __init__.py: _ns, _cmd_* indirection,\
-  \ build_parser, _subparsers_action, _filter_public_help, _add_command trampoline,\
-  \ _PUBLIC_TOP_LEVEL_COMMANDS, _PUBLIC_GROUP_COMMANDS, `import argparse`.\n\n3. Rewrite\
-  \ each command as a single typer function with no Namespace wrapping, no getattr-with-default\
-  \ for typer-declared params, no indirection. Example: doctor becomes `def doctor(workspace:\
-  \ Path = ..., fix: bool = False) -> int:` with the body from _cmd_doctor inlined.\n\
-  \n4. Drop ALL hidden root-level aliases that duplicate sub-app commands: add, issue,\
-  \ intake, debug, logs, list, show, move, promote, requeue (root), resume, abandon,\
-  \ close, update, cleanup, import-issue, import-issues. Sub-app forms only.\n\n5.\
-  \ **Drop `litehive configure` entirely.** It currently takes 28 options just to\
-  \ seed a yaml file \u2014 that's absurd. Instead: workspace scaffolding (first `litehive`\
-  \ invocation in a fresh repo, or an explicit `litehive init` if kept) writes a bundled\
-  \ commented template to .litehive/config.yaml with inline comments explaining every\
-  \ field. No interactive flags, no --edit, no --force. The user edits the yaml by\
-  \ hand before running anything. If .litehive/config.yaml already exists, scaffolding\
-  \ leaves it alone.\n\n6. Drop likely-dead commands (verify via grep first): tasks\
-  \ (TUI launcher), dirty-worktree-gate, recover, prioritize, switch, import-issue,\
-  \ import-issues.\n\n### Target layout\n\n- litehive/cli/__init__.py: `from .app\
-  \ import app, main` (thin re-export only)\n- litehive/cli/app.py: Typer() root +\
-  \ sub-app instances, root callback, add_typer wiring, main()\n- litehive/cli/workspace.py:\
-  \ status, engine, repair, web, tasks (if kept)\n- litehive/cli/runner.py: start,\
-  \ stop, restart, run, rollback, report\n- litehive/cli/daemon_cli.py: daemon sub-app\
-  \ commands\n- litehive/cli/task_cli.py: task sub-app commands (add/debug/logs/list/show/abandon/close/update)\n\
-  - litehive/cli/queue_cli.py: queue sub-app commands\n- litehive/cli/archive_cli.py:\
-  \ archive cleanup\n- litehive/cli/worktree_cli.py: worktree ls/clean/rescue\n- litehive/cli/import_cli.py:\
-  \ import sub-app (github/spec)\n- litehive/cli/templates/workspace_config.yaml:\
-  \ bundled commented template for scaffolding\n\nEach command module holds full typer\
-  \ commands (decorators + bodies), not wrapper functions. No _cmd_* names survive.\n\
-  \n### Load-bearing contracts (must not break)\n\n- `litehive run` and `litehive\
-  \ run --drain` \u2014 daemon spawns these as subprocesses and parses exit codes\
-  \ (see litehive/daemon/_execution.py).\n- `litehive status`, `litehive start`, `litehive\
-  \ stop`, `litehive task add`, `litehive report` \u2014 README and scripts use these.\n\
-  - `litehive.cli.app` and `litehive.cli.main` remain importable.\n- First run in\
-  \ a fresh workspace must still produce a valid .litehive/ directory structure; config.yaml\
-  \ written from template.\n\n### Migration order (each step leaves tests green)\n\
-  \n1. Delete parsers/ and build_parser scaffolding. Port ~30 parser unit tests to\
-  \ CliRunner or delete where redundant.\n2. Drop hidden root aliases. Remove _add_command\
-  \ trampoline.\n3. Drop dead commands (tasks, dirty-worktree-gate, recover, prioritize,\
-  \ switch, import-issue, import-issues).\n4. Create litehive/cli/templates/workspace_config.yaml.\
-  \ Move configure behavior into workspace scaffolding (ensure_workspace or equivalent).\
-  \ Delete the configure typer command and _cmd_configure.\n5. Inline _cmd_* handlers\
-  \ into their typer command functions. Delete _ns. Remove argparse import from __init__.py.\n\
-  6. Split into sibling modules per layout above."
+goal: Drop recover/prioritize/switch root aliases and legacy CLI parse helpers so
+  only the Typer sibling modules remain.
 acceptance_criteria:
 - litehive/cli/__init__.py reduced to a thin re-export (from .app import app, main)
 - No _ns, _cmd_*, build_parser, _subparsers_action, _filter_public_help, or _add_command

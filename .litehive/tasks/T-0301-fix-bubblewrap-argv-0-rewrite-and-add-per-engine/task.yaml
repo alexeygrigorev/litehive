@@ -1,19 +1,13 @@
 id: T-0301
 slug: fix-bubblewrap-argv-0-rewrite-and-add-per-engine
-title: Fix bubblewrap argv[0] rewrite and add per-engine extra_ro_binds
+title: Add bubblewrap argv[0] rewrite and extra_ro_binds
 created_at: '2026-04-10T10:09:43+00:00'
 task_type: null
 pipeline_mode: full
 priority: high
 depends_on: []
-goal: The bubblewrap sandbox path in SandboxLauncher._wrap_bubblewrap does not rewrite
-  argv[0] the way _wrap_docker does, so an engine binary that is not on PATH inside
-  the sandbox (e.g. codex installed via nvm at /home/alexey/.nvm/versions/node/v24.13.1/bin/codex)
-  fails at execvp. Additionally there is no mechanism to bind-mount a binary's package/runtime
-  directory (node + codex package under ~/.nvm), so even after fixing argv[0] the
-  Node shebang script cannot launch. Fix both so that codex and claude (both nvm-installed
-  on this host) can actually run inside the bubblewrap sandbox end-to-end. This is
-  the first blocker before we can enable sandbox mode.
+goal: Implement the missing bubblewrap launcher path using the existing argv[0] rewrite
+  and per-engine bind machinery so nvm-installed codex/claude can run end to end.
 acceptance_criteria:
 - _wrap_bubblewrap rewrites invocation.argv[0] to the resolved absolute host binary
   path (matching the behavior of _wrap_docker)

@@ -1,15 +1,14 @@
 id: T-0297
 slug: move-daemon-run-all-logs-to-local-state-litehive
-title: Move daemon run-all logs to ~/.local/state/litehive/<wid>/logs/
+title: Move daemon logs to XDG_STATE_HOME
 created_at: '2026-04-10T06:49:15+00:00'
 task_type: null
 pipeline_mode: full
 priority: medium
 depends_on:
 - T-0291
-goal: Daemon run-all logs are execution residue that doesn't belong in the repo. Move
-  them out of .litehive/logs/ to $XDG_STATE_HOME/litehive/<workspace-id>/logs/ where
-  they can't accidentally get committed.
+goal: Store run-all logs under XDG_STATE_HOME/litehive/<workspace-id>/logs instead
+  of XDG_DATA_HOME.
 acceptance_criteria:
 - New logs_root() helper returns $XDG_STATE_HOME/litehive/<wid>/logs/
 - Daemon writes logs to new path

@@ -51,3 +51,9 @@ Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See
 
 ## 2026-04-18T09:33:06+00:00
 Task metadata updated via CLI.
+
+## 2026-04-21T21:52:09+00:00
+Task execution stopped via CLI from `testing` stage. Status: parked.
+
+## 2026-04-21T21:52:16+00:00
+Task resumed from `testing`.

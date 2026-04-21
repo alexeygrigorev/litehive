@@ -1,36 +1,13 @@
 id: T-0338
 slug: remove-dead-per-task-engine-override-field-cli
-title: Remove dead per-task engine override (field, CLI flags, display)
+title: Remove leftover per-task engine plumbing from task update/show
 created_at: '2026-04-10T20:53:57+00:00'
 task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: "The per-task engine override feature was removed from the pipeline runner earlier\
-  \ but the field and surrounding UI were never cleaned up. Grep confirms zero runtime\
-  \ reads of task.engine in litehive/pipeline/ or litehive/agents/. Task distribution\
-  \ across 85 task files: 78 with `engine: null`, 7 with `engine: codex` (the workspace\
-  \ default), zero with any actual override. Dead feature.\n\n### Delete\n- `engine`\
-  \ field from TaskRecord (litehive/models/task_models.py or wherever defined)\n-\
-  \ `--engine` flag from `litehive task add`\n- `--engine` flag from `litehive task\
-  \ update`\n- The `print(f'engine: {config.default_engine}')` lines in:\n  - litehive/cli/tasks.py:74\
-  \ (task add output)\n  - litehive/cli/tasks.py:422 (task update output)\n  These\
-  \ print the WORKSPACE default engine in a per-task context, which is misleading\
-  \ noise (suggests the task has an engine setting when it doesn't).\n- Any `engine:\
-  \ ...` emission in task.yaml serialization\n- The load-from-yaml path that reads\
-  \ engine: from existing task.yaml files (accept it silently for backward-compat\
-  \ during migration, then drop it)\n\n### Keep\n- Workspace-level default_engine\
-  \ in config.yaml\n- engine_freeze / is_engine_frozen (separate quota mechanism)\n\
-  - Engine fallback when the default is frozen\n- active_engine in state.yaml (the\
-  \ live engine executing the current task, different concept)\n\n### Migration\n\
-  - One-time pass over .litehive/tasks/*/task.yaml to drop the `engine:` field. Idempotent:\
-  \ tasks loaded without the field continue to work.\n- Document in commit message\
-  \ that existing task.yaml files with engine: will have that field silently ignored\
-  \ and stripped on next write.\n\n### Verification\n- grep confirms no remaining\
-  \ task.engine, record.engine, or TaskRecord.engine references in pipeline/agents\
-  \ code\n- litehive task add and task update no longer print a misleading 'engine:\
-  \ codex' line\n- litehive task add / update help no longer list --engine\n- All\
-  \ tests pass"
+goal: Drop the unused task-update engine parameter and stop printing task-level engine
+  in task show.
 acceptance_criteria:
 - engine field removed from TaskRecord pydantic model
 - --engine flag removed from task add and task update commands

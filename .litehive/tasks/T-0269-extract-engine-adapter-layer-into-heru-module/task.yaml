@@ -1,15 +1,13 @@
 id: T-0269
 slug: extract-engine-adapter-layer-into-heru-module
-title: Extract engine adapter layer into heru module
+title: Extract adapter layer into local heru package
 created_at: '2026-04-09T18:31:43+00:00'
 task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: Move engine adapters, invocation building, transcript parsing, quota checking,
-  and session resume logic from litehive/agents/ into a heru/ package within the repo.
-  litehive imports from heru instead of litehive/agents/adapters/. First step toward
-  a separate heru package (see https://pypi.org/project/heru/).
+goal: Move remaining adapter, transcript, quota, and resume logic out of Litehive
+  into heru/ and import it from there.
 acceptance_criteria:
 - heru/ package exists at repo root with adapters for all engines (claude, codex,
   copilot, gemini, goz, opencode)

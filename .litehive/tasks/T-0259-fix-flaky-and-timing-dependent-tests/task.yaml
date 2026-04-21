@@ -1,13 +1,13 @@
 id: T-0259
 slug: fix-flaky-and-timing-dependent-tests
-title: Fix flaky and timing-dependent tests
+title: Stabilize remaining flaky tests
 created_at: '2026-04-09T09:21:41+00:00'
 task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: Several tests have timing-dependent assertions or shared mutable state that
-  causes flaky failures. Fix them.
+goal: Unskip or rewrite the remaining timeout-sensitive integration cases so they
+  run deterministically.
 acceptance_criteria:
 - test_inactivity_timeout.py timing tests use larger margins (1s not 0.5s) or mock
   time

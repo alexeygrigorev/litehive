@@ -1,21 +1,13 @@
 id: T-0343
 slug: adopt-heru-s-unified-hours-weeks-usage-shape
-title: Adopt heru's unified (hours, weeks) usage shape
+title: Finish unified quota usage-shape migration
 created_at: '2026-04-11T07:01:22+00:00'
 task_type: refactor
 pipeline_mode: full
 priority: high
 depends_on: []
-goal: heru is normalizing its quota/usage output to a single unified shape with exactly
-  two windows (hours and weeks) and collapsing the per-provider dataclasses (see the
-  corresponding heru task). litehive currently consumes the old per-provider shapes
-  (CodexQuotaStatus.primary_window/secondary_window, ClaudeQuotaStatus.five_hour/seven_day,
-  CopilotQuotaStatus.premium_remaining/premium_entitlement/percent_remaining, ZaiQuotaStatus.api_calls/tokens/window_hours,
-  plus fields like quota_reset_date and max_used_percent). Migrate every litehive
-  call site to the new unified shape. Delete now-dead per-provider handling. Any UI
-  or monitoring code that showed provider-specific windows should switch to showing
-  'hours remaining' and 'weeks remaining'. Bump the heru dependency pin to a version
-  that includes the unified shape.
+goal: Remove provider-specific quota handling from the compat layer and update remaining
+  call sites to the unified hours/weeks shape.
 acceptance_criteria:
 - No references to CodexQuotaWindow, ClaudeQuotaWindow, ZaiQuotaWindow, CopilotQuotaStatus.premium_*,
   primary_window, secondary_window, five_hour, seven_day, api_calls, tokens window_hours,

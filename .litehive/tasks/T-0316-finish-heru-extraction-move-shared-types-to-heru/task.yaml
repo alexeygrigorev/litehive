@@ -1,23 +1,13 @@
 id: T-0316
 slug: finish-heru-extraction-move-shared-types-to-heru
-title: 'Finish heru extraction: move shared types to heru, delete litehive compat
-  shims'
+title: Finish heru extraction and remove Litehive compat bridge
 created_at: '2026-04-10T17:48:27+00:00'
 task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: "The T-0269 heru extraction physically moved engine adapters out of litehive/agents/\
-  \ into heru/, but two loose ends remain that keep heru coupled to litehive and prevent\
-  \ it from being a real standalone package. First, heru/types.py reaches up into\
-  \ litehive.models for 16 shared types (EngineLimitKind, StageReport, RuntimeEngineContinuation,\
-  \ SubagentRef, etc.) \u2014 this inverts the layering (lower layer depends on higher)\
-  \ and means heru cannot be installed without litehive. Second, 16 compatibility\
-  \ shim files still live under litehive/agents/adapters/ and litehive/agents/quota/\
-  \ that just do 'from heru.adapters.X import *' \u2014 they exist so old import paths\
-  \ keep working, but they are dead weight and create near-cyclic import risk. Close\
-  \ both gaps so heru becomes a standalone package that litehive depends on in one\
-  \ direction only."
+goal: Move the remaining shared types into heru, then delete litehive/heru_compat.py
+  and any lingering compatibility shims.
 acceptance_criteria:
 - The 16 shared types currently defined in litehive/models and re-exported via heru/types.py
   are moved into heru (either into heru/types.py directly or a new heru/models.py),

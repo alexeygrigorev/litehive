@@ -1,28 +1,13 @@
 id: T-0321
 slug: delete-parallel-execution-subsystem-single-user
-title: Delete parallel execution subsystem (single-user never runs parallel)
+title: Remove remaining parallel execution path
 created_at: '2026-04-10T20:13:47+00:00'
 task_type: null
 pipeline_mode: full
 priority: high
 depends_on: []
-goal: "Remove the parallel worktree execution path \u2014 single-user workflow doesn't\
-  \ need it. Your .litehive/config.yaml uses parallel_capacity=1 (sequential only).\
-  \ ~1170 LOC gone.\n\nFiles to delete:\n- litehive/pipeline/_parallel.py (576 LOC):\
-  \ ParallelRunSummary, IntegrationResult, _integrate_completed_task, _select_parallel_tasks,\
-  \ _run_single_parallel_task, _clear_parallel_active_tasks\n- tests/test_parallel_execution.py\
-  \ (546 LOC)\n\nConfig fields to delete (litehive/config/ and models):\n- parallel_capacity\n\
-  - parallel_integration_check\n- Related normalization in config/normalization.py\n\
-  - Any .litehive/config.yaml default entries\n\nCLI branch to delete:\n- The parallel\
-  \ dispatch in litehive/cli/run.py (~30 LOC)\n- Any --parallel flag on litehive run\n\
-  \nRelated plumbing in litehive/pipeline/:\n- Parallel-specific stop reasons in _pool_control.py\
-  \ (pool_stop_reason discriminators that only fire with parallel > 1)\n- Any parallel\
-  \ imports in pipeline/__init__.py re-export manifest\n\nVerification:\n- All tests\
-  \ pass\n- litehive run and litehive run --drain work unchanged\n- No references\
-  \ to parallel_capacity, _parallel, ParallelRunSummary remain\n- The budget / pool\
-  \ stop conditions in _pool_control.py collapse naturally (may enable follow-up simplification)\n\
-  \nThis is one of the bigger single-cut wins from the simplification audit (cut #1,\
-  \ ~1170 LOC, low risk)."
+goal: Delete litehive/daemon/parallel.py, the parallel tests, and max_parallel_tasks;
+  keep sequential-only run.
 acceptance_criteria:
 - litehive/pipeline/_parallel.py deleted
 - tests/test_parallel_execution.py deleted

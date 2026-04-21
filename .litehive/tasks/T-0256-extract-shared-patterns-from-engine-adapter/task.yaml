@@ -1,14 +1,13 @@
 id: T-0256
 slug: extract-shared-patterns-from-engine-adapter
-title: Extract shared patterns from engine adapter classes to reduce duplication
+title: Extract shared engine-adapter helpers
 created_at: '2026-04-09T09:16:18+00:00'
 task_type: null
 pipeline_mode: full
 priority: low
 depends_on: []
-goal: '6 adapter files (300-470 lines each) duplicate patterns: transcript extraction,
-  error classification, continuation parsing, usage observation. Extract common patterns
-  into base class methods or shared helpers.'
+goal: Move remaining transcript, continuation, and error-classification logic into
+  shared base/helpers used by all adapters.
 acceptance_criteria:
 - Common transcript extraction logic in base class
 - Common error/limit classification patterns shared

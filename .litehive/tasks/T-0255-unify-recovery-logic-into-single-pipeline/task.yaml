@@ -1,14 +1,13 @@
 id: T-0255
 slug: unify-recovery-logic-into-single-pipeline
-title: Unify recovery logic into single pipeline/recovery/ package
+title: Consolidate recovery flows
 created_at: '2026-04-09T09:16:17+00:00'
 task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: 'Recovery is split between workspace/recovery.py (1037 lines, startup repair)
-  and pipeline/_recovery.py (747 lines, execution recovery). Merge into pipeline/recovery/
-  with clear separation: detection.py, workspace_repair.py, execution_recovery.py.'
+goal: Move launch prep and workspace repair into one recovery package with explicit
+  detection/workspace/execution modules.
 acceptance_criteria:
 - Single recovery package at pipeline/recovery/
 - workspace/recovery.py removed, functions moved to pipeline/recovery/

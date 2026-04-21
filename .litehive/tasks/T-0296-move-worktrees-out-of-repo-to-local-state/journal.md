@@ -8,3 +8,6 @@ Task closed: duplicate. Already done: verified in code (intent/runtime split don
 
 ## 2026-04-20T13:46:12+00:00
 Normalized stale closed-task flagged state to backlog; task is already closed as duplicate.
+
+## 2026-04-21T21:47:35+00:00
+Task metadata updated via CLI.

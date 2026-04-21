@@ -1,23 +1,13 @@
 id: T-0313
 slug: reject-swe-implementing-stage-when-git-diff-is
-title: Reject SWE implementing stage when git diff is empty but report claims changes
+title: Add implementing-stage filesystem guard for pass reports
 created_at: '2026-04-10T14:54:31+00:00'
 task_type: null
 pipeline_mode: full
 priority: high
 depends_on: []
-goal: "Root cause of T-0240's multi-day confirmation-bias loop: the first SWE hallucinated\
-  \ a completion report without actually invoking any file-edit tool. The report described\
-  \ extensive file changes but 'git status' in the worktree was empty. Nothing in\
-  \ the pipeline caught the discrepancy \u2014 the bogus report was accepted, persisted\
-  \ in the task thread, and fed to every subsequent SWE retry as ground truth, causing\
-  \ all 14 subagents across 5 pipeline passes to confirm the lie. Add a cheap deterministic\
-  \ guard at the end of every implementing stage: compare the SWE's self-reported\
-  \ files_changed against the actual 'git status --porcelain' in the worktree. If\
-  \ the report claims any non-empty files_changed but the worktree is clean, the stage\
-  \ fails with verdict=reject and reason 'agent reported changes but worktree is clean\
-  \ \u2014 likely hallucination'. This is a one-line check that would have caught\
-  \ the T-0240 hallucination on pass 1 and prevented it from poisoning the task thread."
+goal: Reject implementing pass reports when the worktree is clean, using live git-status
+  evidence instead of trusting files_changed alone.
 acceptance_criteria:
 - The implementing stage runner verifies (via 'git status --porcelain' in the task
   worktree) that the worktree actually has changes before accepting a pass verdict

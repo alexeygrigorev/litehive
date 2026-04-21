@@ -1,0 +1,23 @@
+id: T-0467
+slug: make-litehive-daemon-status-infer-workspace-by
+title: Make litehive daemon status infer workspace by default
+created_at: '2026-04-21T21:59:03+00:00'
+task_type: null
+pipeline_mode: full
+priority: medium
+depends_on: []
+goal: Remove the inconsistent requirement that 'litehive daemon status' needs an explicit
+  --workspace when run from inside a Litehive workspace. It should resolve the workspace
+  exactly like top-level status/start/stop commands so operator diagnostics are consistent
+  and scriptable.
+acceptance_criteria:
+- Running 'litehive daemon status' inside a workspace succeeds without --workspace.
+- Workspace resolution matches 'litehive status' behavior and errors clearly only
+  when no workspace can be inferred.
+- CLI tests cover both inferred-workspace and explicit --workspace forms.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0467 make-litehive-daemon-status-infer-workspace-by'
+created_from: null

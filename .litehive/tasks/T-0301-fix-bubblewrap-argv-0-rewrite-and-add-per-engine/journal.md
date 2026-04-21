@@ -54,3 +54,6 @@ Task closed: duplicate. Zombie re-queue: runtime.yaml execution_status=done. See
 
 ## 2026-04-17T13:23:42+00:00
 Task closed: wont_do. Bubblewrap sandbox removed
+
+## 2026-04-21T21:47:44+00:00
+Task metadata updated via CLI.

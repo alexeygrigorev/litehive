@@ -1,14 +1,12 @@
 id: T-0334
 slug: consume-heru-s-unified-jsonl-event-schema-instead
-title: Consume heru's unified JSONL event schema instead of per-engine parsing
+title: Consume heru unified JSONL events
 created_at: '2026-04-10T20:48:10+00:00'
 task_type: refactor
 pipeline_mode: full
 priority: high
 depends_on: []
-goal: Refactor Litehive's subagent execution/session pipeline to consume heru's unified
-  JSONL event contract as the source of truth, instead of relying on Litehive-side
-  per-engine JSONL parsing behavior.
+goal: Remove adapter fallback parsing once all supported engines emit unified JSONL.
 acceptance_criteria:
 - litehive/agents/ no longer contains per-engine JSONL parsing code paths that heru's
   unified schema already covers

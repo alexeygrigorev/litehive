@@ -1,31 +1,13 @@
 id: T-0330
 slug: audit-litehive-models-for-unused-types-and-dead
-title: Audit litehive/models/ for unused types and dead fields
+title: Audit domain models for unused types and dead fields
 created_at: '2026-04-10T20:27:59+00:00'
 task_type: null
 pipeline_mode: full
 priority: low
 depends_on:
 - T-0323
-goal: "Keep the 5-file split in litehive/models/ (common.py, engine_models.py, report_models.py,\
-  \ runtime_models.py, task_models.py) \u2014 separate files are fine. But audit for\
-  \ unused types and dead fields.\n\n### Scope\n1. Every class defined in litehive/models/\
-  \ gets a usage report (grep-based).\n2. Every field on every pydantic model gets\
-  \ a usage report (grep + Read callers).\n3. Classify:\n   - LIVE: has callers in\
-  \ non-test code\n   - TEST-ONLY: only tests reference it (either delete + its tests,\
-  \ or keep if it covers a live path)\n   - DEAD: zero references\n4. Delete DEAD\
-  \ types and fields. Update TEST-ONLY on a case-by-case basis.\n\n### Specific candidates\
-  \ from the simplification audit\n- UpstreamContributionOrigin, UpstreamPatchProposal,\
-  \ UpstreamContributionKind (cross-repo-contribution feature \u2014 agent flagged\
-  \ as possibly unused; verify no task.yaml has upstream_origin set)\n- GitHubOrigin\
-  \ \u2014 check if GitHub import flow still uses it\n- UpstreamPatchProposal fields\
-  \ (prepared, repo_path)\n- Any model that existed to serialize a feature flag removed\
-  \ by T-0323 (budget ledger configs, resource limit configs, etc.) \u2014 those should\
-  \ disappear automatically but double-check\n\n### Non-goals\n- Do NOT collapse the\
-  \ 5 files into one models.py\n- Do NOT move anything to heru/\n- Do NOT change pydantic\
-  \ model inheritance or base classes\n\n### Coordination\nBest done after T-0323\
-  \ (dead feature flags) and T-0324 (web deletion) land, so the models they remove\
-  \ are already gone."
+goal: Run the usage audit over litehive/domain/* and delete dead types/fields.
 acceptance_criteria:
 - Every model class in litehive/models/ classified with grep evidence in the journal
 - Dead model classes deleted

@@ -1,30 +1,12 @@
 id: T-0326
 slug: simplify-runner-hooks-keep-same-hook-point-names
-title: 'Simplify runner hooks: keep same hook point names, cut execution-mode matrix'
+title: Simplify runner hooks
 created_at: '2026-04-10T20:27:08+00:00'
 task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: "Runner hooks today are ~386 LOC in pipeline/_hooks.py + config + normalization.\
-  \ The complexity is a 3-phase execution mode system (RunnerHookConfig.hook_point,\
-  \ execution_mode with 'run_all' / 'stop_on_failure', reject-on-failure plumbing,\
-  \ _attach_runner_hook_results, _flatten_runner_hook_feedback, _flatten_runner_hook_warnings).\
-  \ I use exactly one hook point (after_implementing) with two ruff commands.\n\n\
-  ### Keep\n- All 9 hook point names: before_grooming, after_grooming, before_implementing,\
-  \ after_implementing, before_testing, after_testing, before_accepting, after_accepting,\
-  \ after_commit\n- The config schema `runner_hooks: {after_implementing: [cmd1, cmd2]}`\
-  \ (same shape as today)\n- Commands run in sequence per hook point\n- Command failure\
-  \ surfaces as a stage warning (not a hard stop)\n\n### Cut\n- execution_mode (run_all\
-  \ vs stop_on_failure) \u2014 always run_all\n- reject_on_failure plumbing \u2014\
-  \ if a hook command fails, log it, continue\n- _attach_runner_hook_results result\
-  \ aggregation layer\n- _flatten_runner_hook_feedback / _flatten_runner_hook_warnings\
-  \ helpers\n- RunnerHookConfig nested dataclass \u2014 flat dict is enough\n- Normalization\
-  \ of hook_point field (no longer needed, key IS the hook point)\n- RUNNER_HOOK_EXECUTION_MODES\
-  \ constant\n\n### Target size\n~80 LOC: a function that takes (hook_point, workspace,\
-  \ config) -> None that runs the commands in sequence with subprocess.run and logs\
-  \ results.\n\n### Integration\nCalled from the stage loop in _builder.py at each\
-  \ phase boundary. Replaces the current 3-phase dispatcher with a direct call."
+goal: Keep runner_hooks, remove the remaining execution-mode matrix and stage duplication.
 acceptance_criteria:
 - pipeline/_hooks.py reduced to ~80 LOC
 - All 9 hook point names still supported

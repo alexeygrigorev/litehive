@@ -1,46 +1,14 @@
 id: T-0342
 slug: consolidate-all-global-litehive-state-under-a
-title: Consolidate all global litehive state under a single XDG_DATA_HOME/litehive
-  root
+title: Finish single-root global-state consolidation
 created_at: '2026-04-11T05:41:14+00:00'
 task_type: null
 pipeline_mode: full
 priority: medium
 depends_on:
 - T-0332
-goal: "Global litehive state is scattered across multiple XDG directories and that\
-  \ scatter is part of why yesterday's outage went unnoticed:\n- ~/.config/litehive/workspaces.yaml\
-  \ (registry)\n- ~/.config/litehive/daemons.yaml (daemon registry)\n- ~/.local/share/litehive/<workspace_id>/data.db\
-  \ (SQLite runtime)\n- ~/.local/share/litehive/<workspace_id>/... (per-workspace\
-  \ data)\n- Possibly ~/.litehive/ (legacy, may still be touched by old code paths)\n\
-  - Possibly ~/.local/state/litehive/ (some logs/future XDG_STATE_HOME usage per T-0297)\n\
-  \nGoal: ONE root directory for all global litehive state. When something breaks,\
-  \ I open ONE folder and see everything.\n\n### Target layout\n~/.local/share/litehive/\n\
-  \u251C\u2500\u2500 config.yaml          # global user config (was ~/.config/litehive/config.yaml)\n\
-  \u251C\u2500\u2500 workspaces.yaml      # registry (was ~/.config/litehive/workspaces.yaml)\n\
-  \u251C\u2500\u2500 daemons.yaml         # daemon registry (was ~/.config/litehive/daemons.yaml)\n\
-  \u251C\u2500\u2500 logs/                # daemon logs for all workspaces, keyed\
-  \ by workspace_id\n\u2502   \u2514\u2500\u2500 <workspace_id>/\n\u2514\u2500\u2500\
-  \ <workspace_id>/      # per-workspace state\n    \u251C\u2500\u2500 data.db   \
-  \       # SQLite runtime\n    \u251C\u2500\u2500 worktrees/       # task worktrees\
-  \ (from T-0296)\n    \u2514\u2500\u2500 logs/            # daemon run-all logs\n\
-  \n### What moves\n- ~/.config/litehive/workspaces.yaml \u2192 ~/.local/share/litehive/workspaces.yaml\n\
-  - ~/.config/litehive/daemons.yaml \u2192 ~/.local/share/litehive/daemons.yaml\n\
-  - ~/.config/litehive/config.yaml \u2192 ~/.local/share/litehive/config.yaml (if\
-  \ it exists)\n- Keep XDG respected via LITEHIVE_HOME env override for testing\n\n\
-  ### What NOT to move\n- Per-workspace .litehive/ inside the repo (task.yaml files,\
-  \ config.yaml, context.md) \u2014 those stay in the repo as today\n- .litehive/state.yaml\
-  \ \u2014 stays in repo until fully migrated to DB (coordinate with T-0291 followups\
-  \ T-0294, T-0295)\n\n### One-time migration\n- First run after upgrade: if old paths\
-  \ exist, copy to new location and print a deprecation notice\n- After 1 release,\
-  \ delete the old-path readers entirely\n\n### Why\n- Single root = single place\
-  \ to clean, backup, debug, or delete\n- When yesterday's workspaces.yaml corruption\
-  \ happened, I had to hunt across ~/.config and ~/.local to understand where state\
-  \ lived\n- Paths.py currently has ~8 path helpers for different locations \u2014\
-  \ collapses to 2-3\n- Coordinates with T-0296 (worktrees to XDG) and T-0297 (logs\
-  \ to XDG) \u2014 those already use ~/.local but different subpaths; unify them\n\
-  \n### Out of scope\n- Changing the per-workspace internal layout\n- Changing config\
-  \ format\n- Supporting multiple litehive installations on one machine (single-user)"
+goal: Move remaining repo-local/global state under XDG_DATA_HOME/litehive, including
+  state.yaml readers.
 acceptance_criteria:
 - All global litehive state lives under one root directory (default ~/.local/share/litehive/)
 - LITEHIVE_HOME env var overrides the root for testing and alternate installs

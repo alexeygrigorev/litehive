@@ -1,18 +1,12 @@
 id: T-0335
 slug: delegate-resume-continue-to-heru-s-unified-resume
-title: Delegate --resume/--continue to heru's unified resume mechanism
+title: Delegate resume/continue to heru
 created_at: '2026-04-10T20:48:17+00:00'
 task_type: refactor
 pipeline_mode: full
 priority: high
 depends_on: []
-goal: "heru T-0003 shipped a unified --resume/--continue path across all engine adapters.\
-  \ litehive currently has per-engine resume/continuation logic (see extract_engine_continuation\
-  \ and friends in litehive/agents/). Replace that with a single call into heru's\
-  \ unified resume API. Delete the per-engine continuation extractors where heru now\
-  \ covers them. Preserve litehive's RuntimeContinuationHandoff semantics \u2014 only\
-  \ the low-level 'how do I hand a session id back to engine X' layer changes. Bump\
-  \ the heru dependency pin to a version including T-0003."
+goal: Drop Litehive-specific continuation extraction once heru fully covers all engines.
 acceptance_criteria:
 - litehive/agents/ no longer contains per-engine resume/continuation extraction logic
   that heru's unified API covers

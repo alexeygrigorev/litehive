@@ -1,20 +1,13 @@
 id: T-0286
 slug: sandbox-enforcement-for-destructive-git-operations
-title: Sandbox enforcement for destructive git operations
+title: Enforce git at the sandbox boundary
 created_at: '2026-04-10T05:59:06+00:00'
 task_type: null
 pipeline_mode: full
 priority: high
 depends_on: []
-goal: "Prevent agents from running destructive git operations by removing git from\
-  \ the sandbox filesystem for every role except merge-resolver. The T-0266 incident\
-  \ had codex running non-sandboxed with full host access and force-pushed to origin/main.\
-  \ Policy: merge-resolver is the ONLY role whose sandbox exposes a git binary, and\
-  \ even that binary is a wrapper that blocks destructive subcommands. Every other\
-  \ role (planner, SWE, QA, reviewer, recovery) has no git binary reachable at all\
-  \ \u2014 not at /usr/bin/git, not anywhere on PATH, not via absolute path. Enforcement\
-  \ is at the filesystem/sandbox boundary, not via env vars or role-checking logic\
-  \ (those are trivially bypassable by the agent itself)."
+goal: Remove git from non-merge-resolver sandboxes and keep only the wrapper-mounted
+  git path for merge-resolver.
 acceptance_criteria:
 - Sandbox profile per role. Non-merge-resolver roles (planner, swe, qa, reviewer,
   recovery, grooming, etc.) launch with a sandbox whose filesystem view contains NO

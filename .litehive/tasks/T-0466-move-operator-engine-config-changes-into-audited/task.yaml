@@ -1,0 +1,29 @@
+id: T-0466
+slug: move-operator-engine-config-changes-into-audited
+title: Move operator engine/config changes into audited DB-backed settings
+created_at: '2026-04-21T21:54:43+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on:
+- T-0460
+goal: Store mutable operator-controlled runtime settings such as default_engine, engine
+  preference, engine freezes, and task/queue engine switches in the database or another
+  audited state store instead of directly editing .litehive/config.yaml, so every
+  change is timestamped, attributable, queryable, and survives task deletion/archive
+  history.
+acceptance_criteria:
+- Default engine changes are persisted in DB-backed settings, not by directly editing
+  .litehive/config.yaml.
+- Every operator change to engine selection or engine preference creates an audit-log
+  record with timestamp, actor, old value, and new value.
+- Engine switch / freeze / unfreeze / default-engine updates are queryable from the
+  CLI or DB for forensic review.
+- Startup/runtime reads audited settings from the canonical store and config-file
+  drift is either rejected or treated as bootstrap-only.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0466 move-operator-engine-config-changes-into-audited'
+created_from: null
