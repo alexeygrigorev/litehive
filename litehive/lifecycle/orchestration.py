@@ -260,10 +260,14 @@ def _resolve_worktree(root: Path, state: TaskState) -> Path:
 
 
 def _resolve_hook_execution_root(root: Path, state: TaskState) -> Path:
-    """Run stage hooks inside the task checkout, but keep after_commit on main."""
-    if state.stage == "after_commit":
-        return root
-    return _resolve_worktree(root, state)
+    """Run runner hooks against the main workspace checkout.
+
+    Hooks are expected to inspect and, when needed, mutate the main checkout
+    so their side effects participate in the dirty-main cleanup path instead
+    of being stranded inside a task worktree.
+    """
+    del state
+    return root
 
 
 def _task_recorded_worktree(root: Path, task_id: str) -> tuple[TaskRecord | None, Path | None]:

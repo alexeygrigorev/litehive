@@ -359,16 +359,16 @@ def inc_stage_retry(stage: NodeName, *, retry_target_stage: NodeName | None = No
     """
 
     def _effect(state: TaskState, event: Event) -> StateDelta:
-        return _rejection_tracking_delta(state, event, stage=stage, increment_retry=True)
+        return _rejection_tracking_delta(state, event, stage=stage, increment_retry=True, retry_target_stage=retry_target_stage)
 
     return _effect
 
 
-def remember_rejection(stage: NodeName) -> EffectFn:
+def remember_rejection(stage: NodeName, *, retry_target_stage: NodeName | None = None) -> EffectFn:
     """Capture a rejection for a downstream prompt without bumping retries."""
 
     def _effect(state: TaskState, event: Event) -> StateDelta:
-        return _rejection_tracking_delta(state, event, stage=stage, increment_retry=False)
+        return _rejection_tracking_delta(state, event, stage=stage, increment_retry=False, retry_target_stage=retry_target_stage)
 
     return _effect
 
@@ -379,6 +379,7 @@ def _rejection_tracking_delta(
     *,
     stage: NodeName,
     increment_retry: bool,
+    retry_target_stage: NodeName | None = None,
 ) -> StateDelta:
         rejection = _rejection_from_event(state, event)
         set_rej = (stage, rejection) if rejection is not None else None

@@ -1,4 +1,4 @@
-"""Duplicate task detection backed by a workspace-local sqlitesearch index."""
+"""Duplicate task detection and search backed by a workspace-local sqlitesearch index."""
 
 from __future__ import annotations
 
@@ -27,12 +27,26 @@ class DuplicateTaskMatch:
     status: str
 
 
+@dataclass(frozen=True)
+class TaskSearchMatch:
+    task_id: str
+    title: str
+    status: str
+    snippet: str
+
+
 def duplicate_index_path(root: Path) -> Path:
     return workspace_path(root, _INDEX_DIRNAME, _INDEX_FILENAME)
 
 
 def duplicate_index_exists(root: Path) -> bool:
     return duplicate_index_path(root).exists()
+
+
+def ensure_duplicate_task_index(root: Path) -> Path:
+    if duplicate_index_exists(root):
+        return duplicate_index_path(root)
+    return rebuild_duplicate_task_index(root)
 
 
 def rebuild_duplicate_task_index(root: Path) -> Path:
@@ -67,7 +81,7 @@ def find_potential_duplicate_tasks(
     goal: str = "",
     limit: int = 5,
 ) -> list[DuplicateTaskMatch]:
-    rebuild_duplicate_task_index(root)
+    ensure_duplicate_task_index(root)
     query = _search_query(title, goal)
     if not query:
         return []
@@ -124,6 +138,47 @@ def find_potential_duplicate_tasks(
     return [match for _, match in ranked_matches[:limit]]
 
 
+def search_tasks_by_text(root: Path, *, query: str, limit: int = 5) -> list[TaskSearchMatch]:
+    normalized_query = _normalize_query(query)
+    if not normalized_query or limit < 1:
+        return []
+
+    ensure_duplicate_task_index(root)
+    index = _open_duplicate_index(root)
+    try:
+        raw_matches = index.search(
+            normalized_query,
+            boost_dict={"title": 3.0, "goal": 1.5},
+            num_results=max(limit * 4, 10),
+        )
+    finally:
+        index.close()
+
+    results: list[TaskSearchMatch] = []
+    seen: set[str] = set()
+    for candidate in raw_matches:
+        task_id = str(candidate.get("task_id", "")).strip()
+        if not task_id or task_id in seen:
+            continue
+        status = str(candidate.get("status", "")).strip()
+        if status not in _MATCH_STATUSES:
+            continue
+        title = str(candidate.get("title", "")).strip()
+        goal = str(candidate.get("goal", "")).strip()
+        seen.add(task_id)
+        results.append(
+            TaskSearchMatch(
+                task_id=task_id,
+                title=title,
+                status=status,
+                snippet=_search_snippet(title=title, goal=goal, query=normalized_query),
+            )
+        )
+        if len(results) >= limit:
+            break
+    return results
+
+
 def _open_duplicate_index(root: Path) -> TextSearchIndex:
     path = duplicate_index_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -160,20 +215,44 @@ def _task_to_document(task: TaskRecord) -> dict[str, str]:
 
 
 def _search_query(title: str, goal: str) -> str:
-    primary_tokens = _tokens(title)
+    primary_tokens = _ordered_tokens(title)
     if not primary_tokens:
-        primary_tokens = _tokens(goal)
+        primary_tokens = _ordered_tokens(goal)
     if not primary_tokens:
         return ""
 
     query_tokens = list(primary_tokens)
-    for token in _tokens(goal):
+    for token in _ordered_tokens(goal):
         if token in primary_tokens or token in query_tokens:
             continue
         query_tokens.append(token)
         if len(query_tokens) >= 10:
             break
     return " ".join(query_tokens)
+
+
+def _normalize_query(value: str) -> str:
+    return " ".join(_ordered_tokens(value))
+
+
+def _search_snippet(*, title: str, goal: str, query: str, max_chars: int = 100) -> str:
+    source = " ".join(goal.split()) or " ".join(title.split())
+    if len(source) <= max_chars:
+        return source
+
+    for token in _ordered_tokens(query):
+        match_index = source.lower().find(token)
+        if match_index == -1:
+            continue
+        start = max(0, match_index - 20)
+        end = min(len(source), start + max_chars)
+        snippet = source[start:end].strip()
+        if start > 0:
+            snippet = f"...{snippet}"
+        if end < len(source):
+            snippet = f"{snippet}..."
+        return snippet
+    return f"{source[: max_chars - 3].rstrip()}..."
 
 
 def _duplicate_score(
@@ -219,6 +298,17 @@ def _duplicate_score(
 
 def _normalize_text(value: str) -> str:
     return " ".join(_TOKEN_RE.findall(value.lower()))
+
+
+def _ordered_tokens(value: str) -> list[str]:
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for token in _TOKEN_RE.findall(value.lower()):
+        if len(token) <= 2 or token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+    return tokens
 
 
 def _tokens(value: str) -> set[str]:
