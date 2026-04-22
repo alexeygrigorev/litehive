@@ -30,11 +30,23 @@ _COMPLETED_INACTIVITY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+try:
+    from heru import render_execution_transcript as render_unified_execution_transcript
+except ImportError:  # pragma: no cover - compatibility with older heru installs
+    render_unified_execution_transcript = None
+
 
 def render_execution_transcript(engine_name: str, execution: CLIExecutionResult | None) -> str:
     if execution is None:
         return ""
-    return get_engine(engine_name).render_transcript(execution)
+    fallback_renderer = get_engine(engine_name).render_transcript
+    if render_unified_execution_transcript is None:
+        return fallback_renderer(execution)
+    return render_unified_execution_transcript(
+        engine_name,
+        execution,
+        fallback_renderer=fallback_renderer,
+    )
 
 
 class SessionMixin:

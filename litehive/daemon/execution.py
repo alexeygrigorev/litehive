@@ -202,6 +202,21 @@ def _emit(message: str, *, stream: TextIO | None) -> None:
     stream.flush()
 
 
+def _runner_is_live(status) -> bool:
+    return getattr(status, "status", None) in {"running", "late"}
+
+
+def _emit_runner_wait(status, *, stream: TextIO | None) -> None:
+    pid = "-" if getattr(status, "pid", None) is None else str(status.pid)
+    task_id = getattr(status, "active_task_id", None) or "-"
+    heartbeat = getattr(status, "heartbeat_at", None) or "-"
+    state = getattr(status, "status", None) or "running"
+    _emit(
+        f"runner already active: status={state} pid={pid} active_task_id={task_id} heartbeat_at={heartbeat}",
+        stream=stream,
+    )
+
+
 def _ensure_workspace_venvs_ready(
     workspace: Path,
     *,
@@ -361,6 +376,12 @@ def run_daemon_loop(
                     cycle_recovery_attempted = True
                     if not _recover_cycle_start_failure(workspace, failure, output_stream=output_stream):
                         continue
+
+            live_runner = runner_status(workspace)
+            if _runner_is_live(live_runner):
+                _emit_runner_wait(live_runner, stream=output_stream)
+                _sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
+                continue
 
             try:
                 _maybe_run_workspace_backup(workspace, stream=output_stream)
