@@ -44,10 +44,12 @@ def usage_limit_block_reason(engine_name: str, status: UsageStatus) -> str | Non
 
 def resolve_engine_resume_session_id(
     engine_name: str,
-    continuation: RuntimeEngineContinuation | None,
+    continuation: RuntimeEngineContinuation | str | None,
     *,
     prefer_latest: bool = False,
 ) -> str | None:
+    if isinstance(continuation, str):
+        return continuation or None
     if continuation is not None and continuation.resume_id:
         return continuation.resume_id
     if prefer_latest and engine_name == "claude":
