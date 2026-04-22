@@ -11,9 +11,6 @@ from heru.quota import (
     check_codex_quota,
     check_copilot_quota,
     check_zai_quota,
-    preferred_reset_at as heru_preferred_reset_at,
-    quota_long_term,
-    quota_short_term,
 )
 from litehive.cli.engine import engine_command
 from litehive.cli.display import format_retry_on
@@ -48,6 +45,7 @@ from litehive.observability.status_diagnostics import (
 from litehive.observability.venv_health import broken_venv_issue_message, probe_broken_venv_executables
 from litehive.recovery.workspace_repair import repair_workspace_state
 from litehive.state.records import get_task, list_tasks_state_first
+from litehive.heru_compat import preferred_reset_at as heru_preferred_reset_at, quota_long_term, quota_short_term
 from litehive.state.persist import load_state
 from litehive.state.records import list_tasks
 from litehive.domain.task_ops import WorkspaceConflictError, WorkspaceRepairSummary
