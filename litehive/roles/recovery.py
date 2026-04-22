@@ -1,11 +1,21 @@
 from typing import Any
 from pathlib import Path
 
-from litehive.lifecycle.events import Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
+from litehive.domain.recovery import TriggerEventKind, blocked_on_follow_up_reason
+from litehive.domain.reports import RecoveryAction
+from litehive.lifecycle.events import Crash, Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.persistence import TaskState
 from litehive.recovery.scope_analysis import analyze_scope_changes
+from litehive.recovery.test_failure_attribution import (
+    UNRELATED_TEST_BREAKAGE,
+    TestFailureAttribution,
+    attribute_test_failure,
+    build_unrelated_test_follow_up,
+)
 from litehive.state.records import get_task_record
+from litehive.state.records import create_follow_up_tasks
+from litehive.tasks.reports import record_recovery_report
 from litehive.tasks.worktrees import task_worktree_path
 from .base import RoleAgent
 
@@ -55,9 +65,19 @@ class RecoveryAgent(RoleAgent):
     ROLE = "recovery"
     INSTRUCTIONS = INSTRUCTIONS
 
+    def run(self, state: TaskState) -> Event:
+        try:
+            auto_event = self._auto_handle_unrelated_test_failure(state)
+        except Exception as exc:
+            return Crash(exc_type=type(exc).__name__, message=str(exc))
+        if auto_event is not None:
+            return auto_event
+        return super().run(state)
+
     def build_prompt(self, state: TaskState) -> dict[str, Any]:
         base = super().build_prompt(state)
         trigger = state.active_recovery_trigger
+        test_failure_attribution = self._test_failure_attribution(state)
 
         # Perform scope analysis if worktree can be determined
         scope_analysis = None
@@ -95,6 +115,9 @@ class RecoveryAgent(RoleAgent):
                 "recovery_trigger": trigger.to_payload() if trigger is not None else None,
                 "recovery_failure_explanation": state.recovery_failure_explanation,
                 "scope_analysis": scope_analysis,
+                "test_failure_attribution": (
+                    None if test_failure_attribution is None else test_failure_attribution.to_prompt_payload()
+                ),
             }
         )
         return base
@@ -116,3 +139,94 @@ class RecoveryAgent(RoleAgent):
         if outcome == "budget_hit":
             return RecoveryBudgetHit()
         return RecoveryFailed(reason=verdict.reason or "recovery_failed")
+
+    def _test_failure_attribution(self, state: TaskState) -> TestFailureAttribution | None:
+        trigger = state.active_recovery_trigger
+        if trigger is None or trigger.trigger_event_kind != TriggerEventKind.REJECT:
+            return None
+        return attribute_test_failure(
+            changed_files=state.last_report.changed_files,
+            rejection_message=trigger.message,
+            diagnostics=trigger.diagnostics,
+        )
+
+    def _auto_handle_unrelated_test_failure(self, state: TaskState) -> Event | None:
+        root = self.prompt_context.workspace_root
+        if root is None:
+            return None
+        trigger = state.active_recovery_trigger
+        if trigger is None or trigger.trigger_event_kind != TriggerEventKind.REJECT:
+            return None
+        origin_stage = _follow_up_stage(trigger.origin_stage)
+        if origin_stage not in {"testing", "accepting"}:
+            return None
+        attribution = self._test_failure_attribution(state)
+        if attribution is None or not attribution.is_unrelated_breakage or attribution.primary_failing_test is None:
+            return None
+        task = get_task_record(root, state.task_id)
+        if task is None:
+            return None
+        created = create_follow_up_tasks(
+            root,
+            parent_task=task,
+            stage=origin_stage,
+            follow_ups=[
+                build_unrelated_test_follow_up(
+                    parent_task_id=task.id,
+                    failing_test=attribution.primary_failing_test,
+                    changed_files=attribution.changed_files,
+                )
+            ],
+        )
+        if not created:
+            return None
+        follow_up = created[0]
+        record_recovery_report(
+            root,
+            task,
+            trigger_event_kind=trigger.trigger_event_kind,
+            origin_stage=origin_stage,
+            summary=(
+                f"Attributed `{attribution.primary_failing_test}` to unrelated breakage, created blocking follow-up "
+                f"{follow_up.id}, and flagged the current task."
+            ),
+            runnable_state="blocked",
+            actions=[
+                RecoveryAction(
+                    action="attribute_test_failure",
+                    summary=attribution.reasoning,
+                    metadata={
+                        "classification": attribution.classification,
+                        "failing_tests": list(attribution.failing_tests),
+                        "changed_files": list(attribution.changed_files),
+                    },
+                ),
+                RecoveryAction(
+                    action="create_follow_up_task",
+                    summary=f"Created blocking bugfix task {follow_up.id}: {follow_up.title}",
+                    metadata={"follow_up_task_id": follow_up.id},
+                ),
+                RecoveryAction(
+                    action="block_current_task",
+                    summary=f"Current task blocked on follow-up {follow_up.id}",
+                    metadata={"follow_up_task_id": follow_up.id},
+                ),
+            ],
+            failure_classification=UNRELATED_TEST_BREAKAGE,
+            blocker=f"{follow_up.id}: {follow_up.title}",
+        )
+        return RecoveryFailed(reason=blocked_on_follow_up_reason(follow_up.id))
+
+
+def _follow_up_stage(origin_stage: str | None) -> str | None:
+    if origin_stage in {"before_testing", "testing", "after_testing"}:
+        return "testing"
+    if origin_stage in {"before_accepting", "accepting", "after_accepting"}:
+        return "accepting"
+    if origin_stage in {"before_implementing", "implementing", "after_implementing"}:
+        return "implementing"
+    if origin_stage in {"before_grooming", "grooming", "after_grooming", "recovering"}:
+        return "grooming"
+    if origin_stage in {"before_commit", "commit", "after_commit", "merge_resolving"}:
+        return "commit_to_git"
+    return origin_stage
