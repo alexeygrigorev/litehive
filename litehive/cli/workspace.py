@@ -5,7 +5,16 @@ import typer
 from dataclasses import dataclass
 
 from heru import ENGINE_CHOICES
-from heru.quota import UsageStatus, check_claude_quota, check_codex_quota, check_copilot_quota, check_zai_quota
+from heru.quota import (
+    UsageStatus,
+    check_claude_quota,
+    check_codex_quota,
+    check_copilot_quota,
+    check_zai_quota,
+    preferred_reset_at as heru_preferred_reset_at,
+    quota_long_term,
+    quota_short_term,
+)
 from litehive.cli.engine import engine_command
 from litehive.cli.display import format_retry_on
 from litehive.cli.common import WorkspaceOption
@@ -38,8 +47,6 @@ from litehive.observability.status_diagnostics import (
 )
 from litehive.observability.venv_health import broken_venv_issue_message, probe_broken_venv_executables
 from litehive.recovery.workspace_repair import repair_workspace_state
-from litehive.heru_compat import preferred_reset_at as heru_preferred_reset_at
-from litehive.heru_compat import quota_long_term, quota_short_term
 from litehive.state.records import get_task, list_tasks_state_first
 from litehive.state.persist import load_state
 from litehive.state.records import list_tasks

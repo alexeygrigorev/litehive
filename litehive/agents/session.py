@@ -7,16 +7,12 @@ import signal
 import time
 from typing import Callable
 
+from heru import extract_engine_continuation, extract_engine_timeline, render_execution_transcript
 from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
 from litehive.agents.artifacts import (
     write_stream_artifact,
     write_text_artifact,
-)
-from litehive.heru_compat import (
-    extract_engine_continuation,
-    extract_engine_timeline,
-    render_execution_transcript,
 )
 from litehive.agents.session_store import (
     load_subagent_session,

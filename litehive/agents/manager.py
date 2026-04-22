@@ -8,7 +8,7 @@ import sys
 import time
 
 from litehive.config.loading import load_config
-from heru import get_engine
+from heru import get_engine, resume_safe_model_override
 from heru.adapters import (
     EngineError,
     classify_execution_interruption,
@@ -17,7 +17,6 @@ from heru.adapters import (
 )
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.agents.sandbox import SandboxError, SandboxLauncher
-from litehive.heru_compat import resume_safe_model_override
 from litehive.observability.events import append_event
 from heru.types import SubagentRef
 from litehive.domain.common import cap_feedback
