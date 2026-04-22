@@ -16,6 +16,10 @@ _LEGACY_UNSUPPORTED_KEYS = {
     "pre_acceptance_command": (
         "pre_acceptance_command is no longer supported. Migrate this command to runner_hooks.before_accepting."
     ),
+    "runner_hook_execution_mode": (
+        "runner_hook_execution_mode is no longer supported. "
+        "Runner hooks now run sequentially and stop at the first failure."
+    ),
     "task_engine_routing": (
         "task_engine_routing is no longer supported. "
         "Engine selection now comes only from default_engine, explicit runtime engine switches, "

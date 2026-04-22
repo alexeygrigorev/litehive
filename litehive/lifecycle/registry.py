@@ -48,10 +48,8 @@ HOOK_PHASES: tuple[NodeName, ...] = (
     "after_accepting",
     "after_commit",
 )
-
-
-def _phase_hook_node(name: NodeName, hooks: list[HookSpec], runner: HookRunner, *, execution_mode: str) -> HookNode:
-    return HookNode(name, hooks=hooks, runner=runner, execution_mode=execution_mode)
+def _phase_hook_node(name: NodeName, hooks: list[HookSpec], runner: HookRunner) -> HookNode:
+    return HookNode(name, hooks=hooks, runner=runner)
 
 
 def build_registry(
@@ -65,7 +63,6 @@ def build_registry(
     pre_exec_recovery_node: PreExecRecoveryNode | None = None,
     prompt_context: PromptContext | None = None,
     hook_specs: dict[NodeName, list[HookSpec]] | None = None,
-    hook_execution_mode: str = "run_all",
     retry_budget: int = 3,
     retry_on: tuple[str, ...] = ("execution_limit", "timeout"),
     retry_backoff_seconds: float = 0.0,
@@ -98,7 +95,6 @@ def build_registry(
                 phase_name,
                 hook_specs.get(phase_name, []),
                 hook_runner,
-                execution_mode=hook_execution_mode,
             )
         )
 

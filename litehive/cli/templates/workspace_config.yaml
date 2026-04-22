@@ -56,16 +56,10 @@ pool_stop_on_attention: false
 #   timeout_seconds: optional timeout budget
 #   instructions_on_failure: optional guidance surfaced on failure
 # Example:
-# runner_hook_execution_mode: run_all
 # runner_hooks:
 #   after_implementing:
 #     - command: uv run pytest -q
 #       description: run the full suite before QA
-#
-# Hook execution mode:
-#   run_all: run every configured hook and aggregate failures (default)
-#   fail_fast: stop after the first failing hook
-runner_hook_execution_mode: run_all
 runner_hooks: {}
 
 # Timeout budget for detecting hung live subagents and top-level runs.

@@ -5,7 +5,7 @@ import pytest
 
 from litehive.config.workspace import ensure_workspace
 from litehive.lifecycle.nodes.agent import AgentVerdict
-from litehive.lifecycle.nodes.hook import HookResult, HookRunner, HookSpec
+from litehive.lifecycle.nodes.hook import HookRunner, HookSpec
 from litehive.lifecycle.nodes.system import StubCommitNode
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.lifecycle.registry import build_registry
@@ -27,8 +27,9 @@ class _FixedSelector:
 
 
 class _NoopHookRunner(HookRunner):
-    def run(self, spec: HookSpec, state) -> HookResult:
-        return HookResult(spec=spec, ok=True, output="")
+    def run(self, spec: HookSpec, state):
+        del spec, state
+        return None
 
 
 class _CrossAgentRetryEngine:

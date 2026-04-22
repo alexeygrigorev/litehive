@@ -7,7 +7,7 @@ from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
 
 
-def test_load_config_normalizes_runner_hooks_without_dataclasses(tmp_path: Path) -> None:
+def test_load_config_normalizes_runner_hooks_and_ignores_legacy_flags(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
@@ -62,25 +62,6 @@ def test_load_config_preserves_runner_hook_descriptions_and_instructions(tmp_pat
 
     assert config.runner_hooks["after_implementing"][0]["description"] == "ensures lint passes before acceptance"
     assert config.runner_hooks["after_implementing"][0]["instructions_on_failure"] == "fix lint first"
-
-
-def test_load_config_accepts_runner_hook_execution_mode_fail_fast(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    (tmp_path / ".litehive" / "config.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "runner_hook_execution_mode": "fail_fast",
-                "runner_hooks": {"after_implementing": [{"command": "echo ok"}]},
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
-
-    config = load_config(tmp_path)
-
-    assert config.runner_hook_execution_mode == "fail_fast"
-    assert config.runner_hooks == {"after_implementing": [{"command": "echo ok"}]}
 
 
 def test_configure_rejects_removed_runner_hook_points(tmp_path: Path) -> None:

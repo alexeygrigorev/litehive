@@ -33,11 +33,11 @@ VALID_RUNNER_HOOK_ENTRY_KEYS = frozenset(
         "timeout_seconds",
         "description",
         "instructions_on_failure",
-        "reject_on_failure",
-        "blocking",
     }
 )
-VALID_RUNNER_HOOK_EXECUTION_MODES = frozenset({"run_all", "fail_fast"})
+# Tolerate these legacy fields so existing workspace configs keep loading,
+# but strip them during normalization because the runner no longer uses them.
+LEGACY_RUNNER_HOOK_ENTRY_KEYS = frozenset({"reject_on_failure", "blocking"})
 DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS = 300.0
 
 
@@ -114,7 +114,6 @@ class LitehiveConfig:
     pool_stop_on_dirty_git: bool = False
     pool_stop_on_attention: bool = False
     max_parallel_tasks: int = 1  # Maximum number of tasks to run in parallel
-    runner_hook_execution_mode: str = "run_all"
     runner_hooks: dict[str, list[dict[str, object]]] = field(default_factory=dict)
     subagent_inactivity_timeout_seconds: float = DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS
     inactivity_timeout_seconds: float | None = None
@@ -134,7 +133,6 @@ class LitehiveConfig:
         )
         self.agent_startup_guidance = normalize_agent_startup_guidance(self.agent_startup_guidance)
         self.retry_on = normalize_retry_on(self.retry_on)
-        self.runner_hook_execution_mode = normalize_runner_hook_execution_mode(self.runner_hook_execution_mode)
         self.runner_hooks = normalize_runner_hooks(self.runner_hooks)
         if self.default_rejection_loop_limit < 1:
             raise ValueError("default_rejection_loop_limit must be greater than 0")
@@ -212,18 +210,6 @@ def normalize_retry_on(
     return normalized
 
 
-def normalize_runner_hook_execution_mode(
-    execution_mode: str | None,
-    *,
-    field_name: str = "runner_hook_execution_mode",
-) -> str:
-    normalized = "run_all" if execution_mode is None else str(execution_mode).strip().lower()
-    if normalized not in VALID_RUNNER_HOOK_EXECUTION_MODES:
-        allowed = ", ".join(sorted(VALID_RUNNER_HOOK_EXECUTION_MODES))
-        raise ValueError(f"{field_name} must be one of: {allowed}")
-    return normalized
-
-
 def _normalize_runner_hook(
     raw_hook: str | Mapping[str, object],
     *,
@@ -237,7 +223,7 @@ def _normalize_runner_hook(
     if not isinstance(raw_hook, Mapping):
         raise ValueError(f"{field_name} must be a command string or mapping")
 
-    unknown_keys = sorted(set(raw_hook) - VALID_RUNNER_HOOK_ENTRY_KEYS)
+    unknown_keys = sorted(set(raw_hook) - VALID_RUNNER_HOOK_ENTRY_KEYS - LEGACY_RUNNER_HOOK_ENTRY_KEYS)
     if unknown_keys:
         joined = ", ".join(unknown_keys)
         raise ValueError(f"{field_name} contains unsupported keys: {joined}")
