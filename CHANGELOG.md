@@ -12,7 +12,7 @@ If you have any of the following in your `.litehive/config.yaml`, they must be r
 
 1. **Deprecated keys (now error instead of ignored):**
    - `engine_fallbacks` → Use `engine_preference` to specify engine ordering
-   - `runner_hook_execution_mode` → Removed (hooks are always synchronous)
+   - `runner_hook_execution_mode` → Must be `run_all` (default) or `fail_fast`
 
 2. **Invalid profile/policy values (now error instead of fallback):**
    - `process_profile` must be one of the available profiles (run `litehive status` to see available options)

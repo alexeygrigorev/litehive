@@ -25,10 +25,6 @@ _LEGACY_UNSUPPORTED_KEYS = {
         "engine_fallbacks is no longer supported. "
         "Use engine_preference to specify engine ordering instead."
     ),
-    "runner_hook_execution_mode": (
-        "runner_hook_execution_mode is no longer supported. "
-        "Hook execution mode is now always synchronous."
-    ),
 }
 
 

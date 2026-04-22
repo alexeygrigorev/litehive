@@ -149,6 +149,33 @@ def test_hook_node_runs_all_hooks_and_collects_warnings() -> None:
     assert "tests stderr" in event.metadata["warnings"][1]
 
 
+def test_hook_node_fail_fast_stops_after_first_failure() -> None:
+    hooks = [
+        HookSpec(command="first", description="lint"),
+        HookSpec(command="second", description="tests"),
+        HookSpec(command="third", description="typing"),
+    ]
+    runner = SequenceHookRunner(
+        {
+            "first": HookResult(exit_code=1, stdout="lint stdout", stderr="lint stderr"),
+            "second": HookResult(exit_code=2, stdout="tests stdout", stderr="tests stderr"),
+            "third": None,
+        }
+    )
+    node = HookNode("after_implementing", hooks=hooks, runner=runner, execution_mode="fail_fast")
+
+    event = node.run(make_state(stage="after_implementing"))
+
+    assert isinstance(event, Reject)
+    assert runner.calls == ["first"]
+    assert event.metadata["execution_mode"] == "fail_fast"
+    assert len(event.metadata["warnings"]) == 1
+    assert event.metadata["hook"]["command"] == "first"
+    assert len(event.metadata["failed_hooks"]) == 1
+    assert "lint stdout" in event.metadata["warnings"][0]
+    assert "lint stderr" in event.metadata["warnings"][0]
+
+
 # ── GitCommitNode ───────────────────────────────────────────────────────
 
 
@@ -894,6 +921,71 @@ def test_run_task_runs_all_stage_hooks_and_records_all_warnings(tmp_path: Path) 
     assert len(report.warnings) == 2
     assert "first failed" in report.feedback
     assert "second failed" in report.feedback
+    assert report.failure_diagnostics["execution_mode"] == "run_all"
+
+
+def test_run_task_fail_fast_stops_on_first_failing_hook(tmp_path: Path) -> None:
+    first_command = (
+        "printf 'first\\n' >> .hook_calls && "
+        "if [ ! -f .first_hook_seen ]; then "
+        "touch .first_hook_seen; "
+        "echo first failed >&2; "
+        "exit 1; "
+        "fi"
+    )
+    second_command = (
+        "printf 'second\\n' >> .hook_calls && "
+        "if [ ! -f .second_hook_seen ]; then "
+        "touch .second_hook_seen; "
+        "echo second failed >&2; "
+        "exit 1; "
+        "fi"
+    )
+    _init_workspace_git_repo(
+        tmp_path,
+        config=LitehiveConfig(
+            runner_hook_execution_mode="fail_fast",
+            runner_hooks={
+                "after_implementing": [
+                    {"command": first_command, "description": "first hook"},
+                    {"command": second_command, "description": "second hook"},
+                ]
+            },
+        ),
+    )
+    create_task(tmp_path, title="Fail-fast stage hooks")
+    task = dequeue_next_task(tmp_path)
+    assert task is not None
+
+    result = run_task(
+        tmp_path,
+        task,
+        engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
+    )
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+
+    assert result.final_stage == "done"
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert (tmp_path / ".hook_calls").read_text(encoding="utf-8") == "first\nfirst\nsecond\nfirst\nsecond\n"
+
+    reports = load_stage_reports(tmp_path, refreshed)
+    hook_reports = [report for report in reports if report.source == "hook"]
+    assert len(hook_reports) == 2
+    first_report, second_report = hook_reports
+    assert first_report.stage == "implementing"
+    assert first_report.verdict == "reject"
+    assert first_report.failure_diagnostics["phase"] == "after_implementing"
+    assert first_report.failure_diagnostics["execution_mode"] == "fail_fast"
+    assert len(first_report.warnings) == 1
+    assert "first failed" in first_report.feedback
+    assert "second failed" not in first_report.feedback
+    assert second_report.stage == "implementing"
+    assert second_report.verdict == "reject"
+    assert second_report.failure_diagnostics["execution_mode"] == "fail_fast"
+    assert len(second_report.warnings) == 1
+    assert "second failed" in second_report.feedback
 
 
 def test_run_task_skips_after_commit_when_hook_not_configured(tmp_path: Path) -> None:

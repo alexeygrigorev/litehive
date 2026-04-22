@@ -166,6 +166,7 @@ def test_litehive_config_defaults_include_flat_retry_on() -> None:
 
     assert config.subagent_inactivity_timeout_seconds == DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS
     assert config.retry_on == ["execution_limit", "timeout"]
+    assert config.runner_hook_execution_mode == "run_all"
 
 
 def test_load_config_reads_subagent_inactivity_timeout_override(tmp_path: Path) -> None:
@@ -230,7 +231,7 @@ def test_load_config_rejects_legacy_engine_fallbacks_key(tmp_path: Path) -> None
         load_config(tmp_path)
 
 
-def test_load_config_rejects_legacy_runner_hook_execution_mode_key(tmp_path: Path) -> None:
+def test_load_config_rejects_invalid_runner_hook_execution_mode_key(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
     raw_config["runner_hook_execution_mode"] = "async"
@@ -239,7 +240,7 @@ def test_load_config_rejects_legacy_runner_hook_execution_mode_key(tmp_path: Pat
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="runner_hook_execution_mode is no longer supported"):
+    with pytest.raises(ValueError, match="runner_hook_execution_mode must be one of:"):
         load_config(tmp_path)
 
 

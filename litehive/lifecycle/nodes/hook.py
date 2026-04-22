@@ -95,10 +95,18 @@ class SubprocessHookRunner(HookRunner):
 class HookNode(Node):
     node_type = NodeType.HOOK
 
-    def __init__(self, name: NodeName, hooks: list[HookSpec], runner: HookRunner) -> None:
+    def __init__(
+        self,
+        name: NodeName,
+        hooks: list[HookSpec],
+        runner: HookRunner,
+        *,
+        execution_mode: str = "run_all",
+    ) -> None:
         self.name = name
         self.hooks = hooks
         self.runner = runner
+        self.execution_mode = execution_mode
 
     def run(self, state: TaskState) -> Event:
         failures: list[dict[str, object]] = []
@@ -115,6 +123,8 @@ class HookNode(Node):
                     "exit_code": result.exit_code,
                 }
             )
+            if self.execution_mode == "fail_fast":
+                break
         if not failures:
             return HookOk(warnings=[])
         primary_failure = failures[0]
@@ -123,6 +133,7 @@ class HookNode(Node):
         metadata = {
             "hook": hook,
             "warnings": warnings,
+            "execution_mode": self.execution_mode,
             "failed_hooks": [
                 {
                     "hook": item["hook"],

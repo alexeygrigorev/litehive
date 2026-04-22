@@ -461,15 +461,21 @@ def _record_hook_reject(
     warnings: list[str],
     hook: dict[str, str] | None,
     consecutive_same_hook_rejects: int | None,
+    execution_mode: str | None,
 ) -> None:
     report_stage = _report_stage_for_phase(phase)
-    summary = f"Runner hook at `{phase}` rejected the stage."
+    summary = (
+        f"Runner hooks at `{phase}` rejected the stage."
+        if len(warnings) > 1
+        else f"Runner hook at `{phase}` rejected the stage."
+    )
     feedback_parts = [reason, *warnings]
     feedback = "\n\n".join(part for part in feedback_parts if part)
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] = {
         "phase": phase,
         "source": "hook",
         "consecutive_same_hook_rejects": consecutive_same_hook_rejects,
+        "execution_mode": execution_mode,
     }
     if hook is not None:
         failure_diagnostics.update(
@@ -582,6 +588,7 @@ def run_task(
             pre_exec_recovery_node=pre_exec_recovery_node,
             prompt_context=prompt_context,
             hook_specs=hook_specs,
+            hook_execution_mode=config.runner_hook_execution_mode,
             retry_budget=retry_budget,
             retry_on=tuple(config.retry_on),
         )
@@ -660,6 +667,11 @@ def _observe_transition(
             consecutive_same_hook_rejects=(
                 event.metadata.get("consecutive_same_hook_rejects")
                 if isinstance(event.metadata.get("consecutive_same_hook_rejects"), int)
+                else None
+            ),
+            execution_mode=(
+                event.metadata.get("execution_mode")
+                if isinstance(event.metadata.get("execution_mode"), str)
                 else None
             ),
         )
