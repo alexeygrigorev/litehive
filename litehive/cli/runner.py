@@ -39,7 +39,7 @@ from litehive.state.backup import create_workspace_backup, list_workspace_backup
 from litehive.state.records import get_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.state.persist import load_state, set_pool_stop_reason
-from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection
+from litehive.tasks.queue import dequeue_next_task
 from litehive.tasks.activity import append_task_activity
 from litehive.state.locking import runner_status
 
@@ -251,46 +251,6 @@ def _run_single(
     return iteration.exit_code
 
 
-def _run_dry_run(
-    workspace: Path,
-    *,
-    engine: str | None = None,
-    model: str | None = None,
-) -> int:
-    try:
-        selection = peek_next_task_selection(workspace)
-    except WorkspaceConflictError as exc:
-        print(f"dry-run failed: {exc}")
-        return 1
-    except Exception as exc:
-        print(f"dry-run failed: {exc}")
-        return 1
-
-    if selection.task is None:
-        print("No queued task.")
-        return 0
-
-    task = selection.task
-    config = load_config(workspace)
-
-    # Determine effective engine and model
-    effective_engine = engine or config.default_engine
-    effective_model = model or task.model
-
-    print(f"task: {task.id} {task.title}")
-    print(f"stage: {task.pipeline_status}")
-    print(f"effective_engine: {effective_engine or '-'}")
-    print(f"effective_model: {effective_model or '-'}")
-
-    if selection.blocked:
-        print(f"blocked_tasks: {len(selection.blocked)}")
-        for blocked in selection.blocked:
-            blocked_by_str = ", ".join(blocked.blocked_by)
-            print(f"  {blocked.queue_position}. {blocked.task_id} ({blocked.title}) blocked by: {blocked_by_str}")
-
-    return 0
-
-
 def _workspace_has_dirty_non_litehive_changes(workspace: Path) -> bool:
     if not is_git_repo(workspace):
         return False
@@ -341,12 +301,9 @@ def run_command(
     stop_on_failure: Annotated[bool | None, typer.Option("--stop-on-failure", flag_value=True)] = None,
     max_tasks: Annotated[int | None, typer.Option(help="Stop after this many tasks")] = None,
     stop_on_dirty_git: Annotated[bool | None, typer.Option("--stop-on-dirty-git", flag_value=True)] = None,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Show which task would be run without executing it")] = False,
 ) -> int:
     ensure_workspace(workspace)
     config = load_config(workspace)
-    if dry_run:
-        return _run_dry_run(workspace, engine=engine, model=model)
     effective_stop_on_failure = config.pool_stop_on_failure if stop_on_failure is None else stop_on_failure
     effective_max_tasks = config.pool_max_tasks if max_tasks is None else max_tasks
     effective_stop_on_dirty_git = config.pool_stop_on_dirty_git if stop_on_dirty_git is None else stop_on_dirty_git
