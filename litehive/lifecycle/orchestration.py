@@ -67,7 +67,7 @@ from .nodes.system import (
     PreExecRecoveryNode,
     ReadyNode,
 )
-from .persistence import Limits, SqlitePersistence, TaskState
+from .persistence import Limits, SqlitePersistence, TaskNotFound, TaskState
 from .registry import build_registry
 from .runner import StateMachineRunner
 from .sessions import SqliteSessionStore
@@ -83,12 +83,31 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
     raw = task_record.pipeline_mode
     mode = _PipelineMode(raw) if isinstance(raw, str) and raw else _PipelineMode.FULL
     entry_stage = _entry_stage_for_task(task_record)
-    return persistence.initialize(
-        task_id,
+    fresh_state_kwargs = dict(
+        task_id=task_id,
         pipeline_mode=mode,
         stage="ready",
         entry_stage=entry_stage,
     )
+    if entry_stage is None:
+        return persistence.initialize(**fresh_state_kwargs)
+
+    def _initialize_fresh_state() -> TaskState:
+        persistence.reset(task_id)
+        return persistence.initialize(**fresh_state_kwargs)
+
+    try:
+        state = persistence.load(task_id)
+    except TaskNotFound:
+        return persistence.initialize(**fresh_state_kwargs)
+    except Exception as exc:
+        if _retry_target_stage_load_failure(exc) and _launch_requires_fresh_pipeline_state(task_record):
+            return _initialize_fresh_state()
+        raise
+
+    if _stale_launch_state_requires_reset(task_record, state, pipeline_mode=mode, entry_stage=entry_stage):
+        return _initialize_fresh_state()
+    return state
 
 
 def _entry_stage_for_task(task_record: TaskRecord) -> str | None:
@@ -102,6 +121,29 @@ def _entry_stage_for_task(task_record: TaskRecord) -> str | None:
     if stage == "commit_to_git":
         return "commit"
     return stage
+
+
+def _launch_requires_fresh_pipeline_state(task_record: TaskRecord) -> bool:
+    return _entry_stage_for_task(task_record) is not None and task_record.runtime.execution_status != "running"
+
+
+def _retry_target_stage_load_failure(exc: Exception) -> bool:
+    message = str(exc)
+    return "retry_target_stage" in message and "not defined" in message
+
+
+def _stale_launch_state_requires_reset(
+    task_record: TaskRecord,
+    state: TaskState,
+    *,
+    pipeline_mode: _PipelineMode,
+    entry_stage: str,
+) -> bool:
+    if not _launch_requires_fresh_pipeline_state(task_record):
+        return False
+    if state.pipeline_mode != pipeline_mode:
+        return True
+    return state.stage != "ready" or state.entry_stage != entry_stage
 
 
 _STAGE_TO_PIPELINE_STATUS: dict[str, str] = {
