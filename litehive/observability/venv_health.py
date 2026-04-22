@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+import time
 
 from litehive.config.paths import workspace_path
 
@@ -37,14 +38,19 @@ def discover_workspace_venvs(root: Path) -> list[VenvCheckout]:
     checkouts: dict[Path, VenvCheckout] = {}
     main_venv = root / ".venv"
     if main_venv.is_dir():
-        checkouts[root] = VenvCheckout(checkout_root=root, venv_path=main_venv)
+        resolved_main = main_venv.resolve()
+        checkouts[resolved_main] = VenvCheckout(checkout_root=root, venv_path=resolved_main)
 
     worktrees_dir = workspace_path(root, "worktrees")
     if worktrees_dir.exists():
         for venv_path in sorted(worktrees_dir.glob("*/.venv")):
             checkout_root = venv_path.parent.resolve()
             if venv_path.is_dir():
-                checkouts[checkout_root] = VenvCheckout(checkout_root=checkout_root, venv_path=venv_path.resolve())
+                resolved_venv = venv_path.resolve()
+                checkouts.setdefault(
+                    resolved_venv,
+                    VenvCheckout(checkout_root=checkout_root, venv_path=resolved_venv),
+                )
     return [checkouts[path] for path in sorted(checkouts)]
 
 
@@ -108,17 +114,29 @@ def _iter_probe_candidates(bin_dir: Path) -> list[Path]:
 
 def _probe_executable(binary_path: Path) -> str | None:
     try:
-        subprocess.run(
+        process = subprocess.Popen(
             [str(binary_path), "--version"],
-            check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=_PROBE_TIMEOUT_SECONDS,
         )
-    except subprocess.TimeoutExpired:
-        return None
     except OSError as exc:
         if exc.errno in _MISSING_TARGET_ERRNOS:
             return exc.strerror or str(exc)
+        return None
+
+    deadline = time.monotonic() + _PROBE_TIMEOUT_SECONDS
+    while process.poll() is None and time.monotonic() < deadline:
+        time.sleep(0.05)
+
+    if process.poll() is None:
+        process.kill()
+        kill_deadline = time.monotonic() + 1
+        while process.poll() is None and time.monotonic() < kill_deadline:
+            time.sleep(0.05)
+        if process.poll() is None:
+            process.terminate()
+            term_deadline = time.monotonic() + 1
+            while process.poll() is None and time.monotonic() < term_deadline:
+                time.sleep(0.05)
         return None
     return None
