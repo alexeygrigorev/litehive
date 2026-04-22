@@ -7,7 +7,6 @@ import signal
 import time
 
 from heru import extract_engine_continuation, extract_engine_timeline, get_engine
-from heru._execution_output import parse_unified_execution
 from heru.base import CLIExecutionResult
 from heru.types import LiveTimeline, RuntimeEngineContinuation, SubagentRef
 from litehive.agents.artifacts import (
@@ -35,9 +34,6 @@ _COMPLETED_INACTIVITY_PATTERN = re.compile(
 def render_execution_transcript(engine_name: str, execution: CLIExecutionResult | None) -> str:
     if execution is None:
         return ""
-    unified = parse_unified_execution(execution.stdout)
-    if unified is not None:
-        return unified.transcript(stderr=execution.stderr)
     return get_engine(engine_name).render_transcript(execution)
 
 
