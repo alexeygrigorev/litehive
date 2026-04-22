@@ -162,6 +162,7 @@ class TaskActivityEntry(BaseModel):
     verdict: Verdict = Verdict.COMMENT                  # Associated verdict if applicable
     message: str                                        # Free-form human-readable activity description
     files_changed: list[str] = Field(default_factory=list)  # Files modified as part of this activity
+    follow_up_task_id: str | None = None                # Optional follow-up task reference
     created_at: str = Field(default_factory=utcnow)    # When the activity occurred
 
     @model_validator(mode="before")

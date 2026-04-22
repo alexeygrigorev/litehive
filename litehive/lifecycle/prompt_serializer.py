@@ -74,6 +74,14 @@ def serialize_prompt(
     if recovery_trigger:
         sections.append(_recovery_trigger_section(recovery_trigger, prompt))
 
+    recovery_history = prompt.get("recovery_history")
+    if recovery_history:
+        sections.append(_recovery_history_section(recovery_history))
+
+    repeated_recovery_fingerprint = prompt.get("repeated_recovery_fingerprint")
+    if repeated_recovery_fingerprint:
+        sections.append(_repeated_recovery_fingerprint_section(repeated_recovery_fingerprint))
+
     scope_analysis = prompt.get("scope_analysis")
     if scope_analysis:
         sections.append(_scope_analysis_section(scope_analysis))
@@ -217,6 +225,42 @@ def _recovery_trigger_section(recovery_trigger: dict[str, Any], prompt: dict[str
     explanation = prompt.get("recovery_failure_explanation")
     if explanation:
         lines.append(f"- recovery_failure_explanation: {explanation}")
+    return "\n".join(lines)
+
+
+def _recovery_history_section(recovery_history: list[dict[str, Any]]) -> str:
+    lines = ["Recovery history (persisted prior recovery attempts for this task):"]
+    recent = recovery_history[-5:]
+    if len(recovery_history) > len(recent):
+        lines.append(f"- Showing the latest {len(recent)} of {len(recovery_history)} recovery attempts.")
+    for item in recent:
+        lines.append(
+            "- "
+            + " ".join(
+                part
+                for part in (
+                    f"created_at={item.get('created_at') or '-'}",
+                    f"origin_stage={item.get('origin_stage') or '-'}",
+                    f"fingerprint={item.get('fingerprint') or '-'}",
+                    f"budget_key={item.get('budget_key') or '-'}",
+                    f"verdict={item.get('recovery_verdict') or '-'}",
+                    f"disposition={item.get('disposition') or '-'}",
+                )
+            )
+        )
+    return "\n".join(lines)
+
+
+def _repeated_recovery_fingerprint_section(repeated_recovery_fingerprint: dict[str, Any]) -> str:
+    lines = [
+        "Repeated recovery fingerprint detected:",
+        f"- count_including_current: {repeated_recovery_fingerprint.get('count')}",
+        f"- origin_stage: {repeated_recovery_fingerprint.get('origin_stage') or '-'}",
+        f"- fingerprint: {repeated_recovery_fingerprint.get('fingerprint') or '-'}",
+        f"- budget_key: {repeated_recovery_fingerprint.get('budget_key') or '-'}",
+        "- Escalation required: do not resume or advance again for this same failure path.",
+        "- Create a follow-up bug task for the failure, then reject and include `--follow-up-task <task-id>` in the recovery report.",
+    ]
     return "\n".join(lines)
 
 

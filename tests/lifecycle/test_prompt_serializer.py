@@ -8,6 +8,7 @@ import yaml
 
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
+from litehive.domain.runtime import RuntimeRecoveryOutcome
 from litehive.roles.planner import PlannerAgent
 from litehive.roles.qa import QAAgent
 from litehive.roles.recovery import RecoveryAgent
@@ -146,6 +147,86 @@ def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
     assert "You fix Litehive infrastructure bugs, not agent judgment disagreements." in text
     assert "litehive pipeline journal <task_id>" in text
     assert "litehive task logs <task_id> --agent" in text
+
+
+def test_serialize_recovery_includes_repeated_fingerprint_escalation(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    task.runtime.recovery_history = [
+        RuntimeRecoveryOutcome(
+            origin_stage="implementing",
+            trigger_event_kind="crash",
+            fingerprint="RuntimeError:boom",
+            classification="RuntimeError",
+            budget_key="implementing:RuntimeError",
+            recovery_verdict="resume",
+            disposition="resumed",
+            created_at="2026-04-20T00:00:00+00:00",
+        )
+    ]
+    save_task(workspace, task)
+    agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
+    state = make_state(
+        task.id,
+        stage="recovering",
+        active_recovery_trigger=RecoveryTrigger(
+            origin_stage="implementing",
+            trigger_event_kind=TriggerEventKind.CRASH,
+            failure_fingerprint=FailureFingerprint(
+                fingerprint="RuntimeError:boom",
+                classification="RuntimeError",
+            ),
+            reason_code="runtime_error",
+            message="RuntimeError:boom",
+        ),
+    )
+
+    prompt = agent.build_prompt(state)
+    text = serialize_prompt(prompt, task_record=task, workspace_root=workspace)
+
+    assert prompt["repeated_recovery_fingerprint"] is not None
+    assert prompt["repeated_recovery_fingerprint"]["count"] == 2
+    assert "Recovery history" in text
+    assert "Repeated recovery fingerprint detected" in text
+    assert "Escalation required: do not resume or advance again" in text
+    assert "--follow-up-task <task-id>" in text
+
+
+def test_serialize_recovery_ignores_same_budget_key_with_different_fingerprint(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    task.runtime.recovery_history = [
+        RuntimeRecoveryOutcome(
+            origin_stage="implementing",
+            trigger_event_kind="crash",
+            fingerprint="RuntimeError:boom-1",
+            classification="RuntimeError",
+            budget_key="implementing:RuntimeError",
+            recovery_verdict="resume",
+            disposition="resumed",
+            created_at="2026-04-20T00:00:00+00:00",
+        )
+    ]
+    save_task(workspace, task)
+    agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
+    state = make_state(
+        task.id,
+        stage="recovering",
+        active_recovery_trigger=RecoveryTrigger(
+            origin_stage="implementing",
+            trigger_event_kind=TriggerEventKind.CRASH,
+            failure_fingerprint=FailureFingerprint(
+                fingerprint="RuntimeError:boom-2",
+                classification="RuntimeError",
+            ),
+            reason_code="runtime_error",
+            message="RuntimeError:boom-2",
+        ),
+    )
+
+    prompt = agent.build_prompt(state)
+    text = serialize_prompt(prompt, task_record=task, workspace_root=workspace)
+
+    assert prompt["repeated_recovery_fingerprint"] is None
+    assert "Repeated recovery fingerprint detected" not in text
 
 
 def test_serialize_ignores_corrupt_task_activity_payload(workspace: Path) -> None:

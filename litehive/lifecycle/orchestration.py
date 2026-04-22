@@ -30,7 +30,7 @@ from litehive.config.engine_models import resolve_task_rejection_loop_limit, res
 from litehive.git.ops import GitError, remove_worktree
 from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.domain.task import TaskRecord
-from litehive.domain.runtime import RuntimeHookRejectFingerprint
+from litehive.domain.runtime import RuntimeHookRejectFingerprint, RuntimeRecoveryOutcome
 from litehive.domain.common import cap_feedback, utcnow
 from litehive.state.records import (
     clear_task_worktree_path,
@@ -40,9 +40,10 @@ from litehive.state.records import (
     set_task_commit_sha,
 )
 from litehive.worktree import resolve_recorded_worktree_path, task_worktree_branch
-from litehive.tasks.activity import append_task_activity
+from litehive.tasks.activity import append_task_activity, latest_task_activity_entry
 from litehive.tasks.journal import append_journal
 from litehive.tasks.reports import record_stage_report
+from litehive.tasks.runtime import apply_task_outcome
 from litehive.state.locking import persist_future_task_update
 from litehive.state.locking import runner_heartbeat, workspace_runner_guard
 
@@ -134,11 +135,56 @@ def _runtime_hook_reject_fingerprint(state: TaskState) -> RuntimeHookRejectFinge
     )
 
 
+def _runtime_recovery_outcome(outcome) -> RuntimeRecoveryOutcome:
+    trigger = outcome.trigger
+    return RuntimeRecoveryOutcome(
+        origin_stage=trigger.origin_stage,
+        trigger_event_kind=trigger.trigger_event_kind.value,
+        fingerprint=trigger.failure_fingerprint.fingerprint,
+        classification=trigger.failure_fingerprint.classification,
+        budget_key=trigger.budget_key(),
+        recovery_verdict=outcome.recovery_verdict,
+        disposition=outcome.disposition.value,
+        reason_code=outcome.reason_code,
+        message=outcome.message,
+        created_at=outcome.created_at,
+    )
+
+
+def _runtime_recovery_key(outcome: RuntimeRecoveryOutcome) -> tuple[str | None, str, str, str, str | None]:
+    return (
+        outcome.origin_stage,
+        outcome.fingerprint,
+        outcome.budget_key,
+        outcome.recovery_verdict,
+        outcome.created_at,
+    )
+
+
+def _merged_runtime_recovery_history(
+    existing: list[RuntimeRecoveryOutcome],
+    current_state: TaskState,
+) -> list[RuntimeRecoveryOutcome]:
+    merged: list[RuntimeRecoveryOutcome] = []
+    seen: set[tuple[str | None, str, str, str, str | None]] = set()
+    for item in [*existing, *[_runtime_recovery_outcome(outcome) for outcome in current_state.recovery_history]]:
+        key = _runtime_recovery_key(item)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(item)
+    return merged
+
+
 def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
     now = utcnow()
     task_record.runtime.consecutive_same_hook_rejects = state.consecutive_same_hook_rejects
     task_record.runtime.last_hook_reject_fingerprint = _runtime_hook_reject_fingerprint(state)
     task_record.runtime.hook_reject_recovery_invoked = state.hook_reject_recovery_invoked
+    task_record.runtime.recovery_history = _merged_runtime_recovery_history(
+        task_record.runtime.recovery_history,
+        state,
+    )
     if state.stage in {"done", "failed"}:
         task_record.runtime.execution_status = "idle"
         task_record.runtime.current_stage = task_record.runtime.current_stage.model_copy(
@@ -209,6 +255,8 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
                 task_record.flag_reason = "rejection_loop_detected"
             elif failed_reason == "semantic_reject":
                 task_record.flag_reason = "semantic_reject"
+            elif failed_reason == "recovery_exhausted":
+                task_record.flag_reason = "recovery_failed"
             elif failed_reason == "recovery_budget_hit":
                 trigger_kind = trigger.trigger_event_kind.value if trigger is not None else None
                 task_record.flag_reason = (
@@ -227,11 +275,45 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
         return None
     _sync_runtime_fields(task_record, state)
     journal_message = _sync_terminal_status(task_record, state)
+    _sync_recovery_follow_up(workspace_root, task_record, state)
     if journal_message is not None:
         persist_future_task_update(workspace_root, task_record, journal_message=journal_message)
     else:
         save_task(workspace_root, task_record)
     return task_record
+
+
+def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskState) -> None:
+    failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
+    if state.stage != "failed" or failed_reason != "recovery_exhausted":
+        return
+    latest = latest_task_activity_entry(
+        root,
+        task_record,
+        role="recovery",
+        stage="recovering",
+        verdicts={"reject"},
+    )
+    if latest is None or not latest.follow_up_task_id:
+        return
+    trigger = _latest_recovery_trigger(state)
+    apply_task_outcome(
+        task_record,
+        kind="flagged",
+        stage=(trigger.origin_stage if trigger is not None else "recovering"),
+        reason_code="stage_exception",
+        reason=state.failed_message or latest.message or "Recovery escalated to a follow-up task.",
+        retry_count=task_record.runtime.retry_count,
+        retry_limit=task_record.runtime.retry_limit,
+        follow_up_task_id=latest.follow_up_task_id,
+        failure_classification=(None if trigger is None else trigger.failure_fingerprint.budget_key()),
+        failure_diagnostics={
+            "origin_stage": None if trigger is None else trigger.origin_stage,
+            "trigger_event_kind": None if trigger is None else trigger.trigger_event_kind.value,
+            "fingerprint": None if trigger is None else trigger.failure_fingerprint.fingerprint,
+            "budget_key": None if trigger is None else trigger.budget_key(),
+        },
+    )
 
 
 def _clear_terminal_task_from_workspace_state(root: Path, task_id: str) -> None:

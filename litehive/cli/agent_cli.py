@@ -97,6 +97,10 @@ def agent_report_command(
         typer.Option("--workspace", help="Repository root containing .litehive/"),
     ] = None,
     files_changed: Annotated[list[str] | None, typer.Option("--files-changed", help="Changed file paths")] = None,
+    follow_up_task: Annotated[
+        str | None,
+        typer.Option("--follow-up-task", help="Optional follow-up task id", hidden=True),
+    ] = None,
 ) -> None:
     if message == "-":
         message = sys.stdin.read()
@@ -145,6 +149,14 @@ def agent_report_command(
     if task is None:
         print(f"report failed: task {tid} not found")
         raise SystemExit(1)
+    normalized_follow_up_task = follow_up_task.strip() if follow_up_task else None
+    if normalized_follow_up_task:
+        if normalized_follow_up_task == task.id:
+            print("report failed: follow-up task id cannot reference the current task")
+            raise SystemExit(1)
+        if get_task_record(root, normalized_follow_up_task) is None:
+            print(f"report failed: follow-up task {normalized_follow_up_task} not found")
+            raise SystemExit(1)
 
     try:
         pipeline_state = SqlitePersistence(root).load(tid)
@@ -163,6 +175,7 @@ def agent_report_command(
         verdict=normalized_verdict,
         message=message,
         files_changed=list(files_changed or []),
+        follow_up_task_id=normalized_follow_up_task,
     )
     append_task_activity(root, task, entry)
     print(f"task: {task.id}")
@@ -171,6 +184,8 @@ def agent_report_command(
     print(f"role: {agent_role}")
     if normalized_target_stage:
         print(f"target_stage: {normalized_target_stage}")
+    if normalized_follow_up_task:
+        print(f"follow_up_task: {normalized_follow_up_task}")
 
 
 def _require_role(allowed: set[str]) -> str:
