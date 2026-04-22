@@ -24,7 +24,6 @@ from pathlib import Path
 import re
 from typing import Any
 
-from heru import resolve_engine_resume_session_id
 from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.domain.agent import EngineFailure
@@ -400,7 +399,7 @@ class HeruEngineAdapter:
                 return result
 
             crash_resume_attempted = True
-            resume_session_id = resolve_engine_resume_session_id(self.name, crash_resume_id)
+            resume_session_id = crash_resume_id
             current_prompt = self._crash_resume_prompt(prompt_text)
 
     @classmethod

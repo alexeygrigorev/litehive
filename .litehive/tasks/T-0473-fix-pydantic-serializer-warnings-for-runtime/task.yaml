@@ -1,0 +1,24 @@
+id: T-0473
+slug: fix-pydantic-serializer-warnings-for-runtime
+title: Fix Pydantic serializer warnings for runtime status values
+created_at: '2026-04-22T07:56:47+00:00'
+task_type: null
+pipeline_mode: full
+priority: low
+depends_on: []
+goal: Eliminate the recurring Pydantic serializer warnings emitted during daemon runs
+  when runtime status fields contain plain string values like 'running' where an enum
+  is expected. The runtime state model and persistence path should serialize cleanly
+  without warnings.
+acceptance_criteria:
+- Running Litehive daemon and status commands no longer emits PydanticSerializationUnexpectedValue
+  warnings for runtime status fields.
+- The fix preserves the current persisted runtime semantics and does not silently
+  coerce unrelated enum fields.
+- Tests cover the affected runtime state serialization path.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0473 fix-pydantic-serializer-warnings-for-runtime'
+created_from: null

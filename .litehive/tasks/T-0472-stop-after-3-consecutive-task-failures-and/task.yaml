@@ -1,0 +1,30 @@
+id: T-0472
+slug: stop-after-3-consecutive-task-failures-and
+title: Stop after 3 consecutive task failures and surface critical status
+created_at: '2026-04-22T07:51:03+00:00'
+task_type: null
+pipeline_mode: full
+priority: critical
+depends_on: []
+goal: When three tasks fail consecutively, Litehive should stop the daemon/runner
+  instead of continuing to damage the backlog. Status must surface a clear critical
+  stop reason with the failing task ids and failure reasons so operators immediately
+  see the incident.
+acceptance_criteria:
+- Daemon tracks consecutive task failures across queue progression, not just daemon
+  iteration failures.
+- After the third consecutive failed or flagged task, Litehive stops further execution
+  automatically.
+- Workspace state stores an explicit critical pool stop reason distinct from generic
+  daemon_iteration_failures.
+- litehive status shows the critical stop reason and identifies the recent failed
+  task ids and failure reasons.
+- A successful task resets the consecutive task failure counter.
+- Tests cover three consecutive task failures, counter reset after success, and status
+  rendering of the critical stop reason.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0472 stop-after-3-consecutive-task-failures-and'
+created_from: null

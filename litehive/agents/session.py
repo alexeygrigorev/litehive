@@ -5,9 +5,8 @@ from pathlib import Path
 import re
 import signal
 import time
-from typing import Callable
 
-from heru import extract_engine_continuation, extract_engine_timeline, render_execution_transcript
+from heru import extract_engine_continuation, extract_engine_timeline, get_engine
 from heru.base import CLIExecutionResult
 from heru.types import LiveTimeline, RuntimeEngineContinuation, SubagentRef
 from litehive.agents.artifacts import (
@@ -42,14 +41,10 @@ class SessionMixin:
     def _render_execution_transcript(
         engine_name: str,
         execution: CLIExecutionResult | None,
-        *,
-        fallback_renderer: Callable[[CLIExecutionResult], str] | None = None,
     ) -> str:
-        return render_execution_transcript(
-            engine_name,
-            execution,
-            fallback_renderer=fallback_renderer,
-        )
+        if execution is None:
+            return ""
+        return get_engine(engine_name).render_transcript(execution)
 
     @staticmethod
     def _extract_execution_continuation(

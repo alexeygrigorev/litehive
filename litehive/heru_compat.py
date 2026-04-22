@@ -1,13 +1,7 @@
-"""Litehive-side compatibility helpers for heru quota APIs."""
+"""Litehive-side compatibility helpers for current heru quota APIs."""
 
 from __future__ import annotations
 
-from heru import (
-    render_execution_transcript,
-    resolve_engine_resume_session_id,
-    resume_safe_model_override,
-)
-from heru.base import LATEST_CONTINUATION_SENTINEL
 from heru.quota import (
     UsageStatus,
     check_claude_quota,
@@ -56,8 +50,9 @@ def usage_limit_block_reason(engine_name: str, status: UsageStatus) -> str | Non
         reset_suffix = f", resets {reset_at}" if reset_at else ""
         return f"{engine_name} usage limit reached{reset_suffix}"
     return None
+
+
 __all__ = [
-    "LATEST_CONTINUATION_SENTINEL",
     "UsageStatus",
     "check_claude_quota",
     "check_codex_quota",
@@ -66,8 +61,5 @@ __all__ = [
     "preferred_reset_at",
     "quota_long_term",
     "quota_short_term",
-    "render_execution_transcript",
-    "resolve_engine_resume_session_id",
-    "resume_safe_model_override",
     "usage_limit_block_reason",
 ]
