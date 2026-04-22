@@ -75,3 +75,12 @@ Task metadata updated via CLI.
 
 ## 2026-04-21T21:47:06+00:00
 Task metadata updated via CLI.
+
+## 2026-04-21T23:47:47+00:00
+Interrupted subagent execution while `grooming` was running. Reason: Stale runner detected while subagent `SA-0014` (planner/codex) was still marked running in `grooming`.. Subagent `SA-0014` (planner/codex, pid=242385, path `subagents/SA-0014-planner`) stopped with status `interrupted`. Last snippet: grooming rejected: agent did not submit verdict via litehive report CLI. Resume from `grooming`.
+
+## 2026-04-21T23:51:57+00:00
+Task metadata updated via CLI.
+
+## 2026-04-21T23:57:01+00:00
+Interrupted subagent execution while `implementing` was running. Reason: Stale runner detected while subagent `SA-0017` (swe/codex, pid 252608 no longer alive) was still marked running in `implementing`.. Subagent `SA-0017` (swe/codex, pid=252608, path `subagents/SA-0017-swe`) stopped with status `interrupted`. Last snippet: implementing rejected: agent did not submit verdict via litehive report CLI. Resume from `implementing`.

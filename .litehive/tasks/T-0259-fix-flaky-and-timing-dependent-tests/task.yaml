@@ -6,19 +6,37 @@ task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: Unskip or rewrite the remaining timeout-sensitive integration cases so they
-  run deterministically.
+goal: Confirm commit 2d5428fc remains an ancestor of HEAD and that the April 18, 2026
+  flaky-test stabilization is still present in the six live test modules; close T-0259
+  as already implemented instead of reopening obsolete filenames.
 acceptance_criteria:
-- test_inactivity_timeout.py timing tests use larger margins (1s not 0.5s) or mock
-  time
-- test_has_callable_override tests fixed to not depend on class-level monkeypatch
-  pollution (currently skipped)
-- test_web_snapshot_lockfree timestamp tests use current time not hardcoded dates
-- No test depends on execution order within a file
-- All skipped tests either fixed or removed with justification
-- Full suite passes 10 consecutive runs without failures
-constraints: []
-plan: []
+- git merge-base --is-ancestor 2d5428fc HEAD succeeds.
+- HEAD still contains the landed stabilization coverage in tests/cli/test_logs.py,
+  tests/config/test_engine_freeze.py, tests/lifecycle/test_agent_retries.py, tests/lifecycle/test_engine_adapter.py,
+  tests/recovery/test_repair.py, and tests/agents/test_subagent_manager.py.
+- tests/cli/test_logs.py keeps deterministic live and follow coverage for active-subagent
+  stdout selection and follow-mode completion, and tests/config/test_engine_freeze.py
+  uses computed future/past UTC timestamps for expiry-sensitive freeze assertions
+  instead of fixed dates.
+- tests/lifecycle/test_agent_retries.py and tests/lifecycle/test_engine_adapter.py
+  reset shared scripted-manager and session state between tests, tests/recovery/test_repair.py
+  covers clean repair paths without task scans, and tests/agents/test_subagent_manager.py
+  covers callable-override pollution with fresh codex adapter instances instead of
+  class-level monkeypatch pollution.
+- test_inactivity_timeout.py, test_has_callable_override.py, and test_web_snapshot_lockfree.py
+  are not live tests in this workspace and must not be reopened under T-0259; any
+  future flaky-test work must be filed as a new task scoped to current failing files.
+constraints:
+- Do not implement code in this grooming pass.
+- Do not retarget obsolete filenames to unrelated tests beyond citing the landed replacements
+  and current evidence.
+plan:
+- Audit commit ancestry, the six live test modules, and the absence of the obsolete
+  filenames in the current workspace.
+- Rewrite T-0259 to reference the live modules that now carry the April 18, 2026 stabilization
+  work and to exclude the stale filenames explicitly.
+- Close T-0259 as duplicate because the requested stabilization is already implemented;
+  any future flaky-test work belongs in newly scoped tasks.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0259 fix-flaky-and-timing-dependent-tests'
