@@ -1,25 +1,22 @@
 id: T-0364
 slug: grooming-pre-flight-planner-sees-current-code
-title: 'Grooming pre-flight: planner sees current code state, not just task.yaml'
+title: Preflight current main before grooming and auto-close already-done tasks
 created_at: '2026-04-13T07:24:34+00:00'
 task_type: null
 pipeline_mode: full
 priority: high
 depends_on: []
-goal: "The planner writes an execution plan from task.yaml alone. If the work is already\
-  \ done (task re-queued from a previous successful run, or work merged from a different\
-  \ task), the planner doesn't know \u2014 it scopes work that's already complete\
-  \ and passes grooming, then the SWE wastes a full cycle re-discovering 'git diff\
-  \ is empty'. Grooming should include a pre-flight that checks current main against\
-  \ acceptance criteria and lets the planner close the task as outcome=duplicate/done\
-  \ before any SWE work happens."
+goal: Before grooming writes a plan, check current `main` and recent landed work to
+  see whether the requested behavior is already present. If the task is already satisfied,
+  let the planner mark it done/duplicate directly. Do not add a new pipeline state
+  for this preflight; keep it as part of grooming entry.
 acceptance_criteria:
-- 1. BeforeGroomingHook runs 'git log main --grep=T-XXXX' and includes any matching
-  commits in the planner prompt.
-- '2. Planner prompt: ''if the task is already complete on main, close it with outcome=done
-  via TASK_UPDATE and pass''.'
-- '3. Test: mock a task whose commit is on main, run grooming, assert planner closes
-  it as done.'
+- Grooming performs a current-main preflight before asking the planner to scope implementation
+  work.
+- If the task is already satisfied, the planner can mark it done/duplicate directly
+  from grooming.
+- No new pipeline state is introduced; the preflight remains part of grooming entry
+  behavior.
 constraints: []
 plan: []
 git:

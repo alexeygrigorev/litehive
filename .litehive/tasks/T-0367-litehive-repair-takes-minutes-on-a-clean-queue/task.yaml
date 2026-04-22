@@ -6,23 +6,16 @@ task_type: null
 pipeline_mode: full
 priority: critical
 depends_on: []
-goal: "After every daemon stop/start, 'litehive repair' runs as the first daemon action\
-  \ and takes 2+ minutes on a 43-task queue with no actual repairs needed. During\
-  \ this time the daemon is alive but doesn't pick up any task \u2014 it shows runner_status=idle\
-  \ and no log output. This makes the daemon feel wedged and forces the operator to\
-  \ wait blindly. Repair on a clean queue should be near-instant (sub-second). Profile\
-  \ what repair is doing \u2014 likely scanning every task dir, parsing every runtime.yaml,\
-  \ or hitting sqlite without indexes. Reference incident: 2026-04-13 operator session,\
-  \ daemon pid 2549592, repair pid 2549658 took ~2:30 to complete on a 43-task queue\
-  \ with no inconsistencies, masking pickup of T-0219."
+goal: Make clean-queue repair near-instant by relying on runtime DB state instead
+  of scanning task directories/files when there are no inconsistencies. Keep operator-visible
+  clean-run logging so daemon startup does not look wedged.
 acceptance_criteria:
-- litehive repair on a 100-task clean queue completes in under 1 second
+- '`litehive repair` on a 100-task clean queue completes in under 1 second.'
 - Repair work scales with the number of inconsistencies it actually fixes, not with
-  total queue size
-- 'Daemon log records ''repair: clean (Xms)'' on a clean run so operators can see
-  it ran'
-- 'Regression test: profile repair on a synthetic 100-task clean workspace and assert
-  wall-clock budget'
+  total queue size.
+- Clean repair paths use runtime DB state first instead of scanning every task directory/file.
+- Daemon/repair output records an explicit clean-run message with timing so operators
+  can see repair completed.
 constraints: []
 plan: []
 git:

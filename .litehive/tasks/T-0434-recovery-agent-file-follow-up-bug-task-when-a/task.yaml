@@ -1,25 +1,23 @@
 id: T-0434
 slug: recovery-agent-file-follow-up-bug-task-when-a
-title: 'Recovery agent: file follow-up bug task when a specific test failure blocks
-  an unrelated task'
+title: Handle unrelated failing tests with explicit follow-up tasks and operator-visible
+  scope decisions
 created_at: '2026-04-17T16:17:03+00:00'
 task_type: bugfix
 pipeline_mode: full
 priority: high
 depends_on: []
-goal: 'When the recovery agent (or SWE) keeps rejecting a task because of a failing
-  test that has nothing to do with the task''s acceptance criteria, the outcome is
-  infinite retry loops. Recovery should recognize ''this failure is not in the task''s
-  changed surface'' and do two things: (1) file a follow-up bugfix task for the failing
-  test itself, and (2) either skip that test for this task''s acceptance gate or flag
-  this task as blocked-on-follow-up. T-0429 burned 23 subagents because two unrelated
-  integration tests kept failing.'
+goal: When acceptance fails on tests outside the task's changed surface, agents must
+  not silently skip them. Attribute whether the failure is task-caused or pre-existing,
+  create a follow-up bug task when it is unrelated, and either flag the current task
+  or proceed only with an explicit, recorded narrower gate so the decision is auditable.
 acceptance_criteria:
-- 'Recovery can attribute a failing test to: (a) the current task''s changed surface,
-  or (b) pre-existing / unrelated breakage'
-- For case (b), recovery files a follow-up bugfix task and either flags the current
-  task or continues with a narrower acceptance gate
-- Test covers both attribution branches
+- The system distinguishes task-caused test failures from pre-existing/unrelated failures.
+- Unrelated failures create an explicit follow-up task or attention item; nothing
+  is silently ignored.
+- If the current task proceeds under a narrower gate, the skip/ignore is recorded
+  in activity/report output with linked follow-up context.
+- Tests cover both attribution branches and explicit follow-up creation or escalation.
 constraints: []
 plan: []
 git:

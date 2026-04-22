@@ -1,24 +1,21 @@
 id: T-0361
 slug: distinguish-semanticreject-from-crash-events-in
-title: Distinguish SemanticReject from Crash events in state machine
+title: Emit explicit semantic-reject signals instead of overloading generic Reject
 created_at: '2026-04-13T07:24:03+00:00'
 task_type: null
 pipeline_mode: full
 priority: high
 depends_on: []
-goal: The pipeline currently routes both agent crashes (Timeout, engine died, no verdict)
-  and semantic rejections (QA says 'work doesn't meet acceptance criteria') to the
-  same 'recovering' stage. The recovery agent can only fix the first kind. For judgment
-  disagreements, it's 3+ wasted minutes before recovery_failed -> failed terminal.
-  Should distinguish the two so recovery only runs for infrastructure crashes.
+goal: The rules already send semantic rejects down the non-recovery path, but agent
+  verdict emission still relies on a generic reject plus reason strings. Make judgment-based
+  rejects explicit at emission time so state-machine wiring, prompts, and diagnostics
+  can distinguish crash/timeout recovery from acceptance disagreement without inference.
 acceptance_criteria:
-- 1. Add SemanticReject event emitted by QA/reviewer in agents when verdict=reject
-  for reasons that aren't crash/timeout.
-- '2. Rule table: Crash/Timeout -> recovering (as today); SemanticReject -> stage_retry_limit
-  exhausted -> failed directly (skip recovery).'
-- '3. Recovery agent prompt explicitly states: ''you fix infrastructure crashes, not
-  judgment disagreements''.'
-- 4. Integration test covering both paths.
+- QA/reviewer verdict paths emit an explicit semantic-reject signal or equivalent
+  typed metadata.
+- Recovery only triggers for crash/timeout-style failures, not semantic rejects.
+- Prompts/status surfaces expose the explicit semantic-reject classification.
+- Tests cover crash/timeout vs semantic reject end-to-end.
 constraints: []
 plan: []
 git:

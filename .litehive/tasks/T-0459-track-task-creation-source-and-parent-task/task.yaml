@@ -8,17 +8,16 @@ priority: medium
 depends_on: []
 goal: Record where each task was created from, including whether it was created by
   an in-Litehive agent session or outside Litehive, and when created by an agent capture
-  the current parent task context derived from Litehive agent environment variables.
+  the current parent task context and agent role derived from Litehive agent environment/context
+  variables.
 acceptance_criteria:
-- New tasks persist creation provenance metadata that distinguishes agent-created
-  tasks from tasks created outside Litehive.
-- When a task is created by an in-Litehive agent, the persisted metadata includes
-  the parent/current task ID that was active for that agent at creation time.
-- The provenance metadata is available through existing task inspection surfaces such
-  as litehive task show and/or task.yaml/runtime state.
-- Task creation paths that run outside Litehive explicitly record an external/manual
-  source instead of leaving provenance blank.
-- Tests cover both agent-created and external/manual task creation paths.
+- New tasks persist provenance that distinguishes agent-created tasks from tasks created
+  outside Litehive.
+- Agent-created tasks persist the parent/current task ID and the creating agent role.
+- Provenance metadata is visible through task inspection surfaces such as `litehive
+  task show` and queryable storage.
+- External/manual creation paths record explicit provenance instead of leaving it
+  blank.
 constraints: []
 plan: []
 git:

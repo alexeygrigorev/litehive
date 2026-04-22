@@ -1,24 +1,21 @@
 id: T-0336
 slug: migrate-litehive-s-heru-cli-invocations-to
-title: Migrate litehive's heru CLI invocations to positional engine argument form
+title: Remove Heru legacy --engine CLI form and keep positional engine syntax only
 created_at: '2026-04-10T20:48:22+00:00'
 task_type: refactor
 pipeline_mode: full
 priority: low
 depends_on: []
-goal: Migrate Litehive-owned direct `heru` CLI invocations from the legacy engine-flag
-  form to Heru's preferred positional engine form (`heru <engine> "prompt"`). Scope
-  is limited to places where this repo directly shells out to `heru` or documents
-  that direct invocation in tests/helpers/docs. Litehive's own `litehive ... --engine
-  ...` CLI surface is out of scope.
+goal: Litehive no longer shells out to `heru` with `--engine`, but Heru itself still
+  accepts and documents the legacy flag form. Finish the migration by removing backward
+  compatibility for `heru <prompt> --engine <engine>` in `../heru`, updating docs/tests
+  to the positional `heru <engine> "prompt"` contract, and keeping Litehive aligned
+  with that contract.
 acceptance_criteria:
-- Every direct `heru` CLI invocation in Litehive-owned code, tests, helpers, and docs
-  uses positional engine syntax; no legacy direct invocation using `--engine` remains.
-- Direct Heru CLI coverage preserves existing forwarded behavior for prompt, cwd,
-  model, max-turns, and resume-session-id while using positional engine parsing.
-- tests/ passes.
-- Any existing README or docs snippets that invoke `heru` directly are updated to
-  the positional form.
+- Heru CLI no longer accepts or documents `heru <prompt> --engine <engine>`.
+- Litehive-owned docs/tests/helpers only use positional `heru <engine> ...` syntax.
+- Direct Heru CLI tests in `../heru` and Litehive integration coverage stay green
+  after removing the legacy form.
 constraints:
 - Avoid broad opportunistic cleanup outside the chosen seam.
 - Preserve existing behavior unless the task explicitly includes functional changes.

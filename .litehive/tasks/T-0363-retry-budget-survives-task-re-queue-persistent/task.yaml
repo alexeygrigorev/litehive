@@ -1,22 +1,22 @@
 id: T-0363
 slug: retry-budget-survives-task-re-queue-persistent
-title: Retry budget survives task re-queue (persistent failure memory)
+title: Persist failed-run history and block blind requeue after repeated stage-retry
+  exhaustion
 created_at: '2026-04-13T07:24:12+00:00'
 task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: stage_retry counters reset when a task is re-queued after failure. So a task
-  that failed at testing 3 times, got re-queued, fails the same way again. Infinite
-  loop across runs, just slower. Should persist the failure history and either require
-  operator action before requeue, or count prior failed runs against a cross-run retry
-  budget.
+goal: Stage retry counters still reset too aggressively across task requeues. Persist
+  cross-run failure memory so a task that exhausts the same stage repeatedly cannot
+  loop forever via manual or automatic requeue without explicit operator intent.
 acceptance_criteria:
-- 1. TaskRecord gains a failed_runs counter (or history list with reasons).
-- 2. Tasks with N >= 2 prior failed runs with same stage_retry exhaustion do not auto-requeue;
-  they require explicit operator requeue.
-- 3. Grooming agent sees failed_runs in its prompt and can use litehive task close
-  outcome=wont_do if the task is fundamentally unfixable.
+- Task state keeps cross-run failed-run history or an equivalent persistent counter
+  keyed by failure shape/stage.
+- Repeated exhaustion of the same stage no longer re-enters the queue silently; it
+  requires explicit operator action or consumes a cross-run budget.
+- Planner/grooming surfaces can see prior failed-run history when deciding whether
+  a task is fundamentally unfixable.
 constraints: []
 plan: []
 git:

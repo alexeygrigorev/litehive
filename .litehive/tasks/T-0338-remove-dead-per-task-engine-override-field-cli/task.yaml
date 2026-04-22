@@ -1,22 +1,22 @@
 id: T-0338
 slug: remove-dead-per-task-engine-override-field-cli
-title: Remove leftover per-task engine plumbing from task update/show
+title: Remove misleading engine display and dead engine update plumbing from task
+  show/update
 created_at: '2026-04-10T20:53:57+00:00'
 task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: Drop the unused task-update engine parameter and stop printing task-level engine
-  in task show.
+goal: Per-task engine override is already gone. Finish the cleanup by removing the
+  misleading `engine:` line from `litehive task show`, deleting the dead internal
+  `engine` update path, and updating docs/tests so task metadata surfaces no longer
+  imply a task-owned engine setting.
 acceptance_criteria:
-- engine field removed from TaskRecord pydantic model
-- --engine flag removed from task add and task update commands
-- 'Misleading ''engine: ...'' display line removed from task add and task update output'
-- 'One-time migration drops engine: from all .litehive/tasks/*/task.yaml files'
-- 'Loading a task.yaml that still has an engine: field does not crash (silently ignored)'
-- Workspace default_engine, engine_freeze, is_engine_frozen, active_engine preserved
-  unchanged
-- All tests pass
+- '`litehive task show` no longer prints a task `engine:` line.'
+- The internal task-update path no longer accepts or threads a dead per-task engine
+  parameter.
+- Docs/tests reflect workspace/default-engine handling instead of task-level engine
+  metadata.
 constraints: []
 plan: []
 git:
