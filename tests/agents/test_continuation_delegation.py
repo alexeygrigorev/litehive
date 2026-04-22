@@ -1,9 +1,11 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from heru import extract_engine_continuation, get_engine
 from heru.base import CLIExecutionResult
-from heru.types import RuntimeEngineContinuation
+from heru.types import LiveTimeline, RuntimeEngineContinuation
 from litehive.agents.session import SessionMixin
 from litehive.config.engine_models import _set_continuation_handoff
 from litehive.state.records import create_task
@@ -61,12 +63,51 @@ def test_session_mixin_extract_execution_continuation_delegates_to_heru_for_supp
     assert captured == ["codex", "claude", "copilot", "gemini", "goz", "opencode"]
 
 
+@pytest.mark.parametrize("engine_name", ("codex", "claude", "copilot", "gemini", "goz", "opencode"))
+def test_session_mixin_consumes_unified_event_types_for_supported_engines(engine_name: str) -> None:
+    execution = _execution(
+        "\n".join(
+            [
+                (
+                    f'{{"kind":"message","engine":"{engine_name}","sequence":0,'
+                    '"role":"assistant","content":"implemented via unified events",'
+                    '"timestamp":"2026-04-12T00:00:00+00:00","usage_delta":{},'
+                    '"raw":{},"metadata":{}}'
+                ),
+                (
+                    f'{{"kind":"continuation","engine":"{engine_name}","sequence":1,'
+                    '"timestamp":"2026-04-12T00:00:01+00:00","continuation_id":"session-42",'
+                    '"usage_delta":{},"raw":{},"metadata":{}}'
+                ),
+            ]
+        )
+    )
+
+    transcript = SessionMixin._render_execution_transcript(engine_name, execution)
+    continuation = SessionMixin._extract_execution_continuation(engine_name, execution)
+    timeline = SessionMixin._extract_execution_timeline(
+        engine_name,
+        execution.stdout,
+        task_id="T-0001",
+        subagent_id="SA-0001",
+    )
+
+    assert transcript == "implemented via unified events"
+    assert continuation is not None
+    assert continuation.resume_id == "session-42"
+    assert isinstance(timeline, LiveTimeline)
+    assert timeline.engine == engine_name
+    assert timeline.task_id == "T-0001"
+    assert timeline.subagent_id == "SA-0001"
+    assert [event.kind for event in timeline.events] == ["message", "continuation"]
+
+
 def test_set_continuation_handoff_preserves_unified_continuation_payload(tmp_path, monkeypatch) -> None:
     task = create_task(tmp_path, title="Continuation handoff", auto_commit=False)
 
     class FakeEngine:
         def render_transcript(self, execution):  # type: ignore[no-untyped-def]
-            return "rendered transcript"
+            raise AssertionError("Adapter fallback should not run for unified events")
 
         def parse_stage_report(self, **kwargs):  # type: ignore[no-untyped-def]
             return SimpleNamespace(summary="summary", warnings=["warning"])
@@ -122,3 +163,4 @@ def test_set_continuation_handoff_preserves_unified_continuation_payload(tmp_pat
     assert handoff.continuation.resume_id == "session-42"
     assert captured["task_id"] == task.id
     assert captured["handoff"].continuation.resume_id == "session-42"
+    assert handoff.transcript_snippet == "implemented via unified events"

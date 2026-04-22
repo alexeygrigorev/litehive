@@ -6,6 +6,7 @@ import sys
 import textwrap
 import time
 
+import heru
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
@@ -19,6 +20,7 @@ from litehive.worktree import serialize_worktree_path, task_worktree_branch
 
 _RUNNER = CliRunner()
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+_HERU_ROOT = Path(heru.__file__).resolve().parents[1]
 _FAKE_RUNNER_SCRIPT = textwrap.dedent(
     """
     import signal
@@ -92,14 +94,17 @@ def _create_merge_failed_worktree_task(workspace: Path):
 
 def _spawn_fake_runner(workspace: Path, *, active_task_id: str, ready_file: Path) -> subprocess.Popen[str]:
     env = os.environ.copy()
-    pythonpath = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = f"{_REPO_ROOT}{os.pathsep}{pythonpath}" if pythonpath else str(_REPO_ROOT)
+    pythonpath_parts = [str(_REPO_ROOT), str(_HERU_ROOT)]
+    existing_pythonpath = env.get("PYTHONPATH")
+    if existing_pythonpath:
+        pythonpath_parts.append(existing_pythonpath)
+    env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
     return subprocess.Popen(
         [sys.executable, "-c", _FAKE_RUNNER_SCRIPT, str(workspace), active_task_id, str(ready_file)],
         cwd=_REPO_ROOT,
         env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
     )
 
@@ -109,8 +114,10 @@ def _wait_for_runner_lock(proc: subprocess.Popen[str], workspace: Path, ready_fi
     while time.monotonic() < deadline:
         returncode = proc.poll()
         if returncode is not None:
+            stdout, stderr = proc.communicate()
             raise AssertionError(
-                f"fake runner exited before acquiring the runner lock (returncode={returncode})"
+                "fake runner exited before acquiring the runner lock "
+                f"(returncode={returncode}, stdout={stdout!r}, stderr={stderr!r})"
             )
         if ready_file.exists() and runner_lock_is_held(workspace):
             return

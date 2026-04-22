@@ -7,14 +7,13 @@ import signal
 import time
 from typing import Callable
 
-from heru import extract_engine_continuation, extract_engine_timeline
+from heru import extract_engine_continuation, extract_engine_timeline, render_execution_transcript
 from heru.base import CLIExecutionResult
-from heru.types import SubagentRef
+from heru.types import LiveTimeline, RuntimeEngineContinuation, SubagentRef
 from litehive.agents.artifacts import (
     write_stream_artifact,
     write_text_artifact,
 )
-from litehive.heru_compat import render_execution_transcript
 from litehive.agents.session_store import (
     load_subagent_session,
     save_subagent_artifacts,
@@ -56,7 +55,7 @@ class SessionMixin:
     def _extract_execution_continuation(
         engine_name: str,
         execution: CLIExecutionResult | None,
-    ):
+    ) -> RuntimeEngineContinuation | None:
         return extract_engine_continuation(engine_name, execution)
 
     @staticmethod
@@ -66,7 +65,7 @@ class SessionMixin:
         *,
         task_id: str | None = None,
         subagent_id: str | None = None,
-    ):
+    ) -> LiveTimeline | None:
         return extract_engine_timeline(
             engine_name,
             stdout,

@@ -1,13 +1,13 @@
-"""Litehive-side compatibility helpers for heru API drift.
-
-Keep these wrappers thin and local so the rest of Litehive can depend on a
-stable surface even when sibling heru refactors move or remove helpers.
-"""
+"""Litehive-side compatibility helpers for heru quota APIs."""
 
 from __future__ import annotations
 
-from heru import extract_engine_timeline, get_engine
-from heru.base import CLIExecutionResult, LATEST_CONTINUATION_SENTINEL
+from heru import (
+    render_execution_transcript,
+    resolve_engine_resume_session_id,
+    resume_safe_model_override,
+)
+from heru.base import LATEST_CONTINUATION_SENTINEL
 from heru.quota import (
     UsageStatus,
     check_claude_quota,
@@ -19,9 +19,6 @@ from heru.quota import (
     copilot_quota_block_reason,
     zai_quota_block_reason,
 )
-from heru.types import RuntimeEngineContinuation
-
-
 def quota_short_term(status: UsageStatus):
     return status.short_term
 
@@ -59,62 +56,6 @@ def usage_limit_block_reason(engine_name: str, status: UsageStatus) -> str | Non
         reset_suffix = f", resets {reset_at}" if reset_at else ""
         return f"{engine_name} usage limit reached{reset_suffix}"
     return None
-
-
-def resolve_engine_resume_session_id(
-    engine_name: str,
-    continuation: RuntimeEngineContinuation | str | None,
-    *,
-    prefer_latest: bool = False,
-) -> str | None:
-    if continuation is None:
-        return None
-    if isinstance(continuation, RuntimeEngineContinuation):
-        resume_id = continuation.resume_id
-    else:
-        resume_id = continuation
-    if prefer_latest and engine_name == "claude":
-        return LATEST_CONTINUATION_SENTINEL
-    return resume_id
-
-
-def resume_safe_model_override(
-    engine_name: str,
-    model_name: str | None,
-    *,
-    resume_session_id: str | None = None,
-) -> str | None:
-    if resume_session_id and engine_name == "opencode":
-        return None
-    return model_name
-
-
-def render_execution_transcript(
-    engine_name: str,
-    execution: CLIExecutionResult | None,
-    *,
-    fallback_renderer=None,
-) -> str:
-    if execution is None:
-        return ""
-    timeline = extract_engine_timeline(engine_name, execution.stdout)
-    if timeline is not None and timeline.events:
-        parts: list[str] = []
-        for event in timeline.events:
-            for field_name in ("text", "content", "tool_output", "error"):
-                text = getattr(event, field_name, "") or ""
-                if text:
-                    parts.append(text)
-                    break
-        if parts:
-            transcript = "\n\n".join(parts).strip()
-            if transcript:
-                return transcript
-    if callable(fallback_renderer):
-        return fallback_renderer(execution)
-    return get_engine(engine_name).render_transcript(execution)
-
-
 __all__ = [
     "LATEST_CONTINUATION_SENTINEL",
     "UsageStatus",
