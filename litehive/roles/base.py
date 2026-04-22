@@ -36,27 +36,35 @@ def _bulletize(lines: list[str]) -> str:
 class RoleAgent(AgentNode):
     """Base for stage-bound agents.
 
-    Subclasses set three class attributes:
+    Subclasses set up to five class attributes:
 
     - ``NODE_NAME`` — pipeline node the agent implements (``"grooming"``, …).
     - ``ROLE`` — logical agent role (``"planner"``, ``"swe"``, …).
-    - ``INSTRUCTIONS`` — role-specific bullet block (baseline).
+    - ``ROLE_INSTRUCTIONS`` / ``INSTRUCTIONS`` — role-specific bullet block.
+    - ``FRESH_ATTEMPT_INSTRUCTIONS`` — extra guidance when no current
+      rejection applies to this role's prompt.
+    - ``RETRY_ATTEMPT_INSTRUCTIONS`` — extra guidance when a current
+      rejection does apply to this role's prompt.
 
-    ``build_prompt`` composes instructions from four layers:
+    ``build_prompt`` composes instructions from six layers:
 
-    1. Role-specific (the ``INSTRUCTIONS`` class constant).
-    2. Built-in startup guidance for this role, optionally extended by
+    1. Role-specific instructions.
+    2. A selected fresh/retry attempt block, if defined.
+    3. Built-in startup guidance for this role, optionally extended by
        workspace config.
-    3. A per-workspace ``.litehive/agents/{role}.md`` override. If present
+    4. A per-workspace ``.litehive/agents/{role}.md`` override. If present
        it REPLACES layer 2 for that role.
-    4. An ``"all"`` layer applied to every role, with the same md-override
+    5. An ``"all"`` layer applied to every role, with the same md-override
        behavior.
-    5. An optional process-profile overlay keyed by stage name.
+    6. An optional process-profile overlay keyed by stage name.
     """
 
     NODE_NAME: NodeName = ""
     ROLE: str = ""
+    ROLE_INSTRUCTIONS: str = ""
     INSTRUCTIONS: str = ""
+    FRESH_ATTEMPT_INSTRUCTIONS: str = ""
+    RETRY_ATTEMPT_INSTRUCTIONS: str = ""
 
     def __init__(
         self,
@@ -86,6 +94,7 @@ class RoleAgent(AgentNode):
 
     def build_prompt(self, state: TaskState) -> dict[str, Any]:
         last_rejection = self._last_rejection_for_prompt(state)
+        instruction_layers, instruction_variant = self._assemble_instruction_layers(last_rejection)
         runner_hooks = self._runner_hooks_for_stage()
         return {
             "role": self.ROLE,
@@ -93,7 +102,8 @@ class RoleAgent(AgentNode):
             "task_id": state.task_id,
             "pipeline_mode": state.pipeline_mode.value,
             "stage_retry": state.stage_retry.get(self.NODE_NAME, 0),
-            "instruction_layers": self._assemble_instruction_layers(),
+            "instruction_variant": instruction_variant,
+            "instruction_layers": instruction_layers,
             "last_report": state.last_report.to_payload(),
             "last_rejection": (
                 {
@@ -153,8 +163,16 @@ class RoleAgent(AgentNode):
             for hook in raw_hooks
         ]
 
-    def _assemble_instruction_layers(self) -> list[tuple[str, str]]:
-        layers: list[tuple[str, str]] = [("role", self.INSTRUCTIONS.strip())]
+    def _assemble_instruction_layers(self, last_rejection: LastRejection | None) -> tuple[list[tuple[str, str]], str]:
+        layers: list[tuple[str, str]] = []
+
+        role_instructions = (self.ROLE_INSTRUCTIONS or self.INSTRUCTIONS).strip()
+        if role_instructions:
+            layers.append(("role", role_instructions))
+
+        attempt_label, attempt_text, instruction_variant = self._attempt_instruction_layer(last_rejection)
+        if attempt_text:
+            layers.append((attempt_label, attempt_text))
 
         for key in ("all", self.ROLE):
             md = self._load_overlay_md(key)
@@ -171,7 +189,19 @@ class RoleAgent(AgentNode):
             if stage_block:
                 layers.append(("profile", stage_block))
 
-        return layers
+        return layers, instruction_variant
+
+    def _attempt_instruction_layer(self, last_rejection: LastRejection | None) -> tuple[str, str, str]:
+        if last_rejection is not None:
+            retry_text = self.RETRY_ATTEMPT_INSTRUCTIONS.strip()
+            if retry_text:
+                return "attempt:retry", retry_text, "retry"
+            return "", "", "retry"
+
+        fresh_text = self.FRESH_ATTEMPT_INSTRUCTIONS.strip()
+        if fresh_text:
+            return "attempt:fresh", fresh_text, "fresh"
+        return "", "", "fresh"
 
     def _startup_guidance_for(self, key: str) -> list[str]:
         merged = list(default_startup_guidance().get(key, []))

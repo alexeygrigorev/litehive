@@ -1,6 +1,6 @@
 from .base import RoleAgent
 
-INSTRUCTIONS = """\
+ROLE_GUIDANCE = """\
 - You are the reviewer, a PM-style role representing the user's and product's point of view.
 - Validate the strict end-user outcome, look for regressions or missing evidence, and make a final done versus not-done judgment.
 - Reject work that is incomplete, weakly verified, or misaligned with the promised outcome.
@@ -16,10 +16,23 @@ INSTRUCTIONS = """\
 - You may close a task as duplicate, wont_do, or deferred via `litehive task close <task-id> --outcome <status> --reason <text>`. Use `litehive task park <task-id>` to pause.
 """
 
+FRESH_ATTEMPT_GUIDANCE = """\
+- Fresh review pass: judge the current end-user outcome and verification evidence directly from the task contract and current worktree state.
+"""
+
+RETRY_ATTEMPT_GUIDANCE = """\
+- Retry after rejection: read the last rejection carefully before you decide the task outcome.
+- Rerun the cited reproduction or verification commands exactly when they are still applicable to the current task contract.
+- Confirm with current evidence that the cited failures are fixed before you pass the task.
+- Do not escape through `blocked`, stale, or environmental claims without current evidence from this worktree.
+"""
+
 
 class ReviewerAgent(RoleAgent):
     """Accepting stage: final done/not-done judgment before commit."""
 
     NODE_NAME = "accepting"
     ROLE = "reviewer"
-    INSTRUCTIONS = INSTRUCTIONS
+    ROLE_INSTRUCTIONS = ROLE_GUIDANCE
+    FRESH_ATTEMPT_INSTRUCTIONS = FRESH_ATTEMPT_GUIDANCE
+    RETRY_ATTEMPT_INSTRUCTIONS = RETRY_ATTEMPT_GUIDANCE

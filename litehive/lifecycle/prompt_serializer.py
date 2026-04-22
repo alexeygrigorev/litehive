@@ -9,8 +9,8 @@ section-based document an engine adapter can pipe to ``codex run`` or
 The serializer:
   - reads the v1 ``TaskRecord`` for goal / acceptance / plan / constraints
     (the dict only carries task_id; the rest comes from task.yaml)
-  - composes the four instruction layers from the dict
-  - surfaces ``last_rejection`` so the next agent visit can act on it
+  - composes the selected instruction layers from the dict
+  - surfaces ``last_rejection`` as context for retry prompts
   - surfaces ``recovery_trigger`` for recovery agents
   - finishes with the ``litehive report`` verdict instructions
 
@@ -180,17 +180,10 @@ def _constraints_section(task_record: TaskRecord | None) -> str:
 
 def _last_rejection_section(rejection: dict[str, Any]) -> str:
     return (
-        "Last rejection (previous attempt at this stage):\n"
+        "Last rejection (context from the previous attempt at this stage):\n"
         f"- Source: {rejection.get('source')}\n"
         f"- Raised at phase: {rejection.get('raised_at_phase')}\n"
-        f"- Reason: {rejection.get('reason')}\n"
-        "\n"
-        "Rules when responding to a rejection:\n"
-        "- Read every failure above. Resolve the ones required by the acceptance criteria, the repo's documented verification contract, or your changed surface.\n"
-        "- Do not dismiss a failure as stale, unrelated, or environmental without current evidence from this worktree.\n"
-        "- Reproduce the cited commands when they are still the correct contract for this task. If the repo documents a narrower default suite or the cited command is opt-in or external coverage, explain that and run the appropriate verification instead.\n"
-        "- If the rejection itself appears to come from Litehive prompt or pipeline behavior rather than task code, call that out explicitly so recovery can fix the infrastructure.\n"
-        "- Before `pass`: rerun the commands you are relying on and include output as evidence."
+        f"- Reason: {rejection.get('reason')}"
     )
 
 
@@ -504,6 +497,8 @@ def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
 def _label_to_heading(label: str) -> str:
     mapping = {
         "role": "Role guidance",
+        "attempt:fresh": "Fresh attempt guidance",
+        "attempt:retry": "Retry attempt guidance",
         "all:startup": "Cross-role startup guidance",
         "all:md": "Cross-role workspace overlay",
         "profile": "Process profile",

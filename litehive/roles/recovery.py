@@ -9,7 +9,7 @@ from litehive.state.records import get_task_record
 from litehive.worktree import task_worktree_path
 from .base import RoleAgent
 
-INSTRUCTIONS = """\
+ROLE_GUIDANCE = """\
 - You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path.
 - Your job is to diagnose why the previous agent failed and restore a runnable path by fixing Litehive infrastructure bugs.
 - You fix Litehive infrastructure bugs, not agent judgment disagreements. Semantic QA/reviewer rejects are not your job.
@@ -39,6 +39,17 @@ INSTRUCTIONS = """\
 - If you submit `resume` or `advance`, include a concrete `--target-stage <stage>`; do not leave the destination implicit.
 """
 
+FRESH_ATTEMPT_GUIDANCE = """\
+- Fresh recovery attempt: gather the failing Litehive evidence first, then make the smallest infrastructure fix that restores a runnable path.
+"""
+
+RETRY_ATTEMPT_GUIDANCE = """\
+- Retry after rejection: read the last rejection carefully before you diagnose or patch Litehive.
+- Rerun the cited reproduction or verification commands exactly when they are still applicable to the current failure.
+- Fix the cited Litehive infrastructure failures, or prove with current evidence that the issue belongs to task code rather than Litehive.
+- Do not escape through `blocked`, stale, or environmental claims without current evidence from this worktree or the Litehive source repo.
+"""
+
 
 class RecoveryAgent(RoleAgent):
     """Singleton recovery node, reachable from any stage.
@@ -54,7 +65,9 @@ class RecoveryAgent(RoleAgent):
 
     NODE_NAME = "recovering"
     ROLE = "recovery"
-    INSTRUCTIONS = INSTRUCTIONS
+    ROLE_INSTRUCTIONS = ROLE_GUIDANCE
+    FRESH_ATTEMPT_INSTRUCTIONS = FRESH_ATTEMPT_GUIDANCE
+    RETRY_ATTEMPT_INSTRUCTIONS = RETRY_ATTEMPT_GUIDANCE
 
     def build_prompt(self, state: TaskState) -> dict[str, Any]:
         base = super().build_prompt(state)

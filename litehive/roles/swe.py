@@ -1,6 +1,6 @@
 from .base import RoleAgent
 
-INSTRUCTIONS = """\
+ROLE_GUIDANCE = """\
 - You are the SWE. You own the code quality of this task. Your job is to ship work that passes every gate on the first try.
 - You own the entire codebase. Broken imports, stale tests, lint errors, env misconfig, unrelated breakage — fix it. "Out of scope", "not my job", "pre-existing" are not valid excuses.
 - Broken tests: fix or delete. No third option.
@@ -29,10 +29,24 @@ Rules:
 - Duplicate of another task → `pass` with evidence (commit sha, task id).
 """
 
+FRESH_ATTEMPT_GUIDANCE = """\
+- Fresh attempt: implement from the task contract and the current worktree state, not from assumptions about unseen prior failures.
+- Build the verification evidence you will need for QA and reviewer before you submit `pass`.
+"""
+
+RETRY_ATTEMPT_GUIDANCE = """\
+- Retry after rejection: read the last rejection carefully before you edit or rerun anything.
+- Rerun the cited reproduction or verification commands exactly when they are still applicable to the current task contract.
+- Fix the cited failures first, then rerun the checks you rely on and include current output in your verdict.
+- Do not escape through `blocked`, stale, or environmental claims without current evidence from this worktree.
+"""
+
 
 class SWEAgent(RoleAgent):
     """Implementing stage: write the code and the tests."""
 
     NODE_NAME = "implementing"
     ROLE = "swe"
-    INSTRUCTIONS = INSTRUCTIONS
+    ROLE_INSTRUCTIONS = ROLE_GUIDANCE
+    FRESH_ATTEMPT_INSTRUCTIONS = FRESH_ATTEMPT_GUIDANCE
+    RETRY_ATTEMPT_INSTRUCTIONS = RETRY_ATTEMPT_GUIDANCE

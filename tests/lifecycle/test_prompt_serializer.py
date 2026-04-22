@@ -71,6 +71,13 @@ def _activity_lines(text: str) -> list[str]:
     return [line for line in tail[:end].splitlines() if line.strip()]
 
 
+def _instruction_layer(prompt: dict[str, object], label: str) -> str | None:
+    for current_label, text in prompt.get("instruction_layers", []):
+        if current_label == label:
+            return text
+    return None
+
+
 def test_serialize_includes_header_goal_acceptance_plan(workspace: Path) -> None:
     task = create_task(
         workspace,
@@ -99,11 +106,15 @@ def test_serialize_includes_header_goal_acceptance_plan(workspace: Path) -> None
 def test_serialize_includes_role_instructions(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
-    text = serialize_prompt(agent.build_prompt(make_state(task.id)), task_record=task)
+    prompt = agent.build_prompt(make_state(task.id))
+    text = serialize_prompt(prompt, task_record=task)
 
+    assert prompt["instruction_variant"] == "fresh"
     assert "Instructions:" in text
     assert "## Role guidance" in text
+    assert "## Fresh attempt guidance" in text
     assert "You are the SWE" in text  # from the swe.py INSTRUCTIONS
+    assert "Fresh attempt: implement from the task contract" in text
     assert 'litehive report --verdict pass --role swe --message "your report text"' in text
     assert "litehive agent report" not in text
     assert "Never exit without calling `litehive report`." in text
@@ -294,7 +305,7 @@ def test_retry_prompt_filters_last_rejection_reason_from_prior_work(workspace: P
     assert "- Test results: tests fail with ImportError" not in text
 
 
-def test_last_rejection_guidance_respects_repo_contract_and_opt_in_coverage(workspace: Path) -> None:
+def test_swe_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
     state = make_state(task.id)
@@ -304,25 +315,58 @@ def test_last_rejection_guidance_respects_repo_contract_and_opt_in_coverage(work
         raised_at_phase="testing",
     )
 
-    text = serialize_prompt(agent.build_prompt(state), task_record=task)
+    prompt = agent.build_prompt(state)
+    text = serialize_prompt(prompt, task_record=task)
 
-    assert "repo's documented verification contract" in text
-    assert "opt-in or external coverage" in text
-    assert "Each one is yours to fix" not in text
-    assert "Don't declare the rejection stale, replayed, or pipeline-confused." not in text
-    assert "Don't submit `blocked` to escape." not in text
+    assert prompt["instruction_variant"] == "retry"
+    assert _instruction_layer(prompt, "attempt:retry") is not None
+    assert _instruction_layer(prompt, "attempt:fresh") is None
+    assert "## Retry attempt guidance" in text
+    assert "Retry after rejection: read the last rejection carefully" in text
+    assert "Rerun the cited reproduction or verification commands exactly" in text
+    assert "Fix the cited failures first" in text
+    assert "Do not escape through `blocked`, stale, or environmental claims" in text
+    assert "## Fresh attempt guidance" not in text
+    assert "Rules when responding to a rejection:" not in text
 
 
 def test_qa_prompt_includes_default_vs_opt_in_verification_guidance(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     agent = QAAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
 
-    text = serialize_prompt(agent.build_prompt(make_state(task.id, stage="testing")), task_record=task)
+    prompt = agent.build_prompt(make_state(task.id, stage="testing"))
+    text = serialize_prompt(prompt, task_record=task)
 
+    assert prompt["instruction_variant"] == "fresh"
+    assert "## Fresh attempt guidance" in text
+    assert "Fresh verification pass: build an independent check plan" in text
     assert "## Qa startup guidance" in text
     assert "repo's documented verification flow" in text
     assert "default deterministic test suite and targeted checks first" in text
     assert "opt-in, external-boundary, or authenticated integration coverage" in text
+
+
+def test_qa_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    agent = QAAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+    state = make_state(task.id, stage="testing")
+    state.last_rejection_by_stage["testing"] = LastRejection(
+        source="hook",
+        reason="targeted verification still fails",
+        raised_at_phase="after_testing",
+    )
+
+    prompt = agent.build_prompt(state)
+    text = serialize_prompt(prompt, task_record=task)
+
+    assert prompt["instruction_variant"] == "retry"
+    assert _instruction_layer(prompt, "attempt:retry") is not None
+    assert _instruction_layer(prompt, "attempt:fresh") is None
+    assert "## Retry attempt guidance" in text
+    assert "Retry after rejection: read the last rejection carefully" in text
+    assert "Verify with current evidence that the cited failures are fixed before you pass" in text
+    assert "Do not escape through `blocked`, stale, or environmental claims" in text
+    assert "## Fresh attempt guidance" not in text
 
 
 def test_reviewer_prompt_calls_out_qa_override_with_last_testing_rejection(workspace: Path) -> None:

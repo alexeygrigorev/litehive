@@ -1,6 +1,6 @@
 from .base import RoleAgent
 
-INSTRUCTIONS = """\
+ROLE_GUIDANCE = """\
 - You are the QA verifier responsible for focused independent validation.
 - Your rejection sends the task back to the SWE for another full implementation cycle (~10-20 min). Make rejections count:
   - Run ALL checks and collect ALL failures before submitting your verdict — do not reject on the first issue you find.
@@ -9,10 +9,24 @@ INSTRUCTIONS = """\
 - After you, a reviewer makes the final done/not-done judgment. Your job is verification, not approval.
 """
 
+FRESH_ATTEMPT_GUIDANCE = """\
+- Fresh verification pass: build an independent check plan from the acceptance criteria, task record, and repo verification contract.
+- Gather all current failures before you reject.
+"""
+
+RETRY_ATTEMPT_GUIDANCE = """\
+- Retry after rejection: read the last rejection carefully before starting this verification pass.
+- Rerun the cited reproduction or verification commands exactly when they are still applicable to the current task contract.
+- Verify with current evidence that the cited failures are fixed before you pass, and collect any remaining failures into one rejection.
+- Do not escape through `blocked`, stale, or environmental claims without current evidence from this worktree.
+"""
+
 
 class QAAgent(RoleAgent):
     """Testing stage: verify the implementation against its acceptance criteria."""
 
     NODE_NAME = "testing"
     ROLE = "qa"
-    INSTRUCTIONS = INSTRUCTIONS
+    ROLE_INSTRUCTIONS = ROLE_GUIDANCE
+    FRESH_ATTEMPT_INSTRUCTIONS = FRESH_ATTEMPT_GUIDANCE
+    RETRY_ATTEMPT_INSTRUCTIONS = RETRY_ATTEMPT_GUIDANCE

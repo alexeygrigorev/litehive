@@ -3,7 +3,7 @@ from typing import Any
 from litehive.lifecycle.persistence import TaskState
 from .base import RoleAgent
 
-INSTRUCTIONS = """\
+ROLE_GUIDANCE = """\
 - EXECUTE the merge resolution. Do not just describe it.
 - A prior attempt that only printed a plan will fail — the runner verifies `git diff --name-only --diff-filter=U` is empty before accepting your session.
 - If the merge has not started yet (no conflict markers, no MERGE_HEAD), the checkout may have dirty local changes that blocked `git merge`. In that case: run `git stash -u`, then `git merge <branch> --no-edit`, then `git stash pop` to restore the local changes. If stash pop causes conflicts, resolve them.
@@ -20,6 +20,17 @@ INSTRUCTIONS = """\
 - Self-check before exiting: run `git diff --name-only --diff-filter=U` one more time. If it prints anything, you have NOT finished — fix it or report failure with a concrete reason.
 """
 
+FRESH_ATTEMPT_GUIDANCE = """\
+- Fresh merge-resolution attempt: resolve every listed conflict now and prove the unresolved set is empty before you stop.
+"""
+
+RETRY_ATTEMPT_GUIDANCE = """\
+- Retry after rejection: read the last rejection carefully before touching the merge state.
+- Rerun the cited reproduction or verification commands exactly when they are still applicable, especially conflict checks such as `git diff --name-only --diff-filter=U`.
+- Fix every cited unresolved conflict or merge verification failure before you stop.
+- Do not escape through `blocked`, stale, or environmental claims without current evidence from this worktree.
+"""
+
 
 class MergeAgent(RoleAgent):
     """Resolves git merge conflicts encountered during the commit stage.
@@ -34,7 +45,9 @@ class MergeAgent(RoleAgent):
 
     NODE_NAME = "merge_resolving"
     ROLE = "merge-resolver"
-    INSTRUCTIONS = INSTRUCTIONS
+    ROLE_INSTRUCTIONS = ROLE_GUIDANCE
+    FRESH_ATTEMPT_INSTRUCTIONS = FRESH_ATTEMPT_GUIDANCE
+    RETRY_ATTEMPT_INSTRUCTIONS = RETRY_ATTEMPT_GUIDANCE
 
     def build_prompt(self, state: TaskState) -> dict[str, Any]:
         base = super().build_prompt(state)
