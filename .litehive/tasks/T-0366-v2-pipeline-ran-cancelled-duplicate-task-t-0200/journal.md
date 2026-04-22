@@ -20,3 +20,6 @@ Task requeued for another implementation pass.
 
 ## 2026-04-17T13:26:18+00:00
 Task closed: wont_do. Stale — T-0200 deferred, no orphan risk
+
+## 2026-04-22T08:42:31+00:00
+Task metadata updated via CLI.
