@@ -156,7 +156,7 @@ def agent_report_command(
         task=task,
         pipeline_stage=pipeline_stage,
     )
-    comment = TaskActivityEntry(
+    entry = TaskActivityEntry(
         role=agent_role,
         stage=actual_stage,
         target_stage=normalized_target_stage,
@@ -164,7 +164,7 @@ def agent_report_command(
         message=message,
         files_changed=list(files_changed or []),
     )
-    append_task_activity(root, task, comment)
+    append_task_activity(root, task, entry)
     print(f"task: {task.id}")
     print(f"stage: {actual_stage}")
     print(f"verdict: {normalized_verdict}")

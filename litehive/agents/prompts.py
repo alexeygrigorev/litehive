@@ -239,12 +239,12 @@ def stage_prompt(
             ]
         )
 
-    # Include the task discussion thread so agents see the full history
-    from litehive.tasks.reports import render_task_thread
+    # Include the task activity log so agents see the full history.
+    from litehive.tasks.reports import render_task_activity
 
-    thread_text = render_task_thread(root, task, for_prompt=True) if root is not None else ""
-    if thread_text:
-        lines.extend(["", thread_text])
+    activity_text = render_task_activity(root, task, for_prompt=True) if root is not None else ""
+    if activity_text:
+        lines.extend(["", activity_text])
 
     # Instruct agents to submit their verdict via CLI
     verdicts = "<resume|advance|done|budget_hit|reject>" if stage_owner == "recovery" else "<pass|reject>"

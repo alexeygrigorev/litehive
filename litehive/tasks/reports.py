@@ -1,4 +1,4 @@
-"""Recovery evidence, task discussion comments, and report helpers."""
+"""Recovery evidence, task activity, and report helpers."""
 
 import json
 from pathlib import Path
@@ -48,7 +48,7 @@ def collect_recovery_evidence(
 
     evidence: list[RecoveryEvidenceItem] = []
     task_path = task_file(root, task)
-    comments_path = task_activity_path(root, task)
+    activity_path = task_activity_path(root, task)
     events_path = task_dir(root, task) / "events.jsonl"
     latest_report_path = latest_path(sorted((task_dir(root, task) / "reports").glob("*.yaml")))
     latest_run_log = latest_run_all_log_path(root)
@@ -85,11 +85,11 @@ def collect_recovery_evidence(
     )
     evidence.append(
         RecoveryEvidenceItem(
-            kind="thread",
+            kind="activity",
             label="task activity",
-            path=str(comments_path.relative_to(root)),
-            exists=comments_path.exists(),
-            summary=f"discussion entries={len(load_task_activity(root, task))}",
+            path=str(activity_path.relative_to(root)),
+            exists=activity_path.exists(),
+            summary=f"activity entries={len(load_task_activity(root, task))}",
         )
     )
     evidence.append(
@@ -261,13 +261,8 @@ def record_recovery_report(
     return path
 
 
-def append_activity_entry(root: Path, task: TaskRecord, comment: "TaskActivityEntry") -> None:
-    append_task_activity(root, task, comment)
-
-
-def load_task_thread(root: Path, task: TaskRecord) -> list["TaskActivityEntry"]:
-    """Compatibility alias for callers that still treat task activity as a thread."""
-    return load_task_activity(root, task)
+def append_activity_entry(root: Path, task: TaskRecord, entry: "TaskActivityEntry") -> None:
+    append_task_activity(root, task, entry)
 
 
 def write_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Path:
@@ -383,42 +378,42 @@ def normalized_files_changed(paths: Iterable[str]) -> list[str]:
     return normalized
 
 
-def is_retracted_activity_entry(comment: "TaskActivityEntry") -> bool:
-    return RETRACTED_FILESYSTEM_MARKER in comment.message
+def is_retracted_activity_entry(entry: "TaskActivityEntry") -> bool:
+    return RETRACTED_FILESYSTEM_MARKER in entry.message
 
 
-def is_retractable_pass_entry(comment: "TaskActivityEntry") -> bool:
+def is_retractable_pass_entry(entry: "TaskActivityEntry") -> bool:
     return (
-        comment.verdict == "pass"
-        and comment.stage in _RETRACTABLE_STEPS
-        and bool(normalized_files_changed(comment.files_changed))
+        entry.verdict == "pass"
+        and entry.stage in _RETRACTABLE_STEPS
+        and bool(normalized_files_changed(entry.files_changed))
     )
 
 
-def retract_activity_entry(comment: "TaskActivityEntry") -> bool:
-    if is_retracted_activity_entry(comment):
+def retract_activity_entry(entry: "TaskActivityEntry") -> bool:
+    if is_retracted_activity_entry(entry):
         return False
-    comment.message = f"{comment.message.rstrip()}\n{RETRACTED_FILESYSTEM_MARKER}"
+    entry.message = f"{entry.message.rstrip()}\n{RETRACTED_FILESYSTEM_MARKER}"
     return True
 
 
-def render_task_thread(root: Path, task: TaskRecord, *, for_prompt: bool = False) -> str:
-    thread = load_task_activity(root, task)
-    if not thread:
+def render_task_activity(root: Path, task: TaskRecord, *, for_prompt: bool = False) -> str:
+    activity_entries = load_task_activity(root, task)
+    if not activity_entries:
         return ""
-    lines = ["Discussion thread:"]
-    for c in thread:
-        if for_prompt and is_retracted_activity_entry(c):
-            header = f"[{c.created_at}] {c.role} ({c.stage}) - {c.verdict} {RETRACTED_FILESYSTEM_MARKER}"
+    lines = ["Task activity:"]
+    for entry in activity_entries:
+        if for_prompt and is_retracted_activity_entry(entry):
+            header = f"[{entry.created_at}] {entry.role} ({entry.stage}) - {entry.verdict} {RETRACTED_FILESYSTEM_MARKER}"
             lines.append(f"\n--- {header} ---")
             lines.append("Prior pass report withheld from prompt context after requeue-time filesystem validation.")
-            claimed_files = normalized_files_changed(c.files_changed)
+            claimed_files = normalized_files_changed(entry.files_changed)
             if claimed_files:
                 lines.append(f"Claimed files: {', '.join(claimed_files)}")
             continue
-        header = f"[{c.created_at}] {c.role} ({c.stage}) — {c.verdict}"
+        header = f"[{entry.created_at}] {entry.role} ({entry.stage}) — {entry.verdict}"
         lines.append(f"\n--- {header} ---")
-        lines.append(c.message)
-        if c.files_changed:
-            lines.append(f"Files: {', '.join(c.files_changed)}")
+        lines.append(entry.message)
+        if entry.files_changed:
+            lines.append(f"Files: {', '.join(entry.files_changed)}")
     return "\n".join(lines)

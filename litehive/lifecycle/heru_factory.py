@@ -54,8 +54,8 @@ from .prompt_serializer import serialize_prompt
 from .sessions import Session
 
 
-class _MissingThreadComment(Exception):
-    """Internal: agent finished without producing a fresh thread comment."""
+class _MissingActivityEntry(Exception):
+    """Internal: agent finished without producing a fresh activity entry."""
 
 
 logger = logging.getLogger(__name__)
@@ -133,8 +133,8 @@ def _rewrite_hallucinated_implementing_pass(
         f"claimed_files_changed: {claimed}"
     )
 
-    thread = load_task_activity(workspace_root, task)
-    for entry in reversed(thread):
+    activity_entries = load_task_activity(workspace_root, task)
+    for entry in reversed(activity_entries):
         if entry.created_at != latest.created_at:
             continue
         if entry.role != latest.role or entry.stage != latest.stage:
@@ -146,7 +146,7 @@ def _rewrite_hallucinated_implementing_pass(
             entry.message = f"{entry.message.rstrip()}\n[retracted - filesystem check shows no changes landed]"
         entry.message = f"{entry.message.rstrip()}\n{detail}"
         break
-    save_task_activity(workspace_root, task, thread)
+    save_task_activity(workspace_root, task, activity_entries)
 
     report = StageReport(
         task_id=task.id,
@@ -231,7 +231,7 @@ def _latest_verdict_after(
     stage: str,
     after_ts: datetime,
 ) -> AgentVerdict | None:
-    """Return the most recent thread comment for ``(task_id, stage)`` whose
+    """Return the most recent activity entry for ``(task_id, stage)`` whose
     ``created_at`` is newer than ``after_ts``, mapped to an ``AgentVerdict``.
 
     Returns ``None`` when nothing newer landed — caller raises ``NudgeRequired``.

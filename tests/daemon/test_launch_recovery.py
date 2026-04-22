@@ -9,7 +9,7 @@ from litehive.daemon.execution import run_daemon_loop
 from litehive.recovery.detection import LaunchFailure
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task
-from litehive.tasks.reports import load_task_thread
+from litehive.tasks.activity import load_task_activity
 
 
 def test_daemon_loop_recovers_corrupt_workspaces_yaml_before_cycle_start(tmp_path: Path, monkeypatch) -> None:
@@ -50,8 +50,8 @@ def test_daemon_loop_recovers_corrupt_workspaces_yaml_before_cycle_start(tmp_pat
     assert backups
     assert registry_path.exists()
     assert registry_path.read_text(encoding="utf-8").strip().startswith("- ")
-    thread = load_task_thread(tmp_path, task)
-    assert any(entry.role == "recovery" for entry in thread)
+    activity_entries = load_task_activity(tmp_path, task)
+    assert any(entry.role == "recovery" for entry in activity_entries)
     assert "launch recovery fixed: cycle_start_failed" in stream.getvalue()
 
 

@@ -775,12 +775,12 @@ def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path
     assert (tmp_path / "after_commit_branch.txt").read_text().strip() == "main"
     assert not worktree.exists()
 
-    thread = load_task_activity(tmp_path, refreshed)
-    assert thread[-1].role == "hook"
-    assert thread[-1].stage == "commit_to_git"
-    assert thread[-1].verdict == "reject"
-    assert "Runner hook at `after_commit` rejected the stage." in thread[-1].message
-    assert "echo fail && exit 1" in thread[-1].message
+    activity_entries = load_task_activity(tmp_path, refreshed)
+    assert activity_entries[-1].role == "hook"
+    assert activity_entries[-1].stage == "commit_to_git"
+    assert activity_entries[-1].verdict == "reject"
+    assert "Runner hook at `after_commit` rejected the stage." in activity_entries[-1].message
+    assert "echo fail && exit 1" in activity_entries[-1].message
 
     reports = load_stage_reports(tmp_path, refreshed)
     hook_reports = [report for report in reports if report.source == "hook"]
@@ -831,8 +831,8 @@ def test_run_task_before_accepting_hook_retries_and_continues(
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
 
-    thread = load_task_activity(tmp_path, refreshed)
-    hook_entries = [entry for entry in thread if entry.role == "hook"]
+    activity_entries = load_task_activity(tmp_path, refreshed)
+    hook_entries = [entry for entry in activity_entries if entry.role == "hook"]
     assert hook_entries
     assert hook_entries[-1].stage == "accepting"
     assert hook_entries[-1].verdict == "reject"

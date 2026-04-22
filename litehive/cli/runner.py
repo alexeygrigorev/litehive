@@ -406,17 +406,17 @@ def report_command(
         return 1
     stage = stage or step or task.pipeline_status
     normalized_verdict = "reject" if verdict == "fail" else verdict
-    comment = TaskActivityEntry(
+    entry = TaskActivityEntry(
         role=role,
         stage=stage,
         verdict=normalized_verdict,
         message=message,
         files_changed=list(files_changed or []),
     )
-    append_task_activity(root, task, comment)
+    append_task_activity(root, task, entry)
     print(f"task: {task.id}")
     print(f"stage: {stage}")
-    print(f"verdict: {comment.verdict}")
+    print(f"verdict: {entry.verdict}")
     print(f"role: {role}")
     return 0
 

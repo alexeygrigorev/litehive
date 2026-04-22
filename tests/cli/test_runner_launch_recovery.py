@@ -7,8 +7,9 @@ from litehive.domain.recovery import TriggerEventKind
 from litehive.recovery.detection import LaunchFailure, TaskLaunchFailure
 from litehive.recovery.execution_recovery import LaunchRecoveryResult
 from litehive.state.records import create_task, get_task
+from litehive.tasks.activity import load_task_activity
 from litehive.tasks.normalization import implementation_entry_stage
-from litehive.tasks.reports import load_task_thread, record_recovery_report
+from litehive.tasks.reports import record_recovery_report
 
 
 @dataclass(slots=True)
@@ -64,7 +65,7 @@ def test_run_once_retries_uv_sync_failure_after_recovery(tmp_path: Path, monkeyp
     assert result.final_stage == "done"
     assert prepare_calls["count"] == 2
     assert recovery_calls["count"] == 1
-    assert any(entry.role == "recovery" for entry in load_task_thread(tmp_path, task))
+    assert any(entry.role == "recovery" for entry in load_task_activity(tmp_path, task))
 
 
 def test_run_once_flags_failed_launch_and_continues_to_next_task(tmp_path: Path, monkeypatch) -> None:
@@ -103,7 +104,7 @@ def test_run_once_flags_failed_launch_and_continues_to_next_task(tmp_path: Path,
     assert refreshed is not None
     assert refreshed.status == "flagged"
     assert refreshed.flag_reason == "recovery_failed"
-    assert any(entry.role == "recovery" for entry in load_task_thread(tmp_path, broken))
+    assert any(entry.role == "recovery" for entry in load_task_activity(tmp_path, broken))
 
 
 def test_run_once_limits_launch_recovery_to_one_attempt(tmp_path: Path, monkeypatch) -> None:
@@ -168,7 +169,7 @@ def test_run_once_flags_corrupt_queued_task_yaml_and_continues(tmp_path: Path, m
     assert refreshed_broken is not None
     assert refreshed_broken.status == "flagged"
     assert refreshed_broken.flag_reason == "recovery_failed"
-    assert any(entry.role == "recovery" for entry in load_task_thread(tmp_path, refreshed_broken))
+    assert any(entry.role == "recovery" for entry in load_task_activity(tmp_path, refreshed_broken))
     backups = sorted(broken_task_dir.glob("task.yaml.corrupt-*"))
     assert backups
 
@@ -209,7 +210,7 @@ def test_run_once_attempts_corrupt_task_yaml_recovery_once(tmp_path: Path, monke
     assert refreshed_broken is not None
     assert refreshed_broken.status == "flagged"
     assert refreshed_broken.flag_reason == "recovery_failed"
-    assert any(entry.role == "recovery" for entry in load_task_thread(tmp_path, refreshed_broken))
+    assert any(entry.role == "recovery" for entry in load_task_activity(tmp_path, refreshed_broken))
 
 
 def test_daemon_worker_defers_preflight_to_run_daemon_loop(monkeypatch, tmp_path: Path) -> None:

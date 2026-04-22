@@ -41,7 +41,7 @@ class Pass(Event):
     can distinguish an agent pass from a hook phase completing.
 
     ``metadata`` carries the verdict's ``files_changed`` / ``tests_added``
-    details from the submitted ``litehive report`` comment. The Runner
+    details from the submitted ``litehive report`` activity entry. The Runner
     reads it after each transition and updates ``state.last_report`` so
     downstream guards (``zero_change_shortcut``, etc.) see real numbers
     instead of defaults.

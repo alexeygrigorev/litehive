@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 from heru import extract_engine_continuation, get_engine
+from litehive.agents.session import render_execution_transcript
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace_files import config_path
 from litehive.domain.runtime import RuntimeContinuationHandoff
@@ -386,7 +387,7 @@ def _set_continuation_handoff(
     if result.transcript:
         transcript_snippet = result.transcript.splitlines()[0].strip()
     if result.execution is not None:
-        rendered = get_engine(from_engine).render_transcript(result.execution)
+        rendered = render_execution_transcript(from_engine, result.execution)
         transcript_snippet = transcript_snippet or rendered.splitlines()[0].strip()
 
     handoff = RuntimeContinuationHandoff(
