@@ -24,13 +24,13 @@ from pathlib import Path
 import re
 from typing import Any
 
-from heru import resolve_engine_resume_session_id
 from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.domain.agent import EngineFailure
 from litehive.domain.common import OutcomeReasonCode, Verdict, cap_feedback
 from litehive.domain.reports import StageReport
 from litehive.domain.lifecycle_deltas import recovery_trigger_from_event
+from litehive.heru_compat import resolve_engine_resume_session_id
 from litehive.git.ops import GitError, is_git_repo, status_porcelain
 from litehive.roles.base import PromptContext
 from litehive.roles.recovery import RecoveryAgent

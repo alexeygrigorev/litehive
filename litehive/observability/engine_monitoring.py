@@ -4,7 +4,6 @@ from pathlib import Path
 
 import yaml
 
-from heru.quota import preferred_reset_at, quota_long_term, quota_short_term
 from litehive.config.workspace_files import workspace_gitignore_path
 from litehive.config.workspace import render_workspace_gitignore
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
@@ -15,6 +14,7 @@ from litehive.domain.engine import (
     EngineUsageWindow,
     WorkspaceEngineMonitoring,
 )
+from litehive.heru_compat import UsageStatus, preferred_reset_at, quota_long_term, quota_short_term
 from litehive.state.persist import atomic_write_text
 from litehive.state.locking import workspace_mutation_guard
 
@@ -192,8 +192,6 @@ def record_codex_quota_check(
     status: object,
 ) -> None:
     """Record proactive codex quota status into engine monitoring."""
-    from heru.quota import UsageStatus
-
     if not isinstance(status, UsageStatus):
         return
     if status.error is not None:
