@@ -6,21 +6,28 @@ created_at: '2026-04-22T06:12:29+00:00'
 task_type: null
 pipeline_mode: full
 priority: high
-depends_on: []
-goal: Eliminate remaining live YAML/Markdown runtime state under .litehive/tasks and
-  related runtime paths so Litehive uses SQLite as the sole source of truth for task
-  state, queue state, reports, activity, and other mutable runtime data.
+depends_on:
+- T-0470
+goal: Eliminate the hybrid disk+DB task model. Litehive should store both task intent
+  metadata and runtime state in SQLite, with a real task table as the authoritative
+  source for id, title, goal, created_at, dependencies, acceptance criteria, constraints,
+  plan, provenance, and lifecycle state. Files under .litehive/tasks should become
+  derived/export/archival artifacts only, not the live source of truth.
 acceptance_criteria:
+- SQLite includes a canonical task metadata table (or equivalent normalized task-intent
+  schema) that stores at least task id, slug, title, created_at, priority, goal, acceptance
+  criteria, constraints, plan, dependencies, provenance, and lifecycle status.
 - No live runtime command depends on task.yaml, journal.md, comments/activity YAML,
-  or report YAML as its source of truth
+  or report YAML as authoritative task storage; task reads come from SQLite first.
 - Queue state, task status, pipeline state, reports, task activity, worktree/runtime
-  metadata, and daemon/runner state are all persisted in SQLite
-- Any remaining filesystem artifacts are derived/export/archival views only, not authoritative
-  mutable state
-- Repair, status, archive, and task-management commands operate correctly with SQLite-only
-  runtime state
-- Migration/backfill is provided for existing workspaces and tests are updated to
-  cover the SQLite-only path
+  metadata, and daemon/runner state are all persisted in SQLite.
+- Any remaining filesystem artifacts under .litehive/tasks are derived/export/archival
+  views only, not authoritative mutable state.
+- Repair, status, archive, task list/show/update, and queue-management commands operate
+  correctly with SQLite as the sole live source of truth.
+- Migration/backfill is provided for existing workspaces, including importing task
+  intent from current task.yaml files into the new task table, and tests cover the
+  SQLite-only path.
 constraints: []
 plan: []
 git:

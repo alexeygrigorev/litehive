@@ -1,39 +1,30 @@
 id: T-0291
 slug: migrate-workspace-state-from-files-to-sqlite-keep
-title: Finish SQLite workspace-state migration
+title: Finish SQLite-only workspace-state migration
 created_at: '2026-04-10T06:46:28+00:00'
 task_type: null
 pipeline_mode: full
 priority: high
-depends_on: []
-goal: Move remaining repo-local runtime/report/recovery artifacts out of git and keep
-  only task intent/comments in git.
+depends_on:
+- T-0470
+goal: Complete the SQLite-only migration so Litehive stores both task metadata and
+  runtime state in SQLite, with filesystem artifacts treated as derived/export/archival
+  only. This replaces the older split model that kept task intent in task.yaml.
 acceptance_criteria:
-- 'New SQLite schema with tables: pool_state, queue, task_state, task_journal, stage_reports,
-  hook_artifacts, subagent_sessions, events, engine_monitoring, attention, worktrees'
-- Workspace registry at ~/.config/litehive/workspaces.yaml maps workspace-id (hash
-  of repo path) to repo path
-- data.db lives at $XDG_DATA_HOME/litehive/<workspace-id>/data.db (default ~/.local/share/litehive/<wid>/data.db)
-- worktrees moved to ~/.local/state/litehive/<wid>/worktrees/ (outside the repo entirely)
-- logs/ moved to ~/.local/state/litehive/<wid>/logs/
-- subagent transcripts stored at ~/.local/share/litehive/<wid>/subagents/<task>/<subagent>/
-- tasks/<id>/task.yaml contains only intent fields (no status, pipeline_status, updated_at,
-  runtime, git commit_sha)
-- tasks/<id>/thread.yaml renamed to comments.yaml
-- tasks/<id>/journal.md removed from filesystem, journal becomes DB task_journal table
-- tasks/<id>/runtime.yaml, reports/, artifacts/, events.jsonl, recovery/ all removed
-  from filesystem, data in DB
-- state.yaml, engine-monitoring.yaml, pool-summary.txt removed from filesystem, data
-  in DB
-- 'On archive (close): rm -rf tasks/<id>/ and git commit; full task record remains
-  in DB'
-- litehive archive list/show/restore queries DB
-- 'Loading a task: if filesystem has it, read files and cross-check DB; else read
-  DB only (archived)'
-- ensure_workspace() refuses to create .litehive inside another .litehive
-- All existing tests pass after migration
-- Repo clone size drops significantly (committed .litehive/ shrinks to config + active
-  task intent + comments only)
+- SQLite includes a canonical task metadata table (or equivalent normalized task-intent
+  schema) for id, slug, title, created_at, priority, goal, acceptance criteria, constraints,
+  plan, dependencies, provenance, and lifecycle state.
+- Queue state, task status, pipeline state, reports, task activity, worktree/runtime
+  metadata, and daemon/runner state are all persisted in SQLite.
+- Managed worktrees, logs, subagent artifacts, and backups live under the XDG data/state
+  roots instead of the repo, and the repo-local .litehive tree is no longer a live
+  source of truth.
+- No live command depends on task.yaml, journal.md, comments/activity YAML, report
+  YAML, or recovery YAML as authoritative storage; reads come from SQLite first.
+- Archive/delete/list/show/repair/queue/task-management commands operate correctly
+  against the SQLite-first model.
+- Migration/backfill imports existing task intent and runtime history into SQLite
+  and tests cover clean bootstrap, migrated workspaces, and DB rebuild paths.
 constraints: []
 plan: []
 git:

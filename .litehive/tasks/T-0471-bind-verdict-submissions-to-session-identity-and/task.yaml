@@ -1,0 +1,30 @@
+id: T-0471
+slug: bind-verdict-submissions-to-session-identity-and
+title: Bind verdict submissions to session identity and remove redundant --role flag
+created_at: '2026-04-22T07:36:03+00:00'
+task_type: null
+pipeline_mode: full
+priority: critical
+depends_on: []
+goal: Make agent verdict submission and lookup exact. Agents should rely on env-injected
+  task/stage/role, verdict records should persist the submitting session or subagent
+  identity, and post-turn verdict detection should resolve by exact task+session identity
+  instead of timestamp-based latest-activity lookup so continued sessions cannot lose
+  or misattribute verdicts.
+acceptance_criteria:
+- Agent verdict submission no longer requires or exposes --role when LITEHIVE_AGENT_ROLE
+  is injected.
+- Verdict records persist exact submitting session identity and enough metadata to
+  distinguish retries, nudges, and continued sessions for the same task/stage.
+- Post-turn verdict detection matches the active session identity instead of only
+  task/stage plus created_at > before_turn.
+- Nudged and continued sessions submit a verdict once and the runner recognizes it
+  on the same session without false missing-verdict failures.
+- Tests cover fresh session, continued session, nudged session, and recovery-session
+  verdict submission and lookup.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0471 bind-verdict-submissions-to-session-identity-and'
+created_from: null
