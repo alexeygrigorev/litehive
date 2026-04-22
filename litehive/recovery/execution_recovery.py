@@ -1005,6 +1005,7 @@ def _normalize_nonrunning_resumable_tasks(
     mutated = False
     transitioned: list[TaskRecord] = []
     journal_messages: dict[str, str] = {}
+    front_insertions = 0
     for task in tasks_by_id.values():
         if task.runtime.execution_status == "running":
             continue
@@ -1038,8 +1039,9 @@ def _normalize_nonrunning_resumable_tasks(
 
         if queue_contains_task:
             state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
-        if task.id == state.active_task_id or was_in_progress:
-            state.queue.insert(0, task.id)
+        if task.id == state.active_task_id or was_in_progress or queue_index is None:
+            state.queue.insert(front_insertions, task.id)
+            front_insertions += 1
         elif queue_index is not None:
             state.queue.insert(min(queue_index, len(state.queue)), task.id)
         elif task.id not in state.queue:

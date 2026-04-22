@@ -574,7 +574,9 @@ def restore_missing_queued_tasks(
         if task_id == state.active_task_id or task_id in queued_ids:
             continue
         queued_ids.add(task_id)
-        if task.status == "in_progress":
+        # Missing resumable work must reclaim queue visibility ahead of later
+        # queued tasks or the runner can hand off past unfinished execution.
+        if task.status == "in_progress" or resumable_queue_stage(task) is not None:
             restored_front.append(task_id)
         else:
             restored_back.append(task_id)
