@@ -7,11 +7,12 @@ from heru.quota import (
     check_codex_quota,
     check_copilot_quota,
     check_zai_quota,
+    quota_long_term,
+    quota_short_term,
 )
 
 from litehive.config.loading import load_config
 from litehive.config.engine_models import active_engine_freezes
-from litehive.heru_compat import quota_long_term, quota_short_term
 from litehive.domain.task import TaskRecord
 from litehive.observability.engine_monitoring import load_engine_monitoring
 from litehive.observability.events import read_events

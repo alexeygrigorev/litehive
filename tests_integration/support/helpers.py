@@ -7,25 +7,25 @@ from pathlib import Path
 
 import pytest
 
+from heru import (
+    extract_engine_continuation,
+    get_engine,
+    resolve_engine_resume_session_id,
+    resume_safe_model_override,
+)
 from heru.quota import (
     check_claude_quota,
     check_codex_quota,
     check_copilot_quota,
     check_zai_quota,
+    usage_limit_block_reason,
 )
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import litehive_root
 from litehive.config.workspace import ensure_workspace
 from litehive.config.model import VALID_ENGINE_NAMES
-from heru import get_engine
 from heru.base import CLIExecutionResult
-from litehive.heru_compat import (
-    extract_engine_continuation,
-    resume_safe_model_override,
-    resolve_engine_resume_session_id,
-    usage_limit_block_reason,
-)
 
 
 INTEGRATION_ENV = "LITEHIVE_INTEGRATION_ENGINES"

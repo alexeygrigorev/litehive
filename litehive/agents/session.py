@@ -7,6 +7,7 @@ import signal
 import time
 from typing import Callable
 
+from heru import extract_engine_continuation, extract_engine_timeline, render_execution_transcript
 from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
 from litehive.agents.artifacts import (
@@ -17,7 +18,6 @@ from litehive.agents.session_store import (
     load_subagent_session,
     save_subagent_artifacts,
 )
-from litehive.heru_compat import extract_engine_continuation, extract_engine_timeline, render_execution_transcript
 from litehive.domain.agent import SubagentInactivityTimeout
 from litehive.domain.common import utcnow
 from litehive.domain.runtime import ResourceLimitEvent

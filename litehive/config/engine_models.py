@@ -8,12 +8,19 @@ from pathlib import Path
 import yaml
 
 from heru import extract_engine_continuation, get_engine
-from heru.quota import UsageStatus, check_claude_quota, check_codex_quota, check_copilot_quota, check_zai_quota
+from heru.quota import (
+    UsageStatus,
+    check_claude_quota,
+    check_codex_quota,
+    check_copilot_quota,
+    check_zai_quota,
+    preferred_reset_at,
+    usage_limit_block_reason,
+)
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace_files import config_path
 from litehive.domain.runtime import RuntimeContinuationHandoff
 from litehive.domain.task import TaskRecord
-from litehive.heru_compat import preferred_reset_at, usage_limit_block_reason
 from litehive.tasks.runtime import set_task_continuation_handoff
 
 

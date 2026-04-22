@@ -8,7 +8,7 @@ import sys
 import time
 
 from litehive.config.loading import load_config
-from heru import get_engine
+from heru import get_engine, resume_safe_model_override
 from heru.adapters import (
     EngineError,
     classify_execution_interruption,
@@ -40,7 +40,6 @@ from litehive.domain.agent import EngineFailure, SubagentInactivityTimeout, Suba
 from litehive.agents.parsing import stage_report_from_subagent
 from litehive.agents.sandbox import SandboxedAdapter
 from litehive.agents.session import SessionMixin
-from litehive.heru_compat import resume_safe_model_override
 from litehive.state.records import save_task
 from litehive.tasks.paths import task_dir
 from litehive.tasks.runtime import (
