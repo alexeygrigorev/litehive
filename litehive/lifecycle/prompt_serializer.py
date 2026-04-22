@@ -43,15 +43,15 @@ def serialize_prompt(
     omitted with placeholders. ``workspace_root`` is optional and used
     for two things: (1) fall back to ``get_task()`` if the caller
     didn't already resolve the TaskRecord, and (2) load the task's
-    discussion thread so the next agent visit sees previous stage
+    activity history so the next agent visit sees previous stage
     verdicts.
     """
     if task_record is None and workspace_root is not None:
         task_record = get_task(workspace_root, prompt["task_id"])
 
-    thread = prompt.get("thread") or []
-    if not thread and workspace_root is not None and task_record is not None:
-        thread = _load_task_activity_history(workspace_root, task_record)
+    activity = prompt.get("activity") or prompt.get("thread") or []
+    if not activity and workspace_root is not None and task_record is not None:
+        activity = _load_task_activity_history(workspace_root, task_record)
 
     sections: list[str] = []
     sections.append(_header_section(prompt, task_record))
@@ -85,10 +85,10 @@ def serialize_prompt(
     if prompt.get("nudge"):
         sections.append(_nudge_section(prompt))
 
-    if thread:
+    if activity:
         sections.append(
-            _thread_section(
-                thread,
+            _activity_section(
+                activity,
                 current_stage=prompt.get("stage"),
                 last_rejection=last_rejection,
             )
@@ -107,17 +107,17 @@ def serialize_prompt(
 def _load_task_activity_history(workspace_root: Path, task_record: TaskRecord) -> list[dict[str, Any]]:
     """Read the task's persisted activity entries."""
     try:
-        comments = load_task_activity(workspace_root, task_record)
+        activity_entries = load_task_activity(workspace_root, task_record)
     except (OSError, ValidationError, yaml.YAMLError):
         return []
     return [
         {
-            "role": c.role,
-            "stage": c.stage,
-            "verdict": c.verdict,
-            "message": c.message,
+            "role": entry.role,
+            "stage": entry.stage,
+            "verdict": entry.verdict,
+            "message": entry.message,
         }
-        for c in comments
+        for entry in activity_entries
     ]
 
 
@@ -358,12 +358,12 @@ def _matches_last_rejection(entry: dict[str, Any], last_rejection: dict[str, Any
     return message == rejection_reason or rejection_reason in message
 
 
-def _trim_thread_for_prompt(
-    thread: list[dict[str, Any]],
+def _trim_activity_for_prompt(
+    activity: list[dict[str, Any]],
     current_stage: str | None,
     last_rejection: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Keep only the thread entries the current stage actually needs.
+    """Keep only the activity entries the current stage actually needs.
 
     Rules:
     - Never include recovery entries with verdict=comment (bookkeeping noise).
@@ -378,18 +378,18 @@ def _trim_thread_for_prompt(
         fallback:     grooming pass + last entry per (stage, verdict)
     - Cap each individual message to 500 chars.
     """
-    # Filter out recovery bookkeeping comments
-    thread = [e for e in thread if not (e.get("role") == "recovery" and e.get("verdict") == "comment")]
+    # Filter out recovery bookkeeping entries.
+    activity = [e for e in activity if not (e.get("role") == "recovery" and e.get("verdict") == "comment")]
 
-    if not thread:
+    if not activity:
         return []
 
-    # Skip entries that duplicate last_rejection
+    # Skip entries that duplicate last_rejection.
     if last_rejection:
-        thread = [entry for entry in thread if not _matches_last_rejection(entry, last_rejection)]
+        activity = [entry for entry in activity if not _matches_last_rejection(entry, last_rejection)]
 
     def _last_where(**match: str) -> dict[str, Any] | None:
-        for e in reversed(thread):
+        for e in reversed(activity):
             if all(e.get(k) == v for k, v in match.items()):
                 return e
         return None
@@ -397,16 +397,16 @@ def _trim_thread_for_prompt(
     kept: list[dict[str, Any]] = []
 
     if current_stage == "grooming":
-        pass  # no thread context needed
+        pass  # no activity context needed
 
     elif current_stage == "implementing":
         g = _last_where(stage="grooming", verdict="pass")
         if g:
             kept.append(g)
         # On retry, the rejection is rendered in the dedicated last_rejection
-        # section; do not repeat older reject entries in the thread.
+        # section; do not repeat older reject entries in the activity section.
         if not last_rejection:
-            for e in reversed(thread):
+            for e in reversed(activity):
                 if e.get("verdict") == "reject" and e.get("stage") in (
                     "testing",
                     "accepting",
@@ -433,7 +433,7 @@ def _trim_thread_for_prompt(
         if p:
             kept.append(p)
         # The crash or rejection that triggered recovery
-        for e in reversed(thread):
+        for e in reversed(activity):
             if e.get("verdict") in ("reject", "blocked"):
                 kept.append(e)
                 break
@@ -444,7 +444,7 @@ def _trim_thread_for_prompt(
         if g:
             kept.append(g)
         seen: set[tuple[str, str]] = set()
-        for e in reversed(thread):
+        for e in reversed(activity):
             key = (e.get("stage", "?"), e.get("verdict", "?"))
             if key not in seen:
                 seen.add(key)
@@ -452,15 +452,15 @@ def _trim_thread_for_prompt(
 
     # Deduplicate, preserve original order, cap messages
     kept_ids = {id(e) for e in kept}
-    return [_cap_message(e) for e in thread if id(e) in kept_ids]
+    return [_cap_message(e) for e in activity if id(e) in kept_ids]
 
 
-def _thread_section(
-    thread: list[dict[str, Any]],
+def _activity_section(
+    activity: list[dict[str, Any]],
     current_stage: str | None = None,
     last_rejection: dict[str, Any] | None = None,
 ) -> str:
-    trimmed = _trim_thread_for_prompt(thread, current_stage, last_rejection)
+    trimmed = _trim_activity_for_prompt(activity, current_stage, last_rejection)
     if not trimmed:
         return ""
     blocks: list[str] = []
@@ -470,7 +470,7 @@ def _thread_section(
         verdict = entry.get("verdict", "comment")
         message = entry.get("message", "")
         blocks.append(f"[{stage}] {role} ({verdict}): {message}")
-    return "Discussion thread:\n" + "\n".join(blocks)
+    return "Task activity:\n" + "\n".join(blocks)
 
 
 def _runner_hooks_section(stage: str | None, hooks: list[dict[str, Any]]) -> str:

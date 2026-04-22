@@ -72,7 +72,7 @@ def _debug_latest(root: Path, task):
         else:
             print("exit_code: -")
 
-    # -- Verdict from thread --
+    # -- Verdict from task activity --
     _print_verdict(root, task, ref.role)
 
     # -- Report summary --
@@ -135,7 +135,7 @@ def _read_exit_code(root: Path, task_id: str, subagent_id: str) -> int | None:
 
 
 def _print_verdict(root, task, role):
-    """Cross-reference task comments for the latest non-comment verdict matching the role."""
+    """Cross-reference task activity for the latest non-comment verdict matching the role."""
     verdict_entry = latest_task_activity_entry(
         root,
         task,

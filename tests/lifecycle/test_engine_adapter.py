@@ -879,12 +879,12 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
     assert verdict.source == "guard"
     assert verdict.metadata["reason_code"] == "hallucinated_completion"
 
-    comments = load_task_activity(tmp_path, task)
-    assert len(comments) == 1
-    assert comments[0].verdict == "reject"
-    assert "[retracted - filesystem check shows no changes landed]" in comments[0].message
-    assert "reason_code: hallucinated_completion" in comments[0].message
-    assert "git_status_porcelain: clean" in comments[0].message
+    activity_entries = load_task_activity(tmp_path, task)
+    assert len(activity_entries) == 1
+    assert activity_entries[0].verdict == "reject"
+    assert "[retracted - filesystem check shows no changes landed]" in activity_entries[0].message
+    assert "reason_code: hallucinated_completion" in activity_entries[0].message
+    assert "git_status_porcelain: clean" in activity_entries[0].message
 
     reports = load_stage_reports(tmp_path, task, stage="implementing")
     assert len(reports) == 1

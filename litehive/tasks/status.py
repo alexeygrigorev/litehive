@@ -252,7 +252,7 @@ def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
     return paths
 
 
-def _switch_thread_comment_message(
+def _switch_activity_entry_message(
     task: TaskRecord,
     *,
     reason: str,
@@ -332,7 +332,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
             role="operator",
             stage=task.pipeline_status,
             verdict="comment",
-            message=_switch_thread_comment_message(
+            message=_switch_activity_entry_message(
                 task,
                 reason=reason.strip(),
                 previous_engine=previous_engine,
@@ -397,17 +397,17 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
         main_ref = current_head(root)
         if main_ref is not None:
             checkout_path = _task_checkout_path(task)
-            thread = load_task_activity(root, task)
+            activity_entries = load_task_activity(root, task)
             changed = False
-            for comment in thread:
-                if not is_retractable_pass_entry(comment):
+            for entry in activity_entries:
+                if not is_retractable_pass_entry(entry):
                     continue
-                claimed_paths = normalized_files_changed(comment.files_changed)
+                claimed_paths = normalized_files_changed(entry.files_changed)
                 if any(_path_differs_from_main(checkout_path, main_ref, path) for path in claimed_paths):
                     continue
-                changed = retract_activity_entry(comment) or changed
+                changed = retract_activity_entry(entry) or changed
             if changed:
-                save_task_activity(root, task, thread)
+                save_task_activity(root, task, activity_entries)
         reset_task_for_recovery(
             task,
             status="queued",

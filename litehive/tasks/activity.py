@@ -14,7 +14,7 @@ from .paths import task_dir
 
 
 def task_activity_path(root: Path, task: TaskRecord) -> Path:
-    return task_dir(root, task) / "comments.yaml"
+    return task_dir(root, task) / "activity.yaml"
 
 
 def load_task_activity(root: Path, task: TaskRecord) -> list[TaskActivityEntry]:

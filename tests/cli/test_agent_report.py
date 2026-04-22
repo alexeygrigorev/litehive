@@ -21,14 +21,14 @@ def _workspace_root_env(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(tmp_path))
 
 
-def _assert_thread_comments(
+def _assert_activity_entries(
     actual: list[TaskActivityEntry],
     expected: list[TaskActivityEntry],
 ) -> None:
     assert len(actual) == len(expected)
-    for actual_comment, expected_comment in zip(actual, expected, strict=True):
-        assert actual_comment.model_dump(exclude={"created_at"}) == expected_comment.model_dump(exclude={"created_at"})
-        assert actual_comment.created_at
+    for actual_entry, expected_entry in zip(actual, expected, strict=True):
+        assert actual_entry.model_dump(exclude={"created_at"}) == expected_entry.model_dump(exclude={"created_at"})
+        assert actual_entry.created_at
 
 
 def test_agent_report_uses_intent_record_when_runtime_row_is_missing(tmp_path: Path) -> None:
@@ -76,9 +76,9 @@ def test_agent_report_uses_intent_record_when_runtime_row_is_missing(tmp_path: P
     assert result.exit_code == 0, result.output
     task = get_task_record(tmp_path, "T-0001")
     assert task is not None
-    comments = load_task_activity(tmp_path, task)
-    _assert_thread_comments(
-        comments,
+    activity_entries = load_task_activity(tmp_path, task)
+    _assert_activity_entries(
+        activity_entries,
         [
             TaskActivityEntry(
                 role="recovery",
@@ -119,9 +119,9 @@ def test_agent_report_persists_hidden_recovery_target_stage(tmp_path: Path) -> N
     assert result.exit_code == 0, result.output
     task = get_task_record(tmp_path, task.id)
     assert task is not None
-    comments = load_task_activity(tmp_path, task)
-    _assert_thread_comments(
-        comments,
+    activity_entries = load_task_activity(tmp_path, task)
+    _assert_activity_entries(
+        activity_entries,
         [
             TaskActivityEntry(
                 role="recovery",
@@ -203,9 +203,9 @@ def test_agent_report_uses_env_stage_when_runtime_row_is_missing(tmp_path: Path,
     assert result.exit_code == 0, result.output
     task = get_task_record(tmp_path, "T-0001")
     assert task is not None
-    comments = load_task_activity(tmp_path, task)
-    _assert_thread_comments(
-        comments,
+    activity_entries = load_task_activity(tmp_path, task)
+    _assert_activity_entries(
+        activity_entries,
         [
             TaskActivityEntry(
                 role="planner",
@@ -243,9 +243,9 @@ def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path
     assert result.exit_code == 0, result.output
     task = get_task_record(tmp_path, task.id)
     assert task is not None
-    comments = load_task_activity(tmp_path, task)
-    _assert_thread_comments(
-        comments,
+    activity_entries = load_task_activity(tmp_path, task)
+    _assert_activity_entries(
+        activity_entries,
         [
             TaskActivityEntry(
                 role="planner",
@@ -309,10 +309,10 @@ def test_agent_report_normalizes_legacy_fail_to_reject(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    comments = load_task_activity(tmp_path, updated)
-    assert len(comments) == 1
-    assert comments[0].verdict == "reject"
-    assert comments[0].message == "legacy failure wording"
+    activity_entries = load_task_activity(tmp_path, updated)
+    assert len(activity_entries) == 1
+    assert activity_entries[0].verdict == "reject"
+    assert activity_entries[0].message == "legacy failure wording"
     assert "verdict: reject" in result.output
 
 
@@ -399,7 +399,7 @@ def test_agent_report_accepts_recovery_resume_verdict(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    _assert_thread_comments(
+    _assert_activity_entries(
         load_task_activity(tmp_path, updated),
         [
             TaskActivityEntry(
@@ -439,13 +439,13 @@ def test_agent_report_accepts_hidden_step_alias(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    comments = load_task_activity(tmp_path, updated)
-    assert len(comments) == 1
-    assert comments[0].role == "swe"
-    assert comments[0].stage == "implementing"
-    assert comments[0].verdict == "pass"
-    assert comments[0].message == "integration report from codex"
-    assert comments[0].files_changed == []
+    activity_entries = load_task_activity(tmp_path, updated)
+    assert len(activity_entries) == 1
+    assert activity_entries[0].role == "swe"
+    assert activity_entries[0].stage == "implementing"
+    assert activity_entries[0].verdict == "pass"
+    assert activity_entries[0].message == "integration report from codex"
+    assert activity_entries[0].files_changed == []
 
 
 def test_root_report_accepts_hidden_step_alias(tmp_path: Path, monkeypatch) -> None:
@@ -474,7 +474,7 @@ def test_root_report_accepts_hidden_step_alias(tmp_path: Path, monkeypatch) -> N
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    _assert_thread_comments(
+    _assert_activity_entries(
         load_task_activity(tmp_path, updated),
         [
             TaskActivityEntry(
@@ -514,10 +514,10 @@ def test_root_report_normalizes_legacy_fail_to_reject(tmp_path: Path, monkeypatc
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    comments = load_task_activity(tmp_path, updated)
-    assert len(comments) == 1
-    assert comments[0].verdict == "reject"
-    assert comments[0].message == "legacy root failure wording"
+    activity_entries = load_task_activity(tmp_path, updated)
+    assert len(activity_entries) == 1
+    assert activity_entries[0].verdict == "reject"
+    assert activity_entries[0].message == "legacy root failure wording"
     assert "verdict: reject" in result.output
 
 
@@ -544,9 +544,9 @@ def test_root_report_defaults_to_litehive_task_id_env(tmp_path: Path, monkeypatc
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    comments = load_task_activity(tmp_path, updated)
-    assert len(comments) == 1
-    assert comments[0].message == "root env task id"
+    activity_entries = load_task_activity(tmp_path, updated)
+    assert len(activity_entries) == 1
+    assert activity_entries[0].message == "root env task id"
 
 
 def test_root_report_accepts_workspace_override(tmp_path: Path, monkeypatch) -> None:
@@ -581,9 +581,9 @@ def test_root_report_accepts_workspace_override(tmp_path: Path, monkeypatch) -> 
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    comments = load_task_activity(tmp_path, updated)
-    assert len(comments) == 1
-    assert comments[0].message == "root workspace override"
+    activity_entries = load_task_activity(tmp_path, updated)
+    assert len(activity_entries) == 1
+    assert activity_entries[0].message == "root workspace override"
 
 
 def test_root_report_fails_clearly_when_workspace_cannot_be_resolved(tmp_path: Path, monkeypatch) -> None:
@@ -641,6 +641,6 @@ def test_agent_report_accepts_workspace_override(tmp_path: Path, monkeypatch) ->
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    comments = load_task_activity(tmp_path, updated)
-    assert len(comments) == 1
-    assert comments[0].message == "agent workspace override"
+    activity_entries = load_task_activity(tmp_path, updated)
+    assert len(activity_entries) == 1
+    assert activity_entries[0].message == "agent workspace override"

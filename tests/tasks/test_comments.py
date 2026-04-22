@@ -8,7 +8,7 @@ from litehive.tasks.reports import append_activity_entry, load_task_activity
 
 def test_append_activity_entry_persists_task_activity(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Comments")
+    task = create_task(tmp_path, title="Activity")
 
     append_activity_entry(
         tmp_path,

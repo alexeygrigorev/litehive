@@ -54,8 +54,8 @@ def make_state(task_id: str, stage: str = "implementing", **overrides) -> TaskSt
     )
 
 
-def _discussion_lines(text: str) -> list[str]:
-    marker = "Discussion thread:\n"
+def _activity_lines(text: str) -> list[str]:
+    marker = "Task activity:\n"
     if marker not in text:
         return []
     tail = text.split(marker, 1)[1]
@@ -174,7 +174,7 @@ def test_serialize_ignores_corrupt_task_activity_payload(workspace: Path) -> Non
         workspace_root=workspace,
     )
 
-    assert "Discussion thread:" in text
+    assert "Task activity:" in text
     assert "kept" in text
 
 
@@ -452,7 +452,7 @@ def test_serialize_includes_nudge_message_when_present(workspace: Path) -> None:
     assert "litehive report --verdict <pass|reject> --role <role>" in text
 
 
-def test_implementing_retry_thread_keeps_only_grooming_and_dedups_last_rejection_by_source_and_reason(
+def test_implementing_retry_activity_keeps_only_grooming_and_dedups_last_rejection_by_source_and_reason(
     workspace: Path,
 ) -> None:
     task = create_task(workspace, title="t", goal="g")
@@ -465,7 +465,7 @@ def test_implementing_retry_thread_keeps_only_grooming_and_dedups_last_rejection
         raised_at_phase="testing",
     )
     prompt = agent.build_prompt(state)
-    prompt["thread"] = [
+    prompt["activity"] = [
         {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope " + ("x" * 600)},
         {"role": "recovery", "stage": "recovering", "verdict": "comment", "message": "bookkeeping"},
         {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "old swe pass"},
@@ -475,9 +475,9 @@ def test_implementing_retry_thread_keeps_only_grooming_and_dedups_last_rejection
 
     text = serialize_prompt(prompt, task_record=task)
 
-    discussion = _discussion_lines(text)
-    assert discussion == [f"[grooming] planner (pass): {'scope ' + ('x' * 482)}…(truncated)"]
-    assert len(discussion[0].split(": ", 1)[1]) == 500
+    activity_lines = _activity_lines(text)
+    assert activity_lines == [f"[grooming] planner (pass): {'scope ' + ('x' * 482)}…(truncated)"]
+    assert len(activity_lines[0].split(": ", 1)[1]) == 500
     assert "- Source: qa" in text
     assert "- Reason: tests fail" in text
     assert "bookkeeping" not in text
@@ -575,7 +575,7 @@ def test_implementing_prompt_keeps_latest_hook_reject_when_it_is_newest(workspac
     }
 
 
-def test_thread_does_not_dedup_reject_when_source_differs(workspace: Path) -> None:
+def test_activity_does_not_dedup_reject_when_source_differs(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     prompt = {
         "task_id": task.id,
@@ -588,7 +588,7 @@ def test_thread_does_not_dedup_reject_when_source_differs(workspace: Path) -> No
             "reason": "same reason",
             "raised_at_phase": "testing",
         },
-        "thread": [
+        "activity": [
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
             {"role": "reviewer", "stage": "accepting", "verdict": "reject", "message": "same reason"},
         ],
@@ -596,13 +596,13 @@ def test_thread_does_not_dedup_reject_when_source_differs(workspace: Path) -> No
 
     text = serialize_prompt(prompt, task_record=task)
 
-    assert _discussion_lines(text) == [
+    assert _activity_lines(text) == [
         "[grooming] planner (pass): scope",
         "[accepting] reviewer (reject): same reason",
     ]
 
 
-def test_thread_dedups_agent_reject_when_last_rejection_uses_generic_agent_source(workspace: Path) -> None:
+def test_activity_dedups_agent_reject_when_last_rejection_uses_generic_agent_source(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     prompt = {
         "task_id": task.id,
@@ -615,7 +615,7 @@ def test_thread_dedups_agent_reject_when_last_rejection_uses_generic_agent_sourc
             "reason": "same reason",
             "raised_at_phase": "testing",
         },
-        "thread": [
+        "activity": [
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
             {"role": "qa", "stage": "testing", "verdict": "reject", "message": "same reason"},
         ],
@@ -623,12 +623,12 @@ def test_thread_dedups_agent_reject_when_last_rejection_uses_generic_agent_sourc
 
     text = serialize_prompt(prompt, task_record=task)
 
-    assert _discussion_lines(text) == [
+    assert _activity_lines(text) == [
         "[grooming] planner (pass): scope",
     ]
 
 
-def test_thread_does_not_dedup_generic_agent_reject_when_stage_differs(workspace: Path) -> None:
+def test_activity_does_not_dedup_generic_agent_reject_when_stage_differs(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     prompt = {
         "task_id": task.id,
@@ -641,7 +641,7 @@ def test_thread_does_not_dedup_generic_agent_reject_when_stage_differs(workspace
             "reason": "same reason",
             "raised_at_phase": "testing",
         },
-        "thread": [
+        "activity": [
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
             {"role": "reviewer", "stage": "accepting", "verdict": "reject", "message": "same reason"},
         ],
@@ -649,13 +649,13 @@ def test_thread_does_not_dedup_generic_agent_reject_when_stage_differs(workspace
 
     text = serialize_prompt(prompt, task_record=task)
 
-    assert _discussion_lines(text) == [
+    assert _activity_lines(text) == [
         "[grooming] planner (pass): scope",
         "[accepting] reviewer (reject): same reason",
     ]
 
 
-def test_thread_dedups_hook_reject_when_reason_is_embedded_in_activity_message(workspace: Path) -> None:
+def test_activity_dedups_hook_reject_when_reason_is_embedded_in_activity_message(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     prompt = {
         "task_id": task.id,
@@ -668,7 +668,7 @@ def test_thread_dedups_hook_reject_when_reason_is_embedded_in_activity_message(w
             "reason": "command failed",
             "raised_at_phase": "after_implementing",
         },
-        "thread": [
+        "activity": [
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
             {
                 "role": "hook",
@@ -685,12 +685,12 @@ def test_thread_dedups_hook_reject_when_reason_is_embedded_in_activity_message(w
 
     text = serialize_prompt(prompt, task_record=task)
 
-    assert _discussion_lines(text) == [
+    assert _activity_lines(text) == [
         "[grooming] planner (pass): scope",
     ]
 
 
-def test_thread_section_is_omitted_when_filtering_removes_all_entries(workspace: Path) -> None:
+def test_activity_section_is_omitted_when_filtering_removes_all_entries(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     prompt = {
         "task_id": task.id,
@@ -698,17 +698,17 @@ def test_thread_section_is_omitted_when_filtering_removes_all_entries(workspace:
         "role": "qa",
         "pipeline_mode": PipelineMode.FULL.value,
         "instruction_layers": [],
-        "thread": [
+        "activity": [
             {"role": "recovery", "stage": "recovering", "verdict": "comment", "message": "bookkeeping"},
         ],
     }
 
     text = serialize_prompt(prompt, task_record=task)
 
-    assert "Discussion thread:" not in text
+    assert "Task activity:" not in text
 
 
-def test_testing_thread_keeps_only_last_implementing_pass(workspace: Path) -> None:
+def test_testing_activity_keeps_only_last_implementing_pass(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     prompt = {
         "task_id": task.id,
@@ -716,7 +716,7 @@ def test_testing_thread_keeps_only_last_implementing_pass(workspace: Path) -> No
         "role": "qa",
         "pipeline_mode": PipelineMode.FULL.value,
         "instruction_layers": [],
-        "thread": [
+        "activity": [
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
             {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "first impl"},
             {"role": "qa", "stage": "testing", "verdict": "reject", "message": "old reject"},
@@ -726,12 +726,12 @@ def test_testing_thread_keeps_only_last_implementing_pass(workspace: Path) -> No
 
     text = serialize_prompt(prompt, task_record=task)
 
-    assert _discussion_lines(text) == [
+    assert _activity_lines(text) == [
         "[implementing] swe (pass): latest impl",
     ]
 
 
-def test_accepting_thread_keeps_only_last_implementing_and_testing_passes(workspace: Path) -> None:
+def test_accepting_activity_keeps_only_last_implementing_and_testing_passes(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     prompt = {
         "task_id": task.id,
@@ -739,7 +739,7 @@ def test_accepting_thread_keeps_only_last_implementing_and_testing_passes(worksp
         "role": "reviewer",
         "pipeline_mode": PipelineMode.FULL.value,
         "instruction_layers": [],
-        "thread": [
+        "activity": [
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
             {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "first impl"},
             {"role": "qa", "stage": "testing", "verdict": "pass", "message": "first qa"},
@@ -751,7 +751,7 @@ def test_accepting_thread_keeps_only_last_implementing_and_testing_passes(worksp
 
     text = serialize_prompt(prompt, task_record=task)
 
-    assert _discussion_lines(text) == [
+    assert _activity_lines(text) == [
         "[implementing] swe (pass): latest impl",
         "[testing] qa (pass): latest qa",
     ]
