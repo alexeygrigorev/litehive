@@ -6,11 +6,22 @@ task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: tmp
+goal: Confirm whether T-0376 represents real product work; if it remains only a placeholder
+  follow-up probe with no distinct scope, close it without implementation.
 acceptance_criteria:
-- tmp
-constraints: []
-plan: []
+- Task metadata states that T-0376 is a probe-only placeholder and must not proceed
+  to implementation without a concrete user problem.
+- The task is closed as wont_do with a reason that references the placeholder goal/acceptance
+  criteria and prior journal history.
+- No code changes or new follow-up implementation tasks are created from this probe-only
+  record.
+constraints:
+- Keep changes scoped to task metadata only.
+plan:
+- Review the task record and journal to determine whether any concrete product scope
+  exists.
+- If the task is still only a probe/placeholder, close it as wont_do and document
+  why no implementation should follow.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0376 follow-up-probe'
