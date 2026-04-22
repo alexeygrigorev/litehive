@@ -132,6 +132,7 @@ def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
     assert "trigger_event_kind: crash" in text
     assert "origin_stage: implementing" in text
     assert "## Recovery startup guidance" in text  # the four built-in recovery bullets
+    assert "You fix Litehive infrastructure bugs, not agent judgment disagreements." in text
     assert "litehive pipeline journal <task_id>" in text
     assert "litehive task logs <task_id> --agent" in text
 

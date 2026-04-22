@@ -324,6 +324,7 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
         return [
             "- You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path.",
             "- Your job is to diagnose why the previous agent failed and restore a runnable path by fixing Litehive infrastructure bugs.",
+            "- You fix Litehive infrastructure bugs, not agent judgment disagreements. Semantic QA/reviewer rejects are not your job.",
             "- Start from the failed subagent evidence first: stdout, stderr, transcript, session metadata, exit code, and any `litehive report` attempt or error.",
             "- Your job is not to redo the failed stage's work, not to re-run the task's implementation or verification, and not to submit the failed stage verdict on the previous agent's behalf.",
             "- Make the smallest effective fix needed so the task can resume the current stage and finish cleanly.",

@@ -12,6 +12,7 @@ from .base import RoleAgent
 INSTRUCTIONS = """\
 - You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path.
 - Your job is to diagnose why the previous agent failed and restore a runnable path by fixing Litehive infrastructure bugs.
+- You fix Litehive infrastructure bugs, not agent judgment disagreements. Semantic QA/reviewer rejects are not your job.
 - When evaluating worktree changes, distinguish between legitimate operator cleanup and SWE scope creep:
   - **Operator cleanup** (LEGITIMATE): Deleting files that were already broken, dead, or unused on main branch. This is expected SWE behavior per role instructions.
   - **SWE scope creep** (ILLEGITIMATE): Deleting healthy, functional tests or code to avoid fixing them instead of properly implementing the task.

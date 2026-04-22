@@ -99,9 +99,10 @@ class Reject(Event):
       - ``MergeAgent`` → ``source="agent"`` when it cannot resolve the
         conflict.
 
-    Routing depends on where it fires: retry-epoch rejects go back to
-    implementing with a counter bump; grooming / commit epoch rejects
-    escalate straight to recovering.
+    Routing depends on where it fires: retry-epoch rejects usually go
+    back to implementing with a counter bump; testing may still hand off
+    to accepting for a QA override when hooks are green; exhausted or
+    non-retry reject paths fail directly instead of invoking recovery.
     """
 
     source: Literal["agent", "hook", "guard", "system"]
@@ -180,7 +181,7 @@ class StageRetryLimitHit(Event):
 
     Emitted by the runner (or by a future effect) when a stage has been
     retried more than ``Limits.stage_retry_limit`` times. Routes that
-    stage to ``recovering``. Currently not fired directly — the
+    stage to ``failed``. Currently not fired directly — the
     ``inc_stage_retry`` / ``stage_retries_exhausted`` guard combo
     accomplishes the same routing by picking between two rules. Kept in
     the vocabulary so the runner can emit it explicitly if we ever
@@ -196,9 +197,9 @@ class OverallRetryLimitHit(Event):
 
     Reserved for a future runner-level budget check: if a task has
     cycled through retries so many times it's clear no amount of further
-    work will land it, escalate straight to recovering regardless of
-    which stage we're in. Not currently emitted; wildcard rule exists
-    so we can turn it on without a rule-table change.
+    work will land it, fail directly regardless of which stage we're in.
+    Not currently emitted; the rule exists so we can turn it on without
+    a rule-table change.
     """
 
 

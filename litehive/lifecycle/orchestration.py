@@ -116,6 +116,11 @@ _STAGE_TO_PIPELINE_STATUS: dict[str, str] = {
     "recovering": "grooming",
 }
 
+_MANUAL_REVIEW_FLAG_REASONS = {
+    "hook_reject_loop",
+    "rejection_loop_detected",
+}
+
 
 def _runtime_hook_reject_fingerprint(state: TaskState) -> RuntimeHookRejectFingerprint | None:
     fingerprint = state.last_hook_reject_fingerprint
@@ -189,7 +194,8 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
         trigger = _latest_recovery_trigger(state)
         origin_stage = trigger.origin_stage if trigger is not None else None
         failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
-        if origin_stage == "merge_resolving":
+        merge_reject = state.last_rejection_by_stage.get("merge_resolving")
+        if origin_stage == "merge_resolving" or merge_reject is not None:
             task_record.status = "merge_failed"
             task_record.pipeline_status = "merge_failed"
             if state.failed_message:
@@ -197,10 +203,12 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
         else:
             task_record.status = "flagged"
             task_record.pipeline_status = "flagged"
-            if trigger is not None and trigger.reason_code == "hook_reject_loop":
+            if failed_reason == "hook_reject_loop" or (trigger is not None and trigger.reason_code == "hook_reject_loop"):
                 task_record.flag_reason = "hook_reject_loop"
             elif failed_reason == "rejection_loop_detected":
                 task_record.flag_reason = "rejection_loop_detected"
+            elif failed_reason == "semantic_reject":
+                task_record.flag_reason = "semantic_reject"
             elif failed_reason == "recovery_budget_hit":
                 trigger_kind = trigger.trigger_event_kind.value if trigger is not None else None
                 task_record.flag_reason = (
@@ -341,7 +349,7 @@ def _mark_task_interrupted_on_crash(root: Path, task: TaskRecord, persistence: o
 def _cleanup_terminal_worktree(root: Path, task: TaskRecord | None) -> None:
     if task is None:
         return
-    if task.status == "flagged" and task.flag_reason == "rejection_loop_detected":
+    if task.status == "flagged" and task.flag_reason in _MANUAL_REVIEW_FLAG_REASONS:
         return
     worktree_rel = get_task_worktree_path(task)
     if not worktree_rel:

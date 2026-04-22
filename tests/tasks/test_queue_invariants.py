@@ -158,7 +158,8 @@ def test_peek_next_task_restores_missing_unfinished_tasks_to_queue_on_restart(
     assert repaired_state.queue == [later.id, unfinished.id]
 
 
-def test_dequeue_skips_flagged_rejection_loop_tasks_pending_manual_intervention(tmp_path: Path) -> None:
+@pytest.mark.parametrize("flag_reason", ["rejection_loop_detected", "semantic_reject"])
+def test_dequeue_skips_flagged_manual_intervention_tasks(tmp_path: Path, flag_reason: str) -> None:
     ensure_workspace(tmp_path)
     blocked = create_task(tmp_path, title="Needs manual review")
     runnable = create_task(tmp_path, title="Runnable next task")
@@ -166,7 +167,7 @@ def test_dequeue_skips_flagged_rejection_loop_tasks_pending_manual_intervention(
     blocked_task = require_task(tmp_path, blocked.id)
     blocked_task.status = "flagged"
     blocked_task.pipeline_status = "flagged"
-    blocked_task.flag_reason = "rejection_loop_detected"
+    blocked_task.flag_reason = flag_reason
     save_task(tmp_path, blocked_task)
 
     state = load_state(tmp_path)

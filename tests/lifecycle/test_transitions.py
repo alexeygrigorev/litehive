@@ -145,12 +145,13 @@ def test_full_mode_does_not_use_zero_change_shortcut():
 # ── rejections ────────────────────────────────────────────────────────────
 
 
-def test_grooming_reject_goes_straight_to_recovering():
+def test_grooming_reject_fails_directly():
     state = make_state("grooming")
     trans = step("grooming", Reject(source="agent", reason="x"), state)
-    assert trans.next == "recovering"
-    assert trans.delta.set_active_recovery_trigger is not None
-    assert trans.delta.set_active_recovery_trigger.origin_stage == "grooming"
+    assert trans.next == "failed"
+    assert trans.delta.failed_reason == "semantic_reject"
+    assert trans.delta.set_last_rejection is not None
+    assert trans.delta.set_last_rejection[0] == "grooming"
 
 
 def test_implementing_reject_retries_with_counter_bump():
@@ -181,13 +182,14 @@ def test_implementing_guard_reject_retries_with_counter_bump() -> None:
     assert rejection.reason == "hallucinated completion"
 
 
-def test_implementing_reject_routes_to_recovering_when_exhausted():
+def test_implementing_reject_fails_directly_when_exhausted():
     state = make_state("implementing", stage_retry={"implementing": 3})
     trans = step("implementing", Reject(source="agent", reason="x"), state)
-    assert trans.next == "recovering"
+    assert trans.next == "failed"
+    assert trans.delta.failed_reason == "semantic_reject"
 
 
-def test_same_hook_reject_loop_trips_recovery_before_stage_retry_limit():
+def test_same_hook_reject_loop_fails_directly_before_stage_retry_limit():
     state = make_state("after_implementing", stage_retry={"implementing": 0})
     trans = step(
         "after_implementing",
@@ -207,13 +209,14 @@ def test_same_hook_reject_loop_trips_recovery_before_stage_retry_limit():
         state,
     )
 
-    assert trans.next == "recovering"
-    assert trans.delta.set_active_recovery_trigger is not None
-    assert trans.delta.set_active_recovery_trigger.reason_code == "hook_reject_loop"
-    assert trans.delta.set_hook_reject_recovery_invoked is True
+    assert trans.next == "failed"
+    assert trans.delta.failed_reason == "hook_reject_loop"
+    assert trans.delta.set_last_rejection is not None
+    assert trans.delta.set_last_rejection[0] == "after_implementing"
+    assert trans.delta.set_hook_reject_recovery_invoked is False
 
 
-def test_same_hook_reject_loop_budget_hits_after_one_recovery_in_same_loop():
+def test_same_hook_reject_loop_direct_failure_keeps_hook_tracking():
     state = make_state(
         "after_implementing",
         stage_retry={"implementing": 0},
@@ -238,7 +241,8 @@ def test_same_hook_reject_loop_budget_hits_after_one_recovery_in_same_loop():
     )
 
     assert trans.next == "failed"
-    assert trans.delta.failed_reason == "recovery_budget_hit"
+    assert trans.delta.failed_reason == "hook_reject_loop"
+    assert trans.delta.set_hook_reject_recovery_invoked is True
 
 
 def test_testing_reject_routes_back_to_implementing():
@@ -272,10 +276,11 @@ def test_testing_reject_bypasses_to_accepting_after_qa_retries_when_hooks_green(
     assert step("after_accepting", HookOk(), after_accepting_state).next == "commit"
 
 
-def test_testing_reject_still_routes_to_recovering_when_hooks_are_not_green():
+def test_testing_reject_fails_directly_when_hooks_are_not_green():
     state = make_state("testing", stage_retry={"testing": 2}, stage_retry_limit=2, hook_ok=False)
     trans = step("testing", Reject(source="agent", reason="x"), state)
-    assert trans.next == "recovering"
+    assert trans.next == "failed"
+    assert trans.delta.failed_reason == "semantic_reject"
 
 
 def test_accepting_reject_routes_back_to_implementing():
@@ -336,10 +341,11 @@ def test_testing_pass_does_not_clear_accepting_rejection_loop() -> None:
     assert trans.delta.clear_rejection_loop is False
 
 
-def test_commit_reject_goes_to_recovering():
+def test_commit_reject_fails_directly():
     state = make_state("commit")
     trans = step("commit", Reject(source="system", reason="merge conflict"), state)
-    assert trans.next == "recovering"
+    assert trans.next == "failed"
+    assert trans.delta.failed_reason == "semantic_reject"
 
 
 # ── blocked ───────────────────────────────────────────────────────────────
@@ -577,6 +583,18 @@ def test_no_rule_leaves_recovering_looping_to_recovering():
     for rule in list_transitions():
         if rule.from_state == "recovering" and not callable(rule.transition_to):
             assert rule.transition_to != "recovering", f"self-loop on recovering: {rule.description}"
+
+
+def test_recovering_is_only_reachable_from_blocked_crash_or_timeout():
+    def _target_name(target):
+        if isinstance(target, str):
+            return target
+        return getattr(target, "name", None)
+
+    recovering_rules = [rule for rule in list_transitions() if _target_name(rule.transition_to) == "recovering"]
+
+    assert recovering_rules
+    assert {rule.on_event for rule in recovering_rules} == {Blocked, Crash, Timeout}
 
 
 def test_every_stage_phase_has_crash_route():

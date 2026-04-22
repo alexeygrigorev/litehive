@@ -462,12 +462,19 @@ def fail(reason: FailedReason) -> EffectFn:
     normalized_reason = reason if isinstance(reason, FailedReason) else FailedReason(reason)
 
     def _effect(state: TaskState, event: Event) -> StateDelta:
+        rejection = _rejection_from_event(state, event)
+        set_rej = (state.stage, rejection) if rejection is not None else None
+        hook_delta = _hook_reject_delta(state, event) if isinstance(event, Reject) else EMPTY_DELTA
         if isinstance(event, (Reject, Blocked)):
             message = event.reason
         elif isinstance(event, Crash):
             message = event.message
         elif isinstance(event, RecoveryFailed):
             message = event.reason
+        elif isinstance(event, StageRetryLimitHit):
+            message = f"Stage retry limit exhausted for {event.stage}"
+        elif isinstance(event, OverallRetryLimitHit):
+            message = "Overall retry limit exhausted"
         else:
             message = ""
         outcome = None
@@ -484,6 +491,11 @@ def fail(reason: FailedReason) -> EffectFn:
                 )
                 explanation = _recovery_failure_explanation(trigger, normalized_reason, message)
         return StateDelta(
+            set_last_rejection=set_rej,
+            set_consecutive_same_hook_rejects=hook_delta.set_consecutive_same_hook_rejects,
+            set_last_hook_reject_fingerprint=hook_delta.set_last_hook_reject_fingerprint,
+            clear_hook_reject_tracking=hook_delta.clear_hook_reject_tracking,
+            set_hook_reject_recovery_invoked=hook_delta.set_hook_reject_recovery_invoked,
             failed_reason=normalized_reason,
             failed_message=message,
             append_recovery_outcome=outcome,

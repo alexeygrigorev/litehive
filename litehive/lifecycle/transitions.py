@@ -14,8 +14,7 @@ from litehive.domain.lifecycle_deltas import (
     EMPTY_DELTA,
     EffectFn,
     StateDelta,
-    enter_recovery,
-    exhaust_recovery_budget,
+    fail,
     fail_rejection_loop,
     inc_stage_retry,
 )
@@ -24,14 +23,12 @@ from .guards import (
     Guard,
     hook_reject_loop_detected,
     rejection_loop_detected,
-    recovery_budget_available,
-    recovery_budget_exhausted,
     stage_retries_exhausted,
     stage_retries_remaining,
 )
 from .persistence import TaskState
 from .stages import Stage
-from .types import STAGES, NodeName
+from .types import FailedReason, STAGES, NodeName
 
 ToFn = Callable[[TaskState, Event], NodeName]
 ToSpec = NodeName | ToFn | Stage
@@ -138,12 +135,12 @@ def entry_from_worktree_sync(state: TaskState, event: Event) -> NodeName:
 # ── rule generators (used by rules.py) ──────────────────────────────────
 
 
-def retry_epoch_rules(counter_stage, phases, retry_target, recovering_stage) -> list[Rule]:
-    """Generate retry + exhaust rule pairs for a retryable epoch.
+def retry_epoch_rules(counter_stage, phases, retry_target, *, exhausted_reason: FailedReason | str) -> list[Rule]:
+    """Generate retry + fail rule pairs for a retryable epoch.
 
     ``counter_stage`` — the stage whose retry counter is checked/bumped.
     ``retry_target`` — where to go on retry (usually IMPLEMENTING).
-    ``recovering_stage`` — where to go when retries are exhausted.
+    ``exhausted_reason`` — terminal failure reason when retries are exhausted.
     """
     name = counter_stage.name if isinstance(counter_stage, Stage) else counter_stage
     retry_target_name = retry_target.name if isinstance(retry_target, Stage) else retry_target
@@ -166,17 +163,8 @@ def retry_epoch_rules(counter_stage, phases, retry_target, recovering_stage) -> 
                 from_state=phase,
                 on_event=Reject,
                 transition_to="failed",
-                when=hook_reject_loop_detected() & recovery_budget_exhausted(),
-                with_effect=exhaust_recovery_budget,
-            )
-        )
-        rules.append(
-            Rule(
-                from_state=phase,
-                on_event=Reject,
-                transition_to=recovering_stage,
-                when=hook_reject_loop_detected() & recovery_budget_available(),
-                with_effect=enter_recovery,
+                when=hook_reject_loop_detected(),
+                with_effect=fail(FailedReason.HOOK_REJECT_LOOP),
             )
         )
         rules.append(
@@ -196,17 +184,8 @@ def retry_epoch_rules(counter_stage, phases, retry_target, recovering_stage) -> 
                 from_state=phase,
                 on_event=Reject,
                 transition_to="failed",
-                when=stage_retries_exhausted(name) & recovery_budget_exhausted(),
-                with_effect=exhaust_recovery_budget,
-            )
-        )
-        rules.append(
-            Rule(
-                from_state=phase,
-                on_event=Reject,
-                transition_to=recovering_stage,
-                when=stage_retries_exhausted(name) & recovery_budget_available(),
-                with_effect=enter_recovery,
+                when=stage_retries_exhausted(name),
+                with_effect=fail(exhausted_reason),
             )
         )
     return rules

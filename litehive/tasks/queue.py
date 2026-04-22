@@ -130,6 +130,7 @@ def _needs_manual_intervention(task: TaskRecord) -> bool:
     return task.status == "flagged" and task.flag_reason in {
         "hook_reject_loop",
         "rejection_loop_detected",
+        "semantic_reject",
     }
 
 

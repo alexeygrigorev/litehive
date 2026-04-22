@@ -67,6 +67,18 @@ def _recovery_rules(from_state, on_event, *, when=None) -> list[Rule]:
     ]
 
 
+def _terminal_reject_rules(from_state, *, when=None, reason="semantic_reject") -> list[Rule]:
+    return [
+        Rule(
+            from_state=from_state,
+            on_event=Reject,
+            transition_to=S.FAILED,
+            when=when,
+            with_effect=fail(reason),
+        )
+    ]
+
+
 RULES: list[Rule] = [
     # ── entry ─────────────────────────────────────────────
     Rule(
@@ -86,7 +98,7 @@ RULES: list[Rule] = [
         on_event=Pass,
         transition_to=entry_from_worktree_sync,
     ),
-    *_recovery_rules(S.WORKTREE_SYNC, Reject),
+    *_terminal_reject_rules(S.WORKTREE_SYNC),
     *_recovery_rules(S.WORKTREE_SYNC, Crash),
     *_recovery_rules(S.WORKTREE_SYNC, Timeout),
     # ── pre-exec recovery ─────────────────────────────────────────────
@@ -223,15 +235,18 @@ RULES: list[Rule] = [
         on_event=Pass,
         transition_to=S.AFTER_COMMIT,
     ),
-    *_recovery_rules(S.MERGE_RESOLVING, Reject),
+    *_terminal_reject_rules(S.MERGE_RESOLVING),
     *_recovery_rules(S.MERGE_RESOLVING, Blocked),
     *_recovery_rules(S.MERGE_RESOLVING, Crash),
     *_recovery_rules(S.MERGE_RESOLVING, Timeout),
     # ── rejections: grooming (no retry) ─────────────────────────────────────────────
-    *[rule for p in S.GROOMING_EPOCH for rule in _recovery_rules(p, Reject)],
-    # ── rejections: implementing / testing / accepting (retry then recover) ─────────────────────────────────────────────
+    *[rule for p in S.GROOMING_EPOCH for rule in _terminal_reject_rules(p)],
+    # ── rejections: implementing / testing / accepting (retry then fail or override) ─────────────────────────────────────────────
     *retry_epoch_rules(
-        S.IMPLEMENTING, S.IMPLEMENTING_EPOCH, retry_target=S.IMPLEMENTING, recovering_stage=S.RECOVERING
+        S.IMPLEMENTING,
+        S.IMPLEMENTING_EPOCH,
+        retry_target=S.IMPLEMENTING,
+        exhausted_reason="semantic_reject",
     ),
     Rule(
         from_state=S.TESTING,
@@ -240,18 +255,38 @@ RULES: list[Rule] = [
         when=stage_retries_exhausted("testing") & last_hook_ok(),
         with_effect=remember_rejection("accepting"),
     ),
-    *retry_epoch_rules(S.TESTING, S.TESTING_EPOCH, retry_target=S.IMPLEMENTING, recovering_stage=S.RECOVERING),
-    *retry_epoch_rules(S.ACCEPTING, S.ACCEPTING_EPOCH, retry_target=S.IMPLEMENTING, recovering_stage=S.RECOVERING),
+    *retry_epoch_rules(
+        S.TESTING,
+        S.TESTING_EPOCH,
+        retry_target=S.IMPLEMENTING,
+        exhausted_reason="semantic_reject",
+    ),
+    *retry_epoch_rules(
+        S.ACCEPTING,
+        S.ACCEPTING_EPOCH,
+        retry_target=S.IMPLEMENTING,
+        exhausted_reason="semantic_reject",
+    ),
     # ── rejections: commit (no retry) ─────────────────────────────────────────────
-    *[rule for p in S.COMMIT_EPOCH for rule in _recovery_rules(p, Reject)],
+    *[rule for p in S.COMMIT_EPOCH for rule in _terminal_reject_rules(p)],
     # ── blocked ─────────────────────────────────────────────
     *_recovery_rules(S.GROOMING, Blocked),
     *_recovery_rules(S.IMPLEMENTING, Blocked),
     *_recovery_rules(S.TESTING, Blocked),
     *_recovery_rules(S.ACCEPTING, Blocked),
     # ── escalations ─────────────────────────────────────────────
-    *_recovery_rules(S.ALL_STAGE_PHASES, StageRetryLimitHit),
-    *_recovery_rules(S.ALL_STAGE_PHASES, OverallRetryLimitHit),
+    Rule(
+        from_state=S.ALL_STAGE_PHASES,
+        on_event=StageRetryLimitHit,
+        transition_to=S.FAILED,
+        with_effect=fail("unrecoverable_error"),
+    ),
+    Rule(
+        from_state=S.ALL_STAGE_PHASES,
+        on_event=OverallRetryLimitHit,
+        transition_to=S.FAILED,
+        with_effect=fail("unrecoverable_error"),
+    ),
     # ── recovering ─────────────────────────────────────────────
     Rule(
         from_state=S.RECOVERING,

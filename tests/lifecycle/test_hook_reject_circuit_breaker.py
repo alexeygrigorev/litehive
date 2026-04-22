@@ -9,7 +9,8 @@ from litehive.cli.runner import _run_once
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.config.workspace_files import config_path
-from litehive.lifecycle.nodes.agent import AgentVerdict
+from litehive.domain.recovery import TriggerEventKind
+from litehive.lifecycle.nodes.agent import AgentVerdict, UnrecoverableError
 from litehive.lifecycle.orchestration import run_task as run_pipeline_task
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.state.persist import load_state
@@ -45,6 +46,23 @@ class _RecoveryScenarioEngine:
             )
             return AgentVerdict(outcome="resume", metadata={"target_stage": "implementing"})
         return AgentVerdict(outcome="reject", reason="recovery could not fix the hook loop")
+
+
+class _CrashThenRecoveryEngine:
+    def __init__(self, name: str, *, recovery_calls: list[str], crashed_tasks: set[str]) -> None:
+        self.name = name
+        self.recovery_calls = recovery_calls
+        self.crashed_tasks = crashed_tasks
+
+    def run_turn(self, session, prompt, state) -> AgentVerdict:
+        del session
+        if prompt["role"] == "recovery":
+            self.recovery_calls.append(state.task_id)
+            return AgentVerdict(outcome="resume", metadata={"target_stage": "implementing"})
+        if state.stage == "implementing" and state.task_id not in self.crashed_tasks:
+            self.crashed_tasks.add(state.task_id)
+            raise UnrecoverableError("engine died")
+        return AgentVerdict(outcome="pass")
 
 
 def _task_execution_root(workspace: Path, task_id: str) -> Path:
@@ -98,33 +116,19 @@ def _fail_twice_then_pass_command(task_id: str) -> str:
     )
 
 
-@pytest.mark.skip(reason="Integration test failing - hook recovery mechanism issue")
-def test_same_hook_reject_circuit_breaker_recovers_once_and_resumes(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Recover hook reject loop")
-    _init_workspace_git_repo(
-        tmp_path,
-        config=LitehiveConfig(
-            runner_hooks={
-                "after_implementing": [
-                    {
-                        "command": _always_fail_until_fixed_command(task.id),
-                        "description": "timeout watchdog",
-                    }
-                ]
-            }
-        ),
-    )
+def test_crash_routes_to_recovery_and_resumes(tmp_path: Path) -> None:
+    _init_workspace_git_repo(tmp_path)
+    task = create_task(tmp_path, title="Recover implementing crash", pipeline_mode="single")
 
+    crashed_tasks: set[str] = set()
     recovery_calls: list[str] = []
     result = run_pipeline_task(
         tmp_path,
         task,
-        engine_factory=lambda engine_name: _RecoveryScenarioEngine(
+        engine_factory=lambda engine_name: _CrashThenRecoveryEngine(
             engine_name,
-            workspace=tmp_path,
-            recovery_mode="fix",
             recovery_calls=recovery_calls,
+            crashed_tasks=crashed_tasks,
         ),
     )
     refreshed = get_task(tmp_path, task.id)
@@ -135,13 +139,9 @@ def test_same_hook_reject_circuit_breaker_recovers_once_and_resumes(tmp_path: Pa
     assert refreshed is not None
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
-    assert _task_execution_root(tmp_path, task.id).joinpath(".hook_reject_count").read_text(encoding="utf-8") == "3"
-    assert pipeline_state.consecutive_same_hook_rejects == 0
-    assert pipeline_state.last_hook_reject_fingerprint is None
-    assert pipeline_state.hook_reject_recovery_invoked is False
-    assert refreshed.runtime.consecutive_same_hook_rejects == 0
-    assert refreshed.runtime.last_hook_reject_fingerprint is None
-    assert refreshed.runtime.hook_reject_recovery_invoked is False
+    assert pipeline_state.recovery_history
+    assert pipeline_state.recovery_history[-1].trigger.trigger_event_kind == TriggerEventKind.CRASH
+    assert pipeline_state.recovery_history[-1].recovery_verdict == "resume"
 
 
 def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_path: Path, monkeypatch) -> None:
@@ -180,19 +180,22 @@ def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_p
 
     first = _run_once(tmp_path)
     broken_refreshed = get_task(tmp_path, broken.id)
+    pipeline_state = SqlitePersistence(tmp_path).load(broken.id)
     state_after_first = load_state(tmp_path)
 
     assert first.exit_code == 0
     assert first.ran_task is True
     assert first.final_stage == "failed"
-    assert recovery_calls == [broken.id]
+    assert recovery_calls == []
     assert broken_refreshed is not None
     assert broken_refreshed.status == "flagged"
     assert broken_refreshed.flag_reason == "hook_reject_loop"
+    assert pipeline_state.failed_reason == "hook_reject_loop"
     assert broken_refreshed.runtime.consecutive_same_hook_rejects == 3
     assert broken_refreshed.runtime.last_hook_reject_fingerprint is not None
     assert broken_refreshed.runtime.last_hook_reject_fingerprint.command == _always_fail_until_fixed_command(broken.id)
-    assert broken_refreshed.runtime.hook_reject_recovery_invoked is True
+    assert broken_refreshed.runtime.hook_reject_recovery_invoked is False
+    assert _task_execution_root(tmp_path, broken.id).exists()
     assert broken.id not in state_after_first.queue
     assert runnable.id in state_after_first.queue
 
@@ -205,7 +208,7 @@ def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_p
     assert runnable_refreshed is not None
     assert runnable_refreshed.status == "done"
     assert runnable_refreshed.pipeline_status == "done"
-    assert recovery_calls == [broken.id]
+    assert recovery_calls == []
 
 
 def test_successful_stage_progress_resets_same_hook_reject_tracking(tmp_path: Path) -> None:
