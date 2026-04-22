@@ -339,7 +339,7 @@ def remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[str
                         root,
                         kind="stale_worktree_metadata",
                         title=f"Deferred worktree metadata clearing for {item.task_id}",
-                        reason=f"Worktree removed but task metadata clearing deferred due to active runner lock",
+                        reason="Worktree removed but task metadata clearing deferred due to active runner lock",
                         suggested_action="Wait for runner to finish, then run attention reconciliation",
                         task_id=item.task_id,
                         metadata={"worktree_path": item.worktree_rel, "deferred_operation": "clear_worktree_path"}
