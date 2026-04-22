@@ -6,17 +6,29 @@ task_type: null
 pipeline_mode: full
 priority: low
 depends_on: []
-goal: Per docs/plans/codebase-deletion-plan.md, the status-rendering path is duplicated
-  across CLI, web, and report layers with different field projections. Consolidate
-  to one status query + one renderer; target ~180-280 LOC reduction. Investigate litehive/cli/status*,
-  litehive/reports/, and any web status endpoints.
+goal: 'Status-path cleanup is already largely complete: litehive status fast and full
+  entrypoints both consume litehive.observability.status.collect_task_pipeline_status(),
+  the web dashboard/status surface was deleted by T-0324, and there is no standalone
+  litehive/reports/ pipeline-status consumer in the current tree. Treat this task
+  as an obsolescence check against the current CLI, not as a new cross-surface refactor.'
 acceptance_criteria:
-- One canonical function produces the task-pipeline status data
-- CLI, web, and report consumers all read from that single source (possibly with per-consumer
-  formatters)
-- Existing litehive status command output is unchanged (tests + manual check)
+- '- Confirm the current litehive status fast path in litehive/main.py and the full
+  CLI path in litehive/cli/workspace.py both use the shared collect_task_pipeline_status()
+  snapshot plus shared status render helpers
+
+  - Confirm there is no live litehive/web status endpoint or separate litehive/reports/
+  pipeline-status consumer left in the repo
+
+  - If those checks hold, close this task as obsolete instead of sending it to implementation
+
+  - If a real duplicate status data path is still found, capture the exact modules
+  and the missing shared boundary before re-opening or filing a narrower follow-up'
 constraints: []
-plan: []
+plan:
+- Verify the current status entrypoints and any remaining status consumers against
+  the repo as it exists today.
+- Close T-0447 as obsolete if the shared status path already exists and the referenced
+  web surface is gone.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0447 unify-duplicated-status-path-in-litehive-status'

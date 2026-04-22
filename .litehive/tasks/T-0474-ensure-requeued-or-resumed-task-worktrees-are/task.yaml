@@ -1,0 +1,27 @@
+id: T-0474
+slug: ensure-requeued-or-resumed-task-worktrees-are
+title: Ensure requeued or resumed task worktrees are rebased to main before resume
+created_at: '2026-04-22T16:33:03+00:00'
+task_type: null
+pipeline_mode: full
+priority: critical
+depends_on: []
+goal: Ensure requeued/resumed tasks are synced to current main before agent work resumes.
+  The dedicated worktree_sync/resumable-state path should not silently skip stale
+  task worktrees; if a task branch is behind main, Litehive must rebase or otherwise
+  reconcile it before the task re-enters grooming/implementing/testing/accepting.
+acceptance_criteria:
+- A queued or interrupted resumable task with an existing worktree always passes through
+  worktree_sync before re-entering its saved stage.
+- If the resumable task worktree is behind main, Litehive rebases or otherwise syncs
+  it to current main instead of silently resuming on a stale branch.
+- 'Dirty resumable worktrees do not bypass sync silently: Litehive either performs
+  a safe stash+rebase flow or surfaces an explicit recoverable merge/sync state.'
+- Regression tests cover at least one requeued/resumed task with a stale clean worktree
+  and one with local uncommitted changes.
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0474 ensure-requeued-or-resumed-task-worktrees-are'
+created_from: null
