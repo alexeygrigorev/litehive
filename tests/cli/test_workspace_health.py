@@ -25,7 +25,7 @@ from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import UnmergedWorktree, WorkspaceState
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.state.persist import load_state, save_state
-from litehive.state.records import create_task, save_task
+from litehive.state.records import create_task, require_task, save_task
 
 _RUNNER = CliRunner()
 
@@ -184,6 +184,40 @@ def test_repair_reports_broken_workspace_and_worktree_venvs(tmp_path: Path) -> N
     assert f"venv={worktree_path / '.venv'} checkout={worktree_path}" in result.output
     assert f"broken_venv_binaries: {tmp_path / '.venv'}:ruff {worktree_path / '.venv'}:pytest" in result.output
     assert "uv venv --clear .venv && uv sync --extra dev" in result.output
+
+
+def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Repair stale resumable task")
+    task.status = "in_progress"
+    task.pipeline_status = "testing"
+    task.runtime.execution_status = "idle"
+    task.runtime.current_stage.stage = "testing"
+    task.runtime.current_stage.status = "idle"
+    save_task(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    state.queue = []
+    save_state(tmp_path, state)
+
+    result = _RUNNER.invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
+
+    assert result.return_value == 0
+    assert "repaired: yes" in result.output
+    assert "stale_runner_recovered: yes" in result.output
+    assert f"cleared_active_task_id: {task.id}" in result.output
+    assert f"requeued_tasks: {task.id}" in result.output
+    assert "active_task_id: None" in result.output
+    assert "queue_length: 1" in result.output
+
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "testing"
+    assert refreshed.runtime.execution_status == "idle"
+    assert refreshed.runtime.current_stage.stage == "testing"
+    assert refreshed.runtime.current_stage.status == "idle"
+    assert load_state(tmp_path).queue == [task.id]
 
 
 def test_doctor_removes_stale_unmerged_worktrees_for_done_task_and_missing_worktree(tmp_path: Path) -> None:

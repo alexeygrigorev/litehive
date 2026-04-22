@@ -53,10 +53,8 @@ from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task
 from litehive.tasks.reports import record_recovery_report
 from litehive.tasks.runtime import (
     apply_task_outcome,
-    clear_task_run_activity,
     duration_seconds,
     finish_task_run_transition,
-    idle_stage_state,
     summarize_transcript,
 )
 from litehive.worktree import (
@@ -305,9 +303,9 @@ def recover_stale_runner_state(
             running_task_ids,
             current_thread_owns_runner_guard=current_thread_owns_runner_guard(root),
             runner_lock_held=runner_lock_is_held(root),
+            has_repair_candidates=_has_nonrunning_resumable_repair_candidates(root),
         ):
             return False
-
         tasks = list_tasks(root)
         tasks_by_id = {task.id: task for task in tasks}
         if not _can_attempt_stale_runner_recovery(root, tasks_by_id, running_task_ids):
@@ -324,6 +322,18 @@ def recover_stale_runner_state(
         transitioned = recovery["transitioned"]
         prioritized_ids = recovery["prioritized_ids"]
         journal_messages = recovery["journal_messages"]
+
+        normalized = _normalize_nonrunning_resumable_tasks(
+            state,
+            tasks_by_id=tasks_by_id,
+            summary=summary,
+        )
+        if normalized["mutated"]:
+            mutated = True
+            transitioned.extend(
+                task for task in normalized["transitioned"] if all(existing.id != task.id for existing in transitioned)
+            )
+            journal_messages.update(normalized["journal_messages"])
 
         if _update_active_task_after_recovery(
             state,
@@ -671,10 +681,9 @@ def _has_inactive_running_tasks(
 
 
 def _canonicalize_resumable_task(task: TaskRecord, *, stage: str) -> None:
-    now = clear_task_run_activity(task, execution_status="idle")
-    task.status = "queued"
-    task.pipeline_status = stage
-    task.runtime.current_stage = idle_stage_state(updated_at=now, stage=stage)
+    from litehive.tasks.queue import canonicalize_resumable_queue_task
+
+    canonicalize_resumable_queue_task(task, stage=stage)
 
 
 def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeSubagentState) -> str:
@@ -928,9 +937,16 @@ def _can_skip_recovery_scan(
     *,
     current_thread_owns_runner_guard: bool,
     runner_lock_held: bool,
+    has_repair_candidates: bool,
 ) -> bool:
     del root
-    return not running_task_ids and active_task_id is None and not current_thread_owns_runner_guard and not runner_lock_held
+    return (
+        not running_task_ids
+        and active_task_id is None
+        and not current_thread_owns_runner_guard
+        and not runner_lock_held
+        and not has_repair_candidates
+    )
 
 
 def _recover_running_tasks(
@@ -971,6 +987,126 @@ def _recover_running_tasks(
         "journal_messages": journal_messages,
         "prioritized_ids": prioritized_ids,
     }
+
+
+def _normalize_nonrunning_resumable_tasks(
+    state,
+    *,
+    tasks_by_id: dict[str, TaskRecord],
+    summary: WorkspaceRepairSummary | None,
+) -> dict[str, object]:
+    from litehive.tasks.queue import (
+        canonicalize_resumable_queue_task,
+        is_task_eligible_for_execution,
+        resumable_queue_stage,
+        task_has_resume_marker,
+    )
+
+    mutated = False
+    transitioned: list[TaskRecord] = []
+    journal_messages: dict[str, str] = {}
+    for task in tasks_by_id.values():
+        if task.runtime.execution_status == "running":
+            continue
+        if task.status not in {"queued", "in_progress", "interrupted"}:
+            continue
+        if task.status != "interrupted" and not is_task_eligible_for_execution(task):
+            continue
+        if task.status == "queued" and task.id != state.active_task_id and not task_has_resume_marker(task):
+            continue
+        stage = resumable_queue_stage(task)
+        if stage is None:
+            continue
+        queue_contains_task = task.id in state.queue
+        queue_index = None if not queue_contains_task else state.queue.index(task.id)
+        should_normalize = (
+            task.status != "queued"
+            or task.runtime.execution_status != "idle"
+            or task.pipeline_status != stage
+            or task.runtime.current_stage.stage != stage
+            or task.runtime.current_stage.status != "idle"
+            or task.id == state.active_task_id
+            or not queue_contains_task
+        )
+        if not should_normalize:
+            continue
+
+        was_in_progress = task.status == "in_progress"
+        normalized_stage = canonicalize_resumable_queue_task(task, stage=stage)
+        if normalized_stage is None:
+            continue
+
+        if queue_contains_task:
+            state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
+        if task.id == state.active_task_id or was_in_progress:
+            state.queue.insert(0, task.id)
+        elif queue_index is not None:
+            state.queue.insert(min(queue_index, len(state.queue)), task.id)
+        elif task.id not in state.queue:
+            state.queue.append(task.id)
+
+        transitioned.append(task)
+        mutated = True
+        journal_messages[task.id] = f"Recovered stale resumable state and returned the task to `{normalized_stage}`."
+        if summary is not None and task.id not in summary.requeued_task_ids:
+            summary.requeued_task_ids.append(task.id)
+
+    return {
+        "mutated": mutated,
+        "transitioned": transitioned,
+        "journal_messages": journal_messages,
+    }
+
+
+def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
+    from litehive.db.schema import connect_workspace_db
+
+    with connect_workspace_db(root) as connection:
+        try:
+            row = connection.execute(
+                """
+                SELECT 1
+                FROM task_state
+                WHERE (
+                    json_extract(payload, '$.status') = 'in_progress'
+                    AND json_extract(payload, '$.runtime.execution_status') != 'running'
+                    AND json_extract(payload, '$.pipeline_status') IN (
+                        'grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed'
+                    )
+                ) OR (
+                    json_extract(payload, '$.status') = 'interrupted'
+                    AND COALESCE(
+                        json_extract(payload, '$.runtime.interruption.resume_stage'),
+                        json_extract(payload, '$.runtime.interruption.pipeline_status'),
+                        json_extract(payload, '$.pipeline_status')
+                    ) IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                ) OR (
+                    json_extract(payload, '$.status') = 'queued'
+                    AND json_extract(payload, '$.pipeline_status') IN (
+                        'grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed'
+                    )
+                    AND (
+                        (
+                            json_extract(payload, '$.runtime.current_stage.stage')
+                            = json_extract(payload, '$.pipeline_status')
+                            AND json_extract(payload, '$.runtime.current_stage.status') IN (
+                                'idle', 'paused', 'interrupted'
+                            )
+                        )
+                        OR json_extract(payload, '$.runtime.interruption.resume_stage')
+                            = json_extract(payload, '$.pipeline_status')
+                        OR json_extract(payload, '$.runtime.interruption.pipeline_status')
+                            = json_extract(payload, '$.pipeline_status')
+                        OR json_extract(payload, '$.runtime.continuation_handoff.stage')
+                            = json_extract(payload, '$.pipeline_status')
+                    )
+                )
+                LIMIT 1
+                """
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return False
+    return row is not None
 
 
 def _update_active_task_after_recovery(

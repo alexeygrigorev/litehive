@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 _TERMINAL_EXECUTION_STATUSES = {"done", "cancelled", "failed", "blocked", "interrupted"}
 _TERMINAL_OUTCOME_KINDS = {"duplicate", "deferred", "wont_do"}
 _TRUSTED_IDLE_STAGE_STATUSES = {"idle", "paused", "interrupted"}
+_RESUMABLE_PIPELINE_STAGES = {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
 
 
 # --- list ops ---
@@ -130,6 +131,46 @@ def prepare_completed_task_for_recovery(task: TaskRecord, *, recovery_stage: str
 # --- selection ---
 
 
+def _normalize_resumable_stage_name(stage: str | None) -> str | None:
+    if stage == "merge_failed":
+        return "commit_to_git"
+    if stage in _RESUMABLE_PIPELINE_STAGES:
+        return stage
+    return None
+
+
+def resumable_queue_stage(task: TaskRecord) -> str | None:
+    interruption = task.runtime.interruption
+    handoff = task.runtime.continuation_handoff
+    current_stage = task.runtime.current_stage
+    candidates = [
+        task.pipeline_status,
+        None if interruption is None else interruption.resume_stage,
+        None if interruption is None else interruption.pipeline_status,
+        None if handoff is None else handoff.stage,
+    ]
+    if current_stage.status in _TRUSTED_IDLE_STAGE_STATUSES:
+        candidates.append(current_stage.stage)
+    for candidate in candidates:
+        normalized = _normalize_resumable_stage_name(None if candidate is None else str(candidate))
+        if normalized is not None:
+            return normalized
+    return None
+
+
+def canonicalize_resumable_queue_task(task: TaskRecord, *, stage: str | None = None) -> str | None:
+    target_stage = _normalize_resumable_stage_name(stage) if stage is not None else resumable_queue_stage(task)
+    if target_stage is None:
+        return None
+    now = clear_task_run_activity(task, execution_status="idle")
+    task.status = "queued"
+    task.pipeline_status = target_stage
+    task.runtime.current_stage = idle_stage_state(updated_at=now, stage=target_stage)
+    if task.runtime.last_outcome.kind == "interrupted":
+        task.runtime.last_outcome.stage = target_stage
+    return target_stage
+
+
 def _needs_manual_intervention(task: TaskRecord) -> bool:
     return task.status == "flagged" and task.flag_reason in {
         "hook_reject_loop",
@@ -175,7 +216,7 @@ def _live_active_pipeline_stage(state: WorkspaceState, tasks_by_id: dict[str, Ta
     return None
 
 
-def _has_resume_marker(task: TaskRecord) -> bool:
+def task_has_resume_marker(task: TaskRecord) -> bool:
     stage = str(task.pipeline_status)
     current_stage = task.runtime.current_stage
     if current_stage.stage == stage and current_stage.status in _TRUSTED_IDLE_STAGE_STATUSES:
@@ -203,7 +244,7 @@ def _normalize_stale_pipeline_statuses(
             continue
         if task.status != "queued":
             continue
-        if _has_resume_marker(task):
+        if task_has_resume_marker(task):
             continue
         now = utcnow()
         task.pipeline_status = "backlog"

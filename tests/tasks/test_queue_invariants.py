@@ -164,6 +164,58 @@ def test_peek_next_task_restores_missing_unfinished_tasks_to_queue_on_restart(
     assert repaired_state.queue == [later.id, unfinished.id]
 
 
+def test_peek_canonicalizes_nonrunning_resumable_tasks_on_restart(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    stranded = create_task(tmp_path, title="Stranded in progress")
+    resumed = create_task(tmp_path, title="Interrupted resumable task")
+
+    _persist_task_status(
+        tmp_path,
+        stranded.id,
+        status="in_progress",
+        pipeline_status="testing",
+    )
+    stranded_task = require_task(tmp_path, stranded.id)
+    stranded_task.runtime.execution_status = "idle"
+    stranded_task.runtime.current_stage.stage = "testing"
+    stranded_task.runtime.current_stage.status = "idle"
+    save_task(tmp_path, stranded_task)
+
+    _persist_task_status(
+        tmp_path,
+        resumed.id,
+        status="interrupted",
+        pipeline_status="implementing",
+    )
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = []
+    save_state(tmp_path, state)
+
+    selection = peek_next_task_selection(tmp_path)
+
+    assert selection.task is not None
+
+    repaired_state = load_state(tmp_path)
+    assert repaired_state.active_task_id is None
+    assert set(repaired_state.queue) == {stranded.id, resumed.id}
+
+    refreshed_stranded = require_task(tmp_path, stranded.id)
+    assert refreshed_stranded.status == "queued"
+    assert refreshed_stranded.pipeline_status == "testing"
+    assert refreshed_stranded.runtime.execution_status == "idle"
+    assert refreshed_stranded.runtime.current_stage.stage == "testing"
+    assert refreshed_stranded.runtime.current_stage.status == "idle"
+
+    refreshed_resumed = require_task(tmp_path, resumed.id)
+    assert refreshed_resumed.status == "queued"
+    assert refreshed_resumed.pipeline_status == "implementing"
+    assert refreshed_resumed.runtime.execution_status == "idle"
+    assert refreshed_resumed.runtime.current_stage.stage == "implementing"
+    assert refreshed_resumed.runtime.current_stage.status == "idle"
+
+
 @pytest.mark.parametrize("flag_reason", ["rejection_loop_detected", "semantic_reject"])
 def test_dequeue_skips_flagged_manual_intervention_tasks(tmp_path: Path, flag_reason: str) -> None:
     ensure_workspace(tmp_path)

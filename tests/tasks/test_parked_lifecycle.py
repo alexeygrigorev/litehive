@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 
 from litehive.cli.app import app as cli_app
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.system import StubCommitNode
@@ -203,6 +204,38 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
     assert routed_stages[:2] == ["worktree_sync", "before_testing"]
     assert "before_grooming" not in routed_stages
     assert "before_implementing" not in routed_stages
+
+
+def test_resume_task_recovers_preserved_stage_when_pipeline_status_degraded(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Resume preserved stage",
+        acceptance_criteria=["resume from testing after stale state cleanup"],
+    )
+    task.status = "parked"
+    task.pipeline_status = "backlog"
+    task.runtime.execution_status = "paused"
+    task.runtime.current_stage.stage = "testing"
+    task.runtime.current_stage.status = "paused"
+    task.runtime.interruption = RuntimeInterruptionState(
+        source="runner",
+        stage="testing",
+        pipeline_status="testing",
+        resume_stage="testing",
+        reason="Preserve resumable stage",
+        summary="Resume from testing.",
+    )
+    save_task(tmp_path, task)
+
+    resumed = resume_task(tmp_path, task.id, front=True)
+
+    assert resumed.status == "queued"
+    assert resumed.pipeline_status == "testing"
+    assert resumed.runtime.execution_status == "idle"
+    assert resumed.runtime.current_stage.stage == "testing"
+    assert resumed.runtime.current_stage.status == "idle"
+    assert load_state(tmp_path).queue[0] == task.id
 
 
 def test_queue_resume_and_requeue_keep_parked_semantics_explicit(

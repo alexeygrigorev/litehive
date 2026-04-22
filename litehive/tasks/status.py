@@ -429,7 +429,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
     from litehive.state.records import require_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.state.persist import load_state
-    from litehive.tasks.queue import reset_task_for_recovery
+    from litehive.tasks.queue import reset_task_for_recovery, resumable_queue_stage
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):
@@ -447,13 +447,14 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             and not stranded_in_progress
         ):
             raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, merge_failed, or closed")
-        if task.pipeline_status in {"backlog", "done"}:
+        resumed_stage = resumable_queue_stage(task)
+        if resumed_stage is None:
             raise ValueError(f"Task {task.id} has no resumable stage")
-        resumed_stage = task.pipeline_status
-        if resumed_stage == "merge_failed":
-            resumed_stage = "commit_to_git"
         if resumed_stage in {"implementing", "testing", "accepting"}:
+            original_pipeline_status = task.pipeline_status
+            task.pipeline_status = resumed_stage
             resumed_stage = reroute_stage_for_acceptance_criteria(task)
+            task.pipeline_status = original_pipeline_status
         reset_task_for_recovery(
             task,
             status="queued",
