@@ -101,9 +101,11 @@ def render_execution_transcript(
     if timeline is not None and timeline.events:
         parts: list[str] = []
         for event in timeline.events:
-            text = getattr(event, "text", "") or ""
-            if text:
-                parts.append(text)
+            for field_name in ("text", "content", "tool_output", "error"):
+                text = getattr(event, field_name, "") or ""
+                if text:
+                    parts.append(text)
+                    break
         if parts:
             transcript = "\n\n".join(parts).strip()
             if transcript:

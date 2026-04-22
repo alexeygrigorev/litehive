@@ -9,7 +9,7 @@ from typing import Literal
 
 import yaml
 
-from litehive.config.paths import litehive_root
+from litehive.config.registry import workspace_registry_path
 from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state
 from litehive.state.records import load_task_record_file
@@ -116,7 +116,7 @@ def corrupt_task_launch_diagnostics(root: Path, task_id: str | None) -> dict[str
 
 def detect_cycle_start_failure(root: Path) -> LaunchFailure | None:
     del root
-    path = litehive_root() / "workspaces.yaml"
+    path = workspace_registry_path()
     if not path.exists():
         return None
     try:
@@ -206,4 +206,3 @@ def _corrupt_task_candidate(store, task_dir: Path, task_yaml_path: Path, exc: Ex
         path=task_yaml_path,
         error=f"{type(exc).__name__}: {exc}",
     )
-

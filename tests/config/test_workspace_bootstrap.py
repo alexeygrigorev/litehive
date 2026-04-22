@@ -54,9 +54,9 @@ def _hold_registry_write_lock(
     root = Path(workspace_root)
     del busy_timeout_ms
     ensure_workspace(root)
-    from litehive.config.paths import litehive_root
+    from litehive.config.registry import workspace_registry_path
 
-    lock_path = litehive_root() / ".workspaces.lock"
+    lock_path = workspace_registry_path().with_name(".workspaces.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+", encoding="utf-8") as handle:
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
@@ -65,12 +65,8 @@ def _hold_registry_write_lock(
         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
-def _legacy_registry_path(config_home: Path) -> Path:
-    return ((config_home / "litehive") / "workspaces").with_suffix(".yaml")
-
-
-def _registry_path(data_home: Path) -> Path:
-    return data_home / "litehive" / "workspaces.yaml"
+def _registry_path(config_home: Path) -> Path:
+    return config_home / "litehive" / "workspaces.yaml"
 
 
 def _registered_paths(registry_path: Path) -> list[str]:
@@ -110,7 +106,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, mon
     assert workspace_path(tmp_path, "data.db").exists()
     assert litehive_root() == data_home / "litehive"
     assert litehive_root() / "config.yaml" == data_home / "litehive" / "config.yaml"
-    assert _registered_paths(_registry_path(data_home)) == [str(tmp_path.resolve())]
+    assert _registered_paths(_registry_path(config_home)) == [str(tmp_path.resolve())]
 
     with connect_workspace_db(tmp_path) as connection:
         tables = {
@@ -159,7 +155,7 @@ def test_workspace_registry_handles_parallel_registration(tmp_path: Path, monkey
         )
 
     assert {Path(path) for path in results} == set(workspaces)
-    registry_paths = _registered_paths(_registry_path(data_home))
+    registry_paths = _registered_paths(_registry_path(config_home))
     assert set(registry_paths) == {str(root.resolve()) for root in workspaces}
     assert len(registry_paths) == len(workspaces)
 
@@ -217,13 +213,13 @@ def test_workspace_registry_retries_lock_contention_without_rebuilding(
             holder.join(timeout=1)
 
     assert holder.exitcode == 0
-    assert set(_registered_paths(_registry_path(data_home))) == {
+    assert set(_registered_paths(_registry_path(config_home))) == {
         str(workspace_one.resolve()),
         str(workspace_two.resolve()),
     }
 
 
-def test_workspace_registry_migrates_legacy_yaml_and_preserves_it(
+def test_workspace_registry_uses_only_canonical_config_home_location(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_home = tmp_path / "xdg-config"
@@ -237,27 +233,36 @@ def test_workspace_registry_migrates_legacy_yaml_and_preserves_it(
 
     workspace_one = tmp_path / "workspace-one"
     workspace_two = tmp_path / "workspace-two"
-    legacy_path = _legacy_registry_path(config_home)
-    legacy_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy_path.write_text(
+    workspace_three = tmp_path / "workspace-three"
+    canonical_path = _registry_path(config_home)
+    stale_data_home_path = data_home / "litehive" / "workspaces.yaml"
+    canonical_path.parent.mkdir(parents=True, exist_ok=True)
+    stale_data_home_path.parent.mkdir(parents=True, exist_ok=True)
+    canonical_path.write_text(
         yaml.safe_dump(
-            [str(workspace_two), str(workspace_one), str(workspace_one)],
+            [str(workspace_one)],
             sort_keys=False,
         ),
         encoding="utf-8",
     )
+    stale_data_home_path.write_text(
+        yaml.safe_dump([str(workspace_two)], sort_keys=False),
+        encoding="utf-8",
+    )
 
-    migrated = list_registered_workspace_paths()
+    assert list_registered_workspace_paths() == [workspace_one.resolve()]
+    ensure_workspace(workspace_three)
 
-    assert set(migrated) == {workspace_one.resolve(), workspace_two.resolve()}
-    assert legacy_path.exists()
-    assert set(_registered_paths(_registry_path(data_home))) == {
+    assert set(_registered_paths(canonical_path)) == {
         str(workspace_one.resolve()),
-        str(workspace_two.resolve()),
+        str(workspace_three.resolve()),
     }
+    assert _registered_paths(stale_data_home_path) == [str(workspace_two.resolve())]
 
 
-def test_workspace_registry_rebuilds_after_corruption(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_workspace_registry_rebuilds_after_removed_dict_schema(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     config_home = tmp_path / "xdg-config"
     data_home = tmp_path / "xdg-data"
     state_home = tmp_path / "xdg-state"
@@ -265,12 +270,17 @@ def test_workspace_registry_rebuilds_after_corruption(tmp_path: Path, monkeypatc
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    registry_path = _registry_path(data_home)
+    registry_path = _registry_path(config_home)
     registry_path.parent.mkdir(parents=True, exist_ok=True)
-    registry_path.write_bytes(b"not a sqlite database")
+    registry_path.write_text(
+        yaml.safe_dump([{"repo_path": str(tmp_path)}], sort_keys=False),
+        encoding="utf-8",
+    )
 
     ensure_workspace(tmp_path)
 
+    backups = sorted(registry_path.parent.glob("workspaces.yaml.corrupt-*"))
+    assert backups
     assert _registered_paths(registry_path) == [str(tmp_path.resolve())]
 
 
@@ -316,22 +326,20 @@ def test_legacy_global_state_migrates_once_with_notice(
 
     assert "migrated legacy global state into" in stderr
     assert "config.yaml" in stderr
-    assert "workspaces.yaml" in stderr
     assert "daemons.yaml" in stderr
+    assert "workspaces.yaml" not in stderr
     assert (legacy_root / "config.yaml").exists()
     assert (legacy_root / "workspaces.yaml").exists()
     assert (legacy_root / "daemons.yaml").exists()
     assert (data_home / "litehive" / "config.yaml").exists()
-    assert (data_home / "litehive" / "workspaces.yaml").exists()
     assert (data_home / "litehive" / "daemons.yaml").exists()
+    assert not (data_home / "litehive" / "workspaces.yaml").exists()
+    assert _registered_paths(legacy_root / "workspaces.yaml")[0] == str(tmp_path.resolve())
 
     ensure_workspace(tmp_path)
     assert capsys.readouterr().err == ""
     assert (legacy_root / "config.yaml").read_text(encoding="utf-8") == (
         data_home / "litehive" / "config.yaml"
-    ).read_text(encoding="utf-8")
-    assert (legacy_root / "workspaces.yaml").read_text(encoding="utf-8") == (
-        data_home / "litehive" / "workspaces.yaml"
     ).read_text(encoding="utf-8")
     assert (legacy_root / "daemons.yaml").read_text(encoding="utf-8") == (
         data_home / "litehive" / "daemons.yaml"
@@ -366,18 +374,16 @@ def test_legacy_global_state_notice_and_sync_when_targets_already_exist(
 
     assert "migrated legacy global state into" in stderr
     assert "config.yaml" in stderr
-    assert "workspaces.yaml" in stderr
     assert "daemons.yaml" in stderr
+    assert "workspaces.yaml" not in stderr
     assert (new_root / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
+    assert (new_root / "workspaces.yaml").read_text(encoding="utf-8") == "- /tmp/new-workspace\n"
     assert (new_root / "daemons.yaml").read_text(encoding="utf-8") == "- workspace: /tmp/legacy-workspace\n"
 
     ensure_workspace(tmp_path)
     assert capsys.readouterr().err == ""
     assert (legacy_root / "config.yaml").read_text(encoding="utf-8") == (
         new_root / "config.yaml"
-    ).read_text(encoding="utf-8")
-    assert (legacy_root / "workspaces.yaml").read_text(encoding="utf-8") == (
-        new_root / "workspaces.yaml"
     ).read_text(encoding="utf-8")
     assert (legacy_root / "daemons.yaml").read_text(encoding="utf-8") == (
         new_root / "daemons.yaml"
@@ -405,18 +411,16 @@ def test_legacy_global_state_repopulates_missing_canonical_files_after_notice(
     ensure_workspace(tmp_path)
     assert "migrated legacy global state into" in capsys.readouterr().err
 
-    for filename in ("config.yaml", "workspaces.yaml", "daemons.yaml"):
+    for filename in ("config.yaml", "daemons.yaml"):
         (new_root / filename).unlink()
 
     ensure_workspace(tmp_path)
     assert capsys.readouterr().err == ""
     assert (new_root / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
-    assert (new_root / "workspaces.yaml").read_text(encoding="utf-8") == (
-        legacy_root / "workspaces.yaml"
-    ).read_text(encoding="utf-8")
     assert (new_root / "daemons.yaml").read_text(encoding="utf-8") == (
         legacy_root / "daemons.yaml"
     ).read_text(encoding="utf-8")
+    assert not (new_root / "workspaces.yaml").exists()
 
 
 def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(

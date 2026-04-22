@@ -6,13 +6,24 @@ from pathlib import Path
 import shutil
 import sys
 
-_LEGACY_GLOBAL_FILENAMES = ("config.yaml", "workspaces.yaml", "daemons.yaml")
+_LEGACY_GLOBAL_FILENAMES = ("config.yaml", "daemons.yaml")
 
 
-def _legacy_litehive_root() -> Path:
+def _xdg_config_litehive_root() -> Path:
     config_home = os.environ.get("XDG_CONFIG_HOME")
     base = Path(config_home).expanduser() if config_home else Path.home() / ".config"
     return base / "litehive"
+
+
+def _legacy_litehive_root() -> Path:
+    return _xdg_config_litehive_root()
+
+
+def litehive_config_root() -> Path:
+    override = os.environ.get("LITEHIVE_HOME")
+    if override:
+        return Path(override).expanduser()
+    return _xdg_config_litehive_root()
 
 
 def _configured_litehive_root() -> Path:

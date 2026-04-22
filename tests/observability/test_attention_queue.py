@@ -8,7 +8,8 @@ import yaml
 from litehive.attention import list_attention, record_attention, resolve_attention, waiting_for_you_lines
 from litehive.cli.attention import cmd_attention_list, cmd_attention_resolve
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import litehive_root, workspace_path
+from litehive.config.paths import workspace_path
+from litehive.config.registry import workspace_registry_path
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.execution import run_daemon_loop
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
@@ -365,13 +366,14 @@ def test_pool_halts_immediately_when_local_main_diverges_from_origin(tmp_path: P
 
 
 def test_daemon_loop_rebuilds_corrupt_global_registry_without_exiting(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Queued work")
 
     from litehive.config import registry as registry_mod
 
     registry_mod._close_all_registry_connections()
-    (litehive_root() / "workspaces.yaml").write_bytes(b"not a sqlite database")
+    workspace_registry_path().write_bytes(b"not a sqlite database")
 
     calls: list[tuple[str, ...]] = []
 
@@ -397,7 +399,7 @@ def test_daemon_loop_rebuilds_corrupt_global_registry_without_exiting(tmp_path: 
     assert any("run" in command for command in calls)
     assert "== iteration 1 ==" in output
 
-    paths = yaml.safe_load((litehive_root() / "workspaces.yaml").read_text(encoding="utf-8"))
+    paths = yaml.safe_load(workspace_registry_path().read_text(encoding="utf-8"))
     assert paths == [str(tmp_path.resolve())]
 
 

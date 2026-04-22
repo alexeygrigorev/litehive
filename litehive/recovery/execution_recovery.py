@@ -18,7 +18,8 @@ from litehive.agents.session_store import (
     save_subagent_artifacts,
 )
 from litehive.config.loading import load_config
-from litehive.config.paths import litehive_root, workspace_path
+from litehive.config.paths import workspace_path
+from litehive.config.registry import workspace_registry_path
 from litehive.domain.common import utcnow
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction, TaskActivityEntry
@@ -102,7 +103,7 @@ def attempt_launch_recovery(root: Path, task: TaskRecord, failure: LaunchFailure
             actions=actions,
             warnings=warnings,
         )
-        _repair_legacy_registry(actions=actions, warnings=warnings)
+        _repair_workspace_registry(actions=actions, warnings=warnings)
         _repair_runner_lock(root, actions=actions, warnings=warnings)
         _repair_workspace_runtime(root, actions=actions, warnings=warnings)
 
@@ -472,8 +473,8 @@ def _quarantine_corrupt_task_yaml(
     return True
 
 
-def _repair_legacy_registry(*, actions: list[RecoveryAction], warnings: list[str]) -> None:
-    path = litehive_root() / "workspaces.yaml"
+def _repair_workspace_registry(*, actions: list[RecoveryAction], warnings: list[str]) -> None:
+    path = workspace_registry_path()
     if not path.exists():
         return
     try:

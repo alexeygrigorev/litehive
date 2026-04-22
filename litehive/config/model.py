@@ -1,9 +1,11 @@
 """Workspace configuration: validation constants, supporting dataclasses,
 and the primary ``LitehiveConfig`` aggregate."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 import re
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence
+
+from litehive.config.profiles.loader import PROCESS_PROFILES
 
 
 # --- validation constants ---
@@ -148,6 +150,44 @@ class LitehiveConfig:
         if self.litehive_source_path is not None:
             self.litehive_source_path = self.litehive_source_path.strip() or None
         self.external_engine_sandbox = normalize_external_engine_sandbox_config(self.external_engine_sandbox)
+
+
+_UNSUPPORTED_CONFIG_KEYS = {
+    "pre_acceptance_command": (
+        "pre_acceptance_command is no longer supported. Migrate this command to runner_hooks.before_accepting."
+    ),
+    "runner_hook_execution_mode": (
+        "runner_hook_execution_mode is no longer supported. "
+        "Runner hooks now run sequentially and stop at the first failure."
+    ),
+    "task_engine_routing": (
+        "task_engine_routing is no longer supported. "
+        "Engine selection now comes only from default_engine, explicit runtime engine switches, "
+        "or CLI --engine."
+    ),
+    "engine_fallbacks": (
+        "engine_fallbacks is no longer supported. "
+        "Use engine_preference to specify engine ordering instead."
+    ),
+}
+_VALID_CONFIG_KEYS = frozenset(field.name for field in fields(LitehiveConfig))
+
+
+def validate_config_data(data: Mapping[str, Any]) -> dict[str, Any]:
+    validated = dict(data)
+    for key, message in _UNSUPPORTED_CONFIG_KEYS.items():
+        if key in validated:
+            raise ValueError(message)
+    profile = validated.get("process_profile")
+    if profile in PROCESS_PROFILES or profile is None:
+        pass
+    else:
+        available_profiles = ", ".join(sorted(PROCESS_PROFILES))
+        raise ValueError(f"unknown process_profile {profile!r}; must be one of: {available_profiles}")
+    for key in validated:
+        if key not in _VALID_CONFIG_KEYS:
+            raise ValueError(f"unknown config key {key!r}; remove it or migrate to a supported config field")
+    return validated
 
 
 def normalize_engine_sequence(engines: Sequence[str], *, field_name: str) -> list[str]:

@@ -1,35 +1,15 @@
 """Config loading and merge helpers."""
 
-from dataclasses import asdict, fields
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Mapping
 
 import yaml
 
-from litehive.config.model import LitehiveConfig
+from litehive.config.model import LitehiveConfig, validate_config_data
 from litehive.config.paths import litehive_root
-from litehive.config.profiles.loader import PROCESS_PROFILES
 from litehive.config.workspace_files import config_path, context_path
 from litehive.config.workspace import ensure_workspace
-
-_LEGACY_UNSUPPORTED_KEYS = {
-    "pre_acceptance_command": (
-        "pre_acceptance_command is no longer supported. Migrate this command to runner_hooks.before_accepting."
-    ),
-    "runner_hook_execution_mode": (
-        "runner_hook_execution_mode is no longer supported. "
-        "Runner hooks now run sequentially and stop at the first failure."
-    ),
-    "task_engine_routing": (
-        "task_engine_routing is no longer supported. "
-        "Engine selection now comes only from default_engine, explicit runtime engine switches, "
-        "or CLI --engine."
-    ),
-    "engine_fallbacks": (
-        "engine_fallbacks is no longer supported. "
-        "Use engine_preference to specify engine ordering instead."
-    ),
-}
 
 
 def read_config_mapping(path: Path) -> dict[str, Any]:
@@ -58,22 +38,9 @@ def load_effective_config_data(root: Path) -> dict[str, Any]:
     return data
 
 
-
-
 def load_config(root: Path) -> LitehiveConfig:
     ensure_workspace(root)
-    data = load_effective_config_data(root)
-    for key, message in _LEGACY_UNSUPPORTED_KEYS.items():
-        if key in data:
-            raise ValueError(message)
-    if "process_profile" in data and data["process_profile"] not in PROCESS_PROFILES:
-        available_profiles = ", ".join(sorted(PROCESS_PROFILES.keys()))
-        raise ValueError(f"unknown process_profile {data['process_profile']!r}; must be one of: {available_profiles}")
-    valid_keys = {f.name for f in fields(LitehiveConfig)}
-    for key in list(data):
-        if key not in valid_keys:
-            raise ValueError(f"unknown config key {key!r}; remove it or migrate to a supported config field")
-    return LitehiveConfig(**data)
+    return LitehiveConfig(**validate_config_data(load_effective_config_data(root)))
 
 
 def load_context(root: Path) -> str:

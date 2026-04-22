@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from litehive.config.registry import workspace_registry_path
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.execution import run_daemon_loop
 from litehive.recovery.detection import LaunchFailure
@@ -12,12 +13,14 @@ from litehive.tasks.reports import load_task_thread
 
 
 def test_daemon_loop_recovers_corrupt_workspaces_yaml_before_cycle_start(tmp_path: Path, monkeypatch) -> None:
+    config_home = tmp_path / "config-home"
     data_home = tmp_path / "data-home"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Queue head")
 
-    registry_path = data_home / "litehive" / "workspaces.yaml"
+    registry_path = workspace_registry_path()
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     registry_path.write_text("broken: [\n", encoding="utf-8")
 

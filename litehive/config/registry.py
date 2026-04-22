@@ -12,7 +12,7 @@ from typing import Iterator
 
 import yaml
 
-from litehive.config.paths import litehive_root
+from litehive.config.paths import litehive_config_root
 
 log = logging.getLogger(__name__)
 
@@ -27,12 +27,16 @@ class _RegistryCorruptError(RuntimeError):
     """Raised when the registry YAML cannot be parsed into the expected shape."""
 
 
+def workspace_registry_path() -> Path:
+    return litehive_config_root() / "workspaces.yaml"
+
+
 def _registry_path() -> Path:
-    return litehive_root() / "workspaces.yaml"
+    return workspace_registry_path()
 
 
 def _registry_lock_path() -> Path:
-    return litehive_root() / ".workspaces.lock"
+    return _registry_path().with_name(".workspaces.lock")
 
 
 def _close_all_registry_connections() -> None:
@@ -110,11 +114,12 @@ def _load_registry_entries(path: Path) -> list[Path]:
     if not isinstance(payload, list):
         raise _RegistryCorruptError("workspace registry must contain a list of workspace paths")
 
+    if any(not isinstance(entry, str) for entry in payload):
+        raise _RegistryCorruptError("workspace registry must contain only string workspace paths")
+
     roots: list[Path] = []
     seen: set[Path] = set()
     for entry in payload:
-        if not isinstance(entry, str):
-            continue
         try:
             resolved = Path(entry).expanduser().resolve()
         except OSError:
