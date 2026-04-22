@@ -1,13 +1,23 @@
-from typing import Any
 from pathlib import Path
+from typing import Any
 
+from litehive.domain.recovery import TriggerEventKind, blocked_on_follow_up_reason
+from litehive.domain.reports import RecoveryAction
 from litehive.domain.runtime import RuntimeRecoveryOutcome
-from litehive.lifecycle.events import Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
+from litehive.lifecycle.events import Crash, Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.persistence import TaskState
 from litehive.recovery.scope_analysis import analyze_scope_changes
-from litehive.state.records import get_task_record
+from litehive.recovery.test_failure_attribution import (
+    UNRELATED_TEST_BREAKAGE,
+    TestFailureAttribution,
+    attribute_test_failure,
+    build_unrelated_test_follow_up,
+)
+from litehive.state.records import create_follow_up_tasks, get_task_record
+from litehive.tasks.reports import record_recovery_report
 from litehive.worktree import task_worktree_path
+
 from .base import RoleAgent
 
 ROLE_GUIDANCE = """\
@@ -72,24 +82,30 @@ class RecoveryAgent(RoleAgent):
     FRESH_ATTEMPT_INSTRUCTIONS = FRESH_ATTEMPT_GUIDANCE
     RETRY_ATTEMPT_INSTRUCTIONS = RETRY_ATTEMPT_GUIDANCE
 
+    def run(self, state: TaskState) -> Event:
+        try:
+            auto_event = self._auto_handle_unrelated_test_failure(state)
+        except Exception as exc:
+            return Crash(exc_type=type(exc).__name__, message=str(exc))
+        if auto_event is not None:
+            return auto_event
+        return super().run(state)
+
     def build_prompt(self, state: TaskState) -> dict[str, Any]:
         base = super().build_prompt(state)
         trigger = state.active_recovery_trigger
         task_record = None
         recovery_history: list[dict[str, Any]] = []
         repeated_recovery_fingerprint = None
+        test_failure_attribution = self._test_failure_attribution(state)
 
-        # Perform scope analysis if worktree can be determined
         scope_analysis = None
         try:
             worktree_path = None
-
-            # Try to use current working directory if it's a git worktree
             cwd = Path.cwd()
             if (cwd / ".git").exists():
                 worktree_path = cwd
             elif self.prompt_context and self.prompt_context.workspace_root:
-                # Fall back to looking up via task record
                 task_record = get_task_record(self.prompt_context.workspace_root, state.task_id)
                 if task_record:
                     computed_worktree_path = task_worktree_path(self.prompt_context.workspace_root, task_record)
@@ -98,7 +114,6 @@ class RecoveryAgent(RoleAgent):
 
             if worktree_path:
                 analysis_result = analyze_scope_changes(worktree_path)
-                # Convert NamedTuple to dict for prompt serializer
                 scope_analysis = {
                     "is_operator_cleanup": analysis_result.is_operator_cleanup,
                     "deleted_files": analysis_result.deleted_files,
@@ -107,7 +122,6 @@ class RecoveryAgent(RoleAgent):
                     "reasoning": analysis_result.reasoning,
                 }
         except Exception:
-            # If scope analysis fails, provide no analysis (recovery can proceed without it)
             scope_analysis = None
 
         if task_record is None and self.prompt_context and self.prompt_context.workspace_root:
@@ -122,6 +136,9 @@ class RecoveryAgent(RoleAgent):
                 "repeated_recovery_fingerprint": repeated_recovery_fingerprint,
                 "recovery_failure_explanation": state.recovery_failure_explanation,
                 "scope_analysis": scope_analysis,
+                "test_failure_attribution": (
+                    None if test_failure_attribution is None else test_failure_attribution.to_prompt_payload()
+                ),
             }
         )
         return base
@@ -143,6 +160,83 @@ class RecoveryAgent(RoleAgent):
         if outcome == "budget_hit":
             return RecoveryBudgetHit()
         return RecoveryFailed(reason=verdict.reason or "recovery_failed")
+
+    def _test_failure_attribution(self, state: TaskState) -> TestFailureAttribution | None:
+        trigger = state.active_recovery_trigger
+        if trigger is None or trigger.trigger_event_kind != TriggerEventKind.REJECT:
+            return None
+        return attribute_test_failure(
+            changed_files=state.last_report.changed_files,
+            rejection_message=trigger.message,
+            diagnostics=trigger.diagnostics,
+        )
+
+    def _auto_handle_unrelated_test_failure(self, state: TaskState) -> Event | None:
+        root = None if self.prompt_context is None else self.prompt_context.workspace_root
+        if root is None:
+            return None
+        trigger = state.active_recovery_trigger
+        if trigger is None or trigger.trigger_event_kind != TriggerEventKind.REJECT:
+            return None
+        origin_stage = _follow_up_stage(trigger.origin_stage)
+        if origin_stage not in {"testing", "accepting"}:
+            return None
+        attribution = self._test_failure_attribution(state)
+        if attribution is None or not attribution.is_unrelated_breakage or attribution.primary_failing_test is None:
+            return None
+        task = get_task_record(root, state.task_id)
+        if task is None:
+            return None
+        created = create_follow_up_tasks(
+            root,
+            parent_task=task,
+            stage=origin_stage,
+            follow_ups=[
+                build_unrelated_test_follow_up(
+                    parent_task_id=task.id,
+                    failing_test=attribution.primary_failing_test,
+                    changed_files=attribution.changed_files,
+                )
+            ],
+        )
+        if not created:
+            return None
+        follow_up = created[0]
+        record_recovery_report(
+            root,
+            task,
+            trigger_event_kind=trigger.trigger_event_kind,
+            origin_stage=origin_stage,
+            summary=(
+                f"Attributed `{attribution.primary_failing_test}` to unrelated breakage, created blocking follow-up "
+                f"{follow_up.id}, and flagged the current task."
+            ),
+            runnable_state="blocked",
+            actions=[
+                RecoveryAction(
+                    action="attribute_test_failure",
+                    summary=attribution.reasoning,
+                    metadata={
+                        "classification": attribution.classification,
+                        "failing_tests": list(attribution.failing_tests),
+                        "changed_files": list(attribution.changed_files),
+                    },
+                ),
+                RecoveryAction(
+                    action="create_follow_up_task",
+                    summary=f"Created blocking bugfix task {follow_up.id}: {follow_up.title}",
+                    metadata={"follow_up_task_id": follow_up.id},
+                ),
+                RecoveryAction(
+                    action="block_current_task",
+                    summary=f"Current task blocked on follow-up {follow_up.id}",
+                    metadata={"follow_up_task_id": follow_up.id},
+                ),
+            ],
+            failure_classification=UNRELATED_TEST_BREAKAGE,
+            blocker=f"{follow_up.id}: {follow_up.title}",
+        )
+        return RecoveryFailed(reason=blocked_on_follow_up_reason(follow_up.id))
 
 
 def _pipeline_stage_key(name: str | None) -> str | None:
@@ -193,7 +287,11 @@ def _merged_recovery_history_payload(state: TaskState, task_record: Any) -> list
     merged: list[dict[str, Any]] = []
     seen: set[tuple[str | None, str, str, str, str | None]] = set()
     runtime_history = [] if task_record is None else list(task_record.runtime.recovery_history)
-    for item in [*[_runtime_recovery_payload(outcome) for outcome in runtime_history], *[_state_recovery_payload(outcome) for outcome in state.recovery_history]]:
+    items = [
+        *[_runtime_recovery_payload(outcome) for outcome in runtime_history],
+        *[_state_recovery_payload(outcome) for outcome in state.recovery_history],
+    ]
+    for item in items:
         key = _recovery_history_key(item)
         if key in seen:
             continue
@@ -235,3 +333,17 @@ def _repeated_recovery_fingerprint_payload(
         "budget_key": trigger.budget_key(),
         "matching_prior_attempts": matches,
     }
+
+
+def _follow_up_stage(origin_stage: str | None) -> str | None:
+    if origin_stage in {"before_testing", "testing", "after_testing"}:
+        return "testing"
+    if origin_stage in {"before_accepting", "accepting", "after_accepting"}:
+        return "accepting"
+    if origin_stage in {"before_implementing", "implementing", "after_implementing"}:
+        return "implementing"
+    if origin_stage in {"before_grooming", "grooming", "after_grooming", "recovering"}:
+        return "grooming"
+    if origin_stage in {"before_commit", "commit", "after_commit", "merge_resolving"}:
+        return "commit_to_git"
+    return origin_stage

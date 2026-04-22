@@ -292,7 +292,7 @@ def create_follow_up_tasks(
 ) -> list[TaskRecord]:
     if not follow_ups:
         return []
-    if stage not in {"grooming", "accepting"}:
+    if stage not in {"grooming", "testing", "accepting"}:
         return []
 
     ensure_workspace(root)

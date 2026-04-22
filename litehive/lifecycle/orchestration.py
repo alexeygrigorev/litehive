@@ -28,10 +28,12 @@ import subprocess
 from litehive.config.loading import load_config
 from litehive.config.engine_models import resolve_task_rejection_loop_limit, resolve_task_retry_policy
 from litehive.git.ops import GitError, remove_worktree
+from litehive.domain.recovery import parse_blocked_on_follow_up_reason
 from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.domain.runtime import RuntimeHookRejectFingerprint, RuntimeRecoveryOutcome
 from litehive.domain.common import cap_feedback, utcnow
+from litehive.recovery.test_failure_attribution import UNRELATED_TEST_BREAKAGE
 from litehive.state.records import (
     clear_task_worktree_path,
     get_task,
@@ -219,6 +221,20 @@ def _latest_recovery_trigger(state: TaskState):
     return None
 
 
+def _recovery_origin_stage(origin_stage: str | None) -> str | None:
+    if origin_stage in {"before_grooming", "grooming", "after_grooming", "recovering"}:
+        return "grooming"
+    if origin_stage in {"before_implementing", "implementing", "after_implementing"}:
+        return "implementing"
+    if origin_stage in {"before_testing", "testing", "after_testing"}:
+        return "testing"
+    if origin_stage in {"before_accepting", "accepting", "after_accepting"}:
+        return "accepting"
+    if origin_stage in {"before_commit", "commit", "after_commit", "merge_resolving"}:
+        return "commit_to_git"
+    return origin_stage
+
+
 def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | None:
     journal_message: str | None = None
     commit_result = state.commit_result
@@ -249,7 +265,33 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
         else:
             task_record.status = "flagged"
             task_record.pipeline_status = "flagged"
-            if failed_reason == "hook_reject_loop" or (trigger is not None and trigger.reason_code == "hook_reject_loop"):
+            follow_up_task_id = parse_blocked_on_follow_up_reason(state.failed_message)
+            origin_stage_key = _recovery_origin_stage(origin_stage)
+            if follow_up_task_id is not None:
+                task_record.flag_reason = f"blocked_on_follow_up:{follow_up_task_id}"
+                reason = (
+                    state.recovery_failure_explanation
+                    or f"Blocked on follow-up task `{follow_up_task_id}` for unrelated breakage."
+                )
+                apply_task_outcome(
+                    task_record,
+                    kind="blocked",
+                    stage=origin_stage_key or task_record.pipeline_status,
+                    reason_code="blocked_on_follow_up",
+                    reason=reason,
+                    retry_count=0,
+                    retry_limit=0,
+                    follow_up_task_id=follow_up_task_id,
+                    failure_classification=UNRELATED_TEST_BREAKAGE,
+                    failure_diagnostics={
+                        "follow_up_task_id": follow_up_task_id,
+                        "origin_stage": origin_stage_key,
+                    },
+                )
+                journal_message = reason
+            elif failed_reason == "hook_reject_loop" or (
+                trigger is not None and trigger.reason_code == "hook_reject_loop"
+            ):
                 task_record.flag_reason = "hook_reject_loop"
             elif failed_reason == "rejection_loop_detected":
                 task_record.flag_reason = "rejection_loop_detected"

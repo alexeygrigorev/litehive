@@ -7,6 +7,7 @@ from litehive.domain.recovery import (
     RecoveryOutcome,
     RecoveryTrigger,
     TriggerEventKind,
+    parse_blocked_on_follow_up_reason,
 )
 from litehive.lifecycle.events import (
     Blocked,
@@ -546,6 +547,12 @@ def _recovery_failure_explanation(
     message: str,
 ) -> str:
     subject = trigger.origin_stage or "unknown stage"
+    blocked_follow_up_task_id = parse_blocked_on_follow_up_reason(message)
+    if blocked_follow_up_task_id is not None:
+        return (
+            f"Recovery attributed `{subject}` to unrelated breakage and blocked the current task on follow-up "
+            f"`{blocked_follow_up_task_id}`."
+        )
     if reason == FailedReason.RECOVERY_BUDGET_HIT:
         return (
             f"Recovery budget exhausted for `{subject}` after repeated "

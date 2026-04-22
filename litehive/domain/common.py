@@ -66,6 +66,7 @@ class OutcomeReasonCode(StringEnum):
     VERDICT_FAIL = "verdict_fail"
     VERDICT_REJECT = "verdict_reject"
     VERDICT_BLOCKED = "verdict_blocked"
+    BLOCKED_ON_FOLLOW_UP = "blocked_on_follow_up"
     HALLUCINATED_COMPLETION = "hallucinated_completion"
     RESOURCE_LIMIT = "resource_limit"
     MISSING_ACCEPTANCE_CRITERIA = "missing_acceptance_criteria"

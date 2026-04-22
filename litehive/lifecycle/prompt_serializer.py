@@ -86,6 +86,10 @@ def serialize_prompt(
     if scope_analysis:
         sections.append(_scope_analysis_section(scope_analysis))
 
+    test_failure_attribution = prompt.get("test_failure_attribution")
+    if test_failure_attribution:
+        sections.append(_test_failure_attribution_section(test_failure_attribution))
+
     conflict_files = prompt.get("conflict_files")
     if conflict_files:
         sections.append(_merge_conflict_section(conflict_files, prompt.get("merge_attempt")))
@@ -289,6 +293,24 @@ def _scope_analysis_section(scope_analysis: dict[str, Any]) -> str:
     else:
         lines.append("- No files deleted")
 
+    return "\n".join(lines)
+
+
+def _test_failure_attribution_section(attribution: dict[str, Any]) -> str:
+    classification = str(attribution.get("classification") or "unknown").replace("_", " ").upper()
+    lines = ["Test failure attribution (current recovery trigger):", f"- Classification: {classification}"]
+    reasoning = str(attribution.get("reasoning") or "").strip()
+    if reasoning:
+        lines.append(f"- Reasoning: {reasoning}")
+    failing_tests = _string_list(attribution.get("failing_tests"))
+    if failing_tests:
+        lines.append(f"- Failing tests: {_compact_list(failing_tests, limit=2, separator='; ')}")
+    matched_changed_files = _string_list(attribution.get("matched_changed_files"))
+    if matched_changed_files:
+        lines.append(f"- Matched changed files: {_compact_list(matched_changed_files, limit=3)}")
+    changed_files = _string_list(attribution.get("changed_files"))
+    if changed_files:
+        lines.append(f"- Recorded changed surface: {_compact_list(changed_files, limit=4)}")
     return "\n".join(lines)
 
 

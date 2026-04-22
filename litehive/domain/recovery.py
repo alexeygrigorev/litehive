@@ -163,10 +163,30 @@ class RecoveryOutcome:
         )
 
 
+BLOCKED_ON_FOLLOW_UP_REASON_PREFIX = "blocked_on_follow_up:"
+
+
+def blocked_on_follow_up_reason(follow_up_task_id: str) -> str:
+    return f"{BLOCKED_ON_FOLLOW_UP_REASON_PREFIX}{follow_up_task_id.strip()}"
+
+
+def parse_blocked_on_follow_up_reason(reason: str | None) -> str | None:
+    if reason is None:
+        return None
+    normalized = reason.strip()
+    if not normalized.startswith(BLOCKED_ON_FOLLOW_UP_REASON_PREFIX):
+        return None
+    follow_up_task_id = normalized.removeprefix(BLOCKED_ON_FOLLOW_UP_REASON_PREFIX).strip()
+    return follow_up_task_id or None
+
+
 __all__ = [
+    "BLOCKED_ON_FOLLOW_UP_REASON_PREFIX",
     "FailureFingerprint",
     "RecoveryDisposition",
     "RecoveryOutcome",
     "RecoveryTrigger",
     "TriggerEventKind",
+    "blocked_on_follow_up_reason",
+    "parse_blocked_on_follow_up_reason",
 ]
