@@ -6,7 +6,7 @@ import re
 import signal
 import time
 
-from heru import extract_engine_continuation, extract_engine_timeline, get_engine
+from heru import extract_engine_continuation, extract_engine_timeline, get_engine, render_execution_transcript
 from heru.base import CLIExecutionResult
 from heru.types import LiveTimeline, RuntimeEngineContinuation, SubagentRef
 from litehive.agents.artifacts import (
@@ -44,7 +44,11 @@ class SessionMixin:
     ) -> str:
         if execution is None:
             return ""
-        return get_engine(engine_name).render_transcript(execution)
+        return render_execution_transcript(
+            engine_name,
+            execution,
+            fallback_renderer=get_engine(engine_name).render_transcript,
+        )
 
     @staticmethod
     def _extract_execution_continuation(

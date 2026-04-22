@@ -39,6 +39,64 @@ def _reset_pipeline_state(root: Path, task_id: str) -> None:
     SqlitePersistence(root).reset(task_id)
 
 
+def _terminate_subagent_pid(
+    task_id: str,
+    pid: int | None,
+    *,
+    wait_timeout_seconds: float = 5.0,
+    poll_interval_seconds: float = 0.1,
+) -> bool:
+    from litehive.state.locking import runner_pid_is_alive
+
+    def _pid_is_dead() -> bool:
+        if pid is None:
+            return True
+        try:
+            reaped_pid, _ = os.waitpid(pid, os.WNOHANG)
+        except ChildProcessError:
+            reaped_pid = 0
+        if reaped_pid == pid:
+            return True
+        proc_status = Path(f"/proc/{pid}/status")
+        if proc_status.exists():
+            try:
+                for line in proc_status.read_text(encoding="utf-8").splitlines():
+                    if line.startswith("State:"):
+                        return "\tZ" in line or " zombie" in line
+            except OSError:
+                pass
+        return not runner_pid_is_alive(pid)
+
+    if pid is None or _pid_is_dead():
+        return False
+
+    sleep_interval = max(poll_interval_seconds, 0.01)
+
+    def _wait_until_dead(timeout_seconds: float) -> bool:
+        deadline = time.monotonic() + max(timeout_seconds, 0.0)
+        while not _pid_is_dead() and time.monotonic() < deadline:
+            time.sleep(sleep_interval)
+        return _pid_is_dead()
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return False
+
+    if _wait_until_dead(wait_timeout_seconds):
+        return True
+
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return True
+
+    if _wait_until_dead(wait_timeout_seconds):
+        return True
+
+    raise WorkspaceConflictError(f"subagent pid {pid} for task {task_id} did not exit after SIGTERM/SIGKILL")
+
+
 def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
     from litehive.tasks.queue import validate_single_active_task, active_task_markers
 
@@ -427,6 +485,7 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", "merge_failed", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, merge_failed, or closed")
+        _terminate_subagent_pid(task.id, None if task.runtime.active_subagent is None else task.runtime.active_subagent.pid)
         _apply_cancelled_task_state(task, reason="Task abandoned via CLI.")
         _drop_task_from_workspace_state(state, task.id)
         persist_task_and_state_without_runner_guard(
@@ -534,8 +593,15 @@ def close_task(
         allowed = ", ".join(sorted(_CLOSE_OUTCOME_REASON_CODES))
         raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
     state = load_state(root)
+    task_snapshot = get_task_record(root, task_id)
+    active_subagent_pid = (
+        None
+        if task_snapshot is None or task_snapshot.runtime.active_subagent is None
+        else task_snapshot.runtime.active_subagent.pid
+    )
     if state.active_task_id == task_id:
         stop_current_task(root)
+    _terminate_subagent_pid(task_id, active_subagent_pid)
     with workspace_lock(root):
         task = get_task_record(root, task_id)
         if task is None:
@@ -648,6 +714,7 @@ def update_task(
                 raise ValueError(f"Unsupported close outcome '{outcome_str}'. Expected one of: {allowed}")
             if task.status == "done":
                 raise ValueError(f"Task {task.id} is already done and cannot be closed")
+            _terminate_subagent_pid(task.id, None if task.runtime.active_subagent is None else task.runtime.active_subagent.pid)
             close_msg = _apply_close_task_state(
                 task,
                 outcome=outcome_str,

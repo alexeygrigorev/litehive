@@ -88,9 +88,8 @@ def test_dequeue_next_task_ignores_stale_active_marker_when_reclaiming_missing_w
     ("status", "pipeline_status"),
     [
         ("queued", "implementing"),
-        ("interrupted", "testing"),
     ],
-    ids=["resumed", "interrupted"],
+    ids=["resumed"],
 )
 def test_dequeue_next_task_preserves_missing_resumed_work_on_restart(
     tmp_path: Path,
@@ -106,6 +105,10 @@ def test_dequeue_next_task_preserves_missing_resumed_work_on_restart(
         status=status,
         pipeline_status=pipeline_status,
     )
+    queued_task = require_task(tmp_path, unfinished.id)
+    queued_task.runtime.current_stage.stage = pipeline_status
+    queued_task.runtime.current_stage.status = "idle"
+    save_task(tmp_path, queued_task)
 
     state = load_state(tmp_path)
     state.active_task_id = None
@@ -125,9 +128,8 @@ def test_dequeue_next_task_preserves_missing_resumed_work_on_restart(
     ("status", "pipeline_status"),
     [
         ("queued", "implementing"),
-        ("interrupted", "testing"),
     ],
-    ids=["resumed", "interrupted"],
+    ids=["resumed"],
 )
 def test_peek_next_task_restores_missing_unfinished_tasks_to_queue_on_restart(
     tmp_path: Path,
@@ -143,6 +145,10 @@ def test_peek_next_task_restores_missing_unfinished_tasks_to_queue_on_restart(
         status=status,
         pipeline_status=pipeline_status,
     )
+    queued_task = require_task(tmp_path, unfinished.id)
+    queued_task.runtime.current_stage.stage = pipeline_status
+    queued_task.runtime.current_stage.status = "idle"
+    save_task(tmp_path, queued_task)
 
     state = load_state(tmp_path)
     state.active_task_id = None

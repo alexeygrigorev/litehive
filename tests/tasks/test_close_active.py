@@ -10,12 +10,13 @@ from typer.testing import CliRunner
 from litehive.cli.app import app
 from litehive.config.workspace import ensure_workspace
 from heru.types import SubagentRef
-from litehive.state.records import create_task, require_task
+from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.paths import runner_lock_path, task_dir
 from litehive.state.persist import load_state
 from litehive.tasks.queue import set_active_task
 from litehive.state.locking import runner_lock_is_held
 from litehive.tasks.runtime import (
+    mark_subagent_pid,
     mark_subagent_started,
     mark_task_run_started,
 )
@@ -130,3 +131,74 @@ with workspace_runner_guard(root):
         if proc.poll() is None:
             proc.send_signal(signal.SIGINT)
             proc.wait(timeout=5)
+
+
+def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    monkeypatch.setattr("litehive.cli.agent_cli.block_if_agent", lambda: None)
+    task = create_task(tmp_path, title="Kill live subagent")
+    task.status = "queued"
+    task.pipeline_status = "implementing"
+    save_task(tmp_path, task)
+
+    sleeper = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import signal,sys,time\n"
+            "signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))\n"
+            "signal.signal(signal.SIGINT, lambda *_: sys.exit(0))\n"
+            "time.sleep(60)\n",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    try:
+        task = require_task(tmp_path, task.id)
+        mark_subagent_started(
+            tmp_path,
+            task,
+            SubagentRef(
+                id="SA-0001",
+                role="swe",
+                engine="codex",
+                status="running",
+                path="subagents/SA-0001-swe",
+            ),
+        )
+        task = require_task(tmp_path, task.id)
+        task.runtime.execution_status = "running"
+        save_task(tmp_path, task)
+        task = require_task(tmp_path, task.id)
+        mark_subagent_pid(tmp_path, task, sleeper.pid)
+        set_active_task(tmp_path, task.id)
+
+        result = CliRunner().invoke(
+            app,
+            [
+                "task",
+                "close",
+                task.id,
+                "--workspace",
+                str(tmp_path),
+                "--outcome",
+                "duplicate",
+                "--reason",
+                "already handled",
+            ],
+            standalone_mode=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        sleeper.wait(timeout=5)
+        assert sleeper.returncode in {0, -signal.SIGTERM, -signal.SIGKILL}
+
+        refreshed = require_task(tmp_path, task.id)
+        assert refreshed.status == "duplicate"
+        assert refreshed.runtime.execution_status == "cancelled"
+        assert refreshed.runtime.active_subagent is None
+    finally:
+        if sleeper.poll() is None:
+            sleeper.kill()
+            sleeper.wait(timeout=5)

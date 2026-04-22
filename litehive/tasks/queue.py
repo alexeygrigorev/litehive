@@ -18,6 +18,10 @@ from litehive.tasks.runtime import clear_task_run_activity, idle_stage_state
 
 logger = logging.getLogger(__name__)
 
+_TERMINAL_EXECUTION_STATUSES = {"done", "cancelled", "failed", "blocked", "interrupted"}
+_TERMINAL_OUTCOME_KINDS = {"duplicate", "deferred", "wont_do"}
+_TRUSTED_IDLE_STAGE_STATUSES = {"idle", "paused", "interrupted"}
+
 
 # --- list ops ---
 
@@ -150,6 +154,67 @@ def _should_requeue_commit_stage_task(task: TaskRecord) -> bool:
     }
 
 
+def _has_terminal_execution_status(task: TaskRecord) -> bool:
+    return str(task.runtime.execution_status) in _TERMINAL_EXECUTION_STATUSES
+
+
+def _has_terminal_outcome_kind(task: TaskRecord) -> bool:
+    kind = task.runtime.last_outcome.kind
+    return kind is not None and str(kind) in _TERMINAL_OUTCOME_KINDS
+
+
+def _live_active_pipeline_stage(state: WorkspaceState, tasks_by_id: dict[str, TaskRecord]) -> str | None:
+    if state.active_task_id is None:
+        return None
+    active_task = tasks_by_id.get(state.active_task_id)
+    if active_task is None:
+        return None
+    current_stage = active_task.runtime.current_stage
+    if str(active_task.runtime.execution_status) == "running" or current_stage.status == "running":
+        return str(current_stage.stage or active_task.pipeline_status)
+    return None
+
+
+def _has_resume_marker(task: TaskRecord) -> bool:
+    stage = str(task.pipeline_status)
+    current_stage = task.runtime.current_stage
+    if current_stage.stage == stage and current_stage.status in _TRUSTED_IDLE_STAGE_STATUSES:
+        return True
+    interruption = task.runtime.interruption
+    if interruption is not None and (interruption.resume_stage == stage or interruption.pipeline_status == stage):
+        return True
+    handoff = task.runtime.continuation_handoff
+    if handoff is not None and handoff.stage == stage:
+        return True
+    return False
+
+
+def _normalize_stale_pipeline_statuses(
+    state: WorkspaceState,
+    tasks_by_id: dict[str, TaskRecord],
+) -> list[TaskRecord]:
+    active_stage = _live_active_pipeline_stage(state, tasks_by_id)
+    mutated: list[TaskRecord] = []
+    for task in tasks_by_id.values():
+        if task.id == state.active_task_id:
+            continue
+        stage = str(task.pipeline_status)
+        if stage in {"backlog", active_stage}:
+            continue
+        if task.status != "queued":
+            continue
+        if _has_resume_marker(task):
+            continue
+        now = utcnow()
+        task.pipeline_status = "backlog"
+        task.runtime.current_stage = idle_stage_state(updated_at=now, stage="backlog")
+        task.runtime.updated_at = now
+        if task.runtime.last_outcome.kind == "interrupted":
+            task.runtime.last_outcome.stage = "backlog"
+        mutated.append(task)
+    return mutated
+
+
 def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
     from litehive.state.records import require_task
     from litehive.state.locking import workspace_lock, workspace_mutation_guard
@@ -178,16 +243,19 @@ def peek_next_task(root: Path) -> TaskRecord | None:
 
 def peek_next_task_selection(root: Path) -> TaskSelection:
     from litehive.state.locking import workspace_lock, workspace_mutation_guard
-    from litehive.state.persist import load_state, save_state
+    from litehive.state.persist import load_state, persist_tasks_and_state, save_state
     from litehive.recovery.execution_recovery import recover_stale_runner_state
 
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
         validate_single_active_task(root, state)
-        next_task, blocked, mutated = _resolve_next_task_from_state(root, state)
+        next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(root, state)
         if mutated:
-            save_state(root, state)
+            if normalized_tasks:
+                persist_tasks_and_state(root, tasks=normalized_tasks, state=state)
+            else:
+                save_state(root, state)
         return TaskSelection(task=next_task, blocked=blocked)
 
 
@@ -227,7 +295,7 @@ def dequeue_next_task(root: Path) -> TaskRecord | None:
 
 def dequeue_next_task_selection(root: Path) -> TaskSelection:
     from litehive.state.locking import workspace_mutation_guard
-    from litehive.state.persist import save_state
+    from litehive.state.persist import persist_tasks_and_state, save_state
     from litehive.recovery.execution_recovery import recover_stale_runner_state
     from .reports import record_recovery_report
     from litehive.state.persist import persist_task_and_state
@@ -237,10 +305,13 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
         state = load_state(root)
         original_queue = list(state.queue)
         validate_single_active_task(root, state)
-        next_task, blocked, mutated = _resolve_next_task_from_state(root, state)
+        next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(root, state)
         if next_task is None:
             if mutated:
-                save_state(root, state)
+                if normalized_tasks:
+                    persist_tasks_and_state(root, tasks=normalized_tasks, state=state)
+                else:
+                    save_state(root, state)
             return TaskSelection(task=None, blocked=blocked)
         if state.active_task_id != next_task.id:
             state.active_task_id = next_task.id
@@ -289,12 +360,22 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
             if next_task.status in {"queued", "interrupted"}:
                 next_task.status = "in_progress"
             queue_additions = [task_id for task_id in state.queue if task_id not in original_queue]
-            persist_task_and_state(
-                root,
-                task=next_task,
-                state=state,
-                protected_task_ids=queue_additions,
-            )
+            if normalized_tasks:
+                tasks_to_persist = {task.id: task for task in normalized_tasks}
+                tasks_to_persist[next_task.id] = next_task
+                persist_tasks_and_state(
+                    root,
+                    tasks=list(tasks_to_persist.values()),
+                    state=state,
+                    protected_task_ids=queue_additions,
+                )
+            else:
+                persist_task_and_state(
+                    root,
+                    task=next_task,
+                    state=state,
+                    protected_task_ids=queue_additions,
+                )
         return TaskSelection(task=next_task, blocked=blocked)
 
 
@@ -303,6 +384,10 @@ def _is_parked_task(task: TaskRecord) -> bool:
 
 
 def is_task_eligible_for_execution(task: TaskRecord) -> bool:
+    if _has_terminal_execution_status(task):
+        return False
+    if _has_terminal_outcome_kind(task):
+        return False
     if task.pipeline_status == "done":
         return False
     if _needs_manual_intervention(task):
@@ -426,12 +511,13 @@ def _task_selection_key(
 
 def _resolve_next_task_from_state(
     root: Path, state: WorkspaceState
-) -> tuple[TaskRecord | None, list[BlockedTask], bool]:
+) -> tuple[TaskRecord | None, list[BlockedTask], bool, list[TaskRecord]]:
     from litehive.state.records import list_tasks
 
     tasks_by_id = {task.id: task for task in list_tasks(root)}
+    normalized_tasks = _normalize_stale_pipeline_statuses(state, tasks_by_id)
     next_task, blocked, snapshot_mutated = _resolve_next_task_from_snapshot(state, tasks_by_id)
-    return next_task, blocked, snapshot_mutated
+    return next_task, blocked, snapshot_mutated or bool(normalized_tasks), normalized_tasks
 
 
 def restore_missing_queued_tasks(
@@ -618,7 +704,7 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
     ):
         markers.setdefault(current_state.active_task_id, []).append("workspace.active_task_id")
     for task in tasks:
-        if task.status == "in_progress" and task.pipeline_status != "done":
+        if task.status == "in_progress" and task.pipeline_status != "done" and is_task_eligible_for_execution(task):
             markers.setdefault(task.id, []).append("task.status=in_progress")
         if task.runtime.execution_status == "running":
             markers.setdefault(task.id, []).append("runtime.execution_status=running")

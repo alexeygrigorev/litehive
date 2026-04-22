@@ -45,6 +45,7 @@ from litehive.state.records import (
     clear_task_worktree_path,
     get_task_worktree_path,
     save_task,
+    set_task_worktree_path,
 )
 from litehive.tasks.activity import append_task_activity
 from litehive.tasks.normalization import implementation_entry_stage
@@ -361,7 +362,7 @@ def _ensure_task_worktree(root: Path, task: TaskRecord) -> Path:
     branch = task_worktree_branch(task)
     existing = GitWorktreeSyncNode._registered_worktree_for_branch(root, branch)
     if existing is not None:
-        task.runtime.git.worktree_path = serialize_worktree_path(existing)
+        set_task_worktree_path(task, serialize_worktree_path(existing))
         save_task(root, task)
         return existing
 
@@ -391,7 +392,7 @@ def _ensure_task_worktree(root: Path, task: TaskRecord) -> Path:
         )
 
     ensure_worktree_venv_link(root, worktree)
-    task.runtime.git.worktree_path = serialize_worktree_path(worktree)
+    set_task_worktree_path(task, serialize_worktree_path(worktree))
     save_task(root, task)
     return worktree
 

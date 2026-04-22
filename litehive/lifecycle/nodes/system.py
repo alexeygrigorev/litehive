@@ -157,7 +157,7 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         self.main_ref = main_ref
 
     def _sync(self, state: TaskState) -> bool:
-        from litehive.state.records import get_task, save_task
+        from litehive.state.records import get_task, get_task_worktree_path, save_task, set_task_worktree_path
         from litehive.worktree import (
             ensure_worktree_venv_link,
             resolve_recorded_worktree_path,
@@ -173,12 +173,12 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         if task is None:
             raise GitError(f"task {state.task_id} not found while creating worktree")
 
-        recorded = resolve_recorded_worktree_path(self.workspace_root, task.runtime.git.worktree_path)
+        recorded = resolve_recorded_worktree_path(self.workspace_root, get_task_worktree_path(task))
         if recorded is None or not recorded.exists():
             branch = task_worktree_branch(task)
             existing = self._registered_worktree_for_branch(self.workspace_root, branch)
             if existing is not None:
-                task.runtime.git.worktree_path = serialize_worktree_path(existing)
+                set_task_worktree_path(task, serialize_worktree_path(existing))
                 save_task(self.workspace_root, task)
             else:
                 worktree = task_worktree_path(self.workspace_root, task)
@@ -193,7 +193,7 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
                 if created.returncode != 0:
                     raise GitError(f"git worktree add failed: {created.stderr.strip() or created.stdout.strip()}")
                 ensure_worktree_venv_link(self.workspace_root, worktree)
-                task.runtime.git.worktree_path = serialize_worktree_path(worktree)
+                set_task_worktree_path(task, serialize_worktree_path(worktree))
                 save_task(self.workspace_root, task)
                 return True
 

@@ -33,7 +33,7 @@ from litehive.domain.lifecycle_deltas import recovery_trigger_from_event
 from litehive.git.ops import GitError, is_git_repo, status_porcelain
 from litehive.roles.base import PromptContext
 from litehive.roles.recovery import RecoveryAgent
-from litehive.state.records import get_task
+from litehive.state.records import get_task, get_task_worktree_path
 from litehive.tasks.activity import latest_task_activity_entry, load_task_activity, save_task_activity
 from litehive.tasks.journal import append_journal
 from litehive.tasks.reports import normalized_files_changed, rewrite_latest_stage_report
@@ -86,7 +86,7 @@ def _execution_checkout_path(workspace_root: Path, task) -> Path:
     return (
         resolve_recorded_worktree_path(
             workspace_root,
-            task.runtime.git.worktree_path or task.git.worktree_path,
+            get_task_worktree_path(task),
         )
         or workspace_root
     )
@@ -309,9 +309,7 @@ class HeruEngineAdapter:
         stage = prompt["stage"]
         role = prompt["role"]
         prompt_text = serialize_prompt(prompt, task_record=task, workspace_root=self.workspace_root)
-        execution_root = (
-            resolve_recorded_worktree_path(self.workspace_root, task.runtime.git.worktree_path) or self.workspace_root
-        )
+        execution_root = _execution_checkout_path(self.workspace_root, task)
 
         before_turn = datetime.now(UTC)
         try:

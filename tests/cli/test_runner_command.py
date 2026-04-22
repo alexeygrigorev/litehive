@@ -41,7 +41,7 @@ def test_run_dry_run_shows_task_info(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert "task: T-TEST Test Task for Dry Run" in result.output
-    assert "stage: implementing" in result.output
+    assert "stage: backlog" in result.output
     assert "effective_engine:" in result.output
     assert "effective_model:" in result.output
 
