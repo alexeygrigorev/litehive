@@ -27,6 +27,15 @@ from litehive.tasks.paths import runner_lock_path, task_dir, task_file
 logger = logging.getLogger(__name__)
 
 
+def _pid_is_zombie(pid: int) -> bool:
+    stat_path = Path("/proc") / str(pid) / "stat"
+    try:
+        fields = stat_path.read_text(encoding="utf-8").split()
+    except OSError:
+        return False
+    return len(fields) > 2 and fields[2] == "Z"
+
+
 def _runner_lock_manager(
     root: Path,
     *,
@@ -208,7 +217,7 @@ def runner_pid_is_alive(pid: object) -> bool:
         return False
     except PermissionError:
         return True
-    return True
+    return not _pid_is_zombie(candidate)
 
 
 def subagent_process_is_stale(task: "TaskRecord") -> bool:

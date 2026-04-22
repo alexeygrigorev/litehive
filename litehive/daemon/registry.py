@@ -119,9 +119,11 @@ def _clear_stale_daemon_metadata(workspace: Path, *, pid: int | None = None) -> 
 
 def daemon_metadata(workspace: Path) -> dict[str, object] | None:
     workspace = workspace.resolve()
-    metadata, status = _daemon_lock_manager(workspace).metadata_status()
-    if metadata is None or status == "stopped":
+    manager = _daemon_lock_manager(workspace)
+    metadata = manager.read_metadata()
+    if not metadata:
         return None
+    status = "running" if manager.is_active() else "stale"
     payload = dict(metadata)
     payload["status"] = status
     return payload
@@ -150,10 +152,12 @@ def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
             if isinstance(existing_pid, int) and pid_is_alive(existing_pid):
                 raise RuntimeError(f"daemon already running for {workspace}: pid={existing_pid}") from None
             raise RuntimeError(f"daemon already running for {workspace}: pid={existing_pid}") from None
+        now = utcnow()
         payload = {
             "workspace": str(workspace),
             "pid": pid,
-            "started_at": utcnow(),
+            "started_at": now,
+            "heartbeat_at": now,
             "log_dir": str(log_dir),
         }
         manager.write_locked_metadata(handle, payload)
@@ -187,6 +191,21 @@ def unregister_daemon(workspace: Path, *, pid: int | None = None) -> None:
         _remove_daemon_registry_entry(workspace)
         return
     _clear_stale_daemon_metadata(workspace, pid=pid)
+
+
+def touch_daemon(workspace: Path, *, pid: int | None = None) -> bool:
+    workspace = workspace.resolve()
+    manager = _daemon_lock_manager(workspace)
+    with _DAEMON_LOCKS_MUTEX:
+        handle = _DAEMON_LOCKS.get(workspace)
+        if handle is None:
+            return False
+        metadata = manager.read_locked_metadata(handle)
+        if pid is not None and metadata.get("pid") != pid:
+            return False
+        metadata["heartbeat_at"] = utcnow()
+        manager.write_locked_metadata(handle, metadata)
+    return True
 
 
 def list_daemon_instances() -> list[dict[str, object]]:
