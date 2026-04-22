@@ -1,0 +1,120 @@
+- role: planner
+  step: grooming
+  verdict: pass
+  message: "Grooming passed. The task is implementation-ready and I updated the durable\
+    \ task record with pm_complexity=moderate, planned_effort=s, task_type=bugfix,\
+    \ and a 5-step implementation plan via litehive task update.\n\nWhat I verified:\n\
+    - Inspected litehive/agents/sandbox.py, litehive/config/dataclasses.py, litehive/config/normalization.py,\
+    \ litehive/config/formatting.py, tests/test_runner_workflow.py, and tests/test_workspace_bootstrap.py.\n\
+    - Confirmed the behavioral mismatch: _wrap_docker rewrites container_argv[0] to\
+    \ the mounted absolute binary path, but _wrap_bubblewrap appends invocation.argv\
+    \ unchanged after '--'.\n- Confirmed current host prerequisites exist for real\
+    \ integration coverage: bwrap at /usr/bin/bwrap, codex at /home/alexey/.nvm/versions/node/v24.13.1/bin/codex,\
+    \ claude at /home/alexey/.nvm/versions/node/v24.13.1/bin/claude, python3 in the\
+    \ repo venv, and uv at /home/alexey/.local/bin/uv.\n- Confirmed the resolved binaries\
+    \ are nvm/node script entrypoints, so extra read-only binds are required beyond\
+    \ argv[0] rewrite:\n  codex -> /home/alexey/.nvm/versions/node/v24.13.1/lib/node_modules/@openai/codex/bin/codex.js\n\
+    \  claude -> /home/alexey/.nvm/versions/node/v24.13.1/lib/node_modules/@anthropic-ai/claude-code/cli.js\n\
+    \  node -> /home/alexey/.nvm/versions/node/v24.13.1/bin/node\n\nFocused runtime\
+    \ repro I ran:\n- Command: uv run python - <<'PY' ... construct SandboxLauncher\
+    \ with bubblewrap policy for codex, wrap CLIInvocation(argv=('codex','--version')),\
+    \ subprocess.run(wrapped.argv) ... PY\n- Observed wrapped command ends with '--\
+    \ codex --version' even though the resolved host binary is ro-bound.\n- Observed\
+    \ failure: exit code 1, stderr: 'bwrap: execvp codex: No such file or directory'.\n\
+    This confirms the first acceptance criterion describes a real current bug on this\
+    \ host.\n\nImplementation guidance for the next agent:\n- Add ExternalEngineSandboxPolicy.extra_ro_binds\
+    \ as a list[str] in config dataclasses and normalization, with round-trip/formatting/status\
+    \ coverage updated accordingly.\n- In _wrap_bubblewrap, rewrite argv[0] to the\
+    \ resolved absolute host binary path before appending the command, matching docker\
+    \ behavior semantically.\n- Add per-engine extra_ro_binds mounts in bubblewrap\
+    \ and fail closed with a clear SandboxError if any declared host path does not\
+    \ exist.\n- Update the sandbox config used for codex/claude so their required\
+    \ nvm/runtime directories are declared via extra_ro_binds.\n- Add focused unit\
+    \ tests in existing sandbox/config test files, plus real subprocess integration\
+    \ tests: python3+uv baseline always, codex required on this host, claude conditional\
+    \ if installed.\n\nAcceptance criteria assessment at grooming time:\n- Criteria\
+    \ are specific and independently testable; no narrowing was required.\n- The task\
+    \ is ready to move to implementing.\n\nTests/commands run during grooming:\n-\
+    \ litehive task update T-0301 --workspace . ...\n- command -v codex/claude/python3/uv/bwrap\n\
+    - readlink -f on codex, claude, and node\n- Focused uv-run reproduction of bubblewrap-wrapped\
+    \ codex --version showing execvp failure"
+  files_changed: []
+  created_at: '2026-04-10T12:11:58+00:00'
+- role: swe
+  step: implementing
+  verdict: pass
+  message: 'Implemented bubblewrap argv[0] rewrite plus per-engine extra_ro_binds
+    support. ExternalEngineSandboxPolicy now carries extra_ro_binds, normalization
+    validates absolute paths, formatting/status round-trip includes the field, and
+    bubblewrap mounts each declared host path read-only after fail-closed host existence
+    checks with a clear SandboxError. _wrap_bubblewrap now rewrites the executed command
+    argv[0] to the resolved absolute host binary path before the ''--'' separator,
+    matching the docker path rewrite semantics. Updated workspace config in .litehive/config.yaml
+    so codex and claude declare the required nvm runtime bind (/home/alexey/.nvm/versions/node/v24.13.1).
+    Verification: uv run ruff check --select E402,F401 litehive tests -> pass; forbidden
+    noqa grep hook -> pass; uv run pytest -q tests/test_runner_workflow.py -k ''sandbox
+    and (bubblewrap or external_engine_sandbox)'' -> 6 passed; uv run pytest -q tests/test_workspace_bootstrap.py
+    -k external_engine_sandbox -> 1 passed; uv run pytest -q tests/test_observability_and_status.py
+    -k external_engine_sandbox -> 2 passed; uv run pytest -q tests/test_sandbox_git_profiles.py
+    -> 14 passed. Acceptance evidence: unit coverage now asserts bubblewrap rewrites
+    argv[0] to the resolved binary path and adds extra_ro_binds ro-binds; missing
+    extra_ro_binds paths raise a clear fail-closed SandboxError; config round-trip
+    preserves extra_ro_binds; real bubblewrap subprocess tests execute python3+uv
+    successfully, codex --version successfully (stdout contains codex version text),
+    and claude --version successfully when installed on host.'
+  files_changed: []
+  created_at: '2026-04-10T12:19:48+00:00'
+- role: qa
+  step: testing
+  verdict: pass
+  message: 'QA PASS. Verified the implementation against all acceptance criteria with
+    focused code inspection and targeted tests. In litehive/agents/sandbox.py, _wrap_bubblewrap
+    now rewrites the post-"--" command argv[0] to the resolved absolute host binary
+    path before execution, matching docker semantics; a direct sanity check printed
+    /home/alexey/.nvm/versions/node/v24.13.1/lib/node_modules/@openai/codex/bin/codex.js
+    as the wrapped argv[0] for codex. ExternalEngineSandboxPolicy now includes extra_ro_binds,
+    normalization preserves and validates absolute host paths, formatting/status output
+    renders the field, and .litehive/config.yaml declares per-engine nvm binds for
+    codex and claude. Bubblewrap now adds each extra_ro_binds host path as a read-only
+    bind and unit coverage asserts the bind is present. Fail-closed behavior is covered
+    by test_sandbox_bubblewrap_missing_extra_ro_bind_fails_closed, which passed and
+    asserts SandboxError with a clear missing-path message. Real subprocess integration
+    tests passed in tests/test_sandbox_git_profiles.py: python3+uv inside bubblewrap
+    with extra runtime bind, codex --version inside bubblewrap with nvm runtime bind,
+    and claude --version inside bubblewrap when installed. Host prerequisites were
+    also confirmed directly: codex at /home/alexey/.nvm/versions/node/v24.13.1/bin/codex
+    reports codex-cli 0.118.0, and claude at /home/alexey/.nvm/versions/node/v24.13.1/bin/claude
+    reports 2.1.100 (Claude Code). Commands run: uv run pytest -q tests/test_runner_workflow.py
+    -k ''sandbox and (bubblewrap or external_engine_sandbox)'' -> 6 passed; uv run
+    pytest -q tests/test_sandbox_git_profiles.py -k ''bubblewrap_executes_python3_and_uv_with_extra_runtime_bind
+    or bubblewrap_executes_codex_version_with_nvm_runtime_bind or bubblewrap_executes_claude_version_with_nvm_runtime_bind''
+    -> 3 passed; uv run pytest -q tests/test_workspace_bootstrap.py -k external_engine_sandbox
+    -> 1 passed; uv run pytest -q tests/test_observability_and_status.py -k external_engine_sandbox
+    -> 2 passed. Conclusion: acceptance criteria are met.'
+  files_changed: []
+  created_at: '2026-04-10T12:22:05+00:00'
+- role: reviewer
+  step: accepting
+  verdict: pass
+  message: 'Acceptance pass. I verified the implementation in litehive/agents/sandbox.py,
+    litehive/config/dataclasses.py, litehive/config/normalization.py, .litehive/config.yaml,
+    and the focused tests. _wrap_bubblewrap now rewrites the sandboxed command argv[0]
+    to the resolved absolute host binary path before the -- separator, matching docker
+    semantics, and it mounts declared policy extra_ro_binds as read-only bubblewrap
+    binds. ExternalEngineSandboxPolicy now includes extra_ro_binds, config normalization
+    validates them as absolute host paths, and runtime resolution fails closed with
+    SandboxError if a declared bind path does not exist. Workspace config declares
+    the required NVM bind for both codex and claude. Evidence: tests/test_runner_workflow.py
+    covers argv[0] rewrite, extra_ro_binds propagation, and the clear missing-path
+    failure; tests/test_sandbox_git_profiles.py executes real wrapped subprocesses
+    inside bubblewrap for python3+uv, codex --version, and claude --version when installed.
+    Commands run during acceptance review: uv run pytest -q tests/test_runner_workflow.py
+    -k ''sandbox and (bubblewrap or external_engine_sandbox)'' -> 6 passed; uv run
+    pytest -q tests/test_sandbox_git_profiles.py -k ''bubblewrap_executes_python3_and_uv_with_extra_runtime_bind
+    or bubblewrap_executes_codex_version_with_nvm_runtime_bind or bubblewrap_executes_claude_version_with_nvm_runtime_bind''
+    -> 3 passed; uv run pytest -q tests/test_workspace_bootstrap.py -k external_engine_sandbox
+    -> 1 passed; uv run pytest -q tests/test_observability_and_status.py -k external_engine_sandbox
+    -> 2 passed. Conclusion: all acceptance criteria are met and the task should move
+    to done.'
+  files_changed: []
+  created_at: '2026-04-10T12:23:37+00:00'

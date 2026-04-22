@@ -1,0 +1,46 @@
+git:
+  commit_sha: null
+  worktree_path: null
+execution_status: idle
+run_started_at: null
+updated_at: null
+retry_count: 0
+retry_limit: 0
+retry_source: global
+stage_retry_counts: {}
+current_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: null
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+last_stage:
+  step: null
+  status: idle
+  started_at: null
+  completed_at: null
+  updated_at: null
+  duration_seconds: 0
+  verdict: null
+  summary: ''
+active_subagent: null
+last_subagent: null
+interruption: null
+continuation_handoff: null
+last_engine_switch: null
+last_outcome:
+  kind: null
+  stage: null
+  reason_code: null
+  reason: ''
+  failure_classification: null
+  failure_diagnostics: {}
+  follow_up_task_id: null
+  retry_count: 0
+  retry_limit: 0
+  retry_source: global
+  recorded_at: null
+self_heal_traceback_fingerprints: []

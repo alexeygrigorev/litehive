@@ -1,0 +1,29 @@
+id: T-0468
+slug: remove-remaining-yaml-runtime-files-and-make
+title: Remove remaining YAML runtime files and make SQLite the only Litehive state
+  store
+created_at: '2026-04-22T06:12:29+00:00'
+task_type: null
+pipeline_mode: full
+priority: high
+depends_on: []
+goal: Eliminate remaining live YAML/Markdown runtime state under .litehive/tasks and
+  related runtime paths so Litehive uses SQLite as the sole source of truth for task
+  state, queue state, reports, activity, and other mutable runtime data.
+acceptance_criteria:
+- No live runtime command depends on task.yaml, journal.md, comments/activity YAML,
+  or report YAML as its source of truth
+- Queue state, task status, pipeline state, reports, task activity, worktree/runtime
+  metadata, and daemon/runner state are all persisted in SQLite
+- Any remaining filesystem artifacts are derived/export/archival views only, not authoritative
+  mutable state
+- Repair, status, archive, and task-management commands operate correctly with SQLite-only
+  runtime state
+- Migration/backfill is provided for existing workspaces and tests are updated to
+  cover the SQLite-only path
+constraints: []
+plan: []
+git:
+  auto_commit: true
+  commit_message: 'litehive: complete T-0468 remove-remaining-yaml-runtime-files-and-make'
+created_from: null

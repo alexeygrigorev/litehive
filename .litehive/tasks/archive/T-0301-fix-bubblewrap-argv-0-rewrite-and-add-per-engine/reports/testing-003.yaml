@@ -1,0 +1,73 @@
+task_id: T-0301
+step: testing
+verdict: pass
+source: agent
+summary: 'QA PASS. Verified the implementation against all acceptance criteria with
+  focused code inspection and targeted tests. In litehive/agents/sandbox.py, _wrap_bubblewrap
+  now rewrites the post-"--" command argv[0] to the resolved absolute host binary
+  path before execution, matching docker semantics; a direct sanity check printed
+  /home/alexey/.nvm/versions/node/v24.13.1/lib/node_modules/@openai/codex/bin/codex.js
+  as the wrapped argv[0] for codex. ExternalEngineSandboxPolicy now includes extra_ro_binds,
+  normalization preserves and validates absolute host paths, formatting/status output
+  renders the field, and .litehive/config.yaml declares per-engine nvm binds for codex
+  and claude. Bubblewrap now adds each extra_ro_binds host path as a read-only bind
+  and unit coverage asserts the bind is present. Fail-closed behavior is covered by
+  test_sandbox_bubblewrap_missing_extra_ro_bind_fails_closed, which passed and asserts
+  SandboxError with a clear missing-path message. Real subprocess integration tests
+  passed in tests/test_sandbox_git_profiles.py: python3+uv inside bubblewrap with
+  extra runtime bind, codex --version inside bubblewrap with nvm runtime bind, and
+  claude --version inside bubblewrap when installed. Host prerequisites were also
+  confirmed directly: codex at /home/alexey/.nvm/versions/node/v24.13.1/bin/codex
+  reports codex-cli 0.118.0, and claude at /home/alexey/.nvm/versions/node/v24.13.1/bin/claude
+  reports 2.1.100 (Claude Code). Commands run: uv run pytest -q tests/test_runner_workflow.py
+  -k ''sandbox and (bubblewrap or external_engine_sandbox)'' -> 6 passed; uv run pytest
+  -q tests/test_sandbox_git_profiles.py -k ''bubblewrap_executes_python3_and_uv_with_extra_runtime_bind
+  or bubblewrap_executes_codex_version_with_nvm_runtime_bind or bubblewrap_executes_claude_version_with_nvm_runtime_bind''
+  -> 3 passed; uv run pytest -q tests/test_workspace_bootstrap.py -k external_engine_sandbox
+  -> 1 passed; uv run pytest -q tests/test_observability_and_status.py -k external_engine_sandbox
+  -> 2 passed. Conclusion: acceptance criteria are met.'
+feedback: 'QA PASS. Verified the implementation against all acceptance criteria with
+  focused code inspection and targeted tests. In litehive/agents/sandbox.py, _wrap_bubblewrap
+  now rewrites the post-"--" command argv[0] to the resolved absolute host binary
+  path before execution, matching docker semantics; a direct sanity check printed
+  /home/alexey/.nvm/versions/node/v24.13.1/lib/node_modules/@openai/codex/bin/codex.js
+  as the wrapped argv[0] for codex. ExternalEngineSandboxPolicy now includes extra_ro_binds,
+  normalization preserves and validates absolute host paths, formatting/status output
+  renders the field, and .litehive/config.yaml declares per-engine nvm binds for codex
+  and claude. Bubblewrap now adds each extra_ro_binds host path as a read-only bind
+  and unit coverage asserts the bind is present. Fail-closed behavior is covered by
+  test_sandbox_bubblewrap_missing_extra_ro_bind_fails_closed, which passed and asserts
+  SandboxError with a clear missing-path message. Real subprocess integration tests
+  passed in tests/test_sandbox_git_profiles.py: python3+uv inside bubblewrap with
+  extra runtime bind, codex --version inside bubblewrap with nvm runtime bind, and
+  claude --version inside bubblewrap when installed. Host prerequisites were also
+  confirmed directly: codex at /home/alexey/.nvm/versions/node/v24.13.1/bin/codex
+  reports codex-cli 0.118.0, and claude at /home/alexey/.nvm/versions/node/v24.13.1/bin/claude
+  reports 2.1.100 (Claude Code). Commands run: uv run pytest -q tests/test_runner_workflow.py
+  -k ''sandbox and (bubblewrap or external_engine_sandbox)'' -> 6 passed; uv run pytest
+  -q tests/test_sandbox_git_profiles.py -k ''bubblewrap_executes_python3_and_uv_with_extra_runtime_bind
+  or bubblewrap_executes_codex_version_with_nvm_runtime_bind or bubblewrap_executes_claude_version_with_nvm_runtime_bind''
+  -> 3 passed; uv run pytest -q tests/test_workspace_bootstrap.py -k external_engine_sandbox
+  -> 1 passed; uv run pytest -q tests/test_observability_and_status.py -k external_engine_sandbox
+  -> 2 passed. Conclusion: acceptance criteria are met.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 131
+hook_results: []
+created_at: '2026-04-10T12:22:19+00:00'

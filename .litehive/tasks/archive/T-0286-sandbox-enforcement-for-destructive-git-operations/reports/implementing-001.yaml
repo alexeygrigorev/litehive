@@ -1,0 +1,115 @@
+task_id: T-0286
+step: implementing
+verdict: pass
+source: agent
+summary: 'Root cause: the merge-resolver git denylist only inspected explicit command
+  arguments for protected refs, so \''git cherry-pick <sha>\'' on a checked-out protected
+  branch like main returned no rejection reason and would have been forwarded to real
+  git. Fix: updated both litehive/sandbox/git_wrapper.py and the duplicated wrapper
+  template in litehive/agents/sandbox.py to resolve the current git ref from repository
+  state (.git dir/file plus HEAD) and reject both `git cherry-pick` and `git rebase`
+  when the current ref is protected, in addition to the existing protected-target
+  argument checks. Added focused regression coverage in tests/test_sandbox_git_profiles.py
+  for the exact rejected case (_rejection_reason(["cherry-pick", "deadbeef"], cwd=<repo
+  on main>) now returns a block reason) and for the merge-resolver sandbox wrapper
+  path when bubblewrap is available. Verification run: uv run ruff check --select
+  E402,F401 litehive tests => passed; uv run pytest -q tests/test_sandbox_git_profiles.py
+  tests/test_runner_workflow.py -k ''sandbox or worktree_origin or merge_resolver''
+  => 17 passed, 4 skipped. Extra direct repro check: a temp repo on main now prints
+  `git cherry-pick` while on a protected ref is not allowed instead of None. The previous
+  implementing stage should be retried from its existing context; this was a Litehive
+  infrastructure denylist gap, not a task/worktree bug.'
+feedback: "Runner hook `after_implementing` `uv run ruff check --select E402,F401\
+  \ litehive tests` passed with exit code 0 (artifact: `artifacts/after_implementing-001.yaml`).\n\
+  \nRunner hook `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\
+  \n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf '%s\\\
+  n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` passed with exit code 0 (artifact: `artifacts/after_implementing-002.yaml`).\n\
+  \nRoot cause: the merge-resolver git denylist only inspected explicit command arguments\
+  \ for protected refs, so \\'git cherry-pick <sha>\\' on a checked-out protected\
+  \ branch like main returned no rejection reason and would have been forwarded to\
+  \ real git. Fix: updated both litehive/sandbox/git_wrapper.py and the duplicated\
+  \ wrapper template in litehive/agents/sandbox.py to resolve the current git ref\
+  \ from repository state (.git dir/file plus HEAD) and reject both `git cherry-pick`\
+  \ and `git rebase` when the current ref is protected, in addition to the existing\
+  \ protected-target argument checks. Added focused regression coverage in tests/test_sandbox_git_profiles.py\
+  \ for the exact rejected case (_rejection_reason([\"cherry-pick\", \"deadbeef\"\
+  ], cwd=<repo on main>) now returns a block reason) and for the merge-resolver sandbox\
+  \ wrapper path when bubblewrap is available. Verification run: uv run ruff check\
+  \ --select E402,F401 litehive tests => passed; uv run pytest -q tests/test_sandbox_git_profiles.py\
+  \ tests/test_runner_workflow.py -k 'sandbox or worktree_origin or merge_resolver'\
+  \ => 17 passed, 4 skipped. Extra direct repro check: a temp repo on main now prints\
+  \ `git cherry-pick` while on a protected ref is not allowed instead of None. The\
+  \ previous implementing stage should be retried from its existing context; this\
+  \ was a Litehive infrastructure denylist gap, not a task/worktree bug."
+submitted_via_cli: true
+files_changed:
+- docs/README.md
+- docs/configuration.md
+- docs/engines.md
+- docs/sandboxing.md
+- experiments/
+- litehive/agents/_manager.py
+- litehive/agents/_sandbox.py
+- litehive/agents/_session.py
+- litehive/agents/sandbox.py
+- litehive/pipeline/_worktree.py
+- litehive/pipeline/recovery/workspace_repair.py
+- litehive/sandbox/
+- tests/test_runner_workflow.py
+- tests/test_sandbox_git_profiles.py
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings:
+- 'runner hook passed: `after_implementing` `uv run ruff check --select E402,F401
+  litehive tests` (artifact: `artifacts/after_implementing-001.yaml`)'
+- "runner hook passed: `after_implementing` `if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\"\
+  \ ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" | grep -q . \\\n  && printf\
+  \ '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\\
+  s*noqa:\\s*F401|ruff:\\s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403\
+  \ suppression found.'\n  exit 1\nfi` (artifact: `artifacts/after_implementing-002.yaml`)"
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 158
+hook_results:
+- point: after_implementing
+  command: uv run ruff check --select E402,F401 litehive tests
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-001.yaml
+  stdout: 'All checks passed!
+
+    '
+  stderr: 'warning: `VIRTUAL_ENV=/home/alexey/git/litehive/.venv` does not match the
+    project environment path `.venv` and will be ignored; use `--active` to target
+    the active environment instead
+
+    '
+- point: after_implementing
+  command: "if [ -n \"${LITEHIVE_CHANGED_PATHS:-}\" ] \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\"\
+    \ | grep -q . \\\n  && printf '%s\\n' \"$LITEHIVE_CHANGED_PATHS\" \\\n    | xargs\
+    \ -r -d '\\n' git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\\s*noqa:\\s*F401|ruff:\\\
+    s*noqa:\\s*F403' --; then\n  echo 'Forbidden noqa F401/F403 suppression found.'\n\
+    \  exit 1\nfi"
+  reject_on_failure: true
+  description: null
+  exit_code: 0
+  status: passed
+  artifact: artifacts/after_implementing-002.yaml
+  stdout: ''
+  stderr: ''
+created_at: '2026-04-10T08:46:54+00:00'

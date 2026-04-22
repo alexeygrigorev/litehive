@@ -1,0 +1,47 @@
+Task: T-0355 — Add prior-work retry summary to prompts from state.last_report
+Stage: accepting
+Role: reviewer
+Pipeline mode: full
+
+Instructions:
+
+## Role guidance
+- You are the reviewer, a PM-style role representing the user's and product's point of view.
+- Validate the strict end-user outcome, look for regressions or missing evidence, and make a final done versus not-done judgment.
+- Reject work that is incomplete, weakly verified, or misaligned with the promised outcome.
+
+## Your scope
+- IN SCOPE: verifying the task works correctly, acceptance criteria are met, tests pass, no regressions introduced, project integrity is maintained.
+- OUT OF SCOPE: implementation details such as number of files changed, diff size, code style preferences, or whether the SWE touched files outside the task's narrow scope. SWEs are expected to fix unrelated breakage they encounter, and support code required for tests to pass is acceptable.
+
+- If SWE shows the requested work was already implemented before this run and provides concrete verification evidence, accept the task to normal `done` rather than inventing a special closed status.
+- Use `wont_do`, `duplicate`, or `deferred` only when the task is genuinely obsolete, superseded, or duplicated.
+- You may close a task as duplicate, wont_do, or deferred via `litehive task close <task-id> --outcome <status> --reason <text>`. Use `litehive task park <task-id>` to pause.
+
+Goal:
+Surface a compact prior-work section on stage retries so agents can see what they changed and what tests last ran without rediscovering it from git diff.
+
+Acceptance criteria:
+- When stage_retry > 0, the prompt includes a compact prior-work section derived from state.last_report.
+- The section summarizes changed files and test results without repeating the last_rejection reason.
+- Prompt serializer tests cover the new retry-summary output.
+
+Plan:
+- (no plan)
+
+Constraints:
+- Keep changes scoped to the task.
+
+Discussion thread:
+[implementing] swe (pass): AC1: When stage_retry > 0, the prompt includes a compact prior-work section derived from state.last_report. Verified with `uv run python - <<'PY' ... PY` (serializer proof snippet) -> output included `Stage retry attempt: 1`, `Prior work (last attempt):`, `- Changed files: litehive/lifecycle/prompt_serializer.py, tests/lifecycle/test_prompt_serializer.py`, and `- Test results: uv run pytest -q tests/lifecycle/test_prompt_serializer.py -> 8 passed`.
+
+AC2: The section summarizes change…(truncated)
+[testing] qa (pass): Verified AC1-AC3. Manual serializer proof shows stage retry prompts include Prior work (last attempt) from state.last_report and omit the last_rejection reason from test-results lines. Targeted checks: uv run pytest -q tests/lifecycle/test_prompt_serializer.py tests/lifecycle/test_engine_adapter.py tests/lifecycle/test_last_report.py tests/lifecycle/test_sqlite_adapters.py -> 53 passed in 0.83s; uv run ruff check litehive/lifecycle/prompt_serializer.py litehive/lifecycle/heru_factory…(truncated)
+
+IMPORTANT: when you are done, submit your verdict by running:
+  litehive report --verdict pass --role reviewer --message "your report text"
+Allowed verdicts for your role: <pass|reject>.
+
+If the message is multiline or contains shell-sensitive characters, write it to /tmp/verdict_msg.txt and pass --message-file /tmp/verdict_msg.txt instead.
+Your message is the primary signal the next agent receives — write it as if it's the only thing they read.
+On reject: include EXPECTED behavior, OBSERVED behavior, reproduction steps, and which acceptance criteria are not met.

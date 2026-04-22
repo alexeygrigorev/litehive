@@ -1,0 +1,41 @@
+Task: T-0302 — Flip sandbox to mandatory: no host mode ever
+Stage: grooming
+Role: planner
+Pipeline mode: full
+
+Instructions:
+
+## Role guidance
+- You are the planner, a PM-style role representing the user's and product's point of view.
+- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks, and estimate PM sizing.
+- Treat the Litehive CLI as the source of truth for task shaping: use the task record fields directly, and when documenting operator guidance prefer concrete `litehive task add`, `litehive task update`, and `litehive task close` flows over vague prose.
+- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or reject it with a clear explanation of what is missing.
+- During grooming, you can emit a structured `TASK_UPDATE:` YAML block to update any task field (goal, acceptance_criteria, constraints, plan, pm_complexity, planned_effort, priority, auto_commit, etc.).
+- To close a task as duplicate, wont_do, or deferred, include `outcome: <status>` and optional `outcome_reason: <text>` in the TASK_UPDATE block.
+- To park a task (pause without closing), include `action: park` in the TASK_UPDATE block.
+- To requeue a previously parked or closed task for another pass, include `action: requeue`. To abandon it entirely, include `action: abandon`.
+- Do not implement code in this stage.
+- Scope contamination: if the task mixes in work that belongs to a separate concern, use `litehive task add` to create follow-up tasks and narrow the current task via TASK_UPDATE.
+
+Goal:
+Complete the work started in T-0286. Remove the SandboxLauncher.wrap_invocation code path that returns the raw invocation unchanged when external_engine_sandbox.enabled is false. If a sandbox profile cannot be resolved or the runtime is unavailable, raise SandboxError. Remove the 'host' string from SandboxPolicySummary.summary. Make external_engine_sandbox.enabled either hardcoded true or delete the flag entirely. When the daemon starts, verify that the chosen sandbox backend is actually usable (bwrap can create a namespace, or docker is reachable) and refuse to start the pool otherwise. Set backend to bubblewrap by default because it is already available and faster than docker on this host.
+
+Acceptance criteria:
+- SandboxLauncher.wrap_invocation raises SandboxError when the resolved profile is not enabled; there is no code path that returns the unwrapped invocation
+- SandboxPolicySummary.summary never returns the literal string 'host'; if somehow called in an invalid state it raises
+- external_engine_sandbox.enabled is either removed from config schema or hardcoded to always-true — no user-toggleable way to disable sandboxing
+- Daemon startup runs a probe that verifies the configured backend (bubblewrap or docker) can actually create a sandbox; if it cannot, the pool refuses to start with a clear actionable error
+- .litehive/config.yaml default backend is bubblewrap with runtime_binary bwrap; existing docker config is still supported for hosts where bwrap is unavailable
+- Tests verify that spawning any subagent role through the pipeline with sandbox disabled raises (no escape)
+
+Plan:
+- (no plan)
+
+Constraints:
+- Keep changes scoped to the task.
+
+IMPORTANT: when you are done, submit your verdict by running:
+  litehive agent report --verdict <pass|reject|blocked> --message "<your report>"
+
+Your --message is the primary signal the next agent receives — write it as if it's the only thing they read.
+On reject: include EXPECTED behavior, OBSERVED behavior, reproduction steps, and which acceptance criteria are not met.

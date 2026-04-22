@@ -1,0 +1,40 @@
+status: failed
+summary: 'implementing rejected: agent did not submit verdict via litehive report
+  CLI'
+files_changed: []
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Agent did not submit verdict via litehive report CLI.
+resource_control:
+  enabled: true
+  profile: no-git
+  backend: bubblewrap
+  runtime: bwrap
+  image: litehive-external-engine:latest
+  network_mode: host
+  workspace_mode: rw
+  environment: []
+  credential_inputs: []
+  propagated_mounts:
+  - /usr
+  - /lib
+  - /lib64
+  - /bin
+  - /sbin
+  - /etc/alternatives
+  - /etc/passwd
+  - /etc/group
+  - /etc/hosts
+  - /etc/hostname
+  - /etc/nsswitch.conf
+  - /etc/host.conf
+  - /etc/resolv.conf
+  - /etc/ssl
+  - /etc/ca-certificates
+  - /etc/ld.so.cache
+  - /run/systemd/resolve
+interruption_reason: null
+resource_limit_event: null
+continuation: null

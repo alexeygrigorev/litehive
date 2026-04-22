@@ -1,0 +1,55 @@
+task_id: T-0286
+step: testing
+verdict: reject
+source: agent
+summary: 'REJECT. Expected: the merge-resolver wrapper must reject rebase or cherry-pick
+  onto protected refs, including cherry-picking while the current branch is protected
+  (main/master/origin/*). Observed: the denylist only checks cherry-pick arguments
+  for protected ref names; _rejection_reason([''cherry-pick'', ''deadbeef'']) returns
+  None, so a cherry-pick onto checked-out main would be forwarded to real git instead
+  of being blocked and logged. Steps to reproduce: python - <<''PY'''
+feedback: 'REJECT. Expected: the merge-resolver wrapper must reject rebase or cherry-pick
+  onto protected refs, including cherry-picking while the current branch is protected
+  (main/master/origin/*). Observed: the denylist only checks cherry-pick arguments
+  for protected ref names; _rejection_reason([''cherry-pick'', ''deadbeef'']) returns
+  None, so a cherry-pick onto checked-out main would be forwarded to real git instead
+  of being blocked and logged. Steps to reproduce: python - <<''PY''
+
+  from litehive.sandbox.git_wrapper import _rejection_reason
+
+  print(_rejection_reason([''cherry-pick'', ''deadbeef'']))
+
+  PY
+
+  This prints None. The gap is in litehive/sandbox/git_wrapper.py and the duplicated
+  wrapper template in litehive/agents/sandbox.py. Acceptance criteria status: satisfied/verified
+  by focused checks: fail-closed role->profile selection, no-git default, origin removal
+  from task worktrees, wrapper rejection for push --force, filter-repo, and reset
+  --hard origin/main, docs/adversarial experiment assets present, and focused pytest
+  run `uv run pytest -q tests/test_sandbox_git_profiles.py tests/test_runner_workflow.py
+  -k ''sandbox or worktree_origin or merge_resolver''` => 16 passed, 4 skipped. Not
+  met: merge-resolver denylist criterion for cherry-pick onto protected refs. Note:
+  bubblewrap real-subprocess tests skip on this host because bwrap cannot create a
+  uid map (bwrap: setting up uid map: Permission denied), so this rejection is based
+  on the concrete denylist logic gap above, not on those skips.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 1
+retry_limit: 3
+retry_source: global
+retry_decision: retry
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 355
+hook_results: []
+created_at: '2026-04-10T08:43:42+00:00'

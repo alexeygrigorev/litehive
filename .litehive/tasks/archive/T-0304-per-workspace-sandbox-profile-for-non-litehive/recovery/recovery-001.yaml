@@ -1,0 +1,67 @@
+task_id: T-0304
+origin_stage: implementing
+trigger_event_kind: crash
+summary: 'Launch recovery cycle_start_failed failed: litehive repair failed (rc=1);
+  see /home/alexey/.local/share/litehive/c16deb0d1ee209d7/logs/run-all/20260422T020911Z/0006-repair.log'
+failure_classification: cycle_start_failed
+runnable_state: blocked
+blocker: litehive repair failed (rc=1); see /home/alexey/.local/share/litehive/c16deb0d1ee209d7/logs/run-all/20260422T020911Z/0006-repair.log
+evidence:
+- kind: task
+  label: task.yaml
+  path: .litehive/tasks/T-0304-per-workspace-sandbox-profile-for-non-litehive/task.yaml
+  exists: true
+  summary: status=queued pipeline_status=backlog priority=medium
+  metadata: {}
+- kind: runtime
+  label: runtime state
+  path: null
+  exists: false
+  summary: execution_status=idle current_stage=None last_outcome=none
+  metadata: {}
+- kind: thread
+  label: task activity
+  path: .litehive/tasks/T-0304-per-workspace-sandbox-profile-for-non-litehive/comments.yaml
+  exists: false
+  summary: discussion entries=0
+  metadata: {}
+- kind: events
+  label: events.jsonl
+  path: .litehive/tasks/T-0304-per-workspace-sandbox-profile-for-non-litehive/events.jsonl
+  exists: false
+  summary: task lifecycle and subagent event stream
+  metadata: {}
+- kind: wrapper_log
+  label: latest run-all log
+  path: /home/alexey/.local/share/litehive/c16deb0d1ee209d7/logs/run-all/daemon.log
+  exists: true
+  summary: latest daemon/run-all wrapper log
+  metadata: {}
+- kind: engine_monitoring
+  label: engine-monitoring.yaml
+  path: .litehive/engine-monitoring.yaml
+  exists: true
+  summary: no engine record
+  metadata: {}
+- kind: git
+  label: main checkout git state
+  path: null
+  exists: true
+  summary: head=0bfe6afa9c226b4d97df9bfcd29d439712cfbf06 dirty=0
+  metadata:
+    dirty_paths: []
+- kind: worktree
+  label: task worktree state
+  path: null
+  exists: false
+  summary: task worktree not configured
+  metadata:
+    dirty_paths: []
+    stage: implementing
+actions: []
+warnings:
+- 'repair_log: /home/alexey/.local/share/litehive/c16deb0d1ee209d7/logs/run-all/20260422T020911Z/0006-repair.log'
+- 'repair_rc: 1'
+recovery_subagent_id: null
+recovery_subagent_path: null
+created_at: '2026-04-22T04:09:07+00:00'

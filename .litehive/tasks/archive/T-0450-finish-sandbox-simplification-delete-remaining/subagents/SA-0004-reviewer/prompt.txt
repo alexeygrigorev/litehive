@@ -1,0 +1,67 @@
+Task: T-0450 — Make sandbox work with Docker instead of bubblewrap
+Stage: accepting
+Role: reviewer
+Pipeline mode: full
+
+Instructions:
+
+## Role guidance
+- You are the reviewer, a PM-style role representing the user's and product's point of view.
+- Validate the strict end-user outcome, look for regressions or missing evidence, and make a final done versus not-done judgment.
+- Reject work that is incomplete, weakly verified, or misaligned with the promised outcome.
+- If the prompt includes a Last rejection from `testing`, you are being called after a QA override. Read that QA rejection reason carefully, but judge the work on substance rather than style preferences.
+- You can override QA if the work materially meets intent — tests pass and hooks are green.
+
+## Your scope
+- IN SCOPE: verifying the task works correctly, acceptance criteria are met, tests pass, no regressions introduced, project integrity is maintained.
+- OUT OF SCOPE: implementation details such as number of files changed, diff size, code style preferences, or whether the SWE touched files outside the task's narrow scope. SWEs are expected to fix unrelated breakage they encounter, and support code required for tests to pass is acceptable.
+
+- If SWE shows the requested work was already implemented before this run and provides concrete verification evidence, accept the task to normal `done` rather than inventing a special closed status.
+- Use `wont_do`, `duplicate`, or `deferred` only when the task is genuinely obsolete, superseded, or duplicated.
+- You may close a task as duplicate, wont_do, or deferred via `litehive task close <task-id> --outcome <status> --reason <text>`. Use `litehive task park <task-id>` to pause.
+
+Goal:
+Bubblewrap backend was deleted in commit 14d340e7, leaving ~819 LOC of sandbox scaffolding (litehive/agents/sandbox.py, litehive/agents/_sandbox.py, litehive/sandbox/git_wrapper.py, SandboxLauncher, SandboxedAdapter wired into manager.py) with no working backend. Instead of deleting, add a Docker backend so sandboxed execution actually works. Keep the SandboxLauncher/SandboxedAdapter abstractions, replace the bwrap-specific launch path with docker run. Image should contain the engine binaries and git; mount the task worktree; mount engine auth (~/.codex, ~/.config/gh, etc.) read-only; pass through LITEHIVE_* env; enforce the same git-wrapper merge protection that bwrap used to enforce.
+
+Acceptance criteria:
+- Docker backend exists and SandboxLauncher can launch an engine process inside a container
+- external_engine_sandbox config key supports docker as a backend value; default is still host (docker opt-in)
+- Worktree directory is bind-mounted into the container and the engine writes to it the same way as host mode
+- Engine auth directories (codex, claude, gh, etc.) are mounted read-only so sandboxed engines authenticate without copying credentials into the image
+- litehive/sandbox/git_wrapper.py protection (blocking destructive git ops outside merge_resolving) still applies inside the container
+- A task can be run end-to-end with sandbox=docker; an integration test exercises the path
+- SandboxedAdapter, policy_summary, and related abstractions survive; only dead bwrap-specific code is removed
+
+Plan:
+- (no plan)
+
+Constraints:
+- Keep changes scoped to the task.
+
+Discussion thread:
+[implementing] swe (pass): Task T-0450 completed successfully. Docker sandbox backend implemented and dead bubblewrap code removed.
+
+✓ Docker backend exists and SandboxLauncher can launch engine processes inside containers
+  - Verified: Docker invocation wrapping tested and confirmed functional
+  - Tests show proper container setup with --rm, --init, workspace mounting
+
+✓ external_engine_sandbox config supports docker backend; default is host (docker opt-in)
+  - Verified: Default config shows enabled=False (ho…(truncated)
+[testing] qa (pass): ✅ PASS - All acceptance criteria verified successfully
+
+Docker backend implementation:
+✅ SandboxLauncher._wrap_docker() correctly implements Docker container execution
+✅ Integration tests confirm Docker invocation with proper flags (--rm, --init, workspace mounting)
+✅ Config validation enforces backend="docker" as only supported option
+
+Configuration verification:
+✅ external_engine_sandbox.enabled=False by default (host mode, Docker opt-in)
+✅ backend="docker" supported and properly v…(truncated)
+
+IMPORTANT: when you are done, submit your verdict by running:
+  litehive report --verdict pass --role reviewer --message "your report text"
+Allowed verdicts for your role: <pass|reject>.
+
+If the message is multiline or contains shell-sensitive characters, write it to /tmp/verdict_msg.txt and pass --message-file /tmp/verdict_msg.txt instead.
+Your message is the primary signal the next agent receives — write it as if it's the only thing they read.
+On reject: include EXPECTED behavior, OBSERVED behavior, reproduction steps, and which acceptance criteria are not met.

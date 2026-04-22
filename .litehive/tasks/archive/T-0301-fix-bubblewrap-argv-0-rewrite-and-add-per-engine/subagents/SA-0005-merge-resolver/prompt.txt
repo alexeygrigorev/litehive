@@ -1,0 +1,12 @@
+Git merge conflict while merging task T-0301 worktree into main.
+Conflicting files: .litehive/tasks/T-0301-fix-bubblewrap-argv-0-rewrite-and-add-per-engine/journal.md, .litehive/tasks/T-0301-fix-bubblewrap-argv-0-rewrite-and-add-per-engine/task.yaml
+
+Resolution rules:
+- You must preserve BOTH sides' intent — combine the changes, don't just pick one side.
+- The main branch has the latest infrastructure state (config, gitignore, imports). Prefer main for infrastructure files.
+- The worktree has the task's feature changes. Preserve the feature code.
+- For code conflicts (e.g. both sides added parameters to the same function), include ALL additions.
+- For .gitignore or config conflicts, merge all entries from both sides.
+- Never silently drop changes from either side.
+
+After resolving, run: git add the resolved files, then git commit --no-edit.

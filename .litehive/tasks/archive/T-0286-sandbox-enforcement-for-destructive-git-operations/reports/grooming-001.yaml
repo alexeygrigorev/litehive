@@ -1,0 +1,68 @@
+task_id: T-0286
+step: grooming
+verdict: pass
+source: agent
+summary: Grooming passed. I inspected the current sandbox and spawn path rather than
+  changing code.
+feedback: "Grooming passed. I inspected the current sandbox and spawn path rather\
+  \ than changing code.\n\nVerified repo seams:\n- `litehive/agents/_manager.py` is\
+  \ the single subagent spawn path and the right place to thread role -> sandbox profile\
+  \ selection.\n- `litehive/agents/sandbox.py` currently selects policy by engine\
+  \ only, not role, and bubblewrap read-only binds `/usr`, `/bin`, `/lib*`, so `/usr/bin/git`\
+  \ is reachable today inside sandboxed runs.\n- `litehive/pipeline/_worktree.py`\
+  \ is the current worktree creation / reuse path and the right place to remove `origin`\
+  \ before non-merge-resolver handoff.\n- Existing sandbox tests are mostly argv-construction\
+  \ tests in `tests/test_runner_workflow.py`; the task still needs real subprocess\
+  \ integration tests that exercise the sandbox primitive directly.\n\nEvidence gathered:\n\
+  - No role-based sandbox profile selector exists yet.\n- Current bubblewrap launcher\
+  \ explicitly propagates `PATH` and mounts standard system roots, so the acceptance\
+  \ criteria require a real sandbox refactor, not prompt/env hardening.\n- Merge-resolver\
+  \ already exists as a distinct role in the worktree conflict flow, so it is the\
+  \ natural exception path for the wrapper-backed git profile.\n\nTests run:\n- Repo\
+  \ inspection only (`rg`, `sed`, config/task review). No pytest run in grooming;\
+  \ no code changes made.\n\nImplementation guidance:\n- Keep sandbox profile selection\
+  \ in one audited function and fail closed to NO_GIT for unknown roles.\n- Solve\
+  \ this at the filesystem namespace boundary for every supported backend, not with\
+  \ PATH-only tricks.\n- Preserve a single visible git wrapper for merge-resolver\
+  \ and make the real git path unreachable from inside the sandbox.\n- Add focused\
+  \ real-subprocess tests for both profiles and keep the adversarial LLM breakout\
+  \ harness manual-only under `experiments/`.\n\nTASK_UPDATE:\n  pm_complexity: complex\n\
+  \  planned_effort: l\n  plan:\n    - Add a single audited role-to-sandbox-profile\
+  \ selector that fails closed and is invoked from the subagent spawn path before\
+  \ engine wrapping.\n    - Extend sandbox launchers to support two filesystem-level\
+  \ git profiles across supported backends: no-git for all roles except merge-resolver,\
+  \ and merge-resolver with only a mounted git wrapper plus hidden real git.\n   \
+  \ - Add merge-resolver git wrapper denylist enforcement with clear stderr and attention-log\
+  \ writes, and ensure the real git binary is unreachable from inside the sandbox\
+  \ namespace.\n    - Remove origin from task worktrees before handing them to any\
+  \ non-merge-resolver subagent, while preserving the merge-resolver path needed for\
+  \ conflict resolution and task integration.\n    - Add real subprocess integration\
+  \ tests for both profiles, plus manual adversarial audit fixtures under `experiments/sandbox-breakout`\
+  \ that stay out of default pytest collection.\n    - Document the per-role sandbox\
+  \ policy, wrapper denylist, and manual audit workflow in README/docs.\n\nNote: `litehive\
+  \ task update` was attempted to persist PM sizing and plan, but the CLI rejected\
+  \ concurrent metadata edits because this task is currently marked active/running\
+  \ in workspace state. The implementing agent should proceed from the plan above,\
+  \ and if the runner allows task metadata writes later, persist the sizing fields\
+  \ into `task.yaml`."
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 239
+hook_results: []
+created_at: '2026-04-10T08:15:16+00:00'

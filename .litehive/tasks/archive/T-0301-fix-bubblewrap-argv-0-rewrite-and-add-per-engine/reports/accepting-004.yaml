@@ -1,0 +1,65 @@
+task_id: T-0301
+step: accepting
+verdict: pass
+source: agent
+summary: 'Acceptance pass. I verified the implementation in litehive/agents/sandbox.py,
+  litehive/config/dataclasses.py, litehive/config/normalization.py, .litehive/config.yaml,
+  and the focused tests. _wrap_bubblewrap now rewrites the sandboxed command argv[0]
+  to the resolved absolute host binary path before the -- separator, matching docker
+  semantics, and it mounts declared policy extra_ro_binds as read-only bubblewrap
+  binds. ExternalEngineSandboxPolicy now includes extra_ro_binds, config normalization
+  validates them as absolute host paths, and runtime resolution fails closed with
+  SandboxError if a declared bind path does not exist. Workspace config declares the
+  required NVM bind for both codex and claude. Evidence: tests/test_runner_workflow.py
+  covers argv[0] rewrite, extra_ro_binds propagation, and the clear missing-path failure;
+  tests/test_sandbox_git_profiles.py executes real wrapped subprocesses inside bubblewrap
+  for python3+uv, codex --version, and claude --version when installed. Commands run
+  during acceptance review: uv run pytest -q tests/test_runner_workflow.py -k ''sandbox
+  and (bubblewrap or external_engine_sandbox)'' -> 6 passed; uv run pytest -q tests/test_sandbox_git_profiles.py
+  -k ''bubblewrap_executes_python3_and_uv_with_extra_runtime_bind or bubblewrap_executes_codex_version_with_nvm_runtime_bind
+  or bubblewrap_executes_claude_version_with_nvm_runtime_bind'' -> 3 passed; uv run
+  pytest -q tests/test_workspace_bootstrap.py -k external_engine_sandbox -> 1 passed;
+  uv run pytest -q tests/test_observability_and_status.py -k external_engine_sandbox
+  -> 2 passed. Conclusion: all acceptance criteria are met and the task should move
+  to done.'
+feedback: 'Acceptance pass. I verified the implementation in litehive/agents/sandbox.py,
+  litehive/config/dataclasses.py, litehive/config/normalization.py, .litehive/config.yaml,
+  and the focused tests. _wrap_bubblewrap now rewrites the sandboxed command argv[0]
+  to the resolved absolute host binary path before the -- separator, matching docker
+  semantics, and it mounts declared policy extra_ro_binds as read-only bubblewrap
+  binds. ExternalEngineSandboxPolicy now includes extra_ro_binds, config normalization
+  validates them as absolute host paths, and runtime resolution fails closed with
+  SandboxError if a declared bind path does not exist. Workspace config declares the
+  required NVM bind for both codex and claude. Evidence: tests/test_runner_workflow.py
+  covers argv[0] rewrite, extra_ro_binds propagation, and the clear missing-path failure;
+  tests/test_sandbox_git_profiles.py executes real wrapped subprocesses inside bubblewrap
+  for python3+uv, codex --version, and claude --version when installed. Commands run
+  during acceptance review: uv run pytest -q tests/test_runner_workflow.py -k ''sandbox
+  and (bubblewrap or external_engine_sandbox)'' -> 6 passed; uv run pytest -q tests/test_sandbox_git_profiles.py
+  -k ''bubblewrap_executes_python3_and_uv_with_extra_runtime_bind or bubblewrap_executes_codex_version_with_nvm_runtime_bind
+  or bubblewrap_executes_claude_version_with_nvm_runtime_bind'' -> 3 passed; uv run
+  pytest -q tests/test_workspace_bootstrap.py -k external_engine_sandbox -> 1 passed;
+  uv run pytest -q tests/test_observability_and_status.py -k external_engine_sandbox
+  -> 2 passed. Conclusion: all acceptance criteria are met and the task should move
+  to done.'
+submitted_via_cli: true
+files_changed: []
+created_follow_up_task_ids: []
+task_update: {}
+tests:
+  added: 0
+  passing: 0
+warnings: []
+retry_count: 0
+retry_limit: 3
+retry_source: global
+retry_decision: continue
+outcome: null
+outcome_reason_code: null
+outcome_reason: ''
+failure_classification: null
+failure_diagnostics: {}
+resource_limit_event: null
+duration_seconds: 96
+hook_results: []
+created_at: '2026-04-10T12:23:55+00:00'

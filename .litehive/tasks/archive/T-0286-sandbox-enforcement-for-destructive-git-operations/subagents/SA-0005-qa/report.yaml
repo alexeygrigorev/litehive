@@ -1,0 +1,31 @@
+status: completed
+summary: "Validating the recovery fix for the merge-resolver git denylist and checking\
+  \ whether the acceptance criteria now hold. I\u2019m starting with the wrapper logic\
+  \ and the focused sandbox tests, then I\u2019ll run the required `litehive report`\
+  \ with a precise pass/reject message."
+files_changed: []
+tests:
+  added: 0
+  passing: 0
+warnings:
+- Agent did not submit verdict via litehive report CLI.
+resource_control:
+  enabled: false
+  backend: null
+  runtime: null
+  image: null
+  network_mode: null
+  workspace_mode: null
+  memory_mb: null
+  cpu_count: null
+  process_limit: null
+  environment: []
+  credential_inputs: []
+  propagated_mounts: []
+interruption_reason: null
+resource_limit_event: null
+continuation:
+  session_id: null
+  thread_id: 019d7692-ab59-7871-9dd5-30fc0b96f9fa
+  metadata: {}
+  updated_at: '2026-04-10T08:48:33+00:00'
