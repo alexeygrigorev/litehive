@@ -27,14 +27,17 @@ from typing import Any
 from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.domain.agent import EngineFailure
+from litehive.domain.common import OutcomeReasonCode, Verdict, cap_feedback
+from litehive.domain.reports import StageReport
 from litehive.domain.lifecycle_deltas import recovery_trigger_from_event
-from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
+from litehive.git.ops import GitError, is_git_repo, status_porcelain
 from litehive.heru_compat import resolve_engine_resume_session_id
 from litehive.roles.base import PromptContext
 from litehive.roles.recovery import RecoveryAgent
 from litehive.state.records import get_task
-from litehive.tasks.activity import latest_task_activity_entry
-from litehive.tasks.reports import normalized_files_changed
+from litehive.tasks.activity import latest_task_activity_entry, load_task_activity, save_task_activity
+from litehive.tasks.journal import append_journal
+from litehive.tasks.reports import normalized_files_changed, rewrite_latest_stage_report
 from litehive.worktree import resolve_recorded_worktree_path
 
 from .events import Crash
@@ -80,23 +83,112 @@ def _allowed_verdicts_for_stage(stage: str) -> set[str]:
     return {"pass", "reject"}
 
 
-def _execution_checkout_has_changes(workspace_root: Path, task_id: str) -> bool:
-    task = get_task(workspace_root, task_id)
-    if task is None:
-        return False
-    checkout = resolve_recorded_worktree_path(workspace_root, task.runtime.git.worktree_path) or workspace_root
+def _execution_checkout_path(workspace_root: Path, task) -> Path:
+    return (
+        resolve_recorded_worktree_path(
+            workspace_root,
+            task.runtime.git.worktree_path or task.git.worktree_path,
+        )
+        or workspace_root
+    )
+
+
+def _execution_checkout_status(workspace_root: Path, task) -> tuple[Path, list[str] | None]:
+    checkout = _execution_checkout_path(workspace_root, task)
     if not is_git_repo(checkout):
-        return False
+        return checkout, None
     try:
-        if status_porcelain(checkout):
-            return True
-        workspace_head = current_head(workspace_root)
-        checkout_head = current_head(checkout)
+        return checkout, status_porcelain(checkout)
     except GitError:
-        return False
-    if workspace_head is None or checkout_head is None:
-        return False
-    return workspace_head != checkout_head
+        return checkout, None
+
+
+def _display_path(root: Path, path: Path) -> str:
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return str(path)
+    return "." if str(relative) == "" else str(relative)
+
+
+def _rewrite_hallucinated_implementing_pass(
+    workspace_root: Path,
+    task,
+    *,
+    latest,
+    claimed_files: list[str],
+    checkout: Path,
+) -> AgentVerdict:
+    checkout_display = _display_path(workspace_root, checkout)
+    claimed = ", ".join(claimed_files)
+    reason_code = OutcomeReasonCode.HALLUCINATED_COMPLETION.value
+    reason = (
+        "implementing pass rejected: `git status --porcelain` in the execution checkout was clean, "
+        f"but the SWE reported changed files: {claimed}"
+    )
+    detail = (
+        f"{reason}\n"
+        f"reason_code: {reason_code}\n"
+        f"execution_checkout: {checkout_display}\n"
+        "git_status_porcelain: clean\n"
+        f"claimed_files_changed: {claimed}"
+    )
+
+    thread = load_task_activity(workspace_root, task)
+    for entry in reversed(thread):
+        if entry.created_at != latest.created_at:
+            continue
+        if entry.role != latest.role or entry.stage != latest.stage:
+            continue
+        if entry.message != latest.message or list(entry.files_changed) != list(latest.files_changed):
+            continue
+        entry.verdict = Verdict.REJECT
+        if "[retracted - filesystem check shows no changes landed]" not in entry.message:
+            entry.message = f"{entry.message.rstrip()}\n[retracted - filesystem check shows no changes landed]"
+        entry.message = f"{entry.message.rstrip()}\n{detail}"
+        break
+    save_task_activity(workspace_root, task, thread)
+
+    report = StageReport(
+        task_id=task.id,
+        stage="implementing",
+        verdict="fail",
+        source="agent",
+        summary="implementing fail: pass report claimed files_changed but the execution checkout was clean",
+        feedback=cap_feedback(detail),
+        submitted_via_cli=False,
+        files_changed=claimed_files,
+        failure_classification=reason_code,
+        outcome_reason_code=OutcomeReasonCode.HALLUCINATED_COMPLETION,
+        failure_diagnostics={
+            "reason_code": reason_code,
+            "execution_checkout": checkout_display,
+            "git_status_porcelain": [],
+            "claimed_files_changed": claimed_files,
+        },
+    )
+    report_path = rewrite_latest_stage_report(workspace_root, task, report)
+    append_journal(
+        workspace_root,
+        task,
+        (
+            "Rejected implementing pass as hallucinated completion.\n"
+            f"reason_code: `{reason_code}`\n"
+            f"`git status --porcelain` in `{checkout_display}` returned no changes, but the SWE claimed: {claimed}\n"
+            f"report: `{report_path.relative_to(workspace_root)}`"
+        ),
+    )
+    return AgentVerdict(
+        outcome="reject",
+        reason=reason,
+        metadata={
+            "reason_code": reason_code,
+            "execution_checkout": checkout_display,
+            "git_status_porcelain": [],
+            "claimed_files_changed": claimed_files,
+        },
+        source="guard",
+    )
 
 
 _REPORT_RESULT_HINTS = (
@@ -157,19 +249,17 @@ def _latest_verdict_after(
     )
     if latest is None:
         return None
-    if (
-        stage == "implementing"
-        and latest.verdict == "pass"
-        and not _execution_checkout_has_changes(workspace_root, task_id)
-    ):
-        return AgentVerdict(
-            outcome="reject",
-            reason=(
-                "implementing pass rejected: execution checkout is clean and HEAD matches the "
-                "workspace base, so no work landed"
-            ),
-        )
     changed_files = normalized_files_changed(latest.files_changed)
+    if stage == "implementing" and latest.verdict == "pass":
+        checkout, worktree_status = _execution_checkout_status(workspace_root, task)
+        if worktree_status == [] and changed_files:
+            return _rewrite_hallucinated_implementing_pass(
+                workspace_root,
+                task,
+                latest=latest,
+                claimed_files=changed_files,
+                checkout=checkout,
+            )
     return AgentVerdict(
         outcome=latest.verdict,
         reason=latest.message or "",

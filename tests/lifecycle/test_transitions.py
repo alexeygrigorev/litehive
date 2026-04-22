@@ -160,6 +160,27 @@ def test_implementing_reject_retries_with_counter_bump():
     assert trans.delta.inc_stage_retry == "implementing"
 
 
+def test_implementing_guard_reject_retries_with_counter_bump() -> None:
+    state = make_state("implementing", stage_retry={"implementing": 0})
+    trans = step(
+        "implementing",
+        Reject(
+            source="guard",
+            reason="hallucinated completion",
+            metadata={"reason_code": "hallucinated_completion"},
+        ),
+        state,
+    )
+    assert trans.next == "implementing"
+    assert trans.delta.inc_stage_retry == "implementing"
+    assert trans.delta.set_last_rejection is not None
+    routed_stage, rejection = trans.delta.set_last_rejection
+    assert routed_stage == "implementing"
+    assert rejection is not None
+    assert rejection.source == "guard"
+    assert rejection.reason == "hallucinated completion"
+
+
 def test_implementing_reject_routes_to_recovering_when_exhausted():
     state = make_state("implementing", stage_retry={"implementing": 3})
     trans = step("implementing", Reject(source="agent", reason="x"), state)

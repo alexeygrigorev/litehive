@@ -11,7 +11,7 @@ import pytest
 from heru.types import RuntimeEngineContinuation, SubagentRef
 
 from litehive.domain.agent import EngineFailure, SubagentResult
-from litehive.lifecycle.events import Crash, Pass
+from litehive.lifecycle.events import Crash, Pass, Reject
 from litehive.lifecycle.heru_factory import HeruEngineAdapter
 from litehive.lifecycle.nodes.agent import (
     AgentNode,
@@ -249,6 +249,32 @@ def test_nudge_does_not_consume_retry_budget() -> None:
     event = node.run(make_state())
     assert isinstance(event, Pass)
     assert engine.calls == 4
+
+
+def test_agent_node_preserves_reject_source_and_metadata() -> None:
+    engine = _ScriptedEngine(
+        "codex",
+        [
+            AgentVerdict(
+                outcome="reject",
+                reason="filesystem guard caught a bogus pass",
+                source="guard",
+                metadata={"reason_code": "hallucinated_completion"},
+            )
+        ],
+    )
+    node = _TrivialAgent(
+        "implementing",
+        _ListSelector([engine]),
+        InMemorySessionStore(),
+        retry_budget=3,
+    )
+
+    event = node.run(make_state())
+
+    assert isinstance(event, Reject)
+    assert event.source == "guard"
+    assert event.metadata["reason_code"] == "hallucinated_completion"
 
 
 def test_transient_error_not_in_retry_on_switches_engine_without_retry() -> None:

@@ -294,6 +294,43 @@ def record_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Pa
     return write_stage_report(root, task, report)
 
 
+def rewrite_latest_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Path:
+    payload = json.dumps(report.model_dump(mode="json"), sort_keys=True)
+    rewritten = False
+    with connect_workspace_db(root) as connection:
+        rows = connection.execute(
+            """
+            SELECT id
+            FROM stage_reports
+            WHERE task_id = ? AND stage = ?
+            ORDER BY id DESC
+            """,
+            (task.id, report.stage),
+        ).fetchall()
+        for row in rows:
+            connection.execute(
+                """
+                UPDATE stage_reports
+                SET created_at = ?, payload = ?
+                WHERE id = ?
+                """,
+                (report.created_at, payload, int(row["id"])),
+            )
+            connection.commit()
+            rewritten = True
+            break
+
+    if not rewritten:
+        return record_stage_report(root, task, report)
+
+    reports_dir = task_dir(root, task) / "reports"
+    report_path = latest_path(sorted(reports_dir.glob(f"{report.stage}-*.yaml")))
+    if report_path is None:
+        return write_stage_report(root, task, report)
+    report_path.write_text(yaml.safe_dump(report.model_dump(mode="json"), sort_keys=False), encoding="utf-8")
+    return report_path
+
+
 def load_stage_reports(root: Path, task: TaskRecord, *, stage: str | None = None) -> list[StageReport]:
     query = """
         SELECT payload

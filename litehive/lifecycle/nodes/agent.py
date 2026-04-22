@@ -1,6 +1,6 @@
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Literal, Protocol
 
 from ..events import Blocked, Crash, Event, Pass, Reject
 from ..persistence import TaskState
@@ -75,6 +75,7 @@ class AgentVerdict:
     outcome: str  # "pass" | "reject"
     reason: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+    source: Literal["agent", "guard", "hook", "system"] = "agent"
 
 
 class Engine(Protocol):
@@ -291,7 +292,11 @@ class AgentNode(Node):
         if outcome == "pass":
             return Pass(metadata=dict(verdict.metadata or {}))
         if outcome == "reject":
-            return Reject(source="agent", reason=verdict.reason)
+            return Reject(
+                source=verdict.source,
+                reason=verdict.reason,
+                metadata=dict(verdict.metadata or {}),
+            )
         if outcome == "blocked":
             return Blocked(reason=verdict.reason)
         return Crash(exc_type="UnknownVerdict", message=verdict.outcome)

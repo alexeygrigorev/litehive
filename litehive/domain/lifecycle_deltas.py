@@ -78,6 +78,10 @@ def _rejection_from_event(state: TaskState, event: Event) -> LastRejection | Non
 def _reason_code_from_event(state: TaskState, event: Event) -> str | None:
     if isinstance(event, Reject) and _hook_reject_loop_detected(state, event):
         return "hook_reject_loop"
+    if isinstance(event, Reject):
+        reason_code = event.metadata.get("reason_code")
+        if isinstance(reason_code, str) and reason_code.strip():
+            return reason_code.strip()
     return None
 
 

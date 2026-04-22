@@ -5,7 +5,7 @@ import pytest
 
 from heru.base import CLIExecutionResult
 from litehive.domain.agent import EngineFailure, SubagentResult
-from litehive.domain.reports import TaskActivityEntry
+from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.agents.manager import SubagentStartupError
 from litehive.lifecycle.heru_factory import HeruEngineAdapter, _latest_verdict_after
@@ -13,7 +13,9 @@ from litehive.lifecycle.nodes.agent import AgentVerdict, NudgeRequired, Transien
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.sessions import Session
 from litehive.lifecycle.types import PipelineMode
-from litehive.tasks.reports import append_activity_entry
+from litehive.tasks.paths import task_dir
+from litehive.tasks.activity import load_task_activity
+from litehive.tasks.reports import append_activity_entry, load_stage_reports
 from heru.types import RuntimeEngineContinuation, SubagentRef
 
 
@@ -743,7 +745,7 @@ def test_heru_engine_adapter_passes_selected_model_to_subagent_manager(
     assert _StubManager.last_kwargs["model"] == "goz-preview-model"
 
 
-def test_latest_verdict_after_rejects_empty_implementing_pass(tmp_path, monkeypatch) -> None:
+def test_latest_verdict_after_allows_clean_implementing_noop(tmp_path, monkeypatch) -> None:
     from litehive.state.records import create_task
 
     task = create_task(tmp_path, title="empty pass")
@@ -755,11 +757,56 @@ def test_latest_verdict_after_rejects_empty_implementing_pass(tmp_path, monkeypa
             stage="implementing",
             verdict="pass",
             message="implemented nothing",
+            files_changed=[],
         ),
     )
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._execution_checkout_has_changes",
-        lambda workspace_root, task_id: False,
+        "litehive.lifecycle.heru_factory._execution_checkout_status",
+        lambda workspace_root, task: (tmp_path, []),
+    )
+
+    verdict = _latest_verdict_after(
+        tmp_path,
+        task.id,
+        "implementing",
+        datetime.now(UTC) - timedelta(minutes=1),
+    )
+
+    assert verdict is not None
+    assert verdict.outcome == "pass"
+
+
+def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, monkeypatch) -> None:
+    from litehive.state.records import create_task
+
+    task = create_task(tmp_path, title="hallucinated pass")
+    append_activity_entry(
+        tmp_path,
+        task,
+        TaskActivityEntry(
+            role="swe",
+            stage="implementing",
+            verdict="pass",
+            message="implemented foo.py",
+            files_changed=["foo.py"],
+        ),
+    )
+    record = StageReport(
+        task_id=task.id,
+        stage="implementing",
+        verdict="pass",
+        source="agent",
+        summary="implemented foo.py",
+        feedback="implemented foo.py",
+        submitted_via_cli=True,
+        files_changed=["foo.py"],
+    )
+    from litehive.tasks.reports import record_stage_report
+
+    record_stage_report(tmp_path, task, record)
+    monkeypatch.setattr(
+        "litehive.lifecycle.heru_factory._execution_checkout_status",
+        lambda workspace_root, task: (tmp_path, []),
     )
 
     verdict = _latest_verdict_after(
@@ -771,7 +818,26 @@ def test_latest_verdict_after_rejects_empty_implementing_pass(tmp_path, monkeypa
 
     assert verdict is not None
     assert verdict.outcome == "reject"
-    assert "execution checkout is clean" in verdict.reason
+    assert verdict.source == "guard"
+    assert verdict.metadata["reason_code"] == "hallucinated_completion"
+
+    comments = load_task_activity(tmp_path, task)
+    assert len(comments) == 1
+    assert comments[0].verdict == "reject"
+    assert "[retracted - filesystem check shows no changes landed]" in comments[0].message
+    assert "reason_code: hallucinated_completion" in comments[0].message
+    assert "git_status_porcelain: clean" in comments[0].message
+
+    reports = load_stage_reports(tmp_path, task, stage="implementing")
+    assert len(reports) == 1
+    assert reports[0].verdict == "fail"
+    assert reports[0].failure_classification == "hallucinated_completion"
+    assert reports[0].outcome_reason_code == "hallucinated_completion"
+    assert reports[0].failure_diagnostics["claimed_files_changed"] == ["foo.py"]
+
+    journal = (task_dir(tmp_path, task) / "journal.md").read_text(encoding="utf-8")
+    assert "Rejected implementing pass as hallucinated completion." in journal
+    assert "`git status --porcelain`" in journal
 
 
 def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatch) -> None:
@@ -786,11 +852,12 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
             stage="implementing",
             verdict="pass",
             message="implemented change",
+            files_changed=["foo.py"],
         ),
     )
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._execution_checkout_has_changes",
-        lambda workspace_root, task_id: True,
+        "litehive.lifecycle.heru_factory._execution_checkout_status",
+        lambda workspace_root, task: (tmp_path, [" M foo.py"]),
     )
 
     verdict = _latest_verdict_after(
@@ -826,8 +893,8 @@ def test_latest_verdict_after_includes_retry_summary_metadata(tmp_path, monkeypa
         ),
     )
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._execution_checkout_has_changes",
-        lambda workspace_root, task_id: True,
+        "litehive.lifecycle.heru_factory._execution_checkout_status",
+        lambda workspace_root, task: (tmp_path, [" M litehive/lifecycle/prompt_serializer.py"]),
     )
 
     verdict = _latest_verdict_after(
