@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from heru import extract_engine_continuation, get_engine, render_execution_transcript
+from heru import get_engine
 from heru.quota import (
     UsageStatus,
     check_claude_quota,
@@ -385,9 +385,7 @@ def _set_continuation_handoff(
     warnings: list[str] = []
     if result.transcript:
         transcript_snippet = result.transcript.splitlines()[0].strip()
-    if result.execution is not None:
-        rendered = render_execution_transcript(from_engine, result.execution)
-        transcript_snippet = transcript_snippet or rendered.splitlines()[0].strip()
+    continuation = getattr(result, "continuation", None)
 
     handoff = RuntimeContinuationHandoff(
         stage=stage,
@@ -407,7 +405,7 @@ def _set_continuation_handoff(
         session_path=None,
         report_path=None,
         transcript_path=f"{result.ref.path}/transcript.md",
-        continuation=extract_engine_continuation(from_engine, result.execution),
+        continuation=continuation,
     )
     set_task_continuation_handoff(root, task, handoff)
     return handoff

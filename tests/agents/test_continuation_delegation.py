@@ -45,22 +45,17 @@ def test_heru_extract_engine_continuation_prefers_unified_events(monkeypatch) ->
     assert continuation.resume_id == "session-42"
 
 
-def test_session_mixin_extract_execution_continuation_delegates_to_heru_for_supported_engines(monkeypatch) -> None:
-    captured: list[str] = []
+@pytest.mark.parametrize("engine_name", ("codex", "claude", "copilot", "gemini", "goz", "opencode"))
+def test_session_mixin_does_not_parse_native_engine_jsonl_fallback_for_supported_engines(engine_name: str) -> None:
+    execution = _execution('{"type":"message","role":"assistant","content":"legacy output"}\n')
 
-    def fake_extract(engine_name, execution):  # type: ignore[no-untyped-def]
-        captured.append(engine_name)
-        assert execution is not None
-        return RuntimeEngineContinuation(session_id=f"{engine_name}-session")
+    transcript = SessionMixin._render_execution_transcript(engine_name, execution)
+    continuation = SessionMixin._extract_execution_continuation(engine_name, execution)
+    timeline = SessionMixin._extract_execution_timeline(engine_name, execution.stdout)
 
-    monkeypatch.setattr("litehive.agents.session.extract_engine_continuation", fake_extract)
-
-    for engine_name in ("codex", "claude", "copilot", "gemini", "goz", "opencode"):
-        continuation = SessionMixin._extract_execution_continuation(engine_name, _execution("plain stdout"))
-        assert continuation is not None
-        assert continuation.resume_id == f"{engine_name}-session"
-
-    assert captured == ["codex", "claude", "copilot", "gemini", "goz", "opencode"]
+    assert transcript == execution.transcript
+    assert continuation is None
+    assert timeline is None
 
 
 @pytest.mark.parametrize("engine_name", ("codex", "claude", "copilot", "gemini", "goz", "opencode"))
@@ -105,15 +100,6 @@ def test_session_mixin_consumes_unified_event_types_for_supported_engines(engine
 def test_set_continuation_handoff_preserves_unified_continuation_payload(tmp_path, monkeypatch) -> None:
     task = create_task(tmp_path, title="Continuation handoff", auto_commit=False)
 
-    class FakeEngine:
-        def render_transcript(self, execution):  # type: ignore[no-untyped-def]
-            raise AssertionError("Adapter fallback should not run for unified events")
-
-        def parse_stage_report(self, **kwargs):  # type: ignore[no-untyped-def]
-            return SimpleNamespace(summary="summary", warnings=["warning"])
-
-    monkeypatch.setattr("litehive.config.engine_models.get_engine", lambda _: FakeEngine())
-
     captured = {}
 
     def capture_handoff(root, task_record, handoff):  # type: ignore[no-untyped-def]
@@ -138,6 +124,7 @@ def test_set_continuation_handoff_preserves_unified_continuation_payload(tmp_pat
     result = SimpleNamespace(
         transcript="implemented via unified events",
         execution=execution,
+        continuation=RuntimeEngineContinuation(session_id="session-42"),
         ref=SimpleNamespace(
             id="SA-0001-swe",
             path="subagents/SA-0001-swe",

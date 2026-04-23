@@ -15,7 +15,7 @@ from litehive.tasks.paths import task_dir
 from litehive.tasks.runtime import mark_subagent_started
 
 
-def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
+def test_claude_live_progress_report_uses_unified_transcript_for_restart_snippet(
     tmp_path: Path,
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
@@ -42,13 +42,11 @@ def test_claude_live_progress_report_uses_adapter_summary_for_restart_snippet(
         argv=("claude", "-p"),
         cwd=tmp_path,
         exit_code=0,
-        stdout="\n".join(
-            [
-                '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"VERDICT: PASS\\n"}}',
-                '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"SUMMARY: partial Claude output\\n"}}',
-                '{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"FILES_CHANGED:\\n- litehive/engines.py\\n"}}',
-                '{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"TESTS_ADDED: 1\\nTESTS_PASSING: 1\\nWARNINGS:\\n"}}',
-            ]
+        stdout=(
+            '{"kind":"message","engine":"claude","sequence":0,'
+            '"role":"assistant","content":"SUMMARY: partial Claude output",'
+            '"timestamp":"2026-04-12T00:00:00+00:00","usage_delta":{},'
+            '"raw":{},"metadata":{}}\n'
         ),
         stderr="",
         pid=4242,
@@ -83,7 +81,12 @@ def test_subagent_writes_timeline_during_live_progress(tmp_path: Path, monkeypat
     task = create_task(tmp_path, title="Timeline live progress test")
     manager = SubagentManager(tmp_path)
 
-    partial_stdout = '{"type":"text","part":{"text":"partial output"}}\n'
+    partial_stdout = (
+        '{"kind":"message","engine":"opencode","sequence":0,'
+        '"role":"assistant","content":"partial output",'
+        '"timestamp":"2026-04-12T00:00:00+00:00","usage_delta":{},'
+        '"raw":{},"metadata":{}}\n'
+    )
 
     class FakeStreamingEngine:
         name = "opencode"
@@ -126,7 +129,12 @@ def test_subagent_writes_timeline_during_live_progress(tmp_path: Path, monkeypat
                 argv=("opencode", "run"),
                 cwd=cwd,
                 exit_code=0,
-                stdout=partial_stdout + '{"type":"step_finish","part":{"tokens":{"total":50}}}\n',
+                stdout=(
+                    partial_stdout
+                    + '{"kind":"usage","engine":"opencode","sequence":1,'
+                    '"timestamp":"2026-04-12T00:00:01+00:00","usage_delta":{"total_tokens":50},'
+                    '"raw":{},"metadata":{"total_tokens":50}}\n'
+                ),
                 stderr="",
                 pid=5151,
             )

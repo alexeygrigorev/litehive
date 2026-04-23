@@ -1,14 +1,15 @@
 """Session I/O mixin for SubagentManager."""
 
+import json
+import logging
 import os
 from pathlib import Path
 import re
 import signal
 import time
 
-from heru import extract_engine_continuation, extract_engine_timeline, render_execution_transcript
 from heru.base import CLIExecutionResult
-from heru.types import LiveTimeline, RuntimeEngineContinuation, SubagentRef
+from heru.types import LiveEvent, LiveTimeline, RuntimeEngineContinuation, SubagentRef, UnifiedEvent
 from litehive.agents.artifacts import (
     write_stream_artifact,
     write_text_artifact,
@@ -23,12 +24,98 @@ from litehive.domain.runtime import ResourceLimitEvent
 from litehive.domain.task import TaskRecord
 from litehive.observability.events import append_event, append_session_log, ensure_session_log
 from litehive.tasks.runtime import mark_subagent_pid
+from pydantic import ValidationError
 
 _OPENCODE_INACTIVITY_TIMEOUT_SECONDS = 300.0
 _COMPLETED_INACTIVITY_PATTERN = re.compile(
     r"\[litehive\]\s*Process killed after\s+(?P<seconds>\d+(?:\.\d+)?)s of inactivity\.",
     re.IGNORECASE,
 )
+logger = logging.getLogger(__name__)
+
+
+def _parse_unified_events(stdout: str) -> tuple[UnifiedEvent, ...]:
+    events: list[UnifiedEvent] = []
+    for line_number, raw_line in enumerate(stdout.splitlines(), 1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        if not (line.startswith("{") or line.startswith("[")):
+            continue
+        try:
+            payload = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if not isinstance(payload, dict) or "kind" not in payload:
+            continue
+        try:
+            events.append(UnifiedEvent.model_validate(payload))
+        except ValidationError as exc:
+            logger.warning(
+                "Skipping invalid unified event line %d while parsing subagent output: %s",
+                line_number,
+                exc,
+            )
+    return tuple(events)
+
+
+def _render_event_for_transcript(event: UnifiedEvent) -> str:
+    if event.kind in {"message", "status"} and event.content:
+        return event.content
+    if event.kind == "error" and event.error:
+        return event.error
+    if event.kind not in {"tool_call", "tool_result"}:
+        return ""
+
+    lines = ["```tool"]
+    if event.tool_name:
+        lines.append(f"name: {event.tool_name}")
+    if event.tool_input:
+        lines.append("input:")
+        lines.append(event.tool_input.rstrip())
+    if event.tool_output:
+        lines.append("output:")
+        lines.append(event.tool_output.rstrip())
+    if event.error:
+        lines.append("error:")
+        lines.append(event.error.rstrip())
+    lines.append("```")
+    return "\n".join(lines)
+
+
+def _render_transcript_from_events(events: tuple[UnifiedEvent, ...], *, stderr: str) -> str:
+    parts = [rendered for event in events if (rendered := _render_event_for_transcript(event))]
+    if not parts:
+        return f"[stderr]\n{stderr.strip()}" if stderr.strip() else ""
+    if stderr.strip():
+        parts.append(f"[stderr]\n{stderr.strip()}")
+    return "\n\n".join(parts)
+
+
+def _continuation_from_events(events: tuple[UnifiedEvent, ...]) -> RuntimeEngineContinuation | None:
+    continuation_id: str | None = None
+    for event in events:
+        if event.kind != "continuation":
+            continue
+        continuation_id = event.continuation_id or event.content or continuation_id
+    if not continuation_id:
+        return None
+    return RuntimeEngineContinuation(session_id=continuation_id)
+
+
+def _timeline_from_events(
+    events: tuple[UnifiedEvent, ...],
+    *,
+    engine_name: str,
+    task_id: str | None = None,
+    subagent_id: str | None = None,
+) -> LiveTimeline | None:
+    if not events:
+        return None
+    timeline = LiveTimeline(engine=engine_name, task_id=task_id, subagent_id=subagent_id)
+    timeline.events = [LiveEvent.model_validate(event.model_dump(mode="python")) for event in events]
+    timeline.recompute_counts()
+    return timeline
 
 
 class SessionMixin:
@@ -42,14 +129,23 @@ class SessionMixin:
         engine_name: str,
         execution: CLIExecutionResult | None,
     ) -> str:
-        return render_execution_transcript(engine_name, execution)
+        del engine_name
+        if execution is None:
+            return ""
+        events = _parse_unified_events(execution.stdout)
+        if not events:
+            return execution.transcript
+        return _render_transcript_from_events(events, stderr=execution.stderr)
 
     @staticmethod
     def _extract_execution_continuation(
         engine_name: str,
         execution: CLIExecutionResult | None,
     ) -> RuntimeEngineContinuation | None:
-        return extract_engine_continuation(engine_name, execution)
+        del engine_name
+        if execution is None:
+            return None
+        return _continuation_from_events(_parse_unified_events(execution.stdout))
 
     @staticmethod
     def _extract_execution_timeline(
@@ -59,9 +155,9 @@ class SessionMixin:
         task_id: str | None = None,
         subagent_id: str | None = None,
     ) -> LiveTimeline | None:
-        return extract_engine_timeline(
-            engine_name,
-            stdout,
+        return _timeline_from_events(
+            _parse_unified_events(stdout),
+            engine_name=engine_name,
             task_id=task_id,
             subagent_id=subagent_id,
         )

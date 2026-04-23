@@ -27,7 +27,7 @@ from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.registry import build_registry
 from litehive.lifecycle.runner import StateMachineRunner
 from litehive.roles.base import PromptContext
-from litehive.lifecycle.nodes.hook import HookResult, HookRunner
+from litehive.lifecycle.nodes.hook import HookRunner
 from litehive.lifecycle.nodes.system import CommitNode, StubCommitNode
 from litehive.lifecycle.nodes.agent import AgentVerdict, Engine, TransientError
 from litehive.lifecycle.nodes.system import MergeConflict
@@ -73,8 +73,9 @@ class _FixedSelector:
 class _NoopHookRunner(HookRunner):
     """No real subprocess — returns ok for every spec. Test uses empty hook lists anyway."""
 
-    def run(self, spec, state) -> HookResult:
-        return HookResult(spec=spec, ok=True, output="")
+    def run(self, spec, state) -> None:
+        del spec, state
+        return None
 
 
 class _RecoveringEngine(_PassEngine):
