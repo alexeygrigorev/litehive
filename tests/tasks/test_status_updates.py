@@ -1,4 +1,5 @@
 from pathlib import Path
+import inspect
 
 import pytest
 import yaml
@@ -8,6 +9,18 @@ from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.status import close_task, update_task
+
+
+def test_update_task_signature_excludes_removed_engine_kwarg() -> None:
+    assert "engine" not in inspect.signature(update_task).parameters
+
+
+def test_update_task_rejects_removed_engine_kwarg(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="No engine override")
+
+    with pytest.raises(TypeError, match="engine"):
+        update_task(tmp_path, task.id, **{"engine": "gemini"})
 
 
 def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None:

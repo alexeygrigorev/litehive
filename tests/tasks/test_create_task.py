@@ -149,6 +149,7 @@ def test_task_add_help_matches_trimmed_option_surface() -> None:
     ]:
         assert option in result.output
     for option in [
+        "--engine",
         "--model",
         "--retry-limit",
         "--record-mode",
@@ -284,6 +285,7 @@ def test_task_update_help_matches_trimmed_option_surface() -> None:
     ]:
         assert option in result.output
     for option in [
+        "--engine",
         "--model",
         "--retry-limit",
         "--task-type",

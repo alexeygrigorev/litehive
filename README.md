@@ -67,6 +67,10 @@ default_engine: codex
 codex_model: gpt-5.4-high
 ```
 
+Task metadata does not store an `engine` field. Engine selection comes from the
+workspace `default_engine`, explicit run-time overrides, or a recorded
+`litehive engine switch` handoff between runs.
+
 You can update task metadata in place:
 
 ```bash
@@ -160,7 +164,7 @@ When a stage fails or an agent crashes, litehive does not just give up:
 - If the same stage fails 3 or more times, the task gets escalated back to grooming for replanning
 - If an engine hits its quota, litehive switches to another engine
 - If a live Codex subagent goes 5 minutes without new stdout, Litehive terminates that subprocess and lets the normal stage retry flow restart the same stage
-- The recovery engine can be different from the task engine (e.g. use Claude for recovery while Codex does the work)
+- The recovery engine can differ from the workspace default or current execution engine (e.g. use Claude for recovery while Codex handles normal runs)
 
 That 5-minute live-subagent timeout is separate from background-runner stale-state recovery. It applies to stalled subprocess output, not to the runner lock or heartbeat repair.
 
