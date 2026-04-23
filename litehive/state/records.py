@@ -1,6 +1,7 @@
 """Task CRUD operations: create, list, get, save, and related helpers."""
 
 import logging
+import os
 import re
 from pathlib import Path
 
@@ -45,6 +46,8 @@ _LEGACY_TASK_INTENT_KEYS = {
     "github_origin",
 }
 
+_MANUAL_CREATION_RATIONALE = "Created outside a Litehive agent session."
+
 
 class TaskStateMissingError(RuntimeError):
     """Raised when a task has no SQLite runtime state row."""
@@ -79,6 +82,44 @@ def _reserve_next_task_numbers(root, state, *, count: int = 1) -> list[int]:
     start = state.next_task_number + 1
     state.next_task_number += count
     return list(range(start, start + count))
+
+
+def _task_creation_stage(root: Path, *, current_task_id: str | None) -> str | None:
+    env_stage = (os.environ.get("LITEHIVE_STAGE") or "").strip()
+    if env_stage:
+        return env_stage
+    if not current_task_id:
+        return None
+    current_task = get_task_record(root, current_task_id)
+    if current_task is None:
+        return None
+    runtime_stage = current_task.runtime.current_stage.stage
+    if runtime_stage:
+        return runtime_stage
+    pipeline_stage = str(current_task.pipeline_status).strip()
+    if pipeline_stage and pipeline_stage != "backlog":
+        return pipeline_stage
+    return None
+
+
+def _default_task_creation_source(root: Path) -> TaskCreationSource:
+    agent_role = (os.environ.get("LITEHIVE_AGENT_ROLE") or "").strip()
+    current_task_id = (os.environ.get("LITEHIVE_TASK_ID") or "").strip() or None
+    if not agent_role:
+        return TaskCreationSource(
+            source="manual",
+            rationale=_MANUAL_CREATION_RATIONALE,
+        )
+    rationale = f"Created by Litehive agent role {agent_role}."
+    if current_task_id:
+        rationale = f"{rationale[:-1]} while working on {current_task_id}."
+    return TaskCreationSource(
+        source="agent",
+        task_id=current_task_id,
+        stage=_task_creation_stage(root, current_task_id=current_task_id),
+        role=agent_role,
+        rationale=rationale,
+    )
 
 
 def ensure_runtime_ignored(root: Path) -> None:
@@ -259,6 +300,7 @@ def create_task(
             goal=goal,
             acceptance_criteria=normalize_acceptance_criteria(acceptance_criteria),
             retry_policy={"max_retries": retry_limit},
+            created_from=_default_task_creation_source(root),
             git={
                 "auto_commit": auto_commit,
                 "commit_message": default_commit_message(task_id, slug),
@@ -314,6 +356,7 @@ def create_follow_up_tasks(
                 goal=follow_up.goal,
                 acceptance_criteria=normalize_acceptance_criteria(follow_up.acceptance_criteria),
                 created_from=TaskCreationSource(
+                    source="follow_up",
                     task_id=parent_task.id,
                     stage=stage,  # type: ignore[arg-type]
                     rationale=follow_up.rationale,

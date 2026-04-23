@@ -1,11 +1,12 @@
 """Task and workspace record models."""
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from .common import (
     PipelineMode,
     PipelineStatus,
-    TaskStage,
     TaskStatus,
     utcnow,
 )
@@ -26,16 +27,18 @@ class TaskRetryPolicy(BaseModel):
 class TaskCreationSource(BaseModel):
     """Metadata about what created this task.
 
-    Records the context when a task was created from another task during
-    follow-up task creation flows. Helps track task relationships and
-    creation rationale for debugging and auditing.
+    Records the context for task creation across manual/operator task adds,
+    in-agent task creation, and follow-up task flows. Helps track task
+    relationships and creation provenance for debugging and auditing.
     """
     model_config = ConfigDict(extra="forbid")
 
-    task_id: str         # ID of the task that created this one
-    stage: TaskStage     # Stage the parent was in when creating this task
-    rationale: str       # Operator or agent explanation for creating this task
-    blocking: bool = False  # Whether this task blocks the parent's progress
+    source: Literal["manual", "agent", "follow_up"] = "follow_up"
+    task_id: str | None = None    # Parent/current task id when available
+    stage: str | None = None      # Parent/current stage when available
+    role: str | None = None       # Creating agent role for agent-created tasks
+    rationale: str = ""           # Operator or agent explanation for creating this task
+    blocking: bool = False        # Whether this task blocks the parent's progress
 
 
 class GitSettings(BaseModel):

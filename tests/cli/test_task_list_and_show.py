@@ -181,7 +181,14 @@ def test_list_compact_format(tmp_path: Path, capsys: pytest.CaptureFixture[str])
     assert f"{task.id} [queued/backlog] My test task" in output
 
 
-def test_show_prints_task_details(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_show_prints_task_details(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
+    monkeypatch.delenv("LITEHIVE_STAGE", raising=False)
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="gemini"))
     task = create_task(tmp_path, title="Detail task", auto_commit=False)
     task.goal = "Test the show command"
@@ -201,12 +208,45 @@ def test_show_prints_task_details(tmp_path: Path, capsys: pytest.CaptureFixture[
     assert "pipeline_stage: backlog" in output
     assert "priority: high" in output
     assert "engine: gemini" in output
+    assert "created_from:" in output
+    assert "  source: manual" in output
+    assert "  task_id: -" in output
+    assert "  role: -" in output
+    assert "  rationale: Created outside a Litehive agent session." in output
     assert "goal: Test the show command" in output
     assert "  - criterion one" in output
     assert "  - criterion two" in output
     assert "  - keep it simple" in output
     assert "  - step one" in output
     assert "  - step two" in output
+
+
+def test_show_prints_agent_creation_provenance(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
+    monkeypatch.delenv("LITEHIVE_STAGE", raising=False)
+    ensure_workspace(tmp_path)
+    parent = create_task(tmp_path, title="Current task", auto_commit=False)
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
+    monkeypatch.setenv("LITEHIVE_TASK_ID", parent.id)
+    monkeypatch.setenv("LITEHIVE_STAGE", "grooming")
+    created = create_task(tmp_path, title="Spawned from planner", auto_commit=False)
+
+    exit_code = _cmd_show(argparse.Namespace(workspace=tmp_path, task_id=created.id))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "created_from:" in output
+    assert "  source: agent" in output
+    assert f"  task_id: {parent.id}" in output
+    assert "  stage: grooming" in output
+    assert "  role: planner" in output
+    assert "  blocking: no" in output
+    assert f"  rationale: Created by Litehive agent role planner while working on {parent.id}." in output
 
 
 def test_task_update_renames_title_in_place(

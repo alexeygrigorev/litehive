@@ -11,17 +11,24 @@ _AGENT_ALLOWED_OPERATOR_ROOT_COMMANDS: set[tuple[str, ...]] = {
     ("switch",),
 }
 
+_AGENT_ALLOWED_TASK_ROOT_COMMANDS: set[tuple[str, ...]] = {
+    ("task", "add"),
+}
+
 
 def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
     """Return whether an agent role may invoke a non-`agent` command.
 
     `switch` is an operator queue-management shortcut, so it must keep working
     even when the environment still carries an inherited `LITEHIVE_AGENT_ROLE`.
+    Agents also need the documented `litehive task add ...` follow-up workflow.
     Recovery keeps its small diagnostic allowlist; other commands stay blocked.
     """
     if not argv:
         return False
     if tuple(argv[:1]) in _AGENT_ALLOWED_OPERATOR_ROOT_COMMANDS:
+        return True
+    if tuple(argv[:2]) in _AGENT_ALLOWED_TASK_ROOT_COMMANDS:
         return True
     if role != "recovery":
         return False

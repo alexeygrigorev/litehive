@@ -50,6 +50,20 @@ def _show_dependency_label(root, task) -> str:
     return ", ".join(labels)
 
 
+def _print_creation_provenance(task) -> None:
+    created_from = task.created_from
+    if created_from is None:
+        print("created_from: -")
+        return
+    print("created_from:")
+    print(f"  source: {created_from.source}")
+    print(f"  task_id: {created_from.task_id or '-'}")
+    print(f"  stage: {created_from.stage or '-'}")
+    print(f"  role: {created_from.role or '-'}")
+    print(f"  blocking: {'yes' if created_from.blocking else 'no'}")
+    print(f"  rationale: {created_from.rationale or '-'}")
+
+
 def _print_duplicate_task_warning(matches: list[DuplicateTaskMatch]) -> None:
     if not matches:
         return
@@ -237,6 +251,7 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
     print(f"depends_on: {_show_dependency_label(workspace, task)}")
     print(f"created_at: {task.created_at}")
     print(f"updated_at: {task.updated_at}")
+    _print_creation_provenance(task)
     print(f"goal: {task.goal or '-'}")
     if task.acceptance_criteria:
         print("acceptance_criteria:")

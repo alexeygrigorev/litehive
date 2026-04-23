@@ -111,6 +111,36 @@ def test_main_allows_switch_operator_shortcut_for_agent_roles(
     ]
 
 
+def test_main_allows_task_add_for_agent_roles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_cli_main() -> int:
+        captured["argv"] = list(sys.argv)
+        return 11
+
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
+    monkeypatch.setattr(cli_app_module, "main", fake_cli_main)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["litehive", "task", "add", "Follow-up task", "--goal", "Split mixed scope"],
+    )
+
+    exit_code = main_module.main()
+
+    assert exit_code == 11
+    assert captured["argv"] == [
+        "litehive",
+        "task",
+        "add",
+        "Follow-up task",
+        "--goal",
+        "Split mixed scope",
+    ]
+
+
 def test_main_routes_root_help_for_agent_roles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

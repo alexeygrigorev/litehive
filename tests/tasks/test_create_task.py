@@ -31,6 +31,30 @@ def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
     assert (tmp_path / ".litehive" / "tasks" / "T-0001-fix-login-race" / "task.yaml").exists()
 
 
+def test_create_task_persists_manual_creation_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
+    monkeypatch.delenv("LITEHIVE_STAGE", raising=False)
+    ensure_workspace(tmp_path)
+
+    task = create_task(tmp_path, title="Manual provenance")
+    persisted = get_task(tmp_path, task.id)
+    task_yaml = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "task.yaml"
+    data = yaml.safe_load(task_yaml.read_text(encoding="utf-8"))
+
+    assert persisted is not None
+    assert persisted.created_from is not None
+    assert persisted.created_from.source == "manual"
+    assert persisted.created_from.task_id is None
+    assert persisted.created_from.role is None
+    assert persisted.created_from.rationale == "Created outside a Litehive agent session."
+    assert data["created_from"]["source"] == "manual"
+    assert data["created_from"]["task_id"] is None
+    assert data["created_from"]["role"] is None
+
+
 def test_create_task_defaults_to_full_pipeline_mode(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
@@ -49,6 +73,31 @@ def test_create_task_persists_single_pipeline_mode(tmp_path: Path) -> None:
 
     assert persisted is not None
     assert persisted.pipeline_mode == "single"
+
+
+def test_create_task_persists_agent_creation_provenance_from_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
+    monkeypatch.delenv("LITEHIVE_STAGE", raising=False)
+    ensure_workspace(tmp_path)
+    parent = create_task(tmp_path, title="Current agent task")
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
+    monkeypatch.setenv("LITEHIVE_TASK_ID", parent.id)
+    monkeypatch.setenv("LITEHIVE_STAGE", "implementing")
+
+    task = create_task(tmp_path, title="Created from agent session")
+    persisted = get_task(tmp_path, task.id)
+
+    assert persisted is not None
+    assert persisted.created_from is not None
+    assert persisted.created_from.source == "agent"
+    assert persisted.created_from.task_id == parent.id
+    assert persisted.created_from.stage == "implementing"
+    assert persisted.created_from.role == "swe"
+    assert persisted.created_from.blocking is False
+    assert persisted.created_from.rationale == f"Created by Litehive agent role swe while working on {parent.id}."
 
 
 def test_task_add_cli_persists_surviving_flags(tmp_path: Path) -> None:
@@ -425,6 +474,7 @@ def test_create_follow_up_tasks_persists_queue_and_creation_source(tmp_path: Pat
     follow_up = get_task(tmp_path, created[0].id)
     assert follow_up is not None
     assert follow_up.created_from is not None
+    assert follow_up.created_from.source == "follow_up"
     assert follow_up.created_from.task_id == parent.id
     assert follow_up.created_from.stage == "accepting"
     assert follow_up.created_from.blocking is True
