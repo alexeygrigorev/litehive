@@ -3,18 +3,18 @@ from typing import Any
 
 import yaml
 
-from litehive.config import config_path, load_config
+from litehive.config.loading import load_config
+from litehive.config.workspace_files import config_path
 from litehive.domain.common import cap_feedback
-from litehive.models import StageReport, TaskRecord, TaskThreadComment
-from litehive.config.pipeline_states import ROUTES
+from litehive.domain.reports import StageReport, TaskActivityEntry
+from litehive.domain.task import TaskRecord
 from litehive.tasks.constants import VALID_TASK_ENGINES
-from litehive.tasks.crud import create_task, require_task
-from litehive.tasks.paths import task_dir
-from litehive.tasks.persistence import load_state
-from litehive.tasks.reports import append_thread_comment
-from litehive.workspace.locking import workspace_lock
-from litehive.workspace.runtime_tracking import apply_stage_finished, apply_task_outcome
-from litehive.workspace.task_status import (
+from litehive.state.records import create_task, require_task
+from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
+from litehive.state.locking import workspace_lock
+from litehive.tasks.reports import append_activity_entry, record_stage_report
+from litehive.tasks.runtime import apply_flag_count_auto_defer, apply_stage_finished, apply_task_outcome
+from litehive.tasks.status import (
     abandon_task,
     close_task,
     requeue_task,
@@ -22,7 +22,6 @@ from litehive.workspace.task_status import (
     switch_task_engine,
     update_task,
 )
-from litehive.workspace.workflow import persist_task_and_state_without_runner_guard
 
 from litehive_web.common import (
     WEB_REVIEWABLE_STAGES,
@@ -43,6 +42,13 @@ from litehive_web.snapshot import (
     serialize_task_with_queue_metadata,
     read_engine_dashboard,
 )
+
+WEB_STAGE_ROUTES: dict[tuple[str, str], str] = {
+    ("testing", "pass"): "accepting",
+    ("testing", "reject"): "implementing",
+    ("accepting", "pass"): "done",
+    ("accepting", "reject"): "implementing",
+}
 
 
 def update_task_detail(root: Path, task_id: str, updates: dict[str, Any]) -> dict[str, Any]:
@@ -145,17 +151,17 @@ def submit_stage_verdict_via_web(
         if step != task.pipeline_status:
             raise ValueError(
                 f"step must match the active task pipeline status '{task.pipeline_status}'"
-            )
+        )
 
         cleaned_role = role.strip()
         cleaned_message = message.strip()
-        comment = TaskThreadComment(
+        comment = TaskActivityEntry(
             role=cleaned_role,
-            step=step,
+            stage=step,
             verdict=normalized_verdict,  # type: ignore[arg-type]
             message=cleaned_message,
         )
-        append_thread_comment(root, task, comment)
+        append_activity_entry(root, task, comment)
 
         if normalized_verdict == "comment":
             return {
@@ -170,15 +176,15 @@ def submit_stage_verdict_via_web(
 
         report = StageReport(
             task_id=task.id,
-            step=step,  # type: ignore[arg-type]
+            stage=step,  # type: ignore[arg-type]
             verdict=normalized_verdict,  # type: ignore[arg-type]
             summary=cleaned_message,
             feedback=cap_feedback(cleaned_message),
         )
-        _write_stage_report(root, task, report)
+        record_stage_report(root, task, report)
         apply_stage_finished(task, report)
 
-        target = ROUTES.get((step, normalized_verdict))
+        target = WEB_STAGE_ROUTES.get((step, normalized_verdict))
         if target == "accepting":
             task.pipeline_status = "accepting"
             task.status = "in_progress"
@@ -199,15 +205,14 @@ def submit_stage_verdict_via_web(
         else:
             task.status = "flagged"
             task.runtime.execution_status = "flagged"
-            from litehive.workspace.runtime_tracking import apply_flag_count_auto_defer
             apply_flag_count_auto_defer(task)
             state.active_task_id = None
             state.queue = [item for item in state.queue if item != task.id]
             apply_task_outcome(
                 task,
-                kind="blocked" if verdict == "blocked" else "flagged",
+                kind="blocked" if normalized_verdict == "blocked" else "flagged",
                 stage=step,
-                reason_code="verdict_blocked" if verdict == "blocked" else "unsupported_verdict",
+                reason_code="verdict_blocked" if normalized_verdict == "blocked" else "unsupported_verdict",
                 reason=cleaned_message,
                 retry_count=0,
                 retry_limit=0,
@@ -327,14 +332,3 @@ def _require_task_for_web(root: Path, task_id: str) -> TaskRecord:
         return require_task(root, task_id)
     except ValueError as exc:
         raise FileNotFoundError(str(exc)) from exc
-
-
-def _write_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Path:
-    reports_dir = task_dir(root, task) / "reports"
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    ordinal = len(list(reports_dir.glob(f"{report.step}-*.yaml"))) + 1
-    path = reports_dir / f"{report.step}-{ordinal:03d}.yaml"
-    path.write_text(
-        yaml.safe_dump(report.model_dump(mode="python"), sort_keys=False), encoding="utf-8"
-    )
-    return path

@@ -18,10 +18,11 @@ from litehive.observability.engine_monitoring import load_engine_monitoring
 from litehive.observability.events import read_events
 from litehive.observability.status import collect_task_pipeline_status
 from litehive.tasks.constants import VALID_TASK_ENGINES, VALID_TASK_PRIORITIES, VALID_TASK_TYPES
+from litehive.tasks.activity import resolve_task_activity_path
 from litehive.state.records import list_tasks_state_first
 from litehive.tasks.paths import task_dir
 from litehive.state.persist import load_state
-from litehive.tasks.reports import load_task_thread
+from litehive.tasks.reports import load_task_comments
 
 from litehive_web.common import (
     MAX_ARTIFACT_BYTES,
@@ -359,7 +360,7 @@ def serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) -> 
 
     reports = _load_stage_reports(root, base)
     recovery_reports = _load_recovery_reports(root, base)
-    thread = [comment.model_dump(mode="python") for comment in load_task_thread(root, task)]
+    comments = [comment.model_dump(mode="python") for comment in load_task_comments(root, task)]
     events = _load_task_events(root, task)
     record = task.model_dump(mode="python", exclude={"runtime"})
 
@@ -394,14 +395,14 @@ def serialize_task(root: Path, task: TaskRecord, active_task_id: str | None) -> 
         "task_path": relative_to_root(root, base),
         "task_file": relative_to_root(root, base / "task.yaml"),
         "runtime_file": relative_to_root(root, base / "runtime.yaml"),
-        "thread_file": relative_to_root(root, base / "thread.yaml"),
+        "comments_file": relative_to_root(root, resolve_task_activity_path(root, task)),
         "events_file": relative_to_root(root, base / "events.jsonl"),
         "reports_dir": relative_to_root(root, base / "reports"),
         "recovery_dir": relative_to_root(root, base / "recovery"),
         "record": record,
         "reports": reports,
         "events": events,
-        "thread": thread,
+        "comments": comments,
         "recovery_reports": recovery_reports,
         "subagents": session_entries,
     }

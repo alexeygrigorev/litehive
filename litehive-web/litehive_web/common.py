@@ -185,7 +185,7 @@ def iter_stream_paths(root: Path) -> list[Path]:
     task_root = root / ".litehive" / "tasks"
     if task_root.exists():
         for task_path in sorted(path for path in task_root.iterdir() if path.is_dir()):
-            for name in ("task.yaml", "runtime.yaml", "thread.yaml", "events.jsonl"):
+            for name in ("task.yaml", "runtime.yaml", "comments.yaml", "thread.yaml", "events.jsonl"):
                 candidate = task_path / name
                 if candidate.exists():
                     candidates.append(candidate)

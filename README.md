@@ -309,6 +309,8 @@ litehive task recent --since 72h # widen the reporting window
 
 Litehive keeps `task.yaml`, `runtime.yaml`, stage reports, `comments.yaml`, `journal.md`, `events.jsonl`, `session.yaml`, and `report.yaml` as the durable evidence surface for status, repair, recovery, and handoff.
 
+During migration, Litehive still reads legacy per-task `thread.yaml` discussion files when `comments.yaml` is absent, and `litehive repair` rewrites legacy task discussion files to `comments.yaml`.
+
 High-volume raw execution artifacts are treated as disposable support data:
 
 - Only the latest subagent attempt keeps raw `prompt`, transcript, stdout/stderr, and timeline artifacts; older subagent folders keep their `session.yaml` and `report.yaml` but have raw files pruned.

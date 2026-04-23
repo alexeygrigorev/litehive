@@ -1034,14 +1034,14 @@
       `).join("")}</ul>`;
     }
 
-    function renderThread(task) {
-      if (!task.thread.length) {
-        return `<div class="card empty">No discussion thread recorded.</div>`;
+    function renderComments(task) {
+      if (!task.comments.length) {
+        return `<div class="card empty">No task comments recorded.</div>`;
       }
-      return `<ul class="flat">${task.thread.map((comment) => `
+      return `<ul class="flat">${task.comments.map((comment) => `
         <li class="card">
           <strong>${esc(comment.role || "-")}</strong>
-          <span class="muted"> ${esc(comment.step || "-")} / ${esc(comment.verdict || "-")} / ${esc(comment.created_at || "-")}</span>
+          <span class="muted"> ${esc(comment.stage || "-")} / ${esc(comment.verdict || "-")} / ${esc(comment.created_at || "-")}</span>
           <pre>${esc(comment.message || "")}</pre>
           ${comment.files_changed && comment.files_changed.length ? `<div class="muted">Files: ${esc(comment.files_changed.join(", "))}</div>` : ""}
         </li>
@@ -1088,7 +1088,7 @@
           <div>Task dir</div><div class="mono">${esc(task.task_path)}</div>
           <div>Task file</div><div class="mono">${esc(task.task_file)}</div>
           <div>Runtime file</div><div class="mono">${esc(task.runtime_file)}</div>
-          <div>Thread file</div><div class="mono">${esc(task.thread_file)}</div>
+          <div>Comments file</div><div class="mono">${esc(task.comments_file)}</div>
           <div>Events file</div><div class="mono">${esc(task.events_file)}</div>
           <div>Reports dir</div><div class="mono">${esc(task.reports_dir)}</div>
           <div>Recovery dir</div><div class="mono">${esc(task.recovery_dir)}</div>
@@ -1102,8 +1102,8 @@
         ${renderEditSection(task, snapshot)}
         ${renderRecordSection(task)}
         <div class="section">
-          <h3>Discussion Thread</h3>
-          ${renderThread(task)}
+          <h3>Task Comments</h3>
+          ${renderComments(task)}
         </div>
         <div class="section">
           <h3>Task Events Timeline</h3>

@@ -8,6 +8,7 @@ from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.observability.venv_health import probe_broken_venv_executables
 from litehive.state.persist import load_state, save_state_without_runner_guard
 from litehive.state.store import runtime_store
+from litehive.tasks.activity import migrate_legacy_task_activity_files
 from litehive.tasks.archive import archive_root
 from litehive.tasks.paths import tasks_root
 from litehive.worktree import resolve_recorded_worktree_path
@@ -90,9 +91,10 @@ def repair_workspace_state(root: Path, *, repair_broken_venvs_in_checkouts: bool
         summary.broken_venv_binaries = [
             f"{finding.checkout.venv_path}:{finding.binary_name}" for finding in probe_broken_venv_executables(root)
         ]
+    migrated_comments = migrate_legacy_task_activity_files(root)
     stale_unmerged_worktrees_removed = _cleanup_stale_unmerged_worktrees(root, summary=summary)
     summary.stale_runner_recovered = recover_stale_runner_state(root, summary=summary)
-    summary.mutated = bool(stale_unmerged_worktrees_removed or summary.stale_runner_recovered)
+    summary.mutated = bool(migrated_comments or stale_unmerged_worktrees_removed or summary.stale_runner_recovered)
     return summary
 
 
