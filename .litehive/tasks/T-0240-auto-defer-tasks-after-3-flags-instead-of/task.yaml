@@ -6,33 +6,32 @@ task_type: null
 pipeline_mode: full
 priority: high
 depends_on: []
-goal: Stop tasks that repeatedly cycle through flagged and requeue without human intervention.
-  Persist a lifetime flag counter on the task record, auto-defer on the third flag
-  with a human-review reason, and require --force to requeue tasks whose flag_count
-  is already 3 or higher.
+goal: Prevent infinite flagged/requeue loops by tracking a lifetime flag counter on
+  the TaskRecord runtime state, auto-deferring on the third flag with a human-review
+  reason, and requiring --force to requeue tasks already flagged 3 or more times.
 acceptance_criteria:
-- TaskRecord persists flag_count in task.yaml as an integer defaulting to 0 for new
-  and existing tasks.
-- Every transition into flagged increments flag_count exactly once, including repeated
+- TaskRecord.flag_count defaults to 0 and persists with the task runtime state for
+  new and existing tasks.
+- Each transition into flagged increments flag_count exactly once, including repeated
   passes after requeue.
-- When a task would be flagged with flag_count reaching 3, Litehive stores flag_count=3,
-  changes status to deferred instead of flagged, and sets reason 'flagged 3 times
-  - needs human review'.
+- When a flagged transition would raise flag_count to 3, Litehive persists flag_count=3,
+  stores status deferred instead of flagged, and sets reason 'flagged 3 times - needs
+  human review'.
 - litehive queue requeue refuses tasks with flag_count >= 3 unless --force is supplied
   and prints a clear operator-facing warning.
 - Requeue never resets flag_count; forced requeue preserves the lifetime counter for
   later trips.
-- Regression coverage includes persistence, the third-flag auto-defer path, the CLI/operator
-  force gate, and the existing relevant tests remain green.
-constraints: []
+- Regression coverage includes runtime-state persistence or hydration, the third-flag
+  auto-defer path, the CLI or operator force gate, and the existing relevant tests
+  remain green.
+constraints:
+- Keep the work scoped to this behavior and do not move runtime-only task state back
+  into task.yaml.
 plan:
-- Verify whether the behavior already exists in the runtime, status, persistence,
-  and CLI layers; close as duplicate if the stated acceptance criteria are already
-  satisfied.
-- If any delta remains, implement the smallest change set in TaskRecord persistence,
-  flagged-status transitions, and requeue gating.
-- Add or update focused tests for persistence, third-flag auto-defer, and forced requeue
-  semantics, then run the relevant test slices required by the change.
+- Confirm whether the runtime, persistence, and CLI layers already satisfy the behavior
+  so grooming does not reopen solved work.
+- If any delta remains, keep follow-up scoped to the smallest change in flag transition
+  handling, requeue gating, and focused regression tests.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0240 auto-defer-tasks-after-3-flags-instead-of'
