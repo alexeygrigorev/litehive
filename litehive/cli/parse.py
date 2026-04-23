@@ -80,9 +80,6 @@ def parse_runner_hooks(
         if separator != "=":
             raise ValueError(f"{option_name} entries must use HOOK_POINT=COMMAND")
         command = remainder.strip()
-        mode_label, mode_separator, mode_command = remainder.partition(":")
-        if mode_separator == ":" and mode_label.strip().lower() in {"reject", "run"}:
-            command = mode_command.strip()
         if not point.strip() or not command:
             raise ValueError(f"{option_name} entries must use HOOK_POINT=COMMAND")
         hooks.setdefault(point.strip(), []).append(command)

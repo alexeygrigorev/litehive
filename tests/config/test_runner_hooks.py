@@ -4,6 +4,7 @@ import pytest
 import yaml
 
 from litehive.config.loading import load_config
+from litehive.config.model import VALID_RUNNER_HOOK_ENTRY_KEYS, VALID_RUNNER_HOOK_POINTS
 from litehive.config.workspace import ensure_workspace
 
 
@@ -112,3 +113,26 @@ def test_configure_rejects_invalid_runner_hook_point(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="runner_hooks key must be one of:"):
         load_config(tmp_path)
+
+
+def test_runner_hook_points_keep_all_supported_names() -> None:
+    assert VALID_RUNNER_HOOK_POINTS == {
+        "before_grooming",
+        "after_grooming",
+        "before_implementing",
+        "after_implementing",
+        "before_testing",
+        "after_testing",
+        "before_accepting",
+        "after_accepting",
+        "after_commit",
+    }
+
+
+def test_runner_hook_entry_keys_match_flat_supported_contract() -> None:
+    assert VALID_RUNNER_HOOK_ENTRY_KEYS == {
+        "command",
+        "timeout_seconds",
+        "description",
+        "instructions_on_failure",
+    }

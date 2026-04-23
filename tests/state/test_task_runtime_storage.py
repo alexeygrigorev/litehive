@@ -15,6 +15,7 @@ from litehive.state.records import (
     save_task,
     save_task_runtime,
 )
+from litehive.state.store import runtime_store
 
 
 def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
@@ -29,6 +30,21 @@ def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
     assert loaded is not None
     assert loaded.runtime.execution_status == "running"
     assert loaded.runtime.current_stage.stage == "implementing"
+
+
+def test_get_task_preserves_commit_sha_when_runtime_copy_is_missing(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Commit SHA fallback")
+    state = task.to_state_record()
+    state.git.commit_sha = "abc123"
+    state.runtime.git.commit_sha = None
+    runtime_store(tmp_path).save_task_state(task.id, state)
+
+    loaded = get_task(tmp_path, task.id)
+
+    assert loaded is not None
+    assert loaded.git.commit_sha == "abc123"
+    assert loaded.runtime.git.commit_sha == "abc123"
 
 
 def test_task_yaml_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path: Path) -> None:

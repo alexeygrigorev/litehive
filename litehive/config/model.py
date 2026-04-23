@@ -35,10 +35,9 @@ VALID_RUNNER_HOOK_ENTRY_KEYS = frozenset(
         "timeout_seconds",
         "description",
         "instructions_on_failure",
-        "reject_on_failure",
-        "blocking",
     }
 )
+LEGACY_RUNNER_HOOK_ENTRY_KEYS = frozenset({"reject_on_failure", "blocking"})
 DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS = 300.0
 
 
@@ -237,7 +236,7 @@ def _normalize_runner_hook(
     if not isinstance(raw_hook, Mapping):
         raise ValueError(f"{field_name} must be a command string or mapping")
 
-    unknown_keys = sorted(set(raw_hook) - VALID_RUNNER_HOOK_ENTRY_KEYS)
+    unknown_keys = sorted(set(raw_hook) - VALID_RUNNER_HOOK_ENTRY_KEYS - LEGACY_RUNNER_HOOK_ENTRY_KEYS)
     if unknown_keys:
         joined = ", ".join(unknown_keys)
         raise ValueError(f"{field_name} contains unsupported keys: {joined}")

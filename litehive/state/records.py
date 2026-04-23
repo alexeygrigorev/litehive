@@ -124,6 +124,7 @@ def ensure_runtime_ignored(root: Path) -> None:
 
 
 def serialize_task_record(task: TaskRecord) -> str:
+    _normalize_task_commit_sha_state(task)
     _normalize_task_worktree_state(task)
     _normalize_task_flag_reason(task)
     payload = task.to_intent_record().model_dump(mode="json")
@@ -131,6 +132,7 @@ def serialize_task_record(task: TaskRecord) -> str:
 
 
 def task_state_for_storage(task: TaskRecord) -> TaskStateRecord:
+    _normalize_task_commit_sha_state(task)
     _normalize_task_worktree_state(task)
     _normalize_task_flag_reason(task)
     return task.to_storage_state_record()
@@ -165,6 +167,14 @@ def _normalize_task_worktree_state(task: TaskRecord) -> None:
         return
     if task.git.worktree_path:
         set_task_worktree_path(task, task.git.worktree_path)
+
+
+def _normalize_task_commit_sha_state(task: TaskRecord) -> None:
+    if task.git.commit_sha:
+        task.runtime.git.commit_sha = task.git.commit_sha
+        return
+    if task.runtime.git.commit_sha:
+        task.git.commit_sha = task.runtime.git.commit_sha
 
 
 def _normalize_task_flag_reason(task: TaskRecord) -> None:
@@ -242,7 +252,7 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
     if task_state is None:
         raise TaskStateMissingError(f"Task {task.id} is missing its SQLite runtime state row")
     task = TaskRecord.from_intent_and_state(task.to_intent_record(), task_state)
-    set_task_commit_sha(task, task.runtime.git.commit_sha)
+    _normalize_task_commit_sha_state(task)
     _normalize_task_worktree_state(task)
     return task
 

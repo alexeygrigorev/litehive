@@ -10,7 +10,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.git.ops import has_non_litehive_changes
 from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass, Reject
 from litehive.lifecycle.nodes.agent import AgentVerdict
-from litehive.lifecycle.nodes.hook import HookNode, HookResult, HookRunner, HookSpec, SubprocessHookRunner
+from litehive.lifecycle.nodes.hook import HookNode, HookRunner, HookSpec, SubprocessHookRunner
 from litehive.lifecycle.nodes.system import GitCommitNode, StubCommitNode
 from litehive.lifecycle.orchestration import run_task
 from litehive.lifecycle.persistence import SqlitePersistence, TaskState
@@ -37,12 +37,6 @@ class SequenceHookRunner(HookRunner):
     def run(self, spec: HookSpec, state: TaskState) -> subprocess.CompletedProcess[str] | None:
         self.calls.append(spec.command)
         return self.outcomes[spec.command]
-
-
-class LegacyHookRunner(HookRunner):
-    def run(self, spec: HookSpec, state: TaskState) -> HookResult:
-        del state
-        return HookResult(spec=spec, ok=True, output="")
 
 
 # ── SubprocessHookRunner ────────────────────────────────────────────────
@@ -88,18 +82,6 @@ def test_hook_node_with_passing_spec_emits_hook_ok(tmp_path: Path) -> None:
     event = node.run(make_state())
     assert isinstance(event, HookOk)
     assert event.warnings == []
-
-
-def test_hook_node_accepts_legacy_hook_result() -> None:
-    node = HookNode(
-        "before_grooming",
-        hooks=[HookSpec(command="true")],
-        runner=LegacyHookRunner(),
-    )
-
-    event = node.run(make_state())
-
-    assert isinstance(event, HookOk)
 
 
 def test_hook_node_with_failing_spec_emits_hook_reject(tmp_path: Path) -> None:

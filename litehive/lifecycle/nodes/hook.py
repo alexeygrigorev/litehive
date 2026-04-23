@@ -21,29 +21,12 @@ class HookSpec:
     instructions_on_failure: str | None = None
 
 
-@dataclass(frozen=True)
-class HookResult:
-    """Backward-compatible hook result shape used by older tests/runners."""
-
-    spec: HookSpec
-    ok: bool
-    output: str = ""
-    error: str = ""
-    returncode: int = 1
-
-    def completed_process(self) -> subprocess.CompletedProcess[str] | None:
-        if self.ok:
-            return None
-        code = self.returncode if self.returncode != 0 else 1
-        return _completed_process(self.spec.command, code, stdout=self.output, stderr=self.error)
-
-
 class HookRunner(Protocol):
-    def run(self, spec: HookSpec, state: TaskState) -> subprocess.CompletedProcess[str] | HookResult | None: ...
+    def run(self, spec: HookSpec, state: TaskState) -> subprocess.CompletedProcess[str] | None: ...
 
 
-def _completed_process(command: str, code: int, *, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
-    return subprocess.CompletedProcess(args=command, returncode=code, stdout=stdout, stderr=stderr)
+def _failed_process(command: str, code: int, *, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(command, code, stdout, stderr)
 
 
 class SubprocessHookRunner(HookRunner):
@@ -58,10 +41,12 @@ class SubprocessHookRunner(HookRunner):
         try:
             proc = subprocess.run(spec.command, shell=True, cwd=str(execution_root), timeout=spec.timeout_seconds, capture_output=True, text=True, env=env, check=False)
         except subprocess.TimeoutExpired as exc:
-            return _completed_process(spec.command, 124, stdout=(exc.stdout or "").strip(), stderr=f"[timeout after {spec.timeout_seconds}s]\n{(exc.stderr or '').strip()}".strip())
+            return _failed_process(spec.command, 124, stdout=(exc.stdout or "").strip(), stderr=f"[timeout after {spec.timeout_seconds}s]\n{(exc.stderr or '').strip()}".strip())
         except FileNotFoundError as exc:
-            return _completed_process(spec.command, 127, stderr=f"[hook binary missing] {exc}")
-        return None if proc.returncode == 0 else _completed_process(spec.command, proc.returncode, stdout=(proc.stdout or "").strip(), stderr=(proc.stderr or "").strip())
+            return _failed_process(spec.command, 127, stderr=f"[hook binary missing] {exc}")
+        if proc.returncode == 0:
+            return None
+        return _failed_process(spec.command, proc.returncode, stdout=(proc.stdout or "").strip(), stderr=(proc.stderr or "").strip())
 
 
 class HookNode(Node):
@@ -74,18 +59,10 @@ class HookNode(Node):
 
     def run(self, state: TaskState) -> Event:
         for spec in self.hooks:
-            result = _normalize_hook_result(self.runner.run(spec, state))
+            result = self.runner.run(spec, state)
             if result is not None:
                 return _reject(self.name, spec, result, state)
         return HookOk()
-
-
-def _normalize_hook_result(
-    result: subprocess.CompletedProcess[str] | HookResult | None,
-) -> subprocess.CompletedProcess[str] | None:
-    if isinstance(result, HookResult):
-        return result.completed_process()
-    return result
 
 
 def _reject(point: NodeName, spec: HookSpec, result: subprocess.CompletedProcess[str], state: TaskState) -> Reject:
