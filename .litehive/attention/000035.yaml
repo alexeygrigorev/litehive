@@ -1,6 +1,6 @@
-id: 6
+id: 35
 task_id: null
-created_at: '2026-04-23T14:42:30+00:00'
+created_at: '2026-04-23T20:02:46+00:00'
 kind: stale_worktree
 title: Managed worktree needs cleanup
 reason: task_id=missing path=/home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0259-fix-flaky-and-timing-dependent-tests
@@ -8,9 +8,7 @@ suggested_action: Run `litehive worktree clean --dry-run` and then `litehive wor
   clean`.
 dedupe_key: stale_worktree:/home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0259-fix-flaky-and-timing-dependent-tests
 status: resolved
-resolved_at: '2026-04-23T14:45:24+00:00'
-resolution: resolved by operator
+resolved_at: '2026-04-23T20:02:53+00:00'
+resolution: auto-resolved by attention reconciliation
 metadata:
   path: /home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0259-fix-flaky-and-timing-dependent-tests
-  suppressed_until_cleared: true
-  condition_cleared_after_resolution: true

@@ -1,6 +1,6 @@
-id: 10
+id: 55
 task_id: null
-created_at: '2026-04-23T14:42:30+00:00'
+created_at: '2026-04-23T20:03:04+00:00'
 kind: stale_worktree
 title: Managed worktree needs cleanup
 reason: task_id=missing path=/home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0376-follow-up-probe
@@ -8,9 +8,7 @@ suggested_action: Run `litehive worktree clean --dry-run` and then `litehive wor
   clean`.
 dedupe_key: stale_worktree:/home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0376-follow-up-probe
 status: resolved
-resolved_at: '2026-04-23T14:45:26+00:00'
-resolution: resolved by operator
+resolved_at: '2026-04-23T20:03:12+00:00'
+resolution: auto-resolved by attention reconciliation
 metadata:
   path: /home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0376-follow-up-probe
-  suppressed_until_cleared: true
-  condition_cleared_after_resolution: true

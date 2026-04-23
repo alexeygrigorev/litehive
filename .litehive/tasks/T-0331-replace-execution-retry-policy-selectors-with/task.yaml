@@ -6,35 +6,38 @@ task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: Verify whether selector-era execution retry config is already absent from the
-  live codebase and whether execution retries are already driven by flat workspace
-  config only; if both hold, treat T-0331 as a duplicate/no-op and do not route implementation
-  work.
+goal: Confirm the live Litehive tree has already finished the selector-to-flat execution
+  retry config migration. If selector-era retry symbols are absent and live retries
+  are driven only by workspace default_retry_limit plus retry_on with the existing
+  per-task retry_limit override, close T-0331 as a duplicate/no-op instead of routing
+  implementation work.
 acceptance_criteria:
-- 'No selector-era execution retry symbols remain in the live tree outside historical
-  artifacts or task text: ExecutionRetryPolicy, resolve_execution_retry_policy, _normalize_execution_retry_policies,
+- 'No selector-era execution retry symbols remain in the live tree outside this task
+  or historical artifacts: ExecutionRetryPolicy, resolve_execution_retry_policy, _normalize_execution_retry_policies,
   _execution_retry_model_family, VALID_EXECUTION_RETRY_CLASSIFICATIONS, and execution_retry_policies.'
-- Workspace retry behavior is driven by default_retry_limit and retry_on only, and
-  the agent retry gate is a direct membership check on failure_kind.
-- Per-task retry_limit override, frozen-engine fallback behavior, and inactivity-timeout
-  retries remain unchanged in current code and focused tests.
-- Selector-priority retry tests are absent; retry coverage remains for retryable failure
-  kinds and per-task retry_limit overrides.
-- If all verification points hold in the current codebase, close T-0331 as duplicate/no-op
-  rather than sending it to implementation.
+- 'Active retry wiring is flat-config only: resolve_task_retry_policy falls back to
+  default_retry_limit, orchestration passes config.retry_on directly into agent retry
+  setup, and the retry gate is a direct failure_kind membership check.'
+- 'Preserved behavior remains in current code and focused coverage: task retry_limit
+  overrides the workspace default, frozen engines are skipped while fallback order
+  remains intact, and subagent inactivity timeouts still feed the existing retry path.'
+- Selector-priority retry tests are absent; retry coverage remains focused on retryable
+  failure kinds and task retry_limit overrides.
+- If all checks pass in the current tree, close T-0331 as duplicate with no implementation
+  follow-up.
 constraints:
-- Keep scope limited to retry-config flattening and residual cleanup; do not broaden
-  into failure-kind taxonomy renames.
-- Preserve per-task retry_limit override, frozen-engine fallback behavior, and inactivity-timeout
+- Keep scope limited to retry-config flattening and residual selector cleanup only;
+  do not broaden into failure-kind taxonomy renames.
+- Preserve task retry_limit overrides, frozen-engine fallback behavior, and inactivity-timeout
   handling.
 plan:
-- Search the live tree for selector-era retry symbols and confirm any remaining references
-  are historical artifacts only.
-- 'Verify the active retry path and preserved behaviors in code and focused tests:
-  retryable failure kinds, per-task retry_limit override, frozen-engine fallback,
-  and inactivity-timeout handling.'
-- Close T-0331 as duplicate/no-op when verification passes; create a follow-up only
-  if a concrete remnant is found.
+- Search the live tree for selector-era execution retry symbols and confirm any matches
+  are limited to task text or archives.
+- Verify the active retry path and preserved behaviors in code and focused tests for
+  retry_on, task retry_limit override, frozen-engine fallback, and inactivity-timeout
+  handling.
+- Close T-0331 as duplicate when verification passes; only create a follow-up if a
+  concrete live remnant is found.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0331 replace-execution-retry-policy-selectors-with'
