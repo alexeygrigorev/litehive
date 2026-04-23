@@ -1,16 +1,14 @@
-id: 9
-task_id: null
-created_at: '2026-04-23T14:42:30+00:00'
+id: 27
+task_id: T-0318
+created_at: '2026-04-23T16:57:36+00:00'
 kind: stale_worktree
 title: Managed worktree needs cleanup
-reason: task_id=missing path=/home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0318-remove-leading-underscores-from-internal-package
+reason: task_id=T-0318 status=flagged path=/home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0318-remove-leading-underscores-from-internal-package
 suggested_action: Run `litehive worktree clean --dry-run` and then `litehive worktree
   clean`.
 dedupe_key: stale_worktree:/home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0318-remove-leading-underscores-from-internal-package
 status: resolved
-resolved_at: '2026-04-23T14:45:25+00:00'
-resolution: resolved by operator
+resolved_at: '2026-04-23T17:19:51+00:00'
+resolution: auto-resolved by attention reconciliation
 metadata:
   path: /home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0318-remove-leading-underscores-from-internal-package
-  suppressed_until_cleared: true
-  condition_cleared_after_resolution: true

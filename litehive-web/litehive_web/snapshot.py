@@ -7,8 +7,6 @@ from heru.quota import (
     check_codex_quota,
     check_copilot_quota,
     check_zai_quota,
-    quota_long_term,
-    quota_short_term,
 )
 
 from litehive.config.loading import load_config
@@ -192,18 +190,18 @@ def _serialize_zai_quota(engine: str, status: Any) -> dict[str, Any]:
 
 def _serialize_unified_quota(status: Any, *, engine: str, provider: str) -> dict[str, Any]:
     error = getattr(status, "error", None)
-    short_term = quota_short_term(status)
-    long_term = quota_long_term(status)
+    short_term = _quota_window(status, "short_term")
+    long_term = _quota_window(status, "long_term")
     windows = [
         _build_percent_window(
             "hours",
-            100.0 - short_term.percent_remaining,
-            short_term.reset_at,
+            _used_percent(short_term),
+            getattr(short_term, "reset_at", None),
         ),
         _build_percent_window(
             "weeks",
-            100.0 - long_term.percent_remaining,
-            long_term.reset_at,
+            _used_percent(long_term),
+            getattr(long_term, "reset_at", None),
         ),
     ]
     return {
@@ -214,6 +212,20 @@ def _serialize_unified_quota(status: Any, *, engine: str, provider: str) -> dict
         "summary": "unavailable" if error else _window_remaining_summary(windows),
         "windows": windows,
     }
+
+
+def _quota_window(status: Any, name: str) -> Any:
+    window = getattr(status, name, None)
+    if callable(window):
+        window = window()
+    return window
+
+
+def _used_percent(window: Any) -> float | None:
+    percent_remaining = getattr(window, "percent_remaining", None)
+    if percent_remaining is None:
+        return None
+    return 100.0 - float(percent_remaining)
 
 
 def _build_percent_window(label: str, used_percent: Any, reset_at: str | None) -> dict[str, Any]:

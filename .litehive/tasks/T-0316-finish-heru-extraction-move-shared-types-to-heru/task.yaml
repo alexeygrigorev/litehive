@@ -1,32 +1,36 @@
 id: T-0316
 slug: finish-heru-extraction-move-shared-types-to-heru
-title: Finish heru extraction and remove Litehive compat bridge
+title: Close obsolete heru compat-bridge cleanup task
 created_at: '2026-04-10T17:48:27+00:00'
 task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: Move the remaining shared types into heru, then delete litehive/heru_compat.py
-  and any lingering compatibility shims.
+goal: This task is obsolete in the current codebase. The planner should verify whether
+  any Litehive-side heru compatibility bridge still exists; if the bridge is already
+  gone and heru is already standalone, record that evidence and close the task instead
+  of sending it to implementation.
 acceptance_criteria:
-- The 16 shared types currently defined in litehive/models and re-exported via heru/types.py
-  are moved into heru (either into heru/types.py directly or a new heru/models.py),
-  so litehive.models imports them from heru instead of the reverse
-- "heru/types.py has zero 'from litehive.*' imports \u2014 heru is fully self-contained"
-- The 16 compatibility shim files under litehive/agents/adapters/ and litehive/agents/quota/
-  are deleted, and every importer in litehive is updated to import directly from heru.adapters.*
-  or heru.quota.*
-- heru has its own pyproject.toml (or is added as a member of a workspace) so it can
-  be installed standalone with 'uv pip install heru' without needing litehive to be
-  present
-- 'Regression: all existing tests under tests/ pass after the move, no cyclic import
-  warnings, no runtime ImportError, and the daemon can still spawn all six engines
-  (codex, claude, opencode, copilot, gemini, goz) using the new import paths'
-- Add a simple import-direction test that asserts 'import heru' does not transitively
-  import any litehive module (can be implemented with sys.modules inspection after
-  a clean import)
-constraints: []
-plan: []
+- Verify that Litehive already depends on external `../heru` via `[tool.uv.sources]`,
+  and that `../heru/pyproject.toml` makes heru installable as its own package, so
+  standalone heru packaging is not remaining work for this repo.
+- 'Verify that the Litehive-side compatibility bridge described in the original task
+  is already absent: `litehive/heru_compat.py` is gone, `litehive/agents/adapters/`
+  and `litehive/agents/quota/` shim files are gone, and there is no `litehive/models.py`
+  file matching the old extraction plan.'
+- Verify that `../heru/heru/types.py` is self-contained with no `litehive` imports
+  and that Litehive already guards the import boundary with `tests/test_heru_import_direction.py`;
+  if all checks pass, close `T-0316` as obsolete with no implementation handoff.
+constraints:
+- Do not implement code changes in this task; this is a grooming-only closure decision
+  based on current repository state.
+plan:
+- Inspect the current Litehive and sibling `../heru` layout to compare the original
+  task text against the actual architecture.
+- Record the concrete evidence showing which original acceptance criteria are already
+  satisfied by the current repo state.
+- Close the task as `wont_do` if no Litehive-side compat bridge remains; only create
+  a follow-up task if a concrete residual bridge file is still present.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0316 finish-heru-extraction-move-shared-types-to-heru'
