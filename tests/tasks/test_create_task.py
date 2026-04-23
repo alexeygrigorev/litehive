@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 
 import pytest
-from sqlitesearch import TextSearchIndex
 from typer.testing import CliRunner
 import yaml
 
@@ -15,22 +14,8 @@ from litehive.domain.reports import FollowUpTaskSpec
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_follow_up_tasks, create_task, get_task, list_tasks, save_task
 from litehive.tasks.archive import archive_task
-from litehive.tasks.duplicates import duplicate_index_path, rebuild_duplicate_task_index
+from litehive.tasks.duplicates import rebuild_duplicate_task_index, search_tasks_by_text
 from litehive.tasks.status import update_task_metadata
-
-
-def _search_duplicate_index(root: Path, query: str) -> list[dict[str, str]]:
-    index = TextSearchIndex(
-        text_fields=["title", "goal"],
-        keyword_fields=["task_id", "status"],
-        id_field="task_id",
-        db_path=str(duplicate_index_path(root)),
-        stemming=True,
-    )
-    try:
-        return index.search(query, num_results=10)
-    finally:
-        index.close()
 
 
 def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
@@ -446,7 +431,66 @@ def test_create_follow_up_tasks_persists_queue_and_creation_source(tmp_path: Pat
     assert load_state(tmp_path).queue[-1] == created[0].id
 
 
-def test_duplicate_index_tracks_created_updated_and_archived_tasks(tmp_path: Path) -> None:
+def test_task_search_cli_returns_ranked_matches_from_existing_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    best = create_task(
+        tmp_path,
+        title="Dashboard search rollout",
+        goal="Add natural language task search backed by sqlitesearch ranking",
+    )
+    create_task(
+        tmp_path,
+        title="Dashboard search copy refresh",
+        goal="Refresh dashboard helper text and labels",
+    )
+    rebuild_duplicate_task_index(tmp_path)
+
+    def fail_if_rebuilt(root: Path) -> list[object]:
+        raise AssertionError("search unexpectedly rebuilt the duplicate index")
+
+    monkeypatch.setattr("litehive.tasks.duplicates._iter_indexable_tasks", fail_if_rebuilt)
+
+    result = CliRunner().invoke(
+        task_app,
+        [
+            "search",
+            "dashboard search sqlitesearch",
+            "--workspace",
+            str(tmp_path),
+            "--limit",
+            "2",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.output.index(best.id) < result.output.index("T-0002")
+    assert f"{best.id} [queued] Dashboard search rollout" in result.output
+    assert "goal: Add natural language task search backed by sqlitesearch ranking" in result.output
+
+
+def test_task_search_cli_handles_empty_results(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    create_task(tmp_path, title="Dashboard rollout", goal="Ship the dashboard experience")
+
+    result = CliRunner().invoke(
+        task_app,
+        [
+            "search",
+            "totally unrelated phrase",
+            "--workspace",
+            str(tmp_path),
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "No matching tasks found for: totally unrelated phrase" in result.output
+
+
+def test_search_tasks_by_text_tracks_duplicate_index_maintenance(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Seed task", goal="Bootstrap duplicate search")
     rebuild_duplicate_task_index(tmp_path)
@@ -457,11 +501,11 @@ def test_duplicate_index_tracks_created_updated_and_archived_tasks(tmp_path: Pat
         goal="Remove duplicate web dashboard cards",
     )
 
-    created_matches = _search_duplicate_index(tmp_path, "duplicate dashboard cards")
-    created_match = next(match for match in created_matches if match["task_id"] == task.id)
-    assert created_match["title"] == "Dashboard cleanup"
-    assert created_match["goal"] == "Remove duplicate web dashboard cards"
-    assert created_match["status"] == "queued"
+    created_matches = search_tasks_by_text(tmp_path, query="duplicate dashboard cards", limit=10)
+    created_match = next(match for match in created_matches if match.task_id == task.id)
+    assert created_match.title == "Dashboard cleanup"
+    assert "duplicate web dashboard cards" in created_match.snippet
+    assert created_match.status == "queued"
 
     update_task_metadata(
         tmp_path,
@@ -469,10 +513,10 @@ def test_duplicate_index_tracks_created_updated_and_archived_tasks(tmp_path: Pat
         title="Dashboard duplicate cleanup",
         goal="Remove duplicate web dashboard widgets",
     )
-    updated_matches = _search_duplicate_index(tmp_path, "duplicate dashboard widgets")
-    updated_match = next(match for match in updated_matches if match["task_id"] == task.id)
-    assert updated_match["title"] == "Dashboard duplicate cleanup"
-    assert updated_match["goal"] == "Remove duplicate web dashboard widgets"
+    updated_matches = search_tasks_by_text(tmp_path, query="duplicate dashboard widgets", limit=10)
+    updated_match = next(match for match in updated_matches if match.task_id == task.id)
+    assert updated_match.title == "Dashboard duplicate cleanup"
+    assert "duplicate web dashboard widgets" in updated_match.snippet
 
     task = get_task(tmp_path, task.id)
     assert task is not None
@@ -481,8 +525,8 @@ def test_duplicate_index_tracks_created_updated_and_archived_tasks(tmp_path: Pat
     save_task(tmp_path, task)
     archive_task(tmp_path, task.id)
 
-    archived_matches = _search_duplicate_index(tmp_path, "duplicate dashboard widgets")
-    archived_match = next(match for match in archived_matches if match["task_id"] == task.id)
-    assert archived_match["status"] == "done"
-    assert archived_match["title"] == "Dashboard duplicate cleanup"
-    assert archived_match["goal"] == "Remove duplicate web dashboard widgets"
+    archived_matches = search_tasks_by_text(tmp_path, query="duplicate dashboard widgets", limit=10)
+    archived_match = next(match for match in archived_matches if match.task_id == task.id)
+    assert archived_match.status == "done"
+    assert archived_match.title == "Dashboard duplicate cleanup"
+    assert "duplicate web dashboard widgets" in archived_match.snippet
