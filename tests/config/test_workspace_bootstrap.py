@@ -134,7 +134,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, mon
     } <= tables
 
 
-def test_workspace_registry_handles_parallel_registration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_workspace_registry_handles_concurrent_registration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_home = tmp_path / "xdg-config"
     data_home = tmp_path / "xdg-data"
     state_home = tmp_path / "xdg-state"

@@ -442,28 +442,13 @@ def render_active_task_detail_lines(task: TaskRecord | None, default_engine: str
 
 
 def render_runner_status_line(runner: RunnerStatusState, state: WorkspaceState | None = None) -> str:
+    del state
     base_status = (
         f"runner_status: {runner.status} pid={runner.pid or '-'} "
         f"started_at={runner.started_at or '-'} "
         f"heartbeat_at={runner.heartbeat_at or '-'}"
     )
-
-    if state and state.is_parallel_mode:
-        # Show parallel execution status
-        active_count = len(state.active_tasks)
-        max_parallel = state.max_parallel_tasks
-        integration_queue_size = len(state.integration_queue)
-        integrating = state.integrating_task_id
-
-        parallel_info = (
-            f"parallel_mode: {active_count}/{max_parallel} active "
-            f"integration_queue: {integration_queue_size} "
-            f"integrating: {integrating or '-'}"
-        )
-        return f"{base_status} {parallel_info}"
-    else:
-        # Show legacy single task status
-        return f"{base_status} active_task_id={runner.active_task_id or '-'}"
+    return f"{base_status} active_task_id={runner.active_task_id or '-'}"
 
 
 def render_full_status_header_lines(
@@ -484,10 +469,6 @@ def render_full_status_header_lines(
             local_until = until_dt.astimezone().strftime("%Y-%m-%d %H:%M %Z")
             lines.append(f"engine_frozen: {engine_name} until {local_until}")
 
-    # Add parallel execution configuration
-    max_parallel_tasks = getattr(config, 'max_parallel_tasks', 1)
-    lines.append(f"max_parallel_tasks: {max_parallel_tasks}")
-
     lines.extend(
         [
             f"litehive_source_path: {config.litehive_source_path or '-'}",
@@ -497,20 +478,6 @@ def render_full_status_header_lines(
             f"pool_stop_reason: {state.pool_stop_reason}",
         ]
     )
-
-    # Add parallel execution status details
-    if state.is_parallel_mode:
-        lines.extend([
-            f"parallel_execution: enabled",
-            f"active_parallel_tasks: {len(state.active_tasks)}",
-            f"integration_queue_size: {len(state.integration_queue)}",
-            f"currently_integrating: {state.integrating_task_id or 'none'}",
-        ])
-
-        # List active tasks
-        for i, active_task in enumerate(state.active_tasks):
-            lines.append(f"active_task_{i+1}: {active_task.task_id} (worktree: {active_task.worktree_path or 'none'})")
-
     return lines
 
 

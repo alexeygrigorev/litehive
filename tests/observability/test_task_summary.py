@@ -141,6 +141,8 @@ def test_render_runner_status_and_full_header_lines(tmp_path: Path) -> None:
     assert "active_task_id: T-0001" in lines
     assert runner_line in lines
     assert "queued_tasks: 2" in lines
+    assert "pool_stop_reason: None" in lines
+    assert len(lines) == 9
 
 
 def test_render_full_status_header_prefers_live_runner_active_task_id(tmp_path: Path) -> None:

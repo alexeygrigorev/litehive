@@ -9,7 +9,7 @@ import yaml
 
 from litehive.cli.app import app
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.task import ActiveTask, TaskRecord
+from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, list_tasks, save_task
 from litehive.state.store import runtime_store
@@ -273,10 +273,7 @@ def test_delete_archived_task_removes_live_records_and_preserves_tombstone(tmp_p
 
     state = load_state(tmp_path)
     state.active_task_id = task.id
-    state.active_tasks = [ActiveTask(task_id=task.id)]
     state.queue = [task.id]
-    state.integration_queue = [task.id]
-    state.integrating_task_id = task.id
     save_state(tmp_path, state)
 
     deleted = delete_archived_task(tmp_path, task.id, reason="retention policy satisfied")
@@ -288,10 +285,7 @@ def test_delete_archived_task_removes_live_records_and_preserves_tombstone(tmp_p
     assert get_archived_task(tmp_path, task.id) is None
     assert runtime_store(tmp_path).load_task_state(task.id) is None
     assert refreshed_state.active_task_id is None
-    assert refreshed_state.active_tasks == []
     assert task.id not in refreshed_state.queue
-    assert task.id not in refreshed_state.integration_queue
-    assert refreshed_state.integrating_task_id is None
     assert all(task.id != archived_task.id for archived_task in list_archived_tasks(tmp_path))
     assert all(match.task_id != task.id for match in search_tasks_by_text(tmp_path, query=task.id, limit=10))
     assert all(

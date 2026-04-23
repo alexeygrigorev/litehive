@@ -103,16 +103,8 @@ def _drop_task_from_workspace_state(state, task_id: str) -> bool:
     if state.active_task_id == task_id:
         state.active_task_id = None
         changed = True
-    if state.remove_active_task(task_id):
-        changed = True
     if task_id in state.queue:
         state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
-        changed = True
-    if task_id in state.integration_queue:
-        state.integration_queue = [queued_id for queued_id in state.integration_queue if queued_id != task_id]
-        changed = True
-    if state.integrating_task_id == task_id:
-        state.integrating_task_id = None
         changed = True
     original_unmerged = len(state.unmerged_worktrees)
     state.unmerged_worktrees = [item for item in state.unmerged_worktrees if item.task_id != task_id]
