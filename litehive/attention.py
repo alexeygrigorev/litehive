@@ -1,21 +1,24 @@
-"""Persistent operator-attention queue backed by the runtime database."""
+"""Persistent operator-attention queue backed by `.litehive/attention/*.yaml`."""
 
 import json
+import os
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import ensure_workspace, normalize_workspace_root
+from litehive.config.workspace_files import workspace_dir
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord
+from litehive.state.lock_manager import WorkspaceLockManager
+from litehive.state.persist import load_state, set_pool_stop_reason
 from litehive.state.records import list_tasks
 from litehive.tasks.paths import tasks_root
-from litehive.state.persist import load_state, set_pool_stop_reason
-
 
 DETECTABLE_ATTENTION_KINDS = {
     "duplicate_task_id",
@@ -38,6 +41,9 @@ ATTENTION_PRIORITIES = {
     "flagged_task": 6,
 }
 
+_ATTENTION_ID_WIDTH = 6
+_MIGRATION_MARKER = ".migration-complete"
+
 
 class AttentionItem(BaseModel):
     id: int | None = None
@@ -55,7 +61,8 @@ class AttentionItem(BaseModel):
 
 
 def append_attention_log(workspace: Path, message: str) -> None:
-    path = workspace / ".litehive" / "runtime" / "attention.log"
+    root = normalize_workspace_root(workspace, source="append_attention_log")
+    path = workspace_dir(root) / "runtime" / "attention.log"
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(f"{utcnow()}\t{message}\n")
@@ -67,45 +74,22 @@ def attention_priority(item: AttentionItem) -> tuple[int, str, int]:
 
 class AttentionStore:
     def __init__(self, root: Path) -> None:
-        self.root = root
+        self.root = normalize_workspace_root(root, source="attention_store")
 
     def list_items(self, *, include_resolved: bool = False) -> list[AttentionItem]:
-        with connect_workspace_db(self.root) as connection:
-            rows = connection.execute(
-                "SELECT id, task_id, created_at, kind, payload FROM attention ORDER BY id ASC"
-            ).fetchall()
-        items = [self._row_to_item(row) for row in rows]
+        with self._store_lock():
+            self._ensure_store_ready_locked()
+            items = self._load_items_locked()
         if include_resolved:
             return items
         return [item for item in items if item.status == "pending"]
 
     def create_or_keep(self, item: AttentionItem) -> AttentionItem:
-        with connect_workspace_db(self.root) as connection:
-            existing = self._find_pending_by_dedupe(connection, item.dedupe_key)
-            if existing is not None:
-                existing_item = self._row_to_item(existing)
-                refreshed = self._refreshed_pending_item(existing_item, item)
-                if refreshed is not None:
-                    self._update_item(connection, refreshed)
-                    connection.commit()
-                    return refreshed
-                return existing_item
-            connection.execute(
-                """
-                INSERT INTO attention (task_id, created_at, kind, payload)
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    item.task_id,
-                    item.created_at,
-                    item.kind,
-                    json.dumps(item.model_dump(mode="python", exclude={"id"}), sort_keys=True),
-                ),
-            )
-            row_id = int(connection.execute("SELECT last_insert_rowid()").fetchone()[0])
-            connection.commit()
-        item.id = row_id
-        return item
+        with self._store_lock():
+            self._ensure_store_ready_locked()
+            items = self._load_items_locked()
+            stored = self._create_or_keep_locked(items, item)
+        return stored
 
     @staticmethod
     def _refreshed_pending_item(existing: AttentionItem, replacement: AttentionItem) -> AttentionItem | None:
@@ -124,14 +108,11 @@ class AttentionStore:
         return updated
 
     def resolve(self, item_id: int, *, resolution: str) -> AttentionItem | None:
-        with connect_workspace_db(self.root) as connection:
-            row = connection.execute(
-                "SELECT id, task_id, created_at, kind, payload FROM attention WHERE id = ?",
-                (item_id,),
-            ).fetchone()
-            if row is None:
+        with self._store_lock():
+            self._ensure_store_ready_locked()
+            item = self._read_item_path_locked(self._item_path(item_id))
+            if item is None:
                 return None
-            item = self._row_to_item(row)
             if item.status == "resolved":
                 return item
             item.status = "resolved"
@@ -140,26 +121,30 @@ class AttentionStore:
             if resolution == "resolved by operator" and item.kind in DETECTABLE_ATTENTION_KINDS:
                 item.metadata["suppressed_until_cleared"] = True
                 item.metadata["condition_cleared_after_resolution"] = False
-            self._update_item(connection, item)
-            connection.commit()
+            self._write_item_locked(item)
             return item
 
     def reconcile(self, detected: list[AttentionItem]) -> list[AttentionItem]:
-        all_items = self.list_items(include_resolved=True)
-        latest_by_key: dict[str, AttentionItem] = {}
-        for item in all_items:
-            latest_by_key[item.dedupe_key] = item
-        pending = [item for item in all_items if item.status == "pending"]
-        pending_by_key = {item.dedupe_key: item for item in pending}
-        detected_keys = {item.dedupe_key for item in detected}
+        with self._store_lock():
+            self._ensure_store_ready_locked()
+            all_items = self._load_items_locked()
+            latest_by_key: dict[str, AttentionItem] = {}
+            pending_by_key: dict[str, AttentionItem] = {}
+            for item in all_items:
+                latest_by_key[item.dedupe_key] = item
+                if item.status == "pending":
+                    pending_by_key[item.dedupe_key] = item
+            detected_keys = {item.dedupe_key for item in detected}
 
-        for item in detected:
-            previous = latest_by_key.get(item.dedupe_key)
-            if previous is not None and self._is_operator_suppressed(previous):
-                continue
-            self.create_or_keep(item)
+            for item in detected:
+                previous = latest_by_key.get(item.dedupe_key)
+                if previous is not None and self._is_operator_suppressed(previous):
+                    continue
+                stored = self._create_or_keep_locked(all_items, item, pending_by_key=pending_by_key)
+                latest_by_key[stored.dedupe_key] = stored
+                if stored.status == "pending":
+                    pending_by_key[stored.dedupe_key] = stored
 
-        with connect_workspace_db(self.root) as connection:
             for item in all_items:
                 if item.kind not in DETECTABLE_ATTENTION_KINDS:
                     continue
@@ -169,36 +154,51 @@ class AttentionStore:
                     item.status = "resolved"
                     item.resolved_at = utcnow()
                     item.resolution = "auto-resolved by attention reconciliation"
-                    self._update_item(connection, item)
+                    self._write_item_locked(item)
                     continue
                 if self._is_operator_suppressed(item):
                     item.metadata["condition_cleared_after_resolution"] = True
-                    self._update_item(connection, item)
-            connection.commit()
+                    self._write_item_locked(item)
 
-        return self.list_items(include_resolved=False)
+            return [item for item in all_items if item.status == "pending"]
+
+    def _create_or_keep_locked(
+        self,
+        all_items: list[AttentionItem],
+        item: AttentionItem,
+        *,
+        pending_by_key: dict[str, AttentionItem] | None = None,
+    ) -> AttentionItem:
+        pending_lookup = (
+            pending_by_key
+            if pending_by_key is not None
+            else {candidate.dedupe_key: candidate for candidate in all_items if candidate.status == "pending"}
+        )
+        existing_item = pending_lookup.get(item.dedupe_key)
+        if existing_item is not None:
+            refreshed = self._refreshed_pending_item(existing_item, item)
+            if refreshed is not None:
+                self._replace_loaded_item(all_items, refreshed)
+                pending_lookup[refreshed.dedupe_key] = refreshed
+                self._write_item_locked(refreshed)
+                return refreshed
+            return existing_item
+
+        stored = item.model_copy(deep=True)
+        stored.id = self._next_id(all_items)
+        all_items.append(stored)
+        if stored.status == "pending":
+            pending_lookup[stored.dedupe_key] = stored
+        self._write_item_locked(stored)
+        return stored
 
     @staticmethod
-    def _row_to_item(row: sqlite3.Row) -> AttentionItem:
-        payload = json.loads(row["payload"])
-        payload.setdefault("created_at", row["created_at"])
-        payload.setdefault("kind", row["kind"])
-        payload.setdefault("task_id", row["task_id"])
-        payload["id"] = int(row["id"])
-        return AttentionItem(**payload)
-
-    @staticmethod
-    def _find_pending_by_dedupe(connection: sqlite3.Connection, dedupe_key: str) -> sqlite3.Row | None:
-        rows = connection.execute(
-            "SELECT id, task_id, created_at, kind, payload FROM attention ORDER BY id ASC"
-        ).fetchall()
-        for row in rows:
-            payload = json.loads(row["payload"])
-            if payload.get("status", "pending") != "pending":
-                continue
-            if payload.get("dedupe_key") == dedupe_key:
-                return row
-        return None
+    def _replace_loaded_item(all_items: list[AttentionItem], replacement: AttentionItem) -> None:
+        for index, current in enumerate(all_items):
+            if current.id == replacement.id:
+                all_items[index] = replacement
+                return
+        all_items.append(replacement)
 
     @staticmethod
     def _is_operator_suppressed(item: AttentionItem) -> bool:
@@ -209,15 +209,107 @@ class AttentionStore:
             and item.metadata.get("condition_cleared_after_resolution") is not True
         )
 
+    def _load_items_locked(self) -> list[AttentionItem]:
+        return [
+            item
+            for path in self._item_paths_locked()
+            if (item := self._read_item_path_locked(path)) is not None
+        ]
+
+    def _read_item_path_locked(self, path: Path) -> AttentionItem | None:
+        if not path.exists():
+            return None
+        try:
+            payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except OSError:
+            return None
+        if not isinstance(payload, dict):
+            raise ValueError(f"attention item at {path} is not a YAML mapping")
+        item_id = int(path.stem)
+        payload["id"] = item_id
+        return AttentionItem(**payload)
+
+    def _write_item_locked(self, item: AttentionItem) -> None:
+        if item.id is None:
+            raise ValueError("attention item id is required before writing")
+        path = self._item_path(item.id)
+        tmp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        payload = item.model_dump(mode="json")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            yaml.safe_dump(payload, handle, sort_keys=False)
+        tmp_path.replace(path)
+
+    def _ensure_store_ready_locked(self) -> None:
+        items_dir = self._items_dir()
+        items_dir.mkdir(parents=True, exist_ok=True)
+        marker_path = items_dir / _MIGRATION_MARKER
+        if marker_path.exists():
+            return
+        if any(self._item_paths_locked()):
+            marker_path.write_text(f"completed_at: {utcnow()}\n", encoding="utf-8")
+            return
+        for legacy_item in self._legacy_db_items():
+            if legacy_item.id is None:
+                continue
+            self._write_item_locked(legacy_item)
+        marker_path.write_text(f"completed_at: {utcnow()}\n", encoding="utf-8")
+
+    def _legacy_db_items(self) -> list[AttentionItem]:
+        try:
+            with connect_workspace_db(self.root, migrate=False) as connection:
+                rows = connection.execute(
+                    "SELECT id, task_id, created_at, kind, payload FROM attention ORDER BY id ASC"
+                ).fetchall()
+        except sqlite3.Error:
+            return []
+        items: list[AttentionItem] = []
+        for row in rows:
+            try:
+                items.append(self._row_to_item(row))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+        return items
+
     @staticmethod
-    def _update_item(connection: sqlite3.Connection, item: AttentionItem) -> None:
-        connection.execute(
-            "UPDATE attention SET payload = ? WHERE id = ?",
-            (
-                json.dumps(item.model_dump(mode="python", exclude={"id"}), sort_keys=True),
-                item.id,
-            ),
-        )
+    def _row_to_item(row: sqlite3.Row) -> AttentionItem:
+        payload = json.loads(row["payload"])
+        payload.setdefault("created_at", row["created_at"])
+        payload.setdefault("kind", row["kind"])
+        payload.setdefault("task_id", row["task_id"])
+        payload["id"] = int(row["id"])
+        return AttentionItem(**payload)
+
+    def _item_paths_locked(self) -> list[Path]:
+        items_dir = self._items_dir()
+        if not items_dir.exists():
+            return []
+        candidates = [
+            path
+            for path in items_dir.iterdir()
+            if path.is_file() and path.suffix == ".yaml" and path.stem.isdigit()
+        ]
+        return sorted(candidates, key=lambda path: int(path.stem))
+
+    def _next_id(self, all_items: list[AttentionItem]) -> int:
+        return max((item.id or 0 for item in all_items), default=0) + 1
+
+    def _items_dir(self) -> Path:
+        return workspace_dir(self.root) / "attention"
+
+    def _item_path(self, item_id: int) -> Path:
+        return self._items_dir() / f"{item_id:0{_ATTENTION_ID_WIDTH}d}.yaml"
+
+    @contextmanager
+    def _store_lock(self):
+        manager = WorkspaceLockManager(self._items_dir() / ".lock", pid_is_alive=lambda pid: False)
+        handle = manager.open()
+        manager.lock(handle, nonblocking=False)
+        try:
+            yield
+        finally:
+            manager.unlock(handle)
+            handle.close()
 
 
 def attention_store(root: Path) -> AttentionStore:
@@ -236,6 +328,7 @@ def record_attention(
     metadata: dict[str, Any] | None = None,
     log_message: str | None = None,
 ) -> AttentionItem:
+    root = normalize_workspace_root(root, source="record_attention")
     ensure_workspace(root)
     item = AttentionItem(
         task_id=task_id,
@@ -251,24 +344,31 @@ def record_attention(
     return stored
 
 
-def list_attention(root: Path, *, reconcile: bool = True) -> list[AttentionItem]:
+def list_attention(
+    root: Path,
+    *,
+    reconcile: bool = True,
+    auto_resolve: bool = True,
+) -> list[AttentionItem]:
+    root = normalize_workspace_root(root, source="list_attention")
     ensure_workspace(root)
     if reconcile:
-        return reconcile_attention(root)
+        return reconcile_attention(root, auto_resolve=auto_resolve)
     return sorted(attention_store(root).list_items(), key=attention_priority)
 
 
 def resolve_attention(root: Path, item_id: int) -> AttentionItem | None:
+    root = normalize_workspace_root(root, source="resolve_attention")
     ensure_workspace(root)
     return attention_store(root).resolve(item_id, resolution="resolved by operator")
 
 
 def reconcile_attention(root: Path, *, auto_resolve: bool = True) -> list[AttentionItem]:
+    root = normalize_workspace_root(root, source="reconcile_attention")
     ensure_workspace(root)
     state = load_state(root)
     _import_attention_log_events(root)
     detected = _detect_attention_items(root, state.pool_stop_reason)
-    # Auto-resolve deferred worktree metadata items when safe to do so (only during explicit reconciliation)
     if auto_resolve:
         _auto_resolve_stale_worktree_metadata_items(root)
     unresolved = attention_store(root).reconcile(detected)
@@ -279,9 +379,8 @@ def reconcile_attention(root: Path, *, auto_resolve: bool = True) -> list[Attent
 
 def waiting_for_you_lines(root: Path, *, limit: int = 5) -> list[str]:
     try:
-        # Use read-only listing for status display to avoid side effects during status collection
-        items = list_attention(root, reconcile=False)
-    except sqlite3.Error:
+        items = list_attention(root, auto_resolve=False)
+    except Exception:
         return ["attention_items: unavailable"]
     lines = [f"attention_items: {len(items)}"]
     if not items:
@@ -311,7 +410,7 @@ def _detect_attention_items(root: Path, pool_stop_reason: str | None) -> list[At
 
 
 def _import_attention_log_events(root: Path) -> None:
-    log_path = root / ".litehive" / "runtime" / "attention.log"
+    log_path = workspace_dir(root) / "runtime" / "attention.log"
     if not log_path.exists():
         return
     seen_keys = {item.dedupe_key for item in attention_store(root).list_items(include_resolved=True)}
@@ -394,7 +493,10 @@ def _flagged_and_merge_failed_items(root: Path, tasks: list[TaskRecord]) -> list
                         f"Task is paused in `{task.pipeline_status}` and requires operator review."
                         f" Flag reason: {task.flag_reason or 'unknown'}."
                     ),
-                    suggested_action=f"Run `litehive task debug {task.id}` and then `litehive queue promote {task.id}` when it is ready to continue.",
+                    suggested_action=(
+                        f"Run `litehive task debug {task.id}` and then `litehive queue promote {task.id}`"
+                        " when it is ready to continue."
+                    ),
                     dedupe_key=f"flagged_task:{task.id}",
                     metadata={"pipeline_status": task.pipeline_status, "flag_reason": task.flag_reason},
                 )
@@ -543,32 +645,26 @@ def _human_checkpoint_item(
 
 
 def _stale_worktree_metadata_items(root: Path, tasks: list[TaskRecord]) -> list[AttentionItem]:
-    """Return existing deferred worktree metadata attention items for status reporting."""
-    # Get existing deferred metadata attention items
+    del tasks
     store = attention_store(root)
     existing_items = store.list_items(include_resolved=True)
-    deferred_items = [item for item in existing_items if item.kind == "stale_worktree_metadata" and item.status == "pending"]
-
-    # This is a read-only function for status reporting - auto-resolution happens elsewhere
-    return deferred_items
+    return [
+        item for item in existing_items if item.kind == "stale_worktree_metadata" and item.status == "pending"
+    ]
 
 
 def _auto_resolve_stale_worktree_metadata_items(root: Path) -> None:
-    """Auto-resolve deferred worktree metadata clearing operations when safe to do so."""
-    from litehive.state.locking import runner_lock_is_active
-    from litehive.state.records import get_task, save_task, clear_task_worktree_path
     from litehive.domain.task_ops import WorkspaceConflictError
+    from litehive.state.locking import runner_lock_is_active
+    from litehive.state.records import clear_task_worktree_path, get_task, save_task
 
-    # If runner is still active, can't process deferred items yet
     if runner_lock_is_active(root):
         return
 
-    # Get existing deferred metadata attention items
     store = attention_store(root)
     existing_items = store.list_items(include_resolved=True)
     deferred_items = [item for item in existing_items if item.kind == "stale_worktree_metadata" and item.status == "pending"]
 
-    # Try to process each deferred item
     for item in deferred_items:
         if item.task_id is None:
             continue
@@ -576,17 +672,13 @@ def _auto_resolve_stale_worktree_metadata_items(root: Path) -> None:
         try:
             task = get_task(root, item.task_id)
             if task is not None and task.runtime.git.worktree_path is not None:
-                # Task still has worktree path recorded, try to clear it
                 clear_task_worktree_path(task)
                 save_task(root, task)
-                # If successful, resolve the attention item
-                store.resolve(item.id, resolution="auto-resolved: worktree metadata cleared")
+                store.resolve(item.id or 0, resolution="auto-resolved: worktree metadata cleared")
         except WorkspaceConflictError:
-            # Still can't clear, keep the item pending
             continue
         except Exception:
-            # Task might not exist anymore or other issue - resolve the item
-            store.resolve(item.id, resolution="auto-resolved: task no longer exists or clearing not needed")
+            store.resolve(item.id or 0, resolution="auto-resolved: task no longer exists or clearing not needed")
 
 
 def _default_dedupe_key(kind: str, *, task_id: str | None, title: str, reason: str) -> str:

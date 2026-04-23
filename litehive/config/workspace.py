@@ -181,7 +181,9 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
     _reject_nested_workspace_bootstrap(root, source="ensure_workspace")
     base = workspace_dir(root)
     tasks = base / "tasks"
+    attention = base / "attention"
     tasks.mkdir(parents=True, exist_ok=True)
+    attention.mkdir(parents=True, exist_ok=True)
 
     cfg = config or LitehiveConfig()
     if not config_path(root).exists():

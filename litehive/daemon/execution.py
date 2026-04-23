@@ -657,6 +657,15 @@ def run_daemon_loop(
             if stop_reason_before == "blocked_tasks_remaining":
                 _emit("Blocked tasks remain and nothing is runnable. Stopping.", stream=output_stream)
                 return 0
+            if stop_reason_before == "attention_required":
+                unresolved_attention = list_attention(workspace)
+                if unresolved_attention:
+                    _emit(
+                        f"Pool stopped: attention_required ({len(unresolved_attention)} unresolved item(s))",
+                        stream=output_stream,
+                    )
+                    return 0
+                stop_reason_before = None
             if _is_explicit_pool_stop_reason(str(stop_reason_before) if stop_reason_before is not None else None):
                 _emit(f"Pool already stopped: {stop_reason_before}", stream=output_stream)
                 return 0

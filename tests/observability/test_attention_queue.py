@@ -12,10 +12,12 @@ from litehive.config.paths import workspace_path
 from litehive.config.registry import workspace_registry_path
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.execution import run_daemon_loop
+from litehive.db.schema import connect_workspace_db
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.lifecycle.types import PipelineMode
 from litehive.main import _fast_status
+from litehive.sandbox.git_wrapper import main as git_wrapper_main
 from litehive.state.records import create_task, save_task
 from litehive.state.persist import load_state, save_state, set_pool_stop_reason
 
@@ -33,6 +35,10 @@ def _create_broken_venv_binary(checkout_root: Path, binary_name: str, cache_root
     _write_cache_tool(cache_target)
     (bin_dir / binary_name).symlink_to(cache_target)
     cache_target.unlink()
+
+
+def _attention_item_paths(root: Path) -> list[Path]:
+    return sorted((root / ".litehive" / "attention").glob("*.yaml"))
 
 
 def test_attention_list_and_resolve_persist_items(tmp_path: Path, capsys) -> None:
@@ -54,6 +60,14 @@ def test_attention_list_and_resolve_persist_items(tmp_path: Path, capsys) -> Non
     assert f"attention: {item.id}" in output
     assert "Destructive git command was blocked" in output
     assert "suggested_action:" in output
+    item_paths = _attention_item_paths(tmp_path)
+    assert len(item_paths) == 1
+    persisted = yaml.safe_load(item_paths[0].read_text(encoding="utf-8"))
+    assert persisted["id"] == item.id
+    assert persisted["title"] == "Destructive git command was blocked"
+    assert persisted["reason"] == "`git push --force origin main` was rejected."
+    assert persisted["suggested_action"] == "Use a safe git command and then run `litehive attention resolve <id>`."
+    assert persisted["status"] == "pending"
 
     resolve_code = cmd_attention_resolve(type("Args", (), {"workspace": tmp_path, "attention_id": item.id})())
     resolved_output = capsys.readouterr().out
@@ -61,6 +75,10 @@ def test_attention_list_and_resolve_persist_items(tmp_path: Path, capsys) -> Non
     assert resolve_code == 0
     assert f"resolved_attention: {item.id}" in resolved_output
     assert list_attention(tmp_path) == []
+    resolved_payload = yaml.safe_load(item_paths[0].read_text(encoding="utf-8"))
+    assert resolved_payload["status"] == "resolved"
+    assert resolved_payload["resolution"] == "resolved by operator"
+    assert resolved_payload["resolved_at"] is not None
 
 
 def test_status_shows_attention_count_and_waiting_actions(tmp_path: Path, capsys) -> None:
@@ -87,10 +105,89 @@ def test_waiting_for_you_lines_reports_database_unavailable(tmp_path: Path, monk
     ensure_workspace(tmp_path)
     monkeypatch.setattr(
         "litehive.attention.list_attention",
-        lambda root, reconcile=True: (_ for _ in ()).throw(sqlite3.DatabaseError("boom")),
+        lambda root, reconcile=True, auto_resolve=True: (_ for _ in ()).throw(sqlite3.DatabaseError("boom")),
     )
 
     assert waiting_for_you_lines(tmp_path) == ["attention_items: unavailable"]
+
+
+def test_status_reconciles_detectable_attention_items_without_prior_listing(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+    primary = create_task(tmp_path, title="Primary task")
+    duplicate_dir = tmp_path / ".litehive" / "tasks" / f"{primary.id}-duplicate-copy"
+    duplicate_dir.mkdir(parents=True)
+    (duplicate_dir / "task.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "id": primary.id,
+                "slug": "duplicate-copy",
+                "title": "Duplicate copy",
+                "mode": "implementation",
+                "pipeline_mode": "full",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = _fast_status(["--workspace", str(tmp_path)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "attention_items: 1" in output
+    assert "waiting for you:" in output
+    assert f"Duplicate task id detected for {primary.id}" in output
+    assert len(_attention_item_paths(tmp_path)) == 1
+
+
+def test_git_wrapper_block_records_attention_yaml_item(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+
+    exit_code = git_wrapper_main(
+        ["push", "--force", "origin", "main"],
+        real_git_path="/usr/bin/git",
+        workspace_root=str(tmp_path),
+    )
+    err = capsys.readouterr().err
+
+    assert exit_code == 2
+    assert "blocked destructive git command" in err
+    items = list_attention(tmp_path, reconcile=False)
+    assert len(items) == 1
+    item = items[0]
+    assert item.kind == "destructive_git_denied"
+    assert item.reason == "`git push --force origin main` was rejected: push with force or mirror is not allowed"
+    payload = yaml.safe_load(_attention_item_paths(tmp_path)[0].read_text(encoding="utf-8"))
+    assert payload["kind"] == "destructive_git_denied"
+    assert payload["metadata"]["command"] == "git push --force origin main"
+
+
+def test_attention_store_migrates_legacy_database_rows_to_yaml(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    with connect_workspace_db(tmp_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO attention (task_id, created_at, kind, payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                None,
+                "2026-04-23T10:00:00Z",
+                "destructive_git_denied",
+                '{"kind": "destructive_git_denied", "title": "Legacy item", "reason": "legacy reason", '
+                '"suggested_action": "legacy action", "dedupe_key": "legacy-key", "status": "pending"}',
+            ),
+        )
+        connection.commit()
+
+    items = list_attention(tmp_path, reconcile=False)
+
+    assert len(items) == 1
+    assert items[0].title == "Legacy item"
+    assert len(_attention_item_paths(tmp_path)) == 1
+    migrated = yaml.safe_load(_attention_item_paths(tmp_path)[0].read_text(encoding="utf-8"))
+    assert migrated["title"] == "Legacy item"
+    assert migrated["dedupe_key"] == "legacy-key"
 
 
 def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, monkeypatch) -> None:
@@ -324,6 +421,50 @@ def test_pool_stops_before_running_tasks_when_attention_gate_enabled(tmp_path: P
     assert exit_code == 0
     assert any("repair" in command for command in calls)
     assert "Pool stopped: attention_required" in output
+
+
+def test_pool_resumes_after_attention_items_are_resolved(tmp_path: Path, monkeypatch) -> None:
+    config = LitehiveConfig(pool_stop_on_attention=True)
+    ensure_workspace(tmp_path, config)
+    create_task(tmp_path, title="Queued work")
+    item = record_attention(
+        tmp_path,
+        kind="destructive_git_denied",
+        title="Destructive git command was blocked",
+        reason="`git push --force origin main` was rejected.",
+        suggested_action="Use a safe git command and then run `litehive attention resolve <id>`.",
+        dedupe_key="destructive_git_denied:resume",
+    )
+
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_logged_subprocess(command, **kwargs):
+        calls.append(tuple(command))
+        if any(arg == "run" for arg in command[2:]):
+            state = load_state(tmp_path)
+            state.queue = []
+            save_state(tmp_path, state)
+        return 0
+
+    monkeypatch.setattr("litehive.daemon.execution.load_config", lambda workspace: config)
+    monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
+    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
+
+    first_stream = io.StringIO()
+    first_exit_code = run_daemon_loop(tmp_path, output_stream=first_stream, session_dir=tmp_path / "logs-first")
+
+    resolved = resolve_attention(tmp_path, item.id or 0)
+    second_stream = io.StringIO()
+    second_exit_code = run_daemon_loop(tmp_path, output_stream=second_stream, session_dir=tmp_path / "logs-second")
+
+    assert first_exit_code == 0
+    assert "Pool stopped: attention_required" in first_stream.getvalue()
+    assert resolved is not None
+    assert second_exit_code == 0
+    assert "Pool already stopped: attention_required" not in second_stream.getvalue()
+    assert any("run" in command for command in calls)
 
 
 def test_pool_halts_immediately_when_local_main_diverges_from_origin(tmp_path: Path, monkeypatch) -> None:

@@ -80,6 +80,7 @@ def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
     assert (tmp_path / ".litehive" / "config.yaml").exists()
     assert (tmp_path / ".litehive" / ".gitignore").exists()
     assert (tmp_path / ".litehive" / "tasks").exists()
+    assert (tmp_path / ".litehive" / "attention").exists()
 
 
 def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

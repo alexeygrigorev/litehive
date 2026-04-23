@@ -1,4 +1,18 @@
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Annotated
+
+import typer
+
 from litehive.attention import list_attention, resolve_attention
+from litehive.cli.common import WorkspaceOption, make_typer, require_subcommand
+
+app = make_typer(invoke_without_command=True)
+
+
+@app.callback()
+def attention_group(ctx: typer.Context) -> None:
+    require_subcommand(ctx)
 
 
 def cmd_attention_list(args) -> int:
@@ -26,3 +40,16 @@ def cmd_attention_resolve(args) -> int:
     print(f"resolved_attention: {item.id}")
     print(f"title: {item.title}")
     return 0
+
+
+@app.command("list", help="List pending operator-attention items")
+def attention_list_command(workspace: WorkspaceOption = Path.cwd()) -> int:
+    return cmd_attention_list(SimpleNamespace(workspace=workspace))
+
+
+@app.command("resolve", help="Resolve one operator-attention item by id")
+def attention_resolve_command(
+    attention_id: Annotated[int, typer.Argument(help="Attention item id to resolve.")],
+    workspace: WorkspaceOption = Path.cwd(),
+) -> int:
+    return cmd_attention_resolve(SimpleNamespace(workspace=workspace, attention_id=attention_id))

@@ -3,6 +3,7 @@ import importlib
 
 from typer.testing import CliRunner
 
+from litehive.attention import record_attention
 from litehive.config.workspace import ensure_workspace
 
 modern_cli = importlib.import_module("litehive.cli.app")
@@ -95,6 +96,31 @@ def test_queue_resume_and_requeue_help_mentions_parked_semantics() -> None:
 
         assert result.exit_code == 0, result.output
         assert help_text in _normalized(result.output)
+
+
+def test_attention_commands_are_registered_and_work(tmp_path) -> None:
+    ensure_workspace(tmp_path)
+    item = record_attention(
+        tmp_path,
+        kind="destructive_git_denied",
+        title="Destructive git command was blocked",
+        reason="`git reset --hard origin/main` was rejected.",
+        suggested_action="Use a safe git command and then run `litehive attention resolve <id>`.",
+        dedupe_key="destructive_git_denied:cli",
+    )
+
+    runner = CliRunner()
+    list_result = runner.invoke(modern_cli.app, ["attention", "list", "--workspace", str(tmp_path)])
+    resolve_result = runner.invoke(
+        modern_cli.app,
+        ["attention", "resolve", str(item.id), "--workspace", str(tmp_path)],
+    )
+
+    assert list_result.exit_code == 0, list_result.output
+    assert "pending_attention: 1" in list_result.output
+    assert f"attention: {item.id}" in list_result.output
+    assert resolve_result.exit_code == 0, resolve_result.output
+    assert f"resolved_attention: {item.id}" in resolve_result.output
 
 
 def test_run_drain_runs_until_queue_is_empty(tmp_path, monkeypatch) -> None:
