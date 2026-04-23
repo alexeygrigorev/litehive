@@ -4,19 +4,26 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from typer.testing import CliRunner
 import yaml
 
+from litehive.cli.app import app
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.task import TaskRecord
+from litehive.domain.task import ActiveTask, TaskRecord
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, list_tasks, save_task
+from litehive.state.store import runtime_store
 from litehive.tasks.archive import (
     archive_done_tasks,
+    delete_archived_task,
+    get_archived_task,
     archive_root,
     archive_task,
     cleanup_archived_tasks,
     list_archived_tasks,
 )
+from litehive.tasks.audit import load_task_audit_entries
+from litehive.tasks.duplicates import rebuild_duplicate_task_index, search_tasks_by_text
 from litehive.tasks.paths import task_dir
 from litehive.tasks.queue import set_active_task
 from litehive.tasks.status import requeue_task, resume_task
@@ -231,6 +238,78 @@ def test_cli_requeue_archived_task_directs_operator_to_create_new_task(
     assert exit_code == 1
     assert "archived and cannot be requeued" in output
     assert "Create a new task for follow-up work instead." in output
+
+
+def test_archive_delete_cli_rejects_unarchived_task(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Queued delete target")
+
+    result = CliRunner().invoke(
+        app,
+        ["archive", "delete", task.id, "--reason", "cleanup", "--workspace", str(tmp_path)],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0
+    assert result.return_value == 1
+    assert f"delete failed: Task {task.id} has status 'queued' — only archived tasks can be deleted" in result.output
+
+
+def test_delete_archived_task_removes_live_records_and_preserves_tombstone(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = _make_done_task(tmp_path, "Delete archived task")
+    task.goal = "Remove archived tasks from live records and search"
+    save_task(tmp_path, task)
+    archive_task(tmp_path, task.id)
+
+    archive_dir = archive_root(tmp_path) / f"{task.id}-{task.slug}"
+    task_yaml = archive_dir / "task.yaml"
+    archived_at = yaml.safe_load(task_yaml.read_text(encoding="utf-8"))["archived_at"]
+
+    rebuild_duplicate_task_index(tmp_path)
+    archived_matches = search_tasks_by_text(tmp_path, query="remove archived tasks from live records", limit=10)
+    archived_match = next(match for match in archived_matches if match.task_id == task.id)
+    assert archived_match.status == "archived"
+
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    state.active_tasks = [ActiveTask(task_id=task.id)]
+    state.queue = [task.id]
+    state.integration_queue = [task.id]
+    state.integrating_task_id = task.id
+    save_state(tmp_path, state)
+
+    deleted = delete_archived_task(tmp_path, task.id, reason="retention policy satisfied")
+
+    refreshed_state = load_state(tmp_path)
+    assert deleted.id == task.id
+    assert not archive_dir.exists()
+    assert get_task(tmp_path, task.id) is None
+    assert get_archived_task(tmp_path, task.id) is None
+    assert runtime_store(tmp_path).load_task_state(task.id) is None
+    assert refreshed_state.active_task_id is None
+    assert refreshed_state.active_tasks == []
+    assert task.id not in refreshed_state.queue
+    assert task.id not in refreshed_state.integration_queue
+    assert refreshed_state.integrating_task_id is None
+    assert all(task.id != archived_task.id for archived_task in list_archived_tasks(tmp_path))
+    assert all(match.task_id != task.id for match in search_tasks_by_text(tmp_path, query=task.id, limit=10))
+    assert all(
+        match.task_id != task.id
+        for match in search_tasks_by_text(tmp_path, query="remove archived tasks from live records", limit=10)
+    )
+
+    with pytest.raises(ValueError, match=f"Task {task.id} not found"):
+        requeue_task(tmp_path, task.id)
+    with pytest.raises(ValueError, match=f"Task {task.id} not found"):
+        resume_task(tmp_path, task.id)
+
+    entries = load_task_audit_entries(tmp_path, task_id=task.id, limit=10)
+    deleted_entry = next(entry for entry in entries if entry.action == "deleted")
+    assert deleted_entry.context["title"] == task.title
+    assert deleted_entry.context["archived_at"] == archived_at
+    assert deleted_entry.context["deleted_at"] == deleted_entry.created_at
+    assert deleted_entry.context["deletion_reason"] == "retention policy satisfied"
 
 
 # ── cleanup_archived_tasks ───────────────────────────────────────────

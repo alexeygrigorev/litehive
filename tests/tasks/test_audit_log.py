@@ -9,7 +9,7 @@ from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
-from litehive.tasks.archive import archive_root, archive_task, cleanup_archived_tasks
+from litehive.tasks.archive import archive_root, archive_task, cleanup_archived_tasks, delete_archived_task
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.tasks.status import requeue_task
 
@@ -104,4 +104,29 @@ def test_archive_cleanup_keeps_audit_trail_after_task_removal(tmp_path: Path) ->
     entries = load_task_audit_entries(tmp_path, task_id=task_id, limit=10)
     actions = {(entry.action, entry.source) for entry in entries}
     assert ("archived", "archive") in actions
-    assert ("removed", "archive_cleanup") in actions
+    assert ("deleted", "archive_cleanup") in actions
+
+
+def test_db_audit_cli_shows_deleted_tombstone_for_hard_deleted_archived_task(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task_id, slug = _make_done_task(tmp_path, "Hard delete archived task")
+    archive_task(tmp_path, task_id)
+
+    archive_dir = archive_root(tmp_path) / f"{task_id}-{slug}"
+    archived_at = yaml.safe_load((archive_dir / "task.yaml").read_text(encoding="utf-8"))["archived_at"]
+    delete_archived_task(tmp_path, task_id, reason="Operator requested cleanup")
+
+    result = CliRunner().invoke(
+        app,
+        ["db", "audit", task_id, "--action", "deleted", "--workspace", str(tmp_path)],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "audit_entries: 1" in result.output
+    assert f"task_id: {task_id}" in result.output
+    assert "action: deleted" in result.output
+    assert "source: archive_delete" in result.output
+    assert '"archived_at": "' + archived_at + '"' in result.output
+    assert '"deletion_reason": "Operator requested cleanup"' in result.output
+    assert '"title": "Hard delete archived task"' in result.output

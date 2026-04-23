@@ -7,7 +7,7 @@ from typer.core import TyperGroup
 
 from litehive.cli.common import WorkspaceOption
 from litehive.config.workspace import ensure_workspace
-from litehive.tasks.archive import archive_done_tasks, archive_task, cleanup_archived_tasks
+from litehive.tasks.archive import archive_done_tasks, archive_task, cleanup_archived_tasks, delete_archived_task
 
 
 class ArchiveGroup(TyperGroup):
@@ -121,4 +121,21 @@ def cleanup(
     for task in deleted:
         print(f"deleted: {task.id} {task.title}")
     print(f"deleted_count: {len(deleted)}")
+    return 0
+
+
+@app.command("delete", help="Hard-delete a single archived task while preserving audit history")
+def delete(
+    task_id: Annotated[str, typer.Argument(help="Archived task id to delete")],
+    workspace: WorkspaceOption = Path.cwd(),
+    reason: Annotated[str, typer.Option(help="Why the archived task is being deleted")] = ...,
+) -> int:
+    ensure_workspace(workspace)
+    try:
+        task = delete_archived_task(workspace, task_id, reason=reason)
+    except ValueError as exc:
+        print(f"delete failed: {exc}")
+        return 1
+    print(f"deleted: {task.id} {task.title}")
+    print("deleted_count: 1")
     return 0

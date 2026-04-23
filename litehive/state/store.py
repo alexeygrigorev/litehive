@@ -25,6 +25,21 @@ _LEGACY_TASK_INTENT_KEYS = {
 }
 
 _TASK_DIR_RE = re.compile(r"^T-(\d{4})-")
+_TASK_SCOPED_TABLES = (
+    "task_state",
+    "task_journal",
+    "task_activity",
+    "stage_reports",
+    "hook_artifacts",
+    "subagent_sessions",
+    "events",
+    "attention",
+    "worktrees",
+    "pipeline_transitions",
+    "pipeline_journal",
+    "pipeline_task_state",
+    "pipeline_sessions",
+)
 
 
 # Map subagent statuses that earlier versions of the runtime wrote into SQLite
@@ -118,6 +133,18 @@ class RuntimeStore:
                 self._save_workspace_state(connection, workspace_state)
             for task_id, state in (task_states or {}).items():
                 self._save_task_state(connection, task_id, state)
+            insert_task_audit_entries(connection, audit_entries or [])
+            connection.commit()
+
+    def delete_task_records_preserving_audit(
+        self,
+        task_id: str,
+        *,
+        audit_entries: list[TaskAuditEntry] | None = None,
+    ) -> None:
+        with connect_workspace_db(self.root) as connection:
+            for table_name in _TASK_SCOPED_TABLES:
+                connection.execute(f"DELETE FROM {table_name} WHERE task_id = ?", (task_id,))
             insert_task_audit_entries(connection, audit_entries or [])
             connection.commit()
 
