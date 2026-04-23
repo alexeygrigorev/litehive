@@ -94,6 +94,15 @@ def test_restore_missing_queued_tasks_skips_parked_and_restores_interrupted(
     parked.pipeline_status = "implementing"
     save_task(tmp_path, parked)
 
+    backlog = create_task(
+        tmp_path,
+        title="Dormant backlog work",
+        acceptance_criteria=["stay off the live queue until explicitly queued"],
+    )
+    backlog.status = "queued"
+    backlog.pipeline_status = "backlog"
+    save_task(tmp_path, backlog)
+
     state = load_state(tmp_path)
     state.queue = []
     save_state(tmp_path, state)
@@ -104,6 +113,7 @@ def test_restore_missing_queued_tasks_skips_parked_and_restores_interrupted(
     assert restored == [interrupted.id]
     assert state.queue == [interrupted.id]
     assert parked.id not in state.queue
+    assert backlog.id not in state.queue
 
 
 @pytest.mark.parametrize("execution_status", ["interrupted", "idle"])

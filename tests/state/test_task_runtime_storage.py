@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.task import TaskRecord
 from litehive.state.records import (
+    TaskStateMissingError,
     create_task,
     get_task,
     list_tasks,
@@ -14,7 +15,6 @@ from litehive.state.records import (
     save_task,
     save_task_runtime,
 )
-from litehive.state.store import runtime_store
 
 
 def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
@@ -79,7 +79,7 @@ def test_task_yaml_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path:
     assert loaded.runtime.current_stage.stage == "implementing"
 
 
-def test_get_task_backfills_missing_sqlite_runtime_state_row(tmp_path: Path) -> None:
+def test_get_task_raises_when_sqlite_runtime_state_row_is_missing(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-missing-runtime"
     task_dir.mkdir(parents=True)
@@ -101,15 +101,8 @@ def test_get_task_backfills_missing_sqlite_runtime_state_row(tmp_path: Path) -> 
         encoding="utf-8",
     )
 
-    loaded = get_task(tmp_path, "T-0001")
-
-    assert loaded is not None
-    assert loaded.id == "T-0001"
-    assert loaded.runtime.execution_status == "idle"
-    reloaded = get_task(tmp_path, "T-0001")
-    assert reloaded is not None
-    assert reloaded.id == "T-0001"
-    assert loaded.runtime.current_stage.stage is None
+    with pytest.raises(TaskStateMissingError, match="missing its SQLite runtime state row"):
+        get_task(tmp_path, "T-0001")
 
 
 def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Path) -> None:
@@ -172,36 +165,6 @@ def test_load_task_record_file_rejects_legacy_intent_fields(tmp_path: Path) -> N
 
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         load_task_record_file(task_path)
-
-
-def test_runtime_store_bootstrap_skips_legacy_intent_task_files(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-legacy-intent"
-    task_dir.mkdir(parents=True)
-    task_path = task_dir / "task.yaml"
-    task_path.write_text(
-        yaml.safe_dump(
-            {
-                "id": "T-0001",
-                "slug": "legacy-intent",
-                "title": "Legacy intent",
-                "mode": "implementation",
-                "pipeline_mode": "full",
-                "priority": "medium",
-                "git": {
-                    "auto_commit": True,
-                    "commit_message": "legacy intent",
-                },
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
-
-    store = runtime_store(tmp_path)
-    store.bootstrap()
-
-    assert store.load_task_state("T-0001") is None
 
 
 def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -> None:

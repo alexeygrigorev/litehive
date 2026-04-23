@@ -333,30 +333,39 @@ def test_legacy_global_state_in_config_home_is_not_migrated(
 
 
 def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Current runtime state")
-
-    def _boom(*args, **kwargs):  # type: ignore[no-untyped-def]
-        raise AssertionError("current runtime state should skip task.yaml rescan")
-
-    monkeypatch.setattr("litehive.state.store.RuntimeStore._seed_task_state_rows_from_disk", _boom)
+    from litehive.db.schema import connect_workspace_db
 
     ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Current runtime state")
+
+    with connect_workspace_db(tmp_path) as connection:
+        connection.execute("DELETE FROM task_state WHERE task_id = ?", (task.id,))
+        connection.commit()
+        assert connection.execute("SELECT task_id FROM task_state WHERE task_id = ?", (task.id,)).fetchone() is None
+
+    ensure_workspace(tmp_path)
+
+    with connect_workspace_db(tmp_path) as connection:
+        assert connection.execute("SELECT task_id FROM task_state WHERE task_id = ?", (task.id,)).fetchone() is None
 
 
 def test_ensure_workspace_skips_disk_scan_for_bootstrapped_empty_workspace(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path)
-
-    def _boom(*args, **kwargs):  # type: ignore[no-untyped-def]
-        raise AssertionError("bootstrapped empty workspace should skip disk scan")
-
-    monkeypatch.setattr("litehive.state.store.RuntimeStore._seed_task_state_rows_from_disk", _boom)
+    from litehive.db.schema import connect_workspace_db
 
     ensure_workspace(tmp_path)
+    ensure_workspace(tmp_path)
+
+    with connect_workspace_db(tmp_path) as connection:
+        task_rows = connection.execute("SELECT COUNT(*) FROM task_state").fetchone()[0]
+        queue_row = connection.execute("SELECT payload FROM queue WHERE workspace_key = ?", ("workspace",)).fetchone()
+
+    assert task_rows == 0
+    assert queue_row is not None
+    assert queue_row[0] == "[]"
 
 
 def test_litehive_home_overrides_default_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -637,25 +637,20 @@ def restore_missing_queued_tasks(
     tasks_by_id: dict[str, TaskRecord],
 ) -> list[str]:
     restored_front: list[str] = []
-    restored_back: list[str] = []
     queued_ids = set(state.queue)
     for task_id, task in tasks_by_id.items():
         if not is_task_eligible_for_execution(task):
             continue
         if task_id == state.active_task_id or task_id in queued_ids:
             continue
-        queued_ids.add(task_id)
         # Missing resumable work must reclaim queue visibility ahead of later
         # queued tasks or the runner can hand off past unfinished execution.
         if task.status == "in_progress" or resumable_queue_stage(task) is not None:
+            queued_ids.add(task_id)
             restored_front.append(task_id)
-        else:
-            restored_back.append(task_id)
     if restored_front:
         state.queue = [*restored_front, *state.queue]
-    if restored_back:
-        state.queue.extend(restored_back)
-    return [*restored_front, *restored_back]
+    return restored_front
 
 
 def _resolve_next_task_from_snapshot(

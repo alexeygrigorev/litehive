@@ -1,22 +1,15 @@
 """SQLite-backed runtime storage for workspace execution state."""
 
 import json
-import logging
-import re
 import sqlite3
 from pathlib import Path
-
-import yaml
 
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
 from litehive.domain.runtime import TaskRuntime
-from litehive.domain.task import TaskIntentRecord, TaskRecord, TaskStateRecord, WorkspaceState
+from litehive.domain.task import TaskStateRecord, WorkspaceState
 from litehive.tasks.audit import TaskAuditEntry, insert_task_audit_entries
 
-logger = logging.getLogger(__name__)
-
-_TASK_DIR_RE = re.compile(r"^T-(\d{4})-")
 _TASK_SCOPED_TABLES = (
     "task_state",
     "task_journal",
@@ -39,19 +32,6 @@ class RuntimeStore:
 
     def __init__(self, root: Path) -> None:
         self.root = root
-
-    def bootstrap(self) -> None:
-        with connect_workspace_db(self.root) as connection:
-            self._ensure_workspace_state_rows(connection)
-            disk_task_ids, highest_task_number = self._task_ids_on_disk()
-            if not self._runtime_state_is_current(
-                connection,
-                task_ids_on_disk=disk_task_ids,
-                highest_task_number=highest_task_number,
-            ):
-                seeded_task_ids = self._seed_task_state_rows_from_disk(connection)
-                self._seed_workspace_state_from_disk(connection, seeded_task_ids)
-            connection.commit()
 
     def load_workspace_state(self) -> WorkspaceState | None:
         with connect_workspace_db(self.root) as connection:
@@ -204,110 +184,6 @@ class RuntimeStore:
             ("workspace", json.dumps([], sort_keys=True), now),
         )
         connection.commit()
-
-    def _task_ids_on_disk(self) -> tuple[list[str], int]:
-        task_ids: list[str] = []
-        highest_task_number = 0
-        tasks_dir = self.root / ".litehive" / "tasks"
-        if not tasks_dir.exists():
-            return task_ids, highest_task_number
-        for child in tasks_dir.iterdir():
-            if not child.is_dir():
-                continue
-            match = _TASK_DIR_RE.match(child.name)
-            if match is None:
-                continue
-            task_ids.append(f"T-{match.group(1)}")
-            highest_task_number = max(highest_task_number, int(match.group(1)))
-        task_ids.sort()
-        return task_ids, highest_task_number
-
-    def _runtime_state_is_current(
-        self,
-        connection: sqlite3.Connection,
-        *,
-        task_ids_on_disk: list[str],
-        highest_task_number: int,
-    ) -> bool:
-        state_row = connection.execute(
-            "SELECT payload FROM pool_state WHERE workspace_key = ?",
-            ("workspace",),
-        ).fetchone()
-        queue_row = connection.execute(
-            "SELECT payload FROM queue WHERE workspace_key = ?",
-            ("workspace",),
-        ).fetchone()
-        if state_row is None or queue_row is None:
-            return False
-        if not task_ids_on_disk:
-            return True
-        task_state_count = int(connection.execute("SELECT COUNT(*) FROM task_state").fetchone()[0])
-        if task_state_count < len(task_ids_on_disk):
-            return False
-        payload = json.loads(state_row["payload"])
-        queue = json.loads(queue_row["payload"])
-        default_state_payload = WorkspaceState().model_dump(mode="json", exclude={"queue"})
-        fresh_workspace_state = payload == default_state_payload and queue == []
-        if fresh_workspace_state:
-            return False
-        return int(payload.get("next_task_number") or 0) >= highest_task_number
-
-    def _seed_task_state_rows_from_disk(self, connection: sqlite3.Connection) -> list[str]:
-        existing_rows = connection.execute("SELECT task_id FROM task_state").fetchall()
-        existing_task_ids = {str(row["task_id"]) for row in existing_rows}
-        task_ids_on_disk: list[str] = []
-        tasks_dir = self.root / ".litehive" / "tasks"
-        if not tasks_dir.exists():
-            return task_ids_on_disk
-        for task_file in sorted(tasks_dir.glob("*/task.yaml")):
-            try:
-                loaded = yaml.safe_load(task_file.read_text(encoding="utf-8")) or {}
-                if not isinstance(loaded, dict):
-                    raise ValueError("task file must contain a mapping")
-                intent = TaskIntentRecord.model_validate(loaded)
-            except Exception as exc:
-                logger.warning("Skipping invalid task file during sqlite bootstrap %s: %s", task_file, exc)
-                continue
-            task = TaskRecord.from_intent_and_state(intent)
-            task_ids_on_disk.append(task.id)
-            if task.id in existing_task_ids:
-                continue
-            self._save_task_state(connection, task.id, task.to_storage_state_record())
-        return task_ids_on_disk
-
-    def _seed_workspace_state_from_disk(
-        self,
-        connection: sqlite3.Connection,
-        task_ids_on_disk: list[str],
-    ) -> None:
-        state_row = connection.execute(
-            "SELECT payload FROM pool_state WHERE workspace_key = ?",
-            ("workspace",),
-        ).fetchone()
-        queue_row = connection.execute(
-            "SELECT payload FROM queue WHERE workspace_key = ?",
-            ("workspace",),
-        ).fetchone()
-        if state_row is None or queue_row is None:
-            return
-        payload = json.loads(state_row["payload"])
-        queue = json.loads(queue_row["payload"])
-        highest_task_number = 0
-        for task_id in task_ids_on_disk:
-            try:
-                highest_task_number = max(highest_task_number, int(task_id.split("-", 1)[1]))
-            except (IndexError, ValueError):
-                continue
-        default_state_payload = WorkspaceState().model_dump(mode="json", exclude={"queue"})
-        fresh_workspace_state = payload == default_state_payload and queue == []
-        if not fresh_workspace_state and highest_task_number <= int(payload.get("next_task_number") or 0):
-            return
-        state = WorkspaceState(**payload, queue=queue)
-        if fresh_workspace_state and task_ids_on_disk:
-            state.queue = list(task_ids_on_disk)
-        if highest_task_number > state.next_task_number:
-            state.next_task_number = highest_task_number
-        self._save_workspace_state(connection, state)
 
 
 def runtime_store(root: Path) -> RuntimeStore:

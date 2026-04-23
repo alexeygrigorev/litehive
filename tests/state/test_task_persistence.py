@@ -7,7 +7,6 @@ import litehive.state.persist as workflow_module
 from litehive.config.workspace import ensure_workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task
-from litehive.state.store import RuntimeStore
 
 
 def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
@@ -58,27 +57,6 @@ def test_workspace_transition_writes_preserve_task_added_after_state_snapshot(
 
     assert merged_state.queue == ["T-0002", "T-0003"]
     assert merged_state.next_task_number == 3
-
-
-def test_create_task_bootstraps_workspace_once_after_initialization(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    ensure_workspace(tmp_path)
-
-    bootstrap_calls = 0
-    real_bootstrap = RuntimeStore.bootstrap
-
-    def track_bootstrap(self: RuntimeStore) -> None:
-        nonlocal bootstrap_calls
-        bootstrap_calls += 1
-        real_bootstrap(self)
-
-    monkeypatch.setattr(RuntimeStore, "bootstrap", track_bootstrap)
-
-    create_task(tmp_path, title="Single bootstrap task")
-
-    assert bootstrap_calls == 1
 
 
 def test_create_task_surfaces_cleanup_failure_when_rollback_removal_fails(
