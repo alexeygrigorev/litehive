@@ -14,6 +14,7 @@ from litehive.state.records import set_task_commit_sha
 from litehive.domain.task_ops import BlockedTask, TaskPlan, TaskSelection, WorkspaceConflictError
 from litehive.state.persist import load_state, save_state_without_runner_guard
 from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
+from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.runtime import clear_task_run_activity, idle_stage_state
 
 logger = logging.getLogger(__name__)
@@ -36,35 +37,79 @@ def enqueue_task_front(root: Path, task_id: str) -> WorkspaceState:
 
 
 def _enqueue_task(root: Path, task_id: str, *, front: bool) -> WorkspaceState:
+    from litehive.state.records import require_task
+
     with workspace_lock(root):
         state = load_state(root)
         ensure_future_task_mutation_allowed(root, [task_id], state=state)
+        task = require_task(root, task_id)
+        before_task = snapshot_task_audit_state(task)
+        queue_before = list(state.queue)
         state.queue = [item for item in state.queue if item != task_id]
         if front:
             state.queue.insert(0, task_id)
         else:
             state.queue.append(task_id)
-        save_state_without_runner_guard(root, state)
+        save_state_without_runner_guard(
+            root,
+            state,
+            audit_entries=[
+                build_task_audit_entry(
+                    task_id=task_id,
+                    action="queue_enqueued",
+                    actor="operator",
+                    source="queue",
+                    before_task=before_task,
+                    after_task=task,
+                    before_queue=queue_before,
+                    after_queue=state.queue,
+                    context={"front": front},
+                )
+            ],
+        )
         return state
 
 
 def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
+    from litehive.state.records import require_task
+
     if position < 1:
         raise ValueError("Queue position must be 1 or greater")
     with workspace_lock(root):
         state = load_state(root)
         ensure_future_task_mutation_allowed(root, [task_id], state=state)
+        task = require_task(root, task_id)
+        before_task = snapshot_task_audit_state(task)
+        queue_before = list(state.queue)
         if task_id not in state.queue:
             raise ValueError(f"Task {task_id} is not queued")
         queue = [item for item in state.queue if item != task_id]
         target_index = min(position - 1, len(queue))
         queue.insert(target_index, task_id)
         state.queue = queue
-        save_state_without_runner_guard(root, state)
+        save_state_without_runner_guard(
+            root,
+            state,
+            audit_entries=[
+                build_task_audit_entry(
+                    task_id=task_id,
+                    action="queue_moved",
+                    actor="operator",
+                    source="queue",
+                    before_task=before_task,
+                    after_task=task,
+                    before_queue=queue_before,
+                    after_queue=state.queue,
+                    context={"requested_position": position},
+                )
+            ],
+        )
         return state
 
 
 def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
+    from litehive.state.records import require_task
+
     if not task_ids:
         raise ValueError("At least one task id is required")
     seen: set[str] = set()
@@ -80,13 +125,33 @@ def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
     with workspace_lock(root):
         state = load_state(root)
         ensure_future_task_mutation_allowed(root, task_ids, state=state)
+        queue_before = list(state.queue)
         missing = [task_id for task_id in task_ids if task_id not in state.queue]
         if missing:
             joined = ", ".join(missing)
             raise ValueError(f"Tasks are not queued: {joined}")
+        queued_tasks = {task_id: require_task(root, task_id) for task_id in task_ids}
+        before_tasks = {task_id: snapshot_task_audit_state(task) for task_id, task in queued_tasks.items()}
         remaining = [queued_id for queued_id in state.queue if queued_id not in task_ids]
         state.queue = [*task_ids, *remaining]
-        save_state_without_runner_guard(root, state)
+        save_state_without_runner_guard(
+            root,
+            state,
+            audit_entries=[
+                build_task_audit_entry(
+                    task_id=task_id,
+                    action="queue_prioritized",
+                    actor="operator",
+                    source="queue",
+                    before_task=before_tasks[task_id],
+                    after_task=queued_tasks[task_id],
+                    before_queue=queue_before,
+                    after_queue=state.queue,
+                    context={"requested_order": list(task_ids)},
+                )
+                for task_id in task_ids
+            ],
+        )
         return state
 
 

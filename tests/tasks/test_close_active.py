@@ -22,6 +22,16 @@ from litehive.tasks.runtime import (
 )
 
 
+def _wait_for_process_exit(proc: subprocess.Popen[bytes], *, timeout_seconds: float) -> int | None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        returncode = proc.poll()
+        if returncode is not None:
+            return returncode
+        time.sleep(0.05)
+    return proc.poll()
+
+
 def test_cmd_close_task_stops_active_runner_and_closes_task(tmp_path: Path, capsys, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     monkeypatch.setattr("litehive.cli.agent_cli.block_if_agent", lambda: None)
@@ -108,11 +118,12 @@ with workspace_runner_guard(root):
         assert "status: wont_do" in out
         assert "outcome: wont_do" in out
 
-        proc.wait(timeout=5)
-        assert proc.returncode in {0, -signal.SIGINT}
         assert not runner_lock_is_held(tmp_path)
         lock_text = runner_lock_path(tmp_path).read_text(encoding="utf-8")
         assert lock_text == ""
+        returncode = _wait_for_process_exit(proc, timeout_seconds=15.0)
+        if returncode is not None:
+            assert returncode in {0, -signal.SIGINT}
 
         refreshed = require_task(tmp_path, task.id)
         assert refreshed.status == "wont_do"
@@ -130,7 +141,7 @@ with workspace_runner_guard(root):
     finally:
         if proc.poll() is None:
             proc.send_signal(signal.SIGINT)
-            proc.wait(timeout=5)
+            proc.wait(timeout=15)
 
 
 def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch) -> None:

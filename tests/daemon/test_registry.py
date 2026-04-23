@@ -34,6 +34,8 @@ def _spawn_locked_daemon_like_process(
             "-c",
             "import fcntl,json,os,signal,sys,time\n"
             "from pathlib import Path\n"
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+            "signal.signal(signal.SIGINT, signal.SIG_IGN)\n"
             "lock_path = Path(sys.argv[1])\n"
             "workspace = Path(sys.argv[2]).resolve()\n"
             "metadata = json.loads(sys.argv[3])\n"
@@ -51,8 +53,6 @@ def _spawn_locked_daemon_like_process(
             "json.dump(payload, handle)\n"
             "handle.flush()\n"
             "os.fsync(handle.fileno())\n"
-            "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
-            "signal.signal(signal.SIGINT, signal.SIG_IGN)\n"
             "time.sleep(60)\n",
             str(lock_path),
             str(workspace),
@@ -62,6 +62,21 @@ def _spawn_locked_daemon_like_process(
         stderr=subprocess.DEVNULL,
         text=True,
     )
+
+
+def _wait_for_daemon_metadata(
+    workspace: Path,
+    *,
+    timeout_seconds: float = 2.0,
+    poll_interval_seconds: float = 0.02,
+) -> dict[str, object] | None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        entry = daemon_metadata(workspace)
+        if entry is not None:
+            return entry
+        time.sleep(poll_interval_seconds)
+    return daemon_metadata(workspace)
 
 
 def test_register_and_unregister_daemon_uses_shared_lock_manager(tmp_path: Path, monkeypatch) -> None:
@@ -177,9 +192,8 @@ def test_stop_workspace_daemon_escalates_to_sigkill_when_sigterm_ignored(tmp_pat
         {"heartbeat_at": "2026-04-12T00:00:00+00:00"},
     )
     try:
-        time.sleep(0.1)
+        entry = _wait_for_daemon_metadata(workspace)
         assert daemon_lock_is_active(workspace) is True
-        entry = daemon_metadata(workspace)
         assert entry is not None
         assert entry["status"] == "running"
         assert entry["pid"] == sleeper.pid
@@ -222,8 +236,7 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
     lock_path = daemon_lock_path(workspace)
     sleeper = _spawn_locked_daemon_like_process(workspace, lock_metadata)
     try:
-        time.sleep(0.1)
-        entry = daemon_metadata(workspace)
+        entry = _wait_for_daemon_metadata(workspace)
         assert entry is not None
         assert entry["status"] == "running"
         assert entry["pid"] == sleeper.pid

@@ -48,6 +48,7 @@ from litehive.state.records import (
 )
 from litehive.worktree import resolve_recorded_worktree_path, task_worktree_branch
 from litehive.tasks.activity import append_task_activity, latest_task_activity_entry
+from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.journal import append_journal
 from litehive.tasks.reports import record_stage_report
 from litehive.tasks.runtime import apply_task_outcome
@@ -366,13 +367,45 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
     task_record = get_task(workspace_root, state.task_id)
     if task_record is None:
         return None
+    before_task = snapshot_task_audit_state(task_record)
+    before_last_outcome = task_record.runtime.last_outcome.model_copy(deep=True)
     _sync_runtime_fields(task_record, state)
     journal_message = _sync_terminal_status(task_record, state)
     _sync_recovery_follow_up(workspace_root, task_record, state)
-    if journal_message is not None:
-        persist_future_task_update(workspace_root, task_record, journal_message=journal_message)
-    else:
-        save_task(workspace_root, task_record)
+    audit_entries = []
+    if (
+        before_task.status != task_record.status
+        or before_task.pipeline_status != task_record.pipeline_status
+        or before_last_outcome != task_record.runtime.last_outcome
+    ):
+        action = "status_changed"
+        if state.stage == "failed":
+            action = "failed"
+        elif state.stage == "done" and task_record.status == "done":
+            action = "completed"
+        audit_entries.append(
+            build_task_audit_entry(
+                task_id=task_record.id,
+                action=action,
+                actor="runner",
+                source="pipeline",
+                before_task=before_task,
+                after_task=task_record,
+                context={
+                    "lifecycle_stage": state.stage,
+                    "failed_reason": (
+                        None if state.failed_reason is None else getattr(state.failed_reason, "value", state.failed_reason)
+                    ),
+                    "failed_message": state.failed_message,
+                },
+            )
+        )
+    persist_future_task_update(
+        workspace_root,
+        task_record,
+        journal_message=journal_message,
+        audit_entries=audit_entries or None,
+    )
     return task_record
 
 

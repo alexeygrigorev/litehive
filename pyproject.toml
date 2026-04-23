@@ -37,6 +37,7 @@ path = "litehive/__version__.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-n auto"
 timeout = 60
 markers = [
     "integration: slower end-to-end, sandbox, and external-boundary coverage",

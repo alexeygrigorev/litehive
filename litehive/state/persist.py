@@ -10,6 +10,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.store import runtime_store
+from litehive.tasks.audit import TaskAuditEntry
 from litehive.tasks.paths import task_dir, task_file
 
 _MISSING = object()
@@ -110,7 +111,18 @@ def save_state(root: Path, state: WorkspaceState) -> None:
         runtime_store(root).save_workspace_state(state)
 
 
-def save_state_without_runner_guard(root: Path, state: WorkspaceState) -> None:
+def save_state_without_runner_guard(
+    root: Path,
+    state: WorkspaceState,
+    *,
+    audit_entries: list[TaskAuditEntry] | None = None,
+) -> None:
+    if audit_entries:
+        runtime_store(root).save_runtime_transaction(
+            workspace_state=state,
+            audit_entries=audit_entries,
+        )
+        return
     runtime_store(root).save_workspace_state(state)
 
 
@@ -210,6 +222,7 @@ def persist_task_and_state(
     state: WorkspaceState,
     journal_message: str | None = None,
     protected_task_ids: list[str] | tuple[str, ...] = (),
+    audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     persist_tasks_and_state(
         root,
@@ -217,6 +230,7 @@ def persist_task_and_state(
         state=state,
         journal_messages={task.id: journal_message} if journal_message is not None else None,
         protected_task_ids=protected_task_ids,
+        audit_entries=audit_entries,
     )
 
 
@@ -227,6 +241,7 @@ def persist_tasks_and_state(
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
     protected_task_ids: list[str] | tuple[str, ...] = (),
+    audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     from litehive.state.locking import workspace_mutation_guard
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
@@ -251,6 +266,7 @@ def persist_tasks_and_state(
             lambda: runtime_store(root).save_runtime_transaction(
                 task_states={task.id: task_state_for_storage(task) for task in tasks},
                 workspace_state=merged_state,
+                audit_entries=audit_entries,
             ),
         )
         ensure_runtime_ignored(root)
@@ -264,6 +280,7 @@ def persist_tasks_and_state_without_runner_guard(
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
     protected_task_ids: list[str] | tuple[str, ...] = (),
+    audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
     from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
@@ -286,6 +303,7 @@ def persist_tasks_and_state_without_runner_guard(
         lambda: runtime_store(root).save_runtime_transaction(
             task_states={task.id: task_state_for_storage(task) for task in tasks},
             workspace_state=merged_state,
+            audit_entries=audit_entries,
         ),
     )
     ensure_runtime_ignored(root)
@@ -299,6 +317,7 @@ def persist_task_and_state_without_runner_guard(
     state: WorkspaceState,
     journal_message: str | None = None,
     protected_task_ids: list[str] | tuple[str, ...] = (),
+    audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     persist_tasks_and_state_without_runner_guard(
         root,
@@ -306,4 +325,5 @@ def persist_task_and_state_without_runner_guard(
         state=state,
         journal_messages={task.id: journal_message} if journal_message is not None else None,
         protected_task_ids=protected_task_ids,
+        audit_entries=audit_entries,
     )

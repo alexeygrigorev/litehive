@@ -404,6 +404,7 @@ def persist_future_task_update(
     task: TaskRecord,
     *,
     journal_message: str | None = None,
+    audit_entries: list["TaskAuditEntry"] | None = None,
 ) -> None:
     from litehive.state.store import runtime_store
     from litehive.state.records import ensure_runtime_ignored, serialize_task_record, task_state_for_storage
@@ -420,7 +421,10 @@ def persist_future_task_update(
         writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_message}\n"
     write_atomic_files_and_then(
         writes,
-        lambda: runtime_store(root).save_runtime_transaction(task_states={task.id: task_state_for_storage(task)}),
+        lambda: runtime_store(root).save_runtime_transaction(
+            task_states={task.id: task_state_for_storage(task)},
+            audit_entries=audit_entries,
+        ),
     )
     ensure_runtime_ignored(root)
     refresh_duplicate_task_index_if_initialized(root)

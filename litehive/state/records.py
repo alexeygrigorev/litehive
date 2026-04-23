@@ -32,6 +32,12 @@ from litehive.state.persist import (
     save_state_without_runner_guard,
     write_atomic_files_and_then,
 )
+from litehive.tasks.audit import (
+    TaskAuditEntry,
+    append_task_audit_entries,
+    build_task_audit_entry,
+    snapshot_task_audit_state,
+)
 from litehive.tasks.normalization import normalize_acceptance_criteria
 from litehive.tasks.paths import slugify, task_dir, tasks_root
 
@@ -205,6 +211,7 @@ def _persist_created_tasks(
     state: WorkspaceState,
     writes: dict[Path, str],
     cleanup_dirs: list[Path],
+    audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     from litehive.state.persist import merged_state_for_runner_owned_write, skip_bootstrap_load_state
     from litehive.tasks.duplicates import add_tasks_to_duplicate_index
@@ -221,6 +228,7 @@ def _persist_created_tasks(
             runtime_store(root).save_runtime_transaction(
                 task_states={task.id: task_state_for_storage(task) for task in tasks},
                 workspace_state=merged_state,
+                audit_entries=audit_entries,
             )
 
         write_atomic_files_and_then(writes, callback)
@@ -314,12 +322,38 @@ def create_task(
             base / "task.yaml": serialize_task_record(task),
             base / "journal.md": f"# {task.id} {task.title}\n\n## {utcnow()}\nTask created.\n",
         }
+        actor = "operator"
+        source = "manual"
+        if task.created_from is not None and task.created_from.source == "agent":
+            actor = "agent"
+            source = "agent"
+        elif task.created_from is not None and task.created_from.source == "follow_up":
+            actor = "system"
+            source = "follow_up"
         _persist_created_tasks(
             root,
             tasks=[task],
             state=state,
             writes=writes,
             cleanup_dirs=[base],
+            audit_entries=[
+                build_task_audit_entry(
+                    task_id=task.id,
+                    action="created",
+                    actor=actor,
+                    source=source,
+                    after_task=task,
+                    after_queue=state.queue,
+                    context={
+                        "title": task.title,
+                        "priority": task.priority,
+                        "pipeline_mode": str(task.pipeline_mode),
+                        "created_from": (
+                            None if task.created_from is None else task.created_from.model_dump(mode="json")
+                        ),
+                    },
+                )
+            ],
         )
         ensure_runtime_ignored(root)
         return task
@@ -388,6 +422,25 @@ def create_follow_up_tasks(
             state=state,
             writes=writes,
             cleanup_dirs=created_dirs,
+            audit_entries=[
+                build_task_audit_entry(
+                    task_id=task.id,
+                    action="created",
+                    actor="system",
+                    source="follow_up",
+                    after_task=task,
+                    after_queue=state.queue,
+                    context={
+                        "title": task.title,
+                        "priority": task.priority,
+                        "pipeline_mode": str(task.pipeline_mode),
+                        "created_from": (
+                            None if task.created_from is None else task.created_from.model_dump(mode="json")
+                        ),
+                    },
+                )
+                for task in created_tasks
+            ],
         )
         ensure_runtime_ignored(root)
     return created_tasks
@@ -399,6 +452,8 @@ def discard_created_task(root: Path, task_id: str) -> None:
     with workspace_lock(root):
         task = get_task(root, task_id)
         state = load_state(root)
+        queue_before = list(state.queue)
+        before_task = snapshot_task_audit_state(task)
         if state.active_task_id == task_id:
             state.active_task_id = None
         state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
@@ -407,6 +462,22 @@ def discard_created_task(root: Path, task_id: str) -> None:
             td = task_dir(root, task)
             if td.exists():
                 remove_tree_logged(td, logger=logger, target_label="task directory")
+        append_task_audit_entries(
+            root,
+            [
+                build_task_audit_entry(
+                    task_id=task_id,
+                    action="removed",
+                    actor="system",
+                    source="task_cleanup",
+                    before_task=before_task,
+                    after_task=None,
+                    before_queue=queue_before,
+                    after_queue=state.queue,
+                    context={"task_missing": task is None},
+                )
+            ],
+        )
         refresh_duplicate_task_index_if_initialized(root)
 
 

@@ -12,6 +12,7 @@ from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
 from litehive.domain.runtime import TaskRuntime
 from litehive.domain.task import TaskIntentRecord, TaskRecord, TaskStateRecord, WorkspaceState
+from litehive.tasks.audit import TaskAuditEntry, insert_task_audit_entries
 
 logger = logging.getLogger(__name__)
 _LEGACY_TASK_INTENT_KEYS = {
@@ -110,12 +111,14 @@ class RuntimeStore:
         *,
         task_states: dict[str, TaskStateRecord] | None = None,
         workspace_state: WorkspaceState | None = None,
+        audit_entries: list[TaskAuditEntry] | None = None,
     ) -> None:
         with connect_workspace_db(self.root) as connection:
             if workspace_state is not None:
                 self._save_workspace_state(connection, workspace_state)
             for task_id, state in (task_states or {}).items():
                 self._save_task_state(connection, task_id, state)
+            insert_task_audit_entries(connection, audit_entries or [])
             connection.commit()
 
     def _save_workspace_state(self, connection: sqlite3.Connection, state: WorkspaceState) -> None:

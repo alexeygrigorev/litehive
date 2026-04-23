@@ -14,6 +14,7 @@ from litehive.fs_cleanup import remove_tree_logged
 
 from litehive.state.records import list_tasks, require_task
 from litehive.state.locking import workspace_lock
+from litehive.tasks.audit import append_task_audit_entries, build_task_audit_entry, snapshot_task_audit_state
 from .paths import task_dir, tasks_root
 from litehive.state.persist import atomic_write_text
 
@@ -60,12 +61,19 @@ def _update_archive_index(root: Path, tasks: list[TaskRecord]) -> None:
     atomic_write_text(index_path, "\n".join(lines) + "\n")
 
 
-def archive_task(root: Path, task_id: str) -> TaskRecord:
+def archive_task(
+    root: Path,
+    task_id: str,
+    *,
+    audit_actor: str = "operator",
+    audit_source: str = "archive",
+) -> TaskRecord:
     """Move a single done task to the archive directory."""
     from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
 
     with workspace_lock(root):
         task = require_task(root, task_id)
+        before_task = snapshot_task_audit_state(task)
         if task.status != "done":
             raise ValueError(f"Task {task.id} has status '{task.status}' — only done tasks can be archived")
         src = task_dir(root, task)
@@ -86,6 +94,20 @@ def archive_task(root: Path, task_id: str) -> TaskRecord:
         shutil.move(str(src), str(dst))
         _update_archive_index(root, [task])
         refresh_duplicate_task_index_if_initialized(root)
+        append_task_audit_entries(
+            root,
+            [
+                build_task_audit_entry(
+                    task_id=task.id,
+                    action="archived",
+                    actor=audit_actor,
+                    source=audit_source,
+                    before_task=before_task,
+                    after_task=task,
+                    context={"archive_path": str(dst.relative_to(root))},
+                )
+            ],
+        )
         return task
 
 
@@ -169,6 +191,20 @@ def cleanup_archived_tasks(root: Path, older_than: str) -> list[TaskRecord]:
                 child,
                 logger=logger,
                 target_label="archived task directory",
+            )
+            append_task_audit_entries(
+                root,
+                [
+                    build_task_audit_entry(
+                        task_id=task.id,
+                        action="removed",
+                        actor="system",
+                        source="archive_cleanup",
+                        before_task=task,
+                        after_task=None,
+                        context={"older_than": older_than, "archive_path": str(child.relative_to(root))},
+                    )
+                ],
             )
             deleted.append(task)
     if deleted:

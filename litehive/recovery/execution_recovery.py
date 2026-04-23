@@ -48,6 +48,7 @@ from litehive.state.records import (
     set_task_worktree_path,
 )
 from litehive.tasks.activity import append_task_activity
+from litehive.tasks.audit import append_task_audit_entries, build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.normalization import implementation_entry_stage
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 from litehive.tasks.reports import record_recovery_report
@@ -144,6 +145,7 @@ def attempt_launch_recovery(root: Path, task: TaskRecord, failure: LaunchFailure
 
 
 def flag_task_after_failed_launch_recovery(root: Path, task: TaskRecord, failure: LaunchFailure) -> TaskRecord:
+    before_task = snapshot_task_audit_state(task)
     reason = f"{failure.context}: {failure.summary}"
     origin_stage = _launch_origin_stage(task)
     task.status = "flagged"
@@ -171,6 +173,24 @@ def flag_task_after_failed_launch_recovery(root: Path, task: TaskRecord, failure
         ),
     )
     flagged = finish_task_run_transition(root, task, "flagged")
+    append_task_audit_entries(
+        root,
+        [
+            build_task_audit_entry(
+                task_id=flagged.id,
+                action="failed",
+                actor="runner",
+                source="launch_recovery",
+                before_task=before_task,
+                after_task=flagged,
+                context={
+                    "failure_context": failure.context,
+                    "summary": failure.summary,
+                    "origin_stage": origin_stage,
+                },
+            )
+        ],
+    )
     try:
         from litehive.lifecycle.persistence import SqlitePersistence
 

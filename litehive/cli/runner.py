@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Annotated
 import os
 import sys
+import json
 from dataclasses import dataclass
 
 import click
@@ -41,6 +42,7 @@ from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.state.persist import load_state, set_pool_stop_reason
 from litehive.tasks.queue import dequeue_next_task
 from litehive.tasks.activity import append_task_activity
+from litehive.tasks.audit import load_task_audit_entries
 from litehive.state.locking import runner_status
 
 
@@ -57,6 +59,7 @@ def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: ty
     db_app.callback()(db_group)
     db_app.command("status", help="Show workspace database schema version and pending migrations")(db_status)
     db_app.command("migrate", help="Apply pending workspace database migrations")(db_migrate)
+    db_app.command("audit", help="Show durable task audit log entries from the workspace database")(db_audit)
 
 
 def start(workspace: WorkspaceOption = Path.cwd()) -> int:
@@ -481,6 +484,30 @@ def db_migrate(
     return 0
 
 
+def db_audit(
+    task_id: Annotated[str | None, typer.Argument(help="Optional task id to filter")] = None,
+    workspace: WorkspaceOption = Path.cwd(),
+    limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum rows to show")] = 20,
+    action: Annotated[str | None, typer.Option("--action", help="Optional action filter")] = None,
+) -> int:
+    workspace = normalize_workspace_root(workspace, source="--workspace")
+    entries = load_task_audit_entries(workspace, task_id=task_id, action=action, limit=limit)
+    print(f"workspace: {workspace}")
+    print(f"audit_entries: {len(entries)}")
+    for entry in entries:
+        print(f"id: {entry.id}")
+        print(f"task_id: {entry.task_id}")
+        print(f"created_at: {entry.created_at}")
+        print(f"action: {entry.action}")
+        print(f"actor: {entry.actor}")
+        print(f"source: {entry.source}")
+        print(f"task_status: {entry.task_status_before or '-'} -> {entry.task_status_after or '-'}")
+        print(f"pipeline_status: {entry.pipeline_status_before or '-'} -> {entry.pipeline_status_after or '-'}")
+        print(f"queue_position: {entry.queue_position_before or '-'} -> {entry.queue_position_after or '-'}")
+        print(f"context: {json.dumps(entry.context, sort_keys=True)}")
+    return 0
+
+
 cmd_run = run_command
 cmd_report = report_command
 cmd_backup_create = backup_create
@@ -488,3 +515,4 @@ cmd_backup_list = backup_list
 cmd_backup_restore = backup_restore
 cmd_db_status = db_status
 cmd_db_migrate = db_migrate
+cmd_db_audit = db_audit

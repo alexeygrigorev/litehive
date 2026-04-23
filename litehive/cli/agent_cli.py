@@ -228,6 +228,8 @@ def agent_update_command(
         constraints=constraints if constraints is not None else sentinel,
         priority=priority if priority is not None else sentinel,
         allow_active_agent_task_mutation=True,
+        audit_actor="agent",
+        audit_source="agent",
     )
     print(f"task: {tid}")
     print("updated: ok")
@@ -251,6 +253,6 @@ def agent_close_command(
     except ValueError:
         raise SystemExit(1)
 
-    close_task(root, tid, outcome=outcome, reason=reason)
+    close_task(root, tid, outcome=outcome, reason=reason, audit_actor="agent", audit_source="agent")
     print(f"task: {tid}")
     print(f"outcome: {outcome}")

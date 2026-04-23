@@ -29,6 +29,7 @@ _BASELINE_REQUIRED_TABLES = {
     "pipeline_journal",
     "pipeline_task_state",
     "pipeline_sessions",
+    "task_audit_log",
 }
 
 
@@ -218,7 +219,7 @@ def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationP
     return MigrationPlan(applied_migrations=applied, pending_migrations=pending, dry_run=False)
 
 
-_DbFingerprint: TypeAlias = tuple[int, int, int, int] | None
+_DbFingerprint: TypeAlias = tuple[int, int] | None
 
 
 def _db_fingerprint(db_path: Path) -> _DbFingerprint:
@@ -226,7 +227,9 @@ def _db_fingerprint(db_path: Path) -> _DbFingerprint:
         stat = db_path.stat()
     except OSError:
         return None
-    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
+    # Track database identity, not normal content churn. Size and mtime change
+    # on every successful write, which would defeat the migration cache.
+    return (stat.st_dev, stat.st_ino)
 
 
 _MIGRATED_DB_PATHS: dict[str, _DbFingerprint] = {}
@@ -237,12 +240,14 @@ def connect_workspace_db(root: Path, *, migrate: bool = True) -> sqlite3.Connect
     if migrate:
         # In-process cache keyed on the absolute db_path (not root), because
         # XDG_DATA_HOME changes can move the db even when root stays the same.
-        # Cuts repeated sqlite opens from ~5ms to <1ms across a test suite.
+        # The cached value follows database identity, so normal writes do not
+        # force another migration check on the next open.
         key = str(db_path.resolve())
         fingerprint = _db_fingerprint(db_path)
         if key not in _MIGRATED_DB_PATHS or _MIGRATED_DB_PATHS[key] != fingerprint:
             apply_pending_migrations(root)
             _MIGRATED_DB_PATHS[key] = _db_fingerprint(db_path)
     connection = _open_connection(db_path)
-    _ensure_schema_migrations_table(connection)
+    if not migrate:
+        _ensure_schema_migrations_table(connection)
     return connection
