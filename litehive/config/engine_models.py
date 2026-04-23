@@ -14,10 +14,8 @@ from heru.quota import (
     check_codex_quota,
     check_copilot_quota,
     check_zai_quota,
-    claude_quota_block_reason,
-    codex_quota_block_reason,
-    copilot_quota_block_reason,
-    zai_quota_block_reason,
+    preferred_reset_at,
+    usage_limit_block_reason,
 )
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace_files import config_path
@@ -188,36 +186,6 @@ def _quota_checker(engine_name: str):
     return None
 
 
-def _preferred_reset_at(
-    status: UsageStatus,
-    *,
-    include_short_term_fallback: bool = False,
-) -> str | None:
-    if status.long_term.reset_at:
-        return status.long_term.reset_at
-    if include_short_term_fallback:
-        return status.short_term.reset_at
-    return None
-
-
-def _usage_limit_block_reason(engine_name: str, status: UsageStatus) -> str | None:
-    if status.error is not None:
-        return None
-    if engine_name == "codex":
-        return codex_quota_block_reason()
-    if engine_name == "claude":
-        return claude_quota_block_reason()
-    if engine_name == "copilot":
-        return copilot_quota_block_reason()
-    if engine_name in {"goz", "opencode"}:
-        return zai_quota_block_reason()
-    if not status.limit_reached:
-        return None
-    reset_at = _preferred_reset_at(status, include_short_term_fallback=True)
-    reset_suffix = f", resets {reset_at}" if reset_at else ""
-    return f"{engine_name} usage limit reached{reset_suffix}"
-
-
 def _engine_quota_block(
     root: Path,
     engine_name: str,
@@ -230,7 +198,7 @@ def _engine_quota_block(
         _record_codex_quota_monitoring(root, status)
     if not isinstance(status, UsageStatus):
         return None, None
-    return _usage_limit_block_reason(engine_name, status), _parse_datetime_utc(_preferred_reset_at(status))
+    return usage_limit_block_reason(engine_name, status), _parse_datetime_utc(preferred_reset_at(status))
 
 
 def select_engine(

@@ -35,6 +35,8 @@ VALID_RUNNER_HOOK_ENTRY_KEYS = frozenset(
         "timeout_seconds",
         "description",
         "instructions_on_failure",
+        "reject_on_failure",
+        "blocking",
     }
 )
 DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS = 300.0
