@@ -299,7 +299,7 @@ class _TimeoutThenPassManager:
     calls = 0
     last_kwargs: list[dict[str, object]] = []
     engine_name = "opencode"
-    session_id = "opencode-session-123"
+    continuation = RuntimeEngineContinuation(session_id="opencode-session-123")
 
     def __init__(self, workspace_root, *, execution_root=None):
         del workspace_root, execution_root
@@ -325,7 +325,7 @@ class _TimeoutThenPassManager:
                     reason="transient timeout",
                     classification="timeout",
                 ),
-                continuation=RuntimeEngineContinuation(session_id=_TimeoutThenPassManager.session_id),
+                continuation=_TimeoutThenPassManager.continuation,
             )
         return SubagentResult(
             ref=SubagentRef(
@@ -338,7 +338,54 @@ class _TimeoutThenPassManager:
             execution=None,
             transcript="",
             exit_code=0,
-            continuation=RuntimeEngineContinuation(session_id=_TimeoutThenPassManager.session_id),
+            continuation=_TimeoutThenPassManager.continuation,
+        )
+
+
+class _TimeoutThenNudgeThenPassManager:
+    calls = 0
+    last_kwargs: list[dict[str, object]] = []
+    continuation = RuntimeEngineContinuation(thread_id="codex-thread-123")
+
+    def __init__(self, workspace_root, *, execution_root=None):
+        del workspace_root, execution_root
+
+    def run(self, task, **kwargs) -> SubagentResult:
+        del task
+        _TimeoutThenNudgeThenPassManager.calls += 1
+        _TimeoutThenNudgeThenPassManager.last_kwargs.append(dict(kwargs))
+        subagent_id = f"SA-000{_TimeoutThenNudgeThenPassManager.calls}"
+        if _TimeoutThenNudgeThenPassManager.calls == 1:
+            return SubagentResult(
+                ref=SubagentRef(
+                    id=subagent_id,
+                    role="swe",
+                    engine="codex",
+                    status="failed",
+                    path=f"subagents/{subagent_id}-swe",
+                ),
+                execution=None,
+                transcript="timeout transcript",
+                exit_code=124,
+                failure=EngineFailure(
+                    kind="retryable_execution_error",
+                    reason="transient timeout",
+                    classification="timeout",
+                ),
+                continuation=_TimeoutThenNudgeThenPassManager.continuation,
+            )
+        return SubagentResult(
+            ref=SubagentRef(
+                id=subagent_id,
+                role="swe",
+                engine="codex",
+                status="completed",
+                path=f"subagents/{subagent_id}-swe",
+            ),
+            execution=None,
+            transcript=f"attempt {_TimeoutThenNudgeThenPassManager.calls}",
+            exit_code=0,
+            continuation=_TimeoutThenNudgeThenPassManager.continuation,
         )
 
 
@@ -347,22 +394,28 @@ def _reset_timeout_then_pass_manager_state() -> None:
     _TimeoutThenPassManager.calls = 0
     _TimeoutThenPassManager.last_kwargs = []
     _TimeoutThenPassManager.engine_name = "opencode"
-    _TimeoutThenPassManager.session_id = "opencode-session-123"
+    _TimeoutThenPassManager.continuation = RuntimeEngineContinuation(session_id="opencode-session-123")
+    _TimeoutThenNudgeThenPassManager.calls = 0
+    _TimeoutThenNudgeThenPassManager.last_kwargs = []
+    _TimeoutThenNudgeThenPassManager.continuation = RuntimeEngineContinuation(thread_id="codex-thread-123")
 
 
 @pytest.mark.parametrize(
-    ("engine_name", "session_id"),
+    ("engine_name", "continuation", "resume_id"),
     [
-        ("opencode", "opencode-session-123"),
-        ("goz", "goz-session-123"),
-        ("gemini", "gemini-session-123"),
+        ("codex", RuntimeEngineContinuation(thread_id="codex-thread-123"), "codex-thread-123"),
+        ("claude", RuntimeEngineContinuation(session_id="claude-session-123"), "claude-session-123"),
+        ("opencode", RuntimeEngineContinuation(session_id="opencode-session-123"), "opencode-session-123"),
+        ("goz", RuntimeEngineContinuation(session_id="goz-session-123"), "goz-session-123"),
+        ("gemini", RuntimeEngineContinuation(session_id="gemini-session-123"), "gemini-session-123"),
     ],
 )
 def test_agent_node_retries_timeout_via_existing_retry_flow(
     tmp_path,
     monkeypatch,
     engine_name: str,
-    session_id: str,
+    continuation: RuntimeEngineContinuation,
+    resume_id: str,
 ) -> None:
     task = create_task(tmp_path, title=f"{engine_name} timeout retry")
     adapter = HeruEngineAdapter(engine_name, tmp_path)
@@ -377,7 +430,7 @@ def test_agent_node_retries_timeout_via_existing_retry_flow(
     _TimeoutThenPassManager.calls = 0
     _TimeoutThenPassManager.last_kwargs = []
     _TimeoutThenPassManager.engine_name = engine_name
-    _TimeoutThenPassManager.session_id = session_id
+    _TimeoutThenPassManager.continuation = continuation
     monkeypatch.setattr(
         "litehive.lifecycle.heru_factory.SubagentManager",
         _TimeoutThenPassManager,
@@ -392,11 +445,61 @@ def test_agent_node_retries_timeout_via_existing_retry_flow(
     assert isinstance(event, Pass)
     assert _TimeoutThenPassManager.calls == 2
     assert _TimeoutThenPassManager.last_kwargs[0]["resume_session_id"] is None
-    assert _TimeoutThenPassManager.last_kwargs[1]["resume_session_id"] == session_id
+    assert _TimeoutThenPassManager.last_kwargs[1]["resume_session_id"] == resume_id
 
     session = store.get_or_create(task.id, "implementing", engine_name)
-    assert session.engine_session_id == session_id
+    assert session.engine_session_id == resume_id
     assert session.turn_count == 1
+
+
+def test_agent_node_nudges_timeout_retry_with_existing_codex_thread_id(tmp_path, monkeypatch) -> None:
+    task = create_task(tmp_path, title="codex timeout nudge")
+    adapter = HeruEngineAdapter("codex", tmp_path)
+    store = InMemorySessionStore()
+    node = _HeruPromptAgent(
+        "implementing",
+        _ListSelector([adapter]),
+        store,
+        retry_budget=3,
+    )
+
+    monkeypatch.setattr(
+        "litehive.lifecycle.heru_factory.SubagentManager",
+        _TimeoutThenNudgeThenPassManager,
+    )
+
+    def _latest_verdict_after_for_nudge(*args, **kwargs):  # type: ignore[no-untyped-def]
+        del args, kwargs
+        if _TimeoutThenNudgeThenPassManager.calls == 2:
+            return None
+        if _TimeoutThenNudgeThenPassManager.calls == 3:
+            return AgentVerdict(
+                outcome="pass",
+                reason="nudged report",
+                metadata={"parsed_from_call": 3},
+            )
+        raise AssertionError(
+            f"unexpected verdict lookup after manager call {_TimeoutThenNudgeThenPassManager.calls}"
+        )
+
+    monkeypatch.setattr(
+        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        _latest_verdict_after_for_nudge,
+    )
+
+    event = node.run(make_state(task_id=task.id))
+
+    assert isinstance(event, Pass)
+    assert event.metadata["parsed_from_call"] == 3
+    assert _TimeoutThenNudgeThenPassManager.calls == 3
+    assert _TimeoutThenNudgeThenPassManager.last_kwargs[0]["resume_session_id"] is None
+    assert _TimeoutThenNudgeThenPassManager.last_kwargs[1]["resume_session_id"] == "codex-thread-123"
+    assert _TimeoutThenNudgeThenPassManager.last_kwargs[2]["resume_session_id"] == "codex-thread-123"
+    assert "IMPORTANT: this is a nudge" in _TimeoutThenNudgeThenPassManager.last_kwargs[2]["prompt"]
+
+    session = store.get_or_create(task.id, "implementing", "codex")
+    assert session.engine_session_id == "codex-thread-123"
+    assert session.turn_count == 2
 
 
 def test_nudge_budget_exhausted_returns_crash() -> None:

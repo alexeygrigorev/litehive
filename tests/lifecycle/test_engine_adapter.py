@@ -645,6 +645,7 @@ def test_heru_engine_adapter_reuses_failed_turn_continuation_on_retry(tmp_path, 
     ("engine_name", "continuation", "expected_resume_session_id"),
     [
         ("codex", RuntimeEngineContinuation(thread_id="codex-thread-123"), "codex-thread-123"),
+        ("claude", RuntimeEngineContinuation(session_id="claude-session-123"), "claude-session-123"),
         ("gemini", RuntimeEngineContinuation(session_id="gemini-session-123"), "gemini-session-123"),
         ("opencode", RuntimeEngineContinuation(session_id="opencode-session-123"), "opencode-session-123"),
     ],
@@ -698,6 +699,43 @@ def test_heru_engine_adapter_retries_crash_once_with_resume_id(
     assert _ScriptedManager.last_kwargs[1]["prompt"].startswith(HeruEngineAdapter._CRASH_RESUME_PROMPT_PREFIX)
     assert session.engine_session_id == continuation.resume_id
     assert session.turn_count == 1
+
+
+@pytest.mark.parametrize("engine_name", ["copilot", "goz"])
+def test_heru_engine_adapter_skips_crash_resume_without_resume_id(
+    tmp_path,
+    monkeypatch,
+    engine_name: str,
+) -> None:
+    from litehive.state.records import create_task
+
+    task = create_task(tmp_path, title=f"{engine_name} no resume id", goal="skip crash resume without continuation id")
+    session = Session()
+    state = TaskState(task_id=task.id, stage="implementing", pipeline_mode=PipelineMode.FULL)
+    adapter = HeruEngineAdapter(engine_name, tmp_path)
+
+    _ScriptedManager.calls = 0
+    _ScriptedManager.last_kwargs = []
+    _ScriptedManager.script = [
+        _subagent_result(
+            engine_name,
+            subagent_id="SA-0001",
+            status="failed",
+            exit_code=1,
+            continuation=RuntimeEngineContinuation(),
+        ),
+    ]
+
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _ScriptedManager)
+    monkeypatch.setattr("litehive.lifecycle.heru_factory._latest_verdict_after", lambda *args, **kwargs: None)
+
+    with pytest.raises(NudgeRequired, match="without a litehive report submission"):
+        adapter.run_turn(session, _heru_prompt(task.id), state)
+
+    assert _ScriptedManager.calls == 1
+    assert _ScriptedManager.last_kwargs[0]["resume_session_id"] is None
+    assert not _ScriptedManager.last_kwargs[0]["prompt"].startswith(HeruEngineAdapter._CRASH_RESUME_PROMPT_PREFIX)
+    assert session.engine_session_id is None
 
 
 def test_heru_engine_adapter_crash_resume_requires_fresh_resume_id(tmp_path, monkeypatch) -> None:
