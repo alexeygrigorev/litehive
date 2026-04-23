@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.11"
 
 [options]
-exclude-newer = "2026-04-16T21:21:52.619307048Z"
+exclude-newer = "2026-04-16T21:59:44.834894256Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -56,14 +56,14 @@ wheels = [
 
 [[package]]
 name = "heru"
-version = "1.0.1"
-source = { path = "packages/heru-1.0.1-py3-none-any.whl" }
+version = "2.0.0"
+source = { path = "packages/heru-2.0.0-py3-none-any.whl" }
 dependencies = [
     { name = "pydantic" },
     { name = "typer" },
 ]
 wheels = [
-    { filename = "heru-1.0.1-py3-none-any.whl", hash = "sha256:9fbefc7d4ba17a534fa489e08acb869fab58d3554dfc39d3e69d3e517b8ff852" },
+    { filename = "heru-2.0.0-py3-none-any.whl", hash = "sha256:5360f6eb7e0379a483ac4e374311bf3bbd5f4ce6a6048bd74b0276cc7c3caaae" },
 ]
 
 [package.metadata]
@@ -115,7 +115,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "heru", path = "packages/heru-1.0.1-py3-none-any.whl" },
+    { name = "heru", path = "packages/heru-2.0.0-py3-none-any.whl" },
     { name = "pycodestyle", marker = "extra == 'dev'", specifier = ">=2.14.0" },
     { name = "pydantic", specifier = ">=2.11.0" },
     { name = "pyflakes", marker = "extra == 'dev'", specifier = ">=3.4.0" },
