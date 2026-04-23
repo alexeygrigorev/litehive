@@ -244,8 +244,6 @@ def pool_stop_condition_label(stop_reason):
         "stop_condition_reached": "custom stop condition reached",
         "max_tasks_reached": "max tasks reached",
         "failure_detected": "failure detected",
-        "execution_limit_reached": "execution limit reached",
-        "execution_limit_fallbacks_exhausted": "execution-limit fallbacks exhausted",
         "dirty_git_state": "dirty git state",
         "diverged_from_origin": "local main diverged from origin/main",
         "attention_required": "attention required",
@@ -277,10 +275,6 @@ def _pool_no_useful_progress_report(stop_reason):
         "attention_required": (
             "operator_action_required",
             "Pool stopped because unresolved attention items require operator action before more work starts.",
-        ),
-        "execution_limit_fallbacks_exhausted": (
-            "no_useful_progress",
-            "Pool stopped with no useful progress because engine fallbacks were exhausted.",
         ),
     }
     return reports.get(stop_reason, (None, None))

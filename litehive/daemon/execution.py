@@ -57,8 +57,6 @@ _EXPLICIT_POOL_STOP_REASONS = {
     "diverged_from_origin",
     "max_tasks_reached",
     "failure_detected",
-    "execution_limit_reached",
-    "execution_limit_fallbacks_exhausted",
     "stop_condition_reached",
     "human_checkpoint_before_acceptance",
     "human_checkpoint_before_commit",

@@ -108,9 +108,6 @@ def read_engine_dashboard(root: Path) -> dict[str, Any]:
                 "claude": config.claude_model,
                 "goz": config.goz_model,
             },
-            "engine_usage_caps": dict(getattr(config, "engine_usage_caps", {})),
-            "engine_budget_caps": dict(getattr(config, "engine_budget_caps", {})),
-            "engine_costs": dict(getattr(config, "engine_costs", {})),
         },
         "routing": {
             "precedence": [
