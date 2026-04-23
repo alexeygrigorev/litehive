@@ -65,6 +65,35 @@ class _CrashThenRecoveryEngine:
         return AgentVerdict(outcome="pass")
 
 
+class _CrashUntilLitehiveFixEngine:
+    def __init__(
+        self,
+        name: str,
+        *,
+        source_repo: Path,
+        recovery_calls: list[str],
+        implementing_attempts: list[str],
+    ) -> None:
+        self.name = name
+        self.source_repo = source_repo
+        self.recovery_calls = recovery_calls
+        self.implementing_attempts = implementing_attempts
+
+    def run_turn(self, session, prompt, state) -> AgentVerdict:
+        del session
+        fix_marker = self.source_repo / ".litehive-recovery-fix"
+        if prompt["role"] == "recovery":
+            self.recovery_calls.append(state.task_id)
+            fix_marker.write_text("fixed\n", encoding="utf-8")
+            return AgentVerdict(outcome="resume", metadata={"target_stage": "implementing"})
+        if state.stage == "implementing":
+            if not fix_marker.exists():
+                self.implementing_attempts.append("crash")
+                raise UnrecoverableError("litehive report wiring bug")
+            self.implementing_attempts.append("pass")
+        return AgentVerdict(outcome="pass")
+
+
 def _task_execution_root(workspace: Path, task_id: str) -> Path:
     task = get_task(workspace, task_id)
     if task is None:
@@ -141,6 +170,39 @@ def test_crash_routes_to_recovery_and_resumes(tmp_path: Path) -> None:
     assert refreshed.pipeline_status == "done"
     assert pipeline_state.recovery_history
     assert pipeline_state.recovery_history[-1].trigger.trigger_event_kind == TriggerEventKind.CRASH
+    assert pipeline_state.recovery_history[-1].recovery_verdict == "resume"
+
+
+def test_recovery_fix_retries_failed_stage_automatically(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    source_repo = tmp_path / "litehive-src"
+    source_repo.mkdir()
+    _init_workspace_git_repo(workspace, config=LitehiveConfig(litehive_source_path=str(source_repo)))
+    task = create_task(workspace, title="Retry failed stage after recovery fix", pipeline_mode="single")
+
+    recovery_calls: list[str] = []
+    implementing_attempts: list[str] = []
+    result = run_pipeline_task(
+        workspace,
+        task,
+        engine_factory=lambda engine_name: _CrashUntilLitehiveFixEngine(
+            engine_name,
+            source_repo=source_repo,
+            recovery_calls=recovery_calls,
+            implementing_attempts=implementing_attempts,
+        ),
+    )
+    refreshed = get_task(workspace, task.id)
+    pipeline_state = SqlitePersistence(workspace).load(task.id)
+
+    assert result.final_stage == "done"
+    assert recovery_calls == [task.id]
+    assert implementing_attempts == ["crash", "pass"]
+    assert (source_repo / ".litehive-recovery-fix").read_text(encoding="utf-8") == "fixed\n"
+    assert refreshed is not None
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
     assert pipeline_state.recovery_history[-1].recovery_verdict == "resume"
 
 

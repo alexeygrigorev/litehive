@@ -6,9 +6,10 @@ from pathlib import Path
 import pytest
 import yaml
 
+from litehive.agents.session_store import save_subagent_artifacts
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
-from litehive.domain.runtime import RuntimeRecoveryOutcome
+from litehive.domain.runtime import RuntimeRecoveryOutcome, RuntimeSubagentState
 from litehive.roles.planner import PlannerAgent
 from litehive.roles.qa import QAAgent
 from litehive.roles.recovery import RecoveryAgent
@@ -25,6 +26,7 @@ from litehive.lifecycle.persistence import LastRejection, LastReport, TaskState
 from litehive.lifecycle.prompt_serializer import serialize_prompt
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task, save_task
+from litehive.tasks.paths import task_dir
 
 
 @pytest.fixture
@@ -147,6 +149,71 @@ def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
     assert "You fix Litehive infrastructure bugs, not agent judgment disagreements." in text
     assert "litehive pipeline journal <task_id>" in text
     assert "litehive task logs <task_id> --agent" in text
+    assert "Did the agent produce any stdout, stderr, or transcript output?" in text
+    assert "Non-example: do not rerun the failed stage's tests" in text
+
+
+def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    task.runtime.last_subagent = RuntimeSubagentState(
+        id="SA-0001",
+        role="swe",
+        engine="codex",
+        status="failed",
+        path="subagents/SA-0001-swe",
+        started_at="2026-04-20T10:00:00Z",
+        updated_at="2026-04-20T10:01:00Z",
+        completed_at="2026-04-20T10:01:05Z",
+        exit_code=17,
+    )
+    save_task(workspace, task)
+
+    subagent_base = task_dir(workspace, task) / "subagents" / "SA-0001-swe"
+    subagent_base.mkdir(parents=True)
+    (subagent_base / "transcript.md").write_text("litehive report --verdict pass failed\n", encoding="utf-8")
+    (subagent_base / "stdout.txt").write_text("attempting litehive report\n", encoding="utf-8")
+    (subagent_base / "stderr.txt").write_text("report failed: unable to resolve workspace\n", encoding="utf-8")
+    save_subagent_artifacts(
+        workspace,
+        task.id,
+        "SA-0001",
+        session={"id": "SA-0001", "status": "failed", "exit_code": 17},
+        report={
+            "status": "failed",
+            "summary": "implementing rejected: agent did not submit verdict via litehive report CLI",
+        },
+    )
+
+    agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
+    state = make_state(
+        task.id,
+        stage="recovering",
+        active_recovery_trigger=RecoveryTrigger(
+            origin_stage="implementing",
+            trigger_event_kind=TriggerEventKind.CRASH,
+            failure_fingerprint=FailureFingerprint(
+                fingerprint="report failed",
+                classification="report_failure",
+            ),
+            reason_code="stage_exception",
+            message="report failed",
+        ),
+    )
+
+    text = serialize_prompt(agent.build_prompt(state), task_record=task, workspace_root=workspace)
+
+    assert "Failed subagent diagnostics" in text
+    assert "exit_code: 17" in text
+    assert "did_produce_output: yes" in text
+    assert "session.yaml" in text
+    assert "report.yaml" in text
+    assert "transcript.md" in text
+    assert "stdout.txt" in text
+    assert "stderr.txt" in text
+    assert "Did the agent produce output?" in text
+    assert "Did it try to call it?" in text
+    assert "what exact Litehive error did it get?" in text
+    assert "unable to resolve workspace" in text
 
 
 def test_serialize_recovery_includes_repeated_fingerprint_escalation(workspace: Path) -> None:

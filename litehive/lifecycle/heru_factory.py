@@ -26,6 +26,7 @@ from typing import Any
 
 from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
+from litehive.config.loading import load_config
 from litehive.domain.agent import EngineFailure
 from litehive.domain.common import OutcomeReasonCode, Verdict, cap_feedback
 from litehive.domain.reports import StageReport
@@ -90,6 +91,30 @@ def _execution_checkout_path(workspace_root: Path, task) -> Path:
         )
         or workspace_root
     )
+
+
+def _recovery_execution_root(workspace_root: Path) -> Path:
+    try:
+        config = load_config(workspace_root)
+    except Exception:
+        return workspace_root
+    raw_source = str(config.litehive_source_path or "").strip()
+    if not raw_source:
+        return workspace_root
+    candidate = Path(raw_source).expanduser()
+    if not candidate.is_absolute():
+        candidate = workspace_root / candidate
+    try:
+        resolved = candidate.resolve()
+    except OSError:
+        resolved = candidate
+    return resolved if resolved.is_dir() else workspace_root
+
+
+def _agent_execution_root(workspace_root: Path, task, *, role: str) -> Path:
+    if role == "recovery":
+        return _recovery_execution_root(workspace_root)
+    return _execution_checkout_path(workspace_root, task)
 
 
 def _execution_checkout_status(workspace_root: Path, task) -> tuple[Path, list[str] | None]:
@@ -309,7 +334,7 @@ class HeruEngineAdapter:
         stage = prompt["stage"]
         role = prompt["role"]
         prompt_text = serialize_prompt(prompt, task_record=task, workspace_root=self.workspace_root)
-        execution_root = _execution_checkout_path(self.workspace_root, task)
+        execution_root = _agent_execution_root(self.workspace_root, task, role=role)
 
         before_turn = datetime.now(UTC)
         try:
@@ -319,7 +344,6 @@ class HeruEngineAdapter:
                 state=state,
                 task=task,
                 role=role,
-                execution_root=execution_root,
                 startup_message=f"{type(exc).__name__}: {exc}",
                 original_exc=exc,
             )
@@ -337,7 +361,6 @@ class HeruEngineAdapter:
                 state=state,
                 task=task,
                 role=role,
-                execution_root=execution_root,
                 startup_message=exc.startup_message,
                 original_exc=exc.original,
             )
@@ -410,7 +433,6 @@ class HeruEngineAdapter:
         state: TaskState,
         task,
         role: str,
-        execution_root: Path,
         startup_message: str,
         original_exc: Exception,
     ) -> AgentVerdict:
@@ -418,7 +440,6 @@ class HeruEngineAdapter:
             recovery_verdict = self._attempt_direct_recovery_handoff(
                 state=state,
                 task=task,
-                execution_root=execution_root,
                 startup_message=startup_message,
             )
         except Exception:
@@ -434,10 +455,10 @@ class HeruEngineAdapter:
         *,
         state: TaskState,
         task,
-        execution_root: Path,
         startup_message: str,
     ) -> AgentVerdict | None:
         recovery_prompt = self._direct_recovery_prompt(task=task, state=state, startup_message=startup_message)
+        recovery_execution_root = _agent_execution_root(self.workspace_root, task, role="recovery")
         after_ts = datetime.min.replace(tzinfo=UTC)
         if state.stage == "recovering":
             previous_recovery = latest_task_activity_entry(
@@ -450,7 +471,7 @@ class HeruEngineAdapter:
                 after_ts = previous_recovery.created_at
         self._run_direct_recovery_turn(
             task_id=state.task_id,
-            execution_root=execution_root,
+            execution_root=recovery_execution_root,
             prompt_text=recovery_prompt,
         )
         if state.stage != "recovering":

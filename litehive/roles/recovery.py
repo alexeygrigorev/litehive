@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import Any
 
+from litehive.agents.session_store import load_subagent_report, load_subagent_session
+from litehive.config.loading import load_config
 from litehive.domain.recovery import TriggerEventKind, blocked_on_follow_up_reason
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.runtime import RuntimeRecoveryOutcome
@@ -15,6 +17,7 @@ from litehive.recovery.test_failure_attribution import (
     build_unrelated_test_follow_up,
 )
 from litehive.state.records import create_follow_up_tasks, get_task_record
+from litehive.tasks.paths import latest_subagent_base, read_text_artifact, resolve_artifact_path, task_dir
 from litehive.tasks.reports import record_recovery_report
 from litehive.worktree import task_worktree_path
 
@@ -40,10 +43,17 @@ ROLE_GUIDANCE = """\
   - Task activity from `litehive task logs <task_id>` / `litehive task debug <task_id>` — verdict history and operator discussion.
   - The `recovery_trigger` field in your prompt already contains the most recent trigger event, source, and reason — use it to narrow your log search.
   - If you need to go deeper than the CLI commands, the underlying tables are `pipeline_transitions` (columns: `seq, created_at, from_stage, event_type, event_payload, to_stage, rule_description, delta`) and `pipeline_journal` (columns: `seq, created_at, kind, payload`). Don't invent column names.
+- Diagnose the failing agent before you touch code:
+  - Did the agent produce any stdout, stderr, or transcript output?
+  - Did it try to call `litehive report`?
+  - If it tried, what exact Litehive error did it get?
+  - What Litehive code path caused that failure, and what is the smallest safe fix?
 - Your job is not to redo the failed stage's work, not to re-run the task's implementation or verification, and not to submit the failed stage verdict on the previous agent's behalf.
 - Make the smallest effective fix needed so the task can resume the current stage and finish cleanly.
 - If this workspace is not already the Litehive repo, switch into the repo at `litehive_source_path` and repair Litehive there.
 - Work in the Litehive source repo so you can fix the orchestrator, adapters, prompts, report wiring, resume logic, or other infrastructure bugs with the smallest safe change.
+- Example: if the failed agent tried `litehive report` and got a Litehive traceback, fix Litehive's report path or resume wiring here, verify the Litehive fix, then submit a recovery verdict.
+- Non-example: do not rerun the failed stage's tests, do not finish the task's feature work, and do not submit `--role swe|qa|reviewer` on the failed agent's behalf.
 - run `uv run pytest` in the Litehive repo before reporting success when you changed Litehive code; keep verification targeted.
 - If the evidence points to a project/task bug rather than a Litehive bug, do not implement the task; report that no Litehive infrastructure fix was found and leave the task for the normal stage owner.
 - Submit your own recovery verdict describing the root cause, the Litehive fix you made, and why the failed stage should be retried.
@@ -98,6 +108,9 @@ class RecoveryAgent(RoleAgent):
         recovery_history: list[dict[str, Any]] = []
         repeated_recovery_fingerprint = None
         test_failure_attribution = self._test_failure_attribution(state)
+        recovery_execution_root = None
+        litehive_source_path = None
+        failed_subagent_diagnostics = None
 
         scope_analysis = None
         try:
@@ -126,15 +139,21 @@ class RecoveryAgent(RoleAgent):
 
         if task_record is None and self.prompt_context and self.prompt_context.workspace_root:
             task_record = get_task_record(self.prompt_context.workspace_root, state.task_id)
+        root = None if self.prompt_context is None else self.prompt_context.workspace_root
+        litehive_source_path, recovery_execution_root = _recovery_source_checkout(root)
+        failed_subagent_diagnostics = _failed_subagent_diagnostics_payload(root, task_record)
         recovery_history = _merged_recovery_history_payload(state, task_record)
         repeated_recovery_fingerprint = _repeated_recovery_fingerprint_payload(trigger, recovery_history)
 
         base.update(
             {
+                "litehive_source_path": litehive_source_path,
+                "recovery_execution_root": recovery_execution_root,
                 "recovery_trigger": trigger.to_payload() if trigger is not None else None,
                 "recovery_history": recovery_history,
                 "repeated_recovery_fingerprint": repeated_recovery_fingerprint,
                 "recovery_failure_explanation": state.recovery_failure_explanation,
+                "failed_subagent_diagnostics": failed_subagent_diagnostics,
                 "scope_analysis": scope_analysis,
                 "test_failure_attribution": (
                     None if test_failure_attribution is None else test_failure_attribution.to_prompt_payload()
@@ -347,3 +366,112 @@ def _follow_up_stage(origin_stage: str | None) -> str | None:
     if origin_stage in {"before_commit", "commit", "after_commit", "merge_resolving"}:
         return "commit_to_git"
     return origin_stage
+
+
+def _recovery_source_checkout(root: Path | None) -> tuple[str | None, str | None]:
+    if root is None:
+        return None, None
+    try:
+        config = load_config(root)
+    except Exception:
+        return None, str(root)
+    raw_source = str(config.litehive_source_path or "").strip() or None
+    if raw_source is None:
+        return None, str(root)
+    candidate = Path(raw_source).expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    try:
+        resolved = candidate.resolve()
+    except OSError:
+        resolved = candidate
+    execution_root = resolved if resolved.is_dir() else root
+    return raw_source, str(execution_root)
+
+
+def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) -> dict[str, Any] | None:
+    if root is None or task_record is None:
+        return None
+    subagent_base = latest_subagent_base(root, task_record)
+    if subagent_base is None or not subagent_base.exists():
+        return None
+
+    rel_path = str(subagent_base.relative_to(task_dir(root, task_record)))
+    runtime_state = None
+    for candidate in (task_record.runtime.last_subagent, task_record.runtime.active_subagent):
+        if candidate is not None and (candidate.path == rel_path or subagent_base.name.startswith(candidate.id)):
+            runtime_state = candidate
+            break
+    subagent_ref = next(
+        (
+            ref
+            for ref in reversed(task_record.subagents)
+            if ref.path == rel_path or (runtime_state is not None and ref.id == runtime_state.id)
+        ),
+        None,
+    )
+    subagent_id = (
+        runtime_state.id
+        if runtime_state is not None
+        else subagent_ref.id
+        if subagent_ref is not None
+        else subagent_base.name.split("-", 2)[0]
+    )
+    if not subagent_id:
+        return None
+
+    session_payload = load_subagent_session(root, task_record.id, subagent_id)
+    report_payload = load_subagent_report(root, task_record.id, subagent_id)
+    transcript = _read_subagent_artifact(subagent_base, "transcript.md")
+    stdout = _read_subagent_artifact(subagent_base, "stdout.txt")
+    stderr = _read_subagent_artifact(subagent_base, "stderr.txt")
+    exit_code = None
+    if runtime_state is not None:
+        exit_code = runtime_state.exit_code
+    if exit_code is None:
+        session_exit_code = session_payload.get("exit_code")
+        if isinstance(session_exit_code, int):
+            exit_code = session_exit_code
+
+    return {
+        "subagent_id": subagent_id,
+        "role": (
+            runtime_state.role
+            if runtime_state is not None
+            else subagent_ref.role
+            if subagent_ref is not None
+            else None
+        ),
+        "engine": (
+            runtime_state.engine
+            if runtime_state is not None
+            else subagent_ref.engine
+            if subagent_ref is not None
+            else None
+        ),
+        "status": (
+            runtime_state.status
+            if runtime_state is not None
+            else subagent_ref.status
+            if subagent_ref is not None
+            else None
+        ),
+        "path": rel_path,
+        "exit_code": exit_code,
+        "did_produce_output": any(text.strip() for text in (transcript, stdout, stderr)),
+        "session": session_payload,
+        "report": report_payload,
+        "transcript": transcript,
+        "stdout": stdout,
+        "stderr": stderr,
+    }
+
+
+def _read_subagent_artifact(subagent_base: Path, artifact_name: str) -> str:
+    artifact_path = resolve_artifact_path(subagent_base, artifact_name)
+    if artifact_path is None:
+        return ""
+    try:
+        return read_text_artifact(artifact_path)
+    except Exception:
+        return ""

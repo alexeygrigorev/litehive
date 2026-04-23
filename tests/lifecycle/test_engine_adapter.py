@@ -282,6 +282,40 @@ def _reset_stub_manager_state() -> None:
     _ScriptedManager.last_kwargs = []
 
 
+def test_heru_engine_adapter_runs_recovery_from_litehive_source_checkout(tmp_path, monkeypatch) -> None:
+    from litehive.config.model import LitehiveConfig
+    from litehive.config.workspace import ensure_workspace
+    from litehive.state.records import create_task, save_task, set_task_worktree_path
+
+    source_repo = tmp_path / "litehive-src"
+    source_repo.mkdir()
+    ensure_workspace(tmp_path, LitehiveConfig(litehive_source_path=str(source_repo)))
+    task = create_task(tmp_path, title="recovery source checkout", goal="recover from source repo")
+    worktree = tmp_path / "task-checkout"
+    worktree.mkdir()
+    set_task_worktree_path(task, str(worktree.relative_to(tmp_path)))
+    save_task(tmp_path, task)
+
+    session = Session()
+    state = TaskState(
+        task_id=task.id,
+        stage="recovering",
+        pipeline_mode=PipelineMode.FULL,
+    )
+    adapter = HeruEngineAdapter("codex", tmp_path)
+
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
+    monkeypatch.setattr(
+        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        lambda *args, **kwargs: AgentVerdict(outcome="resume", reason="fixed", metadata={"target_stage": "testing"}),
+    )
+
+    verdict = adapter.run_turn(session, _recovery_prompt(task.id), state)
+
+    assert verdict.outcome == "resume"
+    assert _StubManager.last_init == (tmp_path.resolve(), source_repo.resolve())
+
+
 def test_heru_engine_adapter_launches_direct_recovery_turn_on_pre_start_subagent_failure(
     tmp_path,
     monkeypatch,

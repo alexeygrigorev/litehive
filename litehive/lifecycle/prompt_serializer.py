@@ -28,6 +28,8 @@ from litehive.tasks.activity import load_task_activity
 
 
 SECTION_SEP = "\n"
+_RECOVERY_ARTIFACT_HEAD_CHARS = 2000
+_RECOVERY_ARTIFACT_TAIL_CHARS = 2000
 
 
 def serialize_prompt(
@@ -73,6 +75,14 @@ def serialize_prompt(
     recovery_trigger = prompt.get("recovery_trigger")
     if recovery_trigger:
         sections.append(_recovery_trigger_section(recovery_trigger, prompt))
+
+    recovery_execution_root = prompt.get("recovery_execution_root")
+    if recovery_execution_root:
+        sections.append(_recovery_execution_root_section(prompt))
+
+    failed_subagent_diagnostics = prompt.get("failed_subagent_diagnostics")
+    if failed_subagent_diagnostics:
+        sections.append(_failed_subagent_diagnostics_section(failed_subagent_diagnostics))
 
     recovery_history = prompt.get("recovery_history")
     if recovery_history:
@@ -230,6 +240,80 @@ def _recovery_trigger_section(recovery_trigger: dict[str, Any], prompt: dict[str
     return "\n".join(lines)
 
 
+def _recovery_execution_root_section(prompt: dict[str, Any]) -> str:
+    lines = ["Recovery execution repo (this recovery turn should patch Litehive here):"]
+    lines.append(f"- recovery_execution_root: {prompt.get('recovery_execution_root')}")
+    source_path = str(prompt.get("litehive_source_path") or "").strip()
+    if source_path:
+        lines.append(f"- configured_litehive_source_path: {source_path}")
+    lines.append("- Recovery is for Litehive infrastructure bugs. Do not use the task worktree as the primary edit target.")
+    return "\n".join(lines)
+
+
+def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
+    blocks: list[str] = []
+    lines = [
+        "Failed subagent diagnostics (read this before changing Litehive code):",
+        f"- subagent_id: {diagnostics.get('subagent_id') or '-'}",
+        f"- role: {diagnostics.get('role') or '-'}",
+        f"- engine: {diagnostics.get('engine') or '-'}",
+        f"- status: {diagnostics.get('status') or '-'}",
+        f"- path: {diagnostics.get('path') or '-'}",
+        f"- exit_code: {diagnostics.get('exit_code') if diagnostics.get('exit_code') is not None else '-'}",
+        f"- did_produce_output: {'yes' if diagnostics.get('did_produce_output') else 'no'}",
+    ]
+    blocks.append("\n".join(lines))
+    blocks.append(
+        "\n".join(
+            [
+                "Diagnosis checklist:",
+                "- Did the agent produce output?",
+                "- Search the transcript/stdout/stderr for `litehive report`. Did it try to call it?",
+                "- If it called `litehive report`, what exact Litehive error did it get?",
+                "- What Litehive code path caused that failure, and what is the smallest safe fix?",
+                "- Do not rerun the failed stage's task work or submit that stage's verdict yourself.",
+            ]
+        )
+    )
+    session_payload = diagnostics.get("session")
+    if isinstance(session_payload, dict) and session_payload:
+        blocks.append(_yaml_block("session.yaml (materialized from the subagent session store)", session_payload))
+    report_payload = diagnostics.get("report")
+    if isinstance(report_payload, dict) and report_payload:
+        blocks.append(_yaml_block("report.yaml (materialized from the subagent report store)", report_payload))
+    transcript = str(diagnostics.get("transcript") or "")
+    if transcript:
+        blocks.append(
+            _text_block(
+                "transcript.md",
+                transcript,
+                limit=_RECOVERY_ARTIFACT_HEAD_CHARS,
+                tail=False,
+            )
+        )
+    stdout = str(diagnostics.get("stdout") or "")
+    if stdout:
+        blocks.append(
+            _text_block(
+                "stdout.txt",
+                stdout,
+                limit=_RECOVERY_ARTIFACT_TAIL_CHARS,
+                tail=True,
+            )
+        )
+    stderr = str(diagnostics.get("stderr") or "")
+    if stderr:
+        blocks.append(
+            _text_block(
+                "stderr.txt",
+                stderr,
+                limit=_RECOVERY_ARTIFACT_TAIL_CHARS,
+                tail=True,
+            )
+        )
+    return "\n\n".join(blocks)
+
+
 def _recovery_history_section(recovery_history: list[dict[str, Any]]) -> str:
     lines = ["Recovery history (persisted prior recovery attempts for this task):"]
     recent = recovery_history[-5:]
@@ -363,6 +447,25 @@ def _compact_list(items: list[str], *, limit: int, separator: str = ", ") -> str
         return separator.join(items)
     shown = separator.join(items[:limit])
     return f"{shown}{separator}+{len(items) - limit} more"
+
+
+def _yaml_block(label: str, payload: dict[str, Any]) -> str:
+    dumped = yaml.safe_dump(payload, sort_keys=False).rstrip()
+    return f"{label}:\n```yaml\n{dumped}\n```"
+
+
+def _text_block(label: str, text: str, *, limit: int, tail: bool) -> str:
+    total = len(text)
+    if total <= limit:
+        preview = text
+        direction = f"{total} chars"
+    elif tail:
+        preview = f"{_TRUNCATION_MARKER}\n{text[-limit:]}"
+        direction = f"{total} chars, showing last {limit}"
+    else:
+        preview = f"{text[:limit]}\n{_TRUNCATION_MARKER}"
+        direction = f"{total} chars, showing first {limit}"
+    return f"{label} ({direction}):\n```text\n{preview}\n```"
 
 
 def _pipeline_stage_key(name: str | None) -> str | None:
