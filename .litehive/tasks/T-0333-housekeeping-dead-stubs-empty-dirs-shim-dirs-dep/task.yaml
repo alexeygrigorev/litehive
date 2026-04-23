@@ -6,19 +6,23 @@ task_type: null
 pipeline_mode: full
 priority: low
 depends_on: []
-goal: Complete a low-risk housekeeping pass that removes confirmed compatibility shims
-  and empty directories, and cleans up direct dependency declarations without changing
-  behavior.
+goal: Validate whether the originally named housekeeping targets still exist in the
+  current tree, and avoid queuing implementation work for cleanup that has already
+  landed or no longer has a concrete target.
 acceptance_criteria:
-- Dead stub files in litehive/tasks/ deleted and importers rewritten
-- litehive/engines/ shim deleted; test_engine_variants_and_timeline.py imports updated
-- Empty litehive/runner/ and litehive/runtime/ directories removed
-- jinja2 usage audited; dropped if single-use and replaceable
-- pytest-timeout moved from [project.dependencies] to [project.optional-dependencies.dev]
-- uv.lock refreshed
-- All tests pass
-constraints: []
-plan: []
+- Confirm whether the named litehive/tasks stubs, litehive/engines shim, empty litehive/runner
+  and litehive/runtime directories, jinja2 dependency, and pytest-timeout runtime
+  dependency still exist in the current repo.
+- If those targets are already absent or already handled elsewhere, close T-0333 with
+  explicit rationale instead of sending it to implementation as a no-op.
+- Only keep the task open if concrete remaining files, imports, or dependency lines
+  are identified and restated explicitly.
+constraints:
+- Do not invent new cleanup scope beyond the targets already named on T-0333.
+plan:
+- Inspect the current tree and pyproject/lock state for each named cleanup target.
+- Compare the remaining scope, if any, with other active compatibility-cleanup tasks.
+- Close the task if no concrete remaining implementation delta exists.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0333 housekeeping-dead-stubs-empty-dirs-shim-dirs-dep'
