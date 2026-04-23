@@ -323,7 +323,6 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
     print(f"flag_reason: {_display_flag_reason(task)}")
     print(f"pipeline_stage: {task.pipeline_status}")
     print(f"priority: {task.priority}")
-    print(f"engine: {load_config(workspace).default_engine}")
     print(f"model: {task.model or '-'}")
     print(f"task_type: {task.task_type or '-'}")
     print(f"pipeline_mode: {task.pipeline_mode}")
