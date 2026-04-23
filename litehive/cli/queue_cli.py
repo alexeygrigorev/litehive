@@ -115,7 +115,7 @@ def promote(
     return 0
 
 
-@app.command("requeue", help="Requeue a flagged or closed task")
+@app.command("requeue", help="Requeue a parked, flagged, merge-failed, or closed task from the implementation entry stage")
 def requeue(
     task_id: Annotated[str, typer.Argument(help="Task id to requeue")],
     workspace: WorkspaceOption = Path.cwd(),
@@ -143,7 +143,7 @@ def requeue(
     return 0
 
 
-@app.command("resume", help="Resume an interrupted, parked, flagged, or closed task")
+@app.command("resume", help="Resume an interrupted, parked, merge-failed, flagged, or closed task at its current stage")
 def resume(
     task_id: Annotated[str, typer.Argument(help="Task id to resume")],
     workspace: WorkspaceOption = Path.cwd(),

@@ -34,7 +34,7 @@ The most important distinction in the task lifecycle is between **parked** and *
 - **Intent**: Should resume execution without operator intervention
 
 ### Parked Tasks  
-- **Cause**: Intentional operator action via `litehive stop` or `litehive park`
+- **Cause**: Intentional operator action via `litehive queue stop`
 - **Recovery**: Stay out of automatic recovery; require explicit operator action
 - **Reason**: Set to "Task parked via CLI command from {stage} stage"
 - **Intent**: Should remain paused until operator decides to resume
@@ -65,12 +65,11 @@ in_progress → merge_failed → (manual merge fix) → queued/cancelled
 ## CLI Command Semantics
 
 ### Stop Commands
-- **`litehive stop`** - Parks the currently running task (status = "parked")
-- **`litehive park {task-id}`** - Explicitly parks a specific task
+- **`litehive queue stop`** - Parks the currently running task (status = "parked")
 
 ### Resume Commands  
-- **`litehive resume {task-id}`** - Returns task to queue at current pipeline stage
-- **`litehive requeue {task-id}`** - Restarts task from implementation entry stage
+- **`litehive queue resume {task-id}`** - Returns task to queue at current pipeline stage
+- **`litehive queue requeue {task-id}`** - Restarts task from implementation entry stage
 
 ### Key Differences
 - **Resume**: Continues from where it left off (current `pipeline_status`)
@@ -88,7 +87,7 @@ The workspace recovery system (`recover_stale_runner_state()`) automatically han
 ### Manual Recovery
 Requires explicit operator action:
 
-- **Parked tasks**: Must use `litehive resume` or `litehive requeue`  
+- **Parked tasks**: Must use `litehive queue resume` or `litehive queue requeue`  
 - **Flagged tasks**: Need diagnosis and manual intervention
 - **Merge conflicts**: Require manual git conflict resolution
 

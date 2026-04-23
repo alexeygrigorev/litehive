@@ -145,7 +145,7 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
             resume_stage=stage,
             pipeline_status=task.pipeline_status,
             reason=f"Task parked via CLI command from {stage} stage",
-            summary=f"Task execution parked via `litehive stop`. Resume from `{stage}`.",
+            summary=f"Task execution parked via `litehive queue stop`. Resume from `{stage}`.",
             interrupted_at=now,
         )
 

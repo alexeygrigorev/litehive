@@ -61,6 +61,20 @@ def test_recovery_shortcut_help_explains_when_to_use_each_command() -> None:
         assert help_text in _normalized(result.output)
 
 
+def test_queue_resume_and_requeue_help_mentions_parked_semantics() -> None:
+    expected_help = {
+        ("queue", "resume"): "Resume an interrupted, parked, merge-failed, flagged, or closed task at its current stage",
+        ("queue", "requeue"): "Requeue a parked, flagged, merge-failed, or closed task from the implementation entry stage",
+    }
+
+    runner = CliRunner()
+    for argv, help_text in expected_help.items():
+        result = runner.invoke(modern_cli.app, [*argv, "--help"])
+
+        assert result.exit_code == 0, result.output
+        assert help_text in _normalized(result.output)
+
+
 def test_run_drain_runs_until_queue_is_empty(tmp_path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
 
