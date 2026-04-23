@@ -625,6 +625,18 @@ class _RejectRecoveryEngine:
         return AgentVerdict(outcome="pass")
 
 
+class _RejectMergeResolverEngine:
+    def __init__(self, name: str, reason: str = "merge conflict remained after manual attempt") -> None:
+        self.name = name
+        self.reason = reason
+
+    def run_turn(self, session, prompt, state) -> AgentVerdict:
+        del session
+        if state.stage == "merge_resolving" or prompt["role"] == "merge-resolver":
+            return AgentVerdict(outcome="reject", reason=self.reason)
+        return AgentVerdict(outcome="pass")
+
+
 class _RecordingPassEngine:
     def __init__(self, name: str, calls: list[dict[str, str]]) -> None:
         self.name = name
@@ -742,6 +754,68 @@ def test_run_task_runs_after_commit_hook_on_main_and_finishes(tmp_path: Path) ->
     assert not worktree.exists()
 
 
+def test_run_task_reconciles_noop_commit_stage_and_records_main_head(tmp_path: Path) -> None:
+    _init_workspace_git_repo(tmp_path)
+    create_task(tmp_path, title="Already landed merge")
+    task = dequeue_next_task(tmp_path)
+    assert task is not None
+    worktree = _prepare_committed_task_worktree(tmp_path, task)
+    worktree_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=worktree,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "cherry-pick", worktree_head],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    landed_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+    result = run_task(
+        tmp_path,
+        task,
+        engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
+    )
+    final_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    refreshed = get_task(tmp_path, task.id)
+    pipeline_state = SqlitePersistence(tmp_path).load(task.id)
+
+    assert refreshed is not None
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+
+    assert result.final_stage == "done"
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert refreshed.runtime.git.commit_sha == final_head
+    assert pipeline_state.commit_result is not None
+    assert pipeline_state.commit_result.head_sha == final_head
+    assert pipeline_state.commit_result.reason == "no_op"
+    assert (tmp_path / "merged.txt").read_text() == "merged\n"
+    assert (
+        f"commit_to_git reconciled as a no-op on main at {final_head}; "
+        "no new integration commit was needed."
+    ) in journal
+    assert landed_head != ""
+    assert not worktree.exists()
+
+
 def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path) -> None:
     _init_workspace_git_repo(
         tmp_path,
@@ -791,6 +865,49 @@ def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path
     assert hook_reports[-1].failure_diagnostics["phase"] == "after_commit"
     assert "echo fail && exit 1" in hook_reports[-1].feedback
     assert hook_reports[-1].warnings
+
+
+def test_run_task_merge_conflict_failure_journal_stays_distinct_from_noop_reconciliation(tmp_path: Path) -> None:
+    _init_workspace_git_repo(tmp_path)
+    create_task(tmp_path, title="Merge conflict failure")
+    task = dequeue_next_task(tmp_path)
+    assert task is not None
+    worktree = task_worktree_path(tmp_path, task)
+    worktree.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-q", "-b", task_worktree_branch(task), str(worktree), "HEAD"],
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=worktree, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=worktree, check=True)
+    (worktree / "seed.txt").write_text("feature\n", encoding="utf-8")
+    subprocess.run(["git", "commit", "-qam", "feature"], cwd=worktree, check=True)
+    set_task_worktree_path(task, serialize_worktree_path(worktree))
+    save_task(tmp_path, task)
+
+    (tmp_path / "seed.txt").write_text("main\n", encoding="utf-8")
+    subprocess.run(["git", "commit", "-qam", "main"], cwd=tmp_path, check=True)
+
+    result = run_task(
+        tmp_path,
+        task,
+        engine_factory=lambda engine_name: _RejectMergeResolverEngine(engine_name),
+    )
+    refreshed = get_task(tmp_path, task.id)
+
+    assert refreshed is not None
+    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+
+    assert result.final_stage == "failed"
+    assert refreshed.status == "merge_failed"
+    assert refreshed.pipeline_status == "merge_failed"
+    assert refreshed.runtime.git.commit_sha is None
+    assert "reconciled as a no-op" not in journal
+    assert (
+        "commit_to_git failed during merge reconciliation: "
+        "merge conflict remained after manual attempt"
+    ) in journal
 
 
 def test_run_task_before_accepting_hook_retries_and_continues(
