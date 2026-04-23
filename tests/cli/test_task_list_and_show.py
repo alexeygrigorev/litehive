@@ -232,7 +232,7 @@ def test_show_prints_task_details(
     assert "status: queued" in output
     assert "pipeline_stage: backlog" in output
     assert "priority: high" in output
-    assert "engine: gemini" in output
+    assert "engine:" not in output
     assert "created_from:" in output
     assert "  source: manual" in output
     assert "  task_id: -" in output

@@ -819,7 +819,6 @@ def update_task(
     title: str | object = ...,
     depends_on: list[str] | object = ...,
     task_type: str | None | object = ...,
-    engine: str | None | object = ...,
     model: str | None | object = ...,
     retry_limit: int | None | object = ...,
     priority: str | object = ...,
