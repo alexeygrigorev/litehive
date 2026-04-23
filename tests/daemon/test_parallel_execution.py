@@ -1,5 +1,6 @@
 """Tests for parallel task execution functionality."""
 
+import io
 import subprocess
 import time
 from pathlib import Path
@@ -7,7 +8,9 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
+from litehive.daemon.execution import run_daemon_loop
 from litehive.daemon.parallel import ParallelTaskManager, run_parallel_iteration
 from litehive.daemon.integration import TaskIntegrator
 from litehive.domain.task import TaskRecord, WorkspaceState
@@ -332,6 +335,85 @@ def test_run_parallel_iteration_integration(tmp_path: Path) -> None:
             # Verify manager methods were called
             mock_manager.check_completed_tasks.assert_called_once()
             # Note: start_next_task might not be called if can_start_new_task returns False after load_state
+
+
+def test_daemon_rechecks_origin_divergence_before_each_parallel_pick(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    ensure_workspace(workspace, LitehiveConfig(max_parallel_tasks=2))
+
+    task1 = create_test_task("T-001", "Test Task 1", workspace)
+    task2 = create_test_task("T-002", "Test Task 2", workspace)
+    enqueue_task(workspace, task1.id)
+    enqueue_task(workspace, task2.id)
+
+    started_task_ids: list[str] = []
+    repair_calls: list[tuple[str, ...]] = []
+    divergence_checks = 0
+
+    def fake_check_origin_divergence(_workspace: Path) -> str | None:
+        del _workspace
+        nonlocal divergence_checks
+        divergence_checks += 1
+        if divergence_checks < 3:
+            return None
+        return (
+            "local main (12345678) and origin/main (abcdef12) have diverged. "
+            "Manual reconciliation required: run `git fetch origin main`, inspect "
+            "`git log --oneline --left-right main...origin/main`, then rebase, reset, or merge "
+            "before restarting the pool."
+        )
+
+    def fake_run_logged_subprocess(command: list[str], **kwargs) -> int:
+        del kwargs
+        repair_calls.append(tuple(command))
+        assert "repair" in command
+        return 0
+
+    def fake_create_task_worktree(self, task: TaskRecord) -> Path:
+        path = self.workspace / ".litehive" / "worktrees" / f"task-{task.id}"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def fake_spawn_task_process(self, task: TaskRecord, worktree_path: Path, output_stream) -> MagicMock:
+        del worktree_path, output_stream
+        started_task_ids.append(task.id)
+        process = MagicMock()
+        process.poll.return_value = None
+        process.returncode = None
+        return process
+
+    monkeypatch.setattr("litehive.daemon.execution.check_origin_divergence", fake_check_origin_divergence)
+    monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
+    monkeypatch.setattr("litehive.daemon.execution.run_integration_iteration", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        "litehive.daemon.parallel.ParallelTaskManager._create_task_worktree",
+        fake_create_task_worktree,
+    )
+    monkeypatch.setattr(
+        "litehive.daemon.parallel.ParallelTaskManager._spawn_task_process",
+        fake_spawn_task_process,
+    )
+
+    stream = io.StringIO()
+    exit_code = run_daemon_loop(workspace, output_stream=stream, session_dir=workspace / "logs")
+    output = stream.getvalue()
+    state = load_state(workspace)
+
+    assert exit_code == 0
+    assert divergence_checks == 3
+    assert len(repair_calls) == 1
+    assert started_task_ids == [task1.id]
+    assert len(state.active_tasks) == 1
+    assert state.active_tasks[0].task_id == task1.id
+    assert state.queue == [task2.id]
+    assert state.pool_stop_reason == "diverged_from_origin"
+    assert "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main." in output
 
 
 def test_workspace_state_backwards_compatibility(tmp_path: Path) -> None:

@@ -87,24 +87,22 @@ def check_origin_divergence(workspace: Path) -> str | None:
     - Fetch failure: returns None (network issues shouldn't halt the pool).
     - Fast-forward in either direction (including equal): returns None.
     - True divergence (neither is ancestor of the other): returns the reason string.
+
+    The daemon compares the refs directly instead of relying on the current
+    checkout, because pool safety depends on `main` vs `origin/main` even when
+    `HEAD` is elsewhere.
     """
     if not (workspace / ".git").exists():
         return None
     remotes = _git(workspace, "remote")
     if remotes.returncode != 0 or "origin" not in remotes.stdout.split():
         return None
-    branch = _git(workspace, "rev-parse", "--abbrev-ref", "HEAD")
-    if branch.returncode != 0:
-        return None
-    local_branch = branch.stdout.strip()
-    if local_branch != "main":
-        return None
     fetch = _git(workspace, "fetch", "origin", "main")
     if fetch.returncode != 0:
         logger.warning("git fetch origin main failed: %s", fetch.stderr.strip())
         return None
-    local_rev = _git(workspace, "rev-parse", "main")
-    remote_rev = _git(workspace, "rev-parse", "origin/main")
+    local_rev = _git(workspace, "rev-parse", "--verify", "main")
+    remote_rev = _git(workspace, "rev-parse", "--verify", "origin/main")
     if local_rev.returncode != 0 or remote_rev.returncode != 0:
         return None
     local_sha = local_rev.stdout.strip()
@@ -124,6 +122,25 @@ def check_origin_divergence(workspace: Path) -> str | None:
         "`git log --oneline --left-right main...origin/main`, then rebase, reset, or merge "
         "before restarting the pool."
     )
+
+
+def _halt_for_origin_divergence(
+    workspace: Path,
+    *,
+    output_stream: TextIO | None,
+) -> bool:
+    divergence_reason = check_origin_divergence(workspace)
+    if divergence_reason is None:
+        return False
+    _write_pool_stop_reason(workspace, "diverged_from_origin")
+    _append_attention_log(workspace, divergence_reason)
+    _emit(
+        "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. "
+        "Halting pool: diverged_from_origin",
+        stream=output_stream,
+    )
+    _emit(divergence_reason, stream=output_stream)
+    return True
 
 
 def _write_pool_stop_reason(workspace: Path, reason: str) -> None:
@@ -474,16 +491,7 @@ def run_daemon_loop(
             iteration_failed = False
             iteration_failure_reason: str | None = None
 
-            divergence_reason = check_origin_divergence(workspace)
-            if divergence_reason is not None:
-                _write_pool_stop_reason(workspace, "diverged_from_origin")
-                _append_attention_log(workspace, divergence_reason)
-                _emit(
-                    "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. "
-                    "Halting pool: diverged_from_origin",
-                    stream=output_stream,
-                )
-                _emit(divergence_reason, stream=output_stream)
+            if _halt_for_origin_divergence(workspace, output_stream=output_stream):
                 return 0
 
             startup_failure = detect_cycle_start_failure(workspace)
@@ -675,6 +683,10 @@ def run_daemon_loop(
                         command_prefix,
                         manager=parallel_manager,
                         output_stream=output_stream,
+                        before_pick=lambda: not _halt_for_origin_divergence(
+                            workspace,
+                            output_stream=output_stream,
+                        ),
                     )
 
                     # Process integration queue for completed parallel tasks

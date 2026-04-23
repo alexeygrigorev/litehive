@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, TextIO
+from typing import Callable, Dict, List, TextIO
 
 from litehive.config.loading import load_config
 from litehive.domain.task import TaskRecord
@@ -48,9 +48,16 @@ class ParallelTaskManager:
         state = load_state(self.workspace)
         return state.has_capacity_for_new_task and bool(state.queue)
 
-    def start_next_task(self, output_stream: TextIO | None = None) -> bool:
+    def start_next_task(
+        self,
+        output_stream: TextIO | None = None,
+        *,
+        before_pick: Callable[[], bool] | None = None,
+    ) -> bool:
         """Start the next available task in parallel. Returns True if a task was started."""
         if not self.can_start_new_task():
+            return False
+        if before_pick is not None and not before_pick():
             return False
 
         try:
@@ -288,6 +295,7 @@ def run_parallel_iteration(
     command_prefix: List[str],
     manager: ParallelTaskManager | None = None,
     output_stream: TextIO | None = None,
+    before_pick: Callable[[], bool] | None = None,
 ) -> ParallelTaskManager:
     """Run one iteration of parallel task management.
 
@@ -316,7 +324,7 @@ def run_parallel_iteration(
 
     started_count = 0
     while manager.can_start_new_task() and manager.active_task_count < max_parallel:
-        if manager.start_next_task(output_stream):
+        if manager.start_next_task(output_stream, before_pick=before_pick):
             started_count += 1
         else:
             break
