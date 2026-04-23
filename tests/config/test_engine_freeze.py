@@ -142,12 +142,12 @@ def test_engine_status_prints_compact_summary(tmp_path: Path, capsys) -> None:
         assert f"{engine_name}(" in output
 
 
-def test_engine_switch_cli_queues_task_for_new_engine(tmp_path: Path) -> None:
+def test_queue_switch_cli_queues_task_for_new_engine(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     task = _prepare_runnable_task(tmp_path, "Switch engines")
 
     exit_code, output = _run_engine(
-        "engine",
+        "queue",
         "switch",
         task.id,
         "gemini",

@@ -215,7 +215,16 @@ def recover(task_id: str, workspace: Path) -> int:
     return 0
 
 
-def switch(task_id: str, engine: str, workspace: Path, reason: str) -> int:
+EngineChoice = choice(ENGINE_CHOICES)
+
+
+@app.command("switch", help="Switch a queued or active task to a different engine")
+def switch(
+    task_id: Annotated[str, typer.Argument(help="Task id to switch")],
+    engine: Annotated[str, typer.Argument(click_type=EngineChoice, help="Engine to switch to")],
+    workspace: WorkspaceOption = Path.cwd(),
+    reason: Annotated[str, typer.Option(help="Why the engine switch happened")] = ...,
+) -> int:
     ensure_workspace(workspace)
     try:
         summary = switch_task_engine(workspace, task_id, engine=engine, reason=reason)
@@ -233,9 +242,6 @@ def switch(task_id: str, engine: str, workspace: Path, reason: str) -> int:
     print(f"signal_sent: {'yes' if summary.signal_sent else 'no'}")
     print(f"position: {state.queue.index(summary.task.id) + 1}")
     return 0
-
-
-EngineChoice = choice(ENGINE_CHOICES)
 
 
 def register_root_shortcuts(app: typer.Typer) -> None:
@@ -266,15 +272,4 @@ def register_root_shortcuts(app: typer.Typer) -> None:
     ) -> int:
         return prioritize(task_ids, workspace)
 
-    @app.command(
-        "switch",
-        help="Compatibility alias for `litehive engine switch`",
-        hidden=True,
-    )
-    def switch_command(
-        task_id: Annotated[str, typer.Argument(help="Task id to switch")],
-        engine: Annotated[str, typer.Argument(click_type=EngineChoice, help="Engine to switch to")],
-        workspace: WorkspaceOption = Path.cwd(),
-        reason: Annotated[str, typer.Option(help="Why the engine switch happened")] = ...,
-    ) -> int:
-        return switch(task_id, engine, workspace, reason)
+    app.command("switch", help="Compatibility alias for `litehive queue switch`", hidden=True)(switch)

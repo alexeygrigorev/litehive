@@ -55,7 +55,7 @@ from litehive.worktree import collect_managed_worktrees, inspect_dirty_worktree_
 def register_root_commands(app: typer.Typer) -> None:
     app.command("status", help="Show workspace status")(status_command)
     app.command("health", help="Show workspace health diagnostics")(health_command)
-    app.command("engine", help="Manage engine freezes, status, and task handoffs")(engine_command)
+    app.command("engine", help="Manage engine freezes and status")(engine_command)
     app.command("repair", help="Repair stale active tasks, interrupted runs, and queue inconsistencies")(repair_command)
     app.command("doctor", help="Auto-clean stale workspace metadata and report repairs")(doctor_command)
 

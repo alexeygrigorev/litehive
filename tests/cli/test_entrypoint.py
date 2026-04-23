@@ -64,7 +64,7 @@ def test_hidden_legacy_shortcut_help_describes_compatibility_aliases() -> None:
         "resume": "Compatibility alias for `litehive queue resume`",
         "recover": "Compatibility alias for `litehive queue requeue` on completed tasks",
         "prioritize": "Compatibility alias for exact-order queue promotion",
-        "switch": "Compatibility alias for `litehive engine switch`",
+        "switch": "Compatibility alias for `litehive queue switch`",
     }
 
     runner = CliRunner()
@@ -75,13 +75,13 @@ def test_hidden_legacy_shortcut_help_describes_compatibility_aliases() -> None:
         assert help_text in _normalized(result.output)
 
 
-def test_engine_switch_help_describes_grouped_engine_handoff() -> None:
-    result = CliRunner().invoke(modern_cli.app, ["engine", "switch", "--help"])
+def test_queue_switch_help_describes_grouped_engine_handoff() -> None:
+    result = CliRunner().invoke(modern_cli.app, ["queue", "switch", "--help"])
 
     assert result.exit_code == 0, result.output
     normalized = _normalized(result.output)
-    assert "Engine name for switch" in normalized
-    assert "Operator note; required for switch" in normalized
+    assert "Engine to switch to" in normalized
+    assert "Why the engine switch happened" in normalized
 
 
 def test_queue_resume_and_requeue_help_mentions_parked_semantics() -> None:
