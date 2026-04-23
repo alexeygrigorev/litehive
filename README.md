@@ -40,7 +40,7 @@ litehive task add "Add user authentication" --goal "Users can sign up and log in
 litehive task add "Fix the search bug" --goal "Search returns results for partial matches"
 litehive task add "Write API documentation" --goal "Capture the public API surface and auth flow"
 
-# Start the daemon
+# Start the background runner
 litehive start
 
 # Check progress
@@ -97,10 +97,10 @@ Execution:
 ```bash
 litehive run                              # run one task
 litehive run --drain                      # run until queue is empty
-litehive start                       # start background daemon
-litehive stop                      # stop daemon
-litehive status                    # quick runner and queue state
-litehive task logs --daemon        # recent background-runner sessions
+litehive start                            # start the background runner
+litehive stop                             # stop the background runner
+litehive status                           # quick runner and queue state
+litehive task logs --daemon               # recent background-runner sessions
 ```
 
 Monitoring:
@@ -110,8 +110,8 @@ litehive status                           # quick workspace overview
 litehive status --fast                    # legacy alias for the default quick read
 litehive status --full                    # verbose per-task status dump
 litehive queue                            # show queue order
-litehive task logs                             # tail the latest daemon run log
-litehive task logs --daemon                    # list recent daemon sessions with outcomes
+litehive task logs                        # tail the latest background-run log
+litehive task logs --daemon               # list recent background-run sessions with outcomes
 litehive task logs T-0002                      # print the task journal
 litehive task logs T-0002 --agent              # show the latest subagent transcript/stdout tail
 litehive task logs T-0002 --agent --all        # list all subagent runs for a task
@@ -125,30 +125,31 @@ Recovery:
 
 ```bash
 litehive repair                           # fix stale state
-litehive recover T-0001                   # requeue a completed task for another pass
-litehive queue requeue T-0001                   # requeue without reverting
-litehive queue resume T-0002                    # resume an interrupted task
+litehive queue requeue T-0001            # requeue a completed task without reverting accepted code
+litehive queue resume T-0002             # resume an interrupted task
+litehive engine switch T-0003 gemini --reason "Need larger context window"
 ```
 
-Queue and recovery shortcuts:
+Queue control:
 
 ```bash
-litehive recover T-0001                   # requeue a completed task but keep its code in place
-litehive switch T-0002 gemini --reason "Need larger context window"
-litehive prioritize T-0007 T-0003 T-0009  # move queued tasks to the front in this exact order
+litehive queue move T-0003 1             # move to an exact queue position
+litehive queue promote T-0007            # move to the front
+litehive queue requeue T-0001            # restart from the implementation entry stage
+litehive queue resume T-0002             # resume at the current stage
 ```
 
-Use `litehive recover <task_id>` when a completed task needs another pipeline pass but the accepted code should remain in the workspace and git history.
+Use `litehive queue requeue <task_id>` when a completed task needs another pipeline pass but the accepted code should remain in the workspace and git history.
 
-Use `litehive switch <task_id> <engine> --reason "..."` when the task should continue on a different engine next time it runs. Litehive records the handoff reason, stops or detaches the current run if needed, and requeues the task for the next iteration.
+Use `litehive engine switch <task_id> <engine> --reason "..."` when the task should continue on a different engine next time it runs. Litehive records the handoff reason, stops or detaches the current run if needed, and requeues the task for the next iteration.
 
-Use `litehive prioritize <task_id> [task_id ...]` when several tasks are already queued and you need to pull them to the front without changing their relative order. The command preserves the exact order you pass on the command line.
+Use `litehive queue move` or `litehive queue promote` when operator ordering matters more than the current queue order.
 
 Agent interaction:
 
 ```bash
-litehive report --verdict pass --role qa --step testing --message "All tests pass"
-litehive report --verdict reject --role qa --step testing --message "Expected: login returns 200. Observed: returns 500."
+litehive report --verdict pass --role qa --stage testing --message "All tests pass"
+litehive report --verdict reject --role qa --stage testing --message "Expected: login returns 200. Observed: returns 500."
 ```
 
 ## Self-healing
@@ -162,7 +163,7 @@ When a stage fails or an agent crashes, litehive does not just give up:
 - If a live Codex subagent goes 5 minutes without new stdout, Litehive terminates that subprocess and lets the normal stage retry flow restart the same stage
 - The recovery engine can be different from the task engine (e.g. use Claude for recovery while Codex does the work)
 
-That 5-minute live-subagent timeout is separate from daemon stale-runner recovery. It applies to stalled subprocess output, not to background daemon lock or heartbeat repair.
+That 5-minute live-subagent timeout is separate from background-runner stale-state recovery. It applies to stalled subprocess output, not to the runner lock or heartbeat repair.
 
 Configure the recovery engine:
 
@@ -200,8 +201,10 @@ runner_hooks:
 agent_startup_guidance:
   all:
     - Start from the latest task artifacts before broad repo exploration.
+  planner:
+    - Rewrite scope with `litehive task update ...` before passing grooming.
   swe:
-    - Prefer targeted file reads over full repo scans.
+    - Prefer targeted file reads over full repo scans and finish with `litehive report ...`.
   qa:
     - Read the latest implementing report before running tests.
 ```
@@ -310,11 +313,11 @@ High-volume raw execution artifacts are treated as disposable support data:
 
 - Only the latest subagent attempt keeps raw `prompt`, transcript, stdout/stderr, and timeline artifacts; older subagent folders keep their `session.yaml` and `report.yaml` but have raw files pruned.
 - Final subagent transcript, stdout/stderr, timeline, and large runner hook artifacts may be stored as gzip snapshots when they are large; readers are expected to handle both plain and `.gz` files.
-- Daemon `logs/run-all/` sessions are bounded to the most recent 8 directories so repeated pool runs do not accumulate unbounded wrapper logs.
+- Background-run `logs/run-all/` sessions are bounded to the most recent 8 directories so repeated pool runs do not accumulate unbounded wrapper logs.
 
-## Daemon
+## Background Runner
 
-The daemon runs tasks continuously in the background:
+The background runner drains tasks continuously after `litehive start`:
 
 ```bash
 litehive start
@@ -324,7 +327,7 @@ Each iteration spawns a fresh subprocess, so code changes to litehive itself are
 
 ```bash
 litehive status                    # this workspace
-litehive task logs --daemon   # recent runner sessions
+litehive task logs --daemon        # recent runner sessions
 litehive stop
 litehive restart
 ```
@@ -343,8 +346,8 @@ Commit format: `litehive: complete T-0001 task-slug`
 To undo a completed task:
 
 ```bash
-litehive recover T-0001      # requeues the task without reverting the accepted code
-litehive queue requeue T-0001      # requeues without reverting (keeps the code)
+litehive queue requeue T-0001      # requeues the task without reverting the accepted code
+litehive queue resume T-0002       # resumes the task at its current stage
 ```
 
 ## Running on multiple projects
@@ -362,8 +365,8 @@ cd ~/projects/api-server
 litehive status
 litehive start
 
-# See all running daemons
-litehive daemon instances
+# Inspect recent background-runner sessions
+litehive task logs --daemon
 ```
 
 All global Litehive metadata for every project now lives under `${LITEHIVE_HOME:-$XDG_DATA_HOME/litehive}` so backup, cleanup, and debugging only require inspecting one root directory.

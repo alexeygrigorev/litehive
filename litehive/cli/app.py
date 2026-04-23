@@ -8,11 +8,11 @@ from litehive.cli.agent_cli import agent_app
 from litehive.cli.archive_cli import app as archive_app
 from litehive.cli.common import make_typer
 from litehive.cli.daemon_cli import app as daemon_app
-from litehive.cli.import_cli import app as import_app
+from litehive.cli.import_cli import app as import_app, register_root_aliases as register_import_aliases
 from litehive.cli.pipeline_cli import app as pipeline_app
 from litehive.cli.queue_cli import app as queue_app, register_root_shortcuts
 from litehive.cli.runner import register_root_commands as register_runner_commands
-from litehive.cli.task_cli import app as task_app
+from litehive.cli.task_cli import app as task_app, register_root_aliases as register_task_aliases
 from litehive.cli.workspace import register_root_commands as register_workspace_commands, status_command
 from litehive.cli.worktree_cli import app as worktree_app
 from litehive.lifecycle.orchestration import run_task
@@ -43,7 +43,9 @@ def root(ctx: typer.Context) -> int | None:
 
 register_workspace_commands(app)
 register_runner_commands(app, backup_app, db_app)
+register_task_aliases(app)
 register_root_shortcuts(app)
+register_import_aliases(app)
 
 
 app.add_typer(queue_app, name="queue", help="Show the active task and queued order")
@@ -55,7 +57,7 @@ app.add_typer(db_app, name="db", help="Inspect and migrate the workspace databas
 app.add_typer(worktree_app, name="worktree", help="Inspect and clean Litehive-managed task worktrees")
 app.add_typer(daemon_app, name="daemon", help="Manage the Litehive pool daemon", hidden=True)
 app.add_typer(pipeline_app, name="pipeline", help="Inspect the v2 pipeline state machine")
-app.add_typer(agent_app, name="agent", help="Agent-restricted commands (verdict submission)")
+app.add_typer(agent_app, name="agent", help="Agent-restricted compatibility aliases", hidden=True)
 
 
 def main() -> int:

@@ -269,7 +269,7 @@ After the refactor stages land, turn the daemon back on and run the workspace un
 
 ### Steps
 
-1. **Start the daemon:**
+1. **Start the background runner:**
    ```bash
    litehive start
    ```

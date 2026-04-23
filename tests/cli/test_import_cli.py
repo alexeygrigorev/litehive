@@ -76,6 +76,22 @@ def test_import_spec_creates_task_from_file(tmp_path: Path) -> None:
     assert brief_path.read_text(encoding="utf-8") == "# Add CSV export\n\nUsers can export reports as CSV.\n"
 
 
+def test_intake_alias_creates_task_from_file(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    spec_path = tmp_path / "feature.md"
+    spec_path.write_text("# Add CSV export\n\nUsers can export reports as CSV.\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        ["intake", str(spec_path), "--workspace", str(tmp_path)],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    task = list_tasks(tmp_path)[0]
+    assert task.title == "Add CSV export"
+
+
 def test_import_github_creates_task_from_issue(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     issue_payload = {
@@ -112,6 +128,94 @@ def test_import_github_creates_task_from_issue(tmp_path: Path, monkeypatch) -> N
     assert task.task_type is None  # No longer auto-classified
     assert task.priority == "high"
     assert "Imported from GitHub issue: owner/repo#10" in task.goal
+
+
+def test_issue_aliases_create_task_from_issue(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    issue_payload = {
+        "number": 10,
+        "title": "Fix login redirect",
+        "body": "The login flow loops back to /login.",
+        "labels": [{"name": "bug"}, {"name": "priority: high"}],
+        "url": "https://github.com/owner/repo/issues/10",
+    }
+
+    def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        if cmd[:3] == ["gh", "auth", "status"]:
+            return type("Proc", (), {"returncode": 0, "stdout": "ok\n", "stderr": ""})()
+        if cmd[:4] == ["gh", "issue", "view", "10"]:
+            return type(
+                "Proc",
+                (),
+                {"returncode": 0, "stdout": json.dumps(issue_payload), "stderr": ""},
+            )()
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr("litehive.cli.import_cli.subprocess.run", fake_run)
+
+    for command in ["issue", "import-issue"]:
+        result = CliRunner().invoke(
+            app,
+            [command, "10", "--repo", "owner/repo", "--workspace", str(tmp_path)],
+            standalone_mode=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        tasks = list_tasks(tmp_path)
+        assert len(tasks) == 1
+        assert tasks[0].title == "Fix login redirect"
+
+
+def test_import_issues_alias_imports_all_open_issues(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    issues_payload = [
+        {
+            "number": 10,
+            "title": "Fix login redirect",
+            "body": "The login flow loops back to /login.",
+            "labels": [{"name": "priority: high"}],
+            "url": "https://github.com/owner/repo/issues/10",
+        },
+        {
+            "number": 11,
+            "title": "Document API auth flow",
+            "body": "Write down the external auth contract.",
+            "labels": [],
+            "url": "https://github.com/owner/repo/issues/11",
+        },
+    ]
+
+    def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        if cmd[:3] == ["gh", "auth", "status"]:
+            return type("Proc", (), {"returncode": 0, "stdout": "ok\n", "stderr": ""})()
+        if cmd[:4] == ["gh", "issue", "list", "--repo"]:
+            return type(
+                "Proc",
+                (),
+                {"returncode": 0, "stdout": json.dumps(issues_payload), "stderr": ""},
+            )()
+        if cmd[:4] == ["gh", "issue", "view", "10"] or cmd[:4] == ["gh", "issue", "view", "11"]:
+            issue_number = int(cmd[3])
+            payload = next(item for item in issues_payload if item["number"] == issue_number)
+            return type(
+                "Proc",
+                (),
+                {"returncode": 0, "stdout": json.dumps(payload), "stderr": ""},
+            )()
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr("litehive.cli.import_cli.subprocess.run", fake_run)
+
+    result = CliRunner().invoke(
+        app,
+        ["import-issues", "--repo", "owner/repo", "--workspace", str(tmp_path)],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Imported 2 issue(s), skipped 0 already-tracked issue(s)." in result.output
+    tasks = list_tasks(tmp_path)
+    assert {task.title for task in tasks} == {"Fix login redirect", "Document API auth flow"}
 
 
 def test_import_github_help_exists() -> None:

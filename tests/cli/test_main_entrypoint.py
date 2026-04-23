@@ -19,7 +19,7 @@ def test_main_rewrites_agent_report_compat_command(
         captured["argv"] = list(sys.argv)
         return 7
 
-    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
     monkeypatch.setattr(cli_app_module, "main", fake_cli_main)
     monkeypatch.setattr(
         sys,
@@ -81,7 +81,7 @@ def test_main_blocks_non_recovery_diagnostic_commands(
     assert "You are not authorized to perform this command." in capsys.readouterr().out
 
 
-def test_main_allows_switch_operator_shortcut_for_agent_roles(
+def test_main_allows_task_update_for_agent_roles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
@@ -95,7 +95,7 @@ def test_main_allows_switch_operator_shortcut_for_agent_roles(
     monkeypatch.setattr(
         sys,
         "argv",
-        ["litehive", "switch", "T-0001", "gemini", "--reason", "Need larger context window"],
+        ["litehive", "task", "update", "T-0001", "--goal", "Tighten scope"],
     )
 
     exit_code = main_module.main()
@@ -103,11 +103,11 @@ def test_main_allows_switch_operator_shortcut_for_agent_roles(
     assert exit_code == 10
     assert captured["argv"] == [
         "litehive",
-        "switch",
+        "task",
+        "update",
         "T-0001",
-        "gemini",
-        "--reason",
-        "Need larger context window",
+        "--goal",
+        "Tighten scope",
     ]
 
 
@@ -141,7 +141,7 @@ def test_main_allows_task_add_for_agent_roles(
     ]
 
 
-def test_main_allows_task_browse_for_agent_roles(
+def test_main_allows_task_close_for_agent_roles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
@@ -150,12 +150,12 @@ def test_main_allows_task_browse_for_agent_roles(
         captured["argv"] = list(sys.argv)
         return 12
 
-    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "qa")
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "reviewer")
     monkeypatch.setattr(cli_app_module, "main", fake_cli_main)
     monkeypatch.setattr(
         sys,
         "argv",
-        ["litehive", "task", "browse", "--since", "24h"],
+        ["litehive", "task", "close", "T-0001", "--outcome", "duplicate", "--reason", "already done"],
     )
 
     exit_code = main_module.main()
@@ -164,10 +164,26 @@ def test_main_allows_task_browse_for_agent_roles(
     assert captured["argv"] == [
         "litehive",
         "task",
-        "browse",
-        "--since",
-        "24h",
+        "close",
+        "T-0001",
+        "--outcome",
+        "duplicate",
+        "--reason",
+        "already done",
     ]
+
+
+def test_main_blocks_task_browse_for_agent_roles(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "qa")
+    monkeypatch.setattr(sys, "argv", ["litehive", "task", "browse", "--since", "24h"])
+
+    exit_code = main_module.main()
+
+    assert exit_code == 1
+    assert "You are not authorized to perform this command." in capsys.readouterr().out
 
 
 def test_main_routes_root_help_for_agent_roles(
@@ -275,21 +291,23 @@ def test_main_dispatches_agent_subcommands_for_agent_roles_without_full_root_app
     assert captured["args"] is None
 
 
-def test_main_rejects_removed_root_add_alias(
+def test_main_routes_root_task_aliases_through_root_cli(
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_cli_main() -> int:
+        captured["argv"] = list(sys.argv)
+        return 13
+
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["litehive", "add", "New task", "--goal", "scope it"],
-    )
+    monkeypatch.setattr(cli_app_module, "main", fake_cli_main)
+    monkeypatch.setattr(sys, "argv", ["litehive", "add", "New task", "--goal", "scope it"])
 
     exit_code = main_module.main()
 
-    assert exit_code == 2
-    assert "No such command 'add'" in capsys.readouterr().err
+    assert exit_code == 13
+    assert captured["argv"] == ["litehive", "add", "New task", "--goal", "scope it"]
 
 
 def test_fast_status_prefers_runner_active_task_id(

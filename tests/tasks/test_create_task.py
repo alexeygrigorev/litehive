@@ -279,14 +279,14 @@ def test_task_update_help_matches_trimmed_option_surface() -> None:
         "--goal",
         "--depends-on",
         "--acceptance-criteria",
+        "--constraint",
+        "--plan-step",
     ]:
         assert option in result.output
     for option in [
         "--model",
         "--retry-limit",
         "--task-type",
-        "--constraint",
-        "--plan-step",
         "--pm-complexity",
         "--planned-effort",
         "--auto-commit",

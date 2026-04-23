@@ -135,7 +135,11 @@ engine_preference:
 - claude
 - copilot
 - goz
-agent_startup_guidance: {}
+agent_startup_guidance:
+  planner:
+  - Rewrite scope with `litehive task update ...` before passing grooming.
+  swe:
+  - Finish the stage with `litehive report ...` after verification.
 auto_commit: true
 task_mode_name: tasks
 implementation_mode_name: implementation

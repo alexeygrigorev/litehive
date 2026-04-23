@@ -37,20 +37,33 @@ def test_bare_litehive_runs_next_task_when_available(monkeypatch) -> None:
     assert result.output == "T-0007: accepting\n"
 
 
-def test_root_help_shows_recovery_shortcuts() -> None:
+def test_root_help_hides_legacy_shortcuts_and_internal_aliases() -> None:
     result = CliRunner().invoke(modern_cli.app, ["--help"])
 
     assert result.exit_code == 0, result.output
-    assert "recover" in result.output
-    assert "prioritize" in result.output
-    assert "switch" in result.output
+    for command in ["recover", "prioritize", "switch", "agent", "daemon"]:
+        assert command not in result.output
+    for command in ["start", "stop", "restart", "task", "queue", "import", "engine"]:
+        assert command in result.output
 
 
-def test_recovery_shortcut_help_explains_when_to_use_each_command() -> None:
+def test_hidden_legacy_shortcut_help_describes_compatibility_aliases() -> None:
     expected_help = {
-        "recover": "Use after an accepted task needs another pass but its current code should stay in place",
-        "prioritize": "Use to pull queued tasks to the front when operator ordering matters more than the current queue",
-        "switch": "Use when a task should continue with a different engine on its next queued run",
+        "add": "Compatibility alias for `litehive task add`",
+        "list": "Compatibility alias for `litehive task list`",
+        "show": "Compatibility alias for `litehive task show`",
+        "update": "Compatibility alias for `litehive task update`",
+        "close": "Compatibility alias for `litehive task close`",
+        "abandon": "Compatibility alias for `litehive task abandon`",
+        "debug": "Compatibility alias for `litehive task debug`",
+        "logs": "Compatibility alias for `litehive task logs`",
+        "move": "Compatibility alias for `litehive queue move`",
+        "promote": "Compatibility alias for `litehive queue promote`",
+        "requeue": "Compatibility alias for `litehive queue requeue`",
+        "resume": "Compatibility alias for `litehive queue resume`",
+        "recover": "Compatibility alias for `litehive queue requeue` on completed tasks",
+        "prioritize": "Compatibility alias for exact-order queue promotion",
+        "switch": "Compatibility alias for `litehive engine switch`",
     }
 
     runner = CliRunner()
@@ -59,6 +72,15 @@ def test_recovery_shortcut_help_explains_when_to_use_each_command() -> None:
 
         assert result.exit_code == 0, result.output
         assert help_text in _normalized(result.output)
+
+
+def test_engine_switch_help_describes_grouped_engine_handoff() -> None:
+    result = CliRunner().invoke(modern_cli.app, ["engine", "switch", "--help"])
+
+    assert result.exit_code == 0, result.output
+    normalized = _normalized(result.output)
+    assert "Engine name for switch" in normalized
+    assert "Operator note; required for switch" in normalized
 
 
 def test_queue_resume_and_requeue_help_mentions_parked_semantics() -> None:

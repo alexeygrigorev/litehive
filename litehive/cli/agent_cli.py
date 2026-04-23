@@ -1,12 +1,11 @@
-"""Restricted CLI for agents running inside the v2 pipeline.
+"""Restricted CLI helpers for agents running inside the v2 pipeline.
 
 When ``LITEHIVE_AGENT_ROLE`` is set, top-level ``litehive report`` is routed
-through this restricted ``litehive agent report`` implementation. The verdict
-options are restricted per role so agents literally cannot submit verdicts
-they're not allowed to use.
+through this restricted implementation. The hidden ``litehive agent ...``
+command remains as a backward-compatible alias.
 
-Also provides a guard function ``block_if_agent()`` that other CLI
-commands call at the top to prevent agents from using them.
+This module also exposes small helpers that other CLI commands can use to
+distinguish operator-only surfaces from the limited agent-facing API.
 """
 
 import os
@@ -44,6 +43,10 @@ agent_app = typer.Typer(
 
 def _current_role() -> str | None:
     return os.environ.get("LITEHIVE_AGENT_ROLE")
+
+
+def current_agent_role() -> str | None:
+    return _current_role()
 
 
 def _current_stage() -> str | None:
@@ -188,6 +191,10 @@ def _require_role(allowed: set[str]) -> str:
         print("You are not authorized to perform this command.")
         raise SystemExit(1)
     return role
+
+
+def require_agent_role(allowed: set[str]) -> str:
+    return _require_role(allowed)
 
 
 @agent_app.command("update", help="Update task fields (planner/reviewer only)")

@@ -7,29 +7,22 @@ from pathlib import Path
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
 
 
-_AGENT_ALLOWED_OPERATOR_ROOT_COMMANDS: set[tuple[str, ...]] = {
-    ("switch",),
-}
-
 _AGENT_ALLOWED_TASK_ROOT_COMMANDS: set[tuple[str, ...]] = {
     ("task", "add"),
-    ("task", "browse"),
+    ("task", "update"),
+    ("task", "close"),
 }
 
 
 def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
     """Return whether an agent role may invoke a non-`agent` command.
 
-    `switch` is an operator queue-management shortcut, so it must keep working
-    even when the environment still carries an inherited `LITEHIVE_AGENT_ROLE`.
-    Agents also need the documented `litehive task add ...` follow-up workflow
-    and the read-only `litehive task browse ...` inspection flow.
+    The public agent-facing CLI is intentionally tiny:
+    `litehive report` plus `litehive task add|update|close`.
     Recovery keeps its small diagnostic allowlist; other commands stay blocked.
     """
     if not argv:
         return False
-    if tuple(argv[:1]) in _AGENT_ALLOWED_OPERATOR_ROOT_COMMANDS:
-        return True
     if tuple(argv[:2]) in _AGENT_ALLOWED_TASK_ROOT_COMMANDS:
         return True
     if role != "recovery":
@@ -89,13 +82,13 @@ def main() -> int:
         route_via_root_cli = False
         cmd = argv[0] if argv else None
         if cmd is None:
-            print("Usage: litehive agent [report|update|close]")
-            print("\nRun 'litehive agent --help' for details.")
+            print("Usage: litehive report | litehive task [add|update|close]")
+            print("\nRun 'litehive --help' for details.")
             return 0
         if _requests_help(argv):
             route_via_root_cli = True
-        if cmd in {"report", "update", "close"}:
-            argv = ["agent", *argv]
+        if cmd == "report":
+            argv = ["agent", "report", *argv[1:]]
             sys.argv = [sys.argv[0], *argv]
             cmd = "agent"
             route_via_root_cli = True

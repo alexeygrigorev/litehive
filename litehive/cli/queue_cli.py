@@ -239,9 +239,15 @@ EngineChoice = choice(ENGINE_CHOICES)
 
 
 def register_root_shortcuts(app: typer.Typer) -> None:
+    app.command("move", help="Compatibility alias for `litehive queue move`", hidden=True)(move)
+    app.command("promote", help="Compatibility alias for `litehive queue promote`", hidden=True)(promote)
+    app.command("requeue", help="Compatibility alias for `litehive queue requeue`", hidden=True)(requeue)
+    app.command("resume", help="Compatibility alias for `litehive queue resume`", hidden=True)(resume)
+
     @app.command(
         "recover",
-        help="Use after an accepted task needs another pass but its current code should stay in place",
+        help="Compatibility alias for `litehive queue requeue` on completed tasks",
+        hidden=True,
     )
     def recover_command(
         task_id: Annotated[str, typer.Argument(help="Task id to recover")],
@@ -251,7 +257,8 @@ def register_root_shortcuts(app: typer.Typer) -> None:
 
     @app.command(
         "prioritize",
-        help="Use to pull queued tasks to the front when operator ordering matters more than the current queue",
+        help="Compatibility alias for exact-order queue promotion",
+        hidden=True,
     )
     def prioritize_command(
         task_ids: Annotated[list[str], typer.Argument(help="Queued task ids to move to the front")],
@@ -261,7 +268,8 @@ def register_root_shortcuts(app: typer.Typer) -> None:
 
     @app.command(
         "switch",
-        help="Use when a task should continue with a different engine on its next queued run",
+        help="Compatibility alias for `litehive engine switch`",
+        hidden=True,
     )
     def switch_command(
         task_id: Annotated[str, typer.Argument(help="Task id to switch")],

@@ -99,7 +99,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
             previous = _web_pkg.stop_workspace_daemon(self.workspace_root)
             if previous is None:
                 return self._send_json(
-                    {"error": "daemon is not running"},
+                    {"error": "runner is not running"},
                     status=HTTPStatus.CONFLICT,
                 )
             payload = _web_pkg.build_daemon_status_payload(self.workspace_root)
@@ -142,7 +142,7 @@ class LitehiveWebHandler(BaseHTTPRequestHandler):
             except ValueError as exc:
                 return self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
             return self._send_json(response)
-        if parsed.path == "/api/task/engine":
+        if parsed.path in {"/api/engine/switch", "/api/task/engine"}:
             task_id = payload.get("task_id")
             engine_name = payload.get("engine")
             reason = payload.get("reason")

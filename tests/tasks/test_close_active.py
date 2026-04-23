@@ -34,6 +34,7 @@ def _wait_for_process_exit(proc: subprocess.Popen[bytes], *, timeout_seconds: fl
 
 def test_cmd_close_task_stops_active_runner_and_closes_task(tmp_path: Path, capsys, monkeypatch) -> None:
     ensure_workspace(tmp_path)
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.setattr("litehive.cli.agent_cli.block_if_agent", lambda: None)
     task = create_task(tmp_path, title="Kill bad run")
     mark_task_run_started(tmp_path, task)
@@ -146,6 +147,7 @@ with workspace_runner_guard(root):
 
 def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.setattr("litehive.cli.agent_cli.block_if_agent", lambda: None)
     task = create_task(tmp_path, title="Kill live subagent")
     task.status = "queued"

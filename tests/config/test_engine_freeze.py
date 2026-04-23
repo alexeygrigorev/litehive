@@ -1,5 +1,6 @@
 """Tests for engine freeze/unfreeze CLI and runtime filtering."""
 
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -23,12 +24,26 @@ from litehive.git.ops import GitError
 from litehive.lifecycle.engines import ConfigBackedEngineSelector
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.types import PipelineMode
-from litehive.state.records import create_task
+from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
+from litehive.state.records import create_task, get_task_record
 
 
 def _run_engine(*args: str) -> tuple[int | None, str]:
-    result = CliRunner().invoke(app, list(args), standalone_mode=False)
-    return result.return_value, result.output
+    env = dict(os.environ)
+    env.pop("LITEHIVE_AGENT_ROLE", None)
+    result = CliRunner().invoke(app, list(args), standalone_mode=False, env=env)
+    return (
+        result.return_value if result.return_value is not None else result.exit_code,
+        result.output,
+    )
+
+
+def _prepare_runnable_task(root: Path, title: str) -> TaskRecord:
+    task = create_task(root, title=title)
+    state = load_state(root)
+    task.pipeline_status = "implementing"
+    persist_task_and_state_without_runner_guard(root, task=task, state=state)
+    return get_task_record(root, task.id) or task
 
 
 class _StubLifecycleEngine:
@@ -125,6 +140,51 @@ def test_engine_status_prints_compact_summary(tmp_path: Path, capsys) -> None:
     assert output.startswith("default_engine: codex | engine_freeze: gemini=2099-06-15T00:00:00Z | engines: ")
     for engine_name in ENGINE_CHOICES:
         assert f"{engine_name}(" in output
+
+
+def test_engine_switch_cli_queues_task_for_new_engine(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    task = _prepare_runnable_task(tmp_path, "Switch engines")
+
+    exit_code, output = _run_engine(
+        "engine",
+        "switch",
+        task.id,
+        "gemini",
+        "--workspace",
+        str(tmp_path),
+        "--reason",
+        "Need larger context window",
+    )
+
+    assert exit_code == 0
+    assert "engine: codex -> gemini" in output
+    refreshed = get_task_record(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.runtime.last_engine_switch is not None
+    assert refreshed.runtime.last_engine_switch.to_engine == "gemini"
+
+
+def test_hidden_switch_alias_still_works(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    task = _prepare_runnable_task(tmp_path, "Switch engines via alias")
+
+    exit_code, output = _run_engine(
+        "switch",
+        task.id,
+        "gemini",
+        "--workspace",
+        str(tmp_path),
+        "--reason",
+        "Need larger context window",
+    )
+
+    assert exit_code == 0
+    assert "engine: codex -> gemini" in output
+    refreshed = get_task_record(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.runtime.last_engine_switch is not None
+    assert refreshed.runtime.last_engine_switch.to_engine == "gemini"
 
 
 def test_engine_freeze_helpers_persist_and_clear_workspace_config(tmp_path: Path) -> None:

@@ -304,3 +304,56 @@ def github(
         return 0
     print(f"Created task {task_id} from {resolved_repo}#{issue_number}")
     return 0
+
+
+def register_root_aliases(app: typer.Typer) -> None:
+    @app.command("issue", help="Compatibility alias for `litehive import github`", hidden=True)
+    def issue_command(
+        issue_ref: Annotated[str | None, typer.Argument(help="GitHub issue URL or issue number")] = None,
+        workspace: WorkspaceOption = Path.cwd(),
+        repo: Annotated[str | None, typer.Option(help="GitHub repo as owner/repo")] = None,
+        all_: Annotated[bool, typer.Option("--all", help="Import all open issues")] = False,
+    ) -> int:
+        return github(issue_ref=issue_ref, workspace=workspace, repo=repo, all_=all_)
+
+    @app.command("intake", help="Compatibility alias for `litehive import spec`", hidden=True)
+    def intake_command(
+        file: Annotated[Path | None, typer.Argument(help="Spec file; reads stdin when omitted")] = None,
+        workspace: WorkspaceOption = Path.cwd(),
+        title: Annotated[str | None, typer.Option(help="Override the derived task title")] = None,
+        priority: Annotated[
+            str | None, typer.Option(click_type=choice(VALID_TASK_PRIORITIES), help="Set task priority")
+        ] = None,
+        acceptance_criteria: Annotated[
+            list[str] | None, typer.Option(help="Add acceptance criteria; repeat for multiple")
+        ] = None,
+    ) -> int:
+        return spec(
+            file=file,
+            workspace=workspace,
+            title=title,
+            priority=priority,
+            acceptance_criteria=acceptance_criteria,
+        )
+
+    @app.command("import-issue", help="Compatibility alias for `litehive import github`", hidden=True)
+    def import_issue_command(
+        issue_ref: Annotated[str | None, typer.Argument(help="GitHub issue URL or issue number")] = None,
+        workspace: WorkspaceOption = Path.cwd(),
+        repo: Annotated[str | None, typer.Option(help="GitHub repo as owner/repo")] = None,
+        all_: Annotated[bool, typer.Option("--all", help="Import all open issues")] = False,
+    ) -> int:
+        return github(issue_ref=issue_ref, workspace=workspace, repo=repo, all_=all_)
+
+    @app.command("import-issues", help="Compatibility alias for `litehive import github --all`", hidden=True)
+    def import_issues_command(
+        issue_ref: Annotated[str | None, typer.Argument(help="Optional issue URL or issue number")] = None,
+        workspace: WorkspaceOption = Path.cwd(),
+        repo: Annotated[str | None, typer.Option(help="GitHub repo as owner/repo")] = None,
+    ) -> int:
+        return github(
+            issue_ref=issue_ref,
+            workspace=workspace,
+            repo=repo,
+            all_=issue_ref is None,
+        )

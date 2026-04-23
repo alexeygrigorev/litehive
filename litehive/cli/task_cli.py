@@ -9,6 +9,7 @@ from litehive.cli.display import task_dependencies_label, task_model_label
 from litehive.cli.parse import (
     parse_acceptance_criteria,
     parse_dependency_ids,
+    parse_text_list_option,
 )
 from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
@@ -423,9 +424,13 @@ def close(
     reason: Annotated[str | None, typer.Option(help="Optional rationale")] = None,
     follow_up_task: Annotated[str | None, typer.Option(help="Optional follow-up task id")] = None,
 ) -> int:
-    from litehive.cli.agent_cli import block_if_agent
+    from litehive.cli.agent_cli import current_agent_role, require_agent_role
 
-    block_if_agent()
+    agent_role = current_agent_role()
+    close_kwargs: dict[str, str] = {}
+    if agent_role is not None:
+        require_agent_role({"planner", "reviewer"})
+        close_kwargs = {"audit_actor": "agent", "audit_source": "agent"}
     ensure_workspace(workspace)
     try:
         task = close_task(
@@ -434,6 +439,7 @@ def close(
             outcome=outcome,
             reason=reason,
             follow_up_task_id=follow_up_task,
+            **close_kwargs,
         )
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"close failed: {exc}")
@@ -458,10 +464,24 @@ def update(
     goal: Annotated[str | None, typer.Option(help="Replace the task goal")] = None,
     depends_on: Annotated[list[str] | None, typer.Option(help="Replace task dependencies")] = None,
     acceptance_criteria: Annotated[list[str] | None, typer.Option(help="Replace acceptance criteria")] = None,
+    constraints: Annotated[
+        list[str] | None, typer.Option("--constraint", help="Replace task constraints")
+    ] = None,
+    plan: Annotated[
+        list[str] | None, typer.Option("--plan-step", help="Replace task plan steps")
+    ] = None,
 ) -> int:
-    from litehive.cli.agent_cli import block_if_agent
+    from litehive.cli.agent_cli import current_agent_role, require_agent_role
 
-    block_if_agent()
+    agent_role = current_agent_role()
+    update_kwargs: dict[str, object] = {}
+    if agent_role is not None:
+        require_agent_role({"planner", "reviewer"})
+        update_kwargs = {
+            "allow_active_agent_task_mutation": True,
+            "audit_actor": "agent",
+            "audit_source": "agent",
+        }
     ensure_workspace(workspace)
     if (
         title is None
@@ -469,12 +489,16 @@ def update(
         and acceptance_criteria is None
         and priority is None
         and goal is None
+        and constraints is None
+        and plan is None
     ):
         print("update failed: no changes requested")
         return 1
     try:
         depends_on = parse_dependency_ids(depends_on, task_id=task_id, allow_clear=True)
         acceptance_criteria = parse_acceptance_criteria(acceptance_criteria, allow_clear=True)
+        constraints = parse_text_list_option(constraints, option_name="constraints", allow_clear=True)
+        plan = parse_text_list_option(plan, option_name="plan", allow_clear=True)
 
         task = update_task_metadata(
             workspace,
@@ -484,6 +508,9 @@ def update(
             priority=priority if priority is not None else ...,
             goal=goal if goal is not None else ...,
             acceptance_criteria=acceptance_criteria,
+            constraints=constraints,
+            plan=plan,
+            **update_kwargs,
         )
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"update failed: {exc}")
@@ -503,3 +530,14 @@ def update(
     if missing_criteria_reason is not None:
         print(f"warning: {missing_criteria_reason}")
     return 0
+
+
+def register_root_aliases(app: typer.Typer) -> None:
+    app.command("add", help="Compatibility alias for `litehive task add`", hidden=True)(add)
+    app.command("list", help="Compatibility alias for `litehive task list`", hidden=True)(list_tasks)
+    app.command("show", help="Compatibility alias for `litehive task show`", hidden=True)(show)
+    app.command("update", help="Compatibility alias for `litehive task update`", hidden=True)(update)
+    app.command("close", help="Compatibility alias for `litehive task close`", hidden=True)(close)
+    app.command("abandon", help="Compatibility alias for `litehive task abandon`", hidden=True)(abandon)
+    app.command("debug", help="Compatibility alias for `litehive task debug`", hidden=True)(debug)
+    app.command("logs", help="Compatibility alias for `litehive task logs`", hidden=True)(logs)

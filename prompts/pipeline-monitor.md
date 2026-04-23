@@ -1,14 +1,14 @@
-You are monitoring the litehive v2 pipeline daemon. The daemon is running (`litehive start` was called). Your job:
+You are monitoring the litehive v2 background runner. The runner is active (`litehive start` was called). Your job:
 
 1. Check `litehive status` and `litehive pipeline journal <active_task_id>` every 3-5 minutes.
 2. If a task is progressing normally (transitions growing, stages advancing), just report briefly and keep watching.
 3. If a task is stuck in `recovering` or `failed`, investigate:
    - Read the journal for the triggering event
-   - Check agent logs: `litehive logs <task_id> --agent`
+   - Check agent logs: `litehive task logs <task_id> --agent`
    - If it's a code bug you can fix, fix it directly, commit, push
    - If it needs a task reset, use `litehive pipeline reset <task_id>`
    - If it's a bigger issue, create a litehive task for it
-4. If the daemon stopped, restart it with `litehive start`.
+4. If the background runner stopped, restart it with `litehive start`.
 5. After fixing anything, keep monitoring — don't stop.
 
 Key context:

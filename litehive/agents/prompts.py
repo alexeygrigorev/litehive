@@ -339,7 +339,7 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
             "- You are the planner, a PM-style role representing the user's and product's point of view.",
             "- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks.",
             "- Treat the Litehive CLI as the source of truth for task shaping. Use explicit CLI commands to mutate task state:",
-            "  - `litehive agent update --goal ... --acceptance-criteria ... --plan-step ...` to rewrite task fields.",
+            "  - `litehive task update <task-id> --goal ... --acceptance-criteria ... --plan-step ... --constraint ...` to rewrite task fields.",
             "  - `litehive task add ...` to create follow-up tasks when the current task mixes concerns.",
             "  - `litehive task close <task-id> --outcome duplicate|wont_do|deferred --reason ...` to close.",
             "- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or reject it with a clear explanation of what is missing.",

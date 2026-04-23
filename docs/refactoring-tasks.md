@@ -57,7 +57,7 @@ Scope:
 Acceptance criteria:
 
 - prompt serialization reads task history through the activity boundary
-- agent report submission writes through the activity boundary
+- report submission writes through the activity boundary
 - debug/report helpers no longer reach into ad hoc thread storage directly
 
 Suggested validation:

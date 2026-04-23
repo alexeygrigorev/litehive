@@ -347,6 +347,90 @@ def test_agent_update_allows_planner_to_shape_active_task(tmp_path: Path, monkey
     assert updated.plan == ["route prompt reads through activity service"]
 
 
+def test_root_task_update_allows_planner_agent_api(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Shape via task update", goal="old goal")
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    save_state(tmp_path, state)
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        root_app,
+        [
+            "task",
+            "update",
+            task.id,
+            "--workspace",
+            str(tmp_path),
+            "--goal",
+            "new goal",
+            "--acceptance-criteria",
+            "one boundary",
+            "--plan-step",
+            "route prompt reads through activity service",
+            "--constraint",
+            "keep the CLI surface stable",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    assert updated.goal == "new goal"
+    assert updated.acceptance_criteria == ["one boundary"]
+    assert updated.plan == ["route prompt reads through activity service"]
+    assert updated.constraints == ["keep the CLI surface stable"]
+
+
+def test_root_task_update_rejects_non_planner_reviewer_agent(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Blocked agent task update", goal="old goal")
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        root_app,
+        ["task", "update", task.id, "--workspace", str(tmp_path), "--goal", "new goal"],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 1
+    assert "not authorized" in result.output
+
+
+def test_root_task_close_allows_reviewer_agent_api(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Close via task group")
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "reviewer")
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        root_app,
+        [
+            "task",
+            "close",
+            task.id,
+            "--workspace",
+            str(tmp_path),
+            "--outcome",
+            "duplicate",
+            "--reason",
+            "already tracked elsewhere",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    assert updated.status == "duplicate"
+    assert updated.runtime.last_outcome is not None
+    assert updated.runtime.last_outcome.reason == "already tracked elsewhere"
+
+
 def test_agent_report_rejects_legacy_recovery_pass_verdict(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery verdict contract")

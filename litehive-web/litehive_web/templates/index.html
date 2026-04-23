@@ -420,8 +420,8 @@
             <textarea name="acceptance_criteria" placeholder="One item per line"></textarea>
           </label>
           <div class="actions">
-            <button class="action-btn primary" type="submit">Create task</button>
-            <button class="action-btn danger" type="button" id="queue-stop-header">Queue stop</button>
+            <button class="action-btn primary" type="submit">task add</button>
+            <button class="action-btn danger" type="button" id="queue-stop-header">queue stop</button>
           </div>
         </form>
       </div>
@@ -452,6 +452,8 @@
       editTaskId: null,
       saveState: "idle",
       saveMessage: "",
+      taskSwitchState: "idle",
+      taskSwitchMessage: "",
       engines: null,
       defaultEngineSaveState: "idle",
       defaultEngineSaveMessage: "",
@@ -641,6 +643,10 @@
         state.saveState = "idle";
         state.saveMessage = "";
       }
+      if (previousTaskId !== state.selectedTaskId) {
+        state.taskSwitchState = "idle";
+        state.taskSwitchMessage = "";
+      }
       if (!task) {
         state.selectedTaskId = null;
         state.selectedSubagentId = null;
@@ -682,9 +688,9 @@
           </div>
           ${task.is_queued ? `
             <div class="queue-actions">
-              <button class="queue-button" data-queue-action="promote" data-task-id="${esc(task.id)}" ${state.mutatingQueue ? "disabled" : ""}>Promote</button>
-              <button class="queue-button" data-queue-action="up" data-task-id="${esc(task.id)}" data-position="${task.queue_position - 1}" ${(state.mutatingQueue || task.queue_position <= 1) ? "disabled" : ""}>Move Up</button>
-              <button class="queue-button" data-queue-action="down" data-task-id="${esc(task.id)}" data-position="${task.queue_position + 1}" ${(state.mutatingQueue || task.queue_position >= snapshot.queue.length) ? "disabled" : ""}>Move Down</button>
+              <button class="queue-button" data-queue-action="promote" data-task-id="${esc(task.id)}" ${state.mutatingQueue ? "disabled" : ""}>queue promote</button>
+              <button class="queue-button" data-queue-action="up" data-task-id="${esc(task.id)}" data-position="${task.queue_position - 1}" ${(state.mutatingQueue || task.queue_position <= 1) ? "disabled" : ""}>queue move up</button>
+              <button class="queue-button" data-queue-action="down" data-task-id="${esc(task.id)}" data-position="${task.queue_position + 1}" ${(state.mutatingQueue || task.queue_position >= snapshot.queue.length) ? "disabled" : ""}>queue move down</button>
             </div>
           ` : ""}
         </div>
@@ -877,7 +883,7 @@
       `).join("");
       return `
         <div class="section">
-          <h3>Switch Engine</h3>
+          <h3>Engine Switch</h3>
           <form id="task-switch-form" class="stack">
             <div class="grid-two">
               <div class="field">
@@ -890,7 +896,7 @@
               </div>
             </div>
             <div class="toolbar">
-              <button class="primary" type="submit" ${state.taskSwitchState === "saving" ? "disabled" : ""}>${state.taskSwitchState === "saving" ? "Switching..." : "Switch Task Engine"}</button>
+              <button class="primary" type="submit" ${state.taskSwitchState === "saving" ? "disabled" : ""}>${state.taskSwitchState === "saving" ? "engine switch..." : "engine switch"}</button>
               <span class="status-line">${esc(state.taskSwitchMessage)}</span>
             </div>
           </form>
@@ -1088,6 +1094,7 @@
           <div>Recovery dir</div><div class="mono">${esc(task.recovery_dir)}</div>
           <div>Priority</div><div>${esc(task.priority || "-")}</div>
           <div>Goal</div><div>${esc(task.goal || "-")}</div>
+          <div>Effective engine</div><div>${esc(task.effective_engine || "-")}</div>
           <div>Current stage</div><div>${esc(task.current_stage.step || "-")} / ${esc(task.current_stage.status || "-")}</div>
           <div>Last stage</div><div>${esc(task.last_stage.step || "-")} / ${esc(task.last_stage.verdict || "-")}</div>
         </div>
@@ -1110,6 +1117,7 @@
           <h3>Recovery Artifacts</h3>
           ${renderRecovery(task)}
         </div>
+        ${renderTaskSwitchSection(task, snapshot)}
         <div class="section">
           <h3>Actions</h3>
           <form class="form-grid" id="task-update-form">
@@ -1136,7 +1144,7 @@
               <textarea name="plan_steps" placeholder="One item per line">${esc(listToLines(task.plan))}</textarea>
             </label>
             <div class="actions">
-              <button class="action-btn primary" type="submit">Update task</button>
+              <button class="action-btn primary" type="submit">task update</button>
             </div>
           </form>
           <form class="form-grid section" id="task-close-form">
@@ -1153,14 +1161,14 @@
               </label>
             </div>
             <div class="actions">
-              <button class="action-btn warn" type="submit">Close task</button>
-              <button class="action-btn" type="button" id="task-requeue-button">Requeue</button>
+              <button class="action-btn warn" type="submit">task close</button>
+              <button class="action-btn" type="button" id="task-requeue-button">queue requeue</button>
               <label class="checkbox">
                 <input type="checkbox" id="task-requeue-front">
                 <span>front of queue</span>
               </label>
-              <button class="action-btn danger" type="button" id="task-abandon-button">Abandon</button>
-              ${task.is_active_task ? `<button class="action-btn danger" type="button" id="task-stop-button">Stop active task</button>` : ""}
+              <button class="action-btn danger" type="button" id="task-abandon-button">task abandon</button>
+              ${task.is_active_task ? `<button class="action-btn danger" type="button" id="task-stop-button">queue stop</button>` : ""}
             </div>
           </form>
         </div>
@@ -1232,6 +1240,27 @@
           await refreshSnapshot();
         } catch (error) {
           setMessage(error.message, true);
+        }
+      });
+      container.querySelector("#task-switch-form")?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        state.taskSwitchState = "saving";
+        state.taskSwitchMessage = "";
+        render(snapshot);
+        try {
+          const result = await postJson("/api/engine/switch", {
+            task_id: task.id,
+            engine: form.get("engine"),
+            reason: form.get("reason"),
+          });
+          state.taskSwitchState = "idle";
+          state.taskSwitchMessage = `Switched to ${result.switch.new_engine}.`;
+          await refreshSnapshot();
+        } catch (error) {
+          state.taskSwitchState = "idle";
+          state.taskSwitchMessage = error.message || "Engine switch failed.";
+          render(state.snapshot);
         }
       });
       container.querySelector("#task-close-form")?.addEventListener("submit", async (event) => {
@@ -1328,10 +1357,10 @@
       `).join("") : `<div class="muted">No run-all logs found under .litehive/logs/run-all/.</div>`;
       return `
         <div class="section">
-          <h3>Daemon Control</h3>
+          <h3>Runner Control</h3>
           <div class="status-strip">
             <div class="meta">
-              ${badge(`daemon:${status}`, status)}
+              ${badge(`runner:${status}`, status)}
               ${daemon?.pid ? badge(`pid:${daemon.pid}`, "running") : ""}
             </div>
             <span class="muted mono" id="daemon-feedback">${esc(state.daemonAction || "idle")}</span>
@@ -1343,13 +1372,13 @@
             <div>Log dir</div><div class="mono">${esc(daemon?.log_dir || "-")}</div>
           </div>
           <div class="controls">
-            <button class="control" id="runner-start" ${status === "running" || daemonBusy ? "disabled" : ""}>Start</button>
-            <button class="control" id="runner-stop" ${status !== "running" || daemonBusy ? "disabled" : ""}>Stop</button>
-            <button class="control" id="runner-restart" ${status !== "running" || daemonBusy ? "disabled" : ""}>Restart</button>
+            <button class="control" id="runner-start" ${status === "running" || daemonBusy ? "disabled" : ""}>start</button>
+            <button class="control" id="runner-stop" ${status !== "running" || daemonBusy ? "disabled" : ""}>stop</button>
+            <button class="control" id="runner-restart" ${status !== "running" || daemonBusy ? "disabled" : ""}>restart</button>
           </div>
         </div>
         <div class="section">
-          <h3>Daemon Logs</h3>
+          <h3>Runner Logs</h3>
           <div class="logs" id="daemon-log-viewer">${entries}</div>
         </div>
       `;

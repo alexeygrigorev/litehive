@@ -13,7 +13,7 @@ ROLE_GUIDANCE = """\
 
 - If SWE shows the requested work was already implemented before this run and provides concrete verification evidence, accept the task to normal `done` rather than inventing a special closed status.
 - Use `wont_do`, `duplicate`, or `deferred` only when the task is genuinely obsolete, superseded, or duplicated.
-- You may close a task as duplicate, wont_do, or deferred via `litehive task close <task-id> --outcome <status> --reason <text>`. Use `litehive task park <task-id>` to pause.
+- You may close a task as duplicate, wont_do, or deferred via `litehive task close <task-id> --outcome <status> --reason <text>`.
 """
 
 FRESH_ATTEMPT_GUIDANCE = """\

@@ -213,7 +213,7 @@ Concrete actions:
   - `RuntimeStageState.step`
   - `StageReport.step`
   - `RuntimeContinuationHandoff.step`
-  - CLI `agent report --step`
+  - CLI `litehive report --stage`
 - Reserve `reason` for machine-readable codes only if we adopt that rule; if
   so, rename human-text fields to `message` or `rationale` across:
   - lifecycle events
@@ -657,7 +657,7 @@ Concrete actions:
 - Add Ruff enforcement for import-outside-top-level (`PLC0415`) and then fix or
   explicitly justify remaining exceptions.
 - Migrate task discussion / verdict storage from YAML comments to SQLite, then
-  update agent report resolution to read from SQLite instead of
+  update report resolution to read from SQLite instead of
   `comments.yaml`.
 - Add `docs/domain.md` defining the canonical terms for:
   - task comments / discussion / verdict entries
@@ -689,7 +689,7 @@ Question:
 - `VERDICT_ALLOWLIST` needs rationale comments
 - drop unused/unsafe agent CLI overrides
 - stop normalizing verdict aliases
-- agent report path should not append YAML comments
+- report path should not append YAML comments
 - some option/default plumbing is hard to read
 
 Answer:
@@ -701,7 +701,7 @@ Answer:
   `claude-opus-4-6`; `claude-opus-4.6` with a dot does not match the published
   model alias format. The existing template value `claude-sonnet-4-20250514`
   also looks stale relative to that.
-- Agent CLI report submission currently:
+- Report submission CLI currently:
   - reads role from env unless overridden
   - reads step from pipeline state unless overridden
   - accepts `--message-file`
@@ -740,7 +740,7 @@ Concrete actions:
 - Remove agent CLI options that are not part of the intended agent contract:
   - `--message-file` if unused
   - `--role`
-  - `--step`
+  - `--stage`
   - possibly `--files-changed`
 - Audit prompts/instructions and runtime code for any dependence on those
   options before removing them.
@@ -748,11 +748,11 @@ Concrete actions:
   verdict values and fail loudly on anything else.
 - Search the codebase and prompt/instruction text for non-canonical verdict
   names and update them to the canonical set.
-- Change agent report persistence to SQLite-backed storage rather than
+- Change report persistence to SQLite-backed storage rather than
   `comments.yaml`.
 - Hide `SqlitePersistence(root)` and similar storage construction behind an
   injected repository/service where practical, especially in CLI entrypoints.
-- Simplify sentinel-based update plumbing in `agent update` so the intent is
+- Simplify sentinel-based update plumbing in `litehive task update` so the intent is
   explicit and readable, while preserving the distinction between "unset" and
   "set to empty".
 
@@ -828,7 +828,7 @@ Compatibility fields/accessors left to delete:
   - `origin_stage`
   - `trigger_event_kind`
 - Delete CLI/reporting surfaces that still speak in `step` terms:
-  - `litehive agent report --step`
+  - `litehive report --stage`
   - CLI output lines such as `step: ...`
   - prompt-serializer thread rendering that still emits `step`
 - Delete verdict alias normalization that only exists for backward
@@ -1099,7 +1099,7 @@ Concrete actions:
   - `litehive/inspection/`
   - `litehive/runtime_artifacts/`
 - Audit how logs are stored today and document the storage model:
-  - daemon run logs under workspace logs
+  - background-run logs under workspace logs
   - task journal
   - subagent stdout/stderr/transcript artifacts
 - Pick a package name for log/artifact inspection that does not conflict with
@@ -2007,7 +2007,7 @@ The task-by-task queue mirror lives in `docs/refactoring-tasks.md`.
    Why first:
    - this gives later renames and storage changes one seam to migrate through
    Validation:
-   - prompt serialization, agent report submission, and task debug output are
+   - prompt serialization, report submission, and task debug output are
      unchanged
 
 2. Rename thread/comment vocabulary to activity vocabulary.

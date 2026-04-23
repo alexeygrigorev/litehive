@@ -427,7 +427,10 @@ def _flagged_and_merge_failed_items(root: Path, tasks: list[TaskRecord]) -> list
                     kind="merge_failed_task",
                     title=title,
                     reason=reason,
-                    suggested_action=f"Run `litehive task debug {task.id} --worktree` and then `litehive recover {task.id}`.",
+                    suggested_action=(
+                        f"Run `litehive task debug {task.id} --worktree` and then "
+                        f"`litehive queue requeue {task.id}`."
+                    ),
                     dedupe_key=f"merge_failed_task:{task.id}",
                     metadata=metadata,
                 )

@@ -15,7 +15,7 @@ linked pages as reference once your workspace is running.
 - Persists queue state, reports, retries, recovery context, and task history in
   `.litehive/`.
 - Can recover interrupted or failed work and continue without losing context.
-- Can run one task at a time or drain the whole queue through the daemon.
+- Can run one task at a time or drain the whole queue through the background runner.
 
 ## Documentation Map
 
