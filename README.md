@@ -295,6 +295,13 @@ SQL
 
 Prefer direct SQL over iterating `litehive task show` per task — the CLI per-task approach is ~100× slower on any non-trivial report.
 
+CLI equivalent for the same recent-task summary:
+
+```bash
+litehive task recent             # tasks touched in the last 24h
+litehive task recent --since 72h # widen the reporting window
+```
+
 ## Artifact retention
 
 Litehive keeps `task.yaml`, `runtime.yaml`, stage reports, `comments.yaml`, `journal.md`, `events.jsonl`, `session.yaml`, and `report.yaml` as the durable evidence surface for status, repair, recovery, and handoff.

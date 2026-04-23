@@ -13,6 +13,10 @@ from litehive.cli.parse import (
 from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
 from litehive.tasks.archive import archive_root
+from litehive.tasks.recent import (
+    format_elapsed_duration,
+    list_recent_task_summaries,
+)
 from litehive.state.records import create_task, list_tasks as load_tasks, require_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
@@ -78,6 +82,35 @@ def _print_task_search_results(matches: list[TaskSearchMatch]) -> None:
             print()
         print(f"{match.task_id} [{match.status}] {match.title}")
         print(f"  goal: {match.snippet or '-'}")
+
+
+def _print_recent_task_table(summaries) -> None:
+    columns = [
+        ("task_id", "TASK_ID"),
+        ("title", "TITLE"),
+        ("transition_count", "TRANSITIONS"),
+        ("elapsed", "ELAPSED"),
+        ("final_stage", "FINAL_STAGE"),
+        ("status", "STATUS"),
+    ]
+    rows = [
+        {
+            "task_id": summary.task_id,
+            "title": summary.title,
+            "transition_count": str(summary.transition_count),
+            "elapsed": format_elapsed_duration(summary.elapsed_seconds),
+            "final_stage": summary.final_stage,
+            "status": summary.status,
+        }
+        for summary in summaries
+    ]
+    widths = {
+        key: max(len(header), *(len(row[key]) for row in rows))
+        for key, header in columns
+    }
+    print("  ".join(header.ljust(widths[key]) for key, header in columns))
+    for row in rows:
+        print("  ".join(row[key].ljust(widths[key]) for key, _ in columns))
 
 
 @app.command("add", help="Create a queued task")
@@ -276,6 +309,27 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
     print(f"current_stage: {rt.current_stage.stage if rt.current_stage and rt.current_stage.stage else '-'}")
     print(f"retry_count: {rt.retry_count}")
     print(f"last_outcome: {rt.last_outcome or '-'}")
+    return 0
+
+
+@app.command("recent", help="Summarize tasks touched in a recent time window")
+def recent(
+    workspace: WorkspaceOption = Path.cwd(),
+    since: Annotated[
+        str,
+        typer.Option("--since", help="Compact duration window (e.g. 24h, 90m, 7d)"),
+    ] = "24h",
+) -> int:
+    ensure_workspace(workspace)
+    try:
+        summaries = list_recent_task_summaries(workspace, since=since)
+    except ValueError as exc:
+        print(f"recent failed: {exc}")
+        return 1
+    if not summaries:
+        print(f"No tasks touched in the last {since}.")
+        return 0
+    _print_recent_task_table(summaries)
     return 0
 
 
