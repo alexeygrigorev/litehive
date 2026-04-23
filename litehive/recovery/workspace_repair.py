@@ -22,7 +22,7 @@ from .execution_recovery import (
 )
 
 _TERMINAL_UNMERGED_WORKTREE_TASK_STATUSES = frozenset(
-    {"done", "abandoned", "cancelled", "wont_do", "duplicate", "deferred"}
+    {"done", "archived", "abandoned", "cancelled", "wont_do", "duplicate", "deferred"}
 )
 
 
@@ -41,7 +41,7 @@ def _task_status_from_disk(root: Path, task_id: str) -> str | None:
             status = payload.get("status")
             if isinstance(status, str):
                 return status
-            return "done"
+            return "archived"
 
     for task_yaml in sorted(tasks_root(root, bootstrap=False).glob(f"{task_id}-*/task.yaml")):
         try:

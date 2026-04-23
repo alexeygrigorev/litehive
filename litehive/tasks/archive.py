@@ -1,4 +1,4 @@
-"""Archive and cleanup for done tasks."""
+"""Archive and cleanup for completed tasks moved into history."""
 
 import logging
 import re
@@ -12,8 +12,10 @@ from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord
 from litehive.fs_cleanup import remove_tree_logged
 
-from litehive.state.records import list_tasks, require_task
+from litehive.state.records import list_tasks, require_task, task_state_for_storage
 from litehive.state.locking import workspace_lock
+from litehive.state.persist import load_state, save_state_without_runner_guard
+from litehive.state.store import runtime_store
 from litehive.tasks.audit import append_task_audit_entries, build_task_audit_entry, snapshot_task_audit_state
 from .paths import task_dir, tasks_root
 from litehive.state.persist import atomic_write_text
@@ -30,12 +32,12 @@ def _load_archived_task_record(path: Path) -> TaskRecord:
     if not isinstance(data, dict):
         raise ValueError(f"Archived task file must contain a mapping: {path}")
     data = dict(data)
-    # Legacy archived task.yaml files predate persisted runtime fields.
-    # Archived tasks are always done, so default missing fields accordingly.
-    data.setdefault("status", "done")
+    # Legacy archived task.yaml files predate persisted archived status fields.
+    # Tasks under archive/ are history-only, so default missing status accordingly.
+    data.setdefault("status", "archived")
     data.setdefault("pipeline_status", "done")
+    data.setdefault("updated_at", data.get("archived_at") or utcnow())
     data.pop("archived_at", None)
-    data.pop("updated_at", None)
     return TaskRecord(**data)
 
 
@@ -80,8 +82,14 @@ def archive_task(
         dst = archive_root(root) / src.name
         if dst.exists():
             raise ValueError(f"Archive destination already exists: {dst.name}")
+        state = load_state(root)
+        queue_before = list(state.queue)
         now = utcnow()
+        task.status = "archived"
         task.updated_at = now
+        if state.active_task_id == task.id:
+            state.active_task_id = None
+        state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
         # Write archive timestamp into task.yaml before moving
         task_yaml_path = src / "task.yaml"
         data = yaml.safe_load(task_yaml_path.read_text(encoding="utf-8")) or {}
@@ -90,6 +98,8 @@ def archive_task(
         data["pipeline_status"] = str(task.pipeline_status)
         data["updated_at"] = now
         atomic_write_text(task_yaml_path, yaml.safe_dump(data, sort_keys=False))
+        runtime_store(root).save_runtime_transaction(task_states={task.id: task_state_for_storage(task)})
+        save_state_without_runner_guard(root, state)
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(dst))
         _update_archive_index(root, [task])
@@ -104,6 +114,8 @@ def archive_task(
                     source=audit_source,
                     before_task=before_task,
                     after_task=task,
+                    before_queue=queue_before,
+                    after_queue=state.queue,
                     context={"archive_path": str(dst.relative_to(root))},
                 )
             ],
@@ -144,6 +156,16 @@ def list_archived_tasks(root: Path) -> list[TaskRecord]:
             continue
         records.append(_load_archived_task_record(path))
     return records
+
+
+def get_archived_task(root: Path, task_id: str) -> TaskRecord | None:
+    """Return an archived task record by id, or None if it is not archived."""
+    archive = archive_root(root)
+    if not archive.exists():
+        return None
+    for path in sorted(archive.glob(f"{task_id}-*/task.yaml")):
+        return _load_archived_task_record(path)
+    return None
 
 
 def _parse_duration(duration_str: str) -> int:

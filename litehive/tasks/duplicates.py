@@ -16,7 +16,8 @@ from litehive.domain.task import TaskRecord
 
 _INDEX_FILENAME = "task-duplicates.db"
 _INDEX_DIRNAME = "search"
-_MATCH_STATUSES = {"queued", "in_progress", "done"}
+_MATCH_STATUSES = {"queued", "in_progress", "done", "archived"}
+_TASK_ID_RE = re.compile(r"^T-\d+$", re.IGNORECASE)
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
@@ -139,8 +140,14 @@ def find_potential_duplicate_tasks(
 
 
 def search_tasks_by_text(root: Path, *, query: str, limit: int = 5) -> list[TaskSearchMatch]:
+    if limit < 1:
+        return []
+    exact_match = _exact_task_id_match(root, query)
+    if exact_match is not None:
+        return [exact_match]
+
     normalized_query = _normalize_query(query)
-    if not normalized_query or limit < 1:
+    if not normalized_query:
         return []
 
     ensure_duplicate_task_index(root)
@@ -177,6 +184,28 @@ def search_tasks_by_text(root: Path, *, query: str, limit: int = 5) -> list[Task
         if len(results) >= limit:
             break
     return results
+
+
+def _exact_task_id_match(root: Path, query: str) -> TaskSearchMatch | None:
+    task_id = query.strip().upper()
+    if not _TASK_ID_RE.fullmatch(task_id):
+        return None
+
+    from litehive.state.records import get_task
+    from litehive.tasks.archive import get_archived_task
+
+    task = get_task(root, task_id)
+    if task is None:
+        task = get_archived_task(root, task_id)
+    if task is None:
+        return None
+    snippet_query = task.goal or task.title or task.id
+    return TaskSearchMatch(
+        task_id=task.id,
+        title=task.title,
+        status=str(task.status),
+        snippet=_search_snippet(title=task.title, goal=task.goal, query=snippet_query),
+    )
 
 
 def _open_duplicate_index(root: Path) -> TextSearchIndex:

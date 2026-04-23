@@ -9,6 +9,7 @@ import pytest
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.state.records import create_task, save_task
+from litehive.tasks.archive import archive_task
 
 from tests.support.helpers import _cmd_recent
 
@@ -172,3 +173,34 @@ def test_task_recent_rejects_invalid_since(
 
     assert exit_code == 1
     assert "recent failed: Invalid duration format 'yesterday'" in output
+
+
+def test_task_recent_shows_archived_status_for_archived_history(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ensure_workspace(tmp_path)
+    now = datetime.now(UTC).replace(microsecond=0)
+
+    task = create_task(tmp_path, title="Archived recent task", auto_commit=False)
+    task.status = "done"
+    task.pipeline_status = "done"
+    save_task(tmp_path, task)
+    archive_task(tmp_path, task.id)
+
+    _insert_transition(
+        tmp_path,
+        task_id=task.id,
+        seq=0,
+        created_at=now - timedelta(minutes=20),
+        from_stage="commit_to_git",
+        to_stage="done",
+    )
+
+    exit_code = _cmd_recent(argparse.Namespace(workspace=tmp_path, since="1h"))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert task.id in output
+    assert "Archived recent task" in output
+    assert "archived" in output

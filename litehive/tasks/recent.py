@@ -51,6 +51,7 @@ def list_recent_task_summaries(
     cutoff = _coerce_utc(now) - timedelta(seconds=window_seconds)
     rows = _load_recent_summary_rows(root, cutoff=cutoff.replace(microsecond=0).isoformat())
     titles = _load_task_titles(root, [str(row["task_id"]) for row in rows])
+    archived_statuses = _load_archived_task_statuses(root, [str(row["task_id"]) for row in rows])
     return [
         RecentTaskSummary(
             task_id=str(row["task_id"]),
@@ -58,7 +59,7 @@ def list_recent_task_summaries(
             transition_count=int(row["transition_count"]),
             elapsed_seconds=max(0, int(row["elapsed_seconds"])),
             final_stage=str(row["final_stage"] or "-"),
-            status=str(row["status"] or "-"),
+            status=archived_statuses.get(str(row["task_id"]), str(row["status"] or "-")),
         )
         for row in rows
     ]
@@ -137,6 +138,19 @@ def _load_task_titles(root: Path, task_ids: list[str]) -> dict[str, str]:
     return titles
 
 
+def _load_archived_task_statuses(root: Path, task_ids: list[str]) -> dict[str, str]:
+    statuses: dict[str, str] = {}
+    archive_root = tasks_root(root, bootstrap=False) / "archive"
+    for task_id in task_ids:
+        task_record = _find_task_record_path(archive_root, task_id)
+        if task_record is None:
+            continue
+        status = _read_task_status(task_record)
+        if status is not None:
+            statuses[task_id] = status
+    return statuses
+
+
 def _find_task_record_path(base: Path, task_id: str) -> Path | None:
     if not base.exists():
         return None
@@ -153,3 +167,16 @@ def _read_task_title(path: Path) -> str | None:
         return None
     title = payload.get("title")
     return title.strip() if isinstance(title, str) and title.strip() else None
+
+
+def _read_task_status(path: Path) -> str | None:
+    try:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    status = payload.get("status")
+    if isinstance(status, str) and status.strip():
+        return status.strip()
+    return "archived"

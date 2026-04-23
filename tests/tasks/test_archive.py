@@ -18,8 +18,10 @@ from litehive.tasks.archive import (
     list_archived_tasks,
 )
 from litehive.tasks.paths import task_dir
+from litehive.tasks.queue import set_active_task
+from litehive.tasks.status import requeue_task, resume_task
 
-from tests.support.helpers import _cmd_queue, _cmd_status
+from tests.support.helpers import _cmd_queue, _cmd_requeue_task, _cmd_status
 
 
 def _make_done_task(root: Path, title: str = "Done task") -> TaskRecord:
@@ -44,6 +46,8 @@ def test_archive_single_done_task(tmp_path: Path) -> None:
     result = archive_task(tmp_path, task.id)
 
     assert result.id == task.id
+    assert result.status == "archived"
+    assert result.pipeline_status == "done"
     # Task dir should no longer exist under tasks/
     assert not task_dir(tmp_path, task).exists()
     # Should exist under archive/
@@ -52,6 +56,8 @@ def test_archive_single_done_task(tmp_path: Path) -> None:
     # archived_at should be set in task.yaml
     data = yaml.safe_load((archive_dir / "task.yaml").read_text(encoding="utf-8"))
     assert "archived_at" in data
+    assert data["status"] == "archived"
+    assert data["pipeline_status"] == "done"
 
 
 def test_archive_rejects_non_done_task(tmp_path: Path) -> None:
@@ -113,7 +119,7 @@ def test_list_archived_tasks(tmp_path: Path) -> None:
     assert archived[0].id == task.id
 
 
-def test_list_archived_tasks_defaults_legacy_records_to_done(tmp_path: Path) -> None:
+def test_list_archived_tasks_defaults_legacy_records_to_archived(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = _make_done_task(tmp_path, "Legacy archive")
     archive_task(tmp_path, task.id)
@@ -128,7 +134,7 @@ def test_list_archived_tasks_defaults_legacy_records_to_done(tmp_path: Path) -> 
     archived = list_archived_tasks(tmp_path)
 
     assert len(archived) == 1
-    assert archived[0].status == "done"
+    assert archived[0].status == "archived"
     assert archived[0].pipeline_status == "done"
 
 
@@ -178,6 +184,53 @@ def test_archived_tasks_excluded_from_status(tmp_path: Path, capsys: pytest.Capt
 
     assert exit_code == 0
     assert task.id not in output
+
+
+def test_archive_removes_task_from_queue_and_active_state(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Archive active reference")
+    task.status = "done"
+    task.pipeline_status = "done"
+    save_task(tmp_path, task)
+    state = load_state(tmp_path)
+    state.queue = [task.id]
+    save_state(tmp_path, state)
+    set_active_task(tmp_path, task.id)
+
+    archive_task(tmp_path, task.id)
+
+    refreshed_state = load_state(tmp_path)
+    assert refreshed_state.active_task_id is None
+    assert task.id not in refreshed_state.queue
+
+
+def test_archived_tasks_cannot_be_requeued_resumed_or_switched_active(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = _make_done_task(tmp_path, "History only")
+    archive_task(tmp_path, task.id)
+
+    with pytest.raises(ValueError, match="archived and cannot be requeued, resumed, or switched active"):
+        requeue_task(tmp_path, task.id)
+    with pytest.raises(ValueError, match="archived and cannot be requeued, resumed, or switched active"):
+        resume_task(tmp_path, task.id)
+    with pytest.raises(ValueError, match="archived and cannot be switched active"):
+        set_active_task(tmp_path, task.id)
+
+
+def test_cli_requeue_archived_task_directs_operator_to_create_new_task(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ensure_workspace(tmp_path)
+    task = _make_done_task(tmp_path, "Archived history")
+    archive_task(tmp_path, task.id)
+
+    exit_code = _cmd_requeue_task(argparse.Namespace(workspace=tmp_path, task_id=task.id, front=False, force=False))
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "archived and cannot be requeued" in output
+    assert "Create a new task for follow-up work instead." in output
 
 
 # ── cleanup_archived_tasks ───────────────────────────────────────────

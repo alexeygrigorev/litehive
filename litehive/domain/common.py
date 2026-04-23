@@ -157,6 +157,7 @@ class TaskStatus(StringEnum):
     INTERRUPTED = "interrupted"     # Execution stopped, potentially resumable
     PARKED = "parked"              # Intentionally paused by Litehive or operator
     DONE = "done"                  # Completed successfully
+    ARCHIVED = "archived"          # Completed and moved to history-only archive
     FLAGGED = "flagged"            # Requires explicit operator attention
     MERGE_FAILED = "merge_failed"   # Failed during git merge operation
     CANCELLED = "cancelled"         # Operator intentionally stopped this task

@@ -12,13 +12,13 @@ from litehive.cli.parse import (
 )
 from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
-from litehive.tasks.archive import archive_root
+from litehive.tasks.archive import archive_root, get_archived_task, list_archived_tasks
 from litehive.tasks.browse import list_recently_created_tasks
 from litehive.tasks.recent import (
     format_elapsed_duration,
     list_recent_task_summaries,
 )
-from litehive.state.records import create_task, list_tasks as load_tasks, require_task
+from litehive.state.records import create_task, get_task, list_tasks as load_tasks, require_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
@@ -53,6 +53,22 @@ def _show_dependency_label(root, task) -> str:
         else:
             labels.append(f"{dependency_id} (missing)")
     return ", ".join(labels)
+
+
+def _load_task_with_archive_history(root: Path, task_id: str):
+    task = get_task(root, task_id)
+    if task is not None:
+        return task
+    return get_archived_task(root, task_id)
+
+
+def _load_task_list_with_archive_history(root: Path, *, include_archived: bool) -> list:
+    tasks = load_tasks(root)
+    if not include_archived:
+        return tasks
+    seen = {task.id for task in tasks}
+    tasks.extend(task for task in list_archived_tasks(root) if task.id not in seen)
+    return tasks
 
 
 def _print_creation_provenance(task) -> None:
@@ -263,7 +279,7 @@ def logs(
 @app.command("list", help="Compact task listing with optional filters")
 def list_tasks(
     workspace: WorkspaceOption = Path.cwd(),
-    show_all: Annotated[bool, typer.Option("--all", help="Include done tasks")] = False,
+    show_all: Annotated[bool, typer.Option("--all", help="Include done and archived tasks")] = False,
     filter_status: Annotated[str | None, typer.Option("--status", help="Filter by task status")] = None,
     filter_pipeline_status: Annotated[
         str | None, typer.Option("--pipeline-status", help="Filter by pipeline stage")
@@ -272,7 +288,10 @@ def list_tasks(
 ) -> int:
     ensure_workspace(workspace)
     config = load_config(workspace)
-    tasks = load_tasks(workspace)
+    tasks = _load_task_list_with_archive_history(
+        workspace,
+        include_archived=show_all or filter_status == "archived",
+    )
     filtered = []
     for task in tasks:
         if not show_all and task.status == "done":
@@ -293,9 +312,8 @@ def list_tasks(
 @app.command("show", help="Print full details for a single task")
 def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: WorkspaceOption = Path.cwd()) -> int:
     ensure_workspace(workspace)
-    try:
-        task = require_task(workspace, task_id)
-    except ValueError:
+    task = _load_task_with_archive_history(workspace, task_id)
+    if task is None:
         print(f"task not found: {task_id}")
         return 1
     print(f"id: {task.id}")

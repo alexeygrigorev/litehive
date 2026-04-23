@@ -10,7 +10,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.archive import archive_task
 
-from tests.support.helpers import _cmd_list, _cmd_show, _cmd_update
+from tests.support.helpers import _cmd_list, _cmd_recover, _cmd_search, _cmd_show, _cmd_update
 
 
 def test_list_excludes_done_tasks_by_default(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -85,6 +85,31 @@ def test_list_filter_by_status(tmp_path: Path, capsys: pytest.CaptureFixture[str
     assert interrupted.id in output
     assert "Interrupted task" in output
     assert queued.id not in output
+
+
+def test_list_filter_by_archived_status(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    ensure_workspace(tmp_path)
+    live = create_task(tmp_path, title="Live task", auto_commit=False)
+    archived = create_task(tmp_path, title="Archived task", auto_commit=False)
+    archived.status = "done"
+    archived.pipeline_status = "done"
+    save_task(tmp_path, archived)
+    archive_task(tmp_path, archived.id)
+
+    exit_code = _cmd_list(
+        argparse.Namespace(
+            workspace=tmp_path,
+            show_all=False,
+            filter_status="archived",
+            filter_pipeline_status=None,
+            filter_engine=None,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert f"{archived.id} [archived/done] Archived task" in output
+    assert live.id not in output
 
 
 def test_list_filter_by_pipeline_status(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -247,6 +272,65 @@ def test_show_prints_agent_creation_provenance(
     assert "  role: planner" in output
     assert "  blocking: no" in output
     assert f"  rationale: Created by Litehive agent role planner while working on {parent.id}." in output
+
+
+def test_show_prints_archived_history(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Archived history task", auto_commit=False)
+    task.status = "done"
+    task.pipeline_status = "done"
+    task.goal = "Keep archived history directly inspectable"
+    save_task(tmp_path, task)
+    archive_task(tmp_path, task.id)
+
+    exit_code = _cmd_show(argparse.Namespace(workspace=tmp_path, task_id=task.id))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert f"id: {task.id}" in output
+    assert "title: Archived history task" in output
+    assert "status: archived" in output
+    assert "pipeline_stage: done" in output
+    assert "goal: Keep archived history directly inspectable" in output
+
+
+def test_search_exact_archived_task_id_returns_archived_history(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Archived search task", auto_commit=False)
+    task.status = "done"
+    task.pipeline_status = "done"
+    task.goal = "Find archived task history by exact task ID"
+    save_task(tmp_path, task)
+    archive_task(tmp_path, task.id)
+
+    exit_code = _cmd_search(argparse.Namespace(workspace=tmp_path, query=task.id, limit=5))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert f"{task.id} [archived] Archived search task" in output
+    assert "Find archived task history by exact task ID" in output
+
+
+def test_recover_archived_task_directs_operator_to_create_new_task(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Archived recover task", auto_commit=False)
+    task.status = "done"
+    task.pipeline_status = "done"
+    save_task(tmp_path, task)
+    archive_task(tmp_path, task.id)
+
+    exit_code = _cmd_recover(argparse.Namespace(workspace=tmp_path, task_id=task.id))
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert f"recover failed: Task {task.id} is archived and cannot be recovered." in output
+    assert "Create a new task for follow-up work instead." in output
 
 
 def test_task_update_renames_title_in_place(

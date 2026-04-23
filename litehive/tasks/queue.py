@@ -323,11 +323,17 @@ def _normalize_stale_pipeline_statuses(
 
 def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
     from litehive.state.records import require_task
+    from litehive.tasks.archive import get_archived_task
     from litehive.state.locking import workspace_lock, workspace_mutation_guard
     from litehive.state.persist import load_state, save_state
     from litehive.state.persist import persist_task_and_state
 
     with workspace_mutation_guard(root), workspace_lock(root):
+        if task_id is not None and get_archived_task(root, task_id) is not None:
+            raise ValueError(
+                f"Task {task_id} is archived and cannot be switched active. "
+                "Create a new task for follow-up work instead."
+            )
         state = load_state(root)
         state.active_task_id = task_id
         if task_id is not None and task_id in state.queue:

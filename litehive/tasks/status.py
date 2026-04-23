@@ -307,10 +307,18 @@ def _switch_activity_entry_message(
     return "\n".join(lines)
 
 
+def _archived_task_revival_message(task_id: str) -> str:
+    return (
+        f"Task {task_id} is archived and cannot be requeued, resumed, or switched active. "
+        "Create a new task for follow-up work instead."
+    )
+
+
 def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) -> SwitchTaskSummary:
     from litehive.state.records import require_task
     from litehive.state.persist import load_state
     from litehive.tasks.activity import append_task_activity
+    from litehive.tasks.archive import get_archived_task
     from litehive.tasks.queue import move_queued_task
     from litehive.tasks.runtime import mark_engine_switch
 
@@ -318,6 +326,8 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
         raise ValueError(f"Unsupported engine '{engine}'")
     if not reason.strip():
         raise ValueError("Switch reason must not be empty")
+    if get_archived_task(root, task_id) is not None:
+        raise ValueError(_archived_task_revival_message(task_id))
 
     task = require_task(root, task_id)
     if task.pipeline_status == "done":
@@ -388,6 +398,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
 
 def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool = False) -> TaskRecord:
     from litehive.state.records import require_task
+    from litehive.tasks.archive import get_archived_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.state.persist import load_state
     from litehive.tasks.activity import load_task_activity, save_task_activity
@@ -421,6 +432,8 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
         raise ValueError(proc.stderr.strip() or f"git diff failed for {relative_path}")
 
     with workspace_lock(root):
+        if get_archived_task(root, task_id) is not None:
+            raise ValueError(_archived_task_revival_message(task_id))
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
         flag_count_before = task.flag_count
@@ -481,12 +494,15 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
 
 def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
     from litehive.state.records import require_task
+    from litehive.tasks.archive import get_archived_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.state.persist import load_state
     from litehive.tasks.queue import reset_task_for_recovery, resumable_queue_stage
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):
+        if get_archived_task(root, task_id) is not None:
+            raise ValueError(_archived_task_revival_message(task_id))
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
         state = load_state(root)

@@ -264,7 +264,7 @@ def test_task_add_cli_shows_done_for_legacy_archived_duplicate(tmp_path: Path) -
     )
 
     assert result.exit_code == 0, result.output
-    assert f"{archived.id} [done] {archived.title}" in result.output
+    assert f"{archived.id} [archived] {archived.title}" in result.output
     assert f"{archived.id} [queued] {archived.title}" not in result.output
     assert "Created task T-0002" in result.output
 
@@ -577,6 +577,6 @@ def test_search_tasks_by_text_tracks_duplicate_index_maintenance(tmp_path: Path)
 
     archived_matches = search_tasks_by_text(tmp_path, query="duplicate dashboard widgets", limit=10)
     archived_match = next(match for match in archived_matches if match.task_id == task.id)
-    assert archived_match.status == "done"
+    assert archived_match.status == "archived"
     assert archived_match.title == "Dashboard duplicate cleanup"
     assert "duplicate web dashboard widgets" in archived_match.snippet
