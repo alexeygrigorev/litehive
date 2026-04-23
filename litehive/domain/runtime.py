@@ -245,7 +245,6 @@ class TaskRuntime(BaseModel):
     updated_at: str | None = None
     retry_count: int = 0
     retry_limit: int = 0
-    stage_retry_counts: dict[str, int] = Field(default_factory=dict)
     current_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
     last_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
     active_subagent: RuntimeSubagentState | None = None
@@ -258,7 +257,6 @@ class TaskRuntime(BaseModel):
     hook_reject_recovery_invoked: bool = False
     recovery_history: list[RuntimeRecoveryOutcome] = Field(default_factory=list)
     last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
-    self_heal_traceback_fingerprints: list[str] = Field(default_factory=list)
 
     def for_storage(
         self,

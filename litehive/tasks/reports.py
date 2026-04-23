@@ -225,8 +225,6 @@ def record_recovery_report(
     failure_classification: str | None = None,
     blocker: str | None = None,
     warnings: list[str] | None = None,
-    recovery_subagent_id: str | None = None,
-    recovery_subagent_path: str | None = None,
 ) -> Path:
     from litehive.domain.reports import TaskActivityEntry
 
@@ -241,8 +239,6 @@ def record_recovery_report(
         evidence=collect_recovery_evidence(root, task, stage=origin_stage),
         actions=list(actions or []),
         warnings=list(warnings or []),
-        recovery_subagent_id=recovery_subagent_id,
-        recovery_subagent_path=recovery_subagent_path,
     )
     path = write_recovery_report(root, task, report)
     append_task_activity(

@@ -56,12 +56,10 @@ class StageReport(BaseModel):
     feedback: str = ""                                  # Detailed feedback or explanation
     submitted_via_cli: bool = False                     # Whether submitted via CLI vs internal
     files_changed: list[str] = Field(default_factory=list)  # Files modified during stage
-    created_follow_up_task_ids: list[str] = Field(default_factory=list)  # Follow-up tasks created
     tests: dict[str, int] = Field(default_factory=lambda: {"added": 0, "passing": 0})  # Test metrics
     warnings: list[str] = Field(default_factory=list)  # Non-fatal warnings
     retry_count: int = 0                               # Current retry attempt number
     retry_limit: int = 0                               # Maximum retries allowed
-    retry_decision: Literal["continue", "retry", "final"] = "continue"  # Retry routing decision
     outcome: OutcomeKind | None = None                 # Terminal outcome if stage completed task
     outcome_reason_code: OutcomeReasonCode | None = None  # Machine-readable outcome reason
     outcome_reason: str = ""                           # Human-readable outcome explanation
@@ -135,8 +133,6 @@ class RecoveryReport(BaseModel):
     evidence: list[RecoveryEvidenceItem] = Field(default_factory=list)  # Evidence collected during diagnosis
     actions: list[RecoveryAction] = Field(default_factory=list)         # Actions taken during recovery
     warnings: list[str] = Field(default_factory=list) # Non-fatal issues encountered
-    recovery_subagent_id: str | None = None            # Subagent that performed recovery
-    recovery_subagent_path: str | None = None          # Path where recovery ran
     created_at: str = Field(default_factory=utcnow)   # When recovery report was generated
 
 
