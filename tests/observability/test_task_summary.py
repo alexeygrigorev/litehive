@@ -20,6 +20,7 @@ from litehive.observability.status import (
     render_health_recent_completion_lines,
     render_health_worktree_finding_lines,
     render_health_worktree_lines,
+    render_recent_activity_section,
     render_runner_status_line,
     render_runtime_policy_lines,
     render_task_summary,
@@ -258,6 +259,24 @@ def test_render_health_worktree_and_quota_sections() -> None:
     assert quota_lines == [
         "=== Engine Quotas ===",
         "quota: codex status=ok summary=90% remaining",
+    ]
+
+
+def test_render_recent_activity_section_uses_canonical_stage_key() -> None:
+    lines = render_recent_activity_section(
+        [
+            {
+                "ts": "2026-04-23T10:00:00Z",
+                "task_id": "T-0001",
+                "kind": "stage_started",
+                "data": {"stage": "implementing", "role": "swe"},
+            }
+        ]
+    )
+
+    assert lines == [
+        "=== Recent Activity ===",
+        "  [2026-04-23T10:00:00Z] T-0001 stage started implementing swe",
     ]
 
 

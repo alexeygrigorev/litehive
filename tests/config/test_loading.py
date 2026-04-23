@@ -198,7 +198,7 @@ def test_load_config_rejects_legacy_pre_acceptance_command(tmp_path: Path, legac
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="pre_acceptance_command is no longer supported"):
+    with pytest.raises(ValueError, match="unknown config key 'pre_acceptance_command'"):
         load_config(tmp_path)
 
 
@@ -211,7 +211,7 @@ def test_load_config_rejects_legacy_task_engine_routing(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="task_engine_routing is no longer supported"):
+    with pytest.raises(ValueError, match="unknown config key 'task_engine_routing'"):
         load_config(tmp_path)
 
 
@@ -227,7 +227,7 @@ def test_load_config_rejects_legacy_engine_fallbacks_key(tmp_path: Path) -> None
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="engine_fallbacks is no longer supported"):
+    with pytest.raises(ValueError, match="unknown config key 'engine_fallbacks'"):
         load_config(tmp_path)
 
 
@@ -240,7 +240,7 @@ def test_load_config_rejects_removed_runner_hook_execution_mode_key(tmp_path: Pa
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="runner_hook_execution_mode is no longer supported"):
+    with pytest.raises(ValueError, match="unknown config key 'runner_hook_execution_mode'"):
         load_config(tmp_path)
 
 

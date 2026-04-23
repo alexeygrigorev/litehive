@@ -5,21 +5,18 @@ import typer
 from dataclasses import dataclass
 
 from heru import ENGINE_CHOICES
-from litehive.cli.engine import engine_command
-from litehive.cli.display import format_retry_on
-from litehive.cli.common import WorkspaceOption
-from litehive.config.workspace import ensure_workspace
-from litehive.daemon.registry import daemon_metadata
-from litehive.heru_compat import (
+from heru.quota import (
     UsageStatus,
     check_claude_quota,
     check_codex_quota,
     check_copilot_quota,
     check_zai_quota,
-    preferred_reset_at as heru_preferred_reset_at,
-    quota_long_term,
-    quota_short_term,
 )
+from litehive.cli.engine import engine_command
+from litehive.cli.display import format_retry_on
+from litehive.cli.common import WorkspaceOption
+from litehive.config.workspace import ensure_workspace
+from litehive.daemon.registry import daemon_metadata
 from litehive.observability.engine_monitoring import render_engine_monitoring_lines
 from litehive.observability.status import (
     collect_task_pipeline_status,
@@ -292,7 +289,11 @@ def _preferred_reset_at(
     *,
     include_short_term_fallback: bool = False,
 ) -> str | None:
-    return heru_preferred_reset_at(status, include_short_term_fallback=include_short_term_fallback)
+    if status.long_term.reset_at:
+        return status.long_term.reset_at
+    if include_short_term_fallback:
+        return status.short_term.reset_at
+    return None
 
 
 def _quota_health(
@@ -303,8 +304,8 @@ def _quota_health(
 ) -> _QuotaHealth:
     if status.error is not None:
         return _QuotaHealth(engine, "unavailable", status.error)
-    short_term = quota_short_term(status)
-    long_term = quota_long_term(status)
+    short_term = status.short_term
+    long_term = status.long_term
     summary = (
         f"hours remaining={short_term.percent_remaining:.1f}% "
         f"weeks remaining={long_term.percent_remaining:.1f}%"

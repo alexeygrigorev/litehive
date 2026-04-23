@@ -115,7 +115,6 @@ class RoleAgent(AgentNode):
                 else None
             ),
             "runner_hooks": runner_hooks,
-            "rejecting_hooks": runner_hooks,
         }
 
     def _last_rejection_for_prompt(self, state: TaskState) -> LastRejection | None:

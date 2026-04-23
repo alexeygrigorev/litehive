@@ -87,10 +87,6 @@ def agent_report_command(
         str | None,
         typer.Option("--target-stage", help="Recovery destination stage", hidden=True),
     ] = None,
-    step: Annotated[
-        str | None,
-        typer.Option("--step", hidden=True, help="Legacy alias for --stage"),
-    ] = None,
     task_id: Annotated[str | None, typer.Option("--task-id", help="Override task id")] = None,
     workspace: Annotated[
         Path | None,
@@ -113,9 +109,6 @@ def agent_report_command(
         raise SystemExit(1)
 
     normalized_verdict = verdict.strip().lower()
-    if agent_role != "recovery" and normalized_verdict == "fail":
-        normalized_verdict = "reject"
-
     allowed = _allowed_verdicts_for_role(agent_role)
     if normalized_verdict not in allowed:
         print("You are not authorized to perform this command.")
@@ -164,7 +157,7 @@ def agent_report_command(
     except TaskNotFound:
         pipeline_stage = None
     actual_stage = _resolve_report_stage(
-        explicit_stage=stage or step,
+        explicit_stage=stage,
         task=task,
         pipeline_stage=pipeline_stage,
     )

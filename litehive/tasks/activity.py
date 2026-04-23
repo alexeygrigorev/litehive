@@ -37,11 +37,8 @@ def load_task_activity(root: Path, task: TaskRecord) -> list[TaskActivityEntry]:
             continue
         if not isinstance(payload, dict):
             continue
-        normalized = dict(payload)
-        if "stage" not in normalized and "step" in normalized:
-            normalized["stage"] = normalized.pop("step")
         try:
-            activity.append(TaskActivityEntry(**normalized))
+            activity.append(TaskActivityEntry(**payload))
         except ValidationError:
             continue
     return activity
@@ -86,18 +83,16 @@ def latest_task_activity_entry(
     *,
     role: str | None = None,
     stage: str | None = None,
-    step: str | None = None,
     verdicts: Iterable[str] | None = None,
     after: datetime | None = None,
 ) -> TaskActivityEntry | None:
-    stage = stage or step
     allowed_verdicts = None if verdicts is None else set(verdicts)
     for entry in reversed(load_task_activity(root, task)):
         if role is not None and entry.role != role:
             continue
         if stage is not None and entry.stage != stage:
             continue
-        entry_verdict = entry.verdict.value if hasattr(entry.verdict, "value") else str(entry.verdict)
+        entry_verdict = str(entry.verdict)
         if allowed_verdicts is not None and entry_verdict not in allowed_verdicts:
             continue
         if after is not None and _parse_created_at(entry.created_at) <= after:

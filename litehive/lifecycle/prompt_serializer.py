@@ -106,9 +106,7 @@ def serialize_prompt(
             )
         )
 
-    runner_hooks = prompt.get("runner_hooks")
-    if runner_hooks is None:
-        runner_hooks = prompt.get("rejecting_hooks") or []
+    runner_hooks = prompt.get("runner_hooks") or []
     if runner_hooks:
         sections.append(_runner_hooks_section(prompt.get("stage"), runner_hooks))
 

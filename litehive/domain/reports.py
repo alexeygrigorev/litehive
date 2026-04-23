@@ -2,7 +2,7 @@
 
 from typing import Literal, TypeAlias
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from .common import (
     FEEDBACK_CAP,
@@ -19,6 +19,16 @@ from .runtime import ResourceLimitEvent
 
 
 ReportStage: TypeAlias = TaskStage | Literal["merge_resolving", "recovering"]
+TaskActivityVerdict: TypeAlias = Literal[
+    "pass",
+    "reject",
+    "blocked",
+    "comment",
+    "resume",
+    "advance",
+    "done",
+    "budget_hit",
+]
 
 
 class StageReport(BaseModel):
@@ -159,24 +169,11 @@ class TaskActivityEntry(BaseModel):
     role: str                                           # Who created this entry (agent role, operator, system)
     stage: str                                          # Pipeline stage where activity occurred
     target_stage: str | None = None                     # Target stage if this is a transition
-    verdict: Verdict = Verdict.COMMENT                  # Associated verdict if applicable
+    verdict: TaskActivityVerdict = "comment"            # Associated verdict if applicable
     message: str                                        # Free-form human-readable activity description
     files_changed: list[str] = Field(default_factory=list)  # Files modified as part of this activity
     follow_up_task_id: str | None = None                # Optional follow-up task reference
     created_at: str = Field(default_factory=utcnow)    # When the activity occurred
-
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_payload(cls, data: object) -> object:
-        if not isinstance(data, dict):
-            return data
-        normalized = dict(data)
-        if "stage" not in normalized and "step" in normalized:
-            normalized["stage"] = normalized["step"]
-        verdict = normalized.get("verdict")
-        if isinstance(verdict, str) and verdict.strip().lower() == "fail":
-            normalized["verdict"] = "reject"
-        return normalized
 
 
 __all__ = [

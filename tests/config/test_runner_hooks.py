@@ -7,7 +7,7 @@ from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
 
 
-def test_load_config_normalizes_runner_hooks_and_ignores_legacy_flags(tmp_path: Path) -> None:
+def test_load_config_normalizes_runner_hooks(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
@@ -15,10 +15,10 @@ def test_load_config_normalizes_runner_hooks_and_ignores_legacy_flags(tmp_path: 
                 "runner_hooks": {
                     "before_implementing": ["echo pre"],
                     "after_implementing": [
-                        {"command": "echo post", "reject_on_failure": True},
+                        {"command": "echo post"},
                         {"command": "uv run pytest -q", "timeout_seconds": 300, "description": "full suite"},
                     ],
-                    "after_commit": [{"command": "echo verify", "blocking": True}],
+                    "after_commit": [{"command": "echo verify"}],
                 }
             },
             sort_keys=False,
@@ -36,6 +36,27 @@ def test_load_config_normalizes_runner_hooks_and_ignores_legacy_flags(tmp_path: 
         ],
         "after_commit": [{"command": "echo verify"}],
     }
+
+
+def test_load_config_rejects_removed_runner_hook_entry_keys(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "runner_hooks": {
+                    "after_implementing": [
+                        {"command": "echo post", "reject_on_failure": True},
+                        {"command": "echo verify", "blocking": True},
+                    ],
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="contains unsupported keys: reject_on_failure"):
+        load_config(tmp_path)
 
 
 def test_load_config_preserves_runner_hook_descriptions_and_instructions(tmp_path: Path) -> None:

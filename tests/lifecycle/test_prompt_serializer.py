@@ -280,7 +280,7 @@ def test_serialize_reads_activity_through_boundary(workspace: Path, monkeypatch)
         return [
             TaskActivityEntry(
                 role="planner",
-                step="grooming",
+                stage="grooming",
                 verdict="pass",
                 message="scope ready",
             )
@@ -478,7 +478,26 @@ def test_build_prompt_ignores_corrupt_hook_config(workspace: Path) -> None:
     )
     prompt = agent.build_prompt(make_state(task.id))
 
-    assert prompt["rejecting_hooks"] == []
+    assert prompt["runner_hooks"] == []
+    assert "rejecting_hooks" not in prompt
+
+
+def test_serialize_prompt_ignores_removed_rejecting_hooks_alias(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+    prompt = agent.build_prompt(make_state(task.id))
+    prompt.pop("runner_hooks", None)
+    prompt["rejecting_hooks"] = [
+        {
+            "command": "uv run pytest -q tests/legacy.py",
+            "description": "legacy alias should be ignored",
+        }
+    ]
+
+    text = serialize_prompt(prompt, task_record=task)
+
+    assert "legacy alias should be ignored" not in text
+    assert "uv run pytest -q tests/legacy.py" not in text
 
 
 def test_swe_prompt_lists_after_stage_hooks_with_descriptions(workspace: Path) -> None:
@@ -490,7 +509,6 @@ def test_swe_prompt_lists_after_stage_hooks_with_descriptions(workspace: Path) -
                     "after_implementing": [
                         {
                             "command": "ruff check --select E402,F401",
-                            "reject_on_failure": True,
                             "description": "ensures no unused imports or wrong import order",
                         },
                         {
@@ -510,8 +528,10 @@ def test_swe_prompt_lists_after_stage_hooks_with_descriptions(workspace: Path) -
         _NullSessions(),
         prompt_context=PromptContext(workspace_root=workspace),
     )
-    text = serialize_prompt(agent.build_prompt(make_state(task.id)), task_record=task)
+    prompt = agent.build_prompt(make_state(task.id))
+    text = serialize_prompt(prompt, task_record=task)
 
+    assert "rejecting_hooks" not in prompt
     assert "After implementing, these checks will run:" in text
     assert "- ruff check --select E402,F401 (ensures no unused imports or wrong import order)" in text
     assert (

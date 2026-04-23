@@ -284,7 +284,7 @@ def test_agent_report_rejects_agent_blocked_verdict(tmp_path: Path) -> None:
     assert "not authorized" in result.output
 
 
-def test_agent_report_normalizes_legacy_fail_to_reject(tmp_path: Path) -> None:
+def test_agent_report_rejects_removed_fail_verdict_alias(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Legacy fail verdict")
 
@@ -306,14 +306,12 @@ def test_agent_report_normalizes_legacy_fail_to_reject(tmp_path: Path) -> None:
         standalone_mode=False,
     )
 
-    assert result.exit_code == 0, result.output
+    assert result.exit_code == 1
+    assert "not authorized" in result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
     activity_entries = load_task_activity(tmp_path, updated)
-    assert len(activity_entries) == 1
-    assert activity_entries[0].verdict == "reject"
-    assert activity_entries[0].message == "legacy failure wording"
-    assert "verdict: reject" in result.output
+    assert activity_entries == []
 
 
 def test_agent_update_allows_planner_to_shape_active_task(tmp_path: Path, monkeypatch) -> None:
@@ -414,7 +412,7 @@ def test_agent_report_accepts_recovery_resume_verdict(tmp_path: Path) -> None:
     )
 
 
-def test_agent_report_accepts_hidden_step_alias(tmp_path: Path) -> None:
+def test_agent_report_rejects_removed_step_alias(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Agent report step alias")
 
@@ -436,19 +434,15 @@ def test_agent_report_accepts_hidden_step_alias(tmp_path: Path) -> None:
         standalone_mode=False,
     )
 
-    assert result.exit_code == 0, result.output
+    assert result.exit_code == 1
+    assert result.exception is not None
+    assert "No such option: --step" in str(result.exception)
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    activity_entries = load_task_activity(tmp_path, updated)
-    assert len(activity_entries) == 1
-    assert activity_entries[0].role == "swe"
-    assert activity_entries[0].stage == "implementing"
-    assert activity_entries[0].verdict == "pass"
-    assert activity_entries[0].message == "integration report from codex"
-    assert activity_entries[0].files_changed == []
+    assert load_task_activity(tmp_path, updated) == []
 
 
-def test_root_report_accepts_hidden_step_alias(tmp_path: Path, monkeypatch) -> None:
+def test_root_report_rejects_removed_step_alias(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Legacy step alias for root report")
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
@@ -471,24 +465,15 @@ def test_root_report_accepts_hidden_step_alias(tmp_path: Path, monkeypatch) -> N
         standalone_mode=False,
     )
 
-    assert result.exit_code == 0, result.output
+    assert result.exit_code == 1
+    assert result.exception is not None
+    assert "No such option: --step" in str(result.exception)
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    _assert_activity_entries(
-        load_task_activity(tmp_path, updated),
-        [
-            TaskActivityEntry(
-                role="recovery",
-                stage="recovering",
-                verdict="pass",
-                message="recovery note",
-                files_changed=[],
-            )
-        ],
-    )
+    assert load_task_activity(tmp_path, updated) == []
 
 
-def test_root_report_normalizes_legacy_fail_to_reject(tmp_path: Path, monkeypatch) -> None:
+def test_root_report_rejects_removed_fail_verdict_alias(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Legacy root fail verdict")
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
@@ -503,7 +488,7 @@ def test_root_report_normalizes_legacy_fail_to_reject(tmp_path: Path, monkeypatc
             "swe",
             "--verdict",
             "fail",
-            "--step",
+            "--stage",
             "implementing",
             "--message",
             "legacy root failure wording",
@@ -511,14 +496,12 @@ def test_root_report_normalizes_legacy_fail_to_reject(tmp_path: Path, monkeypatc
         standalone_mode=False,
     )
 
-    assert result.exit_code == 0, result.output
+    assert result.exit_code == 1
+    assert result.exception is not None
+    assert "'fail' is not one of" in str(result.exception)
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    activity_entries = load_task_activity(tmp_path, updated)
-    assert len(activity_entries) == 1
-    assert activity_entries[0].verdict == "reject"
-    assert activity_entries[0].message == "legacy root failure wording"
-    assert "verdict: reject" in result.output
+    assert load_task_activity(tmp_path, updated) == []
 
 
 def test_root_report_defaults_to_litehive_task_id_env(tmp_path: Path, monkeypatch) -> None:

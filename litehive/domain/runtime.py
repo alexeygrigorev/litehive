@@ -50,14 +50,6 @@ class RuntimeStageState(BaseModel):
     verdict: str | None = None        # Final verdict (accept, reject, blocked) if completed
     summary: str = ""                 # Brief description of stage results
 
-    @property
-    def step(self) -> str | None:
-        return self.stage
-
-    @step.setter
-    def step(self, value: str | None) -> None:
-        self.stage = value
-
 
 class RuntimeSubagentState(BaseModel):
     """Runtime state for a subagent execution.

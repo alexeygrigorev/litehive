@@ -15,14 +15,6 @@ from litehive.domain.task import TaskIntentRecord, TaskRecord, TaskStateRecord, 
 from litehive.tasks.audit import TaskAuditEntry, insert_task_audit_entries
 
 logger = logging.getLogger(__name__)
-_LEGACY_TASK_INTENT_KEYS = {
-    "mode",
-    "pm_complexity",
-    "planned_effort",
-    "human_checkpoints",
-    "upstream_origin",
-    "github_origin",
-}
 
 _TASK_DIR_RE = re.compile(r"^T-(\d{4})-")
 _TASK_SCOPED_TABLES = (
@@ -40,27 +32,6 @@ _TASK_SCOPED_TABLES = (
     "pipeline_task_state",
     "pipeline_sessions",
 )
-
-
-# Map subagent statuses that earlier versions of the runtime wrote into SQLite
-# but which the current pydantic SubagentStatus literal no longer accepts.
-# Rewriting on load keeps old runtime rows readable without a DB migration.
-_LEGACY_SUBAGENT_STATUS_MAP = {
-    "blocked": "failed",
-    "created": "queued",
-}
-
-
-def _normalize_legacy_subagent_statuses(payload: dict) -> None:
-    subagents = payload.get("subagents")
-    if not isinstance(subagents, list):
-        return
-    for entry in subagents:
-        if not isinstance(entry, dict):
-            continue
-        status = entry.get("status")
-        if isinstance(status, str) and status in _LEGACY_SUBAGENT_STATUS_MAP:
-            entry["status"] = _LEGACY_SUBAGENT_STATUS_MAP[status]
 
 
 class RuntimeStore:
@@ -113,7 +84,6 @@ class RuntimeStore:
         if row is None:
             return None
         payload = json.loads(row["payload"])
-        _normalize_legacy_subagent_statuses(payload)
         return TaskStateRecord(**payload)
 
     def save_task_state(self, task_id: str, state: TaskStateRecord) -> None:
@@ -294,10 +264,7 @@ class RuntimeStore:
                 loaded = yaml.safe_load(task_file.read_text(encoding="utf-8")) or {}
                 if not isinstance(loaded, dict):
                     raise ValueError("task file must contain a mapping")
-                payload = dict(loaded)
-                for key in _LEGACY_TASK_INTENT_KEYS:
-                    payload.pop(key, None)
-                intent = TaskIntentRecord.model_validate(payload)
+                intent = TaskIntentRecord.model_validate(loaded)
             except Exception as exc:
                 logger.warning("Skipping invalid task file during sqlite bootstrap %s: %s", task_file, exc)
                 continue

@@ -4,9 +4,10 @@ from pathlib import Path
 
 import yaml
 
+from heru.base import CLIExecutionResult, ExternalCLIAdapter
+from heru.quota import UsageStatus
 from litehive.config.workspace_files import workspace_gitignore_path
 from litehive.config.workspace import render_workspace_gitignore
-from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.domain.common import utcnow
 from litehive.domain.engine import (
     EngineUsageObservation,
@@ -14,7 +15,6 @@ from litehive.domain.engine import (
     EngineUsageWindow,
     WorkspaceEngineMonitoring,
 )
-from litehive.heru_compat import UsageStatus, preferred_reset_at, quota_long_term, quota_short_term
 from litehive.state.persist import atomic_write_text
 from litehive.state.locking import workspace_mutation_guard
 
@@ -23,34 +23,11 @@ def engine_monitoring_file(root: Path) -> Path:
     return root / ".litehive" / "engine-monitoring.yaml"
 
 
-_LEGACY_ENGINE_LIMIT_KIND_MAP = {
-    # Earlier heru versions emitted "capacity" for provider rate-limit hits.
-    # The current literal uses "rate" / "quota" / "budget" / "resource" /
-    # "unknown"; rewrite legacy values to the closest match rather than
-    # crashing every daemon iteration with a pydantic ValidationError.
-    "capacity": "rate",
-}
-
-
-def _normalize_legacy_engine_monitoring(data: dict) -> None:
-    engines = data.get("engines")
-    if not isinstance(engines, dict):
-        return
-    for engine_name, entry in engines.items():
-        if not isinstance(entry, dict):
-            continue
-        kind = entry.get("last_limit_kind")
-        if isinstance(kind, str) and kind in _LEGACY_ENGINE_LIMIT_KIND_MAP:
-            entry["last_limit_kind"] = _LEGACY_ENGINE_LIMIT_KIND_MAP[kind]
-
-
 def load_engine_monitoring(root: Path) -> WorkspaceEngineMonitoring:
     path = engine_monitoring_file(root)
     if not path.exists():
         return WorkspaceEngineMonitoring()
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if isinstance(data, dict):
-        _normalize_legacy_engine_monitoring(data)
     return WorkspaceEngineMonitoring(**data)
 
 
@@ -206,10 +183,10 @@ def record_codex_quota_check(
     record.provider = "openai"
     record.observed_at = utcnow()
 
-    short_term = quota_short_term(status)
-    long_term = quota_long_term(status)
+    short_term = status.short_term
+    long_term = status.long_term
     used_pct = int(long_term.used_percent)
-    reset_at = preferred_reset_at(status)
+    reset_at = _preferred_reset_at(status)
     record.usage = EngineUsageWindow(
         used=used_pct,
         limit=100,
@@ -287,4 +264,16 @@ def _limit_kind(reason: str | None) -> str | None:
         return "capacity"
     if any(marker in normalized for marker in ("quota", "usage limit")):
         return "quota"
+    return None
+
+
+def _preferred_reset_at(
+    status: UsageStatus,
+    *,
+    include_short_term_fallback: bool = False,
+) -> str | None:
+    if status.long_term.reset_at:
+        return status.long_term.reset_at
+    if include_short_term_fallback:
+        return status.short_term.reset_at
     return None

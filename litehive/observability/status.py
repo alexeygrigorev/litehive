@@ -752,8 +752,8 @@ def render_recent_activity_section(events: list[dict[str, Any]]) -> list[str]:
         task_id = event.get("task_id", "-")
         data = event.get("data", {})
         detail_parts = [f"{task_id} {label}"]
-        if kind in ("stage_completed", "stage_started") and data.get("step"):
-            detail_parts.append(data["step"])
+        if kind in ("stage_completed", "stage_started") and data.get("stage"):
+            detail_parts.append(data["stage"])
         if kind == "engine_switch" and data.get("to_engine"):
             detail_parts.append(f"-> {data['to_engine']}")
         if "role" in data:

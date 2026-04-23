@@ -305,8 +305,7 @@ def test_workspace_registry_is_available_from_other_threads(tmp_path: Path, monk
     assert not thread.is_alive()
     assert results == [[tmp_path.resolve()]]
 
-
-def test_legacy_global_state_migrates_once_with_notice(
+def test_legacy_global_state_in_config_home_is_not_migrated(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -317,111 +316,20 @@ def test_legacy_global_state_migrates_once_with_notice(
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
 
     legacy_root = config_home / "litehive"
+    canonical_root = data_home / "litehive"
     legacy_root.mkdir(parents=True, exist_ok=True)
+
     (legacy_root / "config.yaml").write_text("default_engine: gemini\n", encoding="utf-8")
-    (legacy_root / "workspaces.yaml").write_text("- /tmp/workspace-one\n", encoding="utf-8")
-    (legacy_root / "daemons.yaml").write_text("- workspace: /tmp/workspace-one\n", encoding="utf-8")
+    (legacy_root / "workspaces.yaml").write_text("- /tmp/legacy-workspace\n", encoding="utf-8")
+    (legacy_root / "daemons.yaml").write_text("- workspace: /tmp/legacy-workspace\n", encoding="utf-8")
 
     ensure_workspace(tmp_path)
-    stderr = capsys.readouterr().err
-
-    assert "migrated legacy global state into" in stderr
-    assert "config.yaml" in stderr
-    assert "daemons.yaml" in stderr
-    assert "workspaces.yaml" not in stderr
-    assert (legacy_root / "config.yaml").exists()
-    assert (legacy_root / "workspaces.yaml").exists()
-    assert (legacy_root / "daemons.yaml").exists()
-    assert (data_home / "litehive" / "config.yaml").exists()
-    assert (data_home / "litehive" / "daemons.yaml").exists()
-    assert not (data_home / "litehive" / "workspaces.yaml").exists()
+    assert capsys.readouterr().err == ""
+    assert (legacy_root / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
+    assert (legacy_root / "daemons.yaml").read_text(encoding="utf-8") == "- workspace: /tmp/legacy-workspace\n"
+    assert not (canonical_root / "config.yaml").exists()
+    assert not (canonical_root / "daemons.yaml").exists()
     assert _registered_paths(legacy_root / "workspaces.yaml")[0] == str(tmp_path.resolve())
-
-    ensure_workspace(tmp_path)
-    assert capsys.readouterr().err == ""
-    assert (legacy_root / "config.yaml").read_text(encoding="utf-8") == (
-        data_home / "litehive" / "config.yaml"
-    ).read_text(encoding="utf-8")
-    assert (legacy_root / "daemons.yaml").read_text(encoding="utf-8") == (
-        data_home / "litehive" / "daemons.yaml"
-    ).read_text(encoding="utf-8")
-
-
-def test_legacy_global_state_notice_and_sync_when_targets_already_exist(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    config_home = tmp_path / "xdg-config"
-    data_home = tmp_path / "xdg-data"
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
-    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
-
-    legacy_root = config_home / "litehive"
-    new_root = data_home / "litehive"
-    legacy_root.mkdir(parents=True, exist_ok=True)
-    new_root.mkdir(parents=True, exist_ok=True)
-
-    (legacy_root / "config.yaml").write_text("default_engine: gemini\n", encoding="utf-8")
-    (legacy_root / "workspaces.yaml").write_text("- /tmp/legacy-workspace\n", encoding="utf-8")
-    (legacy_root / "daemons.yaml").write_text("- workspace: /tmp/legacy-workspace\n", encoding="utf-8")
-
-    (new_root / "config.yaml").write_text("default_engine: codex\n", encoding="utf-8")
-    (new_root / "workspaces.yaml").write_text("- /tmp/new-workspace\n", encoding="utf-8")
-    (new_root / "daemons.yaml").write_text("- workspace: /tmp/new-workspace\n", encoding="utf-8")
-
-    ensure_workspace(tmp_path)
-    stderr = capsys.readouterr().err
-
-    assert "migrated legacy global state into" in stderr
-    assert "config.yaml" in stderr
-    assert "daemons.yaml" in stderr
-    assert "workspaces.yaml" not in stderr
-    assert (new_root / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
-    assert (new_root / "workspaces.yaml").read_text(encoding="utf-8") == "- /tmp/new-workspace\n"
-    assert (new_root / "daemons.yaml").read_text(encoding="utf-8") == "- workspace: /tmp/legacy-workspace\n"
-
-    ensure_workspace(tmp_path)
-    assert capsys.readouterr().err == ""
-    assert (legacy_root / "config.yaml").read_text(encoding="utf-8") == (
-        new_root / "config.yaml"
-    ).read_text(encoding="utf-8")
-    assert (legacy_root / "daemons.yaml").read_text(encoding="utf-8") == (
-        new_root / "daemons.yaml"
-    ).read_text(encoding="utf-8")
-
-
-def test_legacy_global_state_repopulates_missing_canonical_files_after_notice(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    config_home = tmp_path / "xdg-config"
-    data_home = tmp_path / "xdg-data"
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
-    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
-
-    legacy_root = config_home / "litehive"
-    new_root = data_home / "litehive"
-    legacy_root.mkdir(parents=True, exist_ok=True)
-
-    (legacy_root / "config.yaml").write_text("default_engine: gemini\n", encoding="utf-8")
-    (legacy_root / "workspaces.yaml").write_text("- /tmp/legacy-workspace\n", encoding="utf-8")
-    (legacy_root / "daemons.yaml").write_text("- workspace: /tmp/legacy-workspace\n", encoding="utf-8")
-
-    ensure_workspace(tmp_path)
-    assert "migrated legacy global state into" in capsys.readouterr().err
-
-    for filename in ("config.yaml", "daemons.yaml"):
-        (new_root / filename).unlink()
-
-    ensure_workspace(tmp_path)
-    assert capsys.readouterr().err == ""
-    assert (new_root / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
-    assert (new_root / "daemons.yaml").read_text(encoding="utf-8") == (
-        legacy_root / "daemons.yaml"
-    ).read_text(encoding="utf-8")
-    assert not (new_root / "workspaces.yaml").exists()
 
 
 def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(

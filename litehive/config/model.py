@@ -37,9 +37,6 @@ VALID_RUNNER_HOOK_ENTRY_KEYS = frozenset(
         "instructions_on_failure",
     }
 )
-# Tolerate these legacy fields so existing workspace configs keep loading,
-# but strip them during normalization because the runner no longer uses them.
-LEGACY_RUNNER_HOOK_ENTRY_KEYS = frozenset({"reject_on_failure", "blocking"})
 DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS = 300.0
 
 
@@ -151,33 +148,11 @@ class LitehiveConfig:
             self.litehive_source_path = self.litehive_source_path.strip() or None
         self.external_engine_sandbox = normalize_external_engine_sandbox_config(self.external_engine_sandbox)
 
-
-_UNSUPPORTED_CONFIG_KEYS = {
-    "pre_acceptance_command": (
-        "pre_acceptance_command is no longer supported. Migrate this command to runner_hooks.before_accepting."
-    ),
-    "runner_hook_execution_mode": (
-        "runner_hook_execution_mode is no longer supported. "
-        "Runner hooks now run sequentially and stop at the first failure."
-    ),
-    "task_engine_routing": (
-        "task_engine_routing is no longer supported. "
-        "Engine selection now comes only from default_engine, explicit runtime engine switches, "
-        "or CLI --engine."
-    ),
-    "engine_fallbacks": (
-        "engine_fallbacks is no longer supported. "
-        "Use engine_preference to specify engine ordering instead."
-    ),
-}
 _VALID_CONFIG_KEYS = frozenset(field.name for field in fields(LitehiveConfig))
 
 
 def validate_config_data(data: Mapping[str, Any]) -> dict[str, Any]:
     validated = dict(data)
-    for key, message in _UNSUPPORTED_CONFIG_KEYS.items():
-        if key in validated:
-            raise ValueError(message)
     profile = validated.get("process_profile")
     if profile in PROCESS_PROFILES or profile is None:
         pass
@@ -263,7 +238,7 @@ def _normalize_runner_hook(
     if not isinstance(raw_hook, Mapping):
         raise ValueError(f"{field_name} must be a command string or mapping")
 
-    unknown_keys = sorted(set(raw_hook) - VALID_RUNNER_HOOK_ENTRY_KEYS - LEGACY_RUNNER_HOOK_ENTRY_KEYS)
+    unknown_keys = sorted(set(raw_hook) - VALID_RUNNER_HOOK_ENTRY_KEYS)
     if unknown_keys:
         joined = ", ".join(unknown_keys)
         raise ValueError(f"{field_name} contains unsupported keys: {joined}")

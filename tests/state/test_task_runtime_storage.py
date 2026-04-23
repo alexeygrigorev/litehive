@@ -1,6 +1,8 @@
 from pathlib import Path
 
+import pytest
 import yaml
+from pydantic import ValidationError
 
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.task import TaskRecord
@@ -12,6 +14,7 @@ from litehive.state.records import (
     save_task,
     save_task_runtime,
 )
+from litehive.state.store import runtime_store
 
 
 def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
@@ -138,7 +141,7 @@ def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Pat
     assert [task.id for task in tasks] == [present.id, "T-0002"]
 
 
-def test_load_task_record_file_ignores_legacy_intent_fields(tmp_path: Path) -> None:
+def test_load_task_record_file_rejects_legacy_intent_fields(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-legacy-intent"
     task_dir.mkdir(parents=True)
@@ -167,11 +170,38 @@ def test_load_task_record_file_ignores_legacy_intent_fields(tmp_path: Path) -> N
         encoding="utf-8",
     )
 
-    task = load_task_record_file(task_path)
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        load_task_record_file(task_path)
 
-    assert task.id == "T-0001"
-    assert task.pipeline_mode == "full"
-    assert task.git.commit_message == "legacy intent"
+
+def test_runtime_store_bootstrap_skips_legacy_intent_task_files(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-legacy-intent"
+    task_dir.mkdir(parents=True)
+    task_path = task_dir / "task.yaml"
+    task_path.write_text(
+        yaml.safe_dump(
+            {
+                "id": "T-0001",
+                "slug": "legacy-intent",
+                "title": "Legacy intent",
+                "mode": "implementation",
+                "pipeline_mode": "full",
+                "priority": "medium",
+                "git": {
+                    "auto_commit": True,
+                    "commit_message": "legacy intent",
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    store = runtime_store(tmp_path)
+    store.bootstrap()
+
+    assert store.load_task_state("T-0001") is None
 
 
 def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -> None:

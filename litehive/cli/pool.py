@@ -27,10 +27,10 @@ def _task_stage_outcomes(root, task_id, slug):
     )
     for report_path in report_paths:
         report_data = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
-        step = str(report_data.get("step") or "").strip()
+        stage = str(report_data.get("stage") or "").strip()
         verdict = str(report_data.get("verdict") or "").strip()
-        if step and verdict:
-            outcomes.append(f"{step}={verdict}")
+        if stage and verdict:
+            outcomes.append(f"{stage}={verdict}")
     return outcomes
 
 
@@ -46,7 +46,7 @@ def _task_reports_dir(root, task_id):
 
 
 def _collect_task_stage_stats(root, task_id):
-    """Collect step/verdict/duration_seconds from all reports for a task."""
+    """Collect stage/verdict/duration_seconds from all reports for a task."""
     reports_dir = _task_reports_dir(root, task_id)
     if reports_dir is None or not reports_dir.exists():
         return []
@@ -60,13 +60,13 @@ def _collect_task_stage_stats(root, task_id):
             data = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
         except (yaml.YAMLError, OSError):
             continue
-        step = str(data.get("step") or "").strip()
+        stage = str(data.get("stage") or "").strip()
         verdict = str(data.get("verdict") or "").strip()
-        if not step or not verdict:
+        if not stage or not verdict:
             continue
         raw_dur = data.get("duration_seconds", 0)
         duration = float(raw_dur) if isinstance(raw_dur, (int, float)) and raw_dur > 0 else 0.0
-        stats.append({"step": step, "verdict": verdict, "duration_seconds": duration})
+        stats.append({"stage": stage, "verdict": verdict, "duration_seconds": duration})
     return stats
 
 
@@ -87,23 +87,23 @@ def _compute_pool_flow_statistics(root, task_entries):
         if not task_id:
             continue
         for stat in _collect_task_stage_stats(root, task_id):
-            step = stat["step"]
+            stage = stat["stage"]
             verdict = stat["verdict"]
             duration = stat["duration_seconds"]
             total_stages += 1
             if duration > 0:
-                stage_durations.setdefault(step, []).append(duration)
+                stage_durations.setdefault(stage, []).append(duration)
             if verdict in ("pass", "accept"):
-                stage_pass_counts[step] = stage_pass_counts.get(step, 0) + 1
+                stage_pass_counts[stage] = stage_pass_counts.get(stage, 0) + 1
             else:
-                stage_fail_counts[step] = stage_fail_counts.get(step, 0) + 1
+                stage_fail_counts[stage] = stage_fail_counts.get(stage, 0) + 1
 
     if not stage_durations:
         return None
 
     stage_metrics: dict[str, dict[str, float]] = {}
-    for step, durs in stage_durations.items():
-        stage_metrics[step] = {
+    for stage, durs in stage_durations.items():
+        stage_metrics[stage] = {
             "avg_seconds": sum(durs) / len(durs),
             "min_seconds": min(durs),
             "max_seconds": max(durs),
@@ -410,13 +410,13 @@ def _pool_summary_report_lines(
         stage_metrics = flow_statistics.get("stage_metrics") or {}
         if stage_metrics:
             duration_parts = [
-                f"{step}=avg:{_fmt_seconds(m['avg_seconds'])},min:{_fmt_seconds(m['min_seconds'])},max:{_fmt_seconds(m['max_seconds'])}"
-                for step, m in stage_metrics.items()
+                f"{stage}=avg:{_fmt_seconds(m['avg_seconds'])},min:{_fmt_seconds(m['min_seconds'])},max:{_fmt_seconds(m['max_seconds'])}"
+                for stage, m in stage_metrics.items()
             ]
             lines.append(f"stage_durations: {' '.join(duration_parts)}")
         stage_fail_counts = flow_statistics.get("stage_fail_counts") or {}
         if stage_fail_counts:
-            fail_parts = [f"{step}={count}" for step, count in stage_fail_counts.items()]
+            fail_parts = [f"{stage}={count}" for stage, count in stage_fail_counts.items()]
             lines.append(f"stage_failures: {' '.join(fail_parts)}")
     lines.append(f"stop_condition: {report['stop_condition']}")
     lines.append(f"stop_reason: {report['stop_reason']}")

@@ -323,12 +323,14 @@ def run_command(
 
 
 def report_command(
-    verdict: Annotated[str, typer.Option(click_type=choice(["pass", "reject", "comment", "fail"]))] = ...,
+    verdict: Annotated[
+        str,
+        typer.Option(click_type=choice(["advance", "blocked", "budget_hit", "comment", "done", "pass", "reject", "resume"])),
+    ] = ...,
     message: Annotated[str, typer.Option(help="Detailed explanation (use - for stdin)")] = "",
     message_file: Annotated[Path | None, typer.Option("--message-file", help="Read message from file")] = None,
     role: Annotated[str, typer.Option(help="Role submitting the report")] = "swe",
     stage: Annotated[str | None, typer.Option(help="Stage name")] = None,
-    step: Annotated[str | None, typer.Option("--step", hidden=True)] = None,
     task_id: Annotated[str | None, typer.Option(help="Task ID")] = None,
     workspace: Annotated[
         Path | None,
@@ -364,19 +366,18 @@ def report_command(
     if task is None:
         print(f"report failed: task {task_id} not found")
         return 1
-    stage = stage or step or task.pipeline_status
-    normalized_verdict = "reject" if verdict == "fail" else verdict
+    stage = stage or task.pipeline_status
     entry = TaskActivityEntry(
         role=role,
         stage=stage,
-        verdict=normalized_verdict,
+        verdict=verdict,  # type: ignore[arg-type]
         message=message,
         files_changed=list(files_changed or []),
     )
     append_task_activity(root, task, entry)
     print(f"task: {task.id}")
     print(f"stage: {stage}")
-    print(f"verdict: {entry.verdict}")
+    print(f"verdict: {verdict}")
     print(f"role: {role}")
     return 0
 

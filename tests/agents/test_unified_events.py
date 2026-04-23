@@ -1,9 +1,8 @@
 import logging
 from pathlib import Path
 
-from heru import get_engine
+from heru import extract_engine_continuation, extract_engine_timeline, get_engine, render_execution_transcript
 from heru.base import CLIExecutionResult
-from litehive.heru_compat import extract_engine_continuation, extract_engine_timeline, render_execution_transcript
 
 
 def test_codex_multiline_command_execution_extracts_transcript_timeline_and_continuation(caplog) -> None:
