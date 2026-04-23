@@ -59,6 +59,26 @@ def test_session_mixin_does_not_parse_native_engine_jsonl_fallback_for_supported
 
 
 @pytest.mark.parametrize("engine_name", ("codex", "claude", "copilot", "gemini", "goz", "opencode"))
+def test_session_mixin_extract_execution_continuation_delegates_to_heru(
+    engine_name: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution = _execution('{"type":"message","role":"assistant","content":"legacy output"}\n')
+    expected = RuntimeEngineContinuation(session_id=f"{engine_name}-session")
+
+    def fake_extract(requested_engine_name, requested_execution):  # type: ignore[no-untyped-def]
+        assert requested_engine_name == engine_name
+        assert requested_execution is execution
+        return expected
+
+    monkeypatch.setattr("litehive.agents.session.extract_engine_continuation", fake_extract)
+
+    continuation = SessionMixin._extract_execution_continuation(engine_name, execution)
+
+    assert continuation is expected
+
+
+@pytest.mark.parametrize("engine_name", ("codex", "claude", "copilot", "gemini", "goz", "opencode"))
 def test_session_mixin_consumes_unified_event_types_for_supported_engines(engine_name: str) -> None:
     execution = _execution(
         "\n".join(

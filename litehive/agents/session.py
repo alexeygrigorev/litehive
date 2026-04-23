@@ -8,6 +8,7 @@ import re
 import signal
 import time
 
+from heru import extract_engine_continuation
 from heru.base import CLIExecutionResult
 from heru.types import LiveEvent, LiveTimeline, RuntimeEngineContinuation, SubagentRef, UnifiedEvent
 from litehive.agents.artifacts import (
@@ -92,17 +93,6 @@ def _render_transcript_from_events(events: tuple[UnifiedEvent, ...], *, stderr: 
     return "\n\n".join(parts)
 
 
-def _continuation_from_events(events: tuple[UnifiedEvent, ...]) -> RuntimeEngineContinuation | None:
-    continuation_id: str | None = None
-    for event in events:
-        if event.kind != "continuation":
-            continue
-        continuation_id = event.continuation_id or event.content or continuation_id
-    if not continuation_id:
-        return None
-    return RuntimeEngineContinuation(session_id=continuation_id)
-
-
 def _timeline_from_events(
     events: tuple[UnifiedEvent, ...],
     *,
@@ -142,10 +132,7 @@ class SessionMixin:
         engine_name: str,
         execution: CLIExecutionResult | None,
     ) -> RuntimeEngineContinuation | None:
-        del engine_name
-        if execution is None:
-            return None
-        return _continuation_from_events(_parse_unified_events(execution.stdout))
+        return extract_engine_continuation(engine_name, execution)
 
     @staticmethod
     def _extract_execution_timeline(

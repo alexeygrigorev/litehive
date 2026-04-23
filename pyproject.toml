@@ -9,7 +9,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dynamic = ["version"]
 dependencies = [
-    "heru>=1.0.0",
+    "heru>=1.0.1",
     "pydantic>=2.11.0",
     "pyyaml>=6.0.2",
     "sqlitesearch>=0.0.3",
@@ -61,7 +61,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-heru = { path = "packages/heru-1.0.0-py3-none-any.whl" }
+heru = { path = "packages/heru-1.0.1-py3-none-any.whl" }
 
 [tool.uv.pip]
 find-links = ["./packages"]
