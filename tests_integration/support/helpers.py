@@ -1,13 +1,17 @@
 import os
+import shlex
+import signal
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
 from heru import (
+    classify_execution_limit,
     extract_engine_continuation,
     get_engine,
     resolve_engine_resume_session_id,
@@ -233,6 +237,66 @@ def smoke_prompt(engine_name: str) -> str:
     return f"Reply with exactly: {engine_name} integration smoke."
 
 
+def _run_engine_subprocess(
+    argv: list[str],
+    *,
+    cwd: str | Path,
+    env: dict[str, str],
+    timeout_seconds: int,
+    allow_timeout: bool,
+    stop_when: Callable[[], bool] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    if stop_when is None:
+        return subprocess.run(
+            argv,
+            cwd=cwd,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+
+    process = subprocess.Popen(
+        argv,
+        cwd=cwd,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    deadline = time.monotonic() + timeout_seconds
+    process_group = process.pid
+
+    while True:
+        if stop_when():
+            if process.poll() is None:
+                os.killpg(process_group, signal.SIGTERM)
+                try:
+                    stdout, stderr = process.communicate(timeout=1.0)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process_group, signal.SIGKILL)
+                    stdout, stderr = process.communicate(timeout=1.0)
+            else:
+                stdout, stderr = process.communicate()
+            return subprocess.CompletedProcess(args=argv, returncode=0, stdout=stdout, stderr=stderr)
+
+        try:
+            stdout, stderr = process.communicate(timeout=0.2)
+            return subprocess.CompletedProcess(args=argv, returncode=process.returncode or 0, stdout=stdout, stderr=stderr)
+        except subprocess.TimeoutExpired as exc:
+            if time.monotonic() < deadline:
+                continue
+            os.killpg(process_group, signal.SIGKILL)
+            stdout, stderr = process.communicate(timeout=1.0)
+            if allow_timeout:
+                return subprocess.CompletedProcess(args=argv, returncode=124, stdout=stdout, stderr=stderr)
+            raise subprocess.TimeoutExpired(argv, timeout_seconds, output=stdout or exc.stdout, stderr=stderr or exc.stderr)
+
+
 def execute_engine_prompt(
     engine_name: str,
     *,
@@ -244,6 +308,7 @@ def execute_engine_prompt(
     sandboxed: bool = False,
     role: str = "swe",
     allow_timeout: bool = False,
+    stop_when: Callable[[], bool] | None = None,
 ) -> tuple[object, CLIExecutionResult]:
     engine = get_engine(engine_name)
     if max_turns is None and engine_name == "claude":
@@ -268,14 +333,17 @@ def execute_engine_prompt(
             extra_env={
                 "LITEHIVE_PYTHON_PATH": sys.executable,
                 # Opencode needs access to the operator's real XDG config,
-                # but nested `litehive` CLI calls must keep using the test
-                # process's Litehive home so they write into the same DB.
+                # and copilot relies on the operator's GitHub CLI auth under
+                # the real XDG config dir. Nested `litehive` CLI calls still
+                # keep using the test process's Litehive home so they write
+                # into the same DB.
                 "LITEHIVE_HOME": str(litehive_root()),
                 **(
                     {
                         key: os.environ[f"LITEHIVE_REAL_{key}"]
                         for key in _REAL_XDG_ENV_VARS
-                        if engine_name == "opencode" and os.environ.get(f"LITEHIVE_REAL_{key}")
+                        if engine_name in {"copilot", "opencode"}
+                        and os.environ.get(f"LITEHIVE_REAL_{key}")
                     }
                 ),
                 **(extra_env or {}),
@@ -290,6 +358,7 @@ def execute_engine_prompt(
                 "low",
                 "--max-autopilot-continues",
                 "0",
+                "--allow-all-paths",
                 "--disable-builtin-mcps",
                 "--no-custom-instructions",
             ]
@@ -328,15 +397,13 @@ def execute_engine_prompt(
     attempts = 2 if engine_name == "goz" else 1
     for attempt in range(attempts):
         try:
-            completed = subprocess.run(
+            completed = _run_engine_subprocess(
                 argv,
                 cwd=run_cwd,
                 env=run_env,
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-                check=False,
+                timeout_seconds=timeout_seconds,
+                allow_timeout=allow_timeout,
+                stop_when=stop_when,
             )
         except subprocess.TimeoutExpired as exc:
             if allow_timeout:
@@ -387,6 +454,31 @@ def _assistant_transcript(transcript: str) -> str:
     return transcript.partition("\n\n[stderr]\n")[0].strip()
 
 
+def _execution_limit_reason(execution: CLIExecutionResult) -> str | None:
+    combined = execution.transcript or f"{execution.stdout}\n{execution.stderr}"
+    limit_reason = classify_execution_limit(combined)
+    if limit_reason is not None:
+        return limit_reason
+    normalized = " ".join(combined.lower().split())
+    if any(
+        marker in normalized
+        for marker in (
+            '"errortype":"quota"',
+            '"statuscode":402',
+            "status code 402",
+            "no quota",
+        )
+    ):
+        return "usage limit reached"
+    return None
+
+
+def _skip_if_execution_limited(engine_name: str, execution: CLIExecutionResult) -> None:
+    limit_reason = _execution_limit_reason(execution)
+    if limit_reason is not None:
+        pytest.skip(f"{engine_name} became unavailable during integration test: {limit_reason}")
+
+
 def prepare_smoke_session(engine_name: str, *, cwd: Path, sandboxed: bool = False) -> SmokeSession:
     from litehive.state.records import create_task, require_task, save_task
     from litehive.tasks.queue import set_active_task
@@ -403,6 +495,7 @@ def prepare_smoke_session(engine_name: str, *, cwd: Path, sandboxed: bool = Fals
         cwd=cwd,
         sandboxed=sandboxed,
     )
+    _skip_if_execution_limited(engine_name, execution)
     assert execution.exit_code == 0, execution.transcript
     continuation = extract_engine_continuation(engine_name, execution)
     resume_session_id = resolve_engine_resume_session_id(
@@ -437,7 +530,7 @@ def assert_nudge_verdict_submission(
 ) -> None:
     """Verify the nudge flow: run engine, then nudge to submit verdict via CLI."""
     from litehive.state.records import require_task
-    from litehive.tasks.reports import load_task_thread
+    from litehive.tasks.activity import load_task_activity
 
     session = smoke_session
     if session is None:
@@ -447,33 +540,36 @@ def assert_nudge_verdict_submission(
         assert session.engine_name == engine_name, (session.engine_name, engine_name)
 
     report_command = (
-        '"$LITEHIVE_PYTHON_PATH" -m litehive.main report '
+        f"{shlex.quote(sys.executable)} -m litehive.main report "
         "--verdict pass "
         "--role swe "
         "--stage implementing "
         f"--task-id {session.task_id} "
-        "--workspace . "
+        f"--workspace {shlex.quote(str(session.cwd))} "
         "--message ok"
     )
+
+    def verdict_persisted() -> bool:
+        thread = load_task_activity(session.cwd, require_task(session.cwd, session.task_id))
+        verdicts = [c for c in thread if c.verdict != "comment"]
+        return bool(verdicts and verdicts[-1].verdict == "pass" and verdicts[-1].role == "swe")
 
     # Step 2: nudge — submit verdict via litehive report CLI
     _, nudge_run = execute_engine_prompt(
         engine_name,
-        prompt=(
-            f"Use the shell exactly once to run {report_command}. "
-            "Do not stop after inspection; the task is complete only after that command exits successfully."
-        ),
+        prompt=f"Run this shell command exactly once, then stop: {report_command}",
         cwd=session.cwd,
-        max_turns=2 if engine_name == "claude" else None,
+        max_turns=1,
         resume_session_id=session.resume_session_id,
         extra_env={"LITEHIVE_TASK_ID": session.task_id},
-        allow_timeout=engine_name == "gemini",
+        stop_when=verdict_persisted,
     )
+    _skip_if_execution_limited(engine_name, nudge_run)
 
     # Step 3: verify verdict persisted
     deadline = time.monotonic() + 3.0
     while True:
-        thread = load_task_thread(session.cwd, require_task(session.cwd, session.task_id))
+        thread = load_task_activity(session.cwd, require_task(session.cwd, session.task_id))
         verdicts = [c for c in thread if c.verdict != "comment"]
         if verdicts:
             assert verdicts[-1].verdict == "pass"

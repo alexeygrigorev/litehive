@@ -2,7 +2,7 @@ import pytest
 
 from litehive.state.records import create_task, require_task
 from litehive.tasks.queue import set_active_task
-from litehive.tasks.reports import load_task_thread
+from litehive.tasks.activity import load_task_activity
 
 from tests_integration.support.helpers import (
     assert_nudge_verdict_submission,
@@ -35,7 +35,7 @@ def test_codex_can_invoke_litehive_report_and_persist_thread_comment(integration
     )
     _, execution = execute_engine_prompt("codex", prompt=prompt, cwd=integration_root)
     assert execution.exit_code == 0, execution.transcript
-    thread = load_task_thread(integration_root, require_task(integration_root, task.id))
+    thread = load_task_activity(integration_root, require_task(integration_root, task.id))
     assert thread[-1].role == "swe"
     assert thread[-1].stage == "implementing"
     assert thread[-1].verdict == "pass"

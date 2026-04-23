@@ -6,10 +6,19 @@ import pytest
 from tests_integration.support.helpers import integration_workspace, sandboxed_integration_workspace
 
 
-@pytest.fixture(autouse=True)
-def _integration_timeout(request):
-    """Integration tests get a tight 30s guardrail per test."""
-    request.node.timeout = 30
+INTEGRATION_TEST_TIMEOUT_SECONDS = 30.0
+
+
+def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:
+    """Run integration tests in-process; worker startup dominates single-test runs."""
+    return 0
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_configure(config: pytest.Config) -> None:
+    """Apply a real pytest-timeout guardrail to integration-only runs."""
+    config.option.timeout = INTEGRATION_TEST_TIMEOUT_SECONDS
+    config._env_timeout = INTEGRATION_TEST_TIMEOUT_SECONDS
 
 
 @pytest.fixture(scope="session", autouse=True)

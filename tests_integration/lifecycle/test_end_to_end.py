@@ -476,8 +476,8 @@ def test_merge_conflict_routes_to_merge_agent_then_back_to_after_commit(
     assert ("merge_resolving", "after_commit") in from_to_pairs
 
 
-def test_reject_from_implementing_triggers_retry_then_recovery(workspace: Path) -> None:
-    """Implementing rejects until its retry budget is exhausted, then recovery completes."""
+def test_reject_from_implementing_retries_then_fails(workspace: Path) -> None:
+    """Implementing rejects until its retry budget is exhausted, then fails terminally."""
     persistence = SqlitePersistence(
         workspace,
         limits=Limits(stage_retry_limit=2),
@@ -485,10 +485,7 @@ def test_reject_from_implementing_triggers_retry_then_recovery(workspace: Path) 
     journal = SqliteJournal(workspace)
     sessions = InMemorySessionStore()
 
-    plan = {
-        "implementing": "reject",  # always reject; retries will exhaust
-        "recovering": "done",
-    }
+    plan = {"implementing": "reject"}  # always reject; retries will exhaust
     registry = build_registry(
         selector=_FixedSelector(_RecoveringEngine(plan)),
         session_store=sessions,
@@ -500,13 +497,15 @@ def test_reject_from_implementing_triggers_retry_then_recovery(workspace: Path) 
 
     final_state = runner.run_task("T-E2E-RECOVER")
 
-    assert final_state.stage == "done"
+    assert final_state.stage == "failed"
 
     transitions = journal.load_transitions("T-E2E-RECOVER")
-    seen_implementing_reject = any(
-        row["from_stage"] == "implementing" and row["event_type"] == "Reject"
+    implementing_rejects = [
+        row
         for row in transitions
-    )
+        if row["from_stage"] == "implementing" and row["event_type"] == "Reject"
+    ]
     seen_recovering = any(row["to_stage"] == "recovering" for row in transitions)
-    assert seen_implementing_reject
-    assert seen_recovering
+    assert len(implementing_rejects) == 3
+    assert implementing_rejects[-1]["to_stage"] == "failed"
+    assert not seen_recovering
