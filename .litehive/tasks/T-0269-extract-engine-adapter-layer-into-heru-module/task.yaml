@@ -6,31 +6,20 @@ task_type: null
 pipeline_mode: full
 priority: medium
 depends_on: []
-goal: Move remaining adapter, transcript, quota, and resume logic out of Litehive
-  into heru/ and import it from there.
+goal: Superseded umbrella for the already-externalized heru extraction; do not implement
+  a vendored local heru package in Litehive. Remaining Litehive-side seams belong
+  to narrower follow-up tasks.
 acceptance_criteria:
-- heru/ package exists at repo root with adapters for all engines (claude, codex,
-  copilot, gemini, goz, opencode)
-- Engine invocation building, transcript parsing, and quota checking live in heru/
-- litehive/agents/ imports from heru/ instead of containing adapter code directly
-- 'heru CLI entry point works standalone: heru ''prompt'' --engine claude'
-- All existing litehive tests pass
-- No functional changes - pure code move and re-export
+- Task metadata explicitly records that Litehive already depends on sibling ../heru
+  and that the standalone heru package and CLI already exist outside this repo.
+- 'Task metadata points implementers to the narrower follow-up seams instead of recreating
+  a local vendored heru package: T-0316, T-0334, T-0335, T-0343, and T-0372.'
 constraints: []
 plan:
-- Create heru/ package at repo root with adapters/, quota/, models.py, types.py
-- Move all 6 adapter pairs (claude, codex, copilot, gemini, goz, opencode) + common.py
-- Move base.py (ExternalCLIAdapter contract, CLIExecutionResult, CLIInvocation)
-- Move quota modules (claude, codex, copilot, zai)
-- Move _models.py, _engine_detection.py, _sandbox.py, _continuation.py
-- Create heru types.py with standalone versions of EngineUsageWindow, RuntimeEngineContinuation
-  etc
-- 'Split _prompts.py: generic prompt helpers to heru, stage orchestration stays in
-  litehive'
-- 'Split sandbox.py: generic backend logic to heru, LitehiveConfig integration stays'
-- Update litehive/agents/ to import from heru/ instead of containing adapter code
-- Add heru CLI entry point (heru 'prompt' --engine claude)
-- Verify all litehive tests pass
+- 'Confirm the current import/package boundary: Litehive resolves heru from sibling
+  ../heru, and the sibling repo already contains adapters, quota modules, shared types,
+  and the CLI entry point.'
+- Close this umbrella as duplicate once the replacement tasks are recorded.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0269 extract-engine-adapter-layer-into-heru-module'
