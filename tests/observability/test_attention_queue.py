@@ -510,10 +510,6 @@ def test_daemon_loop_rebuilds_corrupt_global_registry_without_exiting(tmp_path: 
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Queued work")
-
-    from litehive.config import registry as registry_mod
-
-    registry_mod._close_all_registry_connections()
     workspace_registry_path().write_bytes(b"not a sqlite database")
 
     calls: list[tuple[str, ...]] = []

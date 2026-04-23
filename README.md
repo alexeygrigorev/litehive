@@ -26,7 +26,6 @@ grooming -> implementing -> testing -> accepting -> commit_to_git
 ```bash
 # Install
 git clone git@github.com:alexeygrigorev/litehive.git
-git clone git@github.com:alexeygrigorev/heru.git ../heru
 cd litehive
 uv sync
 
@@ -48,7 +47,7 @@ litehive status
 litehive status
 ```
 
-Litehive no longer vendors `heru/` inside this repo. The dependency is an editable filesystem source at `../heru`, so clone the standalone `heru` repo beside the Litehive checkout before running `uv sync`.
+Litehive resolves `heru` from the vendored wheel in `packages/` during `uv sync`. If you update the standalone `heru` package, rebuild that wheel before syncing this repo again.
 
 ## Engines
 

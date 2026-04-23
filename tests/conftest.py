@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -25,6 +26,19 @@ if Path(_GIT_CORE_DIR).is_dir():
 os.environ["GIT_CONFIG_COUNT"] = "1"
 os.environ["GIT_CONFIG_KEY_0"] = "init.defaultBranch"
 os.environ["GIT_CONFIG_VALUE_0"] = "main"
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_HERU_IMPORT_ROOT = Path(_codex_quota_mod.__file__).resolve().parents[2]
+_PYTHONPATH_ENTRIES = [str(_REPO_ROOT), str(_HERU_IMPORT_ROOT)]
+for entry in reversed(_PYTHONPATH_ENTRIES):
+    if entry not in sys.path:
+        sys.path.insert(0, entry)
+current_pythonpath = os.environ.get("PYTHONPATH", "")
+pythonpath_entries = current_pythonpath.split(os.pathsep) if current_pythonpath else []
+for entry in reversed(_PYTHONPATH_ENTRIES):
+    if entry not in pythonpath_entries:
+        pythonpath_entries.insert(0, entry)
+os.environ["PYTHONPATH"] = os.pathsep.join(pythonpath_entries)
 
 
 def _noop_block_reason(**kw):

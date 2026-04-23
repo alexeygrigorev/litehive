@@ -31,16 +31,8 @@ def workspace_registry_path() -> Path:
     return litehive_config_root() / "workspaces.yaml"
 
 
-def _registry_path() -> Path:
-    return workspace_registry_path()
-
-
 def _registry_lock_path() -> Path:
-    return _registry_path().with_name(".workspaces.lock")
-
-
-def _close_all_registry_connections() -> None:
-    """Compatibility shim retained for older tests and callers."""
+    return workspace_registry_path().with_name(".workspaces.lock")
 
 
 def _int_env(name: str, default: int) -> int:
@@ -151,7 +143,7 @@ def _backup_corrupt_registry(path: Path, reason: str) -> None:
 
 
 def list_registered_workspace_paths() -> list[Path]:
-    path = _registry_path()
+    path = workspace_registry_path()
     with _REGISTRY_MUTEX:
         try:
             with _locked_registry_handle():
@@ -169,7 +161,7 @@ def list_registered_workspace_paths() -> list[Path]:
 
 def register_workspace_path(root: Path) -> None:
     resolved = root.expanduser().resolve()
-    path = _registry_path()
+    path = workspace_registry_path()
     with _REGISTRY_MUTEX:
         try:
             with _locked_registry_handle():

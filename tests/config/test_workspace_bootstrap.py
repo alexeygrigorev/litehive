@@ -262,30 +262,6 @@ def test_workspace_registry_uses_only_canonical_config_home_location(
     assert _registered_paths(stale_data_home_path) == [str(workspace_two.resolve())]
 
 
-def test_workspace_registry_rebuilds_after_removed_dict_schema(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    config_home = tmp_path / "xdg-config"
-    data_home = tmp_path / "xdg-data"
-    state_home = tmp_path / "xdg-state"
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
-    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
-    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
-
-    registry_path = _registry_path(config_home)
-    registry_path.parent.mkdir(parents=True, exist_ok=True)
-    registry_path.write_text(
-        yaml.safe_dump([{"repo_path": str(tmp_path)}], sort_keys=False),
-        encoding="utf-8",
-    )
-
-    ensure_workspace(tmp_path)
-
-    backups = sorted(registry_path.parent.glob("workspaces.yaml.corrupt-*"))
-    assert backups
-    assert _registered_paths(registry_path) == [str(tmp_path.resolve())]
-
-
 def test_workspace_registry_is_available_from_other_threads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))

@@ -1,8 +1,7 @@
-This directory stores the local `heru` wheel used by repo-root `uv pip`
-commands.
+This directory stores the local `heru` wheel used by repo-root `uv` commands.
 
-The root `pyproject.toml` sets `[tool.uv.pip].find-links = ["./packages"]` so
-the acceptance-contract command `uv pip install heru` resolves this extracted
+The root `pyproject.toml` pins `[tool.uv.sources].heru` to the wheel in this
+directory so `uv sync`, `uv run`, and `uv pip install heru` resolve the checked-in
 package instead of the unrelated `heru` package published on PyPI.
 
 Regenerate after changing the standalone package contents or metadata:

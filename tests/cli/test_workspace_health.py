@@ -56,7 +56,10 @@ def _copy_heru_dependency(repo_root: Path, workspace: Path) -> None:
     source_root = (repo_root / configured_path).resolve()
     destination = (workspace / configured_path).resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(source_root, destination)
+    if source_root.is_dir():
+        shutil.copytree(source_root, destination)
+    else:
+        shutil.copy2(source_root, destination)
 
 
 def test_health_daemon_status_defaults_to_stopped(tmp_path: Path, monkeypatch) -> None:
