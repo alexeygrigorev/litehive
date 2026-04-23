@@ -6,12 +6,16 @@ import re
 import signal
 import time
 
-from heru import extract_engine_continuation, extract_engine_timeline, get_engine
 from heru.base import CLIExecutionResult
 from heru.types import LiveTimeline, RuntimeEngineContinuation, SubagentRef
 from litehive.agents.artifacts import (
     write_stream_artifact,
     write_text_artifact,
+)
+from litehive.heru_compat import (
+    extract_engine_continuation,
+    extract_engine_timeline,
+    render_execution_transcript,
 )
 from litehive.agents.session_store import (
     load_subagent_session,
@@ -29,24 +33,6 @@ _COMPLETED_INACTIVITY_PATTERN = re.compile(
     r"\[litehive\]\s*Process killed after\s+(?P<seconds>\d+(?:\.\d+)?)s of inactivity\.",
     re.IGNORECASE,
 )
-
-try:
-    from heru import render_execution_transcript as render_unified_execution_transcript
-except ImportError:  # pragma: no cover - compatibility with older heru installs
-    render_unified_execution_transcript = None
-
-
-def render_execution_transcript(engine_name: str, execution: CLIExecutionResult | None) -> str:
-    if execution is None:
-        return ""
-    fallback_renderer = get_engine(engine_name).render_transcript
-    if render_unified_execution_transcript is None:
-        return fallback_renderer(execution)
-    return render_unified_execution_transcript(
-        engine_name,
-        execution,
-        fallback_renderer=fallback_renderer,
-    )
 
 
 class SessionMixin:

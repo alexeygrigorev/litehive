@@ -7,8 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from heru import extract_engine_continuation, get_engine
-from litehive.agents.session import render_execution_transcript
+from heru import get_engine
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace_files import config_path
 from litehive.domain.runtime import RuntimeContinuationHandoff
@@ -19,7 +18,9 @@ from litehive.heru_compat import (
     check_codex_quota,
     check_copilot_quota,
     check_zai_quota,
+    extract_engine_continuation,
     preferred_reset_at,
+    render_execution_transcript,
     usage_limit_block_reason,
 )
 from litehive.tasks.runtime import set_task_continuation_handoff

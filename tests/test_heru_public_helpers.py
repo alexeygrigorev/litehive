@@ -1,6 +1,6 @@
-from heru import resolve_engine_resume_session_id, resume_safe_model_override
 from heru.base import LATEST_CONTINUATION_SENTINEL
 from heru.types import RuntimeEngineContinuation
+from litehive.heru_compat import resolve_engine_resume_session_id, resume_safe_model_override
 
 
 def test_resolve_engine_resume_session_id_prefers_continuation_resume_id() -> None:
