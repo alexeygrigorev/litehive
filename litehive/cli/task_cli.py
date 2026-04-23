@@ -13,6 +13,7 @@ from litehive.cli.parse import (
 from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
 from litehive.tasks.archive import archive_root
+from litehive.tasks.browse import list_recently_created_tasks
 from litehive.tasks.recent import (
     format_elapsed_duration,
     list_recent_task_summaries,
@@ -110,6 +111,33 @@ def _print_recent_task_table(summaries) -> None:
     }
     print("  ".join(header.ljust(widths[key]) for key, header in columns))
     for row in rows:
+        print("  ".join(row[key].ljust(widths[key]) for key, _ in columns))
+
+
+def _print_created_task_table(rows) -> None:
+    columns = [
+        ("task_id", "TASK_ID"),
+        ("title", "TITLE"),
+        ("created_at", "CREATED_AT"),
+        ("source", "SOURCE"),
+        ("context", "CONTEXT"),
+    ]
+    rendered = [
+        {
+            "task_id": row.task_id,
+            "title": row.title,
+            "created_at": row.created_at,
+            "source": row.source,
+            "context": row.context,
+        }
+        for row in rows
+    ]
+    widths = {
+        key: max(len(header), *(len(row[key]) for row in rendered))
+        for key, header in columns
+    }
+    print("  ".join(header.ljust(widths[key]) for key, header in columns))
+    for row in rendered:
         print("  ".join(row[key].ljust(widths[key]) for key, _ in columns))
 
 
@@ -330,6 +358,27 @@ def recent(
         print(f"No tasks touched in the last {since}.")
         return 0
     _print_recent_task_table(summaries)
+    return 0
+
+
+@app.command("browse", help="List tasks created in a recent time window with provenance context")
+def browse(
+    workspace: WorkspaceOption = Path.cwd(),
+    since: Annotated[
+        str,
+        typer.Option("--since", help="Compact duration window (e.g. 24h, 90m, 7d)"),
+    ] = "24h",
+) -> int:
+    ensure_workspace(workspace)
+    try:
+        rows = list_recently_created_tasks(workspace, since=since)
+    except ValueError as exc:
+        print(f"browse failed: {exc}")
+        return 1
+    if not rows:
+        print(f"No tasks created in the last {since}.")
+        return 0
+    _print_created_task_table(rows)
     return 0
 
 

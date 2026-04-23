@@ -141,6 +141,35 @@ def test_main_allows_task_add_for_agent_roles(
     ]
 
 
+def test_main_allows_task_browse_for_agent_roles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_cli_main() -> int:
+        captured["argv"] = list(sys.argv)
+        return 12
+
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "qa")
+    monkeypatch.setattr(cli_app_module, "main", fake_cli_main)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["litehive", "task", "browse", "--since", "24h"],
+    )
+
+    exit_code = main_module.main()
+
+    assert exit_code == 12
+    assert captured["argv"] == [
+        "litehive",
+        "task",
+        "browse",
+        "--since",
+        "24h",
+    ]
+
+
 def test_main_routes_root_help_for_agent_roles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

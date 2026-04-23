@@ -77,6 +77,13 @@ def _cmd_recent(args) -> int:
     return _invoke_cli(argv)
 
 
+def _cmd_browse(args) -> int:
+    argv = ["task", "browse", "--workspace", args.workspace]
+    if getattr(args, "since", None) is not None:
+        argv.extend(["--since", args.since])
+    return _invoke_cli(argv)
+
+
 def _cmd_queue(args) -> int:
     return _invoke_cli(["queue", "--workspace", args.workspace])
 
