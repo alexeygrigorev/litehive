@@ -1,7 +1,7 @@
 # Web Operator Dashboard Status
 
 - There is no `litehive/web/` package in this checkout.
-- The historical dashboard code now lives in [litehive-web/README.md](../litehive-web/README.md) and [litehive-web/litehive_web/__init__.py](../litehive-web/litehive_web/__init__.py).
+- There is no standalone `litehive-web/` compatibility package in this checkout.
 - Litehive remains CLI-first. The packaged/tested runtime has no web imports and no web-only dependencies.
 - Web work is paused indefinitely. Do not create new web dashboard tasks from this document.
 
