@@ -9,7 +9,7 @@ from typing import Literal
 
 import yaml
 
-from litehive.config.registry import workspace_registry_path
+from litehive.config.registry import workspace_registry_error, workspace_registry_path
 from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state
 from litehive.state.records import load_task_record_file
@@ -117,20 +117,11 @@ def corrupt_task_launch_diagnostics(root: Path, task_id: str | None) -> dict[str
 def detect_cycle_start_failure(root: Path) -> LaunchFailure | None:
     del root
     path = workspace_registry_path()
-    if not path.exists():
-        return None
-    try:
-        yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
+    error = workspace_registry_error()
+    if error is not None:
         return LaunchFailure(
             context="cycle_start_failed",
-            summary=f"workspace registry is corrupt at {path} ({yaml_error_location(exc)})",
-            diagnostics={"path": str(path)},
-        )
-    except OSError as exc:
-        return LaunchFailure(
-            context="cycle_start_failed",
-            summary=f"workspace registry is unreadable at {path}: {exc}",
+            summary=f"workspace registry database is corrupt at {path}: {error}",
             diagnostics={"path": str(path)},
         )
     return None

@@ -1,8 +1,8 @@
 from concurrent.futures import ProcessPoolExecutor
-import fcntl
 import multiprocessing
 import os
 from pathlib import Path
+import sqlite3
 import threading
 import time
 
@@ -52,26 +52,42 @@ def _hold_registry_write_lock(
     os.environ["LITEHIVE_REGISTRY_LOCK_RETRY_DELAY_MS"] = str(lock_retry_delay_ms)
 
     root = Path(workspace_root)
-    del busy_timeout_ms
     ensure_workspace(root)
     from litehive.config.registry import workspace_registry_path
 
-    lock_path = workspace_registry_path().with_name(".workspaces.lock")
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    with sqlite3.connect(
+        workspace_registry_path(),
+        timeout=max(busy_timeout_ms, 1) / 1000,
+        isolation_level=None,
+    ) as connection:
+        connection.execute(f"PRAGMA busy_timeout = {busy_timeout_ms}")
+        connection.execute("BEGIN EXCLUSIVE")
         Path(ready_path).write_text("ready", encoding="utf-8")
         time.sleep(hold_seconds)
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-
-
-def _registry_path(config_home: Path) -> Path:
-    return config_home / "litehive" / "workspaces.yaml"
+        connection.rollback()
 
 
 def _registered_paths(registry_path: Path) -> list[str]:
-    payload = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or []
-    return [str(Path(entry).expanduser().resolve()) for entry in payload if isinstance(entry, str)]
+    if not registry_path.exists():
+        return []
+    with sqlite3.connect(registry_path) as connection:
+        table_exists = connection.execute(
+            """
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'workspace_registry'
+            """
+        ).fetchone()
+        if table_exists is None:
+            return []
+        rows = connection.execute(
+            """
+            SELECT root
+            FROM workspace_registry
+            ORDER BY registered_at DESC, root DESC
+            """
+        ).fetchall()
+    return [str(Path(row[0]).expanduser().resolve()) for row in rows]
 
 
 def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
@@ -92,6 +108,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, mon
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
     from litehive.config.paths import litehive_root, workspace_data_dir, workspace_path
+    from litehive.config.registry import workspace_registry_path
     from litehive.db.schema import connect_workspace_db
 
     ensure_workspace(tmp_path)
@@ -107,7 +124,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, mon
     assert workspace_path(tmp_path, "data.db").exists()
     assert litehive_root() == data_home / "litehive"
     assert litehive_root() / "config.yaml" == data_home / "litehive" / "config.yaml"
-    assert _registered_paths(_registry_path(config_home)) == [str(tmp_path.resolve())]
+    assert _registered_paths(workspace_registry_path()) == [str(tmp_path.resolve())]
 
     with connect_workspace_db(tmp_path) as connection:
         tables = {
@@ -142,6 +159,8 @@ def test_workspace_registry_handles_concurrent_registration(tmp_path: Path, monk
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
+    from litehive.config.registry import workspace_registry_path
+
     workspaces = []
     for index in range(8):
         root = tmp_path / f"workspace-{index}"
@@ -157,7 +176,7 @@ def test_workspace_registry_handles_concurrent_registration(tmp_path: Path, monk
         )
 
     assert {Path(path) for path in results} == set(workspaces)
-    registry_paths = _registered_paths(_registry_path(config_home))
+    registry_paths = _registered_paths(workspace_registry_path())
     assert set(registry_paths) == {str(root.resolve()) for root in workspaces}
     assert len(registry_paths) == len(workspaces)
 
@@ -174,6 +193,8 @@ def test_workspace_registry_retries_lock_contention_without_rebuilding(
     monkeypatch.setenv("LITEHIVE_REGISTRY_BUSY_TIMEOUT_MS", "50")
     monkeypatch.setenv("LITEHIVE_REGISTRY_LOCK_RETRIES", "20")
     monkeypatch.setenv("LITEHIVE_REGISTRY_LOCK_RETRY_DELAY_MS", "25")
+
+    from litehive.config.registry import workspace_registry_path
 
     workspace_one = tmp_path / "workspace-one"
     workspace_two = tmp_path / "workspace-two"
@@ -215,13 +236,13 @@ def test_workspace_registry_retries_lock_contention_without_rebuilding(
             holder.join(timeout=1)
 
     assert holder.exitcode == 0
-    assert set(_registered_paths(_registry_path(config_home))) == {
+    assert set(_registered_paths(workspace_registry_path())) == {
         str(workspace_one.resolve()),
         str(workspace_two.resolve()),
     }
 
 
-def test_workspace_registry_uses_only_canonical_config_home_location(
+def test_workspace_registry_migrates_only_from_legacy_config_home_yaml(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_home = tmp_path / "xdg-config"
@@ -231,12 +252,13 @@ def test_workspace_registry_uses_only_canonical_config_home_location(
     monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
 
-    from litehive.config.registry import list_registered_workspace_paths
+    from litehive.config.registry import list_registered_workspace_paths, workspace_registry_path
 
     workspace_one = tmp_path / "workspace-one"
     workspace_two = tmp_path / "workspace-two"
     workspace_three = tmp_path / "workspace-three"
-    canonical_path = _registry_path(config_home)
+    canonical_path = config_home / "litehive" / "workspaces.yaml"
+    registry_path = workspace_registry_path()
     stale_data_home_path = data_home / "litehive" / "workspaces.yaml"
     canonical_path.parent.mkdir(parents=True, exist_ok=True)
     stale_data_home_path.parent.mkdir(parents=True, exist_ok=True)
@@ -255,11 +277,12 @@ def test_workspace_registry_uses_only_canonical_config_home_location(
     assert list_registered_workspace_paths() == [workspace_one.resolve()]
     ensure_workspace(workspace_three)
 
-    assert set(_registered_paths(canonical_path)) == {
+    assert not canonical_path.exists()
+    assert set(_registered_paths(registry_path)) == {
         str(workspace_one.resolve()),
         str(workspace_three.resolve()),
     }
-    assert _registered_paths(stale_data_home_path) == [str(workspace_two.resolve())]
+    assert yaml.safe_load(stale_data_home_path.read_text(encoding="utf-8")) == [str(workspace_two)]
 
 
 def test_workspace_registry_is_available_from_other_threads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -282,7 +305,8 @@ def test_workspace_registry_is_available_from_other_threads(tmp_path: Path, monk
     assert not thread.is_alive()
     assert results == [[tmp_path.resolve()]]
 
-def test_legacy_global_state_in_config_home_is_not_migrated(
+
+def test_legacy_workspace_registry_in_config_home_is_migrated_without_moving_other_global_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -297,16 +321,31 @@ def test_legacy_global_state_in_config_home_is_not_migrated(
     legacy_root.mkdir(parents=True, exist_ok=True)
 
     (legacy_root / "config.yaml").write_text("default_engine: gemini\n", encoding="utf-8")
-    (legacy_root / "workspaces.yaml").write_text("- /tmp/legacy-workspace\n", encoding="utf-8")
+    (legacy_root / "workspaces.yaml").write_text(
+        yaml.safe_dump(
+            [
+                "/tmp/legacy-workspace",
+                str(tmp_path),
+                str(tmp_path / "."),
+                "/tmp/legacy-workspace",
+            ],
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
     (legacy_root / "daemons.yaml").write_text("- workspace: /tmp/legacy-workspace\n", encoding="utf-8")
 
     ensure_workspace(tmp_path)
     assert capsys.readouterr().err == ""
     assert (legacy_root / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
     assert (legacy_root / "daemons.yaml").read_text(encoding="utf-8") == "- workspace: /tmp/legacy-workspace\n"
+    assert not (legacy_root / "workspaces.yaml").exists()
     assert not (canonical_root / "config.yaml").exists()
     assert not (canonical_root / "daemons.yaml").exists()
-    assert _registered_paths(legacy_root / "workspaces.yaml")[0] == str(tmp_path.resolve())
+    assert set(_registered_paths(canonical_root / "workspaces.db")) == {
+        "/tmp/legacy-workspace",
+        str(tmp_path.resolve()),
+    }
 
 
 def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
@@ -359,7 +398,7 @@ def test_litehive_home_overrides_default_root(tmp_path: Path, monkeypatch: pytes
     assert litehive_root() == custom_home
     assert litehive_root() / "config.yaml" == custom_home / "config.yaml"
     assert workspace_path(tmp_path, "data.db") == custom_home / wid / "data.db"
-    assert _registered_paths(custom_home / "workspaces.yaml") == [str(tmp_path.resolve())]
+    assert _registered_paths(custom_home / "workspaces.db") == [str(tmp_path.resolve())]
 
 
 def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None:

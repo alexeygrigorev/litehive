@@ -536,8 +536,11 @@ def test_daemon_loop_rebuilds_corrupt_global_registry_without_exiting(tmp_path: 
     assert any("run" in command for command in calls)
     assert "== iteration 1 ==" in output
 
-    paths = yaml.safe_load(workspace_registry_path().read_text(encoding="utf-8"))
-    assert paths == [str(tmp_path.resolve())]
+    with sqlite3.connect(workspace_registry_path()) as connection:
+        rows = connection.execute(
+            "SELECT root FROM workspace_registry ORDER BY registered_at DESC, root DESC"
+        ).fetchall()
+    assert rows == [(str(tmp_path.resolve()),)]
 
 
 def test_pool_refuses_to_start_when_worktree_venv_is_broken(tmp_path: Path, monkeypatch) -> None:

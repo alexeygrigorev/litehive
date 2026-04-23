@@ -1,5 +1,6 @@
 import io
 from pathlib import Path
+import sqlite3
 
 import pytest
 
@@ -12,7 +13,9 @@ from litehive.state.records import create_task
 from litehive.tasks.activity import load_task_activity
 
 
-def test_daemon_loop_recovers_corrupt_workspaces_yaml_before_cycle_start(tmp_path: Path, monkeypatch) -> None:
+def test_daemon_loop_recovers_corrupt_workspace_registry_db_before_cycle_start(
+    tmp_path: Path, monkeypatch
+) -> None:
     config_home = tmp_path / "config-home"
     data_home = tmp_path / "data-home"
     monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
@@ -22,7 +25,7 @@ def test_daemon_loop_recovers_corrupt_workspaces_yaml_before_cycle_start(tmp_pat
 
     registry_path = workspace_registry_path()
     registry_path.parent.mkdir(parents=True, exist_ok=True)
-    registry_path.write_text("broken: [\n", encoding="utf-8")
+    registry_path.write_bytes(b"not a sqlite database")
 
     calls: list[tuple[str, ...]] = []
 
@@ -46,10 +49,14 @@ def test_daemon_loop_recovers_corrupt_workspaces_yaml_before_cycle_start(tmp_pat
     assert exit_code == 0
     assert any("repair" in command for command in calls)
     assert any("run" in command for command in calls)
-    backups = sorted(registry_path.parent.glob("workspaces.yaml.corrupt-*"))
+    backups = sorted(registry_path.parent.glob("workspaces.db.corrupt-*"))
     assert backups
     assert registry_path.exists()
-    assert registry_path.read_text(encoding="utf-8").strip().startswith("- ")
+    with sqlite3.connect(registry_path) as connection:
+        rows = connection.execute(
+            "SELECT root FROM workspace_registry ORDER BY registered_at DESC, root DESC"
+        ).fetchall()
+    assert rows == [(str(tmp_path.resolve()),)]
     activity_entries = load_task_activity(tmp_path, task)
     assert any(entry.role == "recovery" for entry in activity_entries)
     assert "launch recovery fixed: cycle_start_failed" in stream.getvalue()

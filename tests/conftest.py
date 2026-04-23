@@ -3,10 +3,27 @@
 import os
 from pathlib import Path
 import sys
+import tempfile
 
 import pytest
 
 import heru.quota.codex_quota as _codex_quota_mod
+
+
+_PREVIOUS_TEST_ENV = {
+    key: os.environ.get(key)
+    for key in ("LITEHIVE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME")
+}
+_TEST_XDG_ROOT = Path(tempfile.mkdtemp(prefix="litehive-test-xdg-"))
+_TEST_XDG_PATHS = {
+    "XDG_CONFIG_HOME": _TEST_XDG_ROOT / "config",
+    "XDG_DATA_HOME": _TEST_XDG_ROOT / "data",
+    "XDG_STATE_HOME": _TEST_XDG_ROOT / "state",
+}
+os.environ.pop("LITEHIVE_HOME", None)
+for _key, _value in _TEST_XDG_PATHS.items():
+    os.environ[_key] = str(_value)
+    _value.mkdir(parents=True, exist_ok=True)
 
 
 # Skip fsync in tests — saves ~70% of file write time
@@ -70,19 +87,9 @@ def _neutralize_codex_quota(request, monkeypatch):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _use_session_xdg_dirs(tmp_path_factory: pytest.TempPathFactory):
-    xdg_root = tmp_path_factory.mktemp("xdg-home")
-    paths = {
-        "XDG_CONFIG_HOME": xdg_root / "config",
-        "XDG_DATA_HOME": xdg_root / "data",
-        "XDG_STATE_HOME": xdg_root / "state",
-    }
-    previous = {key: os.environ.get(key) for key in paths}
-    for key, value in paths.items():
-        os.environ[key] = str(value)
-        Path(value).mkdir(parents=True, exist_ok=True)
+def _use_session_xdg_dirs():
     yield
-    for key, value in previous.items():
+    for key, value in _PREVIOUS_TEST_ENV.items():
         if value is None:
             os.environ.pop(key, None)
         else:

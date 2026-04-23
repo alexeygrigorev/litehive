@@ -19,7 +19,11 @@ from litehive.agents.session_store import (
 )
 from litehive.config.loading import load_config
 from litehive.config.paths import workspace_path
-from litehive.config.registry import workspace_registry_path
+from litehive.config.registry import (
+    quarantine_corrupt_workspace_registry,
+    workspace_registry_error,
+    workspace_registry_path,
+)
 from litehive.domain.common import utcnow
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction, TaskActivityEntry
@@ -70,7 +74,6 @@ from .detection import (
     LaunchFailure,
     TaskLaunchFailure,
     corrupt_task_launch_diagnostics,
-    yaml_error_location,
 )
 
 logger = logging.getLogger(__name__)
@@ -508,23 +511,25 @@ def _repair_workspace_registry(*, actions: list[RecoveryAction], warnings: list[
     path = workspace_registry_path()
     if not path.exists():
         return
-    try:
-        yaml.safe_load(path.read_text(encoding="utf-8"))
+    error = workspace_registry_error()
+    if error is None:
         return
-    except yaml.YAMLError as exc:
-        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-        backup = path.with_name(f"{path.name}.corrupt-{timestamp}")
-        path.replace(backup)
-        actions.append(
-            RecoveryAction(
-                action="quarantine_corrupt_workspaces_registry",
-                summary=f"Moved corrupt workspace registry aside to {backup}.",
-                metadata={"path": str(path), "backup_path": str(backup)},
-            )
-        )
-        warnings.append(f"workspaces.yaml was corrupt ({yaml_error_location(exc)})")
+    try:
+        backup = quarantine_corrupt_workspace_registry(error)
     except OSError as exc:
-        warnings.append(f"failed to inspect workspaces.yaml: {exc}")
+        warnings.append(f"failed to inspect workspace registry database: {exc}")
+        return
+    if backup is None:
+        warnings.append(f"failed to quarantine corrupt workspace registry database at {path}")
+        return
+    actions.append(
+        RecoveryAction(
+            action="quarantine_corrupt_workspaces_registry",
+            summary=f"Moved corrupt workspace registry aside to {backup}.",
+            metadata={"path": str(path), "backup_path": str(backup)},
+        )
+    )
+    warnings.append(f"workspace registry database was corrupt ({error})")
 
 
 def _repair_runner_lock(root: Path, *, actions: list[RecoveryAction], warnings: list[str]) -> None:

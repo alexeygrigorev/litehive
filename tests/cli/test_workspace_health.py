@@ -185,7 +185,9 @@ def test_repair_reports_broken_workspace_and_worktree_venvs(tmp_path: Path) -> N
     assert "stale_runner_recovered: no" in result.output
     assert f"venv_health: BROKEN binary=ruff venv={tmp_path / '.venv'}" in result.output
     assert f"venv={worktree_path / '.venv'} checkout={worktree_path}" in result.output
-    assert f"broken_venv_binaries: {tmp_path / '.venv'}:ruff {worktree_path / '.venv'}:pytest" in result.output
+    assert "broken_venv_binaries:" in result.output
+    assert f"{tmp_path / '.venv'}:ruff" in result.output
+    assert f"{worktree_path / '.venv'}:pytest" in result.output
     assert "uv venv --clear .venv && uv sync --extra dev" in result.output
 
 
