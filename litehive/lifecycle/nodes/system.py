@@ -542,6 +542,26 @@ def _status_entry_needs_git_add(code: str) -> bool:
     return worktree_state != " " or index_state in {"?", "U"}
 
 
+def _is_untracked_embedded_git_repo(repo_root: Path, code: str, relpath: str) -> bool:
+    """Return True when an untracked path is itself a nested git checkout.
+
+    Agents and verification commands sometimes create disposable repos inside a
+    task worktree (for example a literal ``$workspace/`` scratch directory).
+    ``git add -- <dir>`` treats that as an embedded repository; if the nested
+    repo has no commit yet, Git aborts with "does not have a commit checked
+    out". Those scratch repos must stay local to the task worktree and should
+    never block the commit stage.
+    """
+
+    if code != "??":
+        return False
+    candidate = repo_root / relpath
+    if not candidate.is_dir():
+        return False
+    git_marker = candidate / ".git"
+    return git_marker.is_dir() or git_marker.is_file()
+
+
 class GitCommitNode(CommitNode):
     """Real ``commit`` node — plain automatic merge, no agents.
 
@@ -666,6 +686,7 @@ class GitCommitNode(CommitNode):
             for code, path in entries
             if not _is_runner_owned_metadata(path, state.task_id)
             and not _is_main_checkout_cleanup_excluded(path)
+            and not _is_untracked_embedded_git_repo(worktree, code, path)
         ]
         if not committable:
             # Only runner-owned metadata is dirty — nothing to checkpoint.

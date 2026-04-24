@@ -1,0 +1,14 @@
+id: 85
+task_id: T-0081
+created_at: '2026-04-24T01:30:13+00:00'
+kind: stale_worktree
+title: Managed worktree needs cleanup
+reason: task_id=T-0081 status=flagged path=/home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0081-add-single-repair-command-for-stale-active-tasks-interrupted-runs-and-queue-inconsistencies
+suggested_action: Run `litehive worktree clean --dry-run` and then `litehive worktree
+  clean`.
+dedupe_key: stale_worktree:/home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0081-add-single-repair-command-for-stale-active-tasks-interrupted-runs-and-queue-inconsistencies
+status: resolved
+resolved_at: '2026-04-24T01:32:16+00:00'
+resolution: auto-resolved by attention reconciliation
+metadata:
+  path: /home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0081-add-single-repair-command-for-stale-active-tasks-interrupted-runs-and-queue-inconsistencies

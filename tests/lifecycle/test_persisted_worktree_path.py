@@ -158,3 +158,47 @@ def test_agent_and_commit_use_persisted_worktree_path(
     assert _git_ok(workspace, "log", "-1", "--format=%s", task_worktree_branch(task)) == (
         f"litehive {task.id}: auto-commit worktree changes"
     )
+
+
+def test_commit_ignores_untracked_embedded_git_repos_in_task_worktree(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _git_ok(workspace, "init", "-b", "main")
+    _configure_repo(workspace)
+    ensure_workspace(workspace)
+
+    (workspace / "seed.txt").write_text("seed\n", encoding="utf-8")
+    _git_ok(workspace, "add", "seed.txt")
+    _git_ok(workspace, "commit", "-m", "initial")
+
+    task = create_task(workspace, title="Scratch repo in worktree")
+    worktree = task_worktree_path(workspace, task)
+    sync_node = GitWorktreeSyncNode(
+        workspace_root=workspace,
+        worktree_resolver=lambda state: worktree,
+    )
+    assert sync_node._sync(_state(task.id, "worktree_sync")) is True
+
+    (worktree / "new.txt").write_text("agent wrote this\n", encoding="utf-8")
+    scratch_repo = worktree / "$workspace"
+    scratch_repo.mkdir()
+    _git_ok(scratch_repo, "init", "-b", "main")
+
+    def _persisted_worktree(state: TaskState) -> Path:
+        recorded_task = require_task(workspace, state.task_id)
+        recorded = get_task_worktree_path(recorded_task)
+        assert recorded is not None
+        resolved = resolve_recorded_worktree_path(workspace, recorded)
+        assert resolved is not None
+        return resolved
+
+    commit_node = GitCommitNode(workspace, worktree_resolver=_persisted_worktree)
+    event = commit_node.run(_state(task.id, "commit"))
+
+    assert isinstance(event, Pass), event
+    assert (workspace / "new.txt").read_text(encoding="utf-8") == "agent wrote this\n"
+    assert not (workspace / "$workspace").exists()
+    assert _git_ok(workspace, "log", "-1", "--format=%s", task_worktree_branch(task)) == (
+        f"litehive {task.id}: auto-commit worktree changes"
+    )
+    assert _git_ok(worktree, "status", "--short") == "?? $workspace/"
