@@ -55,6 +55,7 @@ def register_root_commands(app: typer.Typer) -> None:
     app.command("health", help="Show workspace health diagnostics")(health_command)
     app.command("engine", help="Manage engine freezes and status")(engine_command)
     app.command("repair", help="Repair stale active tasks, interrupted runs, and queue inconsistencies")(repair_command)
+    app.command("doctor", help="Alias for repair")(repair_command)
 
 
 def _print_status_issues(issues) -> int:
@@ -77,6 +78,7 @@ def _repair_summary_lines(
     lines = [
         f"{result_label}: {'yes' if summary.mutated else 'no'}",
         f"stale_runner_recovered: {'yes' if summary.stale_runner_recovered else 'no'}",
+        f"stale_unmerged_worktrees_removed: {summary.stale_unmerged_worktrees_removed}",
     ]
     if summary.cleared_active_task_id or include_empty:
         lines.append(f"cleared_active_task_id: {summary.cleared_active_task_id or '-'}")
