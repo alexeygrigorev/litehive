@@ -1,9 +1,10 @@
 # litehive Documentation
 
 litehive is a local-first task runner for software projects. It stores task and
-workspace state under `.litehive/`, routes work through a fixed pipeline, and
-uses external coding-agent CLIs such as Codex, Gemini, OpenCode, Copilot,
-Claude, and Goz to execute each stage.
+repo-local metadata under `.litehive/`, keeps global/runtime state under
+`${LITEHIVE_HOME:-$XDG_DATA_HOME/litehive}`, routes work through a fixed
+pipeline, and uses external coding-agent CLIs such as Codex, Gemini, OpenCode,
+Copilot, Claude, and Goz to execute each stage.
 
 This guide set is written for a first-time user. Start here, then use the
 linked pages as reference once your workspace is running.
@@ -12,8 +13,8 @@ linked pages as reference once your workspace is running.
 
 - Keeps a queue of tasks in your repository.
 - Runs each task through `grooming -> implementing -> testing -> accepting -> commit_to_git`.
-- Persists queue state, reports, retries, recovery context, and task history in
-  `.litehive/`.
+- Persists repo-local task definitions in `.litehive/` and keeps cross-workspace
+  runtime state in the unified Litehive data root.
 - Can recover interrupted or failed work and continue without losing context.
 - Can run one task at a time or drain the whole queue through the background runner.
 

@@ -306,7 +306,7 @@ def test_workspace_registry_is_available_from_other_threads(tmp_path: Path, monk
     assert results == [[tmp_path.resolve()]]
 
 
-def test_legacy_workspace_registry_in_config_home_is_migrated_without_moving_other_global_state(
+def test_legacy_global_state_in_config_home_is_migrated_to_unified_root(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -336,16 +336,25 @@ def test_legacy_workspace_registry_in_config_home_is_migrated_without_moving_oth
     (legacy_root / "daemons.yaml").write_text("- workspace: /tmp/legacy-workspace\n", encoding="utf-8")
 
     ensure_workspace(tmp_path)
-    assert capsys.readouterr().err == ""
-    assert (legacy_root / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
-    assert (legacy_root / "daemons.yaml").read_text(encoding="utf-8") == "- workspace: /tmp/legacy-workspace\n"
+    err = capsys.readouterr().err
+
+    assert "migrated deprecated global state" in err
+    assert str(legacy_root) in err
+    assert str(canonical_root) in err
+    assert not (legacy_root / "config.yaml").exists()
     assert not (legacy_root / "workspaces.yaml").exists()
-    assert not (canonical_root / "config.yaml").exists()
-    assert not (canonical_root / "daemons.yaml").exists()
+    assert not (legacy_root / "daemons.yaml").exists()
+    assert (canonical_root / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
+    assert (canonical_root / "daemons.yaml").read_text(encoding="utf-8") == "- workspace: /tmp/legacy-workspace\n"
     assert set(_registered_paths(canonical_root / "workspaces.db")) == {
         "/tmp/legacy-workspace",
         str(tmp_path.resolve()),
     }
+    (tmp_path / ".litehive" / "config.yaml").write_text("{}", encoding="utf-8")
+    assert load_config(tmp_path).default_engine == "gemini"
+
+    ensure_workspace(tmp_path)
+    assert capsys.readouterr().err == ""
 
 
 def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
@@ -386,7 +395,18 @@ def test_ensure_workspace_skips_disk_scan_for_bootstrapped_empty_workspace(
 
 def test_litehive_home_overrides_default_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     custom_home = tmp_path / "custom-home"
+    config_home = tmp_path / "config-home"
+    legacy_root = config_home / "litehive"
+    legacy_root.mkdir(parents=True, exist_ok=True)
+    (legacy_root / "config.yaml").write_text("default_engine: gemini\n", encoding="utf-8")
+    (legacy_root / "workspaces.yaml").write_text(
+        yaml.safe_dump(["/tmp/legacy-workspace"], sort_keys=False),
+        encoding="utf-8",
+    )
+    (legacy_root / "daemons.yaml").write_text("- workspace: /tmp/legacy-workspace\n", encoding="utf-8")
+
     monkeypatch.setenv("LITEHIVE_HOME", str(custom_home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "ignored-data"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "ignored-state"))
 
@@ -397,8 +417,17 @@ def test_litehive_home_overrides_default_root(tmp_path: Path, monkeypatch: pytes
     wid = workspace_data_dir(tmp_path).name
     assert litehive_root() == custom_home
     assert litehive_root() / "config.yaml" == custom_home / "config.yaml"
+    assert yaml.safe_load((custom_home / "daemons.yaml").read_text(encoding="utf-8")) == [
+        {"workspace": "/tmp/legacy-workspace"}
+    ]
     assert workspace_path(tmp_path, "data.db") == custom_home / wid / "data.db"
-    assert _registered_paths(custom_home / "workspaces.db") == [str(tmp_path.resolve())]
+    assert set(_registered_paths(custom_home / "workspaces.db")) == {
+        "/tmp/legacy-workspace",
+        str(tmp_path.resolve()),
+    }
+    assert not (legacy_root / "config.yaml").exists()
+    assert not (legacy_root / "workspaces.yaml").exists()
+    assert not (legacy_root / "daemons.yaml").exists()
 
 
 def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None:

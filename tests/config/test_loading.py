@@ -117,6 +117,30 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
     assert config.pool_max_tasks == 2
 
 
+def test_load_config_migrates_legacy_global_config_from_config_home(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
+
+    workspace = tmp_path / "workspace"
+    ensure_workspace(workspace)
+    (workspace / ".litehive" / "config.yaml").write_text("{}", encoding="utf-8")
+
+    legacy_path = tmp_path / "xdg-config" / "litehive" / "config.yaml"
+    legacy_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_path.write_text("default_engine: gemini\n", encoding="utf-8")
+
+    config = load_config(workspace)
+
+    assert config.default_engine == "gemini"
+    assert not legacy_path.exists()
+    assert (litehive_root() / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
+    assert "migrated deprecated global state" in capsys.readouterr().err
+
+
 def test_load_config_deep_merges_global_and_workspace_mappings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))

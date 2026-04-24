@@ -5,16 +5,6 @@ import os
 from pathlib import Path
 
 
-def _xdg_config_litehive_root() -> Path:
-    config_home = os.environ.get("XDG_CONFIG_HOME")
-    base = Path(config_home).expanduser() if config_home else Path.home() / ".config"
-    return base / "litehive"
-
-
-def litehive_config_root() -> Path:
-    return _xdg_config_litehive_root()
-
-
 def _configured_litehive_root() -> Path:
     override = os.environ.get("LITEHIVE_HOME")
     if override:
@@ -27,6 +17,9 @@ def _configured_litehive_root() -> Path:
 def litehive_root() -> Path:
     root = _configured_litehive_root().expanduser()
     root.mkdir(parents=True, exist_ok=True)
+    from litehive.config.global_state import migrate_legacy_global_state
+
+    migrate_legacy_global_state(root)
     return root
 
 

@@ -12,7 +12,7 @@ import time
 
 import yaml
 
-from litehive.config.paths import litehive_config_root, litehive_root
+from litehive.config.paths import litehive_root
 
 log = logging.getLogger(__name__)
 
@@ -32,8 +32,10 @@ def workspace_registry_path() -> Path:
     return litehive_root() / "workspaces.db"
 
 
-def legacy_workspace_registry_path() -> Path:
-    return litehive_config_root() / "workspaces.yaml"
+def _legacy_workspace_registry_path() -> Path:
+    from litehive.config.global_state import legacy_litehive_root
+
+    return legacy_litehive_root() / "workspaces.yaml"
 
 
 def _int_env(name: str, default: int) -> int:
@@ -173,10 +175,14 @@ def _migration_timestamps(count: int) -> list[str]:
     ]
 
 
-def _migrate_legacy_registry_if_needed(connection: sqlite3.Connection) -> None:
-    legacy_path = legacy_workspace_registry_path()
+def _migrate_legacy_registry_if_needed(
+    connection: sqlite3.Connection,
+    *,
+    legacy_path: Path | None = None,
+) -> bool:
+    legacy_path = legacy_path or _legacy_workspace_registry_path()
     if not legacy_path.exists():
-        return
+        return False
     try:
         roots = _legacy_registry_entries(legacy_path)
     except _LegacyRegistryCorruptError as exc:
@@ -185,10 +191,10 @@ def _migrate_legacy_registry_if_needed(connection: sqlite3.Connection) -> None:
             reason=str(exc),
             label="legacy workspace registry",
         )
-        return
+        return False
     except OSError as exc:
         log.warning("%s", exc)
-        return
+        return False
 
     connection.execute("BEGIN IMMEDIATE")
     try:
@@ -216,6 +222,20 @@ def _migrate_legacy_registry_if_needed(connection: sqlite3.Connection) -> None:
         legacy_path.unlink(missing_ok=True)
     except OSError as exc:
         log.warning("failed to remove legacy workspace registry %s after migration (%s)", legacy_path, exc)
+        return False
+    return True
+
+
+def _migrate_legacy_registry_file(path: Path, legacy_path: Path) -> bool:
+    if not legacy_path.exists():
+        return False
+    try:
+        with _open_registry_connection(path) as connection:
+            _ensure_registry_schema(connection)
+            return _migrate_legacy_registry_if_needed(connection, legacy_path=legacy_path)
+    except (OSError, sqlite3.DatabaseError) as exc:
+        log.warning("failed to migrate legacy workspace registry %s into %s (%s)", legacy_path, path, exc)
+        return False
 
 
 def _locked_registry_operation(operation, *, path: Path):

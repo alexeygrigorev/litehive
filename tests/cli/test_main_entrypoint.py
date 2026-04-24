@@ -6,7 +6,7 @@ import importlib
 import pytest
 
 import litehive.main as main_module
-from litehive.config.paths import litehive_config_root
+from litehive.config.paths import litehive_root
 from litehive.config.workspace import ensure_workspace
 
 cli_app_module = importlib.import_module("litehive.cli.app")
@@ -340,20 +340,18 @@ def test_fast_status_prefers_runner_active_task_id(
     assert "active_task_status: in_progress/implementing" in output
 
 
-def test_main_status_reports_corrupt_legacy_registry_from_workspace_cwd(
+def test_main_status_reports_corrupt_registry_from_workspace_cwd(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config-home"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
     ensure_workspace(tmp_path)
-    registry_path = litehive_config_root() / "workspaces.yaml"
-    registry_path.parent.mkdir(parents=True, exist_ok=True)
-    registry_path.write_text("[", encoding="utf-8")
+    registry_path = litehive_root() / "workspaces.db"
+    registry_path.write_text("not a sqlite database", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys, "argv", ["litehive", "status"])
 
@@ -361,26 +359,24 @@ def test_main_status_reports_corrupt_legacy_registry_from_workspace_cwd(
     output = capsys.readouterr().out
 
     assert exit_code == 1
-    assert f"registry: CORRUPT at {registry_path} (line 1)" in output
-    assert "Fix or remove the legacy workspace registry YAML" in output
+    assert f"registry: BROKEN at {registry_path}" in output
+    assert "global workspace registry database" in output
     assert "health:" in output
     assert registry_path.exists()
 
 
-def test_main_status_reports_corrupt_legacy_registry_from_workspace_env(
+def test_main_status_reports_corrupt_registry_from_workspace_env(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config-home"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(tmp_path))
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
     ensure_workspace(tmp_path)
-    registry_path = litehive_config_root() / "workspaces.yaml"
-    registry_path.parent.mkdir(parents=True, exist_ok=True)
-    registry_path.write_text("[", encoding="utf-8")
+    registry_path = litehive_root() / "workspaces.db"
+    registry_path.write_text("not a sqlite database", encoding="utf-8")
     monkeypatch.chdir(tmp_path.parent)
     monkeypatch.setattr(sys, "argv", ["litehive", "status"])
 
@@ -388,7 +384,7 @@ def test_main_status_reports_corrupt_legacy_registry_from_workspace_env(
     output = capsys.readouterr().out
 
     assert exit_code == 1
-    assert f"registry: CORRUPT at {registry_path} (line 1)" in output
-    assert "Fix or remove the legacy workspace registry YAML" in output
+    assert f"registry: BROKEN at {registry_path}" in output
+    assert "global workspace registry database" in output
     assert "health:" in output
     assert registry_path.exists()

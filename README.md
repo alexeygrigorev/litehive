@@ -178,7 +178,7 @@ recovery_engine: claude
 
 Workspace config lives in `.litehive/config.yaml`. Global defaults live in `${LITEHIVE_HOME:-$XDG_DATA_HOME/litehive}/config.yaml` (default `~/.local/share/litehive/config.yaml`). Workspace settings take precedence.
 
-On first run after upgrade, Litehive migrates legacy `~/.config/litehive/{config,workspaces,daemons}.yaml` files into the unified root and prints a deprecation notice.
+On first run after upgrade, Litehive migrates legacy `~/.config/litehive/config.yaml` and `daemons.yaml` into the unified root, imports `~/.config/litehive/workspaces.yaml` into the unified registry database, and prints a deprecation notice.
 
 ```yaml
 default_engine: codex
@@ -230,7 +230,6 @@ Repo-local control files stay in the repository:
 .litehive/
   config.yaml          # workspace configuration
   context.md           # project description for agents
-  state.yaml           # queue and active task state
   .gitignore           # keeps runtime artifacts out of git
   tasks/
     T-0001-example/
@@ -247,7 +246,7 @@ Global Litehive state lives under one XDG root:
 ```
 ~/.local/share/litehive/
   config.yaml          # global defaults
-  workspaces.yaml      # registered workspaces
+  workspaces.db        # registered workspaces
   daemons.yaml         # running daemon index
   <workspace-id>/
     data.db            # workspace runtime database
