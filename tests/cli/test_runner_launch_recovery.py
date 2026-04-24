@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from litehive.cli.runner import _run_once, daemon_worker
+from litehive.cli.runner import daemon_worker, run_once
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.recovery import TriggerEventKind
 from litehive.recovery.detection import LaunchFailure, TaskLaunchFailure
@@ -77,7 +77,7 @@ def test_run_once_retries_uv_sync_failure_after_recovery(tmp_path: Path, monkeyp
     monkeypatch.setattr("litehive.cli.runner.attempt_launch_recovery", fake_recovery)
     monkeypatch.setattr("litehive.cli.runner.run_task", lambda *args, **kwargs: _Result(task=task, final_stage="done"))
 
-    result = _run_once(tmp_path)
+    result = run_once(tmp_path)
 
     assert result.exit_code == 0
     assert result.ran_task is True
@@ -128,7 +128,7 @@ def test_run_once_handles_unrecoverable_launch_failure(
         lambda root, task, **kwargs: _Result(task=task, final_stage="done"),
     )
 
-    result = _run_once(tmp_path)
+    result = run_once(tmp_path)
 
     assert result.exit_code == 0
     assert result.ran_task is expect_ran_task
@@ -165,7 +165,7 @@ def test_run_once_handles_corrupt_task_yaml_once(tmp_path: Path, monkeypatch, st
 
     monkeypatch.setattr("litehive.cli.runner.run_task", fake_run_task)
 
-    result = _run_once(tmp_path)
+    result = run_once(tmp_path)
 
     assert result.exit_code == 0
     assert result.ran_task is True

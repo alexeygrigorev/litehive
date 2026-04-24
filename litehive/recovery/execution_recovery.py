@@ -397,7 +397,7 @@ def _ensure_task_worktree(root: Path, task: TaskRecord) -> Path:
         return root
 
     branch = task_worktree_branch(task)
-    existing = GitWorktreeSyncNode._registered_worktree_for_branch(root, branch)
+    existing = GitWorktreeSyncNode.registered_worktree_for_branch(root, branch)
     if existing is not None:
         set_task_worktree_path(task, serialize_worktree_path(existing))
         save_task(root, task)
@@ -406,7 +406,7 @@ def _ensure_task_worktree(root: Path, task: TaskRecord) -> Path:
     worktree = task_worktree_path(root, task)
     worktree.parent.mkdir(parents=True, exist_ok=True)
     try:
-        GitWorktreeSyncNode._prune_stale_worktrees(root)
+        GitWorktreeSyncNode.prune_stale_worktrees(root)
     except GitError as exc:
         raise TaskLaunchFailure(
             context="worktree_setup_failed",

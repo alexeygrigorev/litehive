@@ -17,7 +17,7 @@ from litehive.db.schema import connect_workspace_db
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.lifecycle.types import PipelineMode
-from litehive.main import _fast_status
+from litehive.main import fast_status
 from litehive.sandbox.git_wrapper import main as git_wrapper_main
 from litehive.state.records import create_task, save_task
 from litehive.state.persist import load_state, save_state, set_pool_stop_reason
@@ -94,7 +94,7 @@ def test_status_shows_attention_count_and_waiting_actions(tmp_path: Path, capsys
         dedupe_key="destructive_git_denied:status",
     )
 
-    exit_code = _fast_status(["--workspace", str(tmp_path)])
+    exit_code = fast_status(["--workspace", str(tmp_path)])
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -132,7 +132,7 @@ def test_status_reconciles_detectable_attention_items_without_prior_listing(tmp_
         encoding="utf-8",
     )
 
-    exit_code = _fast_status(["--workspace", str(tmp_path)])
+    exit_code = fast_status(["--workspace", str(tmp_path)])
     output = capsys.readouterr().out
 
     assert exit_code == 0

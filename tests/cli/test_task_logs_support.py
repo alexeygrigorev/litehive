@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from litehive.cli.task_logs_support import _load_task_with_runtime
+from litehive.cli.task_logs_support import load_task_with_runtime
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task
 from litehive.tasks.paths import task_dir
@@ -19,7 +19,7 @@ def test_load_task_with_runtime_tolerates_unrelated_missing_runtime_rows(tmp_pat
         encoding="utf-8",
     )
 
-    loaded = _load_task_with_runtime(tmp_path, task.id)
+    loaded = load_task_with_runtime(tmp_path, task.id)
 
     assert loaded is not None
     assert loaded.id == task.id

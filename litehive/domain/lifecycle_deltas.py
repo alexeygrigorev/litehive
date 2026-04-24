@@ -262,7 +262,7 @@ def _next_rejection_loop(state: TaskState, event: Event, *, retry_target_stage: 
     )
 
 
-def _rejection_loop_detected(state: TaskState, event: Event, *, retry_target_stage: NodeName | None) -> bool:
+def rejection_loop_detected(state: TaskState, event: Event, *, retry_target_stage: NodeName | None) -> bool:
     loop = _next_rejection_loop(state, event, retry_target_stage=retry_target_stage)
     return loop is not None and loop.count >= state.limits.rejection_loop_limit
 

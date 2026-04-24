@@ -65,15 +65,15 @@ def _merge_status_issues(*issue_groups: Iterable[object]) -> list[object]:
     return merged
 
 
-def _fast_status(argv: list[str]) -> int:
+def fast_status(argv: list[str]) -> int:
     from litehive.observability.status_diagnostics import (
-        _probe_registry_files,
+        probe_registry_files,
         render_issue_lines,
         status_has_problems,
     )
     from litehive.observability.status import collect_task_pipeline_status, render_task_pipeline_status_lines
 
-    preflight_issues = _probe_registry_files()
+    preflight_issues = probe_registry_files()
     try:
         explicit_workspace = _workspace_override_from_argv(argv)
         if explicit_workspace is None:
@@ -124,7 +124,7 @@ def main() -> int:
             return cli_main()
 
     if argv and argv[0] == "status" and "--full" not in argv:
-        return _fast_status(argv[1:])
+        return fast_status(argv[1:])
 
     if argv and argv[0] == "agent":
         import click

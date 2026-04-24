@@ -66,7 +66,7 @@ def _print_status_issues(issues) -> int:
     return 1
 
 
-def _repair_summary_lines(
+def repair_summary_lines(
     summary: WorkspaceRepairSummary,
     *,
     result_label: str,
@@ -152,7 +152,7 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(f"repair failed: {exc}")
         return 1
     state = load_runtime_state(workspace)
-    for line in _repair_summary_lines(
+    for line in repair_summary_lines(
         summary,
         result_label="repaired",
         include_empty=True,
@@ -181,7 +181,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     flagged_tasks = [task for task in tasks if task.status == "flagged"]
     worktrees = collect_managed_worktrees(root)
     dirty_report = inspect_dirty_worktree_gate(root)
-    quota_health = _collect_quota_health()
+    quota_health = collect_quota_health()
     completed = sorted(
         (task for task in tasks if task.status == "done"), key=lambda task: task.updated_at or "", reverse=True
     )[:3]
@@ -210,7 +210,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(line)
 
     print()
-    daemon_status, daemon_pid = _health_daemon_status(root)
+    daemon_status, daemon_pid = health_daemon_status(root)
     for line in render_health_daemon_lines(daemon_status, daemon_pid):
         print(line)
 
@@ -223,7 +223,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     return 1 if flagged_tasks or has_worktree_problem or has_quota_problem else 0
 
 
-def _health_daemon_status(root: Path) -> tuple[str, str]:
+def health_daemon_status(root: Path) -> tuple[str, str]:
     entry = daemon_metadata(root)
     if entry is None or entry.get("status") != "running":
         return ("stopped", "-")
@@ -231,26 +231,26 @@ def _health_daemon_status(root: Path) -> tuple[str, str]:
     return ("running", str(pid) if pid is not None else "-")
 
 
-def _collect_quota_health() -> list[_QuotaHealth]:
+def collect_quota_health() -> list[_QuotaHealth]:
     claude_status = check_claude_quota()
     codex_status = check_codex_quota()
     copilot_status = check_copilot_quota()
     zai_status = check_zai_quota()
     snapshots = {
-        "claude": _quota_health(
+        "claude": quota_health(
             "claude",
             claude_status,
             reset_at=_preferred_reset_at(claude_status, include_short_term_fallback=True),
         ),
-        "codex": _quota_health("codex", codex_status, reset_at=_preferred_reset_at(codex_status)),
-        "copilot": _quota_health(
+        "codex": quota_health("codex", codex_status, reset_at=_preferred_reset_at(codex_status)),
+        "copilot": quota_health(
             "copilot",
             copilot_status,
             reset_at=_preferred_reset_at(copilot_status),
         ),
         "gemini": _unsupported_quota_health("gemini"),
-        "goz": _quota_health("goz", zai_status),
-        "opencode": _quota_health("opencode", zai_status),
+        "goz": quota_health("goz", zai_status),
+        "opencode": quota_health("opencode", zai_status),
     }
     return [snapshots[engine] for engine in ENGINE_CHOICES]
 
@@ -271,7 +271,7 @@ def _preferred_reset_at(
     return None
 
 
-def _quota_health(
+def quota_health(
     engine: str,
     status: UsageStatus,
     *,

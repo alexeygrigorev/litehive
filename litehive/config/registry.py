@@ -246,7 +246,7 @@ def _migrate_legacy_registry_if_needed(
     return True
 
 
-def _migrate_legacy_registry_file(path: Path, legacy_path: Path) -> bool:
+def migrate_legacy_registry_file(path: Path, legacy_path: Path) -> bool:
     if not legacy_path.exists():
         return False
     try:

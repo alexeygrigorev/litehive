@@ -35,7 +35,7 @@ class RuntimeStore:
 
     def load_workspace_state(self) -> WorkspaceState | None:
         with connect_workspace_db(self.root) as connection:
-            self._ensure_workspace_state_rows(connection)
+            self.ensure_workspace_state_rows(connection)
             state_row = connection.execute(
                 "SELECT payload FROM pool_state WHERE workspace_key = ?",
                 ("workspace",),
@@ -160,7 +160,7 @@ class RuntimeStore:
         )
 
     @staticmethod
-    def _ensure_workspace_state_rows(connection: sqlite3.Connection) -> None:
+    def ensure_workspace_state_rows(connection: sqlite3.Connection) -> None:
         now = utcnow()
         connection.execute(
             """

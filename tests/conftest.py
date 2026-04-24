@@ -1,5 +1,6 @@
 """Shared test fixtures."""
 
+import importlib
 import os
 from pathlib import Path
 import sys
@@ -7,7 +8,22 @@ import tempfile
 
 import pytest
 
-import heru.quota.codex_quota as _codex_quota_mod
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _bootstrap_heru_import_path() -> None:
+    candidates = [
+        *sorted((_REPO_ROOT / ".venv" / "lib").glob("python*/site-packages")),
+        *sorted((_REPO_ROOT / "packages").glob("heru-*.whl")),
+    ]
+    for candidate in reversed(candidates):
+        entry = str(candidate)
+        if entry not in sys.path:
+            sys.path.insert(0, entry)
+
+
+_bootstrap_heru_import_path()
+_codex_quota_mod = importlib.import_module("heru.quota.codex_quota")
 
 
 _PREVIOUS_TEST_ENV = {
@@ -44,7 +60,6 @@ os.environ["GIT_CONFIG_COUNT"] = "1"
 os.environ["GIT_CONFIG_KEY_0"] = "init.defaultBranch"
 os.environ["GIT_CONFIG_VALUE_0"] = "main"
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
 _HERU_IMPORT_ROOT = Path(_codex_quota_mod.__file__).resolve().parents[2]
 _PYTHONPATH_ENTRIES = [str(_REPO_ROOT), str(_HERU_IMPORT_ROOT)]
 for entry in reversed(_PYTHONPATH_ENTRIES):

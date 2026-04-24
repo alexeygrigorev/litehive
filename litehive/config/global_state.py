@@ -45,9 +45,9 @@ def migrate_legacy_global_state(root: Path) -> None:
         if daemons_migrated:
             migrated_labels.append("daemons.yaml")
 
-        from litehive.config.registry import _migrate_legacy_registry_file
+        from litehive.config.registry import migrate_legacy_registry_file
 
-        if _migrate_legacy_registry_file(root / "workspaces.db", legacy_root / "workspaces.yaml"):
+        if migrate_legacy_registry_file(root / "workspaces.db", legacy_root / "workspaces.yaml"):
             migrated_labels.append("workspaces.yaml")
 
     if migrated_labels:

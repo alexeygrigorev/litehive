@@ -18,7 +18,6 @@ from litehive.config.model import (
 )
 from litehive.config.profiles.loader import resolve_process_profile
 from litehive.config.workspace import ensure_workspace
-from litehive.state.records import create_task
 
 
 def _register_workspace_in_subprocess(args: tuple[str, str, str, str]) -> str:
@@ -361,6 +360,7 @@ def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
     tmp_path: Path,
 ) -> None:
     from litehive.db.schema import connect_workspace_db
+    from litehive.state.records import create_task
 
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Current runtime state")

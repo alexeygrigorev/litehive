@@ -436,7 +436,7 @@ def test_agent_node_retries_timeout_via_existing_retry_flow(
         _TimeoutThenPassManager,
     )
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        "litehive.lifecycle.heru_factory.latest_verdict_after",
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
@@ -468,7 +468,7 @@ def test_agent_node_nudges_timeout_retry_with_existing_codex_thread_id(tmp_path,
         _TimeoutThenNudgeThenPassManager,
     )
 
-    def _latest_verdict_after_for_nudge(*args, **kwargs):  # type: ignore[no-untyped-def]
+    def latest_verdict_after_for_nudge(*args, **kwargs):  # type: ignore[no-untyped-def]
         del args, kwargs
         if _TimeoutThenNudgeThenPassManager.calls == 2:
             return None
@@ -483,8 +483,8 @@ def test_agent_node_nudges_timeout_retry_with_existing_codex_thread_id(tmp_path,
         )
 
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._latest_verdict_after",
-        _latest_verdict_after_for_nudge,
+        "litehive.lifecycle.heru_factory.latest_verdict_after",
+        latest_verdict_after_for_nudge,
     )
 
     event = node.run(make_state(task_id=task.id))

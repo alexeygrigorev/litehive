@@ -219,6 +219,6 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
     from litehive.state.store import RuntimeStore
 
     with connect_workspace_db(root) as connection:
-        RuntimeStore._ensure_workspace_state_rows(connection)
+        RuntimeStore.ensure_workspace_state_rows(connection)
 
     return base
