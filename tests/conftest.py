@@ -1,13 +1,12 @@
 """Shared test fixtures."""
 
+import importlib
 import os
 from pathlib import Path
 import sys
 import tempfile
 
 import pytest
-
-import heru.quota.codex_quota as _codex_quota_mod
 
 
 _PREVIOUS_TEST_ENV = {
@@ -45,8 +44,10 @@ os.environ["GIT_CONFIG_KEY_0"] = "init.defaultBranch"
 os.environ["GIT_CONFIG_VALUE_0"] = "main"
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_HERU_IMPORT_ROOT = Path(_codex_quota_mod.__file__).resolve().parents[2]
-_PYTHONPATH_ENTRIES = [str(_REPO_ROOT), str(_HERU_IMPORT_ROOT)]
+_PYTHONPATH_ENTRIES = [str(_REPO_ROOT)]
+_SITE_PACKAGES = _REPO_ROOT / ".venv" / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+if _SITE_PACKAGES.exists():
+    _PYTHONPATH_ENTRIES.append(str(_SITE_PACKAGES.resolve()))
 for entry in reversed(_PYTHONPATH_ENTRIES):
     if entry not in sys.path:
         sys.path.insert(0, entry)
@@ -56,6 +57,8 @@ for entry in reversed(_PYTHONPATH_ENTRIES):
     if entry not in pythonpath_entries:
         pythonpath_entries.insert(0, entry)
 os.environ["PYTHONPATH"] = os.pathsep.join(pythonpath_entries)
+
+_codex_quota_mod = importlib.import_module("heru.quota.codex_quota")
 
 
 def _noop_block_reason(**kw):
