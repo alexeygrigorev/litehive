@@ -13,14 +13,15 @@ from litehive.cli.workspace import (
     _repair_summary_lines,
     status_command,
 )
+from litehive.config.paths import workspace_path
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
-from litehive.domain.task import WorkspaceState
+from litehive.domain.task import UnmergedWorktree, WorkspaceState
 from litehive.domain.task_ops import WorkspaceRepairSummary
-from litehive.state.persist import load_state, save_state
+from litehive.state.persist import load_state, save_state, save_state_without_runner_guard
 from litehive.state.records import create_task, require_task, save_task
 
 _RUNNER = CliRunner()
@@ -58,6 +59,7 @@ def test_repair_summary_lines_omit_empty_fields() -> None:
     assert lines == [
         "repaired: yes",
         "stale_runner_recovered: yes",
+        "stale_unmerged_worktrees_removed: 0",
         "requeued_tasks: T-0002",
     ]
 
@@ -75,6 +77,7 @@ def test_repair_summary_lines_include_empty_fields_for_repair_mode() -> None:
     assert lines == [
         "repaired: no",
         "stale_runner_recovered: no",
+        "stale_unmerged_worktrees_removed: 0",
         "cleared_active_task_id: -",
         "requeued_tasks: -",
         "stale_process_tasks: -",
@@ -131,6 +134,7 @@ def test_collect_quota_health_reuses_shared_statuses(monkeypatch) -> None:
     assert by_engine["goz"].problem is True
     assert by_engine["opencode"].summary == "hours remaining=10.0% weeks remaining=5.0%"
 
+
 def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Repair stale resumable task")
@@ -146,7 +150,7 @@ def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tm
     state.queue = []
     save_state(tmp_path, state)
 
-    result = _RUNNER.invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
+    result = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
 
     assert result.return_value == 0
     assert "repaired: yes" in result.output
@@ -163,7 +167,6 @@ def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tm
     assert refreshed.runtime.current_stage.stage == "testing"
     assert refreshed.runtime.current_stage.status == "idle"
     assert load_state(tmp_path).queue == [task.id]
-
 
 def test_repair_skips_legacy_disk_only_tasks_missing_runtime_state(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
@@ -193,6 +196,46 @@ def test_repair_skips_legacy_disk_only_tasks_missing_runtime_state(tmp_path: Pat
     assert load_state(tmp_path).queue == [task.id]
     refreshed = require_task(tmp_path, task.id)
     assert refreshed.status == "queued"
+
+
+def test_repair_removes_stale_unmerged_worktrees_and_reports_count(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    done_task = create_task(tmp_path, title="Done rescued task")
+    done_task.status = "done"
+    done_task.pipeline_status = "done"
+    save_task(tmp_path, done_task)
+
+    queued_task = create_task(tmp_path, title="Queued missing worktree task")
+    queued_task.status = "queued"
+    queued_task.pipeline_status = "implementing"
+    save_task(tmp_path, queued_task)
+
+    existing_worktree = workspace_path(tmp_path, "worktrees") / f"{done_task.id}-{done_task.slug}"
+    existing_worktree.mkdir(parents=True, exist_ok=True)
+    missing_worktree = workspace_path(tmp_path, "worktrees") / f"{queued_task.id}-{queued_task.slug}"
+
+    state = load_state(tmp_path)
+    state.unmerged_worktrees = [
+        UnmergedWorktree(task_id=done_task.id, worktree_path=str(existing_worktree)),
+        UnmergedWorktree(task_id=queued_task.id, worktree_path=str(missing_worktree)),
+    ]
+    save_state_without_runner_guard(tmp_path, state)
+
+    result = _RUNNER.invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
+
+    assert result.return_value == 0
+    assert "repaired: yes" in result.output
+    assert "stale_unmerged_worktrees_removed: 2" in result.output
+
+    refreshed = load_state(tmp_path)
+    assert refreshed.unmerged_worktrees == []
+
+    rerun = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
+
+    assert rerun.return_value == 0
+    assert "repaired: no" in rerun.output
+    assert "stale_unmerged_worktrees_removed: 0" in rerun.output
 
 
 def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatch, capsys) -> None:
