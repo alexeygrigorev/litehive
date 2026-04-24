@@ -18,7 +18,6 @@ from litehive.config.model import (
 )
 from litehive.config.profiles.loader import resolve_process_profile
 from litehive.config.workspace import ensure_workspace
-from litehive.state.records import create_task
 
 
 def _register_workspace_in_subprocess(args: tuple[str, str, str, str]) -> str:
@@ -97,6 +96,31 @@ def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
     assert (tmp_path / ".litehive" / ".gitignore").exists()
     assert (tmp_path / ".litehive" / "tasks").exists()
     assert (tmp_path / ".litehive" / "attention").exists()
+
+
+def test_ensure_workspace_bootstraps_rich_commented_config_once(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    config_path = tmp_path / ".litehive" / "config.yaml"
+    contents = config_path.read_text(encoding="utf-8")
+
+    for snippet in [
+        "# Edit it by hand; Litehive does not provide a `configure` command anymore.",
+        "# Default engine used for new runs unless a command explicitly overrides it.",
+        "# `pool_max_tasks: null` means \"no cap\"; set an integer to stop after N tasks.",
+        "# `pool_stop_on_attention` blocks the pool whenever pending operator",
+        "#   credential_inputs[{env_var, mount_path}], extra_ro_binds,",
+        "#   extra_rw_binds, setenv",
+        "# `auto_commit: false` leaves commit creation to the operator/agent.",
+    ]:
+        assert snippet in contents
+
+    original = "default_engine: gemini\n"
+    config_path.write_text(original, encoding="utf-8")
+
+    ensure_workspace(tmp_path)
+
+    assert config_path.read_text(encoding="utf-8") == original
 
 
 def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -361,6 +385,7 @@ def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
     tmp_path: Path,
 ) -> None:
     from litehive.db.schema import connect_workspace_db
+    from litehive.state.records import create_task
 
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Current runtime state")

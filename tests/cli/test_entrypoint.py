@@ -15,6 +15,13 @@ def _normalized(text: str) -> str:
     return " ".join(text.split())
 
 
+def test_cli_main_module_remains_importable() -> None:
+    compat_module = importlib.import_module("litehive.cli.main")
+
+    assert compat_module.app is modern_cli.app
+    assert compat_module.main is modern_cli.main
+
+
 def test_bare_litehive_prints_status_when_idle(tmp_path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -44,44 +51,61 @@ def test_root_help_hides_legacy_shortcuts_and_internal_aliases() -> None:
     result = CliRunner().invoke(modern_cli.app, ["--help"])
 
     assert result.exit_code == 0, result.output
-    for command in ["recover", "prioritize", "switch", "agent", "daemon"]:
+    for command in ["add", "recover", "prioritize", "switch", "agent", "daemon"]:
         assert command not in result.output
     for command in ["start", "stop", "restart", "task", "queue", "import", "engine"]:
         assert command in result.output
 
 
-def test_hidden_legacy_shortcut_help_describes_compatibility_aliases() -> None:
+def test_removed_root_aliases_are_no_longer_available() -> None:
+    removed_aliases = [
+        "add",
+        "list",
+        "show",
+        "update",
+        "close",
+        "abandon",
+        "debug",
+        "logs",
+        "move",
+        "promote",
+        "requeue",
+        "resume",
+        "issue",
+        "intake",
+        "import-issue",
+        "import-issues",
+        "cleanup",
+        "recover",
+        "prioritize",
+        "switch",
+    ]
+
+    runner = CliRunner()
+    for command in removed_aliases:
+        result = runner.invoke(modern_cli.app, [command, "--help"])
+
+        assert result.exit_code != 0, result.output
+        diagnostic = result.output or str(result.exception)
+        assert f"No such command '{command}'" in diagnostic
+
+
+def test_queue_recover_prioritize_and_switch_help_describe_supported_subcommands() -> None:
     expected_help = {
-        "add": "Compatibility alias for `litehive task add`",
-        "list": "Compatibility alias for `litehive task list`",
-        "show": "Compatibility alias for `litehive task show`",
-        "update": "Compatibility alias for `litehive task update`",
-        "close": "Compatibility alias for `litehive task close`",
-        "abandon": "Compatibility alias for `litehive task abandon`",
-        "debug": "Compatibility alias for `litehive task debug`",
-        "logs": "Compatibility alias for `litehive task logs`",
-        "move": "Compatibility alias for `litehive queue move`",
-        "promote": "Compatibility alias for `litehive queue promote`",
-        "requeue": "Compatibility alias for `litehive queue requeue`",
-        "resume": "Compatibility alias for `litehive queue resume`",
-        "recover": "Compatibility alias for `litehive queue requeue` on completed tasks",
-        "prioritize": "Compatibility alias for exact-order queue promotion",
-        "switch": "Compatibility alias for `litehive queue switch`",
+        ("queue", "recover"): "Requeue a completed task without reverting workspace code",
+        ("queue", "prioritize"): "Move queued tasks to the front in the provided order",
+        ("queue", "switch"): "Switch a queued or active task to a different engine",
     }
 
     runner = CliRunner()
-    for command, help_text in expected_help.items():
-        result = runner.invoke(modern_cli.app, [command, "--help"])
+    for argv, help_text in expected_help.items():
+        result = runner.invoke(modern_cli.app, [*argv, "--help"])
 
         assert result.exit_code == 0, result.output
         assert help_text in _normalized(result.output)
 
-
-def test_queue_switch_help_describes_grouped_engine_handoff() -> None:
-    result = CliRunner().invoke(modern_cli.app, ["queue", "switch", "--help"])
-
-    assert result.exit_code == 0, result.output
-    normalized = _normalized(result.output)
+    switch_help = runner.invoke(modern_cli.app, ["queue", "switch", "--help"])
+    normalized = _normalized(switch_help.output)
     assert "Engine to switch to" in normalized
     assert "Why the engine switch happened" in normalized
 
