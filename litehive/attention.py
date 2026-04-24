@@ -316,6 +316,13 @@ def attention_store(root: Path) -> AttentionStore:
     return AttentionStore(root)
 
 
+def _existing_workspace_root(root: Path, *, source: str) -> Path:
+    resolved = normalize_workspace_root(root, source=source)
+    if not workspace_dir(resolved).is_dir():
+        raise ValueError(f"workspace root does not exist: {resolved}")
+    return resolved
+
+
 def record_attention(
     root: Path,
     *,
@@ -350,23 +357,20 @@ def list_attention(
     reconcile: bool = True,
     auto_resolve: bool = True,
 ) -> list[AttentionItem]:
-    root = normalize_workspace_root(root, source="list_attention")
-    ensure_workspace(root)
+    root = _existing_workspace_root(root, source="list_attention")
     if reconcile:
         return reconcile_attention(root, auto_resolve=auto_resolve)
     return sorted(attention_store(root).list_items(), key=attention_priority)
 
 
 def resolve_attention(root: Path, item_id: int) -> AttentionItem | None:
-    root = normalize_workspace_root(root, source="resolve_attention")
-    ensure_workspace(root)
+    root = _existing_workspace_root(root, source="resolve_attention")
     return attention_store(root).resolve(item_id, resolution="resolved by operator")
 
 
 def reconcile_attention(root: Path, *, auto_resolve: bool = True) -> list[AttentionItem]:
-    root = normalize_workspace_root(root, source="reconcile_attention")
-    ensure_workspace(root)
-    state = load_state(root)
+    root = _existing_workspace_root(root, source="reconcile_attention")
+    state = load_state(root, bootstrap=False)
     _import_attention_log_events(root)
     detected = _detect_attention_items(root, state.pool_stop_reason)
     if auto_resolve:
@@ -394,7 +398,7 @@ def waiting_for_you_lines(root: Path, *, limit: int = 5) -> list[str]:
 
 def _detect_attention_items(root: Path, pool_stop_reason: str | None) -> list[AttentionItem]:
     tasks = list_tasks(root, strict=False)
-    state = load_state(root)
+    state = load_state(root, bootstrap=False)
     detected: list[AttentionItem] = []
     detected.extend(_duplicate_id_items(root))
     detected.extend(_flagged_and_merge_failed_items(root, tasks))

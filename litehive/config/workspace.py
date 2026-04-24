@@ -135,6 +135,7 @@ def resolve_workspace(
     task_id: str | None,
     *,
     cwd: Path | None = None,
+    register: bool = True,
 ) -> Path:
     effective_task_id = task_id or os.environ.get("LITEHIVE_TASK_ID")
 
@@ -142,13 +143,15 @@ def resolve_workspace(
     if env_workspace:
         resolved_env_workspace = normalize_workspace_root(Path(env_workspace), source="LITEHIVE_WORKSPACE_ROOT")
         if _task_matches(resolved_env_workspace, effective_task_id):
-            _register_workspace(resolved_env_workspace)
+            if register:
+                _register_workspace(resolved_env_workspace)
             return resolved_env_workspace
 
     search_root = (cwd or Path.cwd()).resolve()
     resolved_search_root = normalize_workspace_root(search_root, source=f"cwd:{search_root}")
     if resolved_search_root != search_root and _task_matches(resolved_search_root, effective_task_id):
-        _register_workspace(resolved_search_root)
+        if register:
+            _register_workspace(resolved_search_root)
         return resolved_search_root
 
     for candidate in (search_root, *search_root.parents):
@@ -157,13 +160,15 @@ def resolve_workspace(
         resolved = candidate.resolve()
         if not _task_matches(resolved, effective_task_id):
             continue
-        _register_workspace(resolved)
+        if register:
+            _register_workspace(resolved)
         return resolved
 
     if effective_task_id:
         for root in list_registered_workspace_paths():
             if _task_exists(root, effective_task_id):
-                _register_workspace(root)
+                if register:
+                    _register_workspace(root)
                 return root
 
     raise ValueError(

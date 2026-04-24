@@ -1,5 +1,6 @@
 """Lightweight CLI entrypoint with a fast status path."""
 
+from collections.abc import Iterable
 import os
 import sys
 from pathlib import Path
@@ -47,23 +48,43 @@ def _requests_help(argv: list[str]) -> bool:
     return any(arg in {"--help", "-h"} for arg in argv)
 
 
+def _merge_status_issues(*issue_groups: Iterable[object]) -> list[object]:
+    merged: list[object] = []
+    seen: set[tuple[object, object, object]] = set()
+    for issue_group in issue_groups:
+        for issue in issue_group:
+            marker = (
+                getattr(issue, "key", None),
+                getattr(issue, "severity", None),
+                getattr(issue, "message", None),
+            )
+            if marker in seen:
+                continue
+            seen.add(marker)
+            merged.append(issue)
+    return merged
+
+
 def _fast_status(argv: list[str]) -> int:
     from litehive.observability.status_diagnostics import (
+        _probe_registry_files,
         render_issue_lines,
         status_has_problems,
     )
     from litehive.observability.status import collect_task_pipeline_status, render_task_pipeline_status_lines
 
+    preflight_issues = _probe_registry_files()
     try:
         explicit_workspace = _workspace_override_from_argv(argv)
         if explicit_workspace is None:
-            workspace = resolve_workspace(None)
+            workspace = resolve_workspace(None, register=False)
         else:
             workspace = normalize_workspace_root(explicit_workspace, source="--workspace")
     except ValueError as exc:
         print(f"status failed: {exc}")
         return 1
-    status = collect_task_pipeline_status(workspace)
+    status = collect_task_pipeline_status(workspace, read_only=bool(preflight_issues))
+    status.issues = _merge_status_issues(preflight_issues, status.issues)
     for line in render_task_pipeline_status_lines(status, workspace=workspace, mode="fast"):
         print(line)
     if status_has_problems(status.issues):

@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from litehive.config.loading import merge_config_layers
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import litehive_root, workspace_path
+from litehive.config.paths import litehive_config_root, litehive_root, workspace_path
 from litehive.config.workspace_files import config_path, workspace_dir
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.daemon.registry import daemon_metadata, pid_is_alive
@@ -48,12 +48,16 @@ class StatusSnapshot:
 
 def collect_status_snapshot(root: Path) -> StatusSnapshot:
     root = root.resolve()
+    registry_issues = _probe_registry_files()
     config, config_issues = _load_config_for_status(root)
+    legacy_state_issues = _probe_legacy_state_file(root)
     state, state_issues = _load_state_for_status(root)
     runner, runner_issue = _load_runner_status_for_status(root)
     monitoring, monitoring_issues = _load_engine_monitoring_for_status(root)
     issues = [
+        *registry_issues,
         *config_issues,
+        *legacy_state_issues,
         *state_issues,
         *([runner_issue] if runner_issue is not None else []),
         *monitoring_issues,
@@ -86,6 +90,36 @@ def render_issue_lines(issues: list[StatusIssue]) -> list[str]:
     if not status_has_problems(issues):
         return []
     return [*(issue.render() for issue in issues), render_health_summary(issues)]
+
+
+def _probe_registry_files() -> list[StatusIssue]:
+    issues: list[StatusIssue] = []
+    registry_checks = (
+        (
+            litehive_config_root() / "workspaces.yaml",
+            "Fix or remove the legacy workspace registry YAML so Litehive can migrate or ignore it cleanly.",
+        ),
+        (
+            litehive_root() / "daemons.yaml",
+            "Fix or remove the daemon registry YAML, then restart the daemon if daemon tracking is needed.",
+        ),
+    )
+    for path, remediation in registry_checks:
+        _, issue = _safe_yaml_document(path, key="registry", remediation=remediation)
+        if issue is not None:
+            issues.append(issue)
+    return issues
+
+
+def _probe_legacy_state_file(root: Path) -> list[StatusIssue]:
+    _, issue = _safe_yaml_document(
+        workspace_dir(root) / "state.yaml",
+        key="state",
+        remediation="Fix or remove `.litehive/state.yaml`; SQLite is authoritative and the legacy export can be regenerated.",
+    )
+    if issue is None:
+        return []
+    return [issue]
 
 
 def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssue]]:

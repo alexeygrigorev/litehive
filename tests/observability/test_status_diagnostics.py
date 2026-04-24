@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config.paths import workspace_path
+from litehive.config.paths import litehive_config_root, litehive_root, workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.config.workspace_files import workspace_dir
 from litehive.domain.task import WorkspaceState
@@ -41,6 +41,56 @@ def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path:
     assert f"config: CORRUPT at {config_file} (line 1)" in output
     assert f"state: BROKEN at {state_db}" in output
     assert "restore the workspace database from backup" in output
+    assert "health:" in output
+
+
+def test_status_reports_corrupt_legacy_workspace_registry_without_raising(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config-home"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
+    ensure_workspace(tmp_path)
+    registry_path = litehive_config_root() / "workspaces.yaml"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text("[", encoding="utf-8")
+
+    exit_code, output = _run_fast_status(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert f"registry: CORRUPT at {registry_path} (line 1)" in output
+    assert "Fix or remove the legacy workspace registry YAML" in output
+    assert "runner_status:" in output
+    assert "health:" in output
+
+
+def test_status_reports_corrupt_daemon_registry_without_raising(tmp_path: Path, capsys, monkeypatch) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config-home"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
+    ensure_workspace(tmp_path)
+    registry_path = litehive_root() / "daemons.yaml"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text("[", encoding="utf-8")
+
+    exit_code, output = _run_fast_status(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert f"registry: CORRUPT at {registry_path} (line 1)" in output
+    assert "Fix or remove the daemon registry YAML" in output
+    assert "runner_status:" in output
+    assert "health:" in output
+
+
+def test_status_reports_corrupt_legacy_state_yaml_without_raising(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+    state_file = workspace_dir(tmp_path) / "state.yaml"
+    state_file.write_text("[", encoding="utf-8")
+
+    exit_code, output = _run_fast_status(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert f"state: CORRUPT at {state_file} (line 1)" in output
+    assert "SQLite is authoritative" in output
+    assert "runner_status:" in output
     assert "health:" in output
 
 

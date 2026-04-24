@@ -40,7 +40,11 @@ class TaskPipelineStatusData:
     fast_runner_status: str
 
 
-def collect_task_pipeline_status(root: Path) -> TaskPipelineStatusData:
+def collect_task_pipeline_status(
+    root: Path,
+    *,
+    read_only: bool = False,
+) -> TaskPipelineStatusData:
     from litehive.attention import waiting_for_you_lines
     from litehive.observability.status_diagnostics import collect_status_snapshot
     from litehive.state.records import get_task
@@ -48,7 +52,7 @@ def collect_task_pipeline_status(root: Path) -> TaskPipelineStatusData:
     resolved_root = root.resolve()
     snapshot = collect_status_snapshot(resolved_root)
     active_task_id = snapshot.runner.active_task_id or snapshot.state.active_task_id
-    active_task = get_task(resolved_root, active_task_id) if active_task_id else None
+    active_task = None if read_only or not active_task_id else get_task(resolved_root, active_task_id)
     return TaskPipelineStatusData(
         root=resolved_root,
         config=snapshot.config,
@@ -59,7 +63,7 @@ def collect_task_pipeline_status(root: Path) -> TaskPipelineStatusData:
         active_task_id=active_task_id,
         active_task=active_task,
         queue_head=snapshot.state.queue[0] if snapshot.state.queue else None,
-        waiting_lines=waiting_for_you_lines(resolved_root),
+        waiting_lines=["attention_items: unavailable"] if read_only else waiting_for_you_lines(resolved_root),
         fast_runner_status=_fast_runner_state_label(resolved_root, snapshot.runner),
     )
 
