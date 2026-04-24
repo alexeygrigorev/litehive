@@ -5,6 +5,8 @@ from typer.testing import CliRunner
 
 from litehive.attention import record_attention
 from litehive.config.workspace import ensure_workspace
+from litehive.state.persist import load_state
+from litehive.state.records import create_task
 
 modern_cli = importlib.import_module("litehive.cli.app")
 
@@ -169,3 +171,46 @@ def test_run_drain_runs_until_queue_is_empty(tmp_path, monkeypatch) -> None:
         ("dequeue", 0),
     ]
     assert queue == []
+
+
+def test_run_dry_run_previews_next_task_without_mutating_queue(tmp_path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Preview task")
+
+    result = CliRunner().invoke(
+        modern_cli.app,
+        ["run", "--dry-run", "--workspace", str(tmp_path)],
+        catch_exceptions=False,
+    )
+
+    state = load_state(tmp_path)
+    assert result.exit_code == 0, result.output
+    assert f"task: {task.id} Preview task" in result.output
+    assert "engine: codex" in result.output
+    assert state.active_task_id is None
+    assert state.queue == [task.id]
+
+
+def test_run_dry_run_reports_no_queued_task(tmp_path) -> None:
+    ensure_workspace(tmp_path)
+
+    result = CliRunner().invoke(
+        modern_cli.app,
+        ["run", "--dry-run", "--workspace", str(tmp_path)],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.output == "No queued task.\n"
+
+
+def test_run_dry_run_rejects_drain_mode(tmp_path) -> None:
+    ensure_workspace(tmp_path)
+
+    result = CliRunner().invoke(
+        modern_cli.app,
+        ["run", "--dry-run", "--drain", "--workspace", str(tmp_path)],
+    )
+
+    assert result.exit_code != 0
+    assert "cannot be combined with --drain" in result.output

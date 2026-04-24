@@ -1,5 +1,6 @@
 """Tests for SubprocessHookRunner and GitCommitNode (real git merge path)."""
 
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -700,6 +701,44 @@ def test_run_task_single_mode_executes_only_implementing_then_finishes(tmp_path:
     assert pipeline_state.stage == "done"
     assert workspace_state.active_task_id is None
     assert task.id not in workspace_state.queue
+
+
+def test_run_task_runs_after_implementing_hook_in_task_worktree(tmp_path: Path) -> None:
+    hook_pwd = tmp_path / "after_implementing_pwd.txt"
+    hook_branch = tmp_path / "after_implementing_branch.txt"
+    _init_workspace_git_repo(
+        tmp_path,
+        config=LitehiveConfig(
+            runner_hooks={
+                "after_implementing": [
+                    {
+                        "command": (
+                            f"pwd > {shlex.quote(str(hook_pwd))} && "
+                            f"git branch --show-current > {shlex.quote(str(hook_branch))}"
+                        ),
+                    }
+                ]
+            }
+        ),
+    )
+    create_task(tmp_path, title="After implementing hook path")
+    task = dequeue_next_task(tmp_path)
+    assert task is not None
+    expected_worktree = task_worktree_path(tmp_path, task)
+
+    result = run_task(
+        tmp_path,
+        task,
+        engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
+    )
+    refreshed = get_task(tmp_path, task.id)
+
+    assert result.final_stage == "done"
+    assert refreshed is not None
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert hook_pwd.read_text(encoding="utf-8").strip() == str(expected_worktree)
+    assert hook_branch.read_text(encoding="utf-8").strip() == task_worktree_branch(task)
 
 
 def test_run_task_runs_after_commit_hook_on_main_and_finishes(tmp_path: Path) -> None:

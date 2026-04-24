@@ -9,6 +9,7 @@ import click
 import typer
 
 from litehive.cli.common import WorkspaceOption, choice, require_subcommand
+from litehive.config.engine_models import select_engine
 from litehive.config.loading import load_config
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
@@ -40,7 +41,7 @@ from litehive.state.backup import create_workspace_backup, list_workspace_backup
 from litehive.state.records import get_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.state.persist import load_state, set_pool_stop_reason
-from litehive.tasks.queue import dequeue_next_task
+from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection
 from litehive.tasks.activity import append_task_activity
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.state.locking import runner_status
@@ -254,6 +255,38 @@ def _run_single(
     return iteration.exit_code
 
 
+def _preview_single(
+    workspace: Path,
+    *,
+    engine: str | None = None,
+    model: str | None = None,
+) -> int:
+    selection = peek_next_task_selection(workspace)
+    if selection.task is None:
+        state = load_state(workspace)
+        print("No runnable task." if state.queue else "No queued task.")
+        return 0
+
+    config = load_config(workspace)
+    engine_selection = select_engine(
+        workspace,
+        selection.task,
+        config,
+        engine_override=engine,
+        model_override=model,
+    )
+    print(f"task: {selection.task.id} {selection.task.title}")
+    if engine_selection.engine_name is None:
+        print("engine: unavailable")
+        if engine_selection.blocked_reason:
+            print(f"reason: {engine_selection.blocked_reason}")
+        return 0
+    print(f"engine: {engine_selection.engine_name}")
+    if engine_selection.model_name is not None:
+        print(f"model: {engine_selection.model_name}")
+    return 0
+
+
 def _workspace_has_dirty_non_litehive_changes(workspace: Path) -> bool:
     if not is_git_repo(workspace):
         return False
@@ -298,6 +331,7 @@ def _run_drain(
 
 def run_command(
     workspace: WorkspaceOption = Path.cwd(),
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview the next task without running it")] = False,
     drain: Annotated[bool, typer.Option("--drain", help="Drain the task pool")] = False,
     engine: Annotated[str | None, typer.Option(click_type=choice(ENGINE_CHOICES), help="Override the engine")] = None,
     model: Annotated[str | None, typer.Option(help="Override the model")] = None,
@@ -306,6 +340,10 @@ def run_command(
     stop_on_dirty_git: Annotated[bool | None, typer.Option("--stop-on-dirty-git", flag_value=True)] = None,
 ) -> int:
     ensure_workspace(workspace)
+    if dry_run and drain:
+        raise click.UsageError("--dry-run cannot be combined with --drain")
+    if dry_run:
+        return _preview_single(workspace, engine=engine, model=model)
     config = load_config(workspace)
     effective_stop_on_failure = config.pool_stop_on_failure if stop_on_failure is None else stop_on_failure
     effective_max_tasks = config.pool_max_tasks if max_tasks is None else max_tasks
