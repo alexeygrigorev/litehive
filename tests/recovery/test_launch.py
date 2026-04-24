@@ -7,10 +7,10 @@ import pytest
 
 from litehive.config.workspace import ensure_workspace
 from litehive.git.ops import GitError
-from litehive.recovery.detection import LaunchFailure
+from litehive.recovery.detection import LaunchFailure, TaskLaunchFailure
 from litehive.recovery.execution_recovery import attempt_launch_recovery, prepare_task_launch
 from litehive.state.records import create_task, get_task
-from litehive.worktree import resolve_task_execution_root
+from litehive.worktree import resolve_task_execution_root, task_worktree_path
 
 
 def _git_ok(cwd: Path, *args: str) -> str:
@@ -97,3 +97,33 @@ def test_attempt_launch_recovery_rebuilds_symlinked_task_venv(tmp_path: Path) ->
     assert worktree.joinpath(".venv").is_dir()
     assert not worktree.joinpath(".venv").is_symlink()
     assert workspace.joinpath(".venv").is_dir()
+
+
+def test_attempt_launch_recovery_cleans_first_launch_stale_worktree_path(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    _init_workspace_repo(workspace)
+    task = create_task(workspace, title="First launch stale worktree")
+    stale_worktree = task_worktree_path(workspace, task)
+    stale_worktree.mkdir(parents=True)
+    stale_worktree.joinpath("blocked.txt").write_text("stale\n", encoding="utf-8")
+
+    with pytest.raises(TaskLaunchFailure) as excinfo:
+        prepare_task_launch(workspace, task)
+
+    assert excinfo.value.context == "worktree_setup_failed"
+    refreshed = get_task(workspace, task.id)
+    assert refreshed is not None
+    assert refreshed.runtime.git.worktree_path is None
+
+    result = attempt_launch_recovery(workspace, refreshed, excinfo.value.as_failure())
+
+    assert result.fixed is True
+    assert result.actions[0].action == "reset_task_worktree"
+    assert stale_worktree.exists() is False
+
+    prepare_task_launch(workspace, refreshed)
+
+    relaunched = get_task(workspace, task.id)
+    assert relaunched is not None
+    assert Path(relaunched.runtime.git.worktree_path) == stale_worktree
+    assert stale_worktree.exists()

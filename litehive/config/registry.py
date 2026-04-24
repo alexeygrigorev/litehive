@@ -38,6 +38,10 @@ def _legacy_workspace_registry_path() -> Path:
     return legacy_litehive_root() / "workspaces.yaml"
 
 
+def legacy_workspace_registry_path() -> Path:
+    return _legacy_workspace_registry_path()
+
+
 def _int_env(name: str, default: int) -> int:
     raw = os.environ.get(name)
     if raw is None:
@@ -116,9 +120,25 @@ def workspace_registry_error() -> str | None:
     return None
 
 
+def legacy_workspace_registry_error() -> str | None:
+    path = legacy_workspace_registry_path()
+    if not path.exists():
+        return None
+    try:
+        _legacy_registry_entries(path)
+    except (_LegacyRegistryCorruptError, OSError) as exc:
+        return str(exc)
+    return None
+
+
 def quarantine_corrupt_workspace_registry(reason: str) -> Path | None:
     path = workspace_registry_path()
     return _backup_corrupt_registry_file(path, reason=reason, label="workspace registry")
+
+
+def quarantine_corrupt_legacy_workspace_registry(reason: str) -> Path | None:
+    path = legacy_workspace_registry_path()
+    return _backup_corrupt_registry_file(path, reason=reason, label="legacy workspace registry")
 
 
 def _backup_corrupt_registry_file(path: Path, *, reason: str, label: str) -> Path | None:

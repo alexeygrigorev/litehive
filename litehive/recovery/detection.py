@@ -7,7 +7,12 @@ from pathlib import Path
 import re
 from typing import Literal
 
-from litehive.config.registry import workspace_registry_error, workspace_registry_path
+from litehive.config.registry import (
+    legacy_workspace_registry_error,
+    legacy_workspace_registry_path,
+    workspace_registry_error,
+    workspace_registry_path,
+)
 from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state
 from litehive.state.records import load_task_record_file
@@ -114,13 +119,21 @@ def corrupt_task_launch_diagnostics(root: Path, task_id: str | None) -> dict[str
 
 def detect_cycle_start_failure(root: Path) -> LaunchFailure | None:
     del root
+    legacy_path = legacy_workspace_registry_path()
+    legacy_error = legacy_workspace_registry_error()
+    if legacy_error is not None:
+        return LaunchFailure(
+            context="cycle_start_failed",
+            summary=f"legacy workspace registry is corrupt at {legacy_path}: {legacy_error}",
+            diagnostics={"path": str(legacy_path), "registry_kind": "legacy_yaml"},
+        )
     path = workspace_registry_path()
     error = workspace_registry_error()
     if error is not None:
         return LaunchFailure(
             context="cycle_start_failed",
             summary=f"workspace registry database is corrupt at {path}: {error}",
-            diagnostics={"path": str(path)},
+            diagnostics={"path": str(path), "registry_kind": "sqlite_db"},
         )
     return None
 

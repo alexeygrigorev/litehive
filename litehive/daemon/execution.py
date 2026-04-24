@@ -296,6 +296,24 @@ def _ensure_workspace_venvs_ready(
         raise RuntimeError(daemon_broken_venv_message(workspace, findings))
 
 
+def _detect_iteration_cycle_start_failure(
+    workspace: Path,
+    *,
+    output_stream: TextIO | None,
+) -> LaunchFailure | None:
+    failure = detect_cycle_start_failure(workspace)
+    if failure is not None:
+        return failure
+    try:
+        _ensure_workspace_venvs_ready(workspace, output_stream=output_stream)
+    except RuntimeError as exc:
+        return LaunchFailure(
+            context="cycle_start_failed",
+            summary=str(exc),
+        )
+    return None
+
+
 def _maybe_run_workspace_backup(
     workspace: Path,
     *,
@@ -369,11 +387,6 @@ def run_daemon_loop(
         _recover_cycle_start_failure(workspace, preflight_failure, output_stream=output_stream)
     ensure_workspace(workspace)
     apply_pending_migrations(workspace)
-    try:
-        _ensure_workspace_venvs_ready(workspace, output_stream=output_stream)
-    except RuntimeError as exc:
-        _emit(str(exc), stream=output_stream)
-        return 1
     command_prefix = _default_command_prefix()
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     log_base = workspace_path(workspace, "logs", "run-all")
@@ -438,18 +451,6 @@ def run_daemon_loop(
             _emit("", stream=output_stream)
             _emit(f"== iteration {iteration} ==", stream=output_stream)
 
-            if iteration > 1:
-                try:
-                    _ensure_workspace_venvs_ready(workspace, output_stream=output_stream)
-                except RuntimeError as exc:
-                    failure = LaunchFailure(
-                        context="cycle_start_failed",
-                        summary=str(exc),
-                    )
-                    cycle_recovery_attempted = True
-                    if not _recover_cycle_start_failure(workspace, failure, output_stream=output_stream):
-                        continue
-
             live_runner = runner_status(workspace)
             if _runner_is_live(live_runner):
                 _emit_runner_wait(live_runner, stream=output_stream)
@@ -469,7 +470,7 @@ def run_daemon_loop(
             if _halt_for_origin_divergence(workspace, output_stream=output_stream):
                 return 0
 
-            startup_failure = detect_cycle_start_failure(workspace)
+            startup_failure = _detect_iteration_cycle_start_failure(workspace, output_stream=output_stream)
             if startup_failure is not None:
                 if cycle_recovery_attempted:
                     task = best_effort_recovery_task(workspace)

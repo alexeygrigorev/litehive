@@ -2,6 +2,7 @@ import io
 from pathlib import Path
 import shutil
 import sqlite3
+import subprocess
 
 import yaml
 
@@ -20,6 +21,7 @@ from litehive.main import _fast_status
 from litehive.sandbox.git_wrapper import main as git_wrapper_main
 from litehive.state.records import create_task, save_task
 from litehive.state.persist import load_state, save_state, set_pool_stop_reason
+from litehive.tasks.activity import load_task_activity
 
 
 def _write_cache_tool(cache_target: Path) -> None:
@@ -543,30 +545,59 @@ def test_daemon_loop_rebuilds_corrupt_global_registry_without_exiting(tmp_path: 
     assert rows == [(str(tmp_path.resolve()),)]
 
 
-def test_pool_refuses_to_start_when_worktree_venv_is_broken(tmp_path: Path, monkeypatch) -> None:
+def test_pool_recovers_when_worktree_venv_is_broken(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Queued work")
+    task = create_task(tmp_path, title="Queued work")
     broken_worktree = workspace_path(tmp_path, "worktrees") / "T-0001-demo"
+    broken_worktree.mkdir(parents=True, exist_ok=True)
+    (broken_worktree / "pyproject.toml").write_text(
+        "[project]\nname = 'demo'\nversion = '0.1.0'\n",
+        encoding="utf-8",
+    )
     _create_broken_venv_binary(broken_worktree, "ruff", tmp_path / "fake-home" / ".cache" / "uv")
 
     calls: list[tuple[str, ...]] = []
+    real_run = subprocess.run
 
     def fake_run_logged_subprocess(command, **kwargs):
         calls.append(tuple(command))
-        raise AssertionError("daemon should stop before repair or run subprocesses")
+        if any(arg == "run" for arg in command[2:]):
+            state = load_state(tmp_path)
+            state.queue = []
+            save_state(tmp_path, state)
+        return 0
+
+    def fake_uv_sync(
+        args: list[str],
+        *,
+        cwd: str,
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        if args == ["uv", "sync", "--extra", "dev"]:
+            assert capture_output is True and text is True and check is False
+            bin_dir = Path(cwd) / ".venv" / "bin"
+            bin_dir.mkdir(parents=True, exist_ok=True)
+            binary = bin_dir / "ruff"
+            binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            binary.chmod(0o755)
+            return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+        return real_run(args, cwd=cwd, capture_output=capture_output, text=text, check=check)
 
     monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
     monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.recovery.workspace_repair.shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr("litehive.recovery.workspace_repair.subprocess.run", fake_uv_sync)
 
     stream = io.StringIO()
     exit_code = run_daemon_loop(tmp_path, output_stream=stream, session_dir=tmp_path / "logs")
     output = stream.getvalue()
 
-    assert exit_code == 1
-    assert calls == []
-    assert "broken virtualenv entrypoints blocked pool start:" in output
-    assert f"venv={broken_worktree / '.venv'} checkout={broken_worktree}" in output
-    assert "binary=ruff" in output
-    assert "uv venv --clear .venv && uv sync --extra dev" in output
+    assert exit_code == 0
+    assert any("repair" in command for command in calls)
+    assert any("run" in command for command in calls)
+    assert any(entry.role == "recovery" for entry in load_task_activity(tmp_path, task))
+    assert "launch recovery fixed: cycle_start_failed" in output

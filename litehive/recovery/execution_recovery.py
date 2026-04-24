@@ -20,6 +20,9 @@ from litehive.agents.session_store import (
 from litehive.config.loading import load_config
 from litehive.config.paths import workspace_path
 from litehive.config.registry import (
+    legacy_workspace_registry_error,
+    legacy_workspace_registry_path,
+    quarantine_corrupt_legacy_workspace_registry,
     quarantine_corrupt_workspace_registry,
     workspace_registry_error,
     workspace_registry_path,
@@ -100,6 +103,7 @@ def attempt_launch_recovery(root: Path, task: TaskRecord, failure: LaunchFailure
     quarantine_requires_flag = False
 
     if failure.context in {"cycle_start_failed", "pre_stage_setup_failed"}:
+        _repair_legacy_workspace_registry(failure, actions=actions, warnings=warnings)
         quarantine_requires_flag = _quarantine_corrupt_task_yaml(
             root,
             task,
@@ -111,7 +115,7 @@ def attempt_launch_recovery(root: Path, task: TaskRecord, failure: LaunchFailure
         _repair_workspace_runtime(root, actions=actions, warnings=warnings)
 
     if failure.context == "worktree_setup_failed":
-        _reset_task_worktree(root, task, actions=actions, warnings=warnings)
+        _reset_task_worktree(root, task, failure=failure, actions=actions, warnings=warnings)
 
     if failure.context == "venv_sync_failed":
         _rebuild_task_venv(root, task, actions=actions, warnings=warnings)
@@ -532,6 +536,59 @@ def _repair_workspace_registry(*, actions: list[RecoveryAction], warnings: list[
     warnings.append(f"workspace registry database was corrupt ({error})")
 
 
+def _repair_legacy_workspace_registry(
+    failure: LaunchFailure | None = None,
+    *,
+    actions: list[RecoveryAction],
+    warnings: list[str],
+) -> None:
+    path = legacy_workspace_registry_path()
+    if (
+        failure is not None
+        and failure.diagnostics.get("registry_kind") == "legacy_yaml"
+        and failure.diagnostics.get("path")
+    ):
+        path = Path(str(failure.diagnostics["path"]))
+    if not path.exists():
+        backup = _latest_corrupt_backup(path)
+        if backup is None:
+            return
+        actions.append(
+            RecoveryAction(
+                action="quarantine_corrupt_legacy_workspace_registry",
+                summary=f"Moved corrupt legacy workspace registry aside to {backup}.",
+                metadata={"path": str(path), "backup_path": str(backup)},
+            )
+        )
+        return
+    error = legacy_workspace_registry_error()
+    if error is None:
+        return
+    try:
+        backup = quarantine_corrupt_legacy_workspace_registry(error)
+    except OSError as exc:
+        warnings.append(f"failed to inspect legacy workspace registry: {exc}")
+        return
+    if backup is None:
+        warnings.append(f"failed to quarantine legacy workspace registry at {path}")
+        return
+    actions.append(
+        RecoveryAction(
+            action="quarantine_corrupt_legacy_workspace_registry",
+            summary=f"Moved corrupt legacy workspace registry aside to {backup}.",
+            metadata={"path": str(path), "backup_path": str(backup)},
+        )
+    )
+    warnings.append(f"legacy workspace registry was corrupt ({error})")
+
+
+def _latest_corrupt_backup(path: Path) -> Path | None:
+    backups = sorted(path.parent.glob(f"{path.name}.corrupt-*"))
+    if not backups:
+        return None
+    return backups[-1]
+
+
 def _repair_runner_lock(root: Path, *, actions: list[RecoveryAction], warnings: list[str]) -> None:
     lock_path = workspace_path(root, "runtime", ".runner.lock")
     if not lock_path.exists():
@@ -600,29 +657,50 @@ def _repair_workspace_runtime(root: Path, *, actions: list[RecoveryAction], warn
 def _reset_task_worktree(
     root: Path,
     task: TaskRecord,
+    failure: LaunchFailure | None = None,
     *,
     actions: list[RecoveryAction],
     warnings: list[str],
 ) -> None:
     recorded = resolve_recorded_worktree_path(root, get_task_worktree_path(task))
-    if recorded is None:
+    worktree = recorded or _launch_failure_worktree_path(root, task, failure)
+    if worktree is None:
         return
 
-    logger.info("Deleting stale task worktree directory %s", recorded)
+    logger.info("Deleting stale task worktree directory %s", worktree)
     try:
-        remove_worktree(root, recorded)
+        remove_worktree(root, worktree, force=True)
     except GitError as exc:
-        warnings.append(f"failed to remove registered worktree {recorded}: {exc}")
-    remove_tree_logged(recorded, logger=logger, target_label="stale task worktree directory")
-    clear_task_worktree_path(task)
-    save_task(root, task)
+        warnings.append(f"failed to remove registered worktree {worktree}: {exc}")
+    if worktree.exists() or worktree.is_symlink():
+        remove_tree_logged(worktree, logger=logger, target_label="stale task worktree directory")
+    if recorded is not None:
+        clear_task_worktree_path(task)
+        save_task(root, task)
     actions.append(
         RecoveryAction(
             action="reset_task_worktree",
-            summary=f"Removed stale task worktree at {recorded}.",
-            metadata={"task_id": task.id, "worktree_path": str(recorded)},
+            summary=f"Removed stale task worktree at {worktree}.",
+            metadata={"task_id": task.id, "worktree_path": str(worktree)},
         )
     )
+
+
+def _launch_failure_worktree_path(
+    root: Path,
+    task: TaskRecord,
+    failure: LaunchFailure | None,
+) -> Path | None:
+    if failure is not None:
+        raw_path = failure.diagnostics.get("worktree_path")
+        if isinstance(raw_path, str) and raw_path:
+            path = Path(raw_path).expanduser()
+            if not path.is_absolute():
+                path = root / path
+            return path.resolve()
+    if not is_git_repo(root):
+        return None
+    return task_worktree_path(root, task)
 
 
 def _rebuild_task_venv(

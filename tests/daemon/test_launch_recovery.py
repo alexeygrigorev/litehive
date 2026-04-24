@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from litehive.config.registry import workspace_registry_path
+from litehive.config.registry import legacy_workspace_registry_path, workspace_registry_path
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.execution import run_daemon_loop
 from litehive.recovery.detection import LaunchFailure
@@ -48,6 +48,44 @@ def test_daemon_loop_recovers_corrupt_workspace_registry_db_before_cycle_start(t
     assert any("run" in command for command in calls)
     assert sorted(registry_path.parent.glob("workspaces.db.corrupt-*"))
     with sqlite3.connect(registry_path) as connection:
+        rows = connection.execute("SELECT root FROM workspace_registry ORDER BY registered_at DESC, root DESC").fetchall()
+    assert rows == [(str(tmp_path.resolve()),)]
+    assert any(entry.role == "recovery" for entry in load_task_activity(tmp_path, task))
+    assert "launch recovery fixed: cycle_start_failed" in stream.getvalue()
+
+
+def test_daemon_loop_recovers_corrupt_legacy_workspace_registry_yaml_before_cycle_start(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config-home"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Queue head")
+    legacy_path = legacy_workspace_registry_path()
+    legacy_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_path.write_text(":\n  - broken\n", encoding="utf-8")
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_logged_subprocess(command, **kwargs):
+        calls.append(tuple(command))
+        if "run" in command:
+            state = load_state(tmp_path)
+            state.queue = []
+            state.active_task_id = None
+            save_state(tmp_path, state)
+        return 0
+
+    _patch_daemon_basics(monkeypatch)
+    monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
+    stream = io.StringIO()
+    exit_code = run_daemon_loop(tmp_path, output_stream=stream, session_dir=tmp_path / "logs")
+
+    assert exit_code == 0
+    assert any("repair" in command for command in calls)
+    assert any("run" in command for command in calls)
+    assert sorted(legacy_path.parent.glob("workspaces.yaml.corrupt-*"))
+    with sqlite3.connect(workspace_registry_path()) as connection:
         rows = connection.execute("SELECT root FROM workspace_registry ORDER BY registered_at DESC, root DESC").fetchall()
     assert rows == [(str(tmp_path.resolve()),)]
     assert any(entry.role == "recovery" for entry in load_task_activity(tmp_path, task))
