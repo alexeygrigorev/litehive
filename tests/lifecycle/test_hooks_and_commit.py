@@ -12,8 +12,8 @@ from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass, Rejec
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.hook import HookNode, HookRunner, HookSpec, SubprocessHookRunner
 from litehive.lifecycle.nodes.system import GitCommitNode, StubCommitNode
-from litehive.lifecycle.orchestration import run_task
-from litehive.lifecycle.persistence import SqlitePersistence, TaskState
+from litehive.lifecycle.orchestration import _reconcile_terminal_commit_sha, run_task
+from litehive.lifecycle.persistence import CommitResult, SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task, set_task_worktree_path
@@ -796,6 +796,41 @@ def test_run_task_reconciles_noop_commit_stage_and_records_main_head(tmp_path: P
     ) in journal
     assert landed_head != ""
     assert not worktree.exists()
+
+
+def test_reconcile_terminal_commit_sha_recovers_missing_sha_from_persisted_commit_result(tmp_path: Path) -> None:
+    _init_workspace_git_repo(tmp_path)
+    task = create_task(tmp_path, title="Repair missing terminal commit sha")
+    persistence = SqlitePersistence(tmp_path)
+    state = persistence.initialize(task.id, stage="done", pipeline_mode=PipelineMode.FULL)
+    head_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    state.commit_result = CommitResult(head_sha=head_sha, reason="no_op")
+    persistence.save(state)
+
+    fresh = get_task(tmp_path, task.id)
+    assert fresh is not None
+    fresh.status = "done"
+    fresh.pipeline_status = "done"
+    save_task(tmp_path, fresh)
+
+    reconciled = _reconcile_terminal_commit_sha(
+        tmp_path,
+        fresh,
+        final_state=TaskState(task_id=task.id, stage="done", pipeline_mode=PipelineMode.FULL),
+        persistence=persistence,
+    )
+    reloaded = get_task(tmp_path, task.id)
+
+    assert reconciled is not None
+    assert reconciled.runtime.git.commit_sha == head_sha
+    assert reloaded is not None
+    assert reloaded.runtime.git.commit_sha == head_sha
 
 
 def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path) -> None:
