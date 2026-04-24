@@ -530,14 +530,3 @@ def update(
     if missing_criteria_reason is not None:
         print(f"warning: {missing_criteria_reason}")
     return 0
-
-
-def register_root_aliases(app: typer.Typer) -> None:
-    app.command("add", help="Compatibility alias for `litehive task add`", hidden=True)(add)
-    app.command("list", help="Compatibility alias for `litehive task list`", hidden=True)(list_tasks)
-    app.command("show", help="Compatibility alias for `litehive task show`", hidden=True)(show)
-    app.command("update", help="Compatibility alias for `litehive task update`", hidden=True)(update)
-    app.command("close", help="Compatibility alias for `litehive task close`", hidden=True)(close)
-    app.command("abandon", help="Compatibility alias for `litehive task abandon`", hidden=True)(abandon)
-    app.command("debug", help="Compatibility alias for `litehive task debug`", hidden=True)(debug)
-    app.command("logs", help="Compatibility alias for `litehive task logs`", hidden=True)(logs)

@@ -40,9 +40,15 @@ default_stage_retry_limit: 2
 default_rejection_loop_limit: 3
 
 # Pool runner defaults for `litehive run --drain`.
+# `pool_stop_on_failure` exits the drain loop after the first non-`done` task.
 pool_stop_on_failure: false
+# `pool_max_tasks: null` means "no cap"; set an integer to stop after N tasks.
 pool_max_tasks: null
+# `pool_stop_on_dirty_git` blocks the pool when tracked repo changes exist
+# outside Litehive-managed files.
 pool_stop_on_dirty_git: false
+# `pool_stop_on_attention` blocks the pool whenever pending operator
+# attention items exist in `.litehive/attention/`.
 pool_stop_on_attention: false
 
 # Lifecycle hooks keyed by hook point.
@@ -87,10 +93,14 @@ external_engine_sandbox:
     - /tmp
   # Per-engine sandbox overrides. Each engine policy supports:
   #   enabled, network_mode, workspace_mode, environment,
-  #   credential_inputs[{env_var, mount_path}], extra_ro_binds
+  #   credential_inputs[{env_var, mount_path}], extra_ro_binds,
+  #   extra_rw_binds, setenv
   engine_policies: {}
 
 # Temporary engine freezes keyed by engine name -> UTC timestamp.
+# Example:
+# engine_freeze:
+#   gemini: 2026-05-01T00:00:00Z
 engine_freeze: {}
 
 # Engine fallback order when the preferred engine is unavailable.
@@ -111,6 +121,9 @@ engine_preference:
 agent_startup_guidance: {}
 
 # Workspace defaults for automatic commits and display labels.
+# `auto_commit: false` leaves commit creation to the operator/agent.
 auto_commit: true
+# Human-facing label used in prompts and rendered task metadata.
 task_mode_name: tasks
+# Human-facing label used for the implementing stage in prompts/context.
 implementation_mode_name: implementation

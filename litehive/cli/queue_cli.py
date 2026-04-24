@@ -197,6 +197,14 @@ def prioritize(task_ids: list[str], workspace: Path) -> int:
     return 0
 
 
+@app.command("prioritize", help="Move queued tasks to the front in the provided order")
+def prioritize_command(
+    task_ids: Annotated[list[str], typer.Argument(help="Queued task ids to move to the front")],
+    workspace: WorkspaceOption = Path.cwd(),
+) -> int:
+    return prioritize(task_ids, workspace)
+
+
 def recover(task_id: str, workspace: Path) -> int:
     ensure_workspace(workspace)
     try:
@@ -213,6 +221,14 @@ def recover(task_id: str, workspace: Path) -> int:
     if missing_criteria_reason is not None:
         print(f"warning: {missing_criteria_reason}")
     return 0
+
+
+@app.command("recover", help="Requeue a completed task without reverting workspace code")
+def recover_command(
+    task_id: Annotated[str, typer.Argument(help="Task id to recover")],
+    workspace: WorkspaceOption = Path.cwd(),
+) -> int:
+    return recover(task_id, workspace)
 
 
 EngineChoice = choice(ENGINE_CHOICES)
@@ -242,34 +258,3 @@ def switch(
     print(f"signal_sent: {'yes' if summary.signal_sent else 'no'}")
     print(f"position: {state.queue.index(summary.task.id) + 1}")
     return 0
-
-
-def register_root_shortcuts(app: typer.Typer) -> None:
-    app.command("move", help="Compatibility alias for `litehive queue move`", hidden=True)(move)
-    app.command("promote", help="Compatibility alias for `litehive queue promote`", hidden=True)(promote)
-    app.command("requeue", help="Compatibility alias for `litehive queue requeue`", hidden=True)(requeue)
-    app.command("resume", help="Compatibility alias for `litehive queue resume`", hidden=True)(resume)
-
-    @app.command(
-        "recover",
-        help="Compatibility alias for `litehive queue requeue` on completed tasks",
-        hidden=True,
-    )
-    def recover_command(
-        task_id: Annotated[str, typer.Argument(help="Task id to recover")],
-        workspace: WorkspaceOption = Path.cwd(),
-    ) -> int:
-        return recover(task_id, workspace)
-
-    @app.command(
-        "prioritize",
-        help="Compatibility alias for exact-order queue promotion",
-        hidden=True,
-    )
-    def prioritize_command(
-        task_ids: Annotated[list[str], typer.Argument(help="Queued task ids to move to the front")],
-        workspace: WorkspaceOption = Path.cwd(),
-    ) -> int:
-        return prioritize(task_ids, workspace)
-
-    app.command("switch", help="Compatibility alias for `litehive queue switch`", hidden=True)(switch)

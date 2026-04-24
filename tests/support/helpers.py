@@ -98,7 +98,7 @@ def _cmd_requeue_task(args) -> int:
 
 
 def _cmd_recover(args) -> int:
-    return _invoke_cli(["recover", args.task_id, "--workspace", args.workspace])
+    return _invoke_cli(["queue", "recover", args.task_id, "--workspace", args.workspace])
 
 
 def _cmd_search(args) -> int:

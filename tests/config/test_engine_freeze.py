@@ -165,11 +165,12 @@ def test_queue_switch_cli_queues_task_for_new_engine(tmp_path: Path) -> None:
     assert refreshed.runtime.last_engine_switch.to_engine == "gemini"
 
 
-def test_hidden_switch_alias_still_works(tmp_path: Path) -> None:
+def test_queue_switch_subcommand_still_works(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    task = _prepare_runnable_task(tmp_path, "Switch engines via alias")
+    task = _prepare_runnable_task(tmp_path, "Switch engines via queue subcommand")
 
     exit_code, output = _run_engine(
+        "queue",
         "switch",
         task.id,
         "gemini",

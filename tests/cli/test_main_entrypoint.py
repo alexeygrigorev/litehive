@@ -218,12 +218,12 @@ def test_main_routes_root_command_help_for_agent_roles(
 
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
     monkeypatch.setattr(cli_app_module, "main", fake_cli_main)
-    monkeypatch.setattr(sys, "argv", ["litehive", "recover", "--help"])
+    monkeypatch.setattr(sys, "argv", ["litehive", "queue", "recover", "--help"])
 
     exit_code = main_module.main()
 
     assert exit_code == 4
-    assert captured["argv"] == ["litehive", "recover", "--help"]
+    assert captured["argv"] == ["litehive", "queue", "recover", "--help"]
 
 
 def test_main_dispatches_task_subcommands_without_full_root_app(
@@ -293,7 +293,7 @@ def test_main_dispatches_agent_subcommands_for_agent_roles_without_full_root_app
     assert captured["args"] is None
 
 
-def test_main_routes_root_task_aliases_through_root_cli(
+def test_main_routes_queue_subcommands_through_root_cli(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
@@ -304,12 +304,12 @@ def test_main_routes_root_task_aliases_through_root_cli(
 
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.setattr(cli_app_module, "main", fake_cli_main)
-    monkeypatch.setattr(sys, "argv", ["litehive", "add", "New task", "--goal", "scope it"])
+    monkeypatch.setattr(sys, "argv", ["litehive", "queue", "recover", "T-0001"])
 
     exit_code = main_module.main()
 
     assert exit_code == 13
-    assert captured["argv"] == ["litehive", "add", "New task", "--goal", "scope it"]
+    assert captured["argv"] == ["litehive", "queue", "recover", "T-0001"]
 
 
 def test_fast_status_prefers_runner_active_task_id(
