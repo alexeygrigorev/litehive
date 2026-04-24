@@ -1,0 +1,15 @@
+id: 120
+task_id: T-0307
+created_at: '2026-04-24T06:08:19+00:00'
+kind: flagged_task
+title: Task T-0307 is flagged
+reason: 'Task is paused in `flagged` and requires operator review. Flag reason: hook_reject_loop.'
+suggested_action: Run `litehive task debug T-0307` and then `litehive queue promote
+  T-0307` when it is ready to continue.
+dedupe_key: flagged_task:T-0307
+status: resolved
+resolved_at: '2026-04-24T06:09:16+00:00'
+resolution: auto-resolved by attention reconciliation
+metadata:
+  pipeline_status: flagged
+  flag_reason: hook_reject_loop

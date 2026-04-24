@@ -333,7 +333,9 @@ def recover_stale_runner_state(
             has_repair_candidates=_has_nonrunning_resumable_repair_candidates(root),
         ):
             return False
-        tasks = list_tasks(root)
+        # Repair must tolerate legacy disk-only task dirs that are missing
+        # runtime rows so one stale record does not block runner recovery.
+        tasks = list_tasks(root, strict=False)
         tasks_by_id = {task.id: task for task in tasks}
         if not _can_attempt_stale_runner_recovery(root, tasks_by_id, running_task_ids):
             return False

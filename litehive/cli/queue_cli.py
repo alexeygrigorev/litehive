@@ -16,7 +16,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.git.ops import GitError, checkpoint_message
 from litehive.recovery.execution_recovery import recover_stale_runner_state
 from litehive.tasks.completed_task_recovery import recover_completed_task
-from litehive.state.records import get_task, list_tasks, require_task
+from litehive.state.records import get_task_record, list_tasks, require_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
 from litehive.state.persist import load_state
@@ -123,7 +123,7 @@ def requeue(
     force: Annotated[bool, typer.Option(help="Force requeue after repeated flagging")] = False,
 ) -> int:
     ensure_workspace(workspace)
-    task = get_task(workspace, task_id)
+    task = get_task_record(workspace, task_id)
     if task is not None and (task.pipeline_status == "done" or task.status == "done"):
         return recover(task_id, workspace)
     try:

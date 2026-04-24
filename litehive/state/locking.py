@@ -100,7 +100,7 @@ def runner_status_needs_reconciliation(root: Path) -> bool:
     state = load_state(root)
     if state.active_task_id is not None:
         return True
-    return any(task.runtime.execution_status == "running" for task in list_tasks(root))
+    return any(task.runtime.execution_status == "running" for task in list_tasks(root, strict=False))
 
 
 def clear_runner_lock_metadata(root: Path) -> None:

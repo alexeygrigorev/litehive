@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 
 from litehive.cli.app import app
 from litehive.config.workspace import ensure_workspace
+from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import OutcomeKind
 from litehive.git.ops import has_non_litehive_changes
 from litehive.state.persist import load_state, save_state
@@ -99,6 +100,28 @@ def test_queued_task_with_done_execution_status_is_not_selected(tmp_path: Path) 
 
     assert selection.task is not None
     assert selection.task.id == runnable.id
+
+
+def test_dequeue_selection_skips_tasks_missing_runtime_rows(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    legacy = create_task(tmp_path, title="Legacy disk-only task")
+    runnable = create_task(tmp_path, title="Runnable")
+
+    with connect_workspace_db(tmp_path) as connection:
+        connection.execute("DELETE FROM task_state WHERE task_id = ?", (legacy.id,))
+
+    state = load_state(tmp_path)
+    state.queue = [legacy.id, runnable.id]
+    save_state(tmp_path, state)
+
+    selection = dequeue_next_task_selection(tmp_path)
+
+    assert selection.task is not None
+    assert selection.task.id == runnable.id
+
+    refreshed_state = load_state(tmp_path)
+    assert refreshed_state.active_task_id == runnable.id
+    assert refreshed_state.queue == [legacy.id]
 
 
 def test_dequeue_filter_skips_terminal_last_outcome_kinds(tmp_path: Path) -> None:

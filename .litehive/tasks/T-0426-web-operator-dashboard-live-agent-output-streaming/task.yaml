@@ -25,8 +25,10 @@ git:
   auto_commit: true
   commit_message: 'litehive: complete T-0426 web-operator-dashboard-live-agent-output-streaming'
 created_from:
+  source: follow_up
   task_id: T-0215
   stage: implementing
+  role: null
   rationale: Greenfield browser follow-up task created from the T-0215 CLI-versus-browser
     gap analysis.
   blocking: false

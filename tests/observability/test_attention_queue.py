@@ -279,6 +279,13 @@ def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, mon
     assert remaining == []
 
 
+def test_attention_ignores_non_task_directories_under_worktrees(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    (workspace_path(tmp_path, "worktrees") / "heru").mkdir(parents=True)
+
+    assert list_attention(tmp_path) == []
+
+
 def test_merge_failed_attention_refreshes_to_recovery_follow_up_when_commit_recovery_crashes(
     tmp_path: Path,
 ) -> None:

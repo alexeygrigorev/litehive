@@ -1,8 +1,8 @@
-This directory stores the local `heru` wheel used by repo-root `uv` commands.
+This directory stores wheel builds for `heru`.
 
-The root `pyproject.toml` pins `[tool.uv.sources].heru` to the wheel in this
-directory so `uv sync`, `uv run`, and `uv pip install heru` resolve the checked-in
-package instead of the unrelated `heru` package published on PyPI.
+The root `pyproject.toml` now pins `[tool.uv.sources].heru` to the sibling
+`../heru` checkout for local development, but wheel builds can still be staged
+here when you want a frozen artifact.
 
 Regenerate after changing the standalone package contents or metadata:
 

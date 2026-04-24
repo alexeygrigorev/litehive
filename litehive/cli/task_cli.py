@@ -64,7 +64,7 @@ def _load_task_with_archive_history(root: Path, task_id: str):
 
 
 def _load_task_list_with_archive_history(root: Path, *, include_archived: bool) -> list:
-    tasks = load_tasks(root)
+    tasks = load_tasks(root, strict=False)
     if not include_archived:
         return tasks
     seen = {task.id for task in tasks}

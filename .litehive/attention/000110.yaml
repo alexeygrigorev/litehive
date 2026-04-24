@@ -1,0 +1,14 @@
+id: 110
+task_id: T-0298
+created_at: '2026-04-24T05:04:52+00:00'
+kind: stale_worktree
+title: Managed worktree needs cleanup
+reason: task_id=T-0298 status=deferred path=/home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0298-archive-semantics-delete-files-from-filesystem
+suggested_action: Run `litehive worktree clean --dry-run` and then `litehive worktree
+  clean`.
+dedupe_key: stale_worktree:/home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0298-archive-semantics-delete-files-from-filesystem
+status: resolved
+resolved_at: '2026-04-24T05:14:46+00:00'
+resolution: auto-resolved by attention reconciliation
+metadata:
+  path: /home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0298-archive-semantics-delete-files-from-filesystem

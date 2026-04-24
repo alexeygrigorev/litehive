@@ -61,7 +61,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-heru = { path = "packages/heru-2.0.0-py3-none-any.whl" }
+heru = { path = "../heru", editable = true }
 
 [tool.uv.pip]
 find-links = ["./packages"]

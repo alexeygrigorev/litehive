@@ -381,7 +381,7 @@ def plan_task_selections(root: Path) -> TaskPlan:
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
         validate_single_active_task(root, state)
-        tasks_by_id = {task.id: task.model_copy(deep=True) for task in list_tasks(root)}
+        tasks_by_id = {task.id: task.model_copy(deep=True) for task in list_tasks(root, strict=False)}
 
         planned: list[TaskRecord] = []
         simulated_state = state.model_copy(deep=True)
@@ -625,8 +625,19 @@ def _resolve_next_task_from_state(
     root: Path, state: WorkspaceState
 ) -> tuple[TaskRecord | None, list[BlockedTask], bool, list[TaskRecord]]:
     from litehive.state.records import list_tasks
+    from litehive.recovery.detection import TaskLaunchFailure, corrupt_task_launch_diagnostics
 
-    tasks_by_id = {task.id: task for task in list_tasks(root)}
+    tasks_by_id = {task.id: task for task in list_tasks(root, strict=False)}
+    for queued_task_id in state.queue:
+        if queued_task_id in tasks_by_id:
+            continue
+        diagnostics = corrupt_task_launch_diagnostics(root, queued_task_id)
+        if diagnostics:
+            raise TaskLaunchFailure(
+                context="pre_stage_setup_failed",
+                summary=f"queued task {queued_task_id} has corrupt task.yaml metadata",
+                diagnostics=diagnostics,
+            )
     normalized_tasks = _normalize_stale_pipeline_statuses(state, tasks_by_id)
     next_task, blocked, snapshot_mutated = _resolve_next_task_from_snapshot(state, tasks_by_id)
     return next_task, blocked, snapshot_mutated or bool(normalized_tasks), normalized_tasks

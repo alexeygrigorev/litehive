@@ -110,7 +110,7 @@ def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
 
 
 def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskRecord:
-    from litehive.state.records import require_task
+    from litehive.state.records import get_task_record
     from litehive.state.persist import load_state
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
@@ -119,7 +119,9 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
         active_task_id = _active_task_id_for_stop(root, state)
         if active_task_id != task_id:
             raise WorkspaceConflictError(f"task {task_id} is no longer the active task in this workspace")
-        task = require_task(root, task_id)
+        task = get_task_record(root, task_id)
+        if task is None:
+            raise ValueError(f"Task {task_id} not found")
         before_task = snapshot_task_audit_state(task)
         queue_before = list(state.queue)
         if task.pipeline_status == "done":
@@ -315,7 +317,7 @@ def _archived_task_revival_message(task_id: str) -> str:
 
 
 def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) -> SwitchTaskSummary:
-    from litehive.state.records import require_task
+    from litehive.state.records import get_task_record, require_task
     from litehive.state.persist import load_state
     from litehive.tasks.activity import append_task_activity
     from litehive.tasks.archive import get_archived_task
@@ -345,7 +347,9 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
         runner_pid = stop_summary.runner_pid
         signal_sent = stop_summary.signal_sent
     else:
-        task = require_task(root, task_id)
+        task = get_task_record(root, task_id)
+        if task is None:
+            raise ValueError(f"Task {task_id} not found")
 
     previous_engine = _effective_task_engine(root, task)
     mark_engine_switch(
@@ -397,7 +401,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
 
 
 def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool = False) -> TaskRecord:
-    from litehive.state.records import require_task
+    from litehive.state.records import get_task_record
     from litehive.tasks.archive import get_archived_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.state.persist import load_state
@@ -434,7 +438,9 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
     with workspace_lock(root):
         if get_archived_task(root, task_id) is not None:
             raise ValueError(_archived_task_revival_message(task_id))
-        task = require_task(root, task_id)
+        task = get_task_record(root, task_id)
+        if task is None:
+            raise ValueError(f"Task {task_id} not found")
         before_task = snapshot_task_audit_state(task)
         flag_count_before = task.flag_count
         if task.flag_count >= 3 and not force:

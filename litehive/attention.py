@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -43,6 +44,7 @@ ATTENTION_PRIORITIES = {
 
 _ATTENTION_ID_WIDTH = 6
 _MIGRATION_MARKER = ".migration-complete"
+_TASK_WORKTREE_NAME_RE = re.compile(r"^T-\d{4}-")
 
 
 class AttentionItem(BaseModel):
@@ -582,6 +584,8 @@ def _stale_worktree_items(root: Path, tasks: list[TaskRecord], state) -> list[At
     if worktrees_root.exists():
         for child in sorted(worktrees_root.iterdir()):
             if not child.is_dir():
+                continue
+            if _TASK_WORKTREE_NAME_RE.match(child.name) is None:
                 continue
             rel = str(child)
             if rel in managed_paths:

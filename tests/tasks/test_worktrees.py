@@ -6,8 +6,13 @@ from unittest.mock import patch
 import pytest
 
 from litehive.config.workspace import ensure_workspace
-from litehive.state.records import create_task
-from litehive.worktree import ensure_worktree_venv_link, resolve_task_execution_root, task_worktree_path
+from litehive.state.records import create_task, save_task
+from litehive.worktree import (
+    ensure_worktree_venv_link,
+    remove_cleanable_worktrees,
+    resolve_task_execution_root,
+    task_worktree_path,
+)
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -96,3 +101,22 @@ def test_resolve_task_execution_root_logs_target_and_raises_on_worktree_cleanup_
 
     assert f"Deleting task worktree directory {stale_worktree}" in caplog.text
     assert f"Failed to delete task worktree directory {stale_worktree}" in caplog.text
+
+
+def test_remove_cleanable_worktrees_includes_deferred_tasks(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _git_ok(workspace, "init", "-b", "main")
+    _configure_repo(workspace)
+    ensure_workspace(workspace)
+
+    task = create_task(workspace, title="Deferred worktree cleanup")
+    worktree = task_worktree_path(workspace, task)
+    worktree.mkdir(parents=True)
+    task.status = "deferred"
+    task.runtime.git.worktree_path = str(worktree)
+    save_task(workspace, task)
+
+    result = remove_cleanable_worktrees(workspace, dry_run=True)
+
+    assert [item.task_id for item in result["candidates"]] == [task.id]

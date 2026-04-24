@@ -44,7 +44,7 @@ from litehive.tasks.journal import append_journal
 logger = logging.getLogger(__name__)
 
 # Constants
-_CLEANABLE_STATUSES = {"done", "wont_do", "duplicate"}
+_CLEANABLE_STATUSES = {"done", "wont_do", "duplicate", "deferred"}
 
 
 @dataclass(slots=True)
@@ -164,7 +164,7 @@ def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
     except GitError:
         return DirtyWorktreeGateReport()
 
-    tasks = list_tasks(root)
+    tasks = list_tasks(root, strict=False)
     if dirty_entries:
         owners = [task for task in tasks if _task_can_resume_with_owned_dirty_paths(root, task, dirty_entries)]
         finding = DirtyWorktreeFinding(
@@ -279,7 +279,7 @@ def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
     active_path = get_task_worktree_path(active_task) if active_task is not None else None
 
     worktrees: list[ManagedWorktree] = []
-    for task in list_tasks(root):
+    for task in list_tasks(root, strict=False):
         worktree_rel = get_task_worktree_path(task)
         if not is_managed_worktree_path(root, worktree_rel):
             continue
@@ -364,7 +364,7 @@ def remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[str
 def collect_rescue_candidates(root: Path) -> list[RescueCandidate]:
     """Collect worktrees that need rescue (cherry-pick to main)."""
     candidates: list[RescueCandidate] = []
-    for task in list_tasks(root):
+    for task in list_tasks(root, strict=False):
         if task.status != "merge_failed":
             continue
         worktree_rel = get_task_worktree_path(task)
