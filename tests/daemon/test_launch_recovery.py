@@ -1,6 +1,6 @@
 import io
-from pathlib import Path
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -13,20 +13,20 @@ from litehive.state.records import create_task
 from litehive.tasks.activity import load_task_activity
 
 
-def test_daemon_loop_recovers_corrupt_workspace_registry_db_before_cycle_start(
-    tmp_path: Path, monkeypatch
-) -> None:
-    config_home = tmp_path / "config-home"
-    data_home = tmp_path / "data-home"
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
-    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+def _patch_daemon_basics(monkeypatch) -> None:
+    monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
+
+
+def test_daemon_loop_recovers_corrupt_workspace_registry_db_before_cycle_start(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config-home"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Queue head")
-
     registry_path = workspace_registry_path()
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     registry_path.write_bytes(b"not a sqlite database")
-
     calls: list[tuple[str, ...]] = []
 
     def fake_run_logged_subprocess(command, **kwargs):
@@ -38,27 +38,19 @@ def test_daemon_loop_recovers_corrupt_workspace_registry_db_before_cycle_start(
             save_state(tmp_path, state)
         return 0
 
-    monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
-    monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
+    _patch_daemon_basics(monkeypatch)
     monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
-    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
-
     stream = io.StringIO()
     exit_code = run_daemon_loop(tmp_path, output_stream=stream, session_dir=tmp_path / "logs")
 
     assert exit_code == 0
     assert any("repair" in command for command in calls)
     assert any("run" in command for command in calls)
-    backups = sorted(registry_path.parent.glob("workspaces.db.corrupt-*"))
-    assert backups
-    assert registry_path.exists()
+    assert sorted(registry_path.parent.glob("workspaces.db.corrupt-*"))
     with sqlite3.connect(registry_path) as connection:
-        rows = connection.execute(
-            "SELECT root FROM workspace_registry ORDER BY registered_at DESC, root DESC"
-        ).fetchall()
+        rows = connection.execute("SELECT root FROM workspace_registry ORDER BY registered_at DESC, root DESC").fetchall()
     assert rows == [(str(tmp_path.resolve()),)]
-    activity_entries = load_task_activity(tmp_path, task)
-    assert any(entry.role == "recovery" for entry in activity_entries)
+    assert any(entry.role == "recovery" for entry in load_task_activity(tmp_path, task))
     assert "launch recovery fixed: cycle_start_failed" in stream.getvalue()
 
 
@@ -66,30 +58,22 @@ def test_daemon_loop_bounds_cycle_start_recovery_to_one_attempt(tmp_path: Path, 
     ensure_workspace(tmp_path)
     create_task(tmp_path, title="Queue head")
     calls: list[str] = []
-    failures = [
-        LaunchFailure(context="cycle_start_failed", summary="startup broken"),
-        LaunchFailure(context="cycle_start_failed", summary="startup broken"),
-    ]
+    failures = [LaunchFailure(context="cycle_start_failed", summary="startup broken")] * 2
 
+    _patch_daemon_basics(monkeypatch)
     monkeypatch.setattr(
         "litehive.daemon.execution.detect_cycle_start_failure",
         lambda workspace: failures.pop(0) if failures else None,
     )
-
-    def fake_recover(workspace, failure, *, output_stream):
-        del workspace, output_stream
-        calls.append(failure.context)
-        return False
-
-    monkeypatch.setattr("litehive.daemon.execution._recover_cycle_start_failure", fake_recover)
+    monkeypatch.setattr(
+        "litehive.daemon.execution._recover_cycle_start_failure",
+        lambda workspace, failure, *, output_stream: (calls.append(failure.context), False)[1],
+    )
     monkeypatch.setattr(
         "litehive.daemon.execution.flag_task_after_failed_launch_recovery",
         lambda *args, **kwargs: (_ for _ in ()).throw(SystemExit(55)),
     )
-    monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
-    monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution._ensure_workspace_venvs_ready", lambda *args, **kwargs: None)
-    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.check_origin_divergence", lambda *args, **kwargs: None)
 
     with pytest.raises(SystemExit) as excinfo:

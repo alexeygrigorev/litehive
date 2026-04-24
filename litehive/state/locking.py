@@ -280,8 +280,7 @@ def _auto_repair_stale_state(root: Path) -> None:
             print(
                 f"auto-repair: cleared stale state "
                 f"(active={result.cleared_active_task_id or '-'}, "
-                f"requeued={', '.join(result.requeued_task_ids) or '-'}, "
-                f"unmerged_removed={result.stale_unmerged_worktrees_removed})",
+                f"requeued={', '.join(result.requeued_task_ids) or '-'})",
                 file=sys.stderr,
             )
     except Exception:

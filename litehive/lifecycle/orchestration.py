@@ -28,19 +28,12 @@ import subprocess
 from litehive.config.loading import load_config
 from litehive.config.engine_models import resolve_task_rejection_loop_limit, resolve_task_retry_policy
 from litehive.git.ops import GitError, remove_worktree
-from litehive.domain.recovery import parse_blocked_on_follow_up_reason
 from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.domain.runtime import RuntimeHookRejectFingerprint, RuntimeRecoveryOutcome
 from litehive.domain.common import cap_feedback, utcnow
-from litehive.recovery.test_failure_attribution import (
-    UNRELATED_TEST_BREAKAGE,
-    attribute_test_failure,
-    build_unrelated_test_follow_up,
-)
 from litehive.state.records import (
     clear_task_worktree_path,
-    create_follow_up_tasks,
     get_task,
     get_task_worktree_path,
     save_task,
@@ -101,9 +94,7 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
         state = persistence.load(task_id)
     except TaskNotFound:
         return persistence.initialize(**fresh_state_kwargs)
-    except Exception as exc:
-        if _retry_target_stage_load_failure(exc) and _launch_requires_fresh_pipeline_state(task_record):
-            return _initialize_fresh_state()
+    except Exception:
         raise
 
     if _stale_launch_state_requires_reset(task_record, state, pipeline_mode=mode, entry_stage=entry_stage):
@@ -126,11 +117,6 @@ def _entry_stage_for_task(task_record: TaskRecord) -> str | None:
 
 def _launch_requires_fresh_pipeline_state(task_record: TaskRecord) -> bool:
     return _entry_stage_for_task(task_record) is not None and task_record.runtime.execution_status != "running"
-
-
-def _retry_target_stage_load_failure(exc: Exception) -> bool:
-    message = str(exc)
-    return "retry_target_stage" in message and "not defined" in message
 
 
 def _stale_launch_state_requires_reset(
@@ -313,42 +299,15 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
         else:
             task_record.status = "flagged"
             task_record.pipeline_status = "flagged"
-            follow_up_task_id = parse_blocked_on_follow_up_reason(state.failed_message)
             origin_stage_key = _recovery_origin_stage(origin_stage)
-            if follow_up_task_id is not None:
-                task_record.flag_reason = f"blocked_on_follow_up:{follow_up_task_id}"
-                reason = (
-                    state.recovery_failure_explanation
-                    or f"Blocked on follow-up task `{follow_up_task_id}` for unrelated breakage."
-                )
-                apply_task_outcome(
-                    task_record,
-                    kind="blocked",
-                    stage=origin_stage_key or task_record.pipeline_status,
-                    reason_code="blocked_on_follow_up",
-                    reason=reason,
-                    retry_count=0,
-                    retry_limit=0,
-                    follow_up_task_id=follow_up_task_id,
-                    failure_classification=UNRELATED_TEST_BREAKAGE,
-                    failure_diagnostics={
-                        "follow_up_task_id": follow_up_task_id,
-                        "origin_stage": origin_stage_key,
-                    },
-                )
-                journal_message = reason
-            elif failed_reason == "hook_reject_loop" or (
+            if failed_reason == "hook_reject_loop" or (
                 trigger is not None and trigger.reason_code == "hook_reject_loop"
             ):
                 task_record.flag_reason = "hook_reject_loop"
             elif failed_reason == "rejection_loop_detected":
                 task_record.flag_reason = "rejection_loop_detected"
             elif failed_reason == "semantic_reject":
-                if (
-                    task_record.runtime.last_outcome.reason_code != "blocked_on_follow_up"
-                    and parse_blocked_on_follow_up_reason(task_record.flag_reason) is None
-                ):
-                    task_record.flag_reason = "semantic_reject"
+                task_record.flag_reason = "semantic_reject"
             elif failed_reason == "recovery_exhausted":
                 task_record.flag_reason = "recovery_failed"
             elif failed_reason == "recovery_budget_hit":
@@ -413,9 +372,6 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
     failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
     if state.stage != "failed":
         return
-    if failed_reason == "semantic_reject":
-        _sync_semantic_reject_follow_up(root, task_record, state)
-        return
     if failed_reason != "recovery_exhausted":
         return
     latest = latest_task_activity_entry(
@@ -445,68 +401,6 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
             "budget_key": None if trigger is None else trigger.budget_key(),
         },
     )
-
-
-def _sync_semantic_reject_follow_up(root: Path, task_record: TaskRecord, state: TaskState) -> None:
-    if task_record.runtime.last_outcome.reason_code == "blocked_on_follow_up":
-        return
-    if parse_blocked_on_follow_up_reason(task_record.flag_reason) is not None:
-        return
-    rejection_stage, rejection_message = _semantic_reject_context(state)
-    if rejection_stage is None or rejection_message is None:
-        return
-    attribution = attribute_test_failure(
-        changed_files=state.last_report.changed_files,
-        rejection_message=rejection_message,
-    )
-    if attribution is None or not attribution.is_unrelated_breakage or attribution.primary_failing_test is None:
-        return
-    created = create_follow_up_tasks(
-        root,
-        parent_task=task_record,
-        stage=rejection_stage,
-        follow_ups=[
-            build_unrelated_test_follow_up(
-                parent_task_id=task_record.id,
-                failing_test=attribution.primary_failing_test,
-                changed_files=attribution.changed_files,
-            )
-        ],
-    )
-    if not created:
-        return
-    follow_up = created[0]
-    task_record.flag_reason = f"blocked_on_follow_up:{follow_up.id}"
-    apply_task_outcome(
-        task_record,
-        kind="blocked",
-        stage=rejection_stage,
-        reason_code="blocked_on_follow_up",
-        reason=f"Blocked on follow-up task `{follow_up.id}` for unrelated breakage.",
-        retry_count=0,
-        retry_limit=0,
-        follow_up_task_id=follow_up.id,
-        failure_classification=UNRELATED_TEST_BREAKAGE,
-        failure_diagnostics={
-            "follow_up_task_id": follow_up.id,
-            "origin_stage": rejection_stage,
-            "failing_test": attribution.primary_failing_test,
-        },
-    )
-
-
-def _semantic_reject_context(state: TaskState) -> tuple[str | None, str | None]:
-    for stage in ("accepting", "testing"):
-        rejection = state.last_rejection_by_stage.get(stage)
-        if rejection is None:
-            continue
-        reason = str(rejection.reason or "").strip()
-        if reason:
-            return stage, reason
-    message = str(state.failed_message or "").strip()
-    if message:
-        return None, message
-    return None, None
 
 
 def _clear_terminal_task_from_workspace_state(root: Path, task_id: str) -> None:

@@ -705,12 +705,6 @@ def _has_inactive_running_tasks(
     return False
 
 
-def _canonicalize_resumable_task(task: TaskRecord, *, stage: str) -> None:
-    from litehive.tasks.queue import canonicalize_resumable_queue_task
-
-    canonicalize_resumable_queue_task(task, stage=stage)
-
-
 def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeSubagentState) -> str:
     subagent_base = task_dir(root, task) / active.path
     report = load_subagent_report(root, task.id, active.id)
@@ -922,7 +916,7 @@ def _recover_stale_running_task(
     summary: WorkspaceRepairSummary | None,
 ) -> tuple[bool, str | None, bool]:
     from litehive.state.locking import subagent_process_is_stale
-    from litehive.tasks.queue import is_task_eligible_for_execution
+    from litehive.tasks.queue import canonicalize_resumable_queue_task, is_task_eligible_for_execution
 
     if not is_task_eligible_for_execution(task):
         return False, None, False
@@ -935,7 +929,7 @@ def _recover_stale_running_task(
         summary=f"Interrupted run recovered after stale runner detection. Resume from `{stage}`.",
         reason=stale_interruption_reason(task, stage, stale_pid=stale_pid),
     )
-    _canonicalize_resumable_task(task, stage=stage)
+    canonicalize_resumable_queue_task(task, stage=stage)
     _record_stale_recovery(
         root,
         task,
@@ -945,14 +939,6 @@ def _recover_stale_running_task(
         stale_pid=stale_pid,
     )
     return True, interruption_journal_message(task), True
-
-
-def _is_stranded_commit_task(task: TaskRecord) -> bool:
-    return task.pipeline_status == "done" and task.git.commit_sha is None and task.git.checkpoint_attempts > 0
-
-
-should_requeue_commit_stage_task = _should_requeue_commit_stage_task
-is_stranded_commit_task = _is_stranded_commit_task
 
 
 def _can_skip_recovery_scan(
@@ -992,7 +978,7 @@ def _recover_running_tasks(
         task = tasks_by_id.get(task_id)
         if task is None:
             continue
-        if task_id != state.active_task_id and not should_requeue_commit_stage_task(task):
+        if task_id != state.active_task_id and not _should_requeue_commit_stage_task(task):
             if state.active_task_id is not None:
                 metadata = read_runner_lock_metadata(root)
                 if not runner_metadata_present(metadata):
@@ -1159,26 +1145,16 @@ def _update_active_task_after_recovery(
             active_task is not None
             and active_task.runtime.execution_status != "running"
             and active_task.id not in running_task_ids
-            and not is_stranded_commit_task(active_task)
-            and not should_requeue_commit_stage_task(active_task)
+            and not _should_requeue_commit_stage_task(active_task)
         )
     )
     if should_clear_active_task_id:
-        _record_cleared_active_task(summary, active_task, state.active_task_id)
+        if (
+            summary is not None
+            and summary.cleared_active_task_id is None
+            and not (active_task is not None and _should_requeue_commit_stage_task(active_task))
+        ):
+            summary.cleared_active_task_id = state.active_task_id
         state.active_task_id = None
         mutated = True
     return mutated
-
-
-def _record_cleared_active_task(
-    summary: WorkspaceRepairSummary | None,
-    active_task: TaskRecord | None,
-    active_task_id: str,
-) -> None:
-    if summary is None or summary.cleared_active_task_id is not None:
-        return
-    if active_task is not None and (
-        is_stranded_commit_task(active_task) or should_requeue_commit_stage_task(active_task)
-    ):
-        return
-    summary.cleared_active_task_id = active_task_id

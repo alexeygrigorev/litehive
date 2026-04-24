@@ -38,11 +38,9 @@ from litehive.observability.status import (
     render_task_summary,
 )
 from litehive.observability.status_diagnostics import (
-    StatusIssue,
     render_issue_lines,
     status_has_problems,
 )
-from litehive.observability.venv_health import broken_venv_issue_message, probe_broken_venv_executables
 from litehive.recovery.workspace_repair import repair_workspace_state
 from litehive.state.records import get_task, list_tasks_state_first
 from litehive.state.persist import load_state
@@ -57,7 +55,6 @@ def register_root_commands(app: typer.Typer) -> None:
     app.command("health", help="Show workspace health diagnostics")(health_command)
     app.command("engine", help="Manage engine freezes and status")(engine_command)
     app.command("repair", help="Repair stale active tasks, interrupted runs, and queue inconsistencies")(repair_command)
-    app.command("doctor", help="Auto-clean stale workspace metadata and report repairs")(doctor_command)
 
 
 def _print_status_issues(issues) -> int:
@@ -80,31 +77,18 @@ def _repair_summary_lines(
     lines = [
         f"{result_label}: {'yes' if summary.mutated else 'no'}",
         f"stale_runner_recovered: {'yes' if summary.stale_runner_recovered else 'no'}",
-        f"stale_unmerged_worktrees_removed: {summary.stale_unmerged_worktrees_removed}",
     ]
     if summary.cleared_active_task_id or include_empty:
         lines.append(f"cleared_active_task_id: {summary.cleared_active_task_id or '-'}")
 
     items = [
         ("requeued_tasks", summary.requeued_task_ids),
-        ("broken_venv_binaries", summary.broken_venv_binaries),
         ("stale_process_tasks", summary.stale_process_task_ids),
     ]
     for label, values in items:
         if values or include_empty:
             lines.append(f"{label}: {' '.join(values) if values else '-'}")
     return lines
-
-
-def _venv_issues(root: Path) -> list[StatusIssue]:
-    return [
-        StatusIssue(
-            key="venv_health",
-            severity="ERROR",
-            message=broken_venv_issue_message(root, finding),
-        )
-        for finding in probe_broken_venv_executables(root)
-    ]
 
 
 def status_command(
@@ -163,7 +147,7 @@ def status_command(
 def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     ensure_workspace(workspace)
     try:
-        summary = repair_workspace_state(workspace, repair_broken_venvs_in_checkouts=True)
+        summary = repair_workspace_state(workspace)
     except WorkspaceConflictError as exc:
         print(f"repair failed: {exc}")
         return 1
@@ -177,16 +161,7 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(line)
     print(f"active_task_id: {state.active_task_id}")
     print(f"queue_length: {len(state.queue)}")
-    issues = _venv_issues(workspace)
-    if issues:
-        for line in render_issue_lines(issues):
-            print(line)
-        return 1
     return 0
-
-
-def doctor_command(workspace: WorkspaceOption = Path.cwd()) -> int:
-    return repair_command(workspace)
 
 
 @dataclass(slots=True)
@@ -318,4 +293,3 @@ def _quota_health(
 cmd_status = status_command
 cmd_health = health_command
 cmd_repair = repair_command
-cmd_doctor = doctor_command

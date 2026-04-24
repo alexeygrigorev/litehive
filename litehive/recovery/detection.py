@@ -7,8 +7,6 @@ from pathlib import Path
 import re
 from typing import Literal
 
-import yaml
-
 from litehive.config.registry import workspace_registry_error, workspace_registry_path
 from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state
@@ -125,11 +123,6 @@ def detect_cycle_start_failure(root: Path) -> LaunchFailure | None:
             diagnostics={"path": str(path)},
         )
     return None
-
-
-def yaml_error_location(exc: yaml.YAMLError) -> str:
-    mark = getattr(exc, "problem_mark", None)
-    return "line ?, column ?" if mark is None else f"line {mark.line + 1}, column {mark.column + 1}"
 
 
 def _ordered_recovery_candidates(

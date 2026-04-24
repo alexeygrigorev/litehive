@@ -1,8 +1,4 @@
-import os
 from pathlib import Path
-import shutil
-import subprocess
-import tomllib
 from types import SimpleNamespace
 
 from heru import ENGINE_CHOICES
@@ -18,48 +14,15 @@ from litehive.cli.workspace import (
     status_command,
 )
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
-from litehive.domain.task import UnmergedWorktree, WorkspaceState
+from litehive.domain.task import WorkspaceState
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
 
 _RUNNER = CliRunner()
-
-
-def _write_cache_tool(cache_target: Path) -> None:
-    cache_target.parent.mkdir(parents=True, exist_ok=True)
-    cache_target.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    cache_target.chmod(0o755)
-
-
-def _create_broken_venv_binary(checkout_root: Path, binary_name: str, cache_root: Path) -> Path:
-    bin_dir = checkout_root / ".venv" / "bin"
-    bin_dir.mkdir(parents=True, exist_ok=True)
-    cache_target = cache_root / f"{binary_name}-tool"
-    _write_cache_tool(cache_target)
-    binary_path = bin_dir / binary_name
-    binary_path.symlink_to(cache_target)
-    cache_target.unlink()
-    return binary_path
-
-
-def _copy_heru_dependency(repo_root: Path, workspace: Path) -> None:
-    pyproject_data = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
-    heru_source = (((pyproject_data.get("tool") or {}).get("uv") or {}).get("sources") or {}).get("heru")
-    assert isinstance(heru_source, dict)
-    configured_path = heru_source.get("path")
-    assert isinstance(configured_path, str) and configured_path
-    source_root = (repo_root / configured_path).resolve()
-    destination = (workspace / configured_path).resolve()
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if source_root.is_dir():
-        shutil.copytree(source_root, destination)
-    else:
-        shutil.copy2(source_root, destination)
 
 
 def test_health_daemon_status_defaults_to_stopped(tmp_path: Path, monkeypatch) -> None:
@@ -94,7 +57,6 @@ def test_repair_summary_lines_omit_empty_fields() -> None:
     assert lines == [
         "repaired: yes",
         "stale_runner_recovered: yes",
-        "stale_unmerged_worktrees_removed: 0",
         "requeued_tasks: T-0002",
     ]
 
@@ -112,10 +74,8 @@ def test_repair_summary_lines_include_empty_fields_for_repair_mode() -> None:
     assert lines == [
         "repaired: no",
         "stale_runner_recovered: no",
-        "stale_unmerged_worktrees_removed: 0",
         "cleared_active_task_id: -",
         "requeued_tasks: -",
-        "broken_venv_binaries: -",
         "stale_process_tasks: -",
     ]
 
@@ -170,27 +130,6 @@ def test_collect_quota_health_reuses_shared_statuses(monkeypatch) -> None:
     assert by_engine["goz"].problem is True
     assert by_engine["opencode"].summary == "hours remaining=10.0% weeks remaining=5.0%"
 
-
-def test_repair_reports_broken_workspace_and_worktree_venvs(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    cache_root = tmp_path / "fake-home" / ".cache" / "uv"
-    _create_broken_venv_binary(tmp_path, "ruff", cache_root)
-    worktree_path = workspace_path(tmp_path, "worktrees") / "T-0001-demo"
-    _create_broken_venv_binary(worktree_path, "pytest", cache_root)
-
-    result = _RUNNER.invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
-
-    assert result.return_value == 1
-    assert "repaired: no" in result.output
-    assert "stale_runner_recovered: no" in result.output
-    assert f"venv_health: BROKEN binary=ruff venv={tmp_path / '.venv'}" in result.output
-    assert f"venv={worktree_path / '.venv'} checkout={worktree_path}" in result.output
-    assert "broken_venv_binaries:" in result.output
-    assert f"{tmp_path / '.venv'}:ruff" in result.output
-    assert f"{worktree_path / '.venv'}:pytest" in result.output
-    assert "uv venv --clear .venv && uv sync --extra dev" in result.output
-
-
 def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Repair stale resumable task")
@@ -223,85 +162,6 @@ def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tm
     assert refreshed.runtime.current_stage.stage == "testing"
     assert refreshed.runtime.current_stage.status == "idle"
     assert load_state(tmp_path).queue == [task.id]
-
-
-def test_doctor_removes_stale_unmerged_worktrees_for_done_task_and_missing_worktree(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    done_task = create_task(tmp_path, title="Finalize rescued worktree", auto_commit=False)
-    done_task.status = "done"
-    done_task.pipeline_status = "done"
-    save_task(tmp_path, done_task)
-
-    open_task = create_task(tmp_path, title="Keep active worktree metadata", auto_commit=False)
-    save_task(tmp_path, open_task)
-
-    done_worktree = workspace_path(tmp_path, "worktrees") / f"{done_task.id}-{done_task.slug}"
-    done_worktree.mkdir(parents=True)
-    live_worktree = workspace_path(tmp_path, "worktrees") / f"{open_task.id}-{open_task.slug}"
-    live_worktree.mkdir(parents=True)
-    missing_worktree = workspace_path(tmp_path, "worktrees") / "T-9999-missing-worktree"
-    state = load_state(tmp_path)
-    state.unmerged_worktrees = [
-        UnmergedWorktree(task_id=done_task.id, worktree_path=str(done_worktree)),
-        UnmergedWorktree(task_id="T-9999", worktree_path=str(missing_worktree)),
-        UnmergedWorktree(task_id=open_task.id, worktree_path=str(live_worktree)),
-    ]
-    save_state(tmp_path, state)
-
-    doctor = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
-
-    assert doctor.return_value == 0
-    assert "repaired: yes" in doctor.output
-    assert "stale_unmerged_worktrees_removed: 2" in doctor.output
-    assert load_state(tmp_path).unmerged_worktrees == [
-        UnmergedWorktree(task_id=open_task.id, worktree_path=str(live_worktree)),
-    ]
-
-    clean_run = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
-
-    assert clean_run.return_value == 0
-    assert "stale_unmerged_worktrees_removed: 0" in clean_run.output
-
-
-def test_documented_clear_and_sync_fix_restores_broken_symlink_after_uv_cache_clean(tmp_path: Path) -> None:
-    repo_root = Path(__file__).resolve().parents[2]
-    workspace = tmp_path / "workspace"
-    cache_dir = tmp_path / "uv-cache"
-    workspace.mkdir()
-    shutil.copy(repo_root / "pyproject.toml", workspace / "pyproject.toml")
-    shutil.copy(repo_root / "uv.lock", workspace / "uv.lock")
-    shutil.copy(repo_root / "README.md", workspace / "README.md")
-    shutil.copytree(repo_root / "litehive", workspace / "litehive")
-    _copy_heru_dependency(repo_root, workspace)
-    ensure_workspace(workspace)
-
-    env = {
-        **os.environ,
-        "UV_CACHE_DIR": str(cache_dir),
-        "UV_LINK_MODE": "symlink",
-    }
-
-    subprocess.run(["uv", "sync", "--extra", "dev"], cwd=workspace, env=env, check=True, capture_output=True, text=True)
-    ruff_path = workspace / ".venv" / "bin" / "ruff"
-    assert ruff_path.is_symlink()
-
-    subprocess.run(["uv", "cache", "clean"], cwd=workspace, env=env, check=True, capture_output=True, text=True)
-    try:
-        broken = subprocess.run([str(ruff_path), "--version"], cwd=workspace, capture_output=True, text=True, check=False)
-    except FileNotFoundError:
-        broken = None
-    assert broken is None or broken.returncode != 0
-
-    repair = _RUNNER.invoke(app, ["repair", "--workspace", str(workspace)], standalone_mode=False)
-    assert repair.return_value == 1
-    assert "uv venv --clear .venv && uv sync --extra dev" in repair.output
-
-    subprocess.run(["uv", "venv", "--clear", ".venv"], cwd=workspace, env=env, check=True, capture_output=True, text=True)
-    subprocess.run(["uv", "sync", "--extra", "dev"], cwd=workspace, env=env, check=True, capture_output=True, text=True)
-    repaired = subprocess.run([str(ruff_path), "--version"], cwd=workspace, capture_output=True, text=True, check=False)
-
-    assert repaired.returncode == 0
-    assert repaired.stdout.startswith("ruff ")
 
 
 def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatch, capsys) -> None:

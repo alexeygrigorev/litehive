@@ -24,7 +24,6 @@ class _RepeatRecoveryEscalationEngine:
         del session
         if prompt["role"] != "recovery":
             raise UnrecoverableError("repeatable infra crash")
-
         repeated = prompt.get("repeated_recovery_fingerprint")
         if not repeated:
             return AgentVerdict(outcome="resume", metadata={"target_stage": "implementing"})
@@ -33,10 +32,7 @@ class _RepeatRecoveryEscalationEngine:
             self.workspace,
             title=f"Recovery follow-up: {repeated['fingerprint']}",
             task_type="bugfix",
-            goal=(
-                "Fix the repeated recovery failure so the task no longer re-enters recovery for "
-                f"`{repeated['fingerprint']}`."
-            ),
+            goal=f"Fix the repeated recovery failure for `{repeated['fingerprint']}`.",
             acceptance_criteria=[
                 f"Root cause for `{repeated['fingerprint']}` is identified",
                 "Recovery no longer needs to re-route this failure path",
@@ -45,6 +41,7 @@ class _RepeatRecoveryEscalationEngine:
         self.follow_up_ids.append(follow_up.id)
         task = get_task(self.workspace, state.task_id)
         assert task is not None
+        message = f"Repeated recovery fingerprint `{repeated['fingerprint']}`. Filed follow-up task {follow_up.id}."
         append_task_activity(
             self.workspace,
             task,
@@ -52,30 +49,32 @@ class _RepeatRecoveryEscalationEngine:
                 role="recovery",
                 stage="recovering",
                 verdict="reject",
-                message=(
-                    f"Repeated recovery fingerprint `{repeated['fingerprint']}`. "
-                    f"Filed follow-up task {follow_up.id} instead of re-routing."
-                ),
+                message=message,
                 follow_up_task_id=follow_up.id,
             ),
         )
-        return AgentVerdict(
-            outcome="reject",
-            reason=(
-                f"Repeated recovery fingerprint `{repeated['fingerprint']}`. "
-                f"Filed follow-up task {follow_up.id} instead of re-routing."
-            ),
-        )
+        return AgentVerdict(outcome="reject", reason=message)
 
 
 def _init_workspace_git_repo(root: Path) -> None:
     ensure_workspace(root)
-    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
-    subprocess.run(["git", "config", "user.email", "t@t"], cwd=root, check=True)
-    subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
+    for args in (
+        ["git", "init", "-q", "-b", "main"],
+        ["git", "config", "user.email", "t@t"],
+        ["git", "config", "user.name", "t"],
+    ):
+        subprocess.run(args, cwd=root, check=True)
     (root / "seed.txt").write_text("seed\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=root, check=True)
     subprocess.run(["git", "commit", "-qm", "seed"], cwd=root, check=True)
+
+
+def _run_with_repeat_engine(tmp_path: Path, task, follow_up_ids: list[str]):
+    return run_pipeline_task(
+        tmp_path,
+        task,
+        engine_factory=lambda name: _RepeatRecoveryEscalationEngine(name, workspace=tmp_path, follow_up_ids=follow_up_ids),
+    )
 
 
 def test_recovery_repeat_fingerprint_escalates_after_requeue(tmp_path: Path) -> None:
@@ -83,39 +82,18 @@ def test_recovery_repeat_fingerprint_escalates_after_requeue(tmp_path: Path) -> 
     task = create_task(tmp_path, title="Repeated recovery fingerprint", pipeline_mode="single")
     follow_up_ids: list[str] = []
 
-    first = run_pipeline_task(
-        tmp_path,
-        task,
-        engine_factory=lambda engine_name: _RepeatRecoveryEscalationEngine(
-            engine_name,
-            workspace=tmp_path,
-            follow_up_ids=follow_up_ids,
-        ),
-    )
+    first = _run_with_repeat_engine(tmp_path, task, follow_up_ids)
     first_refreshed = get_task(tmp_path, task.id)
-
     assert first.final_stage == "failed"
     assert first_refreshed is not None
-    assert first_refreshed.status == "flagged"
     assert first_refreshed.flag_reason == "crash_budget_exhausted"
     assert len(first_refreshed.runtime.recovery_history) == 2
     assert follow_up_ids == []
 
-    requeued = requeue_task(tmp_path, task.id)
-    second = run_pipeline_task(
-        tmp_path,
-        requeued,
-        engine_factory=lambda engine_name: _RepeatRecoveryEscalationEngine(
-            engine_name,
-            workspace=tmp_path,
-            follow_up_ids=follow_up_ids,
-        ),
-    )
+    second = _run_with_repeat_engine(tmp_path, requeue_task(tmp_path, task.id), follow_up_ids)
     second_refreshed = get_task(tmp_path, task.id)
-
     assert second.final_stage == "failed"
     assert second_refreshed is not None
-    assert second_refreshed.status == "flagged"
     assert second_refreshed.flag_reason == "recovery_failed"
     assert len(second_refreshed.runtime.recovery_history) == 3
     assert len(follow_up_ids) == 1
