@@ -27,7 +27,7 @@ import subprocess
 
 from litehive.config.loading import load_config
 from litehive.config.engine_models import resolve_task_rejection_loop_limit, resolve_task_retry_policy
-from litehive.git.ops import GitError, remove_worktree
+from litehive.git.ops import GitError, current_head, remove_worktree
 from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.domain.runtime import RuntimeHookRejectFingerprint, RuntimeRecoveryOutcome
@@ -542,6 +542,36 @@ def _cleanup_terminal_worktree(root: Path, task: TaskRecord | None) -> None:
     )
 
 
+def _reconcile_terminal_commit_sha(
+    root: Path,
+    task: TaskRecord | None,
+    *,
+    final_state: TaskState,
+    persistence: SqlitePersistence,
+) -> TaskRecord | None:
+    if task is None or final_state.stage != "done":
+        return task
+    if task.git.commit_sha and task.runtime.git.commit_sha:
+        return task
+
+    commit_result = final_state.commit_result
+    if commit_result is None:
+        try:
+            commit_result = persistence.load(final_state.task_id).commit_result
+        except TaskNotFound:
+            commit_result = None
+    if commit_result is None:
+        return task
+
+    head_sha = commit_result.head_sha or current_head(root)
+    if not head_sha:
+        return task
+
+    set_task_commit_sha(task, head_sha)
+    save_task(root, task)
+    return task
+
+
 def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
     """Translate ``LitehiveConfig.runner_hooks`` into ``HookSpec`` lists."""
     out: dict[str, list[HookSpec]] = {}
@@ -780,6 +810,12 @@ def run_task(
         # 4. Mirror terminal state back to the v1 TaskRecord.
         updated_task = _sync_back(final_state, root) or task
         if final_state.stage in {"done", "failed"}:
+            updated_task = _reconcile_terminal_commit_sha(
+                root,
+                updated_task,
+                final_state=final_state,
+                persistence=persistence,
+            )
             _clear_terminal_task_from_workspace_state(root, updated_task.id)
             try:
                 _cleanup_terminal_worktree(root, updated_task)

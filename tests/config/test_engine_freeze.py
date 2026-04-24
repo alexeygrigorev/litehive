@@ -3,10 +3,12 @@
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from heru import ENGINE_CHOICES
+from heru.quota import UsageStatus
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
@@ -19,6 +21,7 @@ from litehive.config.engine_models import (
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.engine import EngineUsageRecord, EngineUsageWindow, WorkspaceEngineMonitoring
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import GitError
 from litehive.lifecycle.engines import ConfigBackedEngineSelector
@@ -123,10 +126,69 @@ def test_unfreeze_not_frozen_engine_returns_error(tmp_path: Path, capsys) -> Non
     assert "not frozen" in output
 
 
-def test_engine_status_prints_compact_summary(tmp_path: Path, capsys) -> None:
+def test_engine_status_prints_monitoring_and_live_quota(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(
         tmp_path,
         LitehiveConfig(default_engine="codex", engine_freeze={"gemini": "2099-06-15T00:00:00Z"}),
+    )
+
+    monkeypatch.setattr(
+        "litehive.cli.engine.load_engine_monitoring",
+        lambda root: WorkspaceEngineMonitoring(
+            engines={
+                "codex": EngineUsageRecord(
+                    engine="codex",
+                    source="provider",
+                    provider="openai",
+                    observed_at="2026-04-20T00:00:00Z",
+                    invocation_count=4,
+                    success_count=3,
+                    failure_count=1,
+                    limit_event_count=1,
+                    usage=EngineUsageWindow(
+                        used=60,
+                        limit=100,
+                        remaining=40,
+                        unit="percent",
+                        reset_at="2026-04-21T00:00:00Z",
+                    ),
+                )
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.engine.check_claude_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            five_hour=SimpleNamespace(used_percent=12.5, reset_at="2026-04-14T12:00:00Z"),
+            seven_day=SimpleNamespace(used_percent=45.0, reset_at="2026-04-15T00:00:00Z"),
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.engine.check_codex_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            primary_window=SimpleNamespace(used_percent=30.0, reset_at="2026-04-14T17:00:00Z"),
+            secondary_window=SimpleNamespace(used_percent=65.0, reset_at="2026-04-21T00:00:00Z"),
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.engine.check_copilot_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            premium_remaining=120,
+            premium_entitlement=300,
+            used_percent=60.0,
+            quota_reset_date="2026-04-30T00:00:00Z",
+        ),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.engine.check_zai_quota",
+        lambda: SimpleNamespace(
+            error=None,
+            api_calls=SimpleNamespace(used_percent=15.0, remaining=85, limit=100, window_hours=24),
+            tokens=SimpleNamespace(used_percent=45.0, remaining=5500, limit=10000, window_hours=24),
+        ),
     )
 
     exit_code, output = _run_engine(
@@ -136,10 +198,65 @@ def test_engine_status_prints_compact_summary(tmp_path: Path, capsys) -> None:
         str(tmp_path),
     )
     assert exit_code == 0
-    output = output.strip()
-    assert output.startswith("default_engine: codex | engine_freeze: gemini=2099-06-15T00:00:00Z | engines: ")
+    assert "default_engine: codex" in output
+    assert "engine_freeze: gemini=2099-06-15T00:00:00Z" in output
     for engine_name in ENGINE_CHOICES:
-        assert f"{engine_name}(" in output
+        assert f"engine: {engine_name} " in output
+    assert (
+        "monitoring: source=provider invocations=4 success=3 failure=1 limits=1 "
+        "provider=openai usage=used=60,limit=100,remaining=40,unit=percent,reset_at=2026-04-21T00:00:00Z "
+        "observed_at=2026-04-20T00:00:00Z"
+    ) in output
+    assert (
+        "quota: 5h utilization=12.5% reset=2026-04-14T12:00:00Z | "
+        "7d utilization=45.0% reset=2026-04-15T00:00:00Z"
+    ) in output
+    assert "quota: 5h used=30.0% reset=2026-04-14T17:00:00Z | weekly used=65.0% reset=2026-04-21T00:00:00Z" in output
+    assert "quota: premium remaining=120/300 used=60.0% reset=2026-04-30T00:00:00Z" in output
+    assert output.count(
+        "quota: api calls used=15.0% remaining=85/100 window=24h | "
+        "tokens used=45.0% remaining=5500/10000 window=24h"
+    ) == 2
+    assert "quota: unsupported" in output
+
+
+def test_engine_status_handles_quota_errors_gracefully(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+
+    monkeypatch.setattr(
+        "litehive.cli.engine.load_engine_monitoring",
+        lambda root: WorkspaceEngineMonitoring(),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.engine.check_claude_quota",
+        lambda: UsageStatus(error="no-credentials"),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.engine.check_codex_quota",
+        lambda: (_ for _ in ()).throw(RuntimeError("backend timeout")),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.engine.check_copilot_quota",
+        lambda: UsageStatus(error="gh exit 1"),
+    )
+    monkeypatch.setattr(
+        "litehive.cli.engine.check_zai_quota",
+        lambda: UsageStatus(error="goz exit 1"),
+    )
+
+    exit_code, output = _run_engine(
+        "engine",
+        "status",
+        "--workspace",
+        str(tmp_path),
+    )
+
+    assert exit_code == 0
+    assert "quota: unavailable (no-credentials)" in output
+    assert "quota: unavailable (backend timeout)" in output
+    assert "quota: unavailable (gh exit 1)" in output
+    assert output.count("quota: unavailable (goz exit 1)") == 2
+    assert "quota: unsupported" in output
 
 
 def test_queue_switch_cli_queues_task_for_new_engine(tmp_path: Path) -> None:
