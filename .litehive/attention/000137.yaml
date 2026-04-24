@@ -1,0 +1,14 @@
+id: 137
+task_id: T-0318
+created_at: '2026-04-24T09:18:59+00:00'
+kind: stale_worktree
+title: Managed worktree needs cleanup
+reason: task_id=T-0318 status=deferred path=/home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0318-remove-leading-underscores-from-internal-package
+suggested_action: Run `litehive worktree clean --dry-run` and then `litehive worktree
+  clean`.
+dedupe_key: stale_worktree:/home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0318-remove-leading-underscores-from-internal-package
+status: resolved
+resolved_at: '2026-04-24T09:20:11+00:00'
+resolution: auto-resolved by attention reconciliation
+metadata:
+  path: /home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0318-remove-leading-underscores-from-internal-package
