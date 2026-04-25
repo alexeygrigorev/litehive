@@ -8,9 +8,9 @@ from heru.base import CLIExecutionResult
 
 from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.agents.session_store import (
+    load_subagent_event_stream,
     load_subagent_report,
     load_subagent_session,
-    load_subagent_timeline,
 )
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.agent import EngineFailure, SubagentInactivityTimeout
@@ -263,11 +263,11 @@ def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
 
     report = load_subagent_report(tmp_path, task.id, result.ref.id)
     session = load_subagent_session(tmp_path, task.id, result.ref.id)
-    timeline = load_subagent_timeline(tmp_path, task.id, result.ref.id)
+    event_stream = load_subagent_event_stream(tmp_path, task.id, result.ref.id)
 
     assert "did not submit verdict" in report["summary"]
     assert session["continuation"]["session_id"] == "session-42"
-    assert timeline["event_counts"] == {"message": 1, "continuation": 1}
+    assert event_stream["event_counts"] == {"message": 1, "continuation": 1}
 
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None

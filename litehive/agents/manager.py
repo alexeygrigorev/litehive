@@ -308,7 +308,7 @@ class SubagentManager(SessionMixin):
             completed_timeout = self.completed_inactivity_timeout(engine_name, proc)
             if completed_timeout is not None:
                 raise completed_timeout
-            transcript = self.render_execution_transcript(
+            transcript = self.render_execution_trace(
                 ref.engine,
                 proc,
             )
@@ -343,7 +343,7 @@ class SubagentManager(SessionMixin):
             if timeout_note not in stderr:
                 stderr = f"{stderr.rstrip()}\n{timeout_note}".strip()
             proc = replace(exc.execution, exit_code=124, stderr=stderr)
-            transcript = self.render_execution_transcript(
+            transcript = self.render_execution_trace(
                 ref.engine,
                 proc,
             )
@@ -497,7 +497,7 @@ class SubagentManager(SessionMixin):
                 "interruption_reason": interruption_reason,
             },
         )
-        self.write_timeline(base, ref, task, "" if execution is None else execution.stdout)
+        self.write_event_stream(base, ref, task, "" if execution is None else execution.stdout)
 
     def write_session_progress(
         self,
@@ -508,7 +508,7 @@ class SubagentManager(SessionMixin):
         execution: CLIExecutionResult,
     ) -> None:
         engine = get_engine(ref.engine)
-        transcript = self.render_execution_transcript(
+        transcript = self.render_execution_trace(
             ref.engine,
             execution,
         )
@@ -594,7 +594,7 @@ class SubagentManager(SessionMixin):
             interruption_reason=None,
             continuation=continuation,
         )
-        self.write_timeline(base, ref, task, execution.stdout)
+        self.write_event_stream(base, ref, task, execution.stdout)
         self.check_stdout_inactivity(base, ref.engine, execution)
 
     def _parse_execution_report(

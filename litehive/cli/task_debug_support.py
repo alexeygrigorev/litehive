@@ -87,9 +87,9 @@ def debug_latest(root: Path, task):
         print(f"stage_report_pipeline_state: {stage_report.pipeline_state}")
         print(f"stage_report_summary: {stage_report.summary}")
 
-    # -- Transcript summary (first 200 chars) --
+    # -- Execution trace summary (first 200 chars) --
     if sa_base.exists():
-        _print_transcript(sa_base)
+        _print_execution_trace(sa_base)
 
     # -- stdout tail (last 500 chars) --
     if sa_base.exists():
@@ -153,23 +153,23 @@ def _print_verdict(root, task, role):
         print("verdict: none")
 
 
-def _print_transcript(sa_base):
-    """Print first 200 chars of the transcript."""
+def _print_execution_trace(sa_base):
+    """Print first 200 chars of the execution trace."""
     path = resolve_artifact_path(sa_base, "transcript.md")
     if path is None:
-        print("transcript: (not found)")
+        print("execution trace: (not found)")
         return
     try:
         content = read_text_artifact(path)
         total_len = len(content)
         preview = content[:200]
         if total_len > 200:
-            print(f"transcript ({total_len} chars, showing first 200):")
+            print(f"execution trace ({total_len} chars, showing first 200):")
         else:
-            print(f"transcript ({total_len} chars):")
+            print(f"execution trace ({total_len} chars):")
         print(f"  {preview}")
     except Exception:
-        print("transcript: (error reading)")
+        print("execution trace: (error reading)")
 
 
 def _print_stream_tail(sa_base, filename, label):

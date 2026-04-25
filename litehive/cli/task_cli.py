@@ -251,7 +251,7 @@ def logs(
     task_id: Annotated[str | None, typer.Argument(help="Optional task ID")] = None,
     workspace: WorkspaceOption = Path.cwd(),
     daemon: Annotated[bool, typer.Option(help="List latest daemon sessions")] = False,
-    agent: Annotated[bool, typer.Option(help="Show subagent transcript/stdout")] = False,
+    agent: Annotated[bool, typer.Option(help="Show subagent execution trace/stdout")] = False,
     all_: Annotated[bool, typer.Option("--all", help="List all subagent runs")] = False,
     follow: Annotated[bool, typer.Option(help="Follow live stdout")] = False,
 ) -> int:

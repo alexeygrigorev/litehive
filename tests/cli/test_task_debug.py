@@ -226,19 +226,19 @@ def test_debug_stderr_output(tmp_path: Path, capsys: pytest.CaptureFixture[str])
     assert "error: something failed" in output
 
 
-# -- Transcript summary --
+# -- Execution trace summary --
 
 
-def test_debug_transcript_summary_200(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_debug_execution_trace_summary_200(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     task, sa_dir = _make_task_with_subagent(tmp_path)
-    long_transcript = "A" * 500
-    (sa_dir / "transcript.md").write_text(long_transcript, encoding="utf-8")
+    long_execution_trace = "A" * 500
+    (sa_dir / "transcript.md").write_text(long_execution_trace, encoding="utf-8")
 
     exit_code = _cmd_debug(_ns(tmp_path, task.id))
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "transcript (500 chars, showing first 200):" in output
+    assert "execution trace (500 chars, showing first 200):" in output
     assert "A" * 200 in output
 
 
@@ -252,7 +252,7 @@ def test_debug_gzipped_artifacts(tmp_path: Path, capsys: pytest.CaptureFixture[s
     with gzip.open(sa_dir / "stdout.txt.gz", "wt", encoding="utf-8") as f:
         f.write("gzipped stdout content")
 
-    # Write gzipped transcript
+    # Write gzipped execution trace
     with gzip.open(sa_dir / "transcript.md.gz", "wt", encoding="utf-8") as f:
         f.write("gzipped transcript content")
 
@@ -277,7 +277,7 @@ def test_debug_missing_artifacts_graceful(tmp_path: Path, capsys: pytest.Capture
     assert exit_code == 0
     assert "stdout: (not found)" in output
     assert "stderr: (not found)" in output
-    assert "transcript: (not found)" in output
+    assert "execution trace: (not found)" in output
 
 
 # -- Session record fallback for exit_code --

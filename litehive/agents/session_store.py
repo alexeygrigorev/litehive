@@ -9,6 +9,8 @@ from litehive.domain.common import utcnow
 
 
 _UNSET = object()
+_EVENT_STREAM_KEY = "event_stream"
+_LEGACY_EVENT_STREAM_KEY = "timeline"
 
 
 def _load_subagent_payload(root: Path, task_id: str, subagent_id: str) -> tuple[dict[str, Any], str | None]:
@@ -39,18 +41,20 @@ def save_subagent_artifacts(
     *,
     session: dict[str, Any] | object = _UNSET,
     report: dict[str, Any] | object = _UNSET,
-    timeline: dict[str, Any] | None | object = _UNSET,
+    event_stream: dict[str, Any] | None | object = _UNSET,
 ) -> None:
     payload, created_at = _load_subagent_payload(root, task_id, subagent_id)
     if session is not _UNSET:
         payload["session"] = session
     if report is not _UNSET:
         payload["report"] = report
-    if timeline is not _UNSET:
-        if timeline is None:
-            payload.pop("timeline", None)
+    if event_stream is not _UNSET:
+        if event_stream is None:
+            payload.pop(_EVENT_STREAM_KEY, None)
+            payload.pop(_LEGACY_EVENT_STREAM_KEY, None)
         else:
-            payload["timeline"] = timeline
+            payload[_EVENT_STREAM_KEY] = event_stream
+            payload.pop(_LEGACY_EVENT_STREAM_KEY, None)
     now = utcnow()
     created_at = created_at or now
     with connect_workspace_db(root) as connection:
@@ -89,7 +93,10 @@ def load_subagent_report(root: Path, task_id: str, subagent_id: str) -> dict[str
     return report if isinstance(report, dict) else {}
 
 
-def load_subagent_timeline(root: Path, task_id: str, subagent_id: str) -> dict[str, Any]:
+def load_subagent_event_stream(root: Path, task_id: str, subagent_id: str) -> dict[str, Any]:
     payload = load_subagent_artifacts(root, task_id, subagent_id)
-    timeline = payload.get("timeline")
-    return timeline if isinstance(timeline, dict) else {}
+    event_stream = payload.get(_EVENT_STREAM_KEY)
+    if isinstance(event_stream, dict):
+        return event_stream
+    legacy_event_stream = payload.get(_LEGACY_EVENT_STREAM_KEY)
+    return legacy_event_stream if isinstance(legacy_event_stream, dict) else {}

@@ -3,6 +3,7 @@
 import shlex
 import subprocess
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -794,9 +795,19 @@ def test_run_task_reconciles_noop_commit_stage_and_records_main_head(tmp_path: P
         text=True,
         check=True,
     ).stdout.strip()
+    worktree_committer_date = subprocess.run(
+        ["git", "show", "-s", "--format=%cI", worktree_head],
+        cwd=worktree,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    cherry_pick_env = os.environ.copy()
+    cherry_pick_env["GIT_COMMITTER_DATE"] = worktree_committer_date
     subprocess.run(
         ["git", "cherry-pick", worktree_head],
         cwd=tmp_path,
+        env=cherry_pick_env,
         capture_output=True,
         text=True,
         check=True,

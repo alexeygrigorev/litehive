@@ -1,7 +1,7 @@
 label: Generic
 summary: General software project workflow with deterministic local orchestration.
 source_of_truth: tasks and implementation state live under `.litehive/`.
-task_source_of_truth: issues or task records define scope; prompts and transcripts are supporting evidence.
+task_source_of_truth: issues or task records define scope; prompts and execution traces are supporting evidence.
 orchestrator_model: the local runner is the manager and owns stage routing.
 routing_model: routing stays deterministic and local; subagents execute assigned stages but do not self-route.
 shared_stages:

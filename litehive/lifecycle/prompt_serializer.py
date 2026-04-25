@@ -277,7 +277,7 @@ def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
             [
                 "Diagnosis checklist:",
                 "- Did the agent produce output?",
-                "- Search the transcript/stdout/stderr for `litehive report`. Did it try to call it?",
+                "- Search the execution trace/stdout/stderr for `litehive report`. Did it try to call it?",
                 "- If it called `litehive report`, what exact Litehive error did it get?",
                 "- What Litehive code path caused that failure, and what is the smallest safe fix?",
                 "- Do not rerun the failed stage's task work or submit that stage's verdict yourself.",
@@ -290,12 +290,12 @@ def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
     report_payload = diagnostics.get("report")
     if isinstance(report_payload, dict) and report_payload:
         blocks.append(_yaml_block("report.yaml (materialized from the subagent report store)", report_payload))
-    transcript = str(diagnostics.get("transcript") or "")
-    if transcript:
+    execution_trace = str(diagnostics.get("transcript") or "")
+    if execution_trace:
         blocks.append(
             _text_block(
                 "transcript.md",
-                transcript,
+                execution_trace,
                 limit=_RECOVERY_ARTIFACT_HEAD_CHARS,
                 tail=False,
             )

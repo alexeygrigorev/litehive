@@ -1,11 +1,16 @@
 import logging
 from pathlib import Path
 
-from heru import extract_engine_continuation, extract_engine_timeline, get_engine, render_execution_transcript
+from heru import (
+    extract_engine_continuation,
+    extract_engine_timeline as extract_engine_event_stream,
+    get_engine,
+    render_execution_transcript as render_execution_trace,
+)
 from heru.base import CLIExecutionResult
 
 
-def test_codex_multiline_command_execution_extracts_transcript_timeline_and_continuation(caplog) -> None:
+def test_codex_multiline_command_execution_extracts_trace_event_stream_and_continuation(caplog) -> None:
     stdout = "\n".join(
         [
             '{"type":"thread.started","thread_id":"thread_123"}',
@@ -26,17 +31,17 @@ def test_codex_multiline_command_execution_extracts_transcript_timeline_and_cont
     )
 
     with caplog.at_level(logging.WARNING):
-        transcript = render_execution_transcript(
+        execution_trace = render_execution_trace(
             "codex",
             execution,
             fallback_renderer=get_engine("codex").render_transcript,
         )
-        timeline = extract_engine_timeline("codex", stdout)
+        event_stream = extract_engine_event_stream("codex", stdout)
         continuation = extract_engine_continuation("codex", execution)
 
-    assert transcript == "tests failed"
-    assert timeline is not None
-    assert [event.kind for event in timeline.events] == ["tool_result", "usage"]
+    assert execution_trace == "tests failed"
+    assert event_stream is not None
+    assert [event.kind for event in event_stream.events] == ["tool_result", "usage"]
     assert continuation is not None
     assert continuation.resume_id == "thread_123"
     assert not caplog.records
@@ -63,17 +68,17 @@ def test_unified_output_logs_parse_failures_with_line_context(caplog) -> None:
     )
 
     with caplog.at_level(logging.WARNING):
-        transcript = render_execution_transcript(
+        execution_trace = render_execution_trace(
             "codex",
             execution,
             fallback_renderer=get_engine("codex").render_transcript,
         )
-        timeline = extract_engine_timeline("codex", stdout)
+        event_stream = extract_engine_event_stream("codex", stdout)
         continuation = extract_engine_continuation("codex", execution)
 
-    assert transcript == "step 1\n\nstep 2"
-    assert timeline is not None
-    assert [event.kind for event in timeline.events] == ["message", "continuation", "status"]
+    assert execution_trace == "step 1\n\nstep 2"
+    assert event_stream is not None
+    assert [event.kind for event in event_stream.events] == ["message", "continuation", "status"]
     assert continuation is not None
     assert continuation.resume_id == "thread_456"
 
@@ -97,9 +102,9 @@ def test_invalid_unified_output_logs_warning_before_fallback_transcript(caplog) 
         return "fallback transcript"
 
     with caplog.at_level(logging.WARNING):
-        transcript = render_execution_transcript("codex", execution, fallback_renderer=fallback_renderer)
+        execution_trace = render_execution_trace("codex", execution, fallback_renderer=fallback_renderer)
 
-    assert transcript == "fallback transcript"
+    assert execution_trace == "fallback transcript"
     messages = [record.message for record in caplog.records]
     assert any("invalid unified event at line 1" in message and "engine: Field required" in message for message in messages)
     assert any("found no valid events" in message for message in messages)
@@ -120,12 +125,12 @@ def test_plain_text_output_falls_back_without_unified_parse_warnings(caplog) -> 
         return execution.transcript
 
     with caplog.at_level(logging.WARNING):
-        transcript = render_execution_transcript("codex", execution, fallback_renderer=fallback_renderer)
-        timeline = extract_engine_timeline("codex", stdout)
+        execution_trace = render_execution_trace("codex", execution, fallback_renderer=fallback_renderer)
+        event_stream = extract_engine_event_stream("codex", stdout)
         continuation = extract_engine_continuation("codex", execution)
 
-    assert transcript == stdout
-    assert timeline is None
+    assert execution_trace == stdout
+    assert event_stream is None
     assert continuation is None
 
 
@@ -162,12 +167,12 @@ def test_malformed_jsonl_without_unified_candidates_logs_warnings_before_fallbac
 
         caplog.clear()
         with caplog.at_level(logging.WARNING):
-            transcript = render_execution_transcript("codex", execution, fallback_renderer=fallback_renderer)
-            timeline = extract_engine_timeline("codex", stdout)
+            execution_trace = render_execution_trace("codex", execution, fallback_renderer=fallback_renderer)
+            event_stream = extract_engine_event_stream("codex", stdout)
             continuation = extract_engine_continuation("codex", execution)
 
-        assert transcript == "fallback transcript"
-        assert timeline is None
+        assert execution_trace == "fallback transcript"
+        assert event_stream is None
         assert continuation is None
 
         messages = [record.message for record in caplog.records]

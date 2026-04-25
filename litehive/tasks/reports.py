@@ -7,7 +7,7 @@ from typing import Iterable
 
 from pydantic import ValidationError
 
-from litehive.agents.session_store import load_subagent_artifacts
+from litehive.agents.session_store import load_subagent_artifacts, load_subagent_event_stream
 from litehive.db.schema import connect_workspace_db
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
 from litehive.domain.recovery import TriggerEventKind
@@ -142,16 +142,22 @@ def collect_recovery_evidence(
         rel_subagent_path = str(subagent_base.relative_to(task_dir(root, task)))
         subagent_ref = next((ref for ref in task.subagents if ref.path == rel_subagent_path), None)
         artifacts = {} if subagent_ref is None else load_subagent_artifacts(root, task.id, subagent_ref.id)
+        event_stream = {} if subagent_ref is None else load_subagent_event_stream(root, task.id, subagent_ref.id)
+        structured_artifact_keys = {"session", "report", "event_stream"}
         for key, label in (
             ("session", "latest subagent session"),
             ("report", "latest subagent report"),
-            ("transcript.md", "latest subagent transcript"),
+            ("transcript.md", "latest subagent execution trace"),
             ("stdout.txt", "latest subagent stdout"),
             ("stderr.txt", "latest subagent stderr"),
-            ("timeline", "latest subagent events timeline"),
+            ("event_stream", "latest subagent event stream"),
         ):
-            path = None if key in {"session", "report", "timeline"} else resolve_artifact_path(subagent_base, key)
-            exists = key in {"session", "report", "timeline"} and key in artifacts
+            path = None if key in structured_artifact_keys else resolve_artifact_path(subagent_base, key)
+            exists = (
+                bool(event_stream)
+                if key == "event_stream"
+                else key in structured_artifact_keys and key in artifacts
+            )
             display_path = path if path is not None else subagent_base / key
             evidence.append(
                 RecoveryEvidenceItem(

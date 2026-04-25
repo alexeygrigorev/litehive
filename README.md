@@ -116,7 +116,7 @@ litehive queue                            # show queue order
 litehive task logs                        # tail the latest background-run log
 litehive task logs --daemon               # list recent background-run sessions with outcomes
 litehive task logs T-0002                      # print the task journal
-litehive task logs T-0002 --agent              # show the latest subagent transcript/stdout tail
+litehive task logs T-0002 --agent              # show the latest subagent execution trace/stdout tail
 litehive task logs T-0002 --agent --all        # list all subagent runs for a task
 litehive task logs --follow                    # follow the active subagent stdout live
 litehive task debug T-0002 --worktree         # inspect recorded worktree existence and changes
@@ -315,8 +315,8 @@ During migration, Litehive still reads legacy per-task `thread.yaml` activity fi
 
 High-volume raw execution artifacts are treated as disposable support data:
 
-- Only the latest subagent attempt keeps raw `prompt`, transcript, stdout/stderr, and timeline artifacts; older subagent folders keep their `session.yaml` and `report.yaml` but have raw files pruned.
-- Final subagent transcript, stdout/stderr, timeline, and large runner hook artifacts may be stored as gzip snapshots when they are large; readers are expected to handle both plain and `.gz` files.
+- Only the latest subagent attempt keeps raw `prompt`, execution trace, stdout/stderr, and event stream artifacts; older subagent folders keep their `session.yaml` and `report.yaml` but have raw files pruned.
+- Final subagent execution trace, stdout/stderr, event stream, and large runner hook artifacts may be stored as gzip snapshots when they are large; readers are expected to handle both plain and `.gz` files.
 - Background-run `logs/run-all/` sessions are bounded to the most recent 8 directories so repeated pool runs do not accumulate unbounded wrapper logs.
 
 ## Background Runner

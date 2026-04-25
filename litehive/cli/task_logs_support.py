@@ -62,7 +62,7 @@ def show_latest_subagent(root: Path, task) -> int:
 
     is_active = bool(task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id)
     base = task_dir(root, task) / ref.path
-    transcript_path = _artifact_for_kind(base, "transcript", active=is_active)
+    execution_trace_path = _artifact_for_kind(base, "execution_trace", active=is_active)
     stdout_path = _artifact_for_kind(base, "stdout", active=is_active)
 
     print(f"task: {task.id}")
@@ -71,7 +71,7 @@ def show_latest_subagent(root: Path, task) -> int:
     print(f"engine: {ref.engine}")
     print(f"status: {ref.status}")
 
-    _print_artifact_tail(transcript_path, "transcript")
+    _print_artifact_tail(execution_trace_path, "execution trace")
     _print_artifact_tail(stdout_path, "stdout")
     return 0
 
@@ -212,7 +212,7 @@ def _latest_subagent_ref(task):
 
 
 def _artifact_for_kind(base: Path, kind: str, *, active: bool) -> Path | None:
-    if kind == "transcript":
+    if kind == "execution_trace":
         return resolve_artifact_path(base, "transcript.md")
     if kind == "stdout":
         if active:

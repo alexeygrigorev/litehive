@@ -7,7 +7,7 @@ the requested engine name.
 
 The adapter delegates the actual subagent invocation to ``SubagentManager``
 (``litehive.agents.SubagentManager``) so we don't reimplement heru's CLI
-shelling, transcript handling, or session management. We sit on top of it,
+shelling, execution-trace handling, or session management. We sit on top of it,
 translating to/from the v2 contract:
 
   - prompt dict → serialized string via ``serialize_prompt``

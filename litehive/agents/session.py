@@ -10,7 +10,7 @@ import time
 
 from heru import extract_engine_continuation
 from heru.base import CLIExecutionResult
-from heru.types import LiveEvent, LiveTimeline, RuntimeEngineContinuation, SubagentRef, UnifiedEvent
+from heru.types import LiveEvent, LiveTimeline as LiveEventStream, RuntimeEngineContinuation, SubagentRef, UnifiedEvent
 from litehive.agents.artifacts import (
     write_stream_artifact,
     write_text_artifact,
@@ -59,7 +59,7 @@ def _parse_unified_events(stdout: str) -> tuple[UnifiedEvent, ...]:
     return tuple(events)
 
 
-def _render_event_for_transcript(event: UnifiedEvent) -> str:
+def _render_event_for_execution_trace(event: UnifiedEvent) -> str:
     if event.kind in {"message", "status"} and event.content:
         return event.content
     if event.kind == "error" and event.error:
@@ -83,8 +83,8 @@ def _render_event_for_transcript(event: UnifiedEvent) -> str:
     return "\n".join(lines)
 
 
-def _render_transcript_from_events(events: tuple[UnifiedEvent, ...], *, stderr: str) -> str:
-    parts = [rendered for event in events if (rendered := _render_event_for_transcript(event))]
+def _render_execution_trace_from_events(events: tuple[UnifiedEvent, ...], *, stderr: str) -> str:
+    parts = [rendered for event in events if (rendered := _render_event_for_execution_trace(event))]
     if not parts:
         return f"[stderr]\n{stderr.strip()}" if stderr.strip() else ""
     if stderr.strip():
@@ -92,19 +92,19 @@ def _render_transcript_from_events(events: tuple[UnifiedEvent, ...], *, stderr: 
     return "\n\n".join(parts)
 
 
-def _timeline_from_events(
+def _event_stream_from_events(
     events: tuple[UnifiedEvent, ...],
     *,
     engine_name: str,
     task_id: str | None = None,
     subagent_id: str | None = None,
-) -> LiveTimeline | None:
+) -> LiveEventStream | None:
     if not events:
         return None
-    timeline = LiveTimeline(engine=engine_name, task_id=task_id, subagent_id=subagent_id)
-    timeline.events = [LiveEvent.model_validate(event.model_dump(mode="python")) for event in events]
-    timeline.recompute_counts()
-    return timeline
+    event_stream = LiveEventStream(engine=engine_name, task_id=task_id, subagent_id=subagent_id)
+    event_stream.events = [LiveEvent.model_validate(event.model_dump(mode="python")) for event in events]
+    event_stream.recompute_counts()
+    return event_stream
 
 
 class SessionMixin:
@@ -114,7 +114,7 @@ class SessionMixin:
     """
 
     @staticmethod
-    def render_execution_transcript(
+    def render_execution_trace(
         engine_name: str,
         execution: CLIExecutionResult | None,
     ) -> str:
@@ -124,7 +124,7 @@ class SessionMixin:
         events = _parse_unified_events(execution.stdout)
         if not events:
             return execution.transcript
-        return _render_transcript_from_events(events, stderr=execution.stderr)
+        return _render_execution_trace_from_events(events, stderr=execution.stderr)
 
     @staticmethod
     def extract_execution_continuation(
@@ -134,14 +134,14 @@ class SessionMixin:
         return extract_engine_continuation(engine_name, execution)
 
     @staticmethod
-    def extract_execution_timeline(
+    def extract_execution_event_stream(
         engine_name: str,
         stdout: str,
         *,
         task_id: str | None = None,
         subagent_id: str | None = None,
-    ) -> LiveTimeline | None:
-        return _timeline_from_events(
+    ) -> LiveEventStream | None:
+        return _event_stream_from_events(
             _parse_unified_events(stdout),
             engine_name=engine_name,
             task_id=task_id,
@@ -302,26 +302,26 @@ class SessionMixin:
         except ProcessLookupError:
             return
 
-    def write_timeline(
+    def write_event_stream(
         self,
         base: Path,
         ref: SubagentRef,
         task: TaskRecord,
         stdout: str,
     ) -> None:
-        timeline = self.extract_execution_timeline(
+        event_stream = self.extract_execution_event_stream(
             ref.engine,
             stdout,
             task_id=task.id,
             subagent_id=ref.id,
         )
-        if timeline is None:
+        if event_stream is None:
             return
         save_subagent_artifacts(
             self.root,
             task.id,
             ref.id,
-            timeline=timeline.model_dump(mode="python"),
+            event_stream=event_stream.model_dump(mode="python"),
         )
 
     def write_session_snapshot(

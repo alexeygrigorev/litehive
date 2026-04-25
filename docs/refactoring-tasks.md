@@ -15,14 +15,14 @@ Queue policy:
   queue until the domain/storage cleanup is complete
 - tasks should be shipped in small, verifiable slices
 - avoid mixing vocabulary changes, storage migration, and behavior changes in
-  the same task unless the seam is too coupled to split safely
+  the same task unless the boundary is too coupled to split safely
 
 ## Current inventory summary
 
 Already done:
 
 - no active structured subagent `session.yaml` / `report.yaml` /
-  `timeline.yaml`
+  event-stream YAML artifacts
 - recovery/state compatibility cleanup already landed
 - schema reset to one baseline migration already landed
 
@@ -341,8 +341,8 @@ Goal:
 
 Scope:
 
-- rename structured `timeline` usage to `event stream`
-- rename structured `transcript` usage to `execution trace` where appropriate
+- use `event stream` for structured subagent event data
+- use `execution trace` for rendered structured subagent output where appropriate
 - keep `journal` distinct from task activity
 
 Acceptance criteria:

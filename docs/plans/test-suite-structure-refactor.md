@@ -83,10 +83,10 @@ The clearest split candidates are:
   - config loading and overlay behavior
   - engine/model selection
   - runner hook validation
-- `tests/test_engine_variants_and_timeline.py`
+- `tests/test_engine_variants_and_event_stream.py`
   - Claude config defaults
   - task update CLI behavior
-  - subagent timeline persistence
+  - subagent event stream persistence
 - `tests/test_rmtree_cleanup_logging.py`
   - task directory cleanup
   - daemon log pruning
@@ -243,15 +243,15 @@ Split into:
 
 The current file mixes too many unrelated concerns for one location or one name.
 
-### `tests/test_engine_variants_and_timeline.py`
+### `tests/test_engine_variants_and_event_stream.py`
 
 Split into:
 
-- `tests/agents/test_subagent_timeline.py`
+- `tests/agents/test_subagent_event_stream.py`
 - `tests/config/test_claude_settings.py`
 - `tests/cli/test_task_update_engine_flags.py`
 
-The current file mixes engine defaults, task update command behavior, and subagent timeline/report persistence.
+The current file mixes engine defaults, task update command behavior, and subagent event-stream/report persistence.
 
 ### `tests/test_rmtree_cleanup_logging.py`
 

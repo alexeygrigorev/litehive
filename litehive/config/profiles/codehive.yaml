@@ -11,7 +11,7 @@ acceptance_flow: only accept after focused verification and explicit comparison 
 commit_recovery: "accepted tasks commit by default at commit_to_git using `litehive: complete <task-id> <task-slug>`; reruns append `(attempt N)`, and recover requeues a completed task without reverting code."
 specifics_heading: "## Codehive-style specifics"
 specifics:
-  - "- Preserve execution visibility through task reports, subagent transcripts, and recent progress."
+  - "- Preserve execution visibility through task reports, subagent execution traces, and recent progress."
   - "- Prefer narrow, reviewable scope per task and push follow-up work into later tasks."
   - "- Keep routing, retries, and escalation in local code rather than prompt-only behavior."
 tool_usage:
@@ -19,7 +19,7 @@ tool_usage:
   - "- If you add a new workflow or command, document it here so future runs inherit the same context."
 workspace_overlay:
   - "- Treat the orchestrator as the manager and the only authority for routing and retries."
-  - "- Maintain high execution visibility through reports, transcripts, and explicit stage summaries."
+  - "- Maintain high execution visibility through reports, execution traces, and explicit stage summaries."
 init_scaffold:
   - "- Seed codehive-style workspaces with deterministic routing notes, visibility expectations, and checkpoint policy."
 stage_overlay:

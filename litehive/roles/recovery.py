@@ -19,7 +19,7 @@ ROLE_GUIDANCE = """\
 - You fix Litehive infrastructure bugs, not agent judgment disagreements. Semantic QA/reviewer rejects are not your job.
 - Pull logs before diagnosing. The failure is not obvious from the prompt — go read the evidence yourself. Sources, in order of value:
   - `litehive pipeline journal <task_id>` — start here. One command, no sqlite incantations: dumps the task state (stage, active recovery trigger, recovery history, failed reason, last rejection by stage), the lifecycle events, and the recent pipeline transitions in one readable block.
-  - `litehive task logs <task_id> --agent` — transcript / stdout / stderr of the failing subagent process. This is usually where the root cause is.
+  - `litehive task logs <task_id> --agent` — execution trace / stdout / stderr of the failing subagent process. This is usually where the root cause is.
   - `litehive task logs <task_id> --agent --all` — lists every subagent run on this task so you can diff the recent ones.
   - `litehive task logs <task_id>` — task journal (v1 style) with stage entries, verdict submissions, and operator notes.
   - `litehive task logs --daemon` — daemon-level events if you suspect an orchestrator/runner bug rather than an agent bug.
@@ -28,7 +28,7 @@ ROLE_GUIDANCE = """\
   - The `recovery_trigger` field in your prompt already contains the most recent trigger event, source, and reason — use it to narrow your log search.
   - If you need to go deeper than the CLI commands, the underlying tables are `stage_reports`, `recovery_reports`, `pipeline_transitions` (columns: `seq, created_at, from_stage, event_type, event_payload, to_stage, rule_description, delta`) and `pipeline_journal` (columns: `seq, created_at, kind, payload`). Don't invent column names.
 - Diagnose the failing agent before you touch code:
-  - Did the agent produce any stdout, stderr, or transcript output?
+  - Did the agent produce any stdout, stderr, or execution-trace output?
   - Did it try to call `litehive report`?
   - If it tried, what exact Litehive error did it get?
   - What Litehive code path caused that failure, and what is the smallest safe fix?
@@ -277,7 +277,7 @@ def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) ->
 
     session_payload = load_subagent_session(root, task_record.id, subagent_id)
     report_payload = load_subagent_report(root, task_record.id, subagent_id)
-    transcript = _read_subagent_artifact(subagent_base, "transcript.md")
+    execution_trace = _read_subagent_artifact(subagent_base, "transcript.md")
     stdout = _read_subagent_artifact(subagent_base, "stdout.txt")
     stderr = _read_subagent_artifact(subagent_base, "stderr.txt")
     exit_code = None
@@ -313,10 +313,10 @@ def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) ->
         ),
         "path": rel_path,
         "exit_code": exit_code,
-        "did_produce_output": any(text.strip() for text in (transcript, stdout, stderr)),
+        "did_produce_output": any(text.strip() for text in (execution_trace, stdout, stderr)),
         "session": session_payload,
         "report": report_payload,
-        "transcript": transcript,
+        "transcript": execution_trace,
         "stdout": stdout,
         "stderr": stderr,
     }

@@ -167,7 +167,7 @@ def test_logs_agent_prefers_live_stdout_for_active_subagent(tmp_path: Path, caps
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "transcript:" in output
+    assert "execution trace:" in output
     assert "live transcript" in output
     assert "stdout:" in output
     assert "live stdout" in output

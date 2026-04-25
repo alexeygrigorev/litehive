@@ -1,7 +1,7 @@
-"""Engine monitoring and live event models.
+"""Engine monitoring and live event-stream models.
 
 The engine-facing types (EngineUsageWindow, EngineUsageObservation,
-LiveEvent, LiveTimeline) now live in heru.types. This module re-exports
+LiveEvent, LiveEventStream) now live in heru.types. This module re-exports
 them and keeps the litehive-only `EngineUsageRecord` /
 `WorkspaceEngineMonitoring` authoritative here.
 """
@@ -14,7 +14,7 @@ from heru.types import (
     EngineUsageObservation,
     EngineUsageWindow,
     LiveEvent,
-    LiveTimeline,
+    LiveTimeline as LiveEventStream,
 )
 
 
@@ -53,6 +53,6 @@ __all__ = [
     "EngineUsageRecord",
     "EngineUsageWindow",
     "LiveEvent",
-    "LiveTimeline",
+    "LiveEventStream",
     "WorkspaceEngineMonitoring",
 ]

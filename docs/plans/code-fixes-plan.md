@@ -226,11 +226,11 @@ Concrete actions:
   means the stage that triggered recovery.
 - Replace generic failure payloads with `RecoveryTrigger` diagnostics or
   `RecoveryOutcome` history when the payload is recovery-owned.
-- Distinguish `journal`, `log`, and `transcript` in both CLI help and model
+- Distinguish `journal`, `log`, and `execution trace` in both CLI help and model
   names:
   - `journal` for structured history
   - `log` for raw operational/debug output
-  - `transcript` for rendered subagent conversation/event trace
+  - `execution trace` for rendered subagent conversation/event output
 - Remove remaining user-facing `v2` wording while touching CLI help so the new
   vocabulary lands together instead of mixing old and new labels.
 
@@ -248,7 +248,7 @@ Answer:
   - some entries still say `X or Y` instead of selecting one canonical term
   - some domain words are introduced without defining what the underlying
     object is, especially `record`, `runtime`, `engine`, `subagent`,
-    `transcript`, `timeline`, and `journal`
+    `execution trace`, `event stream`, and `journal`
   - `stage`, `phase`, `state`, and `pipeline` are still too easy to confuse
   - verdict terminology is still unsettled, especially whether `pass` should
     become `accept`, whether `blocked` is distinct from `reject`, and whether
@@ -296,7 +296,7 @@ Concrete actions:
   append-only history. Compare alternatives such as:
   - `task activity`
   - `task feed`
-  - `task timeline`
+  - `task activity feed`
   - `task entries`
 - Define `FailureFingerprint` more concretely or rename it if another term is
   clearer, for example:
@@ -304,9 +304,8 @@ Concrete actions:
   - `FailureKey`
   - `FailureClassifier`
 - Revisit artifact vocabulary:
-  - if `transcript` is too audio-oriented, choose a clearer term
-  - define exactly what `timeline` means and whether it should instead be
-    `event stream`
+  - use `execution trace` instead of the older audio-oriented wording
+  - use `event stream` for structured subagent event data
   - define how `journal` differs from the task-entry history
 
 ## Selected Vocabulary Decisions
@@ -326,8 +325,8 @@ current target vocabulary unless explicitly revised again.
 - Use `StageVerdict` with values `accept`, `reject`, and `blocked`.
 - Treat `comment` as an entry type or message, not a stage verdict.
 - Use `TaskCloseOutcome` for explicit close dispositions.
-- Use `ExecutionTrace` instead of `transcript` in new naming.
-- Use `EventStream` instead of `timeline` in new naming.
+- Use `ExecutionTrace` in new naming.
+- Use `EventStream` in new naming.
 - Use `LifecycleJournal` for machine-generated transition history and keep it
   distinct from task activity.
 
@@ -542,7 +541,7 @@ Answer:
 - `__all__` is sparse in Litehive, not pervasive, but if the codebase policy is
   "no `__all__`", the current remaining uses should be removed consistently.
 - `artifacts.py` is needed today because Litehive persists task-scoped prompt /
-  transcript / stdout / stderr / timeline artifacts for subagent runs, and both
+  execution trace / stdout / stderr / event stream artifacts for subagent runs, and both
   `manager.py` and `session.py` call it.
 - Most of `artifacts.py` is Litehive-owned persistence policy, not Heru:
   - task-scoped folders
@@ -584,9 +583,9 @@ Concrete actions:
 
 - Move generic unified-event parsing/view code from Litehive into Heru:
   - parsed execution view
-  - transcript rendering from unified events
+  - execution-trace rendering from unified events
   - continuation extraction from unified events
-  - timeline derivation from unified events
+  - event-stream derivation from unified events
 - After that move, delete Litehive wrappers in `agents/_continuation.py` and
   replace call sites with direct Heru APIs.
 - Audit Litehive for wrapper-only re-export/helper functions and remove any that
@@ -659,7 +658,7 @@ Concrete actions:
 - Add `docs/domain.md` defining the canonical terms for:
   - task comments / discussion / verdict entries
   - report vs thread/comment entry
-  - subagent session / transcript / timeline / continuation
+  - subagent session / execution trace / event stream / continuation
   - stage / phase / pipeline status
 - Decide retention policy for subagent artifacts:
   - keep all per-subagent evidence
@@ -1053,7 +1052,7 @@ Concrete actions:
 - Audit how logs are stored today and document the storage model:
   - background-run logs under workspace logs
   - task journal
-  - subagent stdout/stderr/transcript artifacts
+  - subagent stdout/stderr/execution-trace artifacts
 - Pick a package name for log/artifact inspection that does not conflict with
   Python `logging`, and move CLI helpers behind that package.
 - Move `worktree_support.py` out of `cli/`; it is domain/worktree orchestration,
@@ -1080,7 +1079,7 @@ What the current codebase actually looks like:
   - task `task.yaml`
   - `comments.yaml`
   - stage/recovery `*.yaml` reports
-  - subagent `session.yaml` / `report.yaml` / `timeline.yaml`
+  - subagent `session.yaml` / `report.yaml` / event-stream YAML artifacts
   - `engine-monitoring.yaml`
   - pool-run summary YAMLs
   - runner/daemon lock metadata YAML
@@ -1147,12 +1146,12 @@ Notes:
 - storage target: SQLite only for Litehive-owned structured data
   - the only YAML file that remains is `.litehive/config.yaml`
   - no task YAML
-  - no comments/report/session/timeline YAML
+  - no comments/report/session/event-stream YAML
   - no engine-monitoring YAML
   - no pool summary YAML
   - queue stays in SQLite
   - incomplete tasks move fully to SQLite
-  - text logs/transcripts may remain plain text if unstructured
+  - text logs/execution traces may remain plain text if unstructured
   - every other Litehive-owned structured file format should be removed
 
 ## Merge plan
@@ -1377,7 +1376,7 @@ Concrete implementation steps:
   - stage report resolution
   to read/write through the activity store
 - then delete filesystem `comments.yaml` support
-- then delete YAML `report/session/timeline/recovery` artifacts that only store
+- then delete YAML `report/session/event-stream/recovery` artifacts that only store
   structured data
 - remove `files_changed` from target report/activity structures
 
@@ -1723,7 +1722,7 @@ Remove:
 - `engine-monitoring.yaml` reads/writes
 - `session.yaml`
 - `report.yaml`
-- `timeline.yaml`
+- event-stream YAML artifacts
 - stage/recovery `*.yaml` report files
 - pool-run summary YAML files
 - any code path that loads incomplete tasks from filesystem task records
@@ -1794,12 +1793,12 @@ remains to align the code with the storage target stated above.
   - old recovery/report compatibility aliases and fallback paths were removed
   - active CLI/prompt/report surfaces now use the new canonical field names
 - Structured subagent artifact cleanup:
-  - active subagent `session` / `report` / `timeline` storage no longer uses
-    `session.yaml` / `report.yaml` / `timeline.yaml`
+  - active subagent `session` / `report` / `event_stream` storage no longer uses
+    `session.yaml` / `report.yaml` / event-stream YAML artifacts
   - active execution, recovery, debug, and logs paths now read those
     structured artifacts from SQLite-backed subagent-session storage
-- Text transcript/log artifacts are still allowed by plan and remain on disk:
-  - plain-text transcript/log files are not part of the YAML removal target
+- Text execution-trace/log artifacts are still allowed by plan and remain on disk:
+  - plain-text execution-trace/log files are not part of the YAML removal target
 
 ### Still to do
 
@@ -1844,7 +1843,7 @@ remains to align the code with the storage target stated above.
 - no `comments.yaml`
 - no `session.yaml`
 - no `report.yaml`
-- no `timeline.yaml`
+- no event-stream YAML artifacts
 - no `engine-monitoring.yaml`
 - no stage/recovery/pool summary YAML
 - no runtime decision depends on parsing structured YAML artifacts
@@ -1864,11 +1863,11 @@ real implementation rather than against assumptions.
   - one baseline migration is in place
   - old workspace databases are rebuilt from that baseline
 - Structured subagent YAML removal is partially complete and active:
-  - active subagent session/report/timeline data no longer uses
-    `session.yaml` / `report.yaml` / `timeline.yaml`
+  - active subagent session/report/event-stream data no longer uses
+    `session.yaml` / `report.yaml` / event-stream YAML artifacts
   - subagent structured artifacts now flow through SQLite-backed session
     storage
-  - plain-text logs/transcripts still remain on disk by design
+  - plain-text logs/execution traces still remain on disk by design
 
 #### Still active in code today
 
@@ -2065,8 +2064,8 @@ The task-by-task queue mirror lives in `docs/refactoring-tasks.md`.
 
 12. Rename remaining artifact vocabulary to the selected target names.
     Scope:
-    - `transcript` -> `execution trace` where the data is structured
-    - `timeline` -> `event stream`
+    - `execution trace` where the data is structured
+    - `event stream`
     - `journal` remains distinct from task activity
     Note:
     - plain-text artifact filenames can be handled last because they are lower
@@ -2257,7 +2256,7 @@ Concrete follow-up rule:
 - whether backups belong in `storage/` or `workspace/`
 - whether daemon code belongs under `workspace/` or `execution/`
 - whether any structured artifact should remain on disk at all beyond plain
-  text logs/transcripts
+  text logs/execution traces
 - whether debug/log helpers are supported operator tools or just developer
   maintenance tools that should be removed
 - whether `StageReport` survives as a distinct persisted object or is reduced

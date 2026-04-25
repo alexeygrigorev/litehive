@@ -13,7 +13,7 @@ from heru.types import (
 
 
 FEEDBACK_CAP = 2000
-TRUNCATION_MARKER = "\n\n… [truncated — full transcript in subagent artifacts]"
+TRUNCATION_MARKER = "\n\n… [truncated — full execution trace in subagent artifacts]"
 
 
 class StringEnum(str, Enum):

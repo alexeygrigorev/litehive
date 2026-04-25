@@ -154,7 +154,7 @@ def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
     assert "You fix Litehive infrastructure bugs, not agent judgment disagreements." in text
     assert "litehive pipeline journal <task_id>" in text
     assert "litehive task logs <task_id> --agent" in text
-    assert "Did the agent produce any stdout, stderr, or transcript output?" in text
+    assert "Did the agent produce any stdout, stderr, or execution-trace output?" in text
     assert "Non-example: do not rerun the failed stage's tests" in text
 
 
