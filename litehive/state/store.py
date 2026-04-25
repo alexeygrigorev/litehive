@@ -11,6 +11,7 @@ from litehive.domain.common import utcnow
 from litehive.domain.runtime import TaskRuntime
 from litehive.domain.task import TaskIntentRecord, TaskStateRecord, WorkspaceState
 from litehive.tasks.audit import TaskAuditEntry, insert_task_audit_entries
+from litehive.tasks.event_log import append_task_event, task_event_type_for_audit_action
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ _TASK_SCOPED_TABLES = (
     "pipeline_journal",
     "pipeline_task_state",
     "pipeline_sessions",
+    # task_audit_log is intentionally excluded: hard deletes must keep
+    # durable lifecycle history and tombstones queryable after the task rows go away.
 )
 
 
@@ -41,18 +44,21 @@ class RuntimeStore:
         self.root = root
 
     def bootstrap(self) -> None:
-        """Initialize workspace rows and recover task visibility after DB loss.
-
-        Task and queue state are SQLite-first. Bootstrapping only ensures the
-        workspace rows exist; it does not infer active task metadata from
-        filesystem artifacts.
-        """
+        """Initialize workspace rows and replay the task event log after DB loss."""
         with connect_workspace_db(self.root) as connection:
             self.ensure_workspace_state_rows(connection)
             if consume_rebuilt_database_marker(self.root):
                 connection.commit()
-                return
             connection.commit()
+        if self._should_rebuild_from_task_event_log():
+            from litehive.tasks.event_log import rebuild_sqlite_from_task_event_log
+
+            rebuild_sqlite_from_task_event_log(self.root)
+
+    def _should_rebuild_from_task_event_log(self) -> bool:
+        from litehive.tasks.event_log import sqlite_task_tables_empty, task_event_log_has_events
+
+        return task_event_log_has_events(self.root) and sqlite_task_tables_empty(self.root)
 
     def load_workspace_state(self) -> WorkspaceState | None:
         with connect_workspace_db(self.root) as connection:
@@ -74,6 +80,7 @@ class RuntimeStore:
     def save_workspace_state(self, state: WorkspaceState) -> None:
         with connect_workspace_db(self.root) as connection:
             self._save_workspace_state(connection, state)
+            self._append_workspace_state_event(state)
             connection.commit()
 
     def load_task_state(self, task_id: str) -> TaskStateRecord | None:
@@ -112,11 +119,23 @@ class RuntimeStore:
     def save_task_intent(self, task_id: str, intent: TaskIntentRecord) -> None:
         with connect_workspace_db(self.root) as connection:
             self._save_task_intent(connection, task_id, intent)
+            append_task_event(
+                self.root,
+                event_type="task_intent_saved",
+                task_id=task_id,
+                payload={"task_intent": intent.model_dump(mode="json")},
+            )
             connection.commit()
 
     def save_task_state(self, task_id: str, state: TaskStateRecord) -> None:
         with connect_workspace_db(self.root) as connection:
             self._save_task_state(connection, task_id, state)
+            append_task_event(
+                self.root,
+                event_type="task_state_saved",
+                task_id=task_id,
+                payload={"task_state": state.model_dump(mode="json")},
+            )
             connection.commit()
 
     def save_runtime_transaction(
@@ -135,6 +154,12 @@ class RuntimeStore:
             for task_id, state in (task_states or {}).items():
                 self._save_task_state(connection, task_id, state)
             insert_task_audit_entries(connection, audit_entries or [])
+            self._append_runtime_transaction_events(
+                task_intents=task_intents or {},
+                task_states=task_states or {},
+                workspace_state=workspace_state,
+                audit_entries=audit_entries or [],
+            )
             connection.commit()
 
     def delete_task_records_preserving_audit(
@@ -147,7 +172,74 @@ class RuntimeStore:
             for table_name in _TASK_SCOPED_TABLES:
                 connection.execute(f"DELETE FROM {table_name} WHERE task_id = ?", (task_id,))
             insert_task_audit_entries(connection, audit_entries or [])
+            if audit_entries:
+                for entry in audit_entries:
+                    append_task_event(
+                        self.root,
+                        event_type=task_event_type_for_audit_action(entry.action),
+                        task_id=entry.task_id,
+                        payload={"audit_entry": entry.model_dump(mode="json")},
+                    )
+            else:
+                append_task_event(
+                    self.root,
+                    event_type="task_deleted",
+                    task_id=task_id,
+                    payload={},
+                )
             connection.commit()
+
+    def _append_workspace_state_event(self, state: WorkspaceState) -> None:
+        append_task_event(
+            self.root,
+            event_type="workspace_state_saved",
+            task_id=None,
+            payload={"workspace_state": state.model_dump(mode="json")},
+        )
+
+    def _append_runtime_transaction_events(
+        self,
+        *,
+        task_intents: dict[str, TaskIntentRecord],
+        task_states: dict[str, TaskStateRecord],
+        workspace_state: WorkspaceState | None,
+        audit_entries: list[TaskAuditEntry],
+    ) -> None:
+        logged_task_ids: set[str] = set()
+        workspace_payload = None if workspace_state is None else workspace_state.model_dump(mode="json")
+
+        def payload_for_task(task_id: str) -> dict[str, object]:
+            payload: dict[str, object] = {}
+            if task_id in task_intents:
+                payload["task_intent"] = task_intents[task_id].model_dump(mode="json")
+            if task_id in task_states:
+                payload["task_state"] = task_states[task_id].model_dump(mode="json")
+            if workspace_payload is not None:
+                payload["workspace_state"] = workspace_payload
+            return payload
+
+        for entry in audit_entries:
+            payload = payload_for_task(entry.task_id)
+            payload["audit_entry"] = entry.model_dump(mode="json")
+            append_task_event(
+                self.root,
+                event_type=task_event_type_for_audit_action(entry.action),
+                task_id=entry.task_id,
+                payload=payload,
+            )
+            logged_task_ids.add(entry.task_id)
+
+        for task_id in sorted((set(task_intents) | set(task_states)) - logged_task_ids):
+            append_task_event(
+                self.root,
+                event_type="task_state_saved",
+                task_id=task_id,
+                payload=payload_for_task(task_id),
+            )
+            logged_task_ids.add(task_id)
+
+        if workspace_state is not None and not logged_task_ids:
+            self._append_workspace_state_event(workspace_state)
 
     def _save_workspace_state(self, connection: sqlite3.Connection, state: WorkspaceState) -> None:
         now = utcnow()

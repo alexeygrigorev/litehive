@@ -16,7 +16,7 @@ from litehive.state.records import get_task_record, list_tasks, task_state_for_s
 from litehive.state.locking import workspace_lock
 from litehive.state.persist import load_state, save_state_without_runner_guard
 from litehive.state.store import runtime_store
-from litehive.tasks.audit import append_task_audit_entries, build_task_audit_entry, snapshot_task_audit_state
+from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.archive_index import (
     archive_index_path,
     archive_root as archive_index_root,
@@ -198,11 +198,23 @@ def _archive_validated_task(
     if state.active_task_id == task.id:
         state.active_task_id = None
     state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
+    audit_entry = build_task_audit_entry(
+        task_id=task.id,
+        action="archived",
+        actor=audit_actor,
+        source=audit_source,
+        before_task=before_task,
+        after_task=task,
+        before_queue=queue_before,
+        after_queue=state.queue,
+        context={"archive_path": str(dst.relative_to(root))},
+    )
     runtime_store(root).save_runtime_transaction(
         task_intents={task.id: task.to_intent_record()},
         task_states={task.id: task_state_for_storage(task)},
+        workspace_state=state,
+        audit_entries=[audit_entry],
     )
-    save_state_without_runner_guard(root, state)
     dst.parent.mkdir(parents=True, exist_ok=True)
     if src.exists():
         shutil.move(str(src), str(dst))
@@ -210,22 +222,6 @@ def _archive_validated_task(
         dst.mkdir(parents=True, exist_ok=True)
     _update_archive_index(root, [task])
     refresh_duplicate_task_index_if_initialized(root)
-    append_task_audit_entries(
-        root,
-        [
-            build_task_audit_entry(
-                task_id=task.id,
-                action="archived",
-                actor=audit_actor,
-                source=audit_source,
-                before_task=before_task,
-                after_task=task,
-                before_queue=queue_before,
-                after_queue=state.queue,
-                context={"archive_path": str(dst.relative_to(root))},
-            )
-        ],
-    )
     return task
 
 

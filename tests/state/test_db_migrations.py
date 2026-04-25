@@ -267,9 +267,9 @@ def test_daemon_run_reports_broken_worktree_venv_before_start(
     assert "uv venv --clear .venv && uv sync --extra dev" in result.output
 
 
-def test_legacy_workspace_db_is_rebuilt_without_task_yaml_rescan(tmp_path: Path) -> None:
+def test_legacy_workspace_db_rebuild_replays_task_event_log_without_task_yaml_rescan(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Keep me")
+    task = create_task(tmp_path, title="Keep me")
     db_path = workspace_path(tmp_path, "data.db")
     db_path.unlink()
 
@@ -305,9 +305,9 @@ def test_legacy_workspace_db_is_rebuilt_without_task_yaml_rescan(tmp_path: Path)
         queue_row = connection.execute("SELECT payload FROM queue WHERE workspace_key = 'workspace'").fetchone()
 
     assert applied_versions == [1, 2, 3, 4, 5, 6]
-    assert rows == []
+    assert rows == [(task.id,)]
     assert queue_row is not None
-    assert queue_row[0] == "[]"
+    assert json.loads(queue_row[0]) == [task.id]
 
 
 def test_connect_workspace_db_rebuilds_replaced_cached_db(tmp_path: Path) -> None:

@@ -42,6 +42,7 @@ from litehive.state.backup import create_workspace_backup, list_workspace_backup
 from litehive.state.records import get_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.state.persist import load_state, set_pool_stop_reason
+from litehive.tasks.event_log import rebuild_sqlite_from_task_event_log
 from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection
 from litehive.tasks.activity import append_task_activity
 from litehive.tasks.audit import load_task_audit_entries
@@ -61,6 +62,9 @@ def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: ty
     db_app.callback()(db_group)
     db_app.command("status", help="Show workspace database schema version and pending migrations")(db_status)
     db_app.command("migrate", help="Apply pending workspace database migrations")(db_migrate)
+    db_app.command("rebuild-from-events", help="Rebuild task tables from the append-only task event log")(
+        db_rebuild_from_events
+    )
     db_app.command("audit", help="Show durable task audit log entries from the workspace database")(db_audit)
     db_app.command("settings", help="Show audited runtime settings from the workspace database")(db_settings)
     db_app.command("settings-audit", help="Show runtime settings audit log entries")(db_settings_audit)
@@ -526,6 +530,27 @@ def db_migrate(
     return 0
 
 
+def db_rebuild_from_events(workspace: WorkspaceOption = Path.cwd()) -> int:
+    workspace = normalize_workspace_root(workspace, source="--workspace")
+    try:
+        summary = rebuild_sqlite_from_task_event_log(workspace)
+    except Exception as exc:
+        print(f"db rebuild-from-events failed: {exc}")
+        return 1
+    print(f"workspace: {workspace}")
+    print(f"event_log: {summary.event_log_path}")
+    print(f"events_seen: {summary.events_seen}")
+    print(f"events_replayed: {summary.events_replayed}")
+    print(f"invalid_events: {summary.invalid_events}")
+    print(f"tasks_rebuilt: {summary.tasks_rebuilt}")
+    print(f"queue_length: {summary.queue_length}")
+    print(f"audit_entries: {summary.audit_entries}")
+    print(f"activity_entries: {summary.activity_entries}")
+    print(f"stage_reports: {summary.stage_reports}")
+    print(f"recovery_reports: {summary.recovery_reports}")
+    return 0
+
+
 def db_audit(
     task_id: Annotated[str | None, typer.Argument(help="Optional task id to filter")] = None,
     workspace: WorkspaceOption = Path.cwd(),
@@ -587,6 +612,7 @@ cmd_backup_list = backup_list
 cmd_backup_restore = backup_restore
 cmd_db_status = db_status
 cmd_db_migrate = db_migrate
+cmd_db_rebuild_from_events = db_rebuild_from_events
 cmd_db_audit = db_audit
 cmd_db_settings = db_settings
 cmd_db_settings_audit = db_settings_audit

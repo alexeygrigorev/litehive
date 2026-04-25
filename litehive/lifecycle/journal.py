@@ -16,6 +16,7 @@ from typing import Any
 
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
+from litehive.tasks.event_log import append_task_event
 
 from litehive.domain.lifecycle_deltas import StateDelta
 from .events import Event
@@ -190,6 +191,24 @@ class SqliteJournal(PipelineJournal):
                     json.dumps(payload["delta"], sort_keys=True),
                 ),
             )
+            append_task_event(
+                self.workspace_root,
+                event_type="pipeline_transition_recorded",
+                task_id=task_id,
+                payload={
+                    "pipeline_transition": {
+                        "task_id": task_id,
+                        "seq": seq,
+                        "created_at": created_at,
+                        "from_stage": payload["from_stage"],
+                        "event_type": payload["event_type"],
+                        "event_payload": payload["event_payload"],
+                        "to_stage": payload["to_stage"],
+                        "rule_description": payload["rule_description"],
+                        "delta": payload["delta"],
+                    }
+                },
+            )
             connection.commit()
 
     def _insert_lifecycle(
@@ -207,6 +226,20 @@ class SqliteJournal(PipelineJournal):
                 VALUES (?, ?, ?, ?, ?)
                 """,
                 (task_id, seq, created_at, kind, json.dumps(payload, sort_keys=True)),
+            )
+            append_task_event(
+                self.workspace_root,
+                event_type="pipeline_journal_recorded",
+                task_id=task_id,
+                payload={
+                    "pipeline_journal": {
+                        "task_id": task_id,
+                        "seq": seq,
+                        "created_at": created_at,
+                        "kind": kind,
+                        "payload": payload,
+                    }
+                },
             )
             connection.commit()
 

@@ -21,6 +21,7 @@ from litehive.domain.reports import (
     canonical_stage_report_verdict,
 )
 from litehive.domain.task import TaskRecord
+from litehive.tasks.event_log import append_task_event
 
 from .activity import (
     append_task_activity,
@@ -281,6 +282,12 @@ def _insert_recovery_report(root: Path, task: TaskRecord, report: RecoveryReport
             """,
             (task.id, report.origin_stage, report.trigger_event_kind.value, report.created_at, payload),
         )
+        append_task_event(
+            root,
+            event_type="recovery_report_recorded",
+            task_id=task.id,
+            payload={"recovery_report": report.model_dump(mode="json")},
+        )
         connection.commit()
     return ReportReference(table="recovery_reports", row_id=int(cursor.lastrowid))
 
@@ -349,6 +356,12 @@ def record_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Re
             """,
             (task.id, report.pipeline_state, report.created_at, payload),
         )
+        append_task_event(
+            root,
+            event_type="stage_report_recorded",
+            task_id=task.id,
+            payload={"stage_report": report.model_dump(mode="json")},
+        )
         connection.commit()
     return ReportReference(table="stage_reports", row_id=int(cursor.lastrowid))
 
@@ -377,6 +390,12 @@ def rewrite_latest_stage_report(root: Path, task: TaskRecord, report: StageRepor
             WHERE id = ?
             """,
             (report.created_at, payload, report_id),
+        )
+        append_task_event(
+            root,
+            event_type="stage_report_rewritten",
+            task_id=task.id,
+            payload={"rewritten_stage_report": report.model_dump(mode="json")},
         )
         connection.commit()
     return ReportReference(table="stage_reports", row_id=report_id)

@@ -6,6 +6,7 @@ from typing import Any, Protocol
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import PipelineState, canonical_pipeline_state, utcnow
 from litehive.domain.recovery import RecoveryOutcome, RecoveryTrigger
+from litehive.tasks.event_log import append_task_event
 
 from .types import FailedReason, NodeName, PipelineMode
 
@@ -474,7 +475,9 @@ class SqlitePersistence:
         self.limits = limits or Limits()
 
     def save(self, state: TaskState) -> None:
-        payload_json = json.dumps(_state_payload(state), sort_keys=True)
+        payload = _state_payload(state)
+        payload_json = json.dumps(payload, sort_keys=True)
+        updated_at = utcnow()
         with connect_workspace_db(self.workspace_root) as connection:
             connection.execute(
                 """
@@ -491,8 +494,22 @@ class SqlitePersistence:
                     str(state.stage),
                     state.pipeline_mode.value,
                     payload_json,
-                    utcnow(),
+                    updated_at,
                 ),
+            )
+            append_task_event(
+                self.workspace_root,
+                event_type="pipeline_task_state_saved",
+                task_id=state.task_id,
+                payload={
+                    "pipeline_task_state": {
+                        "task_id": state.task_id,
+                        "stage": str(state.stage),
+                        "pipeline_mode": state.pipeline_mode.value,
+                        "payload": payload,
+                        "updated_at": updated_at,
+                    }
+                },
             )
             connection.commit()
 
@@ -523,6 +540,12 @@ class SqlitePersistence:
         """
         with connect_workspace_db(self.workspace_root) as connection:
             connection.execute("DELETE FROM pipeline_task_state WHERE task_id = ?", (task_id,))
+            append_task_event(
+                self.workspace_root,
+                event_type="pipeline_task_state_reset",
+                task_id=task_id,
+                payload={},
+            )
             connection.commit()
 
     def initialize(

@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord
+from litehive.tasks.event_log import append_task_event, task_event_type_for_audit_action
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,13 @@ def append_task_audit_entries(root: Path, entries: Iterable[TaskAuditEntry]) -> 
         return
     with connect_workspace_db(root) as connection:
         insert_task_audit_entries(connection, entry_list)
+        for entry in entry_list:
+            append_task_event(
+                root,
+                event_type=task_event_type_for_audit_action(entry.action),
+                task_id=entry.task_id,
+                payload={"audit_entry": entry.model_dump(mode="json")},
+            )
         connection.commit()
 
 
