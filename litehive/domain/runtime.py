@@ -6,7 +6,7 @@ and keeps the litehive-only runtime state models authoritative here.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from heru.types import (
     RuntimeEngineContinuation,
@@ -219,44 +219,14 @@ class RuntimeContinuationHandoff(BaseModel):
     updated_at: str = Field(default_factory=utcnow)
 
 
-class TaskRuntime(BaseModel):
-    """The unified task-scoped container for mutable runtime state.
+class PipelineRuntime(BaseModel):
+    """Mutable runtime state owned by the task pipeline.
 
-    Created by TaskService when a new task is created. Used by PipelineRunner,
-    CLI, reporting, and recovery code for tracking execution progress.
-
-    DESIGN RATIONALE - Unified vs. Split Architecture:
-
-    The original target design called for splitting this into separate
-    PipelineRuntime and ExecutionRuntime slices to separate concerns:
-    - Pipeline slice: state, retries, current run details, recovery context
-    - Execution slice: subagent state, interruption, continuation, engine switching
-
-    However, the current implementation uses a unified design that combines both
-    concerns into a single TaskRuntime class. This design choice provides:
-
-    1. Simplified orchestration: PipelineRunner owns all runtime state management
-       in one place instead of coordinating across multiple runtime objects
-    2. Atomic state consistency: All runtime changes happen together, avoiding
-       synchronization issues between pipeline and execution state
-    3. Simplified persistence: Single object to load/save instead of managing
-       multiple runtime slices
-
-    OWNERSHIP PATHS:
-
-    TaskRuntime is owned exclusively by PipelineRunner during execution:
-    - PipelineRunner writes: All field updates during task execution
-    - Other components read: CLI, reporting, recovery read current state
-
-    TaskRuntime diverges from TaskState when:
-    - TaskState tracks high-level pipeline position (stage, status, retry counts)
-    - TaskRuntime tracks detailed execution state (subagents, interruptions, handoffs)
-    - TaskState persists across task restarts; TaskRuntime may be reconstructed
-
-    The execution orchestration keeps subagent launch, interruption, resume,
-    and engine switching inside PipelineRunner, giving Litehive one orchestration
-    service instead of splitting execution control across multiple services.
+    This slice tracks run status, stage progress, retry accounting, terminal
+    outcomes, and recovery memory. It deliberately excludes subagent and
+    continuation bookkeeping, which belongs to ExecutionRuntime.
     """
+
     git: RuntimeGitState = Field(default_factory=RuntimeGitState)
     execution_status: str = "idle"
     run_started_at: str | None = None
@@ -265,17 +235,93 @@ class TaskRuntime(BaseModel):
     retry_limit: int = 0
     current_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
     last_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
-    active_subagent: RuntimeSubagentState | None = None
-    last_subagent: RuntimeSubagentState | None = None
-    interruption: RuntimeInterruptionState | None = None
-    continuation_handoff: RuntimeContinuationHandoff | None = None
-    last_engine_switch: RuntimeEngineSwitch | None = None
     consecutive_same_hook_rejects: int = 0
     last_hook_reject_fingerprint: RuntimeHookRejectFingerprint | None = None
     hook_reject_recovery_invoked: bool = False
     recovery_history: list[RuntimeRecoveryOutcome] = Field(default_factory=list)
     failed_run_history: dict[str, RuntimeFailedRunRecord] = Field(default_factory=dict)
     last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
+
+
+class ExecutionRuntime(BaseModel):
+    """Mutable runtime state owned by subagent execution.
+
+    This slice tracks active/recent subagent state plus interruption,
+    continuation, and engine-switch context used to resume or redirect work.
+    """
+
+    active_subagent: RuntimeSubagentState | None = None
+    last_subagent: RuntimeSubagentState | None = None
+    interruption: RuntimeInterruptionState | None = None
+    continuation_handoff: RuntimeContinuationHandoff | None = None
+    last_engine_switch: RuntimeEngineSwitch | None = None
+
+
+_PIPELINE_RUNTIME_FIELDS = frozenset(PipelineRuntime.model_fields)
+_EXECUTION_RUNTIME_FIELDS = frozenset(ExecutionRuntime.model_fields)
+
+
+def _model_or_mapping_payload(value: object) -> dict:
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="python")
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
+
+
+class TaskRuntime(BaseModel):
+    """Task-scoped runtime container split by ownership boundary.
+
+    TaskRuntime keeps persistence atomic for a task while separating mutable
+    runtime state into:
+    - pipeline: run status, stage progress, retries, outcomes, and recovery
+    - execution: subagents, interruptions, handoffs, and engine switching
+
+    Legacy flat runtime payloads are accepted during validation and normalized
+    into these slices before storage.
+    """
+
+    pipeline: PipelineRuntime = Field(default_factory=PipelineRuntime)
+    execution: ExecutionRuntime = Field(default_factory=ExecutionRuntime)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_legacy_flat_payload(cls, data):
+        if isinstance(data, TaskRuntime):
+            return data
+        if not isinstance(data, dict):
+            return data
+
+        payload = dict(data)
+        pipeline_payload = _model_or_mapping_payload(payload.get("pipeline"))
+        execution_payload = _model_or_mapping_payload(payload.get("execution"))
+
+        for field_name in _PIPELINE_RUNTIME_FIELDS:
+            if field_name in payload:
+                pipeline_payload[field_name] = payload.pop(field_name)
+        for field_name in _EXECUTION_RUNTIME_FIELDS:
+            if field_name in payload:
+                execution_payload[field_name] = payload.pop(field_name)
+
+        payload["pipeline"] = pipeline_payload
+        payload["execution"] = execution_payload
+        return payload
+
+    def __getattr__(self, name: str):
+        if name in _PIPELINE_RUNTIME_FIELDS:
+            return getattr(self.pipeline, name)
+        if name in _EXECUTION_RUNTIME_FIELDS:
+            return getattr(self.execution, name)
+        return super().__getattr__(name)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        if name in _PIPELINE_RUNTIME_FIELDS and name not in type(self).model_fields:
+            setattr(self.pipeline, name, value)
+            return
+        if name in _EXECUTION_RUNTIME_FIELDS and name not in type(self).model_fields:
+            setattr(self.execution, name, value)
+            return
+        super().__setattr__(name, value)
 
     def for_storage(
         self,
@@ -284,8 +330,8 @@ class TaskRuntime(BaseModel):
         worktree_path: str | None,
     ) -> "TaskRuntime":
         runtime = self.model_copy(deep=True)
-        runtime.git.commit_sha = commit_sha
-        runtime.git.worktree_path = worktree_path
+        runtime.pipeline.git.commit_sha = commit_sha
+        runtime.pipeline.git.worktree_path = worktree_path
         return runtime
 
 

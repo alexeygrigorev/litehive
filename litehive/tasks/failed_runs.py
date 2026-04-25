@@ -11,7 +11,7 @@ def blocking_failed_run_records(task: TaskRecord) -> list[RuntimeFailedRunRecord
     """Return failed-run records that require operator acknowledgement."""
 
     blocked: list[RuntimeFailedRunRecord] = []
-    for record in task.runtime.failed_run_history.values():
+    for record in task.runtime.pipeline.failed_run_history.values():
         if record.count <= FAILED_RUN_REQUEUE_BUDGET:
             continue
         if record.operator_override_count >= record.count:
@@ -34,7 +34,7 @@ def mark_failed_run_operator_override(
     acknowledged: list[dict[str, object]] = []
     for record in records or blocking_failed_run_records(task):
         key = f"{record.stage}:{record.failure_shape}"
-        stored = task.runtime.failed_run_history.get(key)
+        stored = task.runtime.pipeline.failed_run_history.get(key)
         if stored is None:
             continue
         stored.operator_override_count = max(stored.operator_override_count, stored.count)

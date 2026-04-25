@@ -60,7 +60,7 @@ def show_latest_subagent(root: Path, task) -> int:
         print(f"{task.id}: no subagents")
         return 0
 
-    is_active = bool(task.runtime.active_subagent and task.runtime.active_subagent.id == ref.id)
+    is_active = bool(task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id)
     base = task_dir(root, task) / ref.path
     transcript_path = _artifact_for_kind(base, "transcript", active=is_active)
     stdout_path = _artifact_for_kind(base, "stdout", active=is_active)
@@ -82,10 +82,10 @@ def list_task_subagents(root: Path, task) -> int:
         return 0
 
     runtime_by_id = {}
-    if task.runtime.active_subagent is not None:
-        runtime_by_id[task.runtime.active_subagent.id] = task.runtime.active_subagent
-    if task.runtime.last_subagent is not None:
-        runtime_by_id[task.runtime.last_subagent.id] = task.runtime.last_subagent
+    if task.runtime.execution.active_subagent is not None:
+        runtime_by_id[task.runtime.execution.active_subagent.id] = task.runtime.execution.active_subagent
+    if task.runtime.execution.last_subagent is not None:
+        runtime_by_id[task.runtime.execution.last_subagent.id] = task.runtime.execution.last_subagent
 
     for ref in reversed(task.subagents):
         runtime_state = runtime_by_id.get(ref.id)
@@ -108,8 +108,8 @@ def follow_active_subagent(root: Path, *, task_id: str | None = None) -> int:
     is_active = bool(
         task is not None
         and ref is not None
-        and task.runtime.active_subagent is not None
-        and task.runtime.active_subagent.id == ref.id
+        and task.runtime.execution.active_subagent is not None
+        and task.runtime.execution.active_subagent.id == ref.id
     )
     if task is None or ref is None:
         print("No active subagent.")
@@ -133,13 +133,13 @@ def follow_active_subagent(root: Path, *, task_id: str | None = None) -> int:
     while True:
         position = _print_follow_chunk(stdout_path, position)
         task = resolve_follow_task(root, task_id=task_id)
-        if task is None or task.runtime.active_subagent is None:
+        if task is None or task.runtime.execution.active_subagent is None:
             position = _print_follow_chunk(stdout_path, position)
             break
-        if task.id != active_task_id or task.runtime.active_subagent.id != active_subagent_id:
+        if task.id != active_task_id or task.runtime.execution.active_subagent.id != active_subagent_id:
             position = _print_follow_chunk(stdout_path, position)
             break
-        if task.runtime.active_subagent.path != active_path:
+        if task.runtime.execution.active_subagent.path != active_path:
             position = _print_follow_chunk(stdout_path, position)
             break
         time.sleep(FOLLOW_POLL_SECONDS)
@@ -200,10 +200,10 @@ def _format_session_timestamp(name: str) -> str:
 
 def _latest_subagent_ref(task):
     preferred_ids: list[str] = []
-    if task.runtime.active_subagent is not None:
-        preferred_ids.append(task.runtime.active_subagent.id)
-    if task.runtime.last_subagent is not None:
-        preferred_ids.append(task.runtime.last_subagent.id)
+    if task.runtime.execution.active_subagent is not None:
+        preferred_ids.append(task.runtime.execution.active_subagent.id)
+    if task.runtime.execution.last_subagent is not None:
+        preferred_ids.append(task.runtime.execution.last_subagent.id)
     for subagent_id in preferred_ids:
         for ref in reversed(task.subagents):
             if ref.id == subagent_id:
@@ -267,7 +267,7 @@ def resolve_follow_task(root: Path, *, task_id: str | None) -> object | None:
     if task_id is not None:
         return get_task_record(root, task_id)
     tasks = list_tasks(root, strict=False)
-    active = next((task for task in tasks if task.runtime.active_subagent is not None), None)
+    active = next((task for task in tasks if task.runtime.execution.active_subagent is not None), None)
     if active is not None:
         return active
     return next((task for task in tasks if task.subagents), None)

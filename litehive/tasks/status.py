@@ -126,7 +126,7 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
         queue_before = list(state.queue)
         if task.pipeline_status == "done":
             raise ValueError(f"Task {task.id} is already done")
-        stage = task.runtime.current_stage.stage or task.pipeline_status
+        stage = task.runtime.pipeline.current_stage.stage or task.pipeline_status
 
         # Park the task - this is intentional operator action, not system interruption
         from litehive.domain.common import utcnow
@@ -134,14 +134,14 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
 
         now = utcnow()
         task.status = "parked"
-        task.runtime.execution_status = "idle"
-        task.runtime.run_started_at = None
-        task.runtime.updated_at = now
-        task.runtime.active_subagent = None
+        task.runtime.pipeline.execution_status = "idle"
+        task.runtime.pipeline.run_started_at = None
+        task.runtime.pipeline.updated_at = now
+        task.runtime.execution.active_subagent = None
 
         # Set minimal interruption metadata for resume functionality
         # Use "operator" source to distinguish from system interruptions
-        task.runtime.interruption = RuntimeInterruptionState(
+        task.runtime.execution.interruption = RuntimeInterruptionState(
             source="runner",  # CLI command execution context
             stage=stage,
             resume_stage=stage,
@@ -261,22 +261,22 @@ def stop_current_task(
 
 
 def _effective_task_engine(root: Path, task: TaskRecord) -> str:
-    if task.runtime.active_subagent is not None:
-        return task.runtime.active_subagent.engine
-    if task.runtime.last_subagent is not None:
-        return task.runtime.last_subagent.engine
+    if task.runtime.execution.active_subagent is not None:
+        return task.runtime.execution.active_subagent.engine
+    if task.runtime.execution.last_subagent is not None:
+        return task.runtime.execution.last_subagent.engine
     return load_config(root).default_engine
 
 
 def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
     paths: list[str] = []
-    handoff = task.runtime.continuation_handoff
+    handoff = task.runtime.execution.continuation_handoff
     for candidate in (
         None if handoff is None else handoff.subagent_path,
         None if handoff is None else handoff.transcript_path,
         None if handoff is None else handoff.report_path,
         None if handoff is None else handoff.session_path,
-        None if task.runtime.last_subagent is None else task.runtime.last_subagent.path,
+        None if task.runtime.execution.last_subagent is None else task.runtime.execution.last_subagent.path,
     ):
         if candidate and candidate not in paths:
             paths.append(candidate)
@@ -421,7 +421,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     def _task_checkout_path(task: TaskRecord) -> Path:
-        worktree_path = resolve_recorded_worktree_path(root, task.runtime.git.worktree_path or task.git.worktree_path)
+        worktree_path = resolve_recorded_worktree_path(root, task.runtime.pipeline.git.worktree_path or task.git.worktree_path)
         if worktree_path is not None and worktree_path.exists():
             return worktree_path
         return root
@@ -528,7 +528,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
         stranded_in_progress = (
             task.status == "in_progress"
-            and task.runtime.execution_status in {"interrupted", "idle"}
+            and task.runtime.pipeline.execution_status in {"interrupted", "idle"}
             and bool(task.pipeline_status)
             and task.pipeline_status not in {"backlog", "done"}
         )
@@ -595,7 +595,7 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, or closed")
-        _terminate_subagent_pid(task.id, None if task.runtime.active_subagent is None else task.runtime.active_subagent.pid)
+        _terminate_subagent_pid(task.id, None if task.runtime.execution.active_subagent is None else task.runtime.execution.active_subagent.pid)
         _apply_cancelled_task_state(task, reason="Task abandoned via CLI.")
         _drop_task_from_workspace_state(state, task.id)
         persist_task_and_state_without_runner_guard(
@@ -732,8 +732,8 @@ def close_task(
     task_snapshot = get_task_record(root, task_id)
     active_subagent_pid = (
         None
-        if task_snapshot is None or task_snapshot.runtime.active_subagent is None
-        else task_snapshot.runtime.active_subagent.pid
+        if task_snapshot is None or task_snapshot.runtime.execution.active_subagent is None
+        else task_snapshot.runtime.execution.active_subagent.pid
     )
     runner_metadata = read_runner_lock_metadata(root) if runner_lock_is_held(root) else None
     if state.active_task_id == task_id or (runner_metadata is not None and runner_metadata.active_task_id == task_id):
@@ -890,7 +890,7 @@ def update_task(
                 raise ValueError(f"Unsupported close outcome '{outcome_str}'. Expected one of: {allowed}")
             if task.status == "done":
                 raise ValueError(f"Task {task.id} is already done and cannot be closed")
-            _terminate_subagent_pid(task.id, None if task.runtime.active_subagent is None else task.runtime.active_subagent.pid)
+            _terminate_subagent_pid(task.id, None if task.runtime.execution.active_subagent is None else task.runtime.execution.active_subagent.pid)
             close_msg = _apply_close_task_state(
                 task,
                 outcome=outcome_str,

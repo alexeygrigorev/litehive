@@ -260,8 +260,8 @@ class TaskState:
     - Core pipeline state machine data
 
     TaskRuntime tracks:
-    - Detailed execution state (active subagents, continuations)
-    - Engine switches and interruption context
+    - PipelineRuntime state (run status, stage progress, retries, outcomes)
+    - ExecutionRuntime state (subagents, continuations, interruptions)
     - Runtime-only data that may not persist across restarts
 
     WHEN THEY DIVERGE:

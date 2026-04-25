@@ -107,10 +107,10 @@ def latest_run_all_log_path(root: Path) -> Path | None:
 def latest_subagent_base(root: Path, task: TaskRecord) -> Path | None:
     refs = list(task.subagents)
     preferred = []
-    if task.runtime.active_subagent is not None:
-        preferred.append(task.runtime.active_subagent.path)
-    if task.runtime.last_subagent is not None:
-        preferred.append(task.runtime.last_subagent.path)
+    if task.runtime.execution.active_subagent is not None:
+        preferred.append(task.runtime.execution.active_subagent.path)
+    if task.runtime.execution.last_subagent is not None:
+        preferred.append(task.runtime.execution.last_subagent.path)
     preferred.extend(ref.path for ref in refs)
     for rel_path in reversed(preferred):
         base = task_dir(root, task) / rel_path

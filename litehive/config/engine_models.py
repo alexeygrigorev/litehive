@@ -343,8 +343,8 @@ def resolve_engine_plan(
 ) -> list[str]:
     if engine_override is not None:
         return [engine_override]
-    if task.runtime.last_engine_switch is not None and task.runtime.last_engine_switch.stage == task.pipeline_status:
-        return [task.runtime.last_engine_switch.to_engine]
+    if task.runtime.execution.last_engine_switch is not None and task.runtime.execution.last_engine_switch.stage == task.pipeline_status:
+        return [task.runtime.execution.last_engine_switch.to_engine]
     return [config.default_engine]
 
 
@@ -412,9 +412,9 @@ def set_continuation_handoff(
 
 
 def _is_recovery_run(task: TaskRecord) -> bool:
-    if task.runtime.continuation_handoff is not None:
+    if task.runtime.execution.continuation_handoff is not None:
         return True
-    return task.runtime.last_outcome.kind in {"flagged", "interrupted"}
+    return task.runtime.pipeline.last_outcome.kind in {"flagged", "interrupted"}
 
 
 def _role_for_stage(stage: str, task: TaskRecord | None = None) -> str:

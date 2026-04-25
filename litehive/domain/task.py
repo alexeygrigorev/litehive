@@ -24,7 +24,9 @@ def _last_outcome_reason_code(data: dict) -> str | None:
     runtime = data.get("runtime")
     if not isinstance(runtime, dict):
         return None
-    last_outcome = runtime.get("last_outcome")
+    pipeline = runtime.get("pipeline")
+    runtime_payload = pipeline if isinstance(pipeline, dict) else runtime
+    last_outcome = runtime_payload.get("last_outcome")
     if not isinstance(last_outcome, dict):
         return None
     reason_code = last_outcome.get("reason_code")
@@ -96,7 +98,7 @@ def canonicalize_task_terminal_state(task: "TaskRecord") -> None:
         task.status = "closed"
         task.close_reason = LEGACY_CLOSED_STATUS_CLOSE_REASONS[status]
     elif status == "closed":
-        outcome_reason_code = task.runtime.last_outcome.reason_code
+        outcome_reason_code = task.runtime.pipeline.last_outcome.reason_code
         task.close_reason = (
             task.close_reason
             or (None if outcome_reason_code is None else str(outcome_reason_code))
@@ -367,9 +369,9 @@ class TaskRecord(BaseModel):
         state = self.to_state_record()
         state.runtime = self.runtime.for_storage(
             commit_sha=self.git.commit_sha,
-            worktree_path=self.runtime.git.worktree_path,
+            worktree_path=self.runtime.pipeline.git.worktree_path,
         )
-        state.git.worktree_path = self.runtime.git.worktree_path
+        state.git.worktree_path = self.runtime.pipeline.git.worktree_path
         state.updated_at = self.updated_at
         return state
 

@@ -183,7 +183,7 @@ class RuntimeStore:
     def save_task_runtime(self, task_id: str, runtime: TaskRuntime) -> None:
         state = self.load_task_state(task_id) or TaskStateRecord()
         state.runtime = runtime.model_copy(deep=True)
-        state.updated_at = runtime.updated_at or state.updated_at or utcnow()
+        state.updated_at = runtime.pipeline.updated_at or state.updated_at or utcnow()
         self.save_task_state(task_id, state)
 
     def _save_task_state(
@@ -192,11 +192,11 @@ class RuntimeStore:
         task_id: str,
         state: TaskStateRecord,
     ) -> None:
-        now = state.updated_at or state.runtime.updated_at or utcnow()
+        now = state.updated_at or state.runtime.pipeline.updated_at or utcnow()
         state = state.model_copy(deep=True)
         state.updated_at = now
-        if state.runtime.updated_at is None:
-            state.runtime.updated_at = now
+        if state.runtime.pipeline.updated_at is None:
+            state.runtime.pipeline.updated_at = now
         payload = state.model_dump(mode="json")
         payload["updated_at"] = now
         connection.execute(

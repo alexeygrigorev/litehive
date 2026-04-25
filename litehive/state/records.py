@@ -79,7 +79,7 @@ def _task_creation_stage(root: Path, *, current_task_id: str | None) -> str | No
     current_task = get_task_record(root, current_task_id)
     if current_task is None:
         return None
-    runtime_stage = current_task.runtime.current_stage.stage
+    runtime_stage = current_task.runtime.pipeline.current_stage.stage
     if runtime_stage:
         return runtime_stage
     pipeline_stage = str(current_task.pipeline_status).strip()
@@ -137,15 +137,15 @@ def write_task_runtime(root: Path, task: TaskRecord) -> None:
 
 def set_task_commit_sha(task: TaskRecord, commit_sha: str | None) -> None:
     task.git.commit_sha = commit_sha
-    task.runtime.git.commit_sha = commit_sha
+    task.runtime.pipeline.git.commit_sha = commit_sha
 
 
 def get_task_worktree_path(task: TaskRecord) -> str | None:
-    return task.runtime.git.worktree_path or task.git.worktree_path
+    return task.runtime.pipeline.git.worktree_path or task.git.worktree_path
 
 
 def set_task_worktree_path(task: TaskRecord, worktree_path: str | None) -> None:
-    task.runtime.git.worktree_path = worktree_path
+    task.runtime.pipeline.git.worktree_path = worktree_path
     task.git.worktree_path = None
 
 
@@ -154,7 +154,7 @@ def clear_task_worktree_path(task: TaskRecord) -> None:
 
 
 def _normalize_task_worktree_state(task: TaskRecord) -> None:
-    if task.runtime.git.worktree_path:
+    if task.runtime.pipeline.git.worktree_path:
         task.git.worktree_path = None
         return
     if task.git.worktree_path:
@@ -163,16 +163,16 @@ def _normalize_task_worktree_state(task: TaskRecord) -> None:
 
 def _normalize_task_commit_sha_state(task: TaskRecord) -> None:
     if task.git.commit_sha:
-        task.runtime.git.commit_sha = task.git.commit_sha
+        task.runtime.pipeline.git.commit_sha = task.git.commit_sha
         return
-    if task.runtime.git.commit_sha:
-        task.git.commit_sha = task.runtime.git.commit_sha
+    if task.runtime.pipeline.git.commit_sha:
+        task.git.commit_sha = task.runtime.pipeline.git.commit_sha
 
 
 def _normalize_task_flag_reason(task: TaskRecord) -> None:
     canonicalize_task_terminal_state(task)
     if task.status == "flagged":
-        task.flag_reason = task.flag_reason or task.runtime.last_outcome.reason_code or "unknown"
+        task.flag_reason = task.flag_reason or task.runtime.pipeline.last_outcome.reason_code or "unknown"
         return
     task.flag_reason = None
 

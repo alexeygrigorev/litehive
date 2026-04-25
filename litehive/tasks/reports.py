@@ -74,10 +74,10 @@ def collect_recovery_evidence(
     monitoring_path = engine_monitoring_file(root)
     monitoring = load_engine_monitoring(root)
     engine_name = (
-        task.runtime.active_subagent.engine
-        if task.runtime.active_subagent is not None
-        else task.runtime.last_subagent.engine
-        if task.runtime.last_subagent is not None
+        task.runtime.execution.active_subagent.engine
+        if task.runtime.execution.active_subagent is not None
+        else task.runtime.execution.last_subagent.engine
+        if task.runtime.execution.last_subagent is not None
         else None
     )
     engine_record = monitoring.engines.get(engine_name or "")
@@ -100,8 +100,8 @@ def collect_recovery_evidence(
             kind="runtime",
             label="runtime state",
             summary=(
-                f"execution_status={task.runtime.execution_status} current_stage={task.runtime.current_stage.stage} "
-                f"last_outcome={task.runtime.last_outcome.kind or 'none'}"
+                f"execution_status={task.runtime.pipeline.execution_status} current_stage={task.runtime.pipeline.current_stage.stage} "
+                f"last_outcome={task.runtime.pipeline.last_outcome.kind or 'none'}"
             ),
         )
     )
@@ -196,7 +196,7 @@ def collect_recovery_evidence(
     )
 
     if is_git_repo(root):
-        worktree_path = resolve_recorded_worktree_path(root, task.runtime.git.worktree_path or task.git.worktree_path)
+        worktree_path = resolve_recorded_worktree_path(root, task.runtime.pipeline.git.worktree_path or task.git.worktree_path)
         worktree_rel = get_task_worktree_path(task)
         try:
             root_status = status_porcelain(root)

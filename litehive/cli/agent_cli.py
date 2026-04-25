@@ -62,7 +62,7 @@ def _resolve_report_stage(*, explicit_stage: str | None, task, pipeline_stage: s
         return env_stage
     if pipeline_stage:
         return pipeline_stage
-    runtime_stage = task.runtime.current_stage.stage
+    runtime_stage = task.runtime.pipeline.current_stage.stage
     if runtime_stage:
         return runtime_stage
     return task.pipeline_status

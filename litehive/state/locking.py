@@ -103,7 +103,7 @@ def runner_status_needs_reconciliation(root: Path) -> bool:
     state = load_state(root)
     if state.active_task_id is not None:
         return True
-    return any(task.runtime.execution_status == "running" for task in list_tasks(root, strict=False))
+    return any(task.runtime.pipeline.execution_status == "running" for task in list_tasks(root, strict=False))
 
 
 def clear_runner_lock_metadata(root: Path) -> None:
@@ -225,9 +225,9 @@ def runner_pid_is_alive(pid: object) -> bool:
 
 def subagent_process_is_stale(task: "TaskRecord") -> bool:
     """Return True if the task has a recorded subagent PID that is no longer alive."""
-    if task.runtime.execution_status != "running":
+    if task.runtime.pipeline.execution_status != "running":
         return False
-    active = task.runtime.active_subagent
+    active = task.runtime.execution.active_subagent
     if active is None or active.pid is None:
         return False
     return not runner_pid_is_alive(active.pid)
@@ -384,13 +384,13 @@ def ensure_future_task_mutation_allowed(
             marker_set == {"workspace.active_task_id"}
             and task is not None
             and not is_task_eligible_for_execution(task)
-            and task.runtime.execution_status != "running"
+            and task.runtime.pipeline.execution_status != "running"
         ):
             continue
         if (
             marker_set == {"task.status=in_progress"}
             and task is not None
-            and task.runtime.execution_status != "running"
+            and task.runtime.pipeline.execution_status != "running"
         ):
             continue
         conflicts.append(f"{task_id} ({', '.join(markers[task_id])})")

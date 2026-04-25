@@ -7,6 +7,8 @@ from pydantic import ValidationError
 
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
+from litehive.domain.common import OutcomeKind, OutcomeReasonCode
+from litehive.domain.runtime import RuntimeInterruptionState, RuntimeSubagentState, TaskRuntime
 from litehive.domain.task import TaskRecord
 from litehive.state.records import (
     TaskStateMissingError,
@@ -27,6 +29,51 @@ def _task_intent_payload(root: Path, task_id: str) -> dict:
     return json.loads(row["payload"])
 
 
+def _task_state_payload(root: Path, task_id: str) -> dict:
+    with connect_workspace_db(root) as connection:
+        row = connection.execute("SELECT payload FROM task_state WHERE task_id = ?", (task_id,)).fetchone()
+    assert row is not None
+    return json.loads(row["payload"])
+
+
+def test_task_runtime_normalizes_legacy_flat_payload() -> None:
+    runtime = TaskRuntime.model_validate(
+        {
+            "execution_status": "running",
+            "retry_count": 2,
+            "active_subagent": {
+                "id": "sa-1",
+                "role": "swe",
+                "engine": "codex",
+                "status": "running",
+                "path": "subagents/sa-1",
+                "started_at": "2026-04-20T10:00:00+00:00",
+                "updated_at": "2026-04-20T10:00:01+00:00",
+            },
+            "interruption": {
+                "source": "runner",
+                "reason": "stale state",
+                "resume_stage": "implementing",
+            },
+            "last_outcome": {
+                "kind": "interrupted",
+                "stage": "implementing",
+                "reason_code": "execution_interrupted",
+                "reason": "runner stopped",
+            },
+        }
+    )
+
+    assert runtime.pipeline.execution_status == "running"
+    assert runtime.pipeline.retry_count == 2
+    assert runtime.pipeline.last_outcome.reason_code == "execution_interrupted"
+    assert runtime.execution.active_subagent is not None
+    assert runtime.execution.active_subagent.id == "sa-1"
+    assert runtime.execution.interruption is not None
+    assert runtime.execution.interruption.resume_stage == "implementing"
+    assert set(runtime.model_dump(mode="json")) == {"pipeline", "execution"}
+
+
 def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="DB runtime")
@@ -39,6 +86,56 @@ def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
     assert loaded is not None
     assert loaded.runtime.execution_status == "running"
     assert loaded.runtime.current_stage.stage == "implementing"
+
+
+def test_task_runtime_persists_pipeline_and_execution_slices(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Split runtime")
+    task.runtime.pipeline.execution_status = "running"
+    task.runtime.pipeline.retry_count = 2
+    task.runtime.pipeline.retry_limit = 4
+    task.runtime.pipeline.current_stage.stage = "implementing"
+    task.runtime.pipeline.last_outcome.kind = OutcomeKind.INTERRUPTED
+    task.runtime.pipeline.last_outcome.stage = "implementing"
+    task.runtime.pipeline.last_outcome.reason_code = OutcomeReasonCode.EXECUTION_INTERRUPTED
+    task.runtime.pipeline.last_outcome.reason = "runner stopped"
+    task.runtime.execution.active_subagent = RuntimeSubagentState(
+        id="sa-1",
+        role="swe",
+        engine="codex",
+        status="running",
+        path="subagents/sa-1",
+        started_at="2026-04-20T10:00:00+00:00",
+        updated_at="2026-04-20T10:00:01+00:00",
+    )
+    task.runtime.execution.interruption = RuntimeInterruptionState(
+        source="runner",
+        reason="stale state",
+        resume_stage="implementing",
+    )
+    save_task_runtime(tmp_path, task)
+
+    runtime_payload = _task_state_payload(tmp_path, task.id)["runtime"]
+
+    assert set(runtime_payload) == {"pipeline", "execution"}
+    assert "execution_status" not in runtime_payload
+    assert "current_stage" not in runtime_payload
+    assert "active_subagent" not in runtime_payload
+    assert runtime_payload["pipeline"]["execution_status"] == "running"
+    assert runtime_payload["pipeline"]["retry_count"] == 2
+    assert runtime_payload["pipeline"]["last_outcome"]["reason_code"] == "execution_interrupted"
+    assert runtime_payload["execution"]["active_subagent"]["id"] == "sa-1"
+    assert runtime_payload["execution"]["interruption"]["resume_stage"] == "implementing"
+
+    loaded = get_task(tmp_path, task.id)
+    assert loaded is not None
+    assert loaded.runtime.pipeline.execution_status == "running"
+    assert loaded.runtime.pipeline.retry_count == 2
+    assert loaded.runtime.pipeline.last_outcome.reason == "runner stopped"
+    assert loaded.runtime.execution.active_subagent is not None
+    assert loaded.runtime.execution.active_subagent.id == "sa-1"
+    assert loaded.runtime.execution.interruption is not None
+    assert loaded.runtime.execution.interruption.resume_stage == "implementing"
 
 
 def test_get_task_preserves_commit_sha_when_runtime_copy_is_missing(tmp_path: Path) -> None:

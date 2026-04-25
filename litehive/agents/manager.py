@@ -155,7 +155,7 @@ class SubagentManager(SessionMixin):
 
     @staticmethod
     def _agent_stage_for_task(task: TaskRecord, role: str | None = None) -> str:
-        current_stage = task.runtime.current_stage.stage
+        current_stage = task.runtime.pipeline.current_stage.stage
         if current_stage:
             return current_stage
         pipeline_stage = str(task.pipeline_status) if task.pipeline_status else ""

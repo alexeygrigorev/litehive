@@ -130,7 +130,7 @@ def estimate_task_execution(root: Path, task: TaskRecord) -> ExecutionEstimate:
     avg_duration = sum(durations) / len(durations)
     velocity = 3600.0 / avg_duration if avg_duration > 0 else 0.0
 
-    current_step = task.runtime.current_stage.stage or task.pipeline_status or _PIPELINE_STAGES[0]
+    current_step = task.runtime.pipeline.current_stage.stage or task.pipeline_status or _PIPELINE_STAGES[0]
     try:
         current_idx = _PIPELINE_STAGES.index(current_step)
     except ValueError:
@@ -158,24 +158,24 @@ def _collect_report_durations(root: Path) -> list[float]:
 
 def _task_engine_label(task: TaskRecord, default_engine: str) -> str:
     return (
-        task.runtime.active_subagent.engine
-        if task.runtime.active_subagent is not None
-        else task.runtime.last_subagent.engine
-        if task.runtime.last_subagent is not None
+        task.runtime.execution.active_subagent.engine
+        if task.runtime.execution.active_subagent is not None
+        else task.runtime.execution.last_subagent.engine
+        if task.runtime.execution.last_subagent is not None
         else default_engine
     )
 
 
 def _task_stage_label(task: TaskRecord) -> str:
-    return task.runtime.current_stage.stage or task.pipeline_status or "-"
+    return task.runtime.pipeline.current_stage.stage or task.pipeline_status or "-"
 
 
 def _task_last_verdict_label(task: TaskRecord) -> str:
-    return task.runtime.last_stage.verdict or task.runtime.last_outcome.kind or "-"
+    return task.runtime.pipeline.last_stage.verdict or task.runtime.pipeline.last_outcome.kind or "-"
 
 
 def _task_last_summary_label(task: TaskRecord) -> str:
-    return task.runtime.last_stage.summary or task.runtime.last_outcome.reason or task.flag_reason or task.close_reason or "-"
+    return task.runtime.pipeline.last_stage.summary or task.runtime.pipeline.last_outcome.reason or task.flag_reason or task.close_reason or "-"
 
 
 def _latest_stage_failure_classification(root: Path | None, task: TaskRecord) -> str | None:
@@ -201,7 +201,7 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
         lines.append(f"  depends_on={', '.join(task.depends_on)}")
     if task.model:
         lines.append(f"  engine=workspace-default model={task.model or 'default'}")
-    _wt_path = task.runtime.git.worktree_path or task.git.worktree_path
+    _wt_path = task.runtime.pipeline.git.worktree_path or task.git.worktree_path
     lines.append(f"  auto_commit={task.git.auto_commit}")
     if task.git.commit_message:
         lines.append(f"  commit_message={task.git.commit_message}")
@@ -212,71 +212,71 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
 
     runtime = task.runtime
     configured_limit = retry_policy if retry_policy is not None else "default"
-    lines.append(f"  retry_policy=configured:{configured_limit} effective:{runtime.retry_limit}")
+    lines.append(f"  retry_policy=configured:{configured_limit} effective:{runtime.pipeline.retry_limit}")
     if (
-        runtime.execution_status != "idle"
-        or runtime.current_stage.stage
-        or runtime.current_stage.status != "idle"
-        or runtime.last_stage.stage
+        runtime.pipeline.execution_status != "idle"
+        or runtime.pipeline.current_stage.stage
+        or runtime.pipeline.current_stage.status != "idle"
+        or runtime.pipeline.last_stage.stage
     ):
-        parts = [f"run={runtime.execution_status}"]
-        parts.append(f"retries={runtime.retry_count}/{runtime.retry_limit}")
-        if runtime.run_started_at:
-            parts.append(f"started={runtime.run_started_at}")
-        if runtime.current_stage.status != "idle":
-            parts.append(f"stage_status={runtime.current_stage.status}")
-        if runtime.current_stage.stage:
-            stage_duration = _duration_label(runtime.current_stage.started_at, runtime.current_stage.duration_seconds)
-            parts.append(f"stage={runtime.current_stage.stage}")
+        parts = [f"run={runtime.pipeline.execution_status}"]
+        parts.append(f"retries={runtime.pipeline.retry_count}/{runtime.pipeline.retry_limit}")
+        if runtime.pipeline.run_started_at:
+            parts.append(f"started={runtime.pipeline.run_started_at}")
+        if runtime.pipeline.current_stage.status != "idle":
+            parts.append(f"stage_status={runtime.pipeline.current_stage.status}")
+        if runtime.pipeline.current_stage.stage:
+            stage_duration = _duration_label(runtime.pipeline.current_stage.started_at, runtime.pipeline.current_stage.duration_seconds)
+            parts.append(f"stage={runtime.pipeline.current_stage.stage}")
             parts.append(f"stage_duration={stage_duration}")
-        elif runtime.last_stage.stage:
-            parts.append(f"last_stage={runtime.last_stage.stage}")
-            parts.append(f"last_stage_duration={_seconds_label(runtime.last_stage.duration_seconds)}")
+        elif runtime.pipeline.last_stage.stage:
+            parts.append(f"last_stage={runtime.pipeline.last_stage.stage}")
+            parts.append(f"last_stage_duration={_seconds_label(runtime.pipeline.last_stage.duration_seconds)}")
         lines.append("  " + " ".join(parts))
 
-    if runtime.active_subagent is not None:
-        subagent_duration = _duration_label(runtime.active_subagent.started_at, 0)
-        pid_label = _pid_label(runtime.active_subagent.pid)
+    if runtime.execution.active_subagent is not None:
+        subagent_duration = _duration_label(runtime.execution.active_subagent.started_at, 0)
+        pid_label = _pid_label(runtime.execution.active_subagent.pid)
         sandbox_label = _sandbox_label(
-            runtime.active_subagent.sandboxed,
-            runtime.active_subagent.sandbox_summary,
+            runtime.execution.active_subagent.sandboxed,
+            runtime.execution.active_subagent.sandbox_summary,
         )
         lines.append(
             "  "
             + (
-                f"subagent={runtime.active_subagent.id} {runtime.active_subagent.role}/{runtime.active_subagent.engine} "
-                f"{runtime.active_subagent.status} {pid_label} duration={subagent_duration} {sandbox_label}"
+                f"subagent={runtime.execution.active_subagent.id} {runtime.execution.active_subagent.role}/{runtime.execution.active_subagent.engine} "
+                f"{runtime.execution.active_subagent.status} {pid_label} duration={subagent_duration} {sandbox_label}"
             )
         )
-    elif runtime.last_subagent is not None:
-        snippet = runtime.last_subagent.transcript_snippet or "-"
-        pid_label = _pid_label(runtime.last_subagent.pid)
+    elif runtime.execution.last_subagent is not None:
+        snippet = runtime.execution.last_subagent.transcript_snippet or "-"
+        pid_label = _pid_label(runtime.execution.last_subagent.pid)
         sandbox_label = _sandbox_label(
-            runtime.last_subagent.sandboxed,
-            runtime.last_subagent.sandbox_summary,
+            runtime.execution.last_subagent.sandboxed,
+            runtime.execution.last_subagent.sandbox_summary,
         )
         lines.append(
             "  "
             + (
-                f"last_subagent={runtime.last_subagent.id} {runtime.last_subagent.role}/{runtime.last_subagent.engine} "
-                f"{runtime.last_subagent.status} {pid_label} {sandbox_label} snippet={snippet}"
+                f"last_subagent={runtime.execution.last_subagent.id} {runtime.execution.last_subagent.role}/{runtime.execution.last_subagent.engine} "
+                f"{runtime.execution.last_subagent.status} {pid_label} {sandbox_label} snippet={snippet}"
             )
         )
-        if runtime.last_subagent.interruption_reason:
-            lines.append(f"  last_subagent_interruption_reason={runtime.last_subagent.interruption_reason}")
+        if runtime.execution.last_subagent.interruption_reason:
+            lines.append(f"  last_subagent_interruption_reason={runtime.execution.last_subagent.interruption_reason}")
 
-    if runtime.last_engine_switch is not None:
+    if runtime.execution.last_engine_switch is not None:
         lines.append(
             "  "
             + (
-                f"engine_switch={runtime.last_engine_switch.stage} "
-                f"{runtime.last_engine_switch.from_engine}->{runtime.last_engine_switch.to_engine} "
-                f"reason={runtime.last_engine_switch.reason}"
+                f"engine_switch={runtime.execution.last_engine_switch.stage} "
+                f"{runtime.execution.last_engine_switch.from_engine}->{runtime.execution.last_engine_switch.to_engine} "
+                f"reason={runtime.execution.last_engine_switch.reason}"
             )
         )
 
-    if runtime.interruption is not None:
-        interruption = runtime.interruption
+    if runtime.execution.interruption is not None:
+        interruption = runtime.execution.interruption
         lines.append(
             "  "
             + (
@@ -288,8 +288,8 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
             )
         )
 
-    if runtime.continuation_handoff is not None:
-        handoff = runtime.continuation_handoff
+    if runtime.execution.continuation_handoff is not None:
+        handoff = runtime.execution.continuation_handoff
         continuation_parts = [
             f"continuation={handoff.kind}",
             f"stage={handoff.stage}",
@@ -305,45 +305,45 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
             continuation_parts.append(f"resume_id={handoff.continuation.resume_id}")
         lines.append("  " + " ".join(continuation_parts))
 
-    if runtime.last_stage.stage:
-        summary = runtime.last_stage.summary or "-"
+    if runtime.pipeline.last_stage.stage:
+        summary = runtime.pipeline.last_stage.summary or "-"
         lines.append(
             "  "
             + (
-                f"last_report={runtime.last_stage.stage}/{runtime.last_stage.verdict} "
-                f"duration={_seconds_label(runtime.last_stage.duration_seconds)} summary={summary}"
+                f"last_report={runtime.pipeline.last_stage.stage}/{runtime.pipeline.last_stage.verdict} "
+                f"duration={_seconds_label(runtime.pipeline.last_stage.duration_seconds)} summary={summary}"
             )
         )
     report_classification = _latest_stage_failure_classification(root, task)
     if report_classification is not None:
         lines.append(f"  last_report_failure_classification={report_classification}")
 
-    if runtime.last_outcome.kind is not None:
-        stage = runtime.last_outcome.stage or "-"
-        reason_code = runtime.last_outcome.reason_code or "-"
-        reason = runtime.last_outcome.reason or "-"
-        recorded_at = runtime.last_outcome.recorded_at or "-"
-        follow_up_task_id = runtime.last_outcome.follow_up_task_id or "-"
-        outcome_label = "close_reason" if runtime.last_outcome.kind in {"closed", "done"} else "reason_code"
+    if runtime.pipeline.last_outcome.kind is not None:
+        stage = runtime.pipeline.last_outcome.stage or "-"
+        reason_code = runtime.pipeline.last_outcome.reason_code or "-"
+        reason = runtime.pipeline.last_outcome.reason or "-"
+        recorded_at = runtime.pipeline.last_outcome.recorded_at or "-"
+        follow_up_task_id = runtime.pipeline.last_outcome.follow_up_task_id or "-"
+        outcome_label = "close_reason" if runtime.pipeline.last_outcome.kind in {"closed", "done"} else "reason_code"
         lines.append(
             "  "
             + (
-                f"outcome={runtime.last_outcome.kind} stage={stage} "
+                f"outcome={runtime.pipeline.last_outcome.kind} stage={stage} "
                 f"{outcome_label}={reason_code} recorded_at={recorded_at} "
                 f"follow_up_task={follow_up_task_id} "
-                f"retry_state={runtime.last_outcome.retry_count}/{runtime.last_outcome.retry_limit} "
+                f"retry_state={runtime.pipeline.last_outcome.retry_count}/{runtime.pipeline.last_outcome.retry_limit} "
                 f"reason={reason}"
             )
         )
-        if runtime.last_outcome.failure_classification is not None:
-            phase = runtime.last_outcome.failure_diagnostics.get("phase", "-")
+        if runtime.pipeline.last_outcome.failure_classification is not None:
+            phase = runtime.pipeline.last_outcome.failure_diagnostics.get("phase", "-")
             lines.append(
-                "  " + (f"failure_classification={runtime.last_outcome.failure_classification} failure_phase={phase}")
+                "  " + (f"failure_classification={runtime.pipeline.last_outcome.failure_classification} failure_phase={phase}")
             )
 
-    if runtime.failed_run_history:
+    if runtime.pipeline.failed_run_history:
         lines.append("  failed_run_history:")
-        for key, record in sorted(runtime.failed_run_history.items()):
+        for key, record in sorted(runtime.pipeline.failed_run_history.items()):
             lines.append(
                 "  "
                 + (
@@ -354,7 +354,7 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
             )
 
     if task.status == "flagged" and task.flag_reason == "merge_failed":
-        wt_path = task.runtime.git.worktree_path or task.git.worktree_path
+        wt_path = task.runtime.pipeline.git.worktree_path or task.git.worktree_path
         if wt_path:
             lines.append(f"  unmerged_worktree={wt_path}")
     if task.git.commit_sha:
@@ -417,12 +417,12 @@ def render_active_task_section(task: TaskRecord | None, default_engine: str) -> 
     stage = _task_stage_label(task)
 
     # Task elapsed duration (since run started)
-    task_duration = _duration_label(task.runtime.run_started_at, 0)
+    task_duration = _duration_label(task.runtime.pipeline.run_started_at, 0)
 
     # Stage elapsed duration
     stage_duration = _duration_label(
-        task.runtime.current_stage.started_at,
-        task.runtime.current_stage.duration_seconds,
+        task.runtime.pipeline.current_stage.started_at,
+        task.runtime.pipeline.current_stage.duration_seconds,
     )
 
     lines.append(f"  {task.id} {stage} with {engine}, running for {task_duration}")
@@ -513,8 +513,8 @@ def render_active_tasks_section(
     for task in tasks:
         engine = _task_engine_label(task, default_engine)
         stage = _task_stage_label(task)
-        task_duration = _duration_label(task.runtime.run_started_at, 0)
-        worktree = task.runtime.git.worktree_path or task.git.worktree_path or "-"
+        task_duration = _duration_label(task.runtime.pipeline.run_started_at, 0)
+        worktree = task.runtime.pipeline.git.worktree_path or task.git.worktree_path or "-"
 
         lines.append(f"  {task.id} {stage} with {engine}, running for {task_duration}")
         lines.append(f"    title: {task.title}")
@@ -538,7 +538,7 @@ def render_last_completed_section(task: TaskRecord | None) -> list[str]:
         lines.append("  (none)")
         return lines
 
-    outcome = task.runtime.last_outcome
+    outcome = task.runtime.pipeline.last_outcome
     verdict = outcome.kind or _task_last_verdict_label(task)
     when = outcome.recorded_at or task.updated_at or "-"
     lines.append(f"  {task.id} {task.title} verdict={verdict} at {when}")

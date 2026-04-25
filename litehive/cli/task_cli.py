@@ -38,7 +38,7 @@ def _display_flag_reason(task) -> str:
 def _display_close_reason(task) -> str:
     if task.status not in {"closed", "done"}:
         return "-"
-    return task.close_reason or task.runtime.last_outcome.reason_code or "unknown"
+    return task.close_reason or task.runtime.pipeline.last_outcome.reason_code or "unknown"
 
 
 def _show_dependency_label(root, task) -> str:
@@ -358,11 +358,12 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
             print(f"  - {step}")
     else:
         print("plan: -")
-    rt = task.runtime
-    print(f"execution_status: {rt.execution_status or '-'}")
-    print(f"current_stage: {rt.current_stage.stage if rt.current_stage and rt.current_stage.stage else '-'}")
-    print(f"retry_count: {rt.retry_count}")
-    print(f"last_outcome: {rt.last_outcome or '-'}")
+    pipeline_runtime = task.runtime.pipeline
+    print(f"execution_status: {pipeline_runtime.execution_status or '-'}")
+    current_stage = pipeline_runtime.current_stage
+    print(f"current_stage: {current_stage.stage if current_stage and current_stage.stage else '-'}")
+    print(f"retry_count: {pipeline_runtime.retry_count}")
+    print(f"last_outcome: {pipeline_runtime.last_outcome or '-'}")
     return 0
 
 
@@ -456,8 +457,8 @@ def close(
     print(f"task: {task.id} {task.title}")
     print(f"status: {task.status}")
     print(f"close_reason: {_display_close_reason(task)}")
-    print(f"reason: {task.runtime.last_outcome.reason}")
-    print(f"follow_up_task: {task.runtime.last_outcome.follow_up_task_id or '-'}")
+    print(f"reason: {task.runtime.pipeline.last_outcome.reason}")
+    print(f"follow_up_task: {task.runtime.pipeline.last_outcome.follow_up_task_id or '-'}")
     print(f"pipeline_stage: {task.pipeline_status}")
     return 0
 

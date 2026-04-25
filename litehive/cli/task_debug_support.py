@@ -50,10 +50,10 @@ def debug_latest(root: Path, task):
 
     # Prefer task runtime state loaded from SQLite; fall back to session artifacts when needed.
     runtime_sa = None
-    if task.runtime.last_subagent and task.runtime.last_subagent.id == ref.id:
-        runtime_sa = task.runtime.last_subagent
-    elif task.runtime.active_subagent and task.runtime.active_subagent.id == ref.id:
-        runtime_sa = task.runtime.active_subagent
+    if task.runtime.execution.last_subagent and task.runtime.execution.last_subagent.id == ref.id:
+        runtime_sa = task.runtime.execution.last_subagent
+    elif task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id:
+        runtime_sa = task.runtime.execution.active_subagent
 
     if runtime_sa is not None:
         print(f"exit_code: {runtime_sa.exit_code if runtime_sa.exit_code is not None else '-'}")

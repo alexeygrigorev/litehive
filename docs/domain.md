@@ -89,6 +89,6 @@ Each domain module contains comprehensive docstrings for all models, including:
 **Value Objects**: `TaskRetryPolicy`, `FailureDiagnostics` - descriptive data structures  
 **Enums**: `TaskStatus`, `PipelineState`, `StageVerdict` - normalized classification  
 **Services**: `TaskService`, `PipelineRunner` - domain behavior coordination  
-**Runtime State**: `TaskRuntime`, `PipelineRuntime` - mutable execution tracking
+**Runtime State**: `TaskRuntime`, `PipelineRuntime`, `ExecutionRuntime` - mutable execution tracking
 
 For implementation details, usage patterns, and field-level documentation, consult the docstrings in the corresponding domain module.

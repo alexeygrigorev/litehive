@@ -170,15 +170,15 @@ def reset_task_for_recovery(
     task.flag_reason = None
     task.pipeline_status = pipeline_status
     clear_task_run_activity(task, execution_status="idle", updated_at=now, clear_interruption=True)
-    task.runtime.retry_count = 0
-    task.runtime.retry_limit = 0
+    task.runtime.pipeline.retry_count = 0
+    task.runtime.pipeline.retry_limit = 0
     if not preserve_continuation_handoff:
-        task.runtime.continuation_handoff = None
-    task.runtime.current_stage = idle_stage_state(updated_at=now, stage=pipeline_status)
+        task.runtime.execution.continuation_handoff = None
+    task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage=pipeline_status)
     if clear_last_outcome:
-        task.runtime.last_outcome = TaskOutcomeState()
-    elif task.runtime.last_outcome.kind == "interrupted":
-        task.runtime.last_outcome.stage = pipeline_status
+        task.runtime.pipeline.last_outcome = TaskOutcomeState()
+    elif task.runtime.pipeline.last_outcome.kind == "interrupted":
+        task.runtime.pipeline.last_outcome.stage = pipeline_status
 
 
 def enqueue_recovered_task(state: WorkspaceState, task_id: str) -> None:
@@ -205,9 +205,9 @@ def _normalize_resumable_stage_name(stage: str | None) -> str | None:
 
 
 def resumable_queue_stage(task: TaskRecord) -> str | None:
-    interruption = task.runtime.interruption
-    handoff = task.runtime.continuation_handoff
-    current_stage = task.runtime.current_stage
+    interruption = task.runtime.execution.interruption
+    handoff = task.runtime.execution.continuation_handoff
+    current_stage = task.runtime.pipeline.current_stage
     candidates = [
         task.pipeline_status,
         None if interruption is None else interruption.resume_stage,
@@ -232,9 +232,9 @@ def canonicalize_resumable_queue_task(task: TaskRecord, *, stage: str | None = N
     task.close_reason = None
     task.flag_reason = None
     task.pipeline_status = target_stage
-    task.runtime.current_stage = idle_stage_state(updated_at=now, stage=target_stage)
-    if task.runtime.last_outcome.kind == "interrupted":
-        task.runtime.last_outcome.stage = target_stage
+    task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage=target_stage)
+    if task.runtime.pipeline.last_outcome.kind == "interrupted":
+        task.runtime.pipeline.last_outcome.stage = target_stage
     return target_stage
 
 
@@ -271,11 +271,11 @@ def _should_requeue_commit_stage_task(task: TaskRecord) -> bool:
 
 
 def _has_terminal_execution_status(task: TaskRecord) -> bool:
-    return str(task.runtime.execution_status) in _TERMINAL_EXECUTION_STATUSES
+    return str(task.runtime.pipeline.execution_status) in _TERMINAL_EXECUTION_STATUSES
 
 
 def _has_terminal_outcome_kind(task: TaskRecord) -> bool:
-    kind = task.runtime.last_outcome.kind
+    kind = task.runtime.pipeline.last_outcome.kind
     return kind is not None and str(kind) in _TERMINAL_OUTCOME_KINDS
 
 
@@ -285,21 +285,21 @@ def _live_active_pipeline_stage(state: WorkspaceState, tasks_by_id: dict[str, Ta
     active_task = tasks_by_id.get(state.active_task_id)
     if active_task is None:
         return None
-    current_stage = active_task.runtime.current_stage
-    if str(active_task.runtime.execution_status) == "running" or current_stage.status == "running":
+    current_stage = active_task.runtime.pipeline.current_stage
+    if str(active_task.runtime.pipeline.execution_status) == "running" or current_stage.status == "running":
         return str(current_stage.stage or active_task.pipeline_status)
     return None
 
 
 def task_has_resume_marker(task: TaskRecord) -> bool:
     stage = str(task.pipeline_status)
-    current_stage = task.runtime.current_stage
+    current_stage = task.runtime.pipeline.current_stage
     if current_stage.stage == stage and current_stage.status in _TRUSTED_IDLE_STAGE_STATUSES:
         return True
-    interruption = task.runtime.interruption
+    interruption = task.runtime.execution.interruption
     if interruption is not None and (interruption.resume_stage == stage or interruption.pipeline_status == stage):
         return True
-    handoff = task.runtime.continuation_handoff
+    handoff = task.runtime.execution.continuation_handoff
     if handoff is not None and handoff.stage == stage:
         return True
     return False
@@ -323,10 +323,10 @@ def _normalize_stale_pipeline_statuses(
             continue
         now = utcnow()
         task.pipeline_status = "backlog"
-        task.runtime.current_stage = idle_stage_state(updated_at=now, stage="backlog")
-        task.runtime.updated_at = now
-        if task.runtime.last_outcome.kind == "interrupted":
-            task.runtime.last_outcome.stage = "backlog"
+        task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage="backlog")
+        task.runtime.pipeline.updated_at = now
+        if task.runtime.pipeline.last_outcome.kind == "interrupted":
+            task.runtime.pipeline.last_outcome.stage = "backlog"
         mutated.append(task)
     return mutated
 
@@ -455,7 +455,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                     origin_stage=next_task.pipeline_status,
                     summary=(f"Recovered flagged task back to `{recovery_stage}` so it can run again."),
                     runnable_state="runnable",
-                    failure_classification=next_task.runtime.last_outcome.reason_code,
+                    failure_classification=next_task.runtime.pipeline.last_outcome.reason_code,
                     actions=[
                         RecoveryAction(
                             action="requeue_stage",
@@ -787,7 +787,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
             )
             return state
 
-        if task is not None and is_task_eligible_for_execution(task) and task.runtime.execution_status != "running":
+        if task is not None and is_task_eligible_for_execution(task) and task.runtime.pipeline.execution_status != "running":
             task.status = "queued"
             enqueue_recovered_task(state, task.id)
             state.active_task_id = None
@@ -834,14 +834,14 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
     tasks_by_id = {task.id: task for task in tasks}
     active_task = None if current_state.active_task_id is None else tasks_by_id.get(current_state.active_task_id)
     if active_task is not None and (
-        is_task_eligible_for_execution(active_task) or active_task.runtime.execution_status == "running"
+        is_task_eligible_for_execution(active_task) or active_task.runtime.pipeline.execution_status == "running"
     ):
         markers.setdefault(current_state.active_task_id, []).append("workspace.active_task_id")
     for task in tasks:
         if task.status == "in_progress" and task.pipeline_status != "done" and is_task_eligible_for_execution(task):
             markers.setdefault(task.id, []).append("task.status=in_progress")
-        if task.runtime.execution_status == "running":
-            markers.setdefault(task.id, []).append("runtime.execution_status=running")
+        if task.runtime.pipeline.execution_status == "running":
+            markers.setdefault(task.id, []).append("runtime.pipeline.execution_status=running")
     return markers
 
 

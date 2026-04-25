@@ -25,23 +25,23 @@ def task_dependencies_label(task_id, dependencies):
 
 
 def task_interruption_label(task):
-    if task.status != "interrupted" or task.runtime.current_stage.status != "interrupted":
+    if task.status != "interrupted" or task.runtime.pipeline.current_stage.status != "interrupted":
         return ""
-    interruption = task.runtime.interruption
+    interruption = task.runtime.execution.interruption
     stage = (
         interruption.resume_stage
         if interruption is not None and interruption.resume_stage is not None
-        else task.runtime.current_stage.stage or task.pipeline_status
+        else task.runtime.pipeline.current_stage.stage or task.pipeline_status
     )
     label = f" resumable_from={stage}"
     if interruption is not None:
         label += f" interruption={interruption.source}"
-    if task.runtime.last_outcome.reason_code:
-        label += f" reason_code={task.runtime.last_outcome.reason_code}"
-    if task.runtime.last_subagent is not None:
+    if task.runtime.pipeline.last_outcome.reason_code:
+        label += f" reason_code={task.runtime.pipeline.last_outcome.reason_code}"
+    if task.runtime.execution.last_subagent is not None:
         label += (
             " last_subagent="
-            f"{task.runtime.last_subagent.id}:{task.runtime.last_subagent.role}/{task.runtime.last_subagent.engine}"
+            f"{task.runtime.execution.last_subagent.id}:{task.runtime.execution.last_subagent.role}/{task.runtime.execution.last_subagent.engine}"
         )
     if interruption is not None and interruption.reason:
         label += f" reason={interruption.reason}"

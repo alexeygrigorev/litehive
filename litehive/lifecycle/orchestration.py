@@ -94,7 +94,7 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
     def _fresh_state() -> TaskState:
         state = TaskState(
             **fresh_state_kwargs,
-            failed_run_history=_state_failed_run_history_from_runtime(task_record.runtime.failed_run_history),
+            failed_run_history=_state_failed_run_history_from_runtime(task_record.runtime.pipeline.failed_run_history),
             limits=persistence.limits,
         )
         persistence.save(state)
@@ -124,8 +124,8 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
 
 def _entry_stage_for_task(task_record: TaskRecord) -> PipelineState | None:
     stage = (
-        task_record.runtime.current_stage.stage
-        or (None if task_record.runtime.interruption is None else task_record.runtime.interruption.resume_stage)
+        task_record.runtime.pipeline.current_stage.stage
+        or (None if task_record.runtime.execution.interruption is None else task_record.runtime.execution.interruption.resume_stage)
         or task_record.pipeline_status
     )
     if stage in {None, "backlog", "done", "flagged"}:
@@ -136,7 +136,7 @@ def _entry_stage_for_task(task_record: TaskRecord) -> PipelineState | None:
 
 
 def _launch_requires_fresh_pipeline_state(task_record: TaskRecord) -> bool:
-    return _entry_stage_for_task(task_record) is not None and task_record.runtime.execution_status != "running"
+    return _entry_stage_for_task(task_record) is not None and task_record.runtime.pipeline.execution_status != "running"
 
 
 def _stale_launch_state_requires_reset(
@@ -290,20 +290,20 @@ def _merged_runtime_failed_run_history(
 
 def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
     now = utcnow()
-    task_record.runtime.consecutive_same_hook_rejects = state.consecutive_same_hook_rejects
-    task_record.runtime.last_hook_reject_fingerprint = _runtime_hook_reject_fingerprint(state)
-    task_record.runtime.hook_reject_recovery_invoked = state.hook_reject_recovery_invoked
-    task_record.runtime.recovery_history = _merged_runtime_recovery_history(
-        task_record.runtime.recovery_history,
+    task_record.runtime.pipeline.consecutive_same_hook_rejects = state.consecutive_same_hook_rejects
+    task_record.runtime.pipeline.last_hook_reject_fingerprint = _runtime_hook_reject_fingerprint(state)
+    task_record.runtime.pipeline.hook_reject_recovery_invoked = state.hook_reject_recovery_invoked
+    task_record.runtime.pipeline.recovery_history = _merged_runtime_recovery_history(
+        task_record.runtime.pipeline.recovery_history,
         state,
     )
-    task_record.runtime.failed_run_history = _merged_runtime_failed_run_history(
-        task_record.runtime.failed_run_history,
+    task_record.runtime.pipeline.failed_run_history = _merged_runtime_failed_run_history(
+        task_record.runtime.pipeline.failed_run_history,
         state,
     )
     if state.stage in {PipelineState.DONE, PipelineState.FAILED}:
-        task_record.runtime.execution_status = "idle"
-        task_record.runtime.current_stage = task_record.runtime.current_stage.model_copy(
+        task_record.runtime.pipeline.execution_status = "idle"
+        task_record.runtime.pipeline.current_stage = task_record.runtime.pipeline.current_stage.model_copy(
             update={
                 "stage": None,
                 "status": "idle",
@@ -313,10 +313,10 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
             }
         )
         return
-    current_stage = task_record.runtime.current_stage
+    current_stage = task_record.runtime.pipeline.current_stage
     started_at = current_stage.started_at if current_stage.stage == state.stage else now
-    task_record.runtime.execution_status = "running"
-    task_record.runtime.current_stage = current_stage.model_copy(
+    task_record.runtime.pipeline.execution_status = "running"
+    task_record.runtime.pipeline.current_stage = current_stage.model_copy(
         update={
             "stage": state.stage,
             "status": "running",
@@ -409,7 +409,7 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
     if task_record is None:
         return None
     before_task = snapshot_task_audit_state(task_record)
-    before_last_outcome = task_record.runtime.last_outcome.model_copy(deep=True)
+    before_last_outcome = task_record.runtime.pipeline.last_outcome.model_copy(deep=True)
     _sync_runtime_fields(task_record, state)
     journal_message = _sync_terminal_status(task_record, state)
     _sync_recovery_follow_up(workspace_root, task_record, state)
@@ -417,7 +417,7 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
     if (
         before_task.status != task_record.status
         or before_task.pipeline_status != task_record.pipeline_status
-        or before_last_outcome != task_record.runtime.last_outcome
+        or before_last_outcome != task_record.runtime.pipeline.last_outcome
     ):
         action = "status_changed"
         if state.stage == PipelineState.FAILED:
@@ -472,8 +472,8 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
         stage=(trigger.origin_stage if trigger is not None else "recovering"),
         reason_code="stage_exception",
         reason=state.failed_message or latest.message or "Recovery escalated to a follow-up task.",
-        retry_count=task_record.runtime.retry_count,
-        retry_limit=task_record.runtime.retry_limit,
+        retry_count=task_record.runtime.pipeline.retry_count,
+        retry_limit=task_record.runtime.pipeline.retry_limit,
         follow_up_task_id=latest.follow_up_task_id,
         failure_classification=(None if trigger is None else trigger.failure_fingerprint.budget_key()),
         failure_diagnostics={
@@ -589,8 +589,8 @@ def _mark_task_interrupted_on_crash(root: Path, task: TaskRecord, persistence: o
                 state.queue.insert(0, task.id)
             save_state(root, state)
         fresh = get_task(root, task.id)
-        if fresh is not None and fresh.runtime.execution_status == "running":
-            fresh.runtime.execution_status = "interrupted"
+        if fresh is not None and fresh.runtime.pipeline.execution_status == "running":
+            fresh.runtime.pipeline.execution_status = "interrupted"
             fresh.status = "queued"
             save_task(root, fresh)
     except Exception:
@@ -632,7 +632,7 @@ def reconcile_terminal_commit_sha(
 ) -> TaskRecord | None:
     if task is None or final_state.stage != PipelineState.DONE:
         return task
-    if task.git.commit_sha and task.runtime.git.commit_sha:
+    if task.git.commit_sha and task.runtime.pipeline.git.commit_sha:
         return task
 
     commit_result = final_state.commit_result

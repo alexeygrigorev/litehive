@@ -259,13 +259,17 @@ def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatc
         title="Move stage and recovery reports off YAML storage",
         pipeline_status="implementing",
         runtime=SimpleNamespace(
-            active_subagent=None,
-            last_subagent=None,
-            run_started_at="2026-04-16T03:15:43Z",
-            current_stage=SimpleNamespace(
-                stage="implementing",
-                started_at="2026-04-16T03:20:00Z",
-                duration_seconds=0,
+            pipeline=SimpleNamespace(
+                run_started_at="2026-04-16T03:15:43Z",
+                current_stage=SimpleNamespace(
+                    stage="implementing",
+                    started_at="2026-04-16T03:20:00Z",
+                    duration_seconds=0,
+                ),
+            ),
+            execution=SimpleNamespace(
+                active_subagent=None,
+                last_subagent=None,
             ),
         ),
     )

@@ -175,7 +175,7 @@ def stage_prompt(
             ]
         )
 
-    handoff = task.runtime.continuation_handoff
+    handoff = task.runtime.execution.continuation_handoff
     if handoff is not None and handoff.stage == stage:
         lines.extend(["", "Continuation handoff:"])
         lines.append(f"- Kind: {handoff.kind}")

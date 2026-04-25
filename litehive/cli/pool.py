@@ -151,9 +151,9 @@ def _resumable_pool_tasks(root):
                 status=task.status,
                 pipeline_status=task.pipeline_status,
                 slug=task.slug,
-                reason_code=task.runtime.last_outcome.reason_code,
-                reason=task.runtime.last_outcome.reason,
-                follow_up_task_id=task.runtime.last_outcome.follow_up_task_id,
+                reason_code=task.runtime.pipeline.last_outcome.reason_code,
+                reason=task.runtime.pipeline.last_outcome.reason,
+                follow_up_task_id=task.runtime.pipeline.last_outcome.follow_up_task_id,
             )
         )
     return resumable
@@ -172,9 +172,9 @@ def _closed_pool_tasks(root):
                 status=task.status,
                 pipeline_status=task.pipeline_status,
                 slug=task.slug,
-                reason_code=task.runtime.last_outcome.reason_code,
-                reason=task.runtime.last_outcome.reason,
-                follow_up_task_id=task.runtime.last_outcome.follow_up_task_id,
+                reason_code=task.runtime.pipeline.last_outcome.reason_code,
+                reason=task.runtime.pipeline.last_outcome.reason,
+                follow_up_task_id=task.runtime.pipeline.last_outcome.follow_up_task_id,
                 close_reason=task.close_reason,
             )
         )

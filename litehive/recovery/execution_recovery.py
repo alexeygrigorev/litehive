@@ -164,8 +164,8 @@ def flag_task_after_failed_launch_recovery(root: Path, task: TaskRecord, failure
         stage=origin_stage,
         reason_code="stage_exception",
         reason=reason,
-        retry_count=task.runtime.retry_count,
-        retry_limit=task.runtime.retry_limit,
+        retry_count=task.runtime.pipeline.retry_count,
+        retry_limit=task.runtime.pipeline.retry_limit,
         failure_classification=failure.context,
         failure_diagnostics=failure.diagnostics,
     )
@@ -208,8 +208,8 @@ def flag_task_after_failed_launch_recovery(root: Path, task: TaskRecord, failure
 
 
 def mark_interrupted_subagent(root: Path, task: TaskRecord, *, reason: str, stage: str) -> RuntimeSubagentState | None:
-    active = task.runtime.active_subagent
-    existing = task.runtime.last_subagent if task.runtime.last_subagent is not None else None
+    active = task.runtime.execution.active_subagent
+    existing = task.runtime.execution.last_subagent if task.runtime.execution.last_subagent is not None else None
     if active is None and (existing is None or existing.status != "interrupted"):
         return None
     now = utcnow()
@@ -232,8 +232,8 @@ def mark_interrupted_subagent(root: Path, task: TaskRecord, *, reason: str, stag
             "interruption_reason": _interrupted_subagent_reason(task, reason),
         }
     )
-    task.runtime.last_subagent = interrupted
-    task.runtime.active_subagent = None
+    task.runtime.execution.last_subagent = interrupted
+    task.runtime.execution.active_subagent = None
     _write_interrupted_subagent_artifacts(root, task, interrupted, resume_stage=stage)
     return interrupted
 
@@ -251,9 +251,9 @@ def prepare_interrupted_task(
     timestamps = _interruption_timestamps(task, now)
     task.status = "interrupted"
     task.pipeline_status = stage
-    task.runtime.execution_status = "interrupted"
-    task.runtime.run_started_at = None
-    task.runtime.updated_at = now
+    task.runtime.pipeline.execution_status = "interrupted"
+    task.runtime.pipeline.run_started_at = None
+    task.runtime.pipeline.updated_at = now
     _set_interruption_metadata(
         task,
         root=root,
@@ -269,7 +269,7 @@ def prepare_interrupted_task(
 
 
 def interruption_journal_message(task: TaskRecord) -> str:
-    interruption = task.runtime.interruption
+    interruption = task.runtime.execution.interruption
     if interruption is None:
         return f"Interrupted run recorded. Resume from `{task.pipeline_status}`."
     parts = [
@@ -293,7 +293,7 @@ def interruption_journal_message(task: TaskRecord) -> str:
 
 
 def stale_interruption_reason(task: TaskRecord, stage: str, *, stale_pid: bool = False) -> str:
-    active = task.runtime.active_subagent
+    active = task.runtime.execution.active_subagent
     if active is not None:
         pid_detail = f", pid {active.pid} no longer alive" if stale_pid and active.pid else ""
         return (
@@ -750,7 +750,10 @@ def _running_task_ids(root: Path) -> list[str]:
                 """
                 SELECT task_id
                 FROM task_state
-                WHERE json_extract(payload, '$.runtime.execution_status') = 'running'
+                WHERE COALESCE(
+                    json_extract(payload, '$.runtime.pipeline.execution_status'),
+                    json_extract(payload, '$.runtime.execution_status')
+                ) = 'running'
                 ORDER BY task_id
                 """
             ).fetchall()
@@ -769,7 +772,7 @@ def _has_inactive_running_tasks(
     timeout_seconds: float,
 ) -> bool:
     for task in tasks_by_id.values():
-        if task.runtime.execution_status != "running":
+        if task.runtime.pipeline.execution_status != "running":
             continue
         ts_str = last_event_timestamp(root, task)
         if ts_str is None:
@@ -801,8 +804,8 @@ def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeS
 
 
 def _interrupted_subagent_reason(task: TaskRecord, reason: str) -> str:
-    active = task.runtime.active_subagent
-    last_subagent = task.runtime.last_subagent
+    active = task.runtime.execution.active_subagent
+    last_subagent = task.runtime.execution.last_subagent
     if (
         last_subagent is not None
         and last_subagent.interruption_reason
@@ -855,15 +858,15 @@ def _write_interrupted_subagent_artifacts(
 
 
 def _interruption_timestamps(task: TaskRecord, now: str) -> dict[str, str | None]:
-    started_at = task.runtime.current_stage.started_at or task.runtime.run_started_at
+    started_at = task.runtime.pipeline.current_stage.started_at or task.runtime.pipeline.run_started_at
     interrupted_at = (
-        task.runtime.active_subagent.updated_at
-        if task.runtime.active_subagent is not None
-        else task.runtime.current_stage.updated_at or started_at or now
+        task.runtime.execution.active_subagent.updated_at
+        if task.runtime.execution.active_subagent is not None
+        else task.runtime.pipeline.current_stage.updated_at or started_at or now
     )
     return {
-        "run_started_at": task.runtime.run_started_at,
-        "stage_started_at": task.runtime.current_stage.started_at,
+        "run_started_at": task.runtime.pipeline.run_started_at,
+        "stage_started_at": task.runtime.pipeline.current_stage.started_at,
         "started_at": started_at,
         "interrupted_at": interrupted_at,
     }
@@ -889,10 +892,10 @@ def _set_interruption_metadata(
         stage=stage,
         reason_code="execution_interrupted",
         reason=summary,
-        retry_count=task.runtime.retry_count,
-        retry_limit=task.runtime.retry_limit,
+        retry_count=task.runtime.pipeline.retry_count,
+        retry_limit=task.runtime.pipeline.retry_limit,
     )
-    task.runtime.interruption = RuntimeInterruptionState(
+    task.runtime.execution.interruption = RuntimeInterruptionState(
         source="subagent" if interrupted_subagent is not None else "runner",
         stage=stage,
         pipeline_status=stage,
@@ -905,7 +908,7 @@ def _set_interruption_metadata(
         stage_started_at=stage_started_at,
         subagent=interrupted_subagent,
     )
-    task.runtime.continuation_handoff = RuntimeContinuationHandoff(
+    task.runtime.execution.continuation_handoff = RuntimeContinuationHandoff(
         stage=stage,
         kind="restart",
         reason=reason,
@@ -923,7 +926,7 @@ def _set_interruption_metadata(
         continuation=None if interrupted_subagent is None else interrupted_subagent.continuation,
         updated_at=now,
     )
-    task.runtime.current_stage = task.runtime.current_stage.model_copy(
+    task.runtime.pipeline.current_stage = task.runtime.pipeline.current_stage.model_copy(
         update={
             "stage": stage,
             "status": "interrupted",
@@ -1098,7 +1101,7 @@ def _normalize_nonrunning_resumable_tasks(
     journal_messages: dict[str, str] = {}
     front_insertions = 0
     for task in tasks_by_id.values():
-        if task.runtime.execution_status == "running":
+        if task.runtime.pipeline.execution_status == "running":
             continue
         if task.status not in {"queued", "in_progress", "interrupted"}:
             continue
@@ -1113,10 +1116,10 @@ def _normalize_nonrunning_resumable_tasks(
         queue_index = None if not queue_contains_task else state.queue.index(task.id)
         should_normalize = (
             task.status != "queued"
-            or task.runtime.execution_status != "idle"
+            or task.runtime.pipeline.execution_status != "idle"
             or task.pipeline_status != stage
-            or task.runtime.current_stage.stage != stage
-            or task.runtime.current_stage.status != "idle"
+            or task.runtime.pipeline.current_stage.stage != stage
+            or task.runtime.pipeline.current_stage.status != "idle"
             or task.id == state.active_task_id
             or not queue_contains_task
         )
@@ -1162,13 +1165,19 @@ def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
                 FROM task_state
                 WHERE (
                     json_extract(payload, '$.status') = 'in_progress'
-                    AND json_extract(payload, '$.runtime.execution_status') != 'running'
+                    AND COALESCE(
+                        json_extract(payload, '$.runtime.pipeline.execution_status'),
+                        json_extract(payload, '$.runtime.execution_status'),
+                        'idle'
+                    ) != 'running'
                     AND json_extract(payload, '$.pipeline_status') IN (
                         'grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed'
                     )
                 ) OR (
                     json_extract(payload, '$.status') = 'interrupted'
                     AND COALESCE(
+                        json_extract(payload, '$.runtime.execution.interruption.resume_stage'),
+                        json_extract(payload, '$.runtime.execution.interruption.pipeline_status'),
                         json_extract(payload, '$.runtime.interruption.resume_stage'),
                         json_extract(payload, '$.runtime.interruption.pipeline_status'),
                         json_extract(payload, '$.pipeline_status')
@@ -1180,12 +1189,23 @@ def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
                     )
                     AND (
                         (
-                            json_extract(payload, '$.runtime.current_stage.stage')
+                            COALESCE(
+                                json_extract(payload, '$.runtime.pipeline.current_stage.stage'),
+                                json_extract(payload, '$.runtime.current_stage.stage')
+                            )
                             = json_extract(payload, '$.pipeline_status')
-                            AND json_extract(payload, '$.runtime.current_stage.status') IN (
-                                'idle', 'paused', 'interrupted'
+                            AND COALESCE(
+                                json_extract(payload, '$.runtime.pipeline.current_stage.status'),
+                                json_extract(payload, '$.runtime.current_stage.status')
+                            ) IN ('idle', 'paused', 'interrupted'
                             )
                         )
+                        OR json_extract(payload, '$.runtime.execution.interruption.resume_stage')
+                            = json_extract(payload, '$.pipeline_status')
+                        OR json_extract(payload, '$.runtime.execution.interruption.pipeline_status')
+                            = json_extract(payload, '$.pipeline_status')
+                        OR json_extract(payload, '$.runtime.execution.continuation_handoff.stage')
+                            = json_extract(payload, '$.pipeline_status')
                         OR json_extract(payload, '$.runtime.interruption.resume_stage')
                             = json_extract(payload, '$.pipeline_status')
                         OR json_extract(payload, '$.runtime.interruption.pipeline_status')
@@ -1223,7 +1243,7 @@ def _update_active_task_after_recovery(
         or state.active_task_id in prioritized_ids
         or (
             active_task is not None
-            and active_task.runtime.execution_status != "running"
+            and active_task.runtime.pipeline.execution_status != "running"
             and active_task.id not in running_task_ids
             and not _should_requeue_commit_stage_task(active_task)
         )

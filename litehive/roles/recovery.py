@@ -173,7 +173,7 @@ def _state_recovery_payload(outcome: Any) -> dict[str, Any]:
 def _merged_recovery_history_payload(state: TaskState, task_record: Any) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
     seen: set[tuple[str | None, str, str, str, str | None]] = set()
-    runtime_history = [] if task_record is None else list(task_record.runtime.recovery_history)
+    runtime_history = [] if task_record is None else list(task_record.runtime.pipeline.recovery_history)
     items = [
         *[_runtime_recovery_payload(outcome) for outcome in runtime_history],
         *[_state_recovery_payload(outcome) for outcome in state.recovery_history],
@@ -252,7 +252,7 @@ def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) ->
 
     rel_path = str(subagent_base.relative_to(task_dir(root, task_record)))
     runtime_state = None
-    for candidate in (task_record.runtime.last_subagent, task_record.runtime.active_subagent):
+    for candidate in (task_record.runtime.execution.last_subagent, task_record.runtime.execution.active_subagent):
         if candidate is not None and (candidate.path == rel_path or subagent_base.name.startswith(candidate.id)):
             runtime_state = candidate
             break

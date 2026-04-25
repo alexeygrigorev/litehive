@@ -576,7 +576,7 @@ def _stale_worktree_items(root: Path, tasks: list[TaskRecord], state) -> list[At
     managed_paths: dict[str, str | None] = {}
     active_task_id = None if state is None else state.active_task_id
     for task in tasks:
-        worktree_rel = task.runtime.git.worktree_path or task.git.worktree_path
+        worktree_rel = task.runtime.pipeline.git.worktree_path or task.git.worktree_path
         if not is_managed_worktree_path(root, worktree_rel):
             continue
         worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
@@ -697,7 +697,7 @@ def _auto_resolve_stale_worktree_metadata_items(root: Path) -> None:
 
         try:
             task = get_task(root, item.task_id)
-            if task is not None and task.runtime.git.worktree_path is not None:
+            if task is not None and task.runtime.pipeline.git.worktree_path is not None:
                 clear_task_worktree_path(task)
                 save_task(root, task)
                 store.resolve(item.id or 0, resolution="auto-resolved: worktree metadata cleared")
