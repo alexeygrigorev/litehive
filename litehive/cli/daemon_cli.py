@@ -1,3 +1,6 @@
+from pathlib import Path
+from typing import Annotated
+
 import typer
 
 from litehive.cli.common import WorkspaceOption, make_typer, require_subcommand
@@ -9,6 +12,12 @@ from litehive.cli.runner import (
     start as runner_start,
     stop as runner_stop,
 )
+from litehive.config.workspace import normalize_workspace_root, resolve_workspace
+
+StatusWorkspaceOption = Annotated[
+    Path | None,
+    typer.Option("--workspace", help="Repository root containing .litehive/"),
+]
 
 app = make_typer(invoke_without_command=True)
 
@@ -26,8 +35,17 @@ def daemon_run(workspace: WorkspaceOption, foreground: bool = False) -> int:
 
 
 @app.command("status", help="Show daemon state for a workspace")
-def daemon_status(workspace: WorkspaceOption) -> int:
-    return runner_daemon_status(workspace)
+def daemon_status(workspace: StatusWorkspaceOption = None) -> int:
+    try:
+        root = (
+            resolve_workspace(None, register=False)
+            if workspace is None
+            else normalize_workspace_root(workspace, source="--workspace")
+        )
+    except ValueError as exc:
+        print(f"daemon status failed: {exc}")
+        return 1
+    return runner_daemon_status(root)
 
 
 @app.command("stop", help="Stop the workspace daemon")
