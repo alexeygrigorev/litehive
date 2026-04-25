@@ -97,7 +97,9 @@ def _check_engine_availability_with_retry(engine, max_retries: int = 2, delay: f
                 )
                 time.sleep(delay)
             else:
-                logger.warning(f"Engine {engine.name} availability check failed after {max_retries + 1} attempts: {exc}")
+                logger.warning(
+                    f"Engine {engine.name} availability check failed after {max_retries + 1} attempts: {exc}"
+                )
                 return False
 
         if attempt < max_retries:
@@ -543,7 +545,6 @@ class SubagentManager(SessionMixin):
             continuation=continuation,
         )
         write_text_if_changed(base / "prompt.txt", prompt)
-        write_text_if_changed(base / "transcript.md", transcript)
         write_text_if_changed(base / "stdout.txt", execution.stdout)
         write_text_if_changed(base / "stderr.txt", execution.stderr)
         self.append_stream_delta(base, ref, "stdout", execution.stdout)

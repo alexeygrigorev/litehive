@@ -255,7 +255,9 @@ def _recovery_execution_root_section(prompt: dict[str, Any]) -> str:
     source_path = str(prompt.get("litehive_source_path") or "").strip()
     if source_path:
         lines.append(f"- configured_litehive_source_path: {source_path}")
-    lines.append("- Recovery is for Litehive infrastructure bugs. Do not use the task worktree as the primary edit target.")
+    lines.append(
+        "- Recovery is for Litehive infrastructure bugs. Do not use the task worktree as the primary edit target."
+    )
     return "\n".join(lines)
 
 
@@ -294,7 +296,7 @@ def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
     if execution_trace:
         blocks.append(
             _text_block(
-                "transcript.md",
+                "execution trace (derived from events/artifacts)",
                 execution_trace,
                 limit=_RECOVERY_ARTIFACT_HEAD_CHARS,
                 tail=False,

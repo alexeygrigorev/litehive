@@ -232,7 +232,7 @@ def test_debug_stderr_output(tmp_path: Path, capsys: pytest.CaptureFixture[str])
 def test_debug_execution_trace_summary_200(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     task, sa_dir = _make_task_with_subagent(tmp_path)
     long_execution_trace = "A" * 500
-    (sa_dir / "transcript.md").write_text(long_execution_trace, encoding="utf-8")
+    (sa_dir / "stdout.txt").write_text(long_execution_trace, encoding="utf-8")
 
     exit_code = _cmd_debug(_ns(tmp_path, task.id))
     output = capsys.readouterr().out

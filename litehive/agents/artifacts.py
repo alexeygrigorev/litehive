@@ -56,6 +56,11 @@ def write_text_artifact(
     return plain_path
 
 
+def remove_text_artifact(base: Path, name: str, suffix: str) -> None:
+    (base / f"{name}{suffix}").unlink(missing_ok=True)
+    (base / f"{name}{suffix}.gz").unlink(missing_ok=True)
+
+
 def prune_superseded_subagent_artifacts(task_root: Path, *, keep_subagent_id: str) -> None:
     subagents_root = task_root / "subagents"
     if not subagents_root.exists():

@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any
 
+from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_report, load_subagent_session
 from litehive.config.loading import load_config
 from litehive.domain.common import PipelineState
@@ -277,7 +278,19 @@ def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) ->
 
     session_payload = load_subagent_session(root, task_record.id, subagent_id)
     report_payload = load_subagent_report(root, task_record.id, subagent_id)
-    execution_trace = _read_subagent_artifact(subagent_base, "transcript.md")
+    trace_ref = runtime_state or subagent_ref
+    execution_trace_view = (
+        None
+        if trace_ref is None
+        else load_subagent_execution_trace(
+            root,
+            task_record,
+            trace_ref,
+            active=runtime_state is not None and runtime_state.status == "running",
+            runtime_state=runtime_state,
+        )
+    )
+    execution_trace = "" if execution_trace_view is None else execution_trace_view.text
     stdout = _read_subagent_artifact(subagent_base, "stdout.txt")
     stderr = _read_subagent_artifact(subagent_base, "stderr.txt")
     exit_code = None
@@ -291,11 +304,7 @@ def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) ->
     return {
         "subagent_id": subagent_id,
         "role": (
-            runtime_state.role
-            if runtime_state is not None
-            else subagent_ref.role
-            if subagent_ref is not None
-            else None
+            runtime_state.role if runtime_state is not None else subagent_ref.role if subagent_ref is not None else None
         ),
         "engine": (
             runtime_state.engine

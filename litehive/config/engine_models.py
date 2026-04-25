@@ -343,7 +343,10 @@ def resolve_engine_plan(
 ) -> list[str]:
     if engine_override is not None:
         return [engine_override]
-    if task.runtime.execution.last_engine_switch is not None and task.runtime.execution.last_engine_switch.stage == task.pipeline_status:
+    if (
+        task.runtime.execution.last_engine_switch is not None
+        and task.runtime.execution.last_engine_switch.stage == task.pipeline_status
+    ):
         return [task.runtime.execution.last_engine_switch.to_engine]
     return [config.default_engine]
 
@@ -404,7 +407,7 @@ def set_continuation_handoff(
         warnings=warnings,
         session_path=None,
         report_path=None,
-        transcript_path=f"{result.ref.path}/transcript.md",
+        transcript_path=None,
         continuation=continuation,
     )
     set_task_continuation_handoff(root, task, handoff)

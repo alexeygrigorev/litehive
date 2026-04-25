@@ -54,6 +54,9 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
 
     manager.write_session_progress(task, base, ref, "stream partial Claude output", execution)
 
+    assert not (base / "transcript.md").exists()
+    assert not (base / "transcript.md.gz").exists()
+
     report = load_subagent_report(tmp_path, task.id, "SA-0001")
     assert report["status"] == "running"
     assert "did not submit verdict" in report["summary"]
@@ -122,6 +125,9 @@ def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monke
             assert event_stream_data["engine"] == "opencode"
             assert event_stream_data["task_id"] == task.id
             assert len(event_stream_data["events"]) == 1
+            base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+            assert not (base / "transcript.md").exists()
+            assert not (base / "transcript.md.gz").exists()
 
             return CLIExecutionResult(
                 adapter="opencode",
@@ -129,8 +135,7 @@ def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monke
                 cwd=cwd,
                 exit_code=0,
                 stdout=(
-                    partial_stdout
-                    + '{"kind":"usage","engine":"opencode","sequence":1,'
+                    partial_stdout + '{"kind":"usage","engine":"opencode","sequence":1,'
                     '"timestamp":"2026-04-12T00:00:01+00:00","usage_delta":{"total_tokens":50},'
                     '"raw":{},"metadata":{"total_tokens":50}}\n'
                 ),

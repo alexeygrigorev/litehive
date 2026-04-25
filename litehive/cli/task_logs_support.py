@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 import time
 
+from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_session
 from litehive.config.paths import workspace_path
 from litehive.daemon.logs import latest_run_all_log_dir
@@ -62,7 +63,14 @@ def show_latest_subagent(root: Path, task) -> int:
 
     is_active = bool(task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id)
     base = task_dir(root, task) / ref.path
-    execution_trace_path = _artifact_for_kind(base, "execution_trace", active=is_active)
+    runtime_state = _runtime_state_for_ref(task, ref.id)
+    execution_trace = load_subagent_execution_trace(
+        root,
+        task,
+        ref,
+        active=is_active,
+        runtime_state=runtime_state,
+    )
     stdout_path = _artifact_for_kind(base, "stdout", active=is_active)
 
     print(f"task: {task.id}")
@@ -71,7 +79,7 @@ def show_latest_subagent(root: Path, task) -> int:
     print(f"engine: {ref.engine}")
     print(f"status: {ref.status}")
 
-    _print_artifact_tail(execution_trace_path, "execution trace")
+    _print_text_tail(None if execution_trace is None else execution_trace.text, "execution trace")
     _print_artifact_tail(stdout_path, "stdout")
     return 0
 
@@ -212,8 +220,6 @@ def _latest_subagent_ref(task):
 
 
 def _artifact_for_kind(base: Path, kind: str, *, active: bool) -> Path | None:
-    if kind == "execution_trace":
-        return resolve_artifact_path(base, "transcript.md")
     if kind == "stdout":
         if active:
             live = resolve_artifact_path(base, "stdout.log")
@@ -224,6 +230,24 @@ def _artifact_for_kind(base: Path, kind: str, *, active: bool) -> Path | None:
             return archived
         return resolve_artifact_path(base, "stdout.log")
     raise ValueError(f"Unsupported artifact kind: {kind}")
+
+
+def _runtime_state_for_ref(task, subagent_id: str):
+    for state in (task.runtime.execution.active_subagent, task.runtime.execution.last_subagent):
+        if state is not None and state.id == subagent_id:
+            return state
+    return None
+
+
+def _print_text_tail(content: str | None, label: str) -> None:
+    if content is None:
+        print(f"{label}: (not found)")
+        return
+    if not content:
+        print(f"{label}: (empty)")
+        return
+    print(f"{label}:")
+    print(_tail_text(content))
 
 
 def _print_artifact_tail(path: Path | None, label: str) -> None:

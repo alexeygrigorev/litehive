@@ -7,6 +7,7 @@ from typing import Iterable
 
 from pydantic import ValidationError
 
+from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_artifacts, load_subagent_event_stream
 from litehive.db.schema import connect_workspace_db
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
@@ -143,20 +144,50 @@ def collect_recovery_evidence(
         subagent_ref = next((ref for ref in task.subagents if ref.path == rel_subagent_path), None)
         artifacts = {} if subagent_ref is None else load_subagent_artifacts(root, task.id, subagent_ref.id)
         event_stream = {} if subagent_ref is None else load_subagent_event_stream(root, task.id, subagent_ref.id)
+        runtime_state = None
+        if subagent_ref is not None:
+            runtime_state = next(
+                (
+                    state
+                    for state in (task.runtime.execution.active_subagent, task.runtime.execution.last_subagent)
+                    if state is not None and state.id == subagent_ref.id
+                ),
+                None,
+            )
+        trace_view = (
+            None
+            if subagent_ref is None
+            else load_subagent_execution_trace(
+                root,
+                task,
+                subagent_ref,
+                active=runtime_state is not None and runtime_state.status == "running",
+                runtime_state=runtime_state,
+            )
+        )
         structured_artifact_keys = {"session", "report", "event_stream"}
         for key, label in (
             ("session", "latest subagent session"),
             ("report", "latest subagent report"),
-            ("transcript.md", "latest subagent execution trace"),
+            ("execution_trace", "latest subagent execution trace"),
             ("stdout.txt", "latest subagent stdout"),
             ("stderr.txt", "latest subagent stderr"),
             ("event_stream", "latest subagent event stream"),
         ):
-            path = None if key in structured_artifact_keys else resolve_artifact_path(subagent_base, key)
+            path = (
+                trace_view.source
+                if key == "execution_trace" and isinstance(trace_view.source if trace_view else None, Path)
+                else None
+                if key in structured_artifact_keys or key == "execution_trace"
+                else resolve_artifact_path(subagent_base, key)
+            )
             exists = (
                 bool(event_stream)
                 if key == "event_stream"
-                else key in structured_artifact_keys and key in artifacts
+                else key in structured_artifact_keys
+                and key in artifacts
+                or key == "execution_trace"
+                and trace_view is not None
             )
             display_path = path if path is not None else subagent_base / key
             evidence.append(
@@ -200,7 +231,9 @@ def collect_recovery_evidence(
     )
 
     if is_git_repo(root):
-        worktree_path = resolve_recorded_worktree_path(root, task.runtime.pipeline.git.worktree_path or task.git.worktree_path)
+        worktree_path = resolve_recorded_worktree_path(
+            root, task.runtime.pipeline.git.worktree_path or task.git.worktree_path
+        )
         worktree_rel = get_task_worktree_path(task)
         try:
             root_status = status_porcelain(root)
@@ -290,7 +323,11 @@ def record_recovery_report(
                 f"Recovery trigger `{trigger_event_kind.value}`: {summary}\n"
                 f"runnable_state: {runnable_state}\n"
                 f"report: {ref}"
-                + (f"\nlatest_stage_report: {_stage_report_context(latest_report)}" if latest_report is not None else "")
+                + (
+                    f"\nlatest_stage_report: {_stage_report_context(latest_report)}"
+                    if latest_report is not None
+                    else ""
+                )
                 + (f"\nblocker: {blocker}" if blocker else "")
             ),
         ),
@@ -506,7 +543,9 @@ def render_task_activity(root: Path, task: TaskRecord, *, for_prompt: bool = Fal
     lines = ["Task activity:"]
     for entry in activity_entries:
         if for_prompt and is_retracted_activity_entry(entry):
-            header = f"[{entry.created_at}] {entry.role} ({entry.stage}) - {entry.verdict} {RETRACTED_FILESYSTEM_MARKER}"
+            header = (
+                f"[{entry.created_at}] {entry.role} ({entry.stage}) - {entry.verdict} {RETRACTED_FILESYSTEM_MARKER}"
+            )
             lines.append(f"\n--- {header} ---")
             lines.append("Prior pass report withheld from prompt context after requeue-time filesystem validation.")
             claimed_files = normalized_files_changed(entry.files_changed)

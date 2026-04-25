@@ -12,6 +12,7 @@ import subprocess
 
 import yaml
 
+from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import (
     load_subagent_report,
     load_subagent_session,
@@ -57,7 +58,6 @@ from litehive.state.records import (
 from litehive.tasks.activity import append_task_activity
 from litehive.tasks.audit import append_task_audit_entries, build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.normalization import implementation_entry_stage
-from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 from litehive.tasks.reports import record_recovery_report
 from litehive.tasks.runtime import (
     apply_task_outcome,
@@ -791,15 +791,15 @@ def _has_inactive_running_tasks(
 
 
 def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeSubagentState) -> str:
-    subagent_base = task_dir(root, task) / active.path
     report = load_subagent_report(root, task.id, active.id)
     if report:
         summary = str(report.get("summary") or "").strip()
         if summary:
             return summary
-    transcript_path = resolve_artifact_path(subagent_base, "transcript.md")
-    if transcript_path is not None:
-        snippet = summarize_transcript(read_text_artifact(transcript_path))
+    ref = next((candidate for candidate in reversed(task.subagents) if candidate.id == active.id), None)
+    if ref is not None:
+        trace = load_subagent_execution_trace(root, task, ref, active=True, runtime_state=active)
+        snippet = "" if trace is None else summarize_transcript(trace.text)
         if snippet:
             return snippet
     return active.transcript_snippet or "runner interrupted before subagent completion"
@@ -924,7 +924,7 @@ def _set_interruption_metadata(
         warnings=[],
         session_path=None,
         report_path=None,
-        transcript_path=None if interrupted_subagent is None else f"{interrupted_subagent.path}/transcript.md",
+        transcript_path=None,
         continuation=None if interrupted_subagent is None else interrupted_subagent.continuation,
         updated_at=now,
     )

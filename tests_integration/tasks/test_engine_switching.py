@@ -1,4 +1,3 @@
-
 import pytest
 
 from litehive.domain.runtime import RuntimeContinuationHandoff, RuntimeSubagentState
@@ -45,7 +44,7 @@ def test_switch_cli_persists_engine_handoff_and_requeues_task(integration_root) 
         summary="implementation half done",
         transcript_snippet="implementation half done",
         warnings=[],
-        transcript_path="subagents/SA-0002-swe/transcript.md",
+        transcript_path=None,
         updated_at="2026-04-01T00:00:30+00:00",
     )
     save_task(integration_root, interrupted)
@@ -53,6 +52,7 @@ def test_switch_cli_persists_engine_handoff_and_requeues_task(integration_root) 
     (task_dir(integration_root, interrupted) / "subagents" / "SA-0002-swe").mkdir(parents=True)
 
     completed = cli_command(
+        "queue",
         "switch",
         interrupted.id,
         "gemini",

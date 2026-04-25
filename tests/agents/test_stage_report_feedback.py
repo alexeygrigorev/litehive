@@ -13,7 +13,7 @@ from litehive.domain.agent import EngineFailure, SubagentResult
 from litehive.domain.common import FEEDBACK_CAP
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport, TaskActivityEntry
 from litehive.state.records import create_task
-from litehive.tasks.paths import task_dir
+from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 from litehive.tasks.reports import append_activity_entry
 
 
@@ -182,5 +182,7 @@ def test_subagent_manager_keeps_full_transcript_artifacts(
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
     subagent_dir = task_dir(tmp_path, task) / result.ref.path
 
-    assert (subagent_dir / "transcript.md").read_text(encoding="utf-8") == f"{transcript}\n"
+    transcript_cache = resolve_artifact_path(subagent_dir, "transcript.md")
+    assert transcript_cache is not None
+    assert read_text_artifact(transcript_cache) == f"{transcript}\n"
     assert (subagent_dir / "stdout.txt").read_text(encoding="utf-8") == transcript

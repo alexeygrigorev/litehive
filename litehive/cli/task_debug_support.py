@@ -3,6 +3,7 @@
 from pathlib import Path
 import subprocess
 
+from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_report, load_subagent_session
 from litehive.git.ops import current_head
 from litehive.state.records import get_task_worktree_path
@@ -89,7 +90,7 @@ def debug_latest(root: Path, task):
 
     # -- Execution trace summary (first 200 chars) --
     if sa_base.exists():
-        _print_execution_trace(sa_base)
+        _print_execution_trace(root, task, ref, runtime_sa)
 
     # -- stdout tail (last 500 chars) --
     if sa_base.exists():
@@ -153,14 +154,21 @@ def _print_verdict(root, task, role):
         print("verdict: none")
 
 
-def _print_execution_trace(sa_base):
+def _print_execution_trace(root, task, ref, runtime_sa):
     """Print first 200 chars of the execution trace."""
-    path = resolve_artifact_path(sa_base, "transcript.md")
-    if path is None:
+    is_active = bool(task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id)
+    trace = load_subagent_execution_trace(
+        root,
+        task,
+        ref,
+        active=is_active,
+        runtime_state=runtime_sa,
+    )
+    if trace is None:
         print("execution trace: (not found)")
         return
     try:
-        content = read_text_artifact(path)
+        content = trace.text
         total_len = len(content)
         preview = content[:200]
         if total_len > 200:

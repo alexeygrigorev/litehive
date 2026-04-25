@@ -159,8 +159,14 @@ def test_logs_task_journal_tolerates_unrelated_missing_runtime_rows(
 
 def test_logs_agent_prefers_live_stdout_for_active_subagent(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     task, base = _make_task_with_subagent(tmp_path, active=True)
-    (base / "transcript.md").write_text("live transcript\n", encoding="utf-8")
-    (base / "stdout.log").write_text("live stdout\n", encoding="utf-8")
+    (base / "transcript.md").write_text("stale live transcript\n", encoding="utf-8")
+    (base / "stdout.log").write_text(
+        '{"kind":"message","engine":"codex","sequence":0,'
+        '"role":"assistant","content":"derived live transcript",'
+        '"timestamp":"2026-04-12T00:00:00+00:00","usage_delta":{},'
+        '"raw":{},"metadata":{}}\n',
+        encoding="utf-8",
+    )
     (base / "stdout.txt").write_text("stale snapshot\n", encoding="utf-8")
 
     exit_code = _cmd_logs(_ns(tmp_path, task.id, agent=True))
@@ -168,10 +174,26 @@ def test_logs_agent_prefers_live_stdout_for_active_subagent(tmp_path: Path, caps
 
     assert exit_code == 0
     assert "execution trace:" in output
-    assert "live transcript" in output
+    assert "derived live transcript" in output
+    assert "stale live transcript" not in output
     assert "stdout:" in output
-    assert "live stdout" in output
     assert "stale snapshot" not in output
+
+
+def test_logs_agent_derives_active_plain_text_trace_without_transcript(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    task, base = _make_task_with_subagent(tmp_path, active=True)
+    (base / "stdout.log").write_text("plain live output\n", encoding="utf-8")
+
+    exit_code = _cmd_logs(_ns(tmp_path, task.id, agent=True))
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "execution trace:" in output
+    assert "plain live output" in output
+    assert not (base / "transcript.md").exists()
 
 
 def test_logs_agent_reads_compressed_completed_artifacts(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

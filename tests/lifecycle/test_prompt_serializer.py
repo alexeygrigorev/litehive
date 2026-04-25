@@ -175,8 +175,10 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
 
     subagent_base = task_dir(workspace, task) / "subagents" / "SA-0001-swe"
     subagent_base.mkdir(parents=True)
-    (subagent_base / "transcript.md").write_text("litehive report --verdict pass failed\n", encoding="utf-8")
-    (subagent_base / "stdout.txt").write_text("attempting litehive report\n", encoding="utf-8")
+    (subagent_base / "stdout.txt").write_text(
+        "litehive report --verdict pass failed\nattempting litehive report\n",
+        encoding="utf-8",
+    )
     (subagent_base / "stderr.txt").write_text("report failed: unable to resolve workspace\n", encoding="utf-8")
     save_subagent_artifacts(
         workspace,
@@ -212,7 +214,8 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
     assert "did_produce_output: yes" in text
     assert "session.yaml" in text
     assert "report.yaml" in text
-    assert "transcript.md" in text
+    assert "execution trace (derived from events/artifacts)" in text
+    assert "transcript.md" not in text
     assert "stdout.txt" in text
     assert "stderr.txt" in text
     assert "Did the agent produce output?" in text
@@ -452,8 +455,7 @@ def test_retry_prompt_includes_prior_work_summary_from_last_report(workspace: Pa
 
     assert "Prior work (last attempt):" in text
     assert (
-        "- Changed files: litehive/lifecycle/prompt_serializer.py, "
-        "tests/lifecycle/test_prompt_serializer.py"
+        "- Changed files: litehive/lifecycle/prompt_serializer.py, tests/lifecycle/test_prompt_serializer.py"
     ) in text
     assert (
         "- Test results: uv run pytest -q tests/lifecycle/test_prompt_serializer.py -> 8 passed; "
@@ -648,8 +650,7 @@ def test_swe_prompt_lists_after_stage_hooks_with_descriptions(workspace: Path) -
     assert "After implementing, these checks will run:" in text
     assert "- ruff check --select E402,F401 (ensures no unused imports or wrong import order)" in text
     assert (
-        "- uv run pytest -q tests/lifecycle/test_prompt_serializer.py "
-        "(runs the focused serializer regression slice)"
+        "- uv run pytest -q tests/lifecycle/test_prompt_serializer.py (runs the focused serializer regression slice)"
     ) in text
     assert "Hook failures can reject the stage." in text
 
