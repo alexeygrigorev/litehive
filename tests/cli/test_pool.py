@@ -28,6 +28,7 @@ def test_pool_reads_canonical_stage_reports(tmp_path) -> None:
     assert collect_task_stage_stats(tmp_path, task.id) == [
         {"stage": "implementing", "verdict": "pass", "duration_seconds": 12.0}
     ]
+    assert list((tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports").glob("*.yaml")) == []
 
 
 def test_pool_flow_statistics_use_canonical_stage_keys(tmp_path) -> None:

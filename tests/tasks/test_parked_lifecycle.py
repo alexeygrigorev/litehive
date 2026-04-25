@@ -1,11 +1,11 @@
 from pathlib import Path
 
 import pytest
-import yaml
 from typer.testing import CliRunner
 
 from litehive.cli.app import app as cli_app
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.nodes.agent import AgentVerdict
@@ -13,6 +13,7 @@ from litehive.lifecycle.nodes.system import StubCommitNode
 from litehive.lifecycle.orchestration import run_task
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, list_tasks, save_task
+from litehive.tasks.reports import append_activity_entry
 from litehive.tasks.queue import dequeue_next_task, restore_missing_queued_tasks
 from litehive.tasks.status import resume_task, stop_current_task
 from litehive.worktree import inspect_dirty_worktree_gate
@@ -152,10 +153,16 @@ def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
         title="Dirty ownership",
         acceptance_criteria=["allow resume with owned dirty paths"],
     )
-    reports_dir = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
-    (reports_dir / "implementing-001.yaml").write_text(
-        yaml.safe_dump({"files_changed": ["src/app.py"]}, sort_keys=False),
-        encoding="utf-8",
+    append_activity_entry(
+        tmp_path,
+        task,
+        TaskActivityEntry(
+            role="swe",
+            stage="implementing",
+            verdict="pass",
+            message="Implemented change.",
+            files_changed=["src/app.py"],
+        ),
     )
 
     monkeypatch.setattr("litehive.worktree.is_git_repo", lambda root: True)

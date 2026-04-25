@@ -67,6 +67,8 @@ def pipeline_journal_command(
 ) -> int:
     from litehive.lifecycle.journal import SqliteJournal
     from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
+    from litehive.state.records import get_task_record
+    from litehive.tasks.reports import latest_recovery_report, latest_stage_report
 
     journal = SqliteJournal(workspace)
     store = SqlitePersistence(workspace)
@@ -78,6 +80,25 @@ def pipeline_journal_command(
 
     print(f"task: {task_id}")
     print(f"stage: {state.stage}")
+    task = get_task_record(workspace, task_id)
+    if task is not None:
+        stage_report = latest_stage_report(workspace, task)
+        if stage_report is not None:
+            print(
+                "latest_stage_report: "
+                f"{stage_report.pipeline_state}/{stage_report.verdict} "
+                f"source={stage_report.source} "
+                f"summary={stage_report.summary}"
+            )
+        recovery_report = latest_recovery_report(workspace, task)
+        if recovery_report is not None:
+            print(
+                "latest_recovery_report: "
+                f"origin_stage={recovery_report.origin_stage or '-'} "
+                f"trigger_event_kind={recovery_report.trigger_event_kind.value} "
+                f"runnable_state={recovery_report.runnable_state} "
+                f"summary={recovery_report.summary}"
+            )
     if state.active_recovery_trigger:
         trigger = state.active_recovery_trigger
         print(

@@ -9,8 +9,6 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-import yaml
-
 from litehive.agents.manager import SubagentManager
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
@@ -39,7 +37,9 @@ from litehive.state.records import (
     set_task_worktree_path,
 )
 from litehive.state.persist import load_state, save_state
+from litehive.tasks.activity import load_task_activity
 from litehive.tasks.journal import append_journal
+from litehive.tasks.reports import normalized_files_changed
 
 logger = logging.getLogger(__name__)
 
@@ -645,22 +645,11 @@ def _dirty_entry_paths(dirty_entries: list[str]) -> list[str]:
 
 def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
     """Get the set of paths a task is allowed to commit."""
-    placeholders = {"none", "n/a", "-", ""}
     paths: set[PurePosixPath] = set()
     paths.add(PurePosixPath(".litehive") / "tasks" / f"{task.id}-{task.slug}")
-    reports_dir = root / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports"
-    if reports_dir.exists():
-        for report_file in sorted(reports_dir.glob("*.yaml")):
-            try:
-                data = yaml.safe_load(report_file.read_text(encoding="utf-8"))
-            except Exception:
-                continue
-            if not isinstance(data, dict):
-                continue
-            for changed_file in data.get("files_changed", []) or []:
-                stripped = str(changed_file).strip().strip("/")
-                if stripped.lower() not in placeholders:
-                    paths.add(PurePosixPath(stripped))
+    for entry in load_task_activity(root, task):
+        for changed_file in normalized_files_changed(entry.files_changed):
+            paths.add(PurePosixPath(changed_file))
     return paths
 
 

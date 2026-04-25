@@ -31,6 +31,9 @@ _BASELINE_REQUIRED_TABLES = {
     "pipeline_sessions",
     "task_audit_log",
 }
+_REQUIRED_TABLES_BY_MIGRATION = {
+    4: {"recovery_reports"},
+}
 
 
 @dataclass(frozen=True)
@@ -128,10 +131,17 @@ def _applied_migration_rows(connection: sqlite3.Connection) -> list[tuple[int, s
     return [(int(row["version"]), str(row["name"])) for row in rows]
 
 
-def _has_required_baseline_tables(connection: sqlite3.Connection) -> bool:
+def _has_required_baseline_tables(
+    connection: sqlite3.Connection,
+    applied_versions: set[int],
+) -> bool:
     rows = connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
     tables = {str(row["name"]) for row in rows}
-    return _BASELINE_REQUIRED_TABLES <= tables
+    required_tables = set(_BASELINE_REQUIRED_TABLES)
+    for version, migration_tables in _REQUIRED_TABLES_BY_MIGRATION.items():
+        if version in applied_versions:
+            required_tables.update(migration_tables)
+    return required_tables <= tables
 
 
 def _migration_history_matches_prefix(
@@ -152,7 +162,8 @@ def _database_requires_rebuild(db_path: Path, migrations: tuple[Migration, ...])
             applied = _applied_migration_rows(connection)
             if not _migration_history_matches_prefix(applied, migrations):
                 return True
-            if applied and not _has_required_baseline_tables(connection):
+            applied_versions = {version for version, _name in applied}
+            if applied and not _has_required_baseline_tables(connection, applied_versions):
                 return True
     except sqlite3.DatabaseError:
         return True

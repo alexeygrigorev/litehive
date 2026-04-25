@@ -163,6 +163,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, mon
         "task_journal",
         "task_audit_log",
         "stage_reports",
+        "recovery_reports",
         "hook_artifacts",
         "subagent_sessions",
         "events",

@@ -6,8 +6,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-import yaml
-
 from litehive.config.paths import workspace_path
 from litehive.config.engine_models import active_engine_freezes
 from litehive.config.model import LitehiveConfig
@@ -148,21 +146,14 @@ def estimate_task_execution(root: Path, task: TaskRecord) -> ExecutionEstimate:
 
 
 def _collect_report_durations(root: Path) -> list[float]:
-    """Scan all workspace report YAMLs and collect positive duration_seconds values."""
-    tasks_dir = root / ".litehive" / "tasks"
-    if not tasks_dir.exists():
-        return []
-    durations: list[float] = []
-    for reports_dir in tasks_dir.glob("*/reports"):
-        for report_path in sorted(reports_dir.glob("*.yaml")):
-            try:
-                data = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
-            except (yaml.YAMLError, OSError):
-                continue
-            dur = data.get("duration_seconds", 0)
-            if isinstance(dur, (int, float)) and dur > 0:
-                durations.append(float(dur))
-    return durations
+    """Collect positive stage report durations from workspace runtime storage."""
+    from litehive.tasks.reports import load_workspace_stage_reports
+
+    return [
+        float(report.duration_seconds)
+        for report in load_workspace_stage_reports(root)
+        if report.duration_seconds > 0
+    ]
 
 
 def _task_engine_label(task: TaskRecord, default_engine: str) -> str:

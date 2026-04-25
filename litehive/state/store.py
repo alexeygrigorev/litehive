@@ -22,6 +22,7 @@ _TASK_SCOPED_TABLES = (
     "task_journal",
     "task_activity",
     "stage_reports",
+    "recovery_reports",
     "hook_artifacts",
     "subagent_sessions",
     "events",

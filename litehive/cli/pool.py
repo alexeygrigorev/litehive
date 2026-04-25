@@ -2,6 +2,7 @@ import yaml
 
 from litehive.domain.common import utcnow
 from litehive.state.records import list_tasks
+from litehive.tasks.reports import load_stage_reports_for_task_id
 
 
 def _fmt_seconds(seconds: float) -> str:
@@ -16,57 +17,22 @@ def _fmt_seconds(seconds: float) -> str:
 
 
 def task_stage_outcomes(root, task_id, slug):
-    reports_dir = root / ".litehive" / "tasks" / f"{task_id}-{slug}" / "reports"
-    if not reports_dir.exists():
-        return []
-
-    outcomes = []
-    report_paths = sorted(
-        reports_dir.glob("*.yaml"),
-        key=lambda path: int(path.stem.rsplit("-", 1)[1]) if "-" in path.stem else 0,
-    )
-    for report_path in report_paths:
-        report_data = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
-        stage = str(report_data.get("pipeline_state") or report_data.get("stage") or "").strip()
-        verdict = str(report_data.get("verdict") or "").strip()
-        if stage and verdict:
-            outcomes.append(f"{stage}={verdict}")
-    return outcomes
-
-
-def _task_reports_dir(root, task_id):
-    """Return the reports directory for a task, searching by task_id prefix."""
-    tasks_dir = root / ".litehive" / "tasks"
-    if not tasks_dir.exists():
-        return None
-    for folder in sorted(tasks_dir.iterdir()):
-        if folder.is_dir() and folder.name.startswith(f"{task_id}-"):
-            return folder / "reports"
-    return None
+    del slug
+    return [f"{report.pipeline_state}={report.verdict}" for report in load_stage_reports_for_task_id(root, task_id)]
 
 
 def collect_task_stage_stats(root, task_id):
     """Collect stage/verdict/duration_seconds from all reports for a task."""
-    reports_dir = _task_reports_dir(root, task_id)
-    if reports_dir is None or not reports_dir.exists():
-        return []
     stats = []
-    report_paths = sorted(
-        reports_dir.glob("*.yaml"),
-        key=lambda path: int(path.stem.rsplit("-", 1)[1]) if "-" in path.stem else 0,
-    )
-    for report_path in report_paths:
-        try:
-            data = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
-        except (yaml.YAMLError, OSError):
-            continue
-        stage = str(data.get("pipeline_state") or data.get("stage") or "").strip()
-        verdict = str(data.get("verdict") or "").strip()
-        if not stage or not verdict:
-            continue
-        raw_dur = data.get("duration_seconds", 0)
-        duration = float(raw_dur) if isinstance(raw_dur, (int, float)) and raw_dur > 0 else 0.0
-        stats.append({"stage": stage, "verdict": verdict, "duration_seconds": duration})
+    for report in load_stage_reports_for_task_id(root, task_id):
+        duration = float(report.duration_seconds) if report.duration_seconds > 0 else 0.0
+        stats.append(
+            {
+                "stage": report.pipeline_state,
+                "verdict": report.verdict,
+                "duration_seconds": duration,
+            }
+        )
     return stats
 
 
@@ -445,12 +411,13 @@ def _write_pool_summary_report(
 
 
 def _write_durable_pool_run_report(root, *, report):
+    summary_report = report
     reports_dir = root / ".litehive" / "logs" / "pool-runs"
     reports_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = str(report["created_at"]).replace(":", "-").replace("+00:00", "Z")
+    timestamp = str(summary_report["created_at"]).replace(":", "-").replace("+00:00", "Z")
     report_path = reports_dir / f"{timestamp}.yaml"
     suffix = 1
     while report_path.exists():
         suffix += 1
         report_path = reports_dir / f"{timestamp}-{suffix:02d}.yaml"
-    report_path.write_text(yaml.safe_dump(report, sort_keys=False), encoding="utf-8")
+    report_path.write_text(yaml.safe_dump(summary_report, sort_keys=False), encoding="utf-8")

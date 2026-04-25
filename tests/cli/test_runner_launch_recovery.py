@@ -11,7 +11,7 @@ from litehive.recovery.execution_recovery import LaunchRecoveryResult
 from litehive.state.records import create_task, get_task
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.normalization import implementation_entry_stage
-from litehive.tasks.reports import record_recovery_report
+from litehive.tasks.reports import load_recovery_reports, record_recovery_report
 
 
 @dataclass(slots=True)
@@ -50,6 +50,27 @@ def _write_broken_yaml(root: Path, task) -> Path:
         encoding="utf-8",
     )
     return task_dir
+
+
+def test_record_recovery_report_uses_sqlite_storage(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Recovery storage")
+
+    record_recovery_report(
+        tmp_path,
+        task,
+        trigger_event_kind=TriggerEventKind.CRASH,
+        origin_stage="implementing",
+        summary="captured crash",
+        runnable_state="blocked",
+        failure_classification="crash",
+        blocker="boom",
+    )
+
+    reports = load_recovery_reports(tmp_path, task)
+    assert len(reports) == 1
+    assert reports[0].summary == "captured crash"
+    assert list((tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "recovery").glob("*.yaml")) == []
 
 
 def test_run_once_retries_uv_sync_failure_after_recovery(tmp_path: Path, monkeypatch) -> None:

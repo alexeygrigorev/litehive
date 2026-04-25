@@ -1,11 +1,11 @@
 """Recovery evidence, task activity, and report helpers."""
 
+from dataclasses import dataclass
 import json
 from pathlib import Path
 from typing import Iterable
 
 from pydantic import ValidationError
-import yaml
 
 from litehive.agents.session_store import load_subagent_artifacts
 from litehive.db.schema import connect_workspace_db
@@ -27,19 +27,33 @@ from .activity import (
     resolve_task_activity_path,
 )
 from .paths import (
-    latest_path,
     latest_run_all_log_path,
     latest_subagent_base,
     resolve_artifact_path,
     status_entry_paths,
     task_dir,
     task_file,
-    task_recovery_dir,
 )
 
 RETRACTED_FILESYSTEM_MARKER = "[retracted - filesystem check shows no changes landed]"
 _RETRACTABLE_STEPS = {"implementing", "testing", "accepting"}
 _FILES_CHANGED_PLACEHOLDERS = {"none", "n/a", "-", ""}
+
+
+@dataclass(frozen=True, slots=True)
+class ReportReference:
+    table: str
+    row_id: int
+
+    def display(self) -> str:
+        return f"sqlite:{self.table}/{self.row_id}"
+
+    def relative_to(self, root: Path) -> str:
+        del root
+        return self.display()
+
+    def __str__(self) -> str:
+        return self.display()
 
 
 def collect_recovery_evidence(
@@ -57,7 +71,7 @@ def collect_recovery_evidence(
     task_path = task_file(root, task)
     activity_path = resolve_task_activity_path(root, task)
     events_path = task_dir(root, task) / "events.jsonl"
-    latest_report_path = latest_path(sorted((task_dir(root, task) / "reports").glob("*.yaml")))
+    latest_report = latest_stage_report(root, task)
     latest_run_log = latest_run_all_log_path(root)
     monitoring_path = engine_monitoring_file(root)
     monitoring = load_engine_monitoring(root)
@@ -108,14 +122,20 @@ def collect_recovery_evidence(
             summary="task lifecycle and subagent event stream",
         )
     )
-    if latest_report_path is not None:
+    if latest_report is not None:
         evidence.append(
             RecoveryEvidenceItem(
                 kind="stage_report",
                 label="latest stage report",
-                path=str(latest_report_path.relative_to(root)),
                 exists=True,
-                summary=f"latest report for {task.id}",
+                summary=_stage_report_context(latest_report),
+                metadata={
+                    "pipeline_state": latest_report.pipeline_state,
+                    "verdict": latest_report.verdict,
+                    "source": latest_report.source,
+                    "created_at": latest_report.created_at,
+                    "failure_classification": latest_report.failure_classification,
+                },
             )
         )
     if subagent_base is not None:
@@ -209,14 +229,22 @@ def collect_recovery_evidence(
     return evidence
 
 
-def write_recovery_report(root: Path, task: TaskRecord, report: RecoveryReport) -> Path:
-    reports_dir = task_recovery_dir(root, task)
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    existing = sorted(reports_dir.glob("recovery-*.yaml"))
-    ordinal = len(existing) + 1
-    path = reports_dir / f"recovery-{ordinal:03d}.yaml"
-    path.write_text(yaml.safe_dump(report.model_dump(mode="json"), sort_keys=False), encoding="utf-8")
-    return path
+def _stage_report_context(report: StageReport) -> str:
+    return f"{report.pipeline_state}/{report.verdict} source={report.source} summary={report.summary}"
+
+
+def _insert_recovery_report(root: Path, task: TaskRecord, report: RecoveryReport) -> ReportReference:
+    payload = json.dumps(report.model_dump(mode="json"), sort_keys=True)
+    with connect_workspace_db(root) as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO recovery_reports (task_id, origin_stage, trigger_event_kind, created_at, payload)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (task.id, report.origin_stage, report.trigger_event_kind.value, report.created_at, payload),
+        )
+        connection.commit()
+    return ReportReference(table="recovery_reports", row_id=int(cursor.lastrowid))
 
 
 def record_recovery_report(
@@ -231,7 +259,7 @@ def record_recovery_report(
     failure_classification: str | None = None,
     blocker: str | None = None,
     warnings: list[str] | None = None,
-) -> Path:
+) -> ReportReference:
     report = RecoveryReport(
         task_id=task.id,
         origin_stage=origin_stage,
@@ -244,7 +272,8 @@ def record_recovery_report(
         actions=list(actions or []),
         warnings=list(warnings or []),
     )
-    path = write_recovery_report(root, task, report)
+    ref = _insert_recovery_report(root, task, report)
+    latest_report = latest_stage_report(root, task)
     append_task_activity(
         root,
         task,
@@ -255,31 +284,23 @@ def record_recovery_report(
             message=(
                 f"Recovery trigger `{trigger_event_kind.value}`: {summary}\n"
                 f"runnable_state: {runnable_state}\n"
-                f"report: {path.relative_to(root)}" + (f"\nblocker: {blocker}" if blocker else "")
+                f"report: {ref}"
+                + (f"\nlatest_stage_report: {_stage_report_context(latest_report)}" if latest_report is not None else "")
+                + (f"\nblocker: {blocker}" if blocker else "")
             ),
         ),
     )
-    return path
+    return ref
 
 
 def append_activity_entry(root: Path, task: TaskRecord, entry: "TaskActivityEntry") -> None:
     append_task_activity(root, task, entry)
 
 
-def write_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Path:
-    reports_dir = task_dir(root, task) / "reports"
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    existing = sorted(reports_dir.glob(f"{report.pipeline_state}-*.yaml"))
-    ordinal = len(existing) + 1
-    path = reports_dir / f"{report.pipeline_state}-{ordinal:03d}.yaml"
-    path.write_text(yaml.safe_dump(report.model_dump(mode="json"), sort_keys=False), encoding="utf-8")
-    return path
-
-
-def record_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Path:
+def record_stage_report(root: Path, task: TaskRecord, report: StageReport) -> ReportReference:
     payload = json.dumps(report.model_dump(mode="json"), sort_keys=True)
     with connect_workspace_db(root) as connection:
-        connection.execute(
+        cursor = connection.execute(
             """
             INSERT INTO stage_reports (task_id, pipeline_state, created_at, payload)
             VALUES (?, ?, ?, ?)
@@ -287,76 +308,94 @@ def record_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Pa
             (task.id, report.pipeline_state, report.created_at, payload),
         )
         connection.commit()
-    return write_stage_report(root, task, report)
+    return ReportReference(table="stage_reports", row_id=int(cursor.lastrowid))
 
 
-def rewrite_latest_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Path:
+def rewrite_latest_stage_report(root: Path, task: TaskRecord, report: StageReport) -> ReportReference:
     payload = json.dumps(report.model_dump(mode="json"), sort_keys=True)
-    rewritten = False
     with connect_workspace_db(root) as connection:
-        rows = connection.execute(
+        row = connection.execute(
             """
             SELECT id
             FROM stage_reports
             WHERE task_id = ? AND pipeline_state = ?
             ORDER BY id DESC
+            LIMIT 1
             """,
             (task.id, report.pipeline_state),
-        ).fetchall()
-        for row in rows:
-            connection.execute(
-                """
-                UPDATE stage_reports
-                SET created_at = ?, payload = ?
-                WHERE id = ?
-                """,
-                (report.created_at, payload, int(row["id"])),
-            )
+        ).fetchone()
+        if row is None:
             connection.commit()
-            rewritten = True
-            break
-
-    if not rewritten:
-        return record_stage_report(root, task, report)
-
-    reports_dir = task_dir(root, task) / "reports"
-    report_path = latest_path(sorted(reports_dir.glob(f"{report.pipeline_state}-*.yaml")))
-    if report_path is None:
-        return write_stage_report(root, task, report)
-    report_path.write_text(yaml.safe_dump(report.model_dump(mode="json"), sort_keys=False), encoding="utf-8")
-    return report_path
-
-
-def _deserialize_stage_report_payload(payload: dict[str, object]) -> StageReport:
-    normalized = dict(payload)
-    if "pipeline_state" not in normalized and "stage" in normalized:
-        normalized["pipeline_state"] = normalized["stage"]
-    normalized.pop("stage", None)
-    normalized.pop("files_changed", None)
-    if isinstance(normalized.get("verdict"), str):
-        verdict = canonical_stage_report_verdict(str(normalized["verdict"]))
-        if verdict is not None:
-            normalized["verdict"] = verdict
-    return StageReport(**normalized)
+            return record_stage_report(root, task, report)
+        report_id = int(row["id"])
+        connection.execute(
+            """
+            UPDATE stage_reports
+            SET created_at = ?, payload = ?
+            WHERE id = ?
+            """,
+            (report.created_at, payload, report_id),
+        )
+        connection.commit()
+    return ReportReference(table="stage_reports", row_id=report_id)
 
 
-def load_stage_reports(
+def _deserialize_recovery_report_payload(payload: dict[str, object]) -> RecoveryReport:
+    return RecoveryReport(**payload)
+
+
+def load_recovery_reports(root: Path, task: TaskRecord) -> list[RecoveryReport]:
+    with connect_workspace_db(root) as connection:
+        rows = connection.execute(
+            """
+            SELECT payload
+            FROM recovery_reports
+            WHERE task_id = ?
+            ORDER BY id ASC
+            """,
+            (task.id,),
+        ).fetchall()
+
+    reports: list[RecoveryReport] = []
+    for row in rows:
+        try:
+            payload = json.loads(str(row["payload"]))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        try:
+            reports.append(_deserialize_recovery_report_payload(payload))
+        except ValidationError:
+            continue
+    return reports
+
+
+def latest_recovery_report(root: Path, task: TaskRecord) -> RecoveryReport | None:
+    reports = load_recovery_reports(root, task)
+    return reports[-1] if reports else None
+
+
+def _load_stage_reports(
     root: Path,
-    task: TaskRecord,
     *,
+    task_id: str | None = None,
     pipeline_state: str | None = None,
-    stage: str | None = None,
 ) -> list[StageReport]:
-    selected_pipeline_state = pipeline_state if pipeline_state is not None else stage
     query = """
         SELECT payload
         FROM stage_reports
-        WHERE task_id = ?
     """
-    params: list[str] = [task.id]
-    if selected_pipeline_state is not None:
-        query += " AND pipeline_state = ?"
-        params.append(selected_pipeline_state)
+    clauses: list[str] = []
+    params: list[str] = []
+    if task_id is not None:
+        clauses.append("task_id = ?")
+        params.append(task_id)
+    if pipeline_state is not None:
+        clauses.append("pipeline_state = ?")
+        params.append(pipeline_state)
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
     query += " ORDER BY id ASC"
     with connect_workspace_db(root) as connection:
         rows = connection.execute(query, tuple(params)).fetchall()
@@ -376,6 +415,30 @@ def load_stage_reports(
     return reports
 
 
+def load_stage_reports_for_task_id(
+    root: Path,
+    task_id: str,
+    *,
+    pipeline_state: str | None = None,
+) -> list[StageReport]:
+    return _load_stage_reports(root, task_id=task_id, pipeline_state=pipeline_state)
+
+
+def load_workspace_stage_reports(root: Path) -> list[StageReport]:
+    return _load_stage_reports(root)
+
+
+def load_stage_reports(
+    root: Path,
+    task: TaskRecord,
+    *,
+    pipeline_state: str | None = None,
+    stage: str | None = None,
+) -> list[StageReport]:
+    selected_pipeline_state = pipeline_state if pipeline_state is not None else stage
+    return _load_stage_reports(root, task_id=task.id, pipeline_state=selected_pipeline_state)
+
+
 def latest_stage_report(root: Path, task: TaskRecord, *, source: str | None = None) -> StageReport | None:
     reports = load_stage_reports(root, task)
     for report in reversed(reports):
@@ -383,6 +446,19 @@ def latest_stage_report(root: Path, task: TaskRecord, *, source: str | None = No
             continue
         return report
     return None
+
+
+def _deserialize_stage_report_payload(payload: dict[str, object]) -> StageReport:
+    normalized = dict(payload)
+    if "pipeline_state" not in normalized and "stage" in normalized:
+        normalized["pipeline_state"] = normalized["stage"]
+    normalized.pop("stage", None)
+    normalized.pop("files_changed", None)
+    if isinstance(normalized.get("verdict"), str):
+        verdict = canonical_stage_report_verdict(str(normalized["verdict"]))
+        if verdict is not None:
+            normalized["verdict"] = verdict
+    return StageReport(**normalized)
 
 
 def normalized_files_changed(paths: Iterable[str]) -> list[str]:

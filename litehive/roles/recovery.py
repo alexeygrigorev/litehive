@@ -23,10 +23,9 @@ ROLE_GUIDANCE = """\
   - `litehive task logs <task_id>` — task journal (v1 style) with stage entries, verdict submissions, and operator notes.
   - `litehive task logs --daemon` — daemon-level events if you suspect an orchestrator/runner bug rather than an agent bug.
   - `litehive pipeline rules` — the full v2 transition table, if you need to understand what routing decisions the state machine made.
-  - `.litehive/tasks/<task_id>/reports/*.yaml` — stage reports the agent wrote (if any).
-  - Task activity from `litehive task logs <task_id>` / `litehive task debug <task_id>` — verdict history and operator activity.
+  - `litehive task debug <task_id>` — latest stage report context, verdict history, and operator activity.
   - The `recovery_trigger` field in your prompt already contains the most recent trigger event, source, and reason — use it to narrow your log search.
-  - If you need to go deeper than the CLI commands, the underlying tables are `pipeline_transitions` (columns: `seq, created_at, from_stage, event_type, event_payload, to_stage, rule_description, delta`) and `pipeline_journal` (columns: `seq, created_at, kind, payload`). Don't invent column names.
+  - If you need to go deeper than the CLI commands, the underlying tables are `stage_reports`, `recovery_reports`, `pipeline_transitions` (columns: `seq, created_at, from_stage, event_type, event_payload, to_stage, rule_description, delta`) and `pipeline_journal` (columns: `seq, created_at, kind, payload`). Don't invent column names.
 - Diagnose the failing agent before you touch code:
   - Did the agent produce any stdout, stderr, or transcript output?
   - Did it try to call `litehive report`?
