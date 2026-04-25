@@ -164,8 +164,9 @@ class Verdict(StringEnum):
 
     Created by subagents and hook execution paths when they submit the result
     of a pipeline state. Used by PipelineRunner to decide whether to advance,
-    retry, block, or enter recovery. Also used by ActivityEntry, StageReport,
-    and TaskOutcome as the canonical decision value.
+    retry, block, or enter recovery. Also used by ActivityEntry and
+    TaskOutcome as the canonical submitted decision value. StageReport maps
+    submitted decisions into its narrower pass/reject/blocked verdict set.
     """
     PASS = "pass"              # General positive outcome
     ACCEPT = "accept"          # Stage goal was achieved

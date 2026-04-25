@@ -45,9 +45,11 @@ from litehive.tasks.runtime import (
     mark_subagent_progress,
     mark_subagent_started,
 )
-from litehive.tasks.reports import record_stage_report
+from litehive.tasks.activity import latest_task_activity_entry
+from litehive.tasks.reports import normalized_files_changed, record_stage_report
 
 _REPORTABLE_STAGES = {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
+_REPORT_FILE_VERDICTS = {"pass", "reject", "blocked", "resume", "advance", "done", "budget_hit"}
 _DEFAULT_STAGE_FOR_ROLE = {
     "planner": "grooming",
     "swe": "implementing",
@@ -58,6 +60,13 @@ _DEFAULT_STAGE_FOR_ROLE = {
 }
 
 logger = logging.getLogger(__name__)
+
+
+def _latest_report_files_changed(root: Path, task: TaskRecord, pipeline_state: str) -> list[str]:
+    latest = latest_task_activity_entry(root, task, stage=pipeline_state, verdicts=_REPORT_FILE_VERDICTS)
+    if latest is None:
+        return []
+    return normalized_files_changed(latest.files_changed)
 
 
 def _check_engine_availability_with_retry(engine, max_retries: int = 2, delay: float = 0.5) -> bool:
@@ -445,6 +454,7 @@ class SubagentManager(SessionMixin):
             transcript=transcript,
         )
         report = report.model_copy(update={"warnings": self._merged_warnings(report.warnings, extra_warnings)})
+        files_changed = _latest_report_files_changed(self.root, task, str(report.pipeline_state))
         record_stage_report(self.root, task, report)
         self.write_session_snapshot(
             task,
@@ -457,7 +467,7 @@ class SubagentManager(SessionMixin):
             report_payload={
                 "status": ref.status,
                 "summary": report.summary,
-                "files_changed": report.files_changed,
+                "files_changed": files_changed,
                 "tests": report.tests,
                 "warnings": report.warnings,
                 "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
@@ -564,7 +574,7 @@ class SubagentManager(SessionMixin):
             report_payload = {
                 "status": ref.status,
                 "summary": report.summary,
-                "files_changed": report.files_changed,
+                "files_changed": _latest_report_files_changed(self.root, task, str(report.pipeline_state)),
                 "tests": report.tests,
                 "warnings": report.warnings,
                 "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),

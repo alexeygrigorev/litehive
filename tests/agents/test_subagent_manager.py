@@ -144,7 +144,7 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
     assert report["summary"] == "REJECT"
     assert report["warnings"] == []
     assert stage_reports[-1].source == "agent"
-    assert stage_reports[-1].stage == "grooming"
+    assert stage_reports[-1].pipeline_state == "grooming"
     assert stage_reports[-1].summary == "REJECT"
 
 

@@ -923,13 +923,12 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
     )
     record = StageReport(
         task_id=task.id,
-        stage="implementing",
+        pipeline_state="implementing",
         verdict="pass",
         source="agent",
         summary="implemented foo.py",
         feedback="implemented foo.py",
         submitted_via_cli=True,
-        files_changed=["foo.py"],
     )
     from litehive.tasks.reports import record_stage_report
 
@@ -958,9 +957,9 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
     assert "reason_code: hallucinated_completion" in activity_entries[0].message
     assert "git_status_porcelain: clean" in activity_entries[0].message
 
-    reports = load_stage_reports(tmp_path, task, stage="implementing")
+    reports = load_stage_reports(tmp_path, task, pipeline_state="implementing")
     assert len(reports) == 1
-    assert reports[0].verdict == "fail"
+    assert reports[0].verdict == "reject"
     assert reports[0].failure_classification == "hallucinated_completion"
     assert reports[0].outcome_reason_code == "hallucinated_completion"
     assert reports[0].failure_diagnostics["claimed_files_changed"] == ["foo.py"]

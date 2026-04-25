@@ -17,7 +17,7 @@ def test_pool_reads_canonical_stage_reports(tmp_path) -> None:
         task,
         StageReport(
             task_id=task.id,
-            stage="implementing",
+            pipeline_state="implementing",
             verdict="pass",
             summary="implemented change",
             duration_seconds=12,
@@ -38,7 +38,7 @@ def test_pool_flow_statistics_use_canonical_stage_keys(tmp_path) -> None:
         task,
         StageReport(
             task_id=task.id,
-            stage="implementing",
+            pipeline_state="implementing",
             verdict="pass",
             summary="implemented change",
             duration_seconds=12,

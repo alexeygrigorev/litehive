@@ -703,7 +703,7 @@ def _record_hook_warnings(
     feedback = "\n\n".join(warnings)
     report = StageReport(
         task_id=task.id,
-        stage=report_stage,  # type: ignore[arg-type]
+        pipeline_state=report_stage,  # type: ignore[arg-type]
         verdict="pass",
         source="hook",
         summary=summary,
@@ -770,7 +770,7 @@ def _record_hook_reject(
         )
     report = StageReport(
         task_id=task.id,
-        stage=report_stage,  # type: ignore[arg-type]
+        pipeline_state=report_stage,  # type: ignore[arg-type]
         verdict="reject",
         source="hook",
         summary=summary,

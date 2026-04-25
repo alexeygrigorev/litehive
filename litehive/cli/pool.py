@@ -27,7 +27,7 @@ def task_stage_outcomes(root, task_id, slug):
     )
     for report_path in report_paths:
         report_data = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
-        stage = str(report_data.get("stage") or "").strip()
+        stage = str(report_data.get("pipeline_state") or report_data.get("stage") or "").strip()
         verdict = str(report_data.get("verdict") or "").strip()
         if stage and verdict:
             outcomes.append(f"{stage}={verdict}")
@@ -60,7 +60,7 @@ def collect_task_stage_stats(root, task_id):
             data = yaml.safe_load(report_path.read_text(encoding="utf-8")) or {}
         except (yaml.YAMLError, OSError):
             continue
-        stage = str(data.get("stage") or "").strip()
+        stage = str(data.get("pipeline_state") or data.get("stage") or "").strip()
         verdict = str(data.get("verdict") or "").strip()
         if not stage or not verdict:
             continue

@@ -11,7 +11,14 @@ from litehive.agents.session_store import load_subagent_artifacts
 from litehive.db.schema import connect_workspace_db
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
 from litehive.domain.recovery import TriggerEventKind
-from litehive.domain.reports import RecoveryAction, RecoveryEvidenceItem, RecoveryReport, StageReport, TaskActivityEntry
+from litehive.domain.reports import (
+    RecoveryAction,
+    RecoveryEvidenceItem,
+    RecoveryReport,
+    StageReport,
+    TaskActivityEntry,
+    canonical_stage_report_verdict,
+)
 from litehive.domain.task import TaskRecord
 
 from .activity import (
@@ -262,9 +269,9 @@ def append_activity_entry(root: Path, task: TaskRecord, entry: "TaskActivityEntr
 def write_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Path:
     reports_dir = task_dir(root, task) / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
-    existing = sorted(reports_dir.glob(f"{report.stage}-*.yaml"))
+    existing = sorted(reports_dir.glob(f"{report.pipeline_state}-*.yaml"))
     ordinal = len(existing) + 1
-    path = reports_dir / f"{report.stage}-{ordinal:03d}.yaml"
+    path = reports_dir / f"{report.pipeline_state}-{ordinal:03d}.yaml"
     path.write_text(yaml.safe_dump(report.model_dump(mode="json"), sort_keys=False), encoding="utf-8")
     return path
 
@@ -274,10 +281,10 @@ def record_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Pa
     with connect_workspace_db(root) as connection:
         connection.execute(
             """
-            INSERT INTO stage_reports (task_id, stage, created_at, payload)
+            INSERT INTO stage_reports (task_id, pipeline_state, created_at, payload)
             VALUES (?, ?, ?, ?)
             """,
-            (task.id, report.stage, report.created_at, payload),
+            (task.id, report.pipeline_state, report.created_at, payload),
         )
         connection.commit()
     return write_stage_report(root, task, report)
@@ -291,10 +298,10 @@ def rewrite_latest_stage_report(root: Path, task: TaskRecord, report: StageRepor
             """
             SELECT id
             FROM stage_reports
-            WHERE task_id = ? AND stage = ?
+            WHERE task_id = ? AND pipeline_state = ?
             ORDER BY id DESC
             """,
-            (task.id, report.stage),
+            (task.id, report.pipeline_state),
         ).fetchall()
         for row in rows:
             connection.execute(
@@ -313,23 +320,43 @@ def rewrite_latest_stage_report(root: Path, task: TaskRecord, report: StageRepor
         return record_stage_report(root, task, report)
 
     reports_dir = task_dir(root, task) / "reports"
-    report_path = latest_path(sorted(reports_dir.glob(f"{report.stage}-*.yaml")))
+    report_path = latest_path(sorted(reports_dir.glob(f"{report.pipeline_state}-*.yaml")))
     if report_path is None:
         return write_stage_report(root, task, report)
     report_path.write_text(yaml.safe_dump(report.model_dump(mode="json"), sort_keys=False), encoding="utf-8")
     return report_path
 
 
-def load_stage_reports(root: Path, task: TaskRecord, *, stage: str | None = None) -> list[StageReport]:
+def _deserialize_stage_report_payload(payload: dict[str, object]) -> StageReport:
+    normalized = dict(payload)
+    if "pipeline_state" not in normalized and "stage" in normalized:
+        normalized["pipeline_state"] = normalized["stage"]
+    normalized.pop("stage", None)
+    normalized.pop("files_changed", None)
+    if isinstance(normalized.get("verdict"), str):
+        verdict = canonical_stage_report_verdict(str(normalized["verdict"]))
+        if verdict is not None:
+            normalized["verdict"] = verdict
+    return StageReport(**normalized)
+
+
+def load_stage_reports(
+    root: Path,
+    task: TaskRecord,
+    *,
+    pipeline_state: str | None = None,
+    stage: str | None = None,
+) -> list[StageReport]:
+    selected_pipeline_state = pipeline_state if pipeline_state is not None else stage
     query = """
         SELECT payload
         FROM stage_reports
         WHERE task_id = ?
     """
     params: list[str] = [task.id]
-    if stage is not None:
-        query += " AND stage = ?"
-        params.append(stage)
+    if selected_pipeline_state is not None:
+        query += " AND pipeline_state = ?"
+        params.append(selected_pipeline_state)
     query += " ORDER BY id ASC"
     with connect_workspace_db(root) as connection:
         rows = connection.execute(query, tuple(params)).fetchall()
@@ -343,7 +370,7 @@ def load_stage_reports(root: Path, task: TaskRecord, *, stage: str | None = None
         if not isinstance(payload, dict):
             continue
         try:
-            reports.append(StageReport(**payload))
+            reports.append(_deserialize_stage_report_payload(payload))
         except ValidationError:
             continue
     return reports

@@ -84,7 +84,7 @@ def debug_latest(root: Path, task):
     if stage_report is not None:
         print(f"stage_report_verdict: {stage_report.verdict}")
         print(f"stage_report_source: {stage_report.source}")
-        print(f"stage_report_stage: {stage_report.stage}")
+        print(f"stage_report_pipeline_state: {stage_report.pipeline_state}")
         print(f"stage_report_summary: {stage_report.summary}")
 
     # -- Transcript summary (first 200 chars) --

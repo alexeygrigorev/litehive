@@ -181,7 +181,7 @@ def test_debug_shows_latest_hook_stage_report(tmp_path: Path, capsys: pytest.Cap
         task,
         StageReport(
             task_id=task.id,
-            stage="accepting",
+            pipeline_state="accepting",
             verdict="reject",
             source="hook",
             summary="accepting rejected: hook `uv run ruff check .` failed at `before_accepting`",
@@ -195,7 +195,7 @@ def test_debug_shows_latest_hook_stage_report(tmp_path: Path, capsys: pytest.Cap
     assert exit_code == 0
     assert "stage_report_verdict: reject" in output
     assert "stage_report_source: hook" in output
-    assert "stage_report_stage: accepting" in output
+    assert "stage_report_pipeline_state: accepting" in output
     assert "stage_report_summary: accepting rejected: hook `uv run ruff check .` failed at `before_accepting`" in output
 
 

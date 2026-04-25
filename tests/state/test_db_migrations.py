@@ -38,20 +38,22 @@ def test_embedded_initial_migration_is_discoverable() -> None:
     migrations = available_migrations()
 
     names = [migration.name for migration in migrations]
-    assert names == ["0001_initial.sql", "0002_task_audit_log.sql"]
+    assert names == ["0001_initial.sql", "0002_task_audit_log.sql", "0003_stage_reports_pipeline_state.sql"]
     assert migrations[0].version == 1
     assert "CREATE TABLE IF NOT EXISTS pool_state" in migrations[0].sql
     assert "CREATE TABLE IF NOT EXISTS pipeline_transitions" in migrations[0].sql
     assert "CREATE TABLE IF NOT EXISTS pipeline_task_state" in migrations[0].sql
     assert migrations[1].version == 2
     assert "CREATE TABLE IF NOT EXISTS task_audit_log" in migrations[1].sql
+    assert migrations[2].version == 3
+    assert "RENAME COLUMN stage TO pipeline_state" in migrations[2].sql
 
 
 def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     staged = (
         *available_migrations(),
-        Migration(version=3, name="0003_add_marker.sql", sql="CREATE TABLE marker (id INTEGER PRIMARY KEY);"),
+        Migration(version=4, name="0004_add_marker.sql", sql="CREATE TABLE marker (id INTEGER PRIMARY KEY);"),
     )
     monkeypatch.setattr("litehive.db.schema.available_migrations", lambda: staged)
 
@@ -59,13 +61,13 @@ def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeyp
     dry_run = CliRunner().invoke(app, ["db", "migrate", "--dry-run", "--workspace", str(tmp_path)])
 
     assert status.exit_code == 0, status.output
-    assert "schema_version: 2" in status.output
+    assert "schema_version: 3" in status.output
     assert "pending_migrations: 1" in status.output
-    assert "pending: 0003_add_marker.sql" in status.output
+    assert "pending: 0004_add_marker.sql" in status.output
 
     assert dry_run.exit_code == 0, dry_run.output
     assert "dry_run: yes" in dry_run.output
-    assert "would_apply: 0003_add_marker.sql" in dry_run.output
+    assert "would_apply: 0004_add_marker.sql" in dry_run.output
 
     with sqlite3.connect(workspace_path(tmp_path, "data.db")) as connection:
         marker = connection.execute(
@@ -79,8 +81,8 @@ def test_apply_pending_migrations_rolls_back_failed_migration(tmp_path: Path, mo
     staged = (
         *available_migrations(),
         Migration(
-            version=3,
-            name="0003_broken.sql",
+            version=4,
+            name="0004_broken.sql",
             sql=("CREATE TABLE broken_marker (id INTEGER PRIMARY KEY);INSERT INTO missing_table(value) VALUES (1);"),
         ),
     )
@@ -97,7 +99,7 @@ def test_apply_pending_migrations_rolls_back_failed_migration(tmp_path: Path, mo
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'broken_marker'"
         ).fetchone()
 
-    assert applied_versions == [1, 2]
+    assert applied_versions == [1, 2, 3]
     assert broken_marker is None
 
 
@@ -108,8 +110,8 @@ def test_daemon_run_applies_pending_migrations_before_start(
     staged = (
         *available_migrations(),
         Migration(
-            version=3,
-            name="0003_daemon_marker.sql",
+            version=4,
+            name="0004_daemon_marker.sql",
             sql="CREATE TABLE daemon_marker (id INTEGER PRIMARY KEY);",
         ),
     )
@@ -132,7 +134,7 @@ def test_daemon_run_applies_pending_migrations_before_start(
         daemon_marker = connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'daemon_marker'"
         ).fetchone()
-    assert applied_versions == [1, 2, 3]
+    assert applied_versions == [1, 2, 3, 4]
     assert daemon_marker is not None
 
 
@@ -194,7 +196,7 @@ def test_legacy_workspace_db_is_rebuilt_without_task_yaml_rescan(tmp_path: Path)
         rows = connection.execute("SELECT task_id FROM task_state ORDER BY task_id").fetchall()
         queue_row = connection.execute("SELECT payload FROM queue WHERE workspace_key = 'workspace'").fetchone()
 
-    assert applied_versions == [1, 2]
+    assert applied_versions == [1, 2, 3]
     assert rows == []
     assert queue_row is not None
     assert queue_row[0] == "[]"

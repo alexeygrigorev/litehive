@@ -2,7 +2,7 @@
 
 from typing import Literal, TypeAlias
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .common import (
     FEEDBACK_CAP,
@@ -10,14 +10,14 @@ from .common import (
     OutcomeReasonCode,
     TaskStage,
     TRUNCATION_MARKER,
-    Verdict,
     cap_feedback,
     utcnow,
 )
 from .recovery import TriggerEventKind
 
 
-ReportStage: TypeAlias = TaskStage | Literal["merge_resolving", "recovering"]
+ReportPipelineState: TypeAlias = TaskStage | Literal["merge_resolving", "recovering"]
+StageReportVerdict: TypeAlias = Literal["pass", "reject", "blocked"]
 TaskActivityVerdict: TypeAlias = Literal[
     "pass",
     "reject",
@@ -31,6 +31,17 @@ TaskActivityVerdict: TypeAlias = Literal[
 
 SEMANTIC_REJECT_CLASSIFICATION = "semantic_reject"
 SEMANTIC_REJECT_ROLES = frozenset({"qa", "reviewer"})
+_STAGE_REPORT_VERDICT_ALIASES: dict[str, StageReportVerdict] = {
+    "pass": "pass",
+    "accept": "pass",
+    "resume": "pass",
+    "advance": "pass",
+    "done": "pass",
+    "reject": "reject",
+    "fail": "reject",
+    "blocked": "blocked",
+    "budget_hit": "blocked",
+}
 
 
 def classify_task_activity_verdict(role: str, verdict: str) -> str | None:
@@ -40,8 +51,13 @@ def classify_task_activity_verdict(role: str, verdict: str) -> str | None:
     return None
 
 
+def canonical_stage_report_verdict(verdict: str) -> StageReportVerdict | None:
+    """Map submitted activity verdicts into the narrow StageReport verdict set."""
+    return _STAGE_REPORT_VERDICT_ALIASES.get(verdict.strip().lower())
+
+
 class StageReport(BaseModel):
-    """Normalized machine-readable summary of a pipeline stage execution.
+    """Normalized machine-readable summary of a pipeline state execution.
 
     Separate from ActivityEntry to serve different purposes:
     - ActivityEntry: append-only conversation and review history for humans
@@ -56,15 +72,15 @@ class StageReport(BaseModel):
     Primary consumers: PipelineRunner for routing decisions, recovery logic
     for failure analysis, and reporting systems for metrics and debugging.
     """
+    model_config = ConfigDict(extra="forbid")
 
     task_id: str                                        # Task this report belongs to
-    stage: ReportStage                                  # Pipeline stage that was executed
-    verdict: Verdict                                    # Final stage verdict (accept, reject, blocked)
+    pipeline_state: ReportPipelineState                 # Pipeline state that was executed
+    verdict: StageReportVerdict                         # Final pipeline-state verdict
     source: Literal["agent", "hook"] = "agent"          # What generated this report
-    summary: str                                        # Brief description of stage results
+    summary: str                                        # Brief description of pipeline-state results
     feedback: str = ""                                  # Detailed feedback or explanation
     submitted_via_cli: bool = False                     # Whether submitted via CLI vs internal
-    files_changed: list[str] = Field(default_factory=list)  # Files modified during stage
     tests: dict[str, int] = Field(default_factory=lambda: {"added": 0, "passing": 0})  # Test metrics
     warnings: list[str] = Field(default_factory=list)  # Non-fatal warnings
     retry_count: int = 0                               # Current retry attempt number
@@ -186,10 +202,13 @@ __all__ = [
     "RecoveryAction",
     "RecoveryEvidenceItem",
     "RecoveryReport",
+    "ReportPipelineState",
     "SEMANTIC_REJECT_CLASSIFICATION",
     "StageReport",
+    "StageReportVerdict",
     "TaskActivityEntry",
     "TRUNCATION_MARKER",
     "cap_feedback",
+    "canonical_stage_report_verdict",
     "classify_task_activity_verdict",
 ]

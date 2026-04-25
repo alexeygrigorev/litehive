@@ -56,7 +56,7 @@ def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_pat
     task = require_task(tmp_path, task.id)
     report = StageReport(
         task_id=task.id,
-        stage="implementing",
+        pipeline_state="implementing",
         verdict="pass",
         summary="implemented the change",
     )

@@ -68,7 +68,7 @@ def test_render_task_summary_surfaces_semantic_reject_classification(tmp_path: P
         task,
         StageReport(
             task_id=task.id,
-            stage="accepting",
+            pipeline_state="accepting",
             verdict="reject",
             summary="acceptance evidence is incomplete",
             failure_classification=SEMANTIC_REJECT_CLASSIFICATION,

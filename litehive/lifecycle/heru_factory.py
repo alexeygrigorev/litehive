@@ -175,13 +175,12 @@ def _rewrite_hallucinated_implementing_pass(
 
     report = StageReport(
         task_id=task.id,
-        stage="implementing",
-        verdict="fail",
+        pipeline_state="implementing",
+        verdict="reject",
         source="agent",
-        summary="implementing fail: pass report claimed files_changed but the execution checkout was clean",
+        summary="implementing reject: pass report claimed files_changed but the execution checkout was clean",
         feedback=cap_feedback(detail),
         submitted_via_cli=False,
-        files_changed=claimed_files,
         failure_classification=reason_code,
         outcome_reason_code=OutcomeReasonCode.HALLUCINATED_COMPLETION,
         failure_diagnostics={

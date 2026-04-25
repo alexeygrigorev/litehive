@@ -916,7 +916,7 @@ def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path
     reports = load_stage_reports(tmp_path, refreshed)
     hook_reports = [report for report in reports if report.source == "hook"]
     assert hook_reports
-    assert hook_reports[-1].stage == "commit_to_git"
+    assert hook_reports[-1].pipeline_state == "commit_to_git"
     assert hook_reports[-1].verdict == "reject"
     assert hook_reports[-1].source == "hook"
     assert hook_reports[-1].failure_diagnostics["phase"] == "after_commit"
@@ -1016,7 +1016,7 @@ def test_run_task_before_accepting_hook_retries_and_continues(
     hook_reports = [report for report in reports if report.source == "hook"]
     assert hook_reports
     report = hook_reports[-1]
-    assert report.stage == "accepting"
+    assert report.pipeline_state == "accepting"
     assert report.verdict == "reject"
     assert report.source == "hook"
     assert report.failure_diagnostics["phase"] == "before_accepting"
@@ -1077,13 +1077,13 @@ def test_run_task_retries_sequential_hooks_one_failure_at_a_time(tmp_path: Path)
     hook_reports = [report for report in reports if report.source == "hook"]
     assert len(hook_reports) == 2
     first_report, second_report = hook_reports
-    assert first_report.stage == "implementing"
+    assert first_report.pipeline_state == "implementing"
     assert first_report.verdict == "reject"
     assert first_report.failure_diagnostics["phase"] == "after_implementing"
     assert len(first_report.warnings) == 1
     assert "first failed" in first_report.feedback
     assert "second failed" not in first_report.feedback
-    assert second_report.stage == "implementing"
+    assert second_report.pipeline_state == "implementing"
     assert second_report.verdict == "reject"
     assert len(second_report.warnings) == 1
     assert "second failed" in second_report.feedback

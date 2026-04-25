@@ -11,7 +11,7 @@ from litehive.agents.parsing import stage_report_from_subagent
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.agent import EngineFailure, SubagentResult
 from litehive.domain.common import FEEDBACK_CAP
-from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, TaskActivityEntry
+from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport, TaskActivityEntry
 from litehive.state.records import create_task
 from litehive.tasks.paths import task_dir
 from litehive.tasks.reports import append_activity_entry
@@ -92,6 +92,40 @@ def test_stage_report_from_subagent_preserves_semantic_reject_classification(tmp
     assert report.verdict == "reject"
     assert report.failure_classification == SEMANTIC_REJECT_CLASSIFICATION
     assert report.failure_diagnostics["verdict_classification"] == SEMANTIC_REJECT_CLASSIFICATION
+
+
+def test_stage_report_uses_pipeline_state_without_files_changed() -> None:
+    report = StageReport(
+        task_id="T-0001",
+        pipeline_state="implementing",
+        verdict="pass",
+        summary="implemented the change",
+    )
+
+    payload = report.model_dump(mode="json")
+
+    assert payload["pipeline_state"] == "implementing"
+    assert "stage" not in payload
+    assert "files_changed" not in payload
+
+
+def test_stage_report_rejects_comment_verdicts_and_legacy_files_changed() -> None:
+    with pytest.raises(ValidationError, match="verdict"):
+        StageReport(
+            task_id="T-0001",
+            pipeline_state="implementing",
+            verdict="comment",
+            summary="operator note",
+        )
+
+    with pytest.raises(ValidationError, match="files_changed"):
+        StageReport(
+            task_id="T-0001",
+            pipeline_state="implementing",
+            verdict="pass",
+            summary="implemented the change",
+            files_changed=["src/app.py"],
+        )
 
 
 def test_task_activity_entry_rejects_removed_fail_verdict_alias() -> None:

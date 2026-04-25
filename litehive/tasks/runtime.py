@@ -41,8 +41,8 @@ def _completed_stage_state(
     completed_at: str,
 ) -> RuntimeStageState:
     return RuntimeStageState(
-        stage=report.stage,
-        status="completed" if report.verdict in {"pass", "accept"} else report.verdict,
+        stage=report.pipeline_state,
+        status="completed" if report.verdict == "pass" else report.verdict,
         started_at=started_at,
         completed_at=completed_at,
         updated_at=completed_at,
@@ -280,7 +280,7 @@ def apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
     task.runtime.updated_at = now
     task.runtime.last_stage = _completed_stage_state(report, started_at=started_at, completed_at=now)
     task.runtime.current_stage = idle_stage_state(updated_at=now)
-    if task.runtime.continuation_handoff is not None and task.runtime.continuation_handoff.stage == report.stage:
+    if task.runtime.continuation_handoff is not None and task.runtime.continuation_handoff.stage == report.pipeline_state:
         task.runtime.continuation_handoff = None
 
 
