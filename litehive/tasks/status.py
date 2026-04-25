@@ -400,7 +400,15 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
     )
 
 
-def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool = False) -> TaskRecord:
+def requeue_task(
+    root: Path,
+    task_id: str,
+    *,
+    front: bool = False,
+    force: bool = False,
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> TaskRecord:
     from litehive.state.records import get_task_record
     from litehive.tasks.archive import get_archived_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
@@ -494,8 +502,8 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
                 build_task_audit_entry(
                     task_id=task.id,
                     action="requeued",
-                    actor="operator",
-                    source="cli",
+                    actor=audit_actor,
+                    source=audit_source,
                     before_task=before_task,
                     after_task=task,
                     before_queue=queue_before,
@@ -589,7 +597,14 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
         return task
 
 
-def abandon_task(root: Path, task_id: str) -> TaskRecord:
+def abandon_task(
+    root: Path,
+    task_id: str,
+    *,
+    reason: str = "Task abandoned via CLI.",
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> TaskRecord:
     from litehive.state.records import require_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.state.persist import load_state
@@ -607,24 +622,24 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
             task.id,
             None if task.runtime.execution.active_subagent is None else task.runtime.execution.active_subagent.pid,
         )
-        _apply_cancelled_task_state(task, reason="Task abandoned via CLI.")
+        _apply_cancelled_task_state(task, reason=reason)
         _drop_task_from_workspace_state(state, task.id)
         persist_task_and_state_without_runner_guard(
             root,
             task=task,
             state=state,
-            journal_message=f"Task abandoned via CLI at stage `{task.pipeline_status}`.",
+            journal_message=f"{reason.rstrip('.')} at stage `{task.pipeline_status}`.",
             audit_entries=[
                 build_task_audit_entry(
                     task_id=task.id,
                     action="abandoned",
-                    actor="operator",
-                    source="cli",
+                    actor=audit_actor,
+                    source=audit_source,
                     before_task=before_task,
                     after_task=task,
                     before_queue=queue_before,
                     after_queue=state.queue,
-                    context={"reason": "Task abandoned via CLI."},
+                    context={"reason": reason},
                 )
             ],
         )
@@ -804,7 +819,14 @@ def close_task(
         return task
 
 
-def park_task(root: Path, task_id: str) -> TaskRecord:
+def park_task(
+    root: Path,
+    task_id: str,
+    *,
+    reason: str = "Task parked via CLI.",
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> TaskRecord:
     from litehive.state.records import require_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.state.persist import load_state
@@ -828,18 +850,18 @@ def park_task(root: Path, task_id: str) -> TaskRecord:
             root,
             task=task,
             state=state,
-            journal_message=f"Task parked via CLI at stage `{task.pipeline_status}`.",
+            journal_message=f"{reason.rstrip('.')} at stage `{task.pipeline_status}`.",
             audit_entries=[
                 build_task_audit_entry(
                     task_id=task.id,
                     action="parked",
-                    actor="operator",
-                    source="cli",
+                    actor=audit_actor,
+                    source=audit_source,
                     before_task=before_task,
                     after_task=task,
                     before_queue=queue_before,
                     after_queue=state.queue,
-                    context={"reason": "Task parked via CLI."},
+                    context={"reason": reason},
                 )
             ],
         )
@@ -872,9 +894,43 @@ def update_task(
     from litehive.state.records import get_task_record
     from litehive.state.locking import ensure_future_task_mutation_allowed, persist_future_task_update, workspace_lock
     from litehive.state.persist import load_state
-    from litehive.tasks.queue import reset_task_for_recovery
     from litehive.tasks.queue import validate_task_dependencies
-    from litehive.state.persist import persist_task_and_state_without_runner_guard
+
+    if outcome is not ... and outcome is not None:
+        return close_task(
+            root,
+            task_id,
+            outcome=str(outcome),
+            reason=str(outcome_reason) if outcome_reason is not ... and outcome_reason is not None else None,
+            audit_actor=audit_actor,
+            audit_source=audit_source,
+        )
+
+    if action is not ... and action is not None:
+        if action == "park":
+            return park_task(
+                root,
+                task_id,
+                reason="Task parked via structured report.",
+                audit_actor=audit_actor,
+                audit_source=audit_source,
+            )
+        if action == "requeue":
+            return requeue_task(
+                root,
+                task_id,
+                audit_actor=audit_actor,
+                audit_source=audit_source,
+            )
+        if action == "abandon":
+            return abandon_task(
+                root,
+                task_id,
+                reason="Task abandoned via structured report.",
+                audit_actor=audit_actor,
+                audit_source=audit_source,
+            )
+        raise ValueError(f"Unsupported action '{action}'")
 
     with workspace_lock(root):
         state = load_state(root)
@@ -892,140 +948,6 @@ def update_task(
         allow_active_task_mutation = allow_active_agent_task_mutation and state.active_task_id == task.id
         if not is_runner_thread and not allow_active_task_mutation:
             ensure_future_task_mutation_allowed(root, [task.id], state=state)
-
-        if outcome is not ... and outcome is not None:
-            outcome_str = str(outcome)
-            reason_str = str(outcome_reason) if outcome_reason is not ... and outcome_reason is not None else None
-            if outcome_str not in _CLOSE_OUTCOME_REASON_CODES:
-                allowed = ", ".join(sorted(_CLOSE_OUTCOME_REASON_CODES))
-                raise ValueError(f"Unsupported close outcome '{outcome_str}'. Expected one of: {allowed}")
-            if task.status == "done":
-                raise ValueError(f"Task {task.id} is already done and cannot be closed")
-            _terminate_subagent_pid(
-                task.id,
-                None if task.runtime.execution.active_subagent is None else task.runtime.execution.active_subagent.pid,
-            )
-            close_msg = _apply_close_task_state(
-                task,
-                outcome=outcome_str,
-                reason=reason_str,
-            )
-            _drop_task_from_workspace_state(state, task.id)
-            persist_task_and_state_without_runner_guard(
-                root,
-                task=task,
-                state=state,
-                journal_message=close_msg,
-                audit_entries=[
-                    build_task_audit_entry(
-                        task_id=task.id,
-                        action="closed",
-                        actor=audit_actor,
-                        source=audit_source,
-                        before_task=before_task,
-                        after_task=task,
-                        before_queue=queue_before,
-                        after_queue=state.queue,
-                        context={
-                            "outcome": outcome_str,
-                            "reason": reason_str,
-                            "follow_up_task_id": None,
-                        },
-                    )
-                ],
-            )
-            _reset_pipeline_state(root, task.id)
-            return task
-
-        if action is not ... and action is not None:
-            if action == "park":
-                if task.status == "done":
-                    raise ValueError(f"Task {task.id} is already done and cannot be parked")
-                _apply_parked_task_state(task)
-                _drop_task_from_workspace_state(state, task.id)
-                persist_task_and_state_without_runner_guard(
-                    root,
-                    task=task,
-                    state=state,
-                    journal_message=f"Task parked via structured report at stage `{task.pipeline_status}`.",
-                    audit_entries=[
-                        build_task_audit_entry(
-                            task_id=task.id,
-                            action="parked",
-                            actor=audit_actor,
-                            source=audit_source,
-                            before_task=before_task,
-                            after_task=task,
-                            before_queue=queue_before,
-                            after_queue=state.queue,
-                            context={"reason": "Task parked via structured report."},
-                        )
-                    ],
-                )
-                return task
-            if action == "requeue":
-                from litehive.tasks.failed_runs import blocking_failed_run_records, failed_run_block_message
-
-                if task.status not in {"flagged", "parked", *CLOSED_TASK_STATUSES}:
-                    raise ValueError(f"Task {task.id} is not flagged, parked, or closed")
-                blocked_failed_runs = blocking_failed_run_records(task)
-                if blocked_failed_runs:
-                    raise ValueError(failed_run_block_message(task, blocked_failed_runs))
-                reset_task_for_recovery(
-                    task,
-                    status="queued",
-                    pipeline_status=implementation_entry_stage(task),
-                    clear_last_outcome=task.status not in {"flagged", "parked"},
-                )
-                _reset_pipeline_state(root, task.id)
-                _queue_task(state, task.id)
-                persist_task_and_state_without_runner_guard(
-                    root,
-                    task=task,
-                    state=state,
-                    journal_message="Task requeued for another implementation pass.",
-                    audit_entries=[
-                        build_task_audit_entry(
-                            task_id=task.id,
-                            action="requeued",
-                            actor=audit_actor,
-                            source=audit_source,
-                            before_task=before_task,
-                            after_task=task,
-                            before_queue=queue_before,
-                            after_queue=state.queue,
-                            context={"front": False, "force": False},
-                        )
-                    ],
-                )
-                return task
-            if action == "abandon":
-                if task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
-                    raise ValueError(f"Task {task.id} is not interruptible or closed")
-                _apply_cancelled_task_state(task, reason="Task abandoned via structured report.")
-                _drop_task_from_workspace_state(state, task.id)
-                persist_task_and_state_without_runner_guard(
-                    root,
-                    task=task,
-                    state=state,
-                    journal_message=f"Task abandoned via structured report at stage `{task.pipeline_status}`.",
-                    audit_entries=[
-                        build_task_audit_entry(
-                            task_id=task.id,
-                            action="abandoned",
-                            actor=audit_actor,
-                            source=audit_source,
-                            before_task=before_task,
-                            after_task=task,
-                            before_queue=queue_before,
-                            after_queue=state.queue,
-                            context={"reason": "Task abandoned via structured report."},
-                        )
-                    ],
-                )
-                _reset_pipeline_state(root, task.id)
-                return task
-            raise ValueError(f"Unsupported action '{action}'")
 
         if depends_on is not ...:
             validate_task_dependencies(root, task_id=task.id, depends_on=list(depends_on))
