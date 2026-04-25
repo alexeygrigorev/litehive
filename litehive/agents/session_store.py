@@ -100,3 +100,7 @@ def load_subagent_event_stream(root: Path, task_id: str, subagent_id: str) -> di
         return event_stream
     legacy_event_stream = payload.get(_LEGACY_EVENT_STREAM_KEY)
     return legacy_event_stream if isinstance(legacy_event_stream, dict) else {}
+
+
+def load_subagent_timeline(root: Path, task_id: str, subagent_id: str) -> dict[str, Any]:
+    return load_subagent_event_stream(root, task_id, subagent_id)

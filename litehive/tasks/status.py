@@ -421,7 +421,9 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     def _task_checkout_path(task: TaskRecord) -> Path:
-        worktree_path = resolve_recorded_worktree_path(root, task.runtime.pipeline.git.worktree_path or task.git.worktree_path)
+        worktree_path = resolve_recorded_worktree_path(
+            root, task.runtime.pipeline.git.worktree_path or task.git.worktree_path
+        )
         if worktree_path is not None and worktree_path.exists():
             return worktree_path
         return root
@@ -525,19 +527,22 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
         before_task = snapshot_task_audit_state(task)
         state = load_state(root)
         queue_before = list(state.queue)
-        ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        resumed_stage = resumable_queue_stage(task)
         stranded_in_progress = (
             task.status == "in_progress"
             and task.runtime.pipeline.execution_status in {"interrupted", "idle"}
-            and bool(task.pipeline_status)
-            and task.pipeline_status not in {"backlog", "done"}
+            and resumed_stage is not None
         )
+        already_queued_resumable = task.status == "queued" and resumed_stage is not None
+        if state.active_task_id == task.id and task.runtime.pipeline.execution_status != "running":
+            state.active_task_id = None
+        ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if (
             task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}
             and not stranded_in_progress
+            and not already_queued_resumable
         ):
             raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, or closed")
-        resumed_stage = resumable_queue_stage(task)
         if resumed_stage is None:
             raise ValueError(f"Task {task.id} has no resumable stage")
         if resumed_stage in {"implementing", "testing", "accepting"}:
@@ -550,8 +555,11 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             status="queued",
             pipeline_status=resumed_stage,
             clear_last_outcome=task.status not in {"interrupted", "parked", "flagged"}
-            and not stranded_in_progress,
-            preserve_continuation_handoff=task.status in {"interrupted", "parked"} or stranded_in_progress,
+            and not stranded_in_progress
+            and not already_queued_resumable,
+            preserve_continuation_handoff=task.status in {"interrupted", "parked"}
+            or stranded_in_progress
+            or already_queued_resumable,
         )
         _reset_pipeline_state(root, task.id)
         _queue_task(state, task.id, front=front)
@@ -595,7 +603,10 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, or closed")
-        _terminate_subagent_pid(task.id, None if task.runtime.execution.active_subagent is None else task.runtime.execution.active_subagent.pid)
+        _terminate_subagent_pid(
+            task.id,
+            None if task.runtime.execution.active_subagent is None else task.runtime.execution.active_subagent.pid,
+        )
         _apply_cancelled_task_state(task, reason="Task abandoned via CLI.")
         _drop_task_from_workspace_state(state, task.id)
         persist_task_and_state_without_runner_guard(
@@ -890,7 +901,10 @@ def update_task(
                 raise ValueError(f"Unsupported close outcome '{outcome_str}'. Expected one of: {allowed}")
             if task.status == "done":
                 raise ValueError(f"Task {task.id} is already done and cannot be closed")
-            _terminate_subagent_pid(task.id, None if task.runtime.execution.active_subagent is None else task.runtime.execution.active_subagent.pid)
+            _terminate_subagent_pid(
+                task.id,
+                None if task.runtime.execution.active_subagent is None else task.runtime.execution.active_subagent.pid,
+            )
             close_msg = _apply_close_task_state(
                 task,
                 outcome=outcome_str,

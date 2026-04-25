@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 _TERMINAL_EXECUTION_STATUSES = {"done", "cancelled", "failed", "blocked", "interrupted"}
 _TERMINAL_OUTCOME_KINDS = {"closed", "duplicate", "deferred", "wont_do"}
-_TRUSTED_IDLE_STAGE_STATUSES = {"idle", "paused", "interrupted"}
+_TRUSTED_STAGE_MARKER_STATUSES = {"idle", "paused", "interrupted", "running"}
 _RESUMABLE_PIPELINE_STAGES = {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
 
 
@@ -214,13 +214,22 @@ def resumable_queue_stage(task: TaskRecord) -> str | None:
         None if interruption is None else interruption.pipeline_status,
         None if handoff is None else handoff.stage,
     ]
-    if current_stage.status in _TRUSTED_IDLE_STAGE_STATUSES:
+    if current_stage.status in _TRUSTED_STAGE_MARKER_STATUSES:
         candidates.append(current_stage.stage)
     for candidate in candidates:
         normalized = _normalize_resumable_stage_name(None if candidate is None else str(candidate))
         if normalized is not None:
             return normalized
     return None
+
+
+def resumable_running_stage(task: TaskRecord) -> str | None:
+    current_stage = task.runtime.pipeline.current_stage
+    if current_stage.status == "running":
+        normalized = _normalize_resumable_stage_name(None if current_stage.stage is None else str(current_stage.stage))
+        if normalized is not None:
+            return normalized
+    return resumable_queue_stage(task)
 
 
 def canonicalize_resumable_queue_task(task: TaskRecord, *, stage: str | None = None) -> str | None:
@@ -294,7 +303,7 @@ def _live_active_pipeline_stage(state: WorkspaceState, tasks_by_id: dict[str, Ta
 def task_has_resume_marker(task: TaskRecord) -> bool:
     stage = str(task.pipeline_status)
     current_stage = task.runtime.pipeline.current_stage
-    if current_stage.stage == stage and current_stage.status in _TRUSTED_IDLE_STAGE_STATUSES:
+    if current_stage.stage == stage and current_stage.status in _TRUSTED_STAGE_MARKER_STATUSES:
         return True
     interruption = task.runtime.execution.interruption
     if interruption is not None and (interruption.resume_stage == stage or interruption.pipeline_status == stage):
@@ -787,7 +796,11 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
             )
             return state
 
-        if task is not None and is_task_eligible_for_execution(task) and task.runtime.pipeline.execution_status != "running":
+        if (
+            task is not None
+            and is_task_eligible_for_execution(task)
+            and task.runtime.pipeline.execution_status != "running"
+        ):
             task.status = "queued"
             enqueue_recovered_task(state, task.id)
             state.active_task_id = None

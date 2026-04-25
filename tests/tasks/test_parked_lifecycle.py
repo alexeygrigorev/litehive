@@ -255,6 +255,40 @@ def test_resume_task_recovers_preserved_stage_when_pipeline_status_degraded(tmp_
     assert load_state(tmp_path).queue[0] == task.id
 
 
+def test_resume_task_canonicalizes_stranded_in_progress_with_degraded_pipeline_status(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Resume stranded degraded task",
+        acceptance_criteria=["resume from testing"],
+    )
+    task.status = "in_progress"
+    task.pipeline_status = "backlog"
+    task.runtime.execution_status = "idle"
+    task.runtime.current_stage.stage = "testing"
+    task.runtime.current_stage.status = "idle"
+    save_task(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    state.queue = []
+    save_state(tmp_path, state)
+
+    resumed = resume_task(tmp_path, task.id, front=True)
+
+    assert resumed.status == "queued"
+    assert resumed.pipeline_status == "testing"
+    assert resumed.runtime.execution_status == "idle"
+    assert resumed.runtime.current_stage.stage == "testing"
+    assert resumed.runtime.current_stage.status == "idle"
+
+    refreshed_state = load_state(tmp_path)
+    assert refreshed_state.active_task_id is None
+    assert refreshed_state.queue[0] == task.id
+
+
 def test_queue_resume_and_requeue_keep_parked_semantics_explicit(
     tmp_path: Path,
     monkeypatch,

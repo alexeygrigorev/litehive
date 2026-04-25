@@ -139,7 +139,11 @@ def attempt_launch_recovery(root: Path, task: TaskRecord, failure: LaunchFailure
         actions=actions,
         warnings=[
             *warnings,
-            *[f"{key}: {value}" for key, value in sorted(failure.diagnostics.items()) if value not in (None, "", [], {})],
+            *[
+                f"{key}: {value}"
+                for key, value in sorted(failure.diagnostics.items())
+                if value not in (None, "", [], {})
+            ],
         ],
     )
     return LaunchRecoveryResult(
@@ -651,9 +655,7 @@ def _repair_workspace_runtime(root: Path, *, actions: list[RecoveryAction], warn
     )
     actions.append(action)
     if summary.broken_venv_binaries:
-        warnings.append(
-            "broken checkout venv binaries remain: " + ", ".join(summary.broken_venv_binaries)
-        )
+        warnings.append("broken checkout venv binaries remain: " + ", ".join(summary.broken_venv_binaries))
 
 
 def _reset_task_worktree(
@@ -981,7 +983,9 @@ def _record_stale_recovery(
         runnable_state="runnable",
         failure_classification="stale_runner",
         actions=[
-            RecoveryAction(action="clear_stale_active_state", summary="Cleared stale active runner state for the task."),
+            RecoveryAction(
+                action="clear_stale_active_state", summary="Cleared stale active runner state for the task."
+            ),
             RecoveryAction(action="requeue_stage", summary=f"Requeued the task at {stage}.", metadata={"stage": stage}),
         ],
         warnings=["stale subagent pid detected"] if stale_pid else [],
@@ -999,12 +1003,18 @@ def _recover_stale_running_task(
     summary: WorkspaceRepairSummary | None,
 ) -> tuple[bool, str | None, bool]:
     from litehive.state.locking import subagent_process_is_stale
-    from litehive.tasks.queue import canonicalize_resumable_queue_task, is_task_eligible_for_execution
+    from litehive.tasks.queue import (
+        canonicalize_resumable_queue_task,
+        is_task_eligible_for_execution,
+        resumable_running_stage,
+    )
 
     if not is_task_eligible_for_execution(task):
         return False, None, False
     stale_pid = subagent_process_is_stale(task)
-    stage = task.pipeline_status
+    stage = resumable_running_stage(task)
+    if stage is None:
+        return False, None, False
     prepare_interrupted_task(
         root,
         task,
@@ -1170,48 +1180,67 @@ def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
                         json_extract(payload, '$.runtime.execution_status'),
                         'idle'
                     ) != 'running'
-                    AND json_extract(payload, '$.pipeline_status') IN (
-                        'grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed'
+                    AND (
+                        json_extract(payload, '$.pipeline_status')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                        OR json_extract(payload, '$.runtime.pipeline.current_stage.stage')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                        OR json_extract(payload, '$.runtime.current_stage.stage')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                        OR json_extract(payload, '$.runtime.execution.interruption.resume_stage')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                        OR json_extract(payload, '$.runtime.execution.interruption.pipeline_status')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                        OR json_extract(payload, '$.runtime.execution.continuation_handoff.stage')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                        OR json_extract(payload, '$.runtime.interruption.resume_stage')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                        OR json_extract(payload, '$.runtime.interruption.pipeline_status')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                        OR json_extract(payload, '$.runtime.continuation_handoff.stage')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                     )
                 ) OR (
                     json_extract(payload, '$.status') = 'interrupted'
-                    AND COALESCE(
-                        json_extract(payload, '$.runtime.execution.interruption.resume_stage'),
-                        json_extract(payload, '$.runtime.execution.interruption.pipeline_status'),
-                        json_extract(payload, '$.runtime.interruption.resume_stage'),
-                        json_extract(payload, '$.runtime.interruption.pipeline_status'),
+                    AND (
                         json_extract(payload, '$.pipeline_status')
-                    ) IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                        OR json_extract(payload, '$.runtime.execution.interruption.resume_stage')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                        OR json_extract(payload, '$.runtime.execution.interruption.pipeline_status')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                        OR json_extract(payload, '$.runtime.interruption.resume_stage')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                        OR json_extract(payload, '$.runtime.interruption.pipeline_status')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                    )
                 ) OR (
                     json_extract(payload, '$.status') = 'queued'
-                    AND json_extract(payload, '$.pipeline_status') IN (
-                        'grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed'
-                    )
                     AND (
                         (
                             COALESCE(
                                 json_extract(payload, '$.runtime.pipeline.current_stage.stage'),
                                 json_extract(payload, '$.runtime.current_stage.stage')
                             )
-                            = json_extract(payload, '$.pipeline_status')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                             AND COALESCE(
                                 json_extract(payload, '$.runtime.pipeline.current_stage.status'),
                                 json_extract(payload, '$.runtime.current_stage.status')
-                            ) IN ('idle', 'paused', 'interrupted'
+                            ) IN ('idle', 'paused', 'interrupted', 'running'
                             )
                         )
                         OR json_extract(payload, '$.runtime.execution.interruption.resume_stage')
-                            = json_extract(payload, '$.pipeline_status')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                         OR json_extract(payload, '$.runtime.execution.interruption.pipeline_status')
-                            = json_extract(payload, '$.pipeline_status')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                         OR json_extract(payload, '$.runtime.execution.continuation_handoff.stage')
-                            = json_extract(payload, '$.pipeline_status')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                         OR json_extract(payload, '$.runtime.interruption.resume_stage')
-                            = json_extract(payload, '$.pipeline_status')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                         OR json_extract(payload, '$.runtime.interruption.pipeline_status')
-                            = json_extract(payload, '$.pipeline_status')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                         OR json_extract(payload, '$.runtime.continuation_handoff.stage')
-                            = json_extract(payload, '$.pipeline_status')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                     )
                 )
                 LIMIT 1
