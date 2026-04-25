@@ -135,6 +135,7 @@ def _load_task_activity_history(workspace_root: Path, task_record: TaskRecord) -
             "role": entry.role,
             "stage": entry.stage,
             "verdict": entry.verdict,
+            "verdict_classification": entry.verdict_classification,
             "message": entry.message,
         }
         for entry in activity_entries
@@ -199,12 +200,16 @@ def _constraints_section(task_record: TaskRecord | None) -> str:
 
 
 def _last_rejection_section(rejection: dict[str, Any]) -> str:
-    return (
-        "Last rejection (context from the previous attempt at this stage):\n"
-        f"- Source: {rejection.get('source')}\n"
-        f"- Raised at phase: {rejection.get('raised_at_phase')}\n"
-        f"- Reason: {rejection.get('reason')}"
-    )
+    lines = [
+        "Last rejection (context from the previous attempt at this stage):",
+        f"- Source: {rejection.get('source')}",
+        f"- Raised at phase: {rejection.get('raised_at_phase')}",
+    ]
+    classification = rejection.get("classification")
+    if classification:
+        lines.append(f"- Classification: {classification}")
+    lines.append(f"- Reason: {rejection.get('reason')}")
+    return "\n".join(lines)
 
 
 def _prior_work_section(last_report: dict[str, Any], last_rejection: dict[str, Any] | None = None) -> str:
@@ -628,8 +633,10 @@ def _activity_section(
         role = entry.get("role", "?")
         stage = entry.get("stage", "?")
         verdict = entry.get("verdict", "comment")
+        classification = entry.get("verdict_classification") or entry.get("classification")
+        verdict_label = f"{verdict}; classification={classification}" if classification else str(verdict)
         message = entry.get("message", "")
-        blocks.append(f"[{stage}] {role} ({verdict}): {message}")
+        blocks.append(f"[{stage}] {role} ({verdict_label}): {message}")
     return "Task activity:\n" + "\n".join(blocks)
 
 

@@ -18,7 +18,7 @@ import typer
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
-from litehive.domain.reports import TaskActivityEntry
+from litehive.domain.reports import TaskActivityEntry, classify_task_activity_verdict
 from litehive.state.records import get_task_record
 from litehive.state.persist import load_state
 from litehive.tasks.activity import append_task_activity
@@ -164,11 +164,13 @@ def agent_report_command(
         task=task,
         pipeline_stage=pipeline_stage,
     )
+    verdict_classification = classify_task_activity_verdict(agent_role, normalized_verdict)
     entry = TaskActivityEntry(
         role=agent_role,
         stage=actual_stage,
         target_stage=normalized_target_stage,
         verdict=normalized_verdict,
+        verdict_classification=verdict_classification,
         message=message,
         files_changed=list(files_changed or []),
         follow_up_task_id=normalized_follow_up_task,
@@ -178,6 +180,8 @@ def agent_report_command(
     print(f"stage: {actual_stage}")
     print(f"verdict: {normalized_verdict}")
     print(f"role: {agent_role}")
+    if verdict_classification:
+        print(f"verdict_classification: {verdict_classification}")
     if normalized_target_stage:
         print(f"target_stage: {normalized_target_stage}")
     if normalized_follow_up_task:

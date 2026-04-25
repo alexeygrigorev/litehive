@@ -9,7 +9,7 @@ from litehive.cli.app import app as root_app
 from litehive.config.workspace import ensure_workspace
 from litehive.lifecycle.persistence import SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
-from litehive.domain.reports import TaskActivityEntry
+from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, TaskActivityEntry
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import get_task_record
 from litehive.state.records import create_task
@@ -256,6 +256,49 @@ def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path
             )
         ],
     )
+
+
+@pytest.mark.parametrize(
+    ("role", "stage"),
+    [
+        ("qa", "testing"),
+        ("reviewer", "accepting"),
+    ],
+)
+def test_agent_report_classifies_qa_reviewer_rejects_as_semantic(
+    tmp_path: Path,
+    role: str,
+    stage: str,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title=f"{role} semantic reject")
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "report",
+            "--verdict",
+            "reject",
+            "--message",
+            "acceptance evidence is incomplete",
+            "--role",
+            role,
+            "--stage",
+            stage,
+            "--task-id",
+            task.id,
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert f"verdict_classification: {SEMANTIC_REJECT_CLASSIFICATION}" in result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    activity_entries = load_task_activity(tmp_path, updated)
+    assert len(activity_entries) == 1
+    assert activity_entries[0].verdict == "reject"
+    assert activity_entries[0].verdict_classification == SEMANTIC_REJECT_CLASSIFICATION
 
 
 def test_agent_report_rejects_agent_blocked_verdict(tmp_path: Path) -> None:

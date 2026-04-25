@@ -87,13 +87,17 @@ class LastRejection:
     source: str  # "agent" | "hook" | "guard" | "system"
     reason: str
     raised_at_phase: NodeName  # the phase that emitted the reject
+    classification: str | None = None
 
-    def to_payload(self) -> dict[str, str]:
-        return {
+    def to_payload(self) -> dict[str, str | None]:
+        payload: dict[str, str | None] = {
             "source": self.source,
             "reason": self.reason,
             "raised_at_phase": self.raised_at_phase,
         }
+        if self.classification is not None:
+            payload["classification"] = self.classification
+        return payload
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "LastRejection":
@@ -101,6 +105,7 @@ class LastRejection:
             source=payload["source"],
             reason=payload["reason"],
             raised_at_phase=payload["raised_at_phase"],
+            classification=payload.get("classification"),
         )
 
 

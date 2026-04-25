@@ -107,6 +107,7 @@ class Reject(Event):
 
     source: Literal["agent", "hook", "guard", "system"]
     reason: str
+    classification: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

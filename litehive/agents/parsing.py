@@ -26,6 +26,7 @@ def stage_report_from_subagent(
             verdicts={"pass", "reject", "resume", "advance", "done", "budget_hit"},
         )
         if latest is not None:
+            failure_classification = latest.verdict_classification if latest.verdict == "reject" else None
             return StageReport(
                 task_id=task.id,
                 stage=stage,  # type: ignore[arg-type]
@@ -34,6 +35,12 @@ def stage_report_from_subagent(
                 feedback=latest.message,
                 submitted_via_cli=True,
                 files_changed=list(latest.files_changed),
+                failure_classification=failure_classification,
+                failure_diagnostics=(
+                    {"verdict_classification": failure_classification, "role": latest.role}
+                    if failure_classification
+                    else {}
+                ),
             )
 
     # No CLI verdict submitted — treat agent non-completion as reject.

@@ -74,6 +74,7 @@ class NudgeRequired(Exception):
 class AgentVerdict:
     outcome: str  # "pass" | "reject"
     reason: str = ""
+    classification: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     source: Literal["agent", "guard", "hook", "system"] = "agent"
 
@@ -292,11 +293,24 @@ class AgentNode(Node):
         if outcome == "pass":
             return Pass(metadata=dict(verdict.metadata or {}))
         if outcome == "reject":
+            metadata = dict(verdict.metadata or {})
+            classification = verdict.classification or _metadata_classification(metadata)
+            if classification is not None:
+                metadata.setdefault("verdict_classification", classification)
             return Reject(
                 source=verdict.source,
                 reason=verdict.reason,
-                metadata=dict(verdict.metadata or {}),
+                classification=classification,
+                metadata=metadata,
             )
         if outcome == "blocked":
             return Blocked(reason=verdict.reason)
         return Crash(exc_type="UnknownVerdict", message=verdict.outcome)
+
+
+def _metadata_classification(metadata: dict[str, Any]) -> str | None:
+    for key in ("verdict_classification", "classification"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None

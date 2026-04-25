@@ -284,17 +284,22 @@ def latest_verdict_after(
                 claimed_files=changed_files,
                 checkout=checkout,
             )
+    metadata = {
+        "files_changed": changed_files,
+        "target_stage": latest.target_stage,
+        "last_report": {
+            "changed_files": changed_files,
+            "test_results": _extract_test_results(latest.message or ""),
+        },
+    }
+    classification = latest.verdict_classification if latest.verdict == "reject" else None
+    if classification:
+        metadata["verdict_classification"] = classification
     return AgentVerdict(
         outcome=latest.verdict,
         reason=latest.message or "",
-        metadata={
-            "files_changed": changed_files,
-            "target_stage": latest.target_stage,
-            "last_report": {
-                "changed_files": changed_files,
-                "test_results": _extract_test_results(latest.message or ""),
-            },
-        },
+        classification=classification,
+        metadata=metadata,
     )
 
 

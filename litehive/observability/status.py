@@ -187,6 +187,20 @@ def _task_last_summary_label(task: TaskRecord) -> str:
     return task.runtime.last_stage.summary or task.runtime.last_outcome.reason or task.flag_reason or "-"
 
 
+def _latest_stage_failure_classification(root: Path | None, task: TaskRecord) -> str | None:
+    if root is None:
+        return None
+    try:
+        from litehive.tasks.reports import latest_stage_report
+
+        report = latest_stage_report(root, task)
+    except Exception:
+        return None
+    if report is None:
+        return None
+    return report.failure_classification
+
+
 def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = None) -> list[str]:
     marker = "*" if active else " "
     retry_policy = task.retry_policy.max_retries
@@ -202,6 +216,8 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
     lines.append(f"  auto_commit={task.git.auto_commit}")
     if task.git.commit_message:
         lines.append(f"  commit_message={task.git.commit_message}")
+    if task.status == "flagged":
+        lines.append(f"  flag_reason={task.flag_reason or 'unknown'}")
 
     runtime = task.runtime
     configured_limit = retry_policy if retry_policy is not None else "default"
@@ -307,6 +323,9 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
                 f"duration={_seconds_label(runtime.last_stage.duration_seconds)} summary={summary}"
             )
         )
+    report_classification = _latest_stage_failure_classification(root, task)
+    if report_classification is not None:
+        lines.append(f"  last_report_failure_classification={report_classification}")
 
     if runtime.last_outcome.kind is not None:
         stage = runtime.last_outcome.stage or "-"

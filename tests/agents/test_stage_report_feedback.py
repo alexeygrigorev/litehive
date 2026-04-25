@@ -11,7 +11,7 @@ from litehive.agents.parsing import stage_report_from_subagent
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.agent import EngineFailure, SubagentResult
 from litehive.domain.common import FEEDBACK_CAP
-from litehive.domain.reports import TaskActivityEntry
+from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, TaskActivityEntry
 from litehive.state.records import create_task
 from litehive.tasks.paths import task_dir
 from litehive.tasks.reports import append_activity_entry
@@ -63,6 +63,35 @@ def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Pat
     assert report.submitted_via_cli is True
     assert report.summary == "summary line"
     assert report.feedback == message
+
+
+def test_stage_report_from_subagent_preserves_semantic_reject_classification(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Classified reviewer reject")
+
+    append_activity_entry(
+        tmp_path,
+        task,
+        TaskActivityEntry(
+            role="reviewer",
+            stage="accepting",
+            verdict="reject",
+            verdict_classification=SEMANTIC_REJECT_CLASSIFICATION,
+            message="acceptance evidence is incomplete",
+        ),
+    )
+
+    report = stage_report_from_subagent(
+        task,
+        "accepting",
+        _subagent_result(transcript="reviewer submitted reject"),
+        root=tmp_path,
+    )
+
+    assert report.submitted_via_cli is True
+    assert report.verdict == "reject"
+    assert report.failure_classification == SEMANTIC_REJECT_CLASSIFICATION
+    assert report.failure_diagnostics["verdict_classification"] == SEMANTIC_REJECT_CLASSIFICATION
 
 
 def test_task_activity_entry_rejects_removed_fail_verdict_alias() -> None:

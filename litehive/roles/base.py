@@ -105,15 +105,7 @@ class RoleAgent(AgentNode):
             "instruction_variant": instruction_variant,
             "instruction_layers": instruction_layers,
             "last_report": state.last_report.to_payload(),
-            "last_rejection": (
-                {
-                    "source": last_rejection.source,
-                    "reason": last_rejection.reason,
-                    "raised_at_phase": last_rejection.raised_at_phase,
-                }
-                if last_rejection is not None
-                else None
-            ),
+            "last_rejection": _last_rejection_payload(last_rejection) if last_rejection is not None else None,
             "runner_hooks": runner_hooks,
         }
 
@@ -216,6 +208,17 @@ class RoleAgent(AgentNode):
             return None
         text = md_path.read_text(encoding="utf-8").strip()
         return text or None
+
+
+def _last_rejection_payload(last_rejection: LastRejection) -> dict[str, str]:
+    payload = {
+        "source": last_rejection.source,
+        "reason": last_rejection.reason,
+        "raised_at_phase": last_rejection.raised_at_phase,
+    }
+    if last_rejection.classification is not None:
+        payload["classification"] = last_rejection.classification
+    return payload
 
 
 _IMPLEMENTING_RETRY_ORIGIN_BY_PHASE: dict[str, str] = {

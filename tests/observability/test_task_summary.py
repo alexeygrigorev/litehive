@@ -7,6 +7,7 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
+from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport
 from litehive.domain.runtime import RunnerStatusState, RuntimeSubagentState
 from litehive.domain.task import WorkspaceState
 from litehive.observability.status import (
@@ -26,6 +27,7 @@ from litehive.observability.status import (
     render_task_summary,
 )
 from litehive.state.records import create_task
+from litehive.tasks.reports import record_stage_report
 
 
 def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) -> None:
@@ -53,6 +55,31 @@ def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) 
     assert "stage_estimate=" in combined
     assert "velocity=" in combined
     assert "eta=" in combined
+
+
+def test_render_task_summary_surfaces_semantic_reject_classification(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Semantic reject status")
+    task.status = "flagged"
+    task.pipeline_status = "flagged"
+    task.flag_reason = SEMANTIC_REJECT_CLASSIFICATION
+    record_stage_report(
+        tmp_path,
+        task,
+        StageReport(
+            task_id=task.id,
+            stage="accepting",
+            verdict="reject",
+            summary="acceptance evidence is incomplete",
+            failure_classification=SEMANTIC_REJECT_CLASSIFICATION,
+        ),
+    )
+
+    lines = render_task_summary(task, active=False, root=tmp_path)
+    combined = "\n".join(lines)
+
+    assert "flag_reason=semantic_reject" in combined
+    assert "last_report_failure_classification=semantic_reject" in combined
 
 
 def test_render_active_task_detail_lines_prefers_active_subagent_engine(tmp_path: Path) -> None:

@@ -258,6 +258,7 @@ def test_agent_node_preserves_reject_source_and_metadata() -> None:
             AgentVerdict(
                 outcome="reject",
                 reason="filesystem guard caught a bogus pass",
+                classification="hallucinated_completion",
                 source="guard",
                 metadata={"reason_code": "hallucinated_completion"},
             )
@@ -274,6 +275,8 @@ def test_agent_node_preserves_reject_source_and_metadata() -> None:
 
     assert isinstance(event, Reject)
     assert event.source == "guard"
+    assert event.classification == "hallucinated_completion"
+    assert event.metadata["verdict_classification"] == "hallucinated_completion"
     assert event.metadata["reason_code"] == "hallucinated_completion"
 
 

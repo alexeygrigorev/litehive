@@ -5,7 +5,7 @@ import pytest
 
 from heru.base import CLIExecutionResult
 from litehive.domain.agent import EngineFailure, SubagentResult
-from litehive.domain.reports import StageReport, TaskActivityEntry
+from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport, TaskActivityEntry
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.agents.manager import SubagentStartupError
 from litehive.lifecycle.heru_factory import HeruEngineAdapter, latest_verdict_after
@@ -999,6 +999,35 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
 
     assert verdict is not None
     assert verdict.outcome == "pass"
+
+
+def test_latest_verdict_after_returns_semantic_reject_classification(tmp_path) -> None:
+    from litehive.state.records import create_task
+
+    task = create_task(tmp_path, title="semantic reviewer reject")
+    append_activity_entry(
+        tmp_path,
+        task,
+        TaskActivityEntry(
+            role="reviewer",
+            stage="accepting",
+            verdict="reject",
+            verdict_classification=SEMANTIC_REJECT_CLASSIFICATION,
+            message="acceptance evidence is incomplete",
+        ),
+    )
+
+    verdict = latest_verdict_after(
+        tmp_path,
+        task.id,
+        "accepting",
+        datetime.now(UTC) - timedelta(minutes=1),
+    )
+
+    assert verdict is not None
+    assert verdict.outcome == "reject"
+    assert verdict.classification == SEMANTIC_REJECT_CLASSIFICATION
+    assert verdict.metadata["verdict_classification"] == SEMANTIC_REJECT_CLASSIFICATION
 
 
 def test_latest_verdict_after_includes_retry_summary_metadata(tmp_path, monkeypatch) -> None:

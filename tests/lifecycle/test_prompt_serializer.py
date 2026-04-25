@@ -19,7 +19,7 @@ from litehive.roles.base import PromptContext
 from litehive.config.workspace import ensure_workspace
 from litehive.config.workspace_files import config_path
 from litehive.domain.lifecycle_deltas import StateDelta
-from litehive.domain.reports import TaskActivityEntry
+from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, TaskActivityEntry
 from litehive.lifecycle.events import HookOk, Pass, Reject
 from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.persistence import LastRejection, LastReport, TaskState
@@ -695,6 +695,35 @@ def test_implementing_retry_activity_keeps_only_grooming_and_dedups_last_rejecti
     assert "bookkeeping" not in text
     assert "old swe pass" not in text
     assert "older reject" not in text
+
+
+def test_prompt_surfaces_semantic_reject_classification(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
+    state = make_state(task.id)
+    state.stage_retry["implementing"] = 1
+    state.last_rejection_by_stage["implementing"] = LastRejection(
+        source="agent",
+        reason="acceptance evidence is incomplete",
+        raised_at_phase="accepting",
+        classification=SEMANTIC_REJECT_CLASSIFICATION,
+    )
+    prompt = agent.build_prompt(state)
+    prompt["stage"] = "custom"
+    prompt["activity"] = [
+        {
+            "role": "reviewer",
+            "stage": "accepting",
+            "verdict": "reject",
+            "verdict_classification": SEMANTIC_REJECT_CLASSIFICATION,
+            "message": "reviewer rejected on AC2",
+        }
+    ]
+
+    text = serialize_prompt(prompt, task_record=task)
+
+    assert "- Classification: semantic_reject" in text
+    assert "[accepting] reviewer (reject; classification=semantic_reject): reviewer rejected on AC2" in text
 
 
 def test_implementing_prompt_uses_latest_testing_reject_that_sent_work_back(workspace: Path) -> None:

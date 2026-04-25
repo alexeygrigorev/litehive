@@ -29,6 +29,16 @@ TaskActivityVerdict: TypeAlias = Literal[
     "budget_hit",
 ]
 
+SEMANTIC_REJECT_CLASSIFICATION = "semantic_reject"
+SEMANTIC_REJECT_ROLES = frozenset({"qa", "reviewer"})
+
+
+def classify_task_activity_verdict(role: str, verdict: str) -> str | None:
+    """Return the first-class classification for a newly submitted verdict."""
+    if verdict.strip().lower() == "reject" and role.strip().lower() in SEMANTIC_REJECT_ROLES:
+        return SEMANTIC_REJECT_CLASSIFICATION
+    return None
+
 
 class StageReport(BaseModel):
     """Normalized machine-readable summary of a pipeline stage execution.
@@ -162,6 +172,7 @@ class TaskActivityEntry(BaseModel):
     stage: str                                          # Pipeline stage where activity occurred
     target_stage: str | None = None                     # Target stage if this is a transition
     verdict: TaskActivityVerdict = "comment"            # Associated verdict if applicable
+    verdict_classification: str | None = None            # Machine-readable verdict classification
     message: str                                        # Free-form human-readable activity description
     files_changed: list[str] = Field(default_factory=list)  # Files modified as part of this activity
     follow_up_task_id: str | None = None                # Optional follow-up task reference
@@ -175,8 +186,10 @@ __all__ = [
     "RecoveryAction",
     "RecoveryEvidenceItem",
     "RecoveryReport",
+    "SEMANTIC_REJECT_CLASSIFICATION",
     "StageReport",
     "TaskActivityEntry",
     "TRUNCATION_MARKER",
     "cap_feedback",
+    "classify_task_activity_verdict",
 ]
