@@ -20,7 +20,8 @@ from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task, set_task_worktree_path
 from litehive.tasks.queue import dequeue_next_task
 from litehive.tasks.paths import task_dir
-from litehive.tasks.reports import load_stage_reports, load_task_activity
+from litehive.tasks.activity import load_task_activity
+from litehive.tasks.reports import load_stage_reports
 from litehive.worktree import serialize_worktree_path, task_worktree_branch, task_worktree_path
 
 pytestmark = pytest.mark.integration
