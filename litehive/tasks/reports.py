@@ -88,7 +88,11 @@ def collect_recovery_evidence(
             kind="task",
             label="task record",
             exists=True,
-            summary=f"status={task.status} pipeline_status={task.pipeline_status} priority={task.priority}",
+            summary=(
+                f"status={task.status} pipeline_status={task.pipeline_status} priority={task.priority}"
+                + (f" close_reason={task.close_reason}" if task.close_reason else "")
+                + (f" flag_reason={task.flag_reason}" if task.flag_reason else "")
+            ),
         )
     )
     evidence.append(

@@ -116,8 +116,8 @@ with workspace_runner_guard(root):
         assert result.return_value == 0
         out = result.output
         assert f"task: {task.id} Kill bad run" in out
-        assert "status: wont_do" in out
-        assert "outcome: wont_do" in out
+        assert "status: closed" in out
+        assert "close_reason: wont_do" in out
 
         assert not runner_lock_is_held(tmp_path)
         lock_text = runner_lock_path(tmp_path).read_text(encoding="utf-8")
@@ -127,10 +127,12 @@ with workspace_runner_guard(root):
             assert returncode in {0, -signal.SIGINT}
 
         refreshed = require_task(tmp_path, task.id)
-        assert refreshed.status == "wont_do"
+        assert refreshed.status == "closed"
+        assert refreshed.close_reason == "wont_do"
         assert refreshed.runtime.execution_status == "cancelled"
         assert refreshed.runtime.active_subagent is None
         assert refreshed.runtime.last_outcome.reason_code == "wont_do"
+        assert refreshed.runtime.last_outcome.kind == "closed"
         assert refreshed.runtime.last_outcome.reason == "bad direction"
 
         state = load_state(tmp_path)
@@ -208,7 +210,8 @@ def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch
         assert sleeper.returncode in {0, -signal.SIGTERM, -signal.SIGKILL}
 
         refreshed = require_task(tmp_path, task.id)
-        assert refreshed.status == "duplicate"
+        assert refreshed.status == "closed"
+        assert refreshed.close_reason == "duplicate"
         assert refreshed.runtime.execution_status == "cancelled"
         assert refreshed.runtime.active_subagent is None
     finally:

@@ -1,4 +1,4 @@
-"""Tests for flag_count lifetime counter, auto-defer after 3 flags, and requeue --force."""
+"""Tests for flag_count lifetime counter, flag threshold handling, and requeue --force."""
 
 import argparse
 from pathlib import Path
@@ -60,12 +60,12 @@ def test_auto_defer_after_three_flags(tmp_path: Path) -> None:
     assert t.status == "flagged"
     assert t.flag_count == 2
 
-    # Flag 3 -> auto-defer
+    # Flag 3 -> manual-review flag reason
     requeue_task(tmp_path, task.id, force=True)
     _flag_task(tmp_path, task.id)
     t = get_task(tmp_path, task.id)
     assert t is not None
-    assert t.status == "deferred"
+    assert t.status == "flagged"
     assert t.flag_count == 3
     assert t.flag_reason == "flagged 3 times - needs human review"
 
@@ -97,10 +97,11 @@ def test_requeue_with_force_succeeds_after_three_flags(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Triple-flagged but forced")
 
-    # Set flag_count to 3 and status to deferred (simulating auto-defer)
+    # Set flag_count to 3 and status to flagged (simulating threshold handling)
     t = get_task(tmp_path, task.id)
     assert t is not None
-    t.status = "deferred"
+    t.status = "flagged"
+    t.flag_reason = "flagged 3 times - needs human review"
     t.flag_count = 3
     t.pipeline_status = "implementing"
     save_task(tmp_path, t)
@@ -151,10 +152,11 @@ def test_cli_requeue_warns_and_fails_without_force(tmp_path: Path, capsys: pytes
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="CLI force check")
 
-    # Set up a deferred task with flag_count >= 3
+    # Set up a flagged task with flag_count >= 3
     t = get_task(tmp_path, task.id)
     assert t is not None
-    t.status = "deferred"
+    t.status = "flagged"
+    t.flag_reason = "flagged 3 times - needs human review"
     t.flag_count = 3
     t.pipeline_status = "implementing"
     save_task(tmp_path, t)
@@ -171,7 +173,8 @@ def test_cli_requeue_succeeds_with_force(tmp_path: Path, capsys: pytest.CaptureF
 
     t = get_task(tmp_path, task.id)
     assert t is not None
-    t.status = "deferred"
+    t.status = "flagged"
+    t.flag_reason = "flagged 3 times - needs human review"
     t.flag_count = 3
     t.pipeline_status = "implementing"
     save_task(tmp_path, t)

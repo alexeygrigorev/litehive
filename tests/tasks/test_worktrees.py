@@ -103,17 +103,18 @@ def test_resolve_task_execution_root_logs_target_and_raises_on_worktree_cleanup_
     assert f"Failed to delete task worktree directory {stale_worktree}" in caplog.text
 
 
-def test_remove_cleanable_worktrees_includes_deferred_tasks(tmp_path: Path) -> None:
+def test_remove_cleanable_worktrees_includes_closed_tasks(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
     ensure_workspace(workspace)
 
-    task = create_task(workspace, title="Deferred worktree cleanup")
+    task = create_task(workspace, title="Closed worktree cleanup")
     worktree = task_worktree_path(workspace, task)
     worktree.mkdir(parents=True)
-    task.status = "deferred"
+    task.status = "closed"
+    task.close_reason = "deferred"
     task.runtime.git.worktree_path = str(worktree)
     save_task(workspace, task)
 

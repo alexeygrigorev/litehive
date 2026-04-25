@@ -257,6 +257,7 @@ def agent_close_command(
     except ValueError:
         raise SystemExit(1)
 
-    close_task(root, tid, outcome=outcome, reason=reason, audit_actor="agent", audit_source="agent")
+    task = close_task(root, tid, outcome=outcome, reason=reason, audit_actor="agent", audit_source="agent")
     print(f"task: {tid}")
-    print(f"outcome: {outcome}")
+    print(f"status: {task.status}")
+    print(f"close_reason: {task.close_reason or outcome}")

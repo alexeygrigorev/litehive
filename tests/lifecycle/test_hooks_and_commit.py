@@ -2,12 +2,14 @@
 
 import shlex
 import subprocess
+import json
 from pathlib import Path
 
 import pytest
 
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
+from litehive.db.schema import connect_workspace_db
 from litehive.git.ops import has_non_litehive_changes
 from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass, Reject
 from litehive.lifecycle.nodes.agent import AgentVerdict
@@ -25,6 +27,13 @@ from litehive.tasks.reports import load_stage_reports
 from litehive.worktree import serialize_worktree_path, task_worktree_branch, task_worktree_path
 
 pytestmark = pytest.mark.integration
+
+
+def _raw_task_state_payload(root: Path, task_id: str) -> dict:
+    with connect_workspace_db(root) as connection:
+        row = connection.execute("SELECT payload FROM task_state WHERE task_id = ?", (task_id,)).fetchone()
+    assert row is not None
+    return json.loads(row["payload"])
 
 
 def make_state(stage: str = "before_grooming", task_id: str = "T-0001") -> TaskState:
@@ -957,8 +966,13 @@ def test_run_task_merge_conflict_failure_journal_stays_distinct_from_noop_reconc
     journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
 
     assert result.final_stage == "failed"
-    assert refreshed.status == "merge_failed"
-    assert refreshed.pipeline_status == "merge_failed"
+    assert refreshed.status == "flagged"
+    assert refreshed.pipeline_status == "flagged"
+    assert refreshed.flag_reason == "merge_failed"
+    raw_state = _raw_task_state_payload(tmp_path, task.id)
+    assert raw_state["status"] == "flagged"
+    assert raw_state["pipeline_status"] == "flagged"
+    assert raw_state["flag_reason"] == "merge_failed"
     assert refreshed.runtime.git.commit_sha is None
     assert "reconciled as a no-op" not in journal
     assert (

@@ -21,7 +21,7 @@ from litehive.tasks.runtime import clear_task_run_activity, idle_stage_state
 logger = logging.getLogger(__name__)
 
 _TERMINAL_EXECUTION_STATUSES = {"done", "cancelled", "failed", "blocked", "interrupted"}
-_TERMINAL_OUTCOME_KINDS = {"duplicate", "deferred", "wont_do"}
+_TERMINAL_OUTCOME_KINDS = {"closed", "duplicate", "deferred", "wont_do"}
 _TRUSTED_IDLE_STAGE_STATUSES = {"idle", "paused", "interrupted"}
 _RESUMABLE_PIPELINE_STAGES = {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
 
@@ -166,6 +166,8 @@ def reset_task_for_recovery(
 ) -> None:
     now = utcnow()
     task.status = status
+    task.close_reason = None
+    task.flag_reason = None
     task.pipeline_status = pipeline_status
     clear_task_run_activity(task, execution_status="idle", updated_at=now, clear_interruption=True)
     task.runtime.retry_count = 0
@@ -197,8 +199,6 @@ def prepare_completed_task_for_recovery(task: TaskRecord, *, recovery_stage: str
 
 
 def _normalize_resumable_stage_name(stage: str | None) -> str | None:
-    if stage == "merge_failed":
-        return "commit_to_git"
     if stage in _RESUMABLE_PIPELINE_STAGES:
         return stage
     return None
@@ -229,6 +229,8 @@ def canonicalize_resumable_queue_task(task: TaskRecord, *, stage: str | None = N
         return None
     now = clear_task_run_activity(task, execution_status="idle")
     task.status = "queued"
+    task.close_reason = None
+    task.flag_reason = None
     task.pipeline_status = target_stage
     task.runtime.current_stage = idle_stage_state(updated_at=now, stage=target_stage)
     if task.runtime.last_outcome.kind == "interrupted":
@@ -239,11 +241,16 @@ def canonicalize_resumable_queue_task(task: TaskRecord, *, stage: str | None = N
 def _needs_manual_intervention(task: TaskRecord) -> bool:
     return has_blocking_failed_run_history(task) or (
         task.status == "flagged"
-        and task.flag_reason in {
-            "hook_reject_loop",
-            "rejection_loop_detected",
-            "semantic_reject",
-        }
+        and (
+            task.flag_count >= 3
+            or task.flag_reason
+            in {
+                "hook_reject_loop",
+                "merge_failed",
+                "rejection_loop_detected",
+                "semantic_reject",
+            }
+        )
     )
 
 

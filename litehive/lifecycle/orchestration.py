@@ -121,7 +121,7 @@ def _entry_stage_for_task(task_record: TaskRecord) -> str | None:
         or (None if task_record.runtime.interruption is None else task_record.runtime.interruption.resume_stage)
         or task_record.pipeline_status
     )
-    if stage in {None, "backlog", "done", "flagged", "merge_failed"}:
+    if stage in {None, "backlog", "done", "flagged"}:
         return None
     if stage == "commit_to_git":
         return "commit"
@@ -369,6 +369,8 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
     if state.stage == "done":
         task_record.status = "done"
         task_record.pipeline_status = "done"
+        task_record.close_reason = "done"
+        task_record.flag_reason = None
         if commit_result is not None:
             set_task_commit_sha(task_record, commit_result.head_sha)
             if commit_result.reason == "already_landed":
@@ -386,13 +388,16 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
         failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
         merge_reject = state.last_rejection_by_stage.get("merge_resolving")
         if origin_stage == "merge_resolving" or merge_reject is not None:
-            task_record.status = "merge_failed"
-            task_record.pipeline_status = "merge_failed"
+            task_record.status = "flagged"
+            task_record.pipeline_status = "flagged"
+            task_record.close_reason = None
+            task_record.flag_reason = "merge_failed"
             if state.failed_message:
                 journal_message = f"commit_to_git failed during merge reconciliation: {state.failed_message}"
         else:
             task_record.status = "flagged"
             task_record.pipeline_status = "flagged"
+            task_record.close_reason = None
             if failed_reason == "hook_reject_loop" or (
                 trigger is not None and trigger.reason_code == "hook_reject_loop"
             ):
@@ -410,6 +415,8 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
                 )
     else:
         task_record.status = "in_progress"
+        task_record.close_reason = None
+        task_record.flag_reason = None
         task_record.pipeline_status = _STAGE_TO_PIPELINE_STATUS.get(state.stage, task_record.pipeline_status)
     return journal_message
 

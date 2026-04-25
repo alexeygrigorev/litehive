@@ -1,15 +1,24 @@
 from pathlib import Path
 import inspect
+import json
 
 import pytest
 
 from litehive.config.workspace import ensure_workspace
+from litehive.db.schema import connect_workspace_db
 from litehive.domain.task import TaskRecord
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.state.store import runtime_store
 from litehive.tasks.status import close_task, update_task
+
+
+def _raw_task_state_payload(root: Path, task_id: str) -> dict:
+    with connect_workspace_db(root) as connection:
+        row = connection.execute("SELECT payload FROM task_state WHERE task_id = ?", (task_id,)).fetchone()
+    assert row is not None
+    return json.loads(row["payload"])
 
 
 def _save_intent_only_task(root: Path, task_id: str = "T-0001", *, goal: str = "") -> None:
@@ -60,13 +69,18 @@ def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None
     refreshed = require_task(tmp_path, task.id)
     state = load_state(tmp_path)
 
-    assert refreshed.status == "wont_do"
-    assert refreshed.pipeline_status == "done"
+    assert refreshed.status == "closed"
+    assert refreshed.close_reason == "wont_do"
+    assert refreshed.pipeline_status == "backlog"
     assert refreshed.runtime.execution_status == "cancelled"
     assert refreshed.runtime.last_outcome.reason_code == "wont_do"
+    assert refreshed.runtime.last_outcome.kind == "closed"
     assert refreshed.runtime.last_outcome.reason == "not worth it"
     assert state.active_task_id is None
     assert task.id not in state.queue
+    raw_state = _raw_task_state_payload(tmp_path, task.id)
+    assert raw_state["status"] == "closed"
+    assert raw_state["close_reason"] == "wont_do"
     with pytest.raises(TaskNotFound):
         persistence.load(task.id)
 
@@ -127,9 +141,11 @@ def test_update_task_abandons_task_with_structured_action(tmp_path: Path) -> Non
     refreshed = require_task(tmp_path, task.id)
     state = load_state(tmp_path)
 
-    assert refreshed.status == "cancelled"
+    assert refreshed.status == "closed"
+    assert refreshed.close_reason == "execution_cancelled"
     assert refreshed.runtime.execution_status == "cancelled"
     assert refreshed.runtime.last_outcome.reason_code == "execution_cancelled"
+    assert refreshed.runtime.last_outcome.kind == "closed"
     assert refreshed.runtime.last_outcome.reason == "Task abandoned via structured report."
     assert state.active_task_id is None
     assert task.id not in state.queue
@@ -166,8 +182,12 @@ def test_close_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path)
     close_task(tmp_path, "T-0001", outcome="duplicate", reason="duplicate umbrella")
 
     refreshed = require_task(tmp_path, "T-0001")
-    assert refreshed.status == "duplicate"
+    assert refreshed.status == "closed"
+    assert refreshed.close_reason == "duplicate"
     assert refreshed.runtime.last_outcome.reason == "duplicate umbrella"
+    raw_state = _raw_task_state_payload(tmp_path, "T-0001")
+    assert raw_state["status"] == "closed"
+    assert raw_state["close_reason"] == "duplicate"
 
 
 def test_close_task_resets_pipeline_state_row(tmp_path: Path) -> None:
@@ -181,7 +201,8 @@ def test_close_task_resets_pipeline_state_row(tmp_path: Path) -> None:
     close_task(tmp_path, task.id, outcome="duplicate", reason="duplicate umbrella")
 
     refreshed = require_task(tmp_path, task.id)
-    assert refreshed.status == "duplicate"
+    assert refreshed.status == "closed"
+    assert refreshed.close_reason == "duplicate"
     assert refreshed.runtime.last_outcome.reason == "duplicate umbrella"
     with pytest.raises(TaskNotFound):
         persistence.load(task.id)

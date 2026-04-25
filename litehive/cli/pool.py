@@ -103,6 +103,8 @@ def _pool_task_report_entry(
     reason_code=None,
     reason=None,
     follow_up_task_id=None,
+    close_reason=None,
+    flag_reason=None,
 ):
     stage_outcomes = task_stage_outcomes(root, task_id, slug) if slug is not None else []
     return {
@@ -114,6 +116,8 @@ def _pool_task_report_entry(
         "reason_code": reason_code,
         "reason": reason,
         "follow_up_task_id": follow_up_task_id,
+        "close_reason": close_reason,
+        "flag_reason": flag_reason,
     }
 
 
@@ -158,7 +162,7 @@ def _resumable_pool_tasks(root):
 def _closed_pool_tasks(root):
     closed = []
     for task in list_tasks(root):
-        if task.status not in {"wont_do", "deferred", "duplicate"}:
+        if task.status != "closed":
             continue
         closed.append(
             _pool_task_report_entry(
@@ -171,6 +175,7 @@ def _closed_pool_tasks(root):
                 reason_code=task.runtime.last_outcome.reason_code,
                 reason=task.runtime.last_outcome.reason,
                 follow_up_task_id=task.runtime.last_outcome.follow_up_task_id,
+                close_reason=task.close_reason,
             )
         )
     return closed
@@ -190,6 +195,12 @@ def _format_pool_task_report_line(
     reason_code = entry.get("reason_code")
     if reason_code:
         line += f" reason_code={reason_code}"
+    close_reason = entry.get("close_reason")
+    if close_reason:
+        line += f" close_reason={close_reason}"
+    flag_reason = entry.get("flag_reason")
+    if flag_reason:
+        line += f" flag_reason={flag_reason}"
     reason = entry.get("reason")
     if reason:
         line += f" reason={reason}"

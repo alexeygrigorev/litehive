@@ -15,12 +15,8 @@ from .execution_recovery import recover_stale_runner_state
 
 logger = logging.getLogger(__name__)
 _TERMINAL_UNMERGED_WORKTREE_TASK_STATUSES = {
-    "abandoned",
-    "cancelled",
-    "deferred",
+    "closed",
     "done",
-    "duplicate",
-    "wont_do",
 }
 
 

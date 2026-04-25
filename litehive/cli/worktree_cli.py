@@ -79,7 +79,7 @@ def clean(
     return 1 if failures else 0
 
 
-@app.command("rescue", help="List or rescue merge-failed worktree commits onto main")
+@app.command("rescue", help="List or rescue flagged merge-recovery worktree commits onto main")
 def rescue(
     workspace: WorkspaceOption = Path.cwd(),
     apply: Annotated[bool, typer.Option(help="Cherry-pick eligible commits onto main")] = False,

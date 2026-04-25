@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .common import (
     PipelineMode,
@@ -11,6 +11,104 @@ from .common import (
     utcnow,
 )
 from .runtime import SubagentRef, TaskRuntime
+
+LEGACY_CLOSED_STATUS_CLOSE_REASONS = {
+    "cancelled": "execution_cancelled",
+    "wont_do": "wont_do",
+    "deferred": "deferred",
+    "duplicate": "duplicate",
+}
+
+
+def _last_outcome_reason_code(data: dict) -> str | None:
+    runtime = data.get("runtime")
+    if not isinstance(runtime, dict):
+        return None
+    last_outcome = runtime.get("last_outcome")
+    if not isinstance(last_outcome, dict):
+        return None
+    reason_code = last_outcome.get("reason_code")
+    return None if reason_code is None else str(reason_code)
+
+
+def _canonicalized_task_state_payload(data):
+    if not isinstance(data, dict):
+        return data
+    payload = dict(data)
+    status = str(payload.get("status") or "")
+    pipeline_status = str(payload.get("pipeline_status") or "")
+    flag_reason = payload.get("flag_reason")
+    flag_count = int(payload.get("flag_count") or 0)
+
+    if pipeline_status == "merge_failed":
+        payload["pipeline_status"] = "flagged"
+
+    if status == "merge_failed":
+        payload["status"] = "flagged"
+        payload["pipeline_status"] = "flagged"
+        payload["flag_reason"] = flag_reason or "merge_failed"
+        payload["close_reason"] = None
+        return payload
+
+    if status == "deferred" and flag_count >= 3 and flag_reason:
+        payload["status"] = "flagged"
+        payload["flag_reason"] = str(flag_reason)
+        payload["close_reason"] = None
+        return payload
+
+    close_reason = payload.get("close_reason")
+    if status in LEGACY_CLOSED_STATUS_CLOSE_REASONS:
+        close_reason = LEGACY_CLOSED_STATUS_CLOSE_REASONS[status]
+        payload["status"] = "closed"
+    elif status == "closed":
+        close_reason = close_reason or _last_outcome_reason_code(payload) or "unknown"
+    elif status == "done":
+        close_reason = close_reason or "done"
+    else:
+        close_reason = None
+
+    payload["close_reason"] = close_reason
+    if payload.get("status") in {"closed", "done"}:
+        payload["flag_reason"] = None
+    return payload
+
+
+def canonicalize_task_terminal_state(task: "TaskRecord") -> None:
+    status = str(task.status)
+    pipeline_status = str(task.pipeline_status)
+
+    if pipeline_status == "merge_failed":
+        task.pipeline_status = "flagged"
+
+    if status == "merge_failed":
+        task.status = "flagged"
+        task.pipeline_status = "flagged"
+        task.flag_reason = task.flag_reason or "merge_failed"
+        task.close_reason = None
+        return
+
+    if status == "deferred" and task.flag_count >= 3 and task.flag_reason:
+        task.status = "flagged"
+        task.close_reason = None
+        return
+
+    if status in LEGACY_CLOSED_STATUS_CLOSE_REASONS:
+        task.status = "closed"
+        task.close_reason = LEGACY_CLOSED_STATUS_CLOSE_REASONS[status]
+    elif status == "closed":
+        outcome_reason_code = task.runtime.last_outcome.reason_code
+        task.close_reason = (
+            task.close_reason
+            or (None if outcome_reason_code is None else str(outcome_reason_code))
+            or "unknown"
+        )
+    elif status == "done":
+        task.close_reason = task.close_reason or "done"
+    else:
+        task.close_reason = None
+
+    if str(task.status) in {"closed", "done"}:
+        task.flag_reason = None
 
 
 class TaskRetryPolicy(BaseModel):
@@ -142,6 +240,7 @@ class TaskStateRecord(BaseModel):
     """
     model: str | None = None                                        # AI model being used
     status: TaskStatus = TaskStatus.QUEUED                          # High-level execution status
+    close_reason: str | None = None                                 # Reason if task was explicitly closed
     flag_reason: str | None = None                                  # Reason if task is flagged
     flag_count: int = 0                                            # Number of times flagged
     pipeline_status: PipelineStatus = PipelineStatus.BACKLOG       # Current pipeline position
@@ -151,9 +250,15 @@ class TaskStateRecord(BaseModel):
     retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)   # Retry configuration
     runtime: TaskRuntime = Field(default_factory=TaskRuntime)                # Detailed execution state
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_terminal_state(cls, data):
+        return _canonicalized_task_state_payload(data)
+
     def apply_to_task(self, record: "TaskRecord") -> "TaskRecord":
         record.model = self.model
         record.status = self.status
+        record.close_reason = self.close_reason
         record.flag_reason = self.flag_reason
         record.flag_count = self.flag_count
         record.pipeline_status = self.pipeline_status
@@ -203,6 +308,7 @@ class TaskRecord(BaseModel):
     model: str | None = None                                            # AI model being used for execution
     pipeline_mode: PipelineMode = PipelineMode.FULL                     # Execution mode (full vs single stage)
     status: TaskStatus = TaskStatus.QUEUED                              # High-level execution or terminal category
+    close_reason: str | None = None                                      # Reason when status is closed or done
     flag_reason: str | None = None                                      # Reason if task requires operator attention
     flag_count: int = 0                                                # Number of times task has been flagged
     pipeline_status: PipelineStatus = PipelineStatus.BACKLOG           # Current position in pipeline
@@ -218,6 +324,11 @@ class TaskRecord(BaseModel):
     retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)  # Retry limits configuration
     created_from: TaskCreationSource | None = None                     # What created this task (if from another task)
     runtime: TaskRuntime = Field(default_factory=TaskRuntime, exclude=True)  # Mutable execution state, excluded from serialization
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_terminal_state(cls, data):
+        return _canonicalized_task_state_payload(data)
 
     def to_intent_record(self) -> TaskIntentRecord:
         return TaskIntentRecord(
@@ -241,6 +352,7 @@ class TaskRecord(BaseModel):
         return TaskStateRecord(
             model=self.model,
             status=self.status,
+            close_reason=self.close_reason,
             flag_reason=self.flag_reason,
             flag_count=self.flag_count,
             pipeline_status=self.pipeline_status,

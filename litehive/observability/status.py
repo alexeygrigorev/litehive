@@ -175,7 +175,7 @@ def _task_last_verdict_label(task: TaskRecord) -> str:
 
 
 def _task_last_summary_label(task: TaskRecord) -> str:
-    return task.runtime.last_stage.summary or task.runtime.last_outcome.reason or task.flag_reason or "-"
+    return task.runtime.last_stage.summary or task.runtime.last_outcome.reason or task.flag_reason or task.close_reason or "-"
 
 
 def _latest_stage_failure_classification(root: Path | None, task: TaskRecord) -> str | None:
@@ -202,13 +202,13 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
     if task.model:
         lines.append(f"  engine=workspace-default model={task.model or 'default'}")
     _wt_path = task.runtime.git.worktree_path or task.git.worktree_path
-    if task.status == "merge_failed" and _wt_path:
-        lines.append(f"  unmerged_worktree={_wt_path}")
     lines.append(f"  auto_commit={task.git.auto_commit}")
     if task.git.commit_message:
         lines.append(f"  commit_message={task.git.commit_message}")
     if task.status == "flagged":
         lines.append(f"  flag_reason={task.flag_reason or 'unknown'}")
+    if task.status in {"closed", "done"}:
+        lines.append(f"  close_reason={task.close_reason or 'unknown'}")
 
     runtime = task.runtime
     configured_limit = retry_policy if retry_policy is not None else "default"
@@ -324,11 +324,12 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
         reason = runtime.last_outcome.reason or "-"
         recorded_at = runtime.last_outcome.recorded_at or "-"
         follow_up_task_id = runtime.last_outcome.follow_up_task_id or "-"
+        outcome_label = "close_reason" if runtime.last_outcome.kind in {"closed", "done"} else "reason_code"
         lines.append(
             "  "
             + (
                 f"outcome={runtime.last_outcome.kind} stage={stage} "
-                f"reason_code={reason_code} recorded_at={recorded_at} "
+                f"{outcome_label}={reason_code} recorded_at={recorded_at} "
                 f"follow_up_task={follow_up_task_id} "
                 f"retry_state={runtime.last_outcome.retry_count}/{runtime.last_outcome.retry_limit} "
                 f"reason={reason}"
@@ -352,7 +353,7 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
                 )
             )
 
-    if task.status == "merge_failed":
+    if task.status == "flagged" and task.flag_reason == "merge_failed":
         wt_path = task.runtime.git.worktree_path or task.git.worktree_path
         if wt_path:
             lines.append(f"  unmerged_worktree={wt_path}")

@@ -365,7 +365,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
     if task.status == "queued":
         move_queued_task(root, task.id, 1)
         task = require_task(root, task.id)
-    elif task.status in {"interrupted", "parked", "flagged", "merge_failed", *CLOSED_TASK_STATUSES}:
+    elif task.status in {"interrupted", "parked", "flagged", *CLOSED_TASK_STATUSES}:
         task = resume_task(root, task.id, front=True)
     else:
         raise ValueError(f"Task {task.id} is {task.status} and cannot be switched into a queued runnable state")
@@ -459,8 +459,8 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
         state = load_state(root)
         queue_before = list(state.queue)
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", "merge_failed", "parked", *CLOSED_TASK_STATUSES}:
-            raise ValueError(f"Task {task.id} is not flagged, merge_failed, parked, or closed")
+        if task.status not in {"flagged", "parked", *CLOSED_TASK_STATUSES}:
+            raise ValueError(f"Task {task.id} is not flagged, parked, or closed")
         main_ref = current_head(root)
         if main_ref is not None:
             checkout_path = _task_checkout_path(task)
@@ -479,7 +479,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
             task,
             status="queued",
             pipeline_status=implementation_entry_stage(task),
-            clear_last_outcome=task.status not in {"flagged", "merge_failed", "parked"},
+            clear_last_outcome=task.status not in {"flagged", "parked"},
         )
         _reset_pipeline_state(root, task.id)
         _queue_task(state, task.id, front=front)
@@ -533,10 +533,10 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             and task.pipeline_status not in {"backlog", "done"}
         )
         if (
-            task.status not in {"flagged", "merge_failed", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}
+            task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}
             and not stranded_in_progress
         ):
-            raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, merge_failed, or closed")
+            raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, or closed")
         resumed_stage = resumable_queue_stage(task)
         if resumed_stage is None:
             raise ValueError(f"Task {task.id} has no resumable stage")
@@ -549,7 +549,7 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             task,
             status="queued",
             pipeline_status=resumed_stage,
-            clear_last_outcome=task.status not in {"interrupted", "parked", "flagged", "merge_failed"}
+            clear_last_outcome=task.status not in {"interrupted", "parked", "flagged"}
             and not stranded_in_progress,
             preserve_continuation_handoff=task.status in {"interrupted", "parked"} or stranded_in_progress,
         )
@@ -593,8 +593,8 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         state = load_state(root)
         queue_before = list(state.queue)
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", "merge_failed", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
-            raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, merge_failed, or closed")
+        if task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
+            raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, or closed")
         _terminate_subagent_pid(task.id, None if task.runtime.active_subagent is None else task.runtime.active_subagent.pid)
         _apply_cancelled_task_state(task, reason="Task abandoned via CLI.")
         _drop_task_from_workspace_state(state, task.id)
@@ -648,10 +648,12 @@ def _queue_task(state: WorkspaceState, task_id: str, *, front: bool = False) -> 
 
 def _apply_cancelled_task_state(task: TaskRecord, *, reason: str) -> None:
     clear_task_run_activity(task, execution_status="cancelled")
-    task.status = "cancelled"
+    task.status = "closed"
+    task.close_reason = "execution_cancelled"
+    task.flag_reason = None
     apply_task_outcome(
         task,
-        kind="cancelled",
+        kind="closed",
         stage=task.pipeline_status,
         reason_code="execution_cancelled",
         reason=reason,
@@ -670,11 +672,13 @@ def _apply_close_task_state(
 ) -> str:
     execution_status = "done" if outcome == "done" else "cancelled"
     clear_task_run_activity(task, execution_status=execution_status)
-    task.status = outcome  # type: ignore[assignment]
+    task.status = "done" if outcome == "done" else "closed"
+    task.close_reason = outcome
+    task.flag_reason = None
     task.pipeline_status = pipeline_status or ("done" if outcome == "done" else task.pipeline_status)
     apply_task_outcome(
         task,
-        kind=outcome,
+        kind=task.status,
         stage=task.pipeline_status,
         reason_code=outcome,
         reason=reason or _CLOSE_REASON_CODE_LABELS[outcome],
@@ -891,7 +895,6 @@ def update_task(
                 task,
                 outcome=outcome_str,
                 reason=reason_str,
-                pipeline_status="done",
             )
             _drop_task_from_workspace_state(state, task.id)
             persist_task_and_state_without_runner_guard(
@@ -949,8 +952,8 @@ def update_task(
             if action == "requeue":
                 from litehive.tasks.failed_runs import blocking_failed_run_records, failed_run_block_message
 
-                if task.status not in {"flagged", "merge_failed", "parked", *CLOSED_TASK_STATUSES}:
-                    raise ValueError(f"Task {task.id} is not flagged, merge_failed, parked, or closed")
+                if task.status not in {"flagged", "parked", *CLOSED_TASK_STATUSES}:
+                    raise ValueError(f"Task {task.id} is not flagged, parked, or closed")
                 blocked_failed_runs = blocking_failed_run_records(task)
                 if blocked_failed_runs:
                     raise ValueError(failed_run_block_message(task, blocked_failed_runs))
@@ -958,7 +961,7 @@ def update_task(
                     task,
                     status="queued",
                     pipeline_status=implementation_entry_stage(task),
-                    clear_last_outcome=task.status not in {"flagged", "merge_failed", "parked"},
+                    clear_last_outcome=task.status not in {"flagged", "parked"},
                 )
                 _reset_pipeline_state(root, task.id)
                 _queue_task(state, task.id)
@@ -983,7 +986,7 @@ def update_task(
                 )
                 return task
             if action == "abandon":
-                if task.status not in {"flagged", "merge_failed", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
+                if task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
                     raise ValueError(f"Task {task.id} is not interruptible or closed")
                 _apply_cancelled_task_state(task, reason="Task abandoned via structured report.")
                 _drop_task_from_workspace_state(state, task.id)

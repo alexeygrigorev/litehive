@@ -18,6 +18,7 @@ from litehive.domain.task import (
     TaskIntentRecord,
     TaskStateRecord,
     WorkspaceState,
+    canonicalize_task_terminal_state,
 )
 from litehive.state.store import runtime_store
 
@@ -169,10 +170,9 @@ def _normalize_task_commit_sha_state(task: TaskRecord) -> None:
 
 
 def _normalize_task_flag_reason(task: TaskRecord) -> None:
+    canonicalize_task_terminal_state(task)
     if task.status == "flagged":
         task.flag_reason = task.flag_reason or task.runtime.last_outcome.reason_code or "unknown"
-        return
-    if task.status == "deferred" and task.flag_count >= 3:
         return
     task.flag_reason = None
 

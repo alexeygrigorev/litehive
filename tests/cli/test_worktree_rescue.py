@@ -80,8 +80,9 @@ def _create_merge_failed_worktree_task(workspace: Path):
     _git_ok(worktree_path, "add", "feature.txt")
     _git_ok(worktree_path, "commit", "-m", "feature commit")
 
-    task.status = "merge_failed"
-    task.pipeline_status = "merge_failed"
+    task.status = "flagged"
+    task.pipeline_status = "flagged"
+    task.flag_reason = "merge_failed"
     task.runtime.git.worktree_path = serialize_worktree_path(worktree_path)
     task.git.worktree_path = None
     save_task(workspace, task)
@@ -212,8 +213,9 @@ def test_worktree_rescue_apply_refuses_to_race_the_active_task(tmp_path: Path) -
 
         refreshed = get_task(workspace, rescue_task.id)
         assert refreshed is not None
-        assert refreshed.status == "merge_failed"
-        assert refreshed.pipeline_status == "merge_failed"
+        assert refreshed.status == "flagged"
+        assert refreshed.pipeline_status == "flagged"
+        assert refreshed.flag_reason == "merge_failed"
         assert refreshed.runtime.git.worktree_path == serialize_worktree_path(worktree_path)
         assert refreshed.runtime.git.commit_sha is None
     finally:

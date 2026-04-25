@@ -452,7 +452,8 @@ def test_root_task_close_allows_reviewer_agent_api(tmp_path: Path, monkeypatch) 
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    assert updated.status == "duplicate"
+    assert updated.status == "closed"
+    assert updated.close_reason == "duplicate"
     assert updated.runtime.last_outcome is not None
     assert updated.runtime.last_outcome.reason == "already tracked elsewhere"
 

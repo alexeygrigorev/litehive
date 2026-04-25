@@ -506,7 +506,8 @@ def _duplicate_id_items(root: Path) -> list[AttentionItem]:
 def _flagged_and_merge_failed_items(root: Path, tasks: list[TaskRecord]) -> list[AttentionItem]:
     items: list[AttentionItem] = []
     for task in tasks:
-        if task.status == "flagged":
+        is_merge_failed_task = task.status == "flagged" and task.flag_reason == "merge_failed"
+        if task.status == "flagged" and not is_merge_failed_task:
             items.append(
                 AttentionItem(
                     task_id=task.id,
@@ -524,10 +525,10 @@ def _flagged_and_merge_failed_items(root: Path, tasks: list[TaskRecord]) -> list
                     metadata={"pipeline_status": task.pipeline_status, "flag_reason": task.flag_reason},
                 )
             )
-        if task.status == "merge_failed":
+        if is_merge_failed_task:
             title = f"Task {task.id} needs merge recovery"
             reason = "Checkpoint commit or merge resolution failed and the managed worktree needs operator recovery."
-            metadata: dict[str, Any] = {"pipeline_status": task.pipeline_status}
+            metadata: dict[str, Any] = {"pipeline_status": task.pipeline_status, "flag_reason": task.flag_reason}
             try:
                 from litehive.lifecycle.persistence import SqlitePersistence
 

@@ -44,7 +44,7 @@ from litehive.tasks.reports import normalized_files_changed
 logger = logging.getLogger(__name__)
 
 # Constants
-_CLEANABLE_STATUSES = {"done", "wont_do", "duplicate", "deferred"}
+_CLEANABLE_STATUSES = {"closed", "done"}
 
 
 @dataclass(slots=True)
@@ -365,7 +365,7 @@ def collect_rescue_candidates(root: Path) -> list[RescueCandidate]:
     """Collect worktrees that need rescue (cherry-pick to main)."""
     candidates: list[RescueCandidate] = []
     for task in list_tasks(root, strict=False):
-        if task.status != "merge_failed":
+        if task.status != "flagged" or task.flag_reason != "merge_failed":
             continue
         worktree_rel = get_task_worktree_path(task)
         if not is_managed_worktree_path(root, worktree_rel):

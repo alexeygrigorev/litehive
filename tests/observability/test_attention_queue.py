@@ -203,8 +203,9 @@ def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, mon
     save_task(tmp_path, flagged)
 
     merge_failed = create_task(tmp_path, title="Recover merge")
-    merge_failed.status = "merge_failed"
-    merge_failed.pipeline_status = "merge_failed"
+    merge_failed.status = "flagged"
+    merge_failed.pipeline_status = "flagged"
+    merge_failed.flag_reason = "merge_failed"
     save_task(tmp_path, merge_failed)
 
     stale = create_task(tmp_path, title="Stale worktree")
@@ -276,8 +277,9 @@ def test_merge_failed_attention_refreshes_to_recovery_follow_up_when_commit_reco
     ensure_workspace(tmp_path)
 
     task = create_task(tmp_path, title="Commit crash mislabeled as merge")
-    task.status = "merge_failed"
-    task.pipeline_status = "merge_failed"
+    task.status = "flagged"
+    task.pipeline_status = "flagged"
+    task.flag_reason = "merge_failed"
     save_task(tmp_path, task)
 
     persistence = SqlitePersistence(tmp_path)

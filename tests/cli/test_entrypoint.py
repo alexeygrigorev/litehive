@@ -112,8 +112,8 @@ def test_queue_recover_prioritize_and_switch_help_describe_supported_subcommands
 
 def test_queue_resume_and_requeue_help_mentions_parked_semantics() -> None:
     expected_help = {
-        ("queue", "resume"): "Resume an interrupted, parked, merge-failed, flagged, or closed task at its current stage",
-        ("queue", "requeue"): "Requeue a parked, flagged, merge-failed, or closed task from the implementation entry stage",
+        ("queue", "resume"): "Resume an interrupted, parked, flagged, or closed task at its current stage",
+        ("queue", "requeue"): "Requeue a parked, flagged, or closed task from the implementation entry stage",
     }
 
     runner = CliRunner()

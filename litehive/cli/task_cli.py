@@ -35,6 +35,12 @@ def _display_flag_reason(task) -> str:
     return task.flag_reason or "unknown"
 
 
+def _display_close_reason(task) -> str:
+    if task.status not in {"closed", "done"}:
+        return "-"
+    return task.close_reason or task.runtime.last_outcome.reason_code or "unknown"
+
+
 def _show_dependency_label(root, task) -> str:
     if not task.depends_on:
         return "-"
@@ -306,7 +312,8 @@ def list_tasks(
         filtered.append(task)
     for task in filtered:
         flag_reason = f" flag_reason={_display_flag_reason(task)}" if task.status == "flagged" else ""
-        print(f"{task.id} [{task.status}/{task.pipeline_status}] {task.title}{flag_reason}")
+        close_reason = f" close_reason={_display_close_reason(task)}" if task.status in {"closed", "done"} else ""
+        print(f"{task.id} [{task.status}/{task.pipeline_status}] {task.title}{flag_reason}{close_reason}")
     return 0
 
 
@@ -321,6 +328,7 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
     print(f"slug: {task.slug}")
     print(f"title: {task.title}")
     print(f"status: {task.status}")
+    print(f"close_reason: {_display_close_reason(task)}")
     print(f"flag_reason: {_display_flag_reason(task)}")
     print(f"pipeline_stage: {task.pipeline_status}")
     print(f"priority: {task.priority}")
@@ -409,7 +417,8 @@ def abandon(task_id: Annotated[str, typer.Argument(help="Task id")], workspace: 
         print(f"abandon failed: {exc}")
         return 1
     print(f"task: {task.id} {task.title}")
-    print("status: cancelled")
+    print(f"status: {task.status}")
+    print(f"close_reason: {_display_close_reason(task)}")
     print(f"pipeline_stage: {task.pipeline_status}")
     return 0
 
@@ -446,7 +455,7 @@ def close(
         return 1
     print(f"task: {task.id} {task.title}")
     print(f"status: {task.status}")
-    print(f"outcome: {task.runtime.last_outcome.reason_code}")
+    print(f"close_reason: {_display_close_reason(task)}")
     print(f"reason: {task.runtime.last_outcome.reason}")
     print(f"follow_up_task: {task.runtime.last_outcome.follow_up_task_id or '-'}")
     print(f"pipeline_stage: {task.pipeline_status}")

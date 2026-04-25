@@ -121,7 +121,6 @@ def apply_flag_count_auto_defer(task: TaskRecord) -> None:
         return
     task.flag_count += 1
     if task.flag_count >= 3:
-        task.status = "deferred"
         task.flag_reason = "flagged 3 times - needs human review"
 
 

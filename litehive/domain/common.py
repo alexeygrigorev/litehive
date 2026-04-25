@@ -44,6 +44,7 @@ class OutcomeKind(StringEnum):
     operator workflow management.
     """
     DONE = "done"          # Task was already or successfully completed
+    CLOSED = "closed"      # Explicitly closed with a close_reason
     FLAGGED = "flagged"      # Requires explicit operator attention
     BLOCKED = "blocked"      # Progress requires external input or missing dependency
     INTERRUPTED = "interrupted"  # Execution stopped, potentially resumable
@@ -121,13 +122,9 @@ class TaskStatus(StringEnum):
     INTERRUPTED = "interrupted"     # Execution stopped, potentially resumable
     PARKED = "parked"              # Intentionally paused by Litehive or operator
     DONE = "done"                  # Completed successfully
+    CLOSED = "closed"              # Explicitly closed with a close_reason
     ARCHIVED = "archived"          # Completed and moved to history-only archive
     FLAGGED = "flagged"            # Requires explicit operator attention
-    MERGE_FAILED = "merge_failed"   # Failed during git merge operation
-    CANCELLED = "cancelled"         # Operator intentionally stopped this task
-    WONT_DO = "wont_do"            # Task is no longer worth doing
-    DEFERRED = "deferred"          # Task should wait for later
-    DUPLICATE = "duplicate"         # Another task already covers the same work
 
 
 class PipelineStatus(StringEnum):
@@ -143,7 +140,6 @@ class PipelineStatus(StringEnum):
     ACCEPTING = "accepting"          # In review phase
     COMMIT_TO_GIT = "commit_to_git"  # In git operations phase
     DONE = "done"                    # Completed successfully
-    MERGE_FAILED = "merge_failed"    # Failed during git merge
     FLAGGED = "flagged"              # Requires operator attention
 
 
