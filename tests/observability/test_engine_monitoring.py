@@ -246,7 +246,7 @@ def test_record_codex_quota_check_uses_unified_hours_weeks_windows(tmp_path: Pat
     assert record.metadata["weeks_reset_at"] == "2026-04-25T00:00:00Z"
 
 
-def test_load_engine_monitoring_preserves_capacity_limit_kind(tmp_path: Path) -> None:
+def test_load_engine_monitoring_ignores_legacy_workspace_yaml(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     monitoring_file = tmp_path / ".litehive" / "engine-monitoring.yaml"
     monitoring_file.write_text(
@@ -259,4 +259,4 @@ def test_load_engine_monitoring_preserves_capacity_limit_kind(tmp_path: Path) ->
 
     monitoring = load_engine_monitoring(tmp_path)
 
-    assert monitoring.engines["codex"].last_limit_kind == "capacity"
+    assert monitoring.engines == {}

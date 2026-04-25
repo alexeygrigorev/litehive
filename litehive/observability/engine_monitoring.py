@@ -3,13 +3,9 @@
 import json
 from pathlib import Path
 
-import yaml
-
 from litehive.db.schema import connect_workspace_db
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from heru.quota import UsageStatus
-from litehive.config.workspace_files import workspace_gitignore_path
-from litehive.config.workspace import render_workspace_gitignore
 from litehive.domain.common import utcnow
 from litehive.domain.engine import (
     EngineUsageObservation,
@@ -20,29 +16,13 @@ from litehive.domain.engine import (
 from litehive.state.locking import workspace_mutation_guard
 
 
-def engine_monitoring_file(root: Path) -> Path:
-    return root / ".litehive" / "engine-monitoring.yaml"
-
-
 def load_engine_monitoring(root: Path) -> WorkspaceEngineMonitoring:
-    monitoring = _load_engine_monitoring_from_db(root)
-    if monitoring.engines:
-        return monitoring
-    path = engine_monitoring_file(root)
-    if not path.exists():
-        return WorkspaceEngineMonitoring()
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    return WorkspaceEngineMonitoring(**data)
+    return _load_engine_monitoring_from_db(root)
 
 
 def save_engine_monitoring(root: Path, monitoring: WorkspaceEngineMonitoring) -> None:
     with workspace_mutation_guard(root):
         _save_engine_monitoring_to_db(root, monitoring)
-        engine_monitoring_file(root).unlink(missing_ok=True)
-        ignore_path = workspace_gitignore_path(root)
-        expected = render_workspace_gitignore()
-        if not ignore_path.exists() or ignore_path.read_text(encoding="utf-8") != expected:
-            ignore_path.write_text(expected, encoding="utf-8")
 
 
 def _load_engine_monitoring_from_db(root: Path) -> WorkspaceEngineMonitoring:

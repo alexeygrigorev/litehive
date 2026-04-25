@@ -1,5 +1,3 @@
-import yaml
-
 from litehive.domain.common import utcnow
 from litehive.state.records import list_tasks
 from litehive.tasks.reports import load_stage_reports_for_task_id
@@ -418,17 +416,3 @@ def _write_pool_summary_report(
     report_path = root / ".litehive" / "pool-summary.txt"
     report_lines = _pool_summary_report_lines(report=report)
     report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
-    _write_durable_pool_run_report(root, report=report)
-
-
-def _write_durable_pool_run_report(root, *, report):
-    summary_report = report
-    reports_dir = root / ".litehive" / "logs" / "pool-runs"
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = str(summary_report["created_at"]).replace(":", "-").replace("+00:00", "Z")
-    report_path = reports_dir / f"{timestamp}.yaml"
-    suffix = 1
-    while report_path.exists():
-        suffix += 1
-        report_path = reports_dir / f"{timestamp}-{suffix:02d}.yaml"
-    report_path.write_text(yaml.safe_dump(summary_report, sort_keys=False), encoding="utf-8")

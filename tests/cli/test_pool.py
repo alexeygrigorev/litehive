@@ -1,4 +1,5 @@
 from litehive.cli.pool import (
+    _write_pool_summary_report,
     collect_task_stage_stats,
     compute_pool_flow_statistics,
     task_stage_outcomes,
@@ -59,3 +60,32 @@ def test_pool_flow_statistics_use_canonical_stage_keys(tmp_path) -> None:
     assert flow_statistics["stage_fail_counts"] == {}
     assert flow_statistics["bottleneck_stage"] == "implementing"
     assert flow_statistics["bottleneck_avg_seconds"] == 12.0
+
+
+def test_pool_summary_writes_operator_text_without_structured_yaml(tmp_path) -> None:
+    ensure_workspace(tmp_path)
+    report = {
+        "created_at": "2026-04-25T00:00:00Z",
+        "completed_count": 0,
+        "completed": [],
+        "flagged_count": 0,
+        "flagged": [],
+        "resumable_count": 0,
+        "resumable": [],
+        "closed_count": 0,
+        "closed": [],
+        "skipped_count": 0,
+        "skipped": [],
+        "remaining_count": 0,
+        "remaining": [],
+        "tasks_run": 0,
+        "stop_condition": "queue exhausted",
+        "stop_reason": "queue_exhausted",
+        "flow_statistics": None,
+    }
+
+    _write_pool_summary_report(root=tmp_path, report=report)
+
+    summary_path = tmp_path / ".litehive" / "pool-summary.txt"
+    assert "completed_tasks: 0" in summary_path.read_text(encoding="utf-8")
+    assert list((tmp_path / ".litehive" / "logs" / "pool-runs").glob("*.yaml")) == []

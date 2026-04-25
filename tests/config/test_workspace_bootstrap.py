@@ -97,6 +97,7 @@ def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
     assert (tmp_path / ".litehive" / ".gitignore").exists()
     assert (tmp_path / ".litehive" / "tasks").exists()
     assert (tmp_path / ".litehive" / "attention").exists()
+    assert "engine-monitoring" not in (tmp_path / ".litehive" / ".gitignore").read_text(encoding="utf-8")
 
 
 def test_ensure_workspace_bootstraps_rich_commented_config_once(tmp_path: Path) -> None:

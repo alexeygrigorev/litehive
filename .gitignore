@@ -21,7 +21,6 @@ $tmpdir/
 .litehive/tasks/*/recovery/
 .litehive/tasks/*/comments.yaml
 .litehive/tasks/*/reports/
-.litehive/.engine-monitoring*.tmp-*
 .litehive/*.db
 .litehive/*.db3
 .litehive/*.sqlite

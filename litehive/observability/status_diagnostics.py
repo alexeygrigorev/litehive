@@ -14,7 +14,7 @@ from litehive.config.loading import merge_config_layers
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import litehive_root, workspace_path
 from litehive.config.registry import workspace_registry_error, workspace_registry_path
-from litehive.config.workspace_files import config_path, workspace_dir
+from litehive.config.workspace_files import config_path
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.daemon.registry import daemon_metadata, pid_is_alive
 from litehive.domain.engine import WorkspaceEngineMonitoring
@@ -190,42 +190,15 @@ def _load_engine_monitoring_for_status(
 ) -> tuple[WorkspaceEngineMonitoring, list[StatusIssue]]:
     from litehive.observability.engine_monitoring import load_engine_monitoring
 
-    path = workspace_dir(root) / "engine-monitoring.yaml"
-    if not path.exists():
-        try:
-            return load_engine_monitoring(root), []
-        except Exception as exc:
-            issue = StatusIssue(
-                key="engine_monitoring",
-                severity="WARN",
-                message=(
-                    f"BROKEN in workspace database ({type(exc).__name__}: {exc})"
-                    " — rerun `litehive db migrate` or restore engine usage details from backup."
-                ),
-            )
-            return WorkspaceEngineMonitoring(), [issue]
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        if not isinstance(data, Mapping):
-            data = {}
-        return WorkspaceEngineMonitoring(**data), []
-    except (OSError, yaml.YAMLError) as exc:
+        return load_engine_monitoring(root), []
+    except Exception as exc:
         issue = StatusIssue(
             key="engine_monitoring",
             severity="WARN",
             message=(
-                f"CORRUPT at {path} ({_yaml_location_label(exc if isinstance(exc, yaml.YAMLError) else None)})"
-                " — remove or fix `.litehive/engine-monitoring.yaml` to restore engine usage details."
-            ),
-        )
-        return WorkspaceEngineMonitoring(), [issue]
-    except ValidationError as exc:
-        issue = StatusIssue(
-            key="engine_monitoring",
-            severity="WARN",
-            message=(
-                f"INVALID at {path} ({_validation_error_label(exc)})"
-                " — fix `.litehive/engine-monitoring.yaml` to restore engine usage details."
+                f"BROKEN in workspace database ({type(exc).__name__}: {exc})"
+                " — rerun `litehive db migrate` or restore engine usage details from backup."
             ),
         )
         return WorkspaceEngineMonitoring(), [issue]

@@ -61,7 +61,7 @@ def collect_recovery_evidence(
     *,
     stage: str | None = None,
 ) -> list[RecoveryEvidenceItem]:
-    from litehive.observability.engine_monitoring import engine_monitoring_file, load_engine_monitoring
+    from litehive.observability.engine_monitoring import load_engine_monitoring
 
     from litehive.state.records import get_task_worktree_path
     from litehive.worktree import resolve_recorded_worktree_path
@@ -71,7 +71,6 @@ def collect_recovery_evidence(
     events_path = task_dir(root, task) / "events.jsonl"
     latest_report = latest_stage_report(root, task)
     latest_run_log = latest_run_all_log_path(root)
-    monitoring_path = engine_monitoring_file(root)
     monitoring = load_engine_monitoring(root)
     engine_name = (
         task.runtime.execution.active_subagent.engine
@@ -182,7 +181,6 @@ def collect_recovery_evidence(
         RecoveryEvidenceItem(
             kind="engine_monitoring",
             label="engine monitoring",
-            path=str(monitoring_path.relative_to(root)) if monitoring_path.exists() else None,
             exists=bool(monitoring.engines),
             summary=(
                 "no engine record"

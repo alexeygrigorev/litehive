@@ -7,11 +7,14 @@ from pathlib import Path
 
 import yaml
 
+from heru import get_engine
+from heru.base import CLIExecutionResult
 from litehive.config.paths import litehive_root, workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.config.workspace_files import workspace_dir
 from litehive.domain.task import WorkspaceState
 from litehive.main import fast_status
+from litehive.observability.engine_monitoring import record_engine_execution
 from litehive.state.persist import save_state
 
 from tests.support.helpers import _cmd_status
@@ -114,30 +117,34 @@ def test_status_reports_legacy_engine_fallbacks_config_error(tmp_path: Path, cap
     assert "unexpected keyword argument 'engine_fallbacks'" in output
 
 
-def test_status_reports_invalid_engine_monitoring_schema(tmp_path: Path, capsys) -> None:
+def test_status_ignores_legacy_engine_monitoring_yaml_and_renders_db_data(
+    tmp_path: Path, capsys
+) -> None:
     ensure_workspace(tmp_path)
-    monitoring_file = workspace_dir(tmp_path) / "engine-monitoring.yaml"
-    monitoring_file.write_text(
-        yaml.safe_dump(
-            {
-                "engines": {
-                    "claude": {
-                        "engine": "claude",
-                        "invocation_count": "many",
-                    }
-                }
-            },
-            sort_keys=False,
+    record_engine_execution(
+        tmp_path,
+        task_id="T-0001",
+        engine_name="codex",
+        adapter=get_engine("codex"),
+        execution=CLIExecutionResult(
+            adapter="codex",
+            argv=("codex", "exec"),
+            cwd=tmp_path,
+            exit_code=0,
+            stdout="",
+            stderr="",
         ),
-        encoding="utf-8",
+        failure_kind=None,
+        failure_reason=None,
     )
+    monitoring_file = workspace_dir(tmp_path) / "engine-monitoring.yaml"
+    monitoring_file.write_text("[", encoding="utf-8")
 
     exit_code, output = _run_fast_status(tmp_path, capsys)
 
-    assert exit_code == 1
-    assert f"engine_monitoring: INVALID at {monitoring_file} (engines.claude.invocation_count:" in output
-    assert "restore engine usage details" in output
-    assert "health:" in output
+    assert exit_code == 0
+    assert f"CORRUPT at {monitoring_file}" not in output
+    assert "engine_monitoring: codex source=local invocations=1 success=1 failure=0" in output
 
 
 def test_status_reports_never_started_runner_without_lock(tmp_path: Path, capsys) -> None:
