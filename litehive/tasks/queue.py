@@ -15,6 +15,7 @@ from litehive.domain.task_ops import BlockedTask, TaskPlan, TaskSelection, Works
 from litehive.state.persist import load_state, save_state_without_runner_guard
 from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
+from litehive.tasks.failed_runs import has_blocking_failed_run_history
 from litehive.tasks.runtime import clear_task_run_activity, idle_stage_state
 
 logger = logging.getLogger(__name__)
@@ -236,11 +237,14 @@ def canonicalize_resumable_queue_task(task: TaskRecord, *, stage: str | None = N
 
 
 def _needs_manual_intervention(task: TaskRecord) -> bool:
-    return task.status == "flagged" and task.flag_reason in {
-        "hook_reject_loop",
-        "rejection_loop_detected",
-        "semantic_reject",
-    }
+    return has_blocking_failed_run_history(task) or (
+        task.status == "flagged"
+        and task.flag_reason in {
+            "hook_reject_loop",
+            "rejection_loop_detected",
+            "semantic_reject",
+        }
+    )
 
 
 def _is_recovery_budget_exhausted(task: TaskRecord) -> bool:
@@ -495,6 +499,8 @@ def _is_parked_task(task: TaskRecord) -> bool:
 
 
 def is_task_eligible_for_execution(task: TaskRecord) -> bool:
+    if has_blocking_failed_run_history(task):
+        return False
     if _has_terminal_execution_status(task):
         return False
     if _has_terminal_outcome_kind(task):

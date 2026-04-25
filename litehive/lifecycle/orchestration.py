@@ -30,7 +30,7 @@ from litehive.config.engine_models import resolve_task_rejection_loop_limit, res
 from litehive.git.ops import GitError, current_head, remove_worktree
 from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.domain.task import TaskRecord
-from litehive.domain.runtime import RuntimeHookRejectFingerprint, RuntimeRecoveryOutcome
+from litehive.domain.runtime import RuntimeFailedRunRecord, RuntimeHookRejectFingerprint, RuntimeRecoveryOutcome
 from litehive.domain.common import cap_feedback, utcnow
 from litehive.state.records import (
     clear_task_worktree_path,
@@ -61,7 +61,7 @@ from .nodes.system import (
     PreExecRecoveryNode,
     ReadyNode,
 )
-from .persistence import Limits, SqlitePersistence, TaskNotFound, TaskState
+from .persistence import FailedRunRecord, Limits, SqlitePersistence, TaskNotFound, TaskState, failed_run_key
 from .registry import build_registry
 from .runner import StateMachineRunner
 from .sessions import SqliteSessionStore
@@ -83,17 +83,30 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
         stage="ready",
         entry_stage=entry_stage,
     )
+
+    def _fresh_state() -> TaskState:
+        state = TaskState(
+            **fresh_state_kwargs,
+            failed_run_history=_state_failed_run_history_from_runtime(task_record.runtime.failed_run_history),
+            limits=persistence.limits,
+        )
+        persistence.save(state)
+        return state
+
     if entry_stage is None:
-        return persistence.initialize(**fresh_state_kwargs)
+        try:
+            return persistence.load(task_id)
+        except TaskNotFound:
+            return _fresh_state()
 
     def _initialize_fresh_state() -> TaskState:
         persistence.reset(task_id)
-        return persistence.initialize(**fresh_state_kwargs)
+        return _fresh_state()
 
     try:
         state = persistence.load(task_id)
     except TaskNotFound:
-        return persistence.initialize(**fresh_state_kwargs)
+        return _fresh_state()
     except Exception:
         raise
 
@@ -212,6 +225,83 @@ def _merged_runtime_recovery_history(
     return merged
 
 
+def _runtime_failed_run_record(record: FailedRunRecord) -> RuntimeFailedRunRecord:
+    return RuntimeFailedRunRecord(
+        stage=record.stage,
+        failure_shape=record.failure_shape,
+        count=record.count,
+        first_at=record.first_at,
+        latest_at=record.latest_at,
+        last_reason=record.last_reason,
+        source=record.source,
+        classification=record.classification,
+        retry_limit=record.retry_limit,
+        failed_reason=record.failed_reason,
+        operator_override_count=record.operator_override_count,
+        last_operator_override_at=record.last_operator_override_at,
+    )
+
+
+def _state_failed_run_record(record: RuntimeFailedRunRecord) -> FailedRunRecord:
+    return FailedRunRecord(
+        stage=record.stage,
+        failure_shape=record.failure_shape,
+        count=record.count,
+        first_at=record.first_at,
+        latest_at=record.latest_at,
+        last_reason=record.last_reason,
+        source=record.source,
+        classification=record.classification,
+        retry_limit=record.retry_limit,
+        failed_reason=record.failed_reason,
+        operator_override_count=record.operator_override_count,
+        last_operator_override_at=record.last_operator_override_at,
+    )
+
+
+def _state_failed_run_history_from_runtime(
+    runtime_history: dict[str, RuntimeFailedRunRecord],
+) -> dict[str, FailedRunRecord]:
+    history: dict[str, FailedRunRecord] = {}
+    for key, record in runtime_history.items():
+        state_record = _state_failed_run_record(record)
+        history[str(key) or failed_run_key(state_record.stage, state_record.failure_shape)] = state_record
+    return history
+
+
+def _merge_runtime_failed_run_record(
+    existing: RuntimeFailedRunRecord | None,
+    current: RuntimeFailedRunRecord,
+) -> RuntimeFailedRunRecord:
+    if existing is None:
+        return current
+    return RuntimeFailedRunRecord(
+        stage=current.stage or existing.stage,
+        failure_shape=current.failure_shape or existing.failure_shape,
+        count=max(existing.count, current.count),
+        first_at=existing.first_at or current.first_at,
+        latest_at=current.latest_at or existing.latest_at,
+        last_reason=current.last_reason or existing.last_reason,
+        source=current.source or existing.source,
+        classification=current.classification or existing.classification,
+        retry_limit=current.retry_limit or existing.retry_limit,
+        failed_reason=current.failed_reason or existing.failed_reason,
+        operator_override_count=max(existing.operator_override_count, current.operator_override_count),
+        last_operator_override_at=current.last_operator_override_at or existing.last_operator_override_at,
+    )
+
+
+def _merged_runtime_failed_run_history(
+    existing: dict[str, RuntimeFailedRunRecord],
+    current_state: TaskState,
+) -> dict[str, RuntimeFailedRunRecord]:
+    merged = {str(key): record.model_copy(deep=True) for key, record in existing.items()}
+    for key, state_record in current_state.failed_run_history.items():
+        runtime_record = _runtime_failed_run_record(state_record)
+        merged[str(key)] = _merge_runtime_failed_run_record(merged.get(str(key)), runtime_record)
+    return merged
+
+
 def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
     now = utcnow()
     task_record.runtime.consecutive_same_hook_rejects = state.consecutive_same_hook_rejects
@@ -219,6 +309,10 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
     task_record.runtime.hook_reject_recovery_invoked = state.hook_reject_recovery_invoked
     task_record.runtime.recovery_history = _merged_runtime_recovery_history(
         task_record.runtime.recovery_history,
+        state,
+    )
+    task_record.runtime.failed_run_history = _merged_runtime_failed_run_history(
+        task_record.runtime.failed_run_history,
         state,
     )
     if state.stage in {"done", "failed"}:

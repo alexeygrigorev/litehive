@@ -88,6 +88,10 @@ def serialize_prompt(
     if recovery_history:
         sections.append(_recovery_history_section(recovery_history))
 
+    failed_run_history = prompt.get("failed_run_history")
+    if failed_run_history:
+        sections.append(_failed_run_history_section(failed_run_history))
+
     repeated_recovery_fingerprint = prompt.get("repeated_recovery_fingerprint")
     if repeated_recovery_fingerprint:
         sections.append(_repeated_recovery_fingerprint_section(repeated_recovery_fingerprint))
@@ -339,6 +343,32 @@ def _recovery_history_section(recovery_history: list[dict[str, Any]]) -> str:
                 )
             )
         )
+    return "\n".join(lines)
+
+
+def _failed_run_history_section(failed_run_history: list[dict[str, Any]]) -> str:
+    lines = ["Failed-run history (survives requeue/reset for this task):"]
+    recent = failed_run_history[-5:]
+    if len(failed_run_history) > len(recent):
+        lines.append(f"- Showing the latest {len(recent)} of {len(failed_run_history)} failed-run records.")
+    for item in recent:
+        lines.append(
+            "- "
+            + " ".join(
+                part
+                for part in (
+                    f"stage={item.get('stage') or '-'}",
+                    f"shape={item.get('failure_shape') or '-'}",
+                    f"count={item.get('count') or 0}",
+                    f"retry_limit={item.get('retry_limit') or '-'}",
+                    f"latest_at={item.get('latest_at') or '-'}",
+                    f"operator_override_count={item.get('operator_override_count') or 0}",
+                )
+            )
+        )
+        reason = str(item.get("last_reason") or "").strip()
+        if reason:
+            lines.append(f"  reason={reason}")
     return "\n".join(lines)
 
 

@@ -126,6 +126,27 @@ class RuntimeRecoveryOutcome(BaseModel):
     created_at: str | None = None
 
 
+class RuntimeFailedRunRecord(BaseModel):
+    """Cross-run memory for terminal stage retry exhaustion.
+
+    This lives on the task runtime so it survives v2 pipeline state resets
+    performed by manual requeue and stale/flagged-task recovery paths.
+    """
+
+    stage: str
+    failure_shape: str
+    count: int = 0
+    first_at: str | None = None
+    latest_at: str | None = None
+    last_reason: str = ""
+    source: str | None = None
+    classification: str | None = None
+    retry_limit: int | None = None
+    failed_reason: str | None = None
+    operator_override_count: int = 0
+    last_operator_override_at: str | None = None
+
+
 class TaskOutcomeState(BaseModel):
     """Final outcome state when a task completes or terminates.
 
@@ -253,6 +274,7 @@ class TaskRuntime(BaseModel):
     last_hook_reject_fingerprint: RuntimeHookRejectFingerprint | None = None
     hook_reject_recovery_invoked: bool = False
     recovery_history: list[RuntimeRecoveryOutcome] = Field(default_factory=list)
+    failed_run_history: dict[str, RuntimeFailedRunRecord] = Field(default_factory=dict)
     last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
 
     def for_storage(

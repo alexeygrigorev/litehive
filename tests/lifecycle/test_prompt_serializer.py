@@ -22,7 +22,7 @@ from litehive.domain.lifecycle_deltas import StateDelta
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, TaskActivityEntry
 from litehive.lifecycle.events import HookOk, Pass, Reject
 from litehive.lifecycle.journal import SqliteJournal
-from litehive.lifecycle.persistence import LastRejection, LastReport, TaskState
+from litehive.lifecycle.persistence import FailedRunRecord, LastRejection, LastReport, TaskState
 from litehive.lifecycle.prompt_serializer import serialize_prompt
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task, save_task
@@ -383,6 +383,31 @@ def test_serialize_includes_last_rejection(workspace: Path) -> None:
     assert "- Source: qa" in text
     assert "- Raised at phase: testing" in text
     assert "tests fail with ImportError" in text
+
+
+def test_planner_prompt_surfaces_failed_run_history(workspace: Path) -> None:
+    task = create_task(workspace, title="Repeated retry exhaustion")
+    agent = PlannerAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
+    state = make_state(task.id, stage="grooming")
+    state.failed_run_history["implementing:agent:tests fail"] = FailedRunRecord(
+        stage="implementing",
+        failure_shape="agent:tests fail",
+        count=2,
+        latest_at="2026-04-25T10:00:00+00:00",
+        last_reason="tests fail",
+        source="agent",
+        retry_limit=3,
+        failed_reason="semantic_reject",
+    )
+
+    prompt = agent.build_prompt(state)
+    text = serialize_prompt(prompt, task_record=task)
+
+    assert prompt["failed_run_history"][0]["stage"] == "implementing"
+    assert prompt["failed_run_history"][0]["count"] == 2
+    assert "Failed-run history (survives requeue/reset for this task):" in text
+    assert "stage=implementing shape=agent:tests fail count=2" in text
+    assert "reason=tests fail" in text
 
 
 def test_retry_prompt_includes_prior_work_summary_from_last_report(workspace: Path) -> None:

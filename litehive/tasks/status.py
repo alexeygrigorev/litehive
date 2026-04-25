@@ -407,6 +407,11 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
     from litehive.state.persist import load_state
     from litehive.tasks.activity import load_task_activity, save_task_activity
     from litehive.tasks.queue import reset_task_for_recovery
+    from litehive.tasks.failed_runs import (
+        blocking_failed_run_records,
+        failed_run_block_message,
+        mark_failed_run_operator_override,
+    )
     from litehive.tasks.reports import (
         normalized_files_changed,
         is_retractable_pass_entry,
@@ -445,6 +450,12 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
         flag_count_before = task.flag_count
         if task.flag_count >= 3 and not force:
             raise ValueError(f"Task {task.id} has been flagged {task.flag_count} times. Use --force to requeue anyway.")
+        blocked_failed_runs = blocking_failed_run_records(task)
+        failed_run_overrides: list[dict[str, object]] = []
+        if blocked_failed_runs and not force:
+            raise ValueError(failed_run_block_message(task, blocked_failed_runs))
+        if blocked_failed_runs and force:
+            failed_run_overrides = mark_failed_run_operator_override(task, blocked_failed_runs)
         state = load_state(root)
         queue_before = list(state.queue)
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
@@ -491,6 +502,7 @@ def requeue_task(root: Path, task_id: str, *, front: bool = False, force: bool =
                         "front": front,
                         "force": force,
                         "flag_count_before": flag_count_before,
+                        "stage_retry_exhaustion_overrides": failed_run_overrides,
                     },
                 )
             ],
@@ -934,8 +946,13 @@ def update_task(
                 )
                 return task
             if action == "requeue":
+                from litehive.tasks.failed_runs import blocking_failed_run_records, failed_run_block_message
+
                 if task.status not in {"flagged", "merge_failed", "parked", *CLOSED_TASK_STATUSES}:
                     raise ValueError(f"Task {task.id} is not flagged, merge_failed, parked, or closed")
+                blocked_failed_runs = blocking_failed_run_records(task)
+                if blocked_failed_runs:
+                    raise ValueError(failed_run_block_message(task, blocked_failed_runs))
                 reset_task_for_recovery(
                     task,
                     status="queued",

@@ -171,6 +171,72 @@ class RejectionLoop:
 
 
 @dataclass
+class FailedRunRecord:
+    """Persistent summary of a terminal failed run shape.
+
+    Records are keyed by stage plus a normalized failure shape. They are
+    mirrored into TaskRuntime so requeue/reset paths cannot erase the fact
+    that a task repeatedly exhausted the same stage retry budget.
+    """
+
+    stage: NodeName
+    failure_shape: str
+    count: int = 0
+    first_at: str | None = None
+    latest_at: str | None = None
+    last_reason: str = ""
+    source: str | None = None
+    classification: str | None = None
+    retry_limit: int | None = None
+    failed_reason: str | None = None
+    operator_override_count: int = 0
+    last_operator_override_at: str | None = None
+
+    @property
+    def key(self) -> str:
+        return failed_run_key(self.stage, self.failure_shape)
+
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "stage": self.stage,
+            "failure_shape": self.failure_shape,
+            "count": self.count,
+            "first_at": self.first_at,
+            "latest_at": self.latest_at,
+            "last_reason": self.last_reason,
+            "source": self.source,
+            "classification": self.classification,
+            "retry_limit": self.retry_limit,
+            "failed_reason": self.failed_reason,
+            "operator_override_count": self.operator_override_count,
+            "last_operator_override_at": self.last_operator_override_at,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> "FailedRunRecord":
+        retry_limit = payload.get("retry_limit")
+        retry_limit_value = None if retry_limit in (None, "") else int(retry_limit)
+        return cls(
+            stage=str(payload.get("stage") or ""),
+            failure_shape=str(payload.get("failure_shape") or ""),
+            count=int(payload.get("count") or 0),
+            first_at=payload.get("first_at"),
+            latest_at=payload.get("latest_at"),
+            last_reason=str(payload.get("last_reason") or ""),
+            source=payload.get("source"),
+            classification=payload.get("classification"),
+            retry_limit=retry_limit_value,
+            failed_reason=payload.get("failed_reason"),
+            operator_override_count=int(payload.get("operator_override_count") or 0),
+            last_operator_override_at=payload.get("last_operator_override_at"),
+        )
+
+
+def failed_run_key(stage: str, failure_shape: str) -> str:
+    return f"{stage}:{failure_shape}"
+
+
+@dataclass
 class TaskState:
     """Single source of truth for task state the machine reads and writes.
 
@@ -225,6 +291,7 @@ class TaskState:
     commit_result: CommitResult | None = None
     last_report: LastReport = field(default_factory=LastReport)
     last_rejection_by_stage: dict[NodeName, LastRejection] = field(default_factory=dict)
+    failed_run_history: dict[str, FailedRunRecord] = field(default_factory=dict)
     rejection_loop: RejectionLoop | None = None
     consecutive_same_hook_rejects: int = 0
     last_hook_reject_fingerprint: HookRejectFingerprint | None = None
@@ -292,6 +359,7 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
         "commit_result": (state.commit_result.to_payload() if state.commit_result is not None else None),
         "last_report": state.last_report.to_payload(),
         "last_rejection_by_stage": {stage: rej.to_payload() for stage, rej in state.last_rejection_by_stage.items()},
+        "failed_run_history": {key: record.to_payload() for key, record in state.failed_run_history.items()},
         "rejection_loop": (state.rejection_loop.to_payload() if state.rejection_loop is not None else None),
         "consecutive_same_hook_rejects": state.consecutive_same_hook_rejects,
         "last_hook_reject_fingerprint": (
@@ -313,6 +381,7 @@ def _state_from_row(
 ) -> TaskState:
     last_report_data = payload.get("last_report") or {}
     last_rejections_data = payload.get("last_rejection_by_stage") or {}
+    failed_run_history_data = payload.get("failed_run_history") or {}
     hook_fingerprint_data = payload.get("last_hook_reject_fingerprint") or None
     active_recovery_trigger = payload.get("active_recovery_trigger")
     recovery_history = payload.get("recovery_history")
@@ -339,6 +408,11 @@ def _state_from_row(
         last_report=LastReport.from_payload(last_report_data),
         last_rejection_by_stage={
             stage_name: LastRejection.from_payload(rej) for stage_name, rej in last_rejections_data.items()
+        },
+        failed_run_history={
+            str(key): FailedRunRecord.from_payload(dict(record))
+            for key, record in failed_run_history_data.items()
+            if isinstance(record, dict)
         },
         rejection_loop=(RejectionLoop.from_payload(dict(rejection_loop)) if isinstance(rejection_loop, dict) else None),
         consecutive_same_hook_rejects=int(payload.get("consecutive_same_hook_rejects") or 0),

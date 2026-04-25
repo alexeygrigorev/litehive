@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable
 
+from litehive.domain.common import utcnow
 from litehive.domain.recovery import (
     FailureFingerprint,
     RecoveryDisposition,
@@ -23,6 +24,7 @@ from litehive.lifecycle.events import (
     Timeout,
 )
 from litehive.lifecycle.persistence import (
+    FailedRunRecord,
     HookRejectFingerprint,
     LastRejection,
     MergeContext,
@@ -61,6 +63,7 @@ class StateDelta:
     failed_message: str | None = None
     set_recovery_failure_explanation: str | None = None
     clear_recovery_failure_explanation: bool = False
+    record_failed_run: FailedRunRecord | None = None
 
 
 EMPTY_DELTA = StateDelta()
@@ -74,6 +77,60 @@ def _rejection_from_event(state: TaskState, event: Event) -> LastRejection | Non
         reason=event.reason,
         raised_at_phase=state.stage,
         classification=event.classification,
+    )
+
+
+def _normalized_failure_text(value: str | None) -> str:
+    text = " ".join(str(value or "").lower().split())
+    return text[:160] or "unknown"
+
+
+def _event_failure_shape(event: Event) -> str:
+    if isinstance(event, Reject):
+        hook = _hook_fingerprint_from_event(event)
+        if hook is not None:
+            return f"hook:{_normalized_failure_text(hook.fingerprint)}"
+        classification = event.classification or event.metadata.get("verdict_classification")
+        reason_code = event.metadata.get("reason_code")
+        if isinstance(classification, str) and classification.strip():
+            return f"{event.source}:{_normalized_failure_text(classification)}"
+        if isinstance(reason_code, str) and reason_code.strip():
+            return f"{event.source}:{_normalized_failure_text(reason_code)}"
+        return f"{event.source}:{_normalized_failure_text(event.reason)}"
+    if isinstance(event, StageRetryLimitHit):
+        return "system:stage_retry_limit"
+    return _normalized_failure_text(type(event).__name__)
+
+
+def _stage_retry_exhausted_record(
+    state: TaskState,
+    event: Event,
+    *,
+    failed_reason: FailedReason,
+    message: str,
+) -> FailedRunRecord | None:
+    if failed_reason != FailedReason.SEMANTIC_REJECT:
+        return None
+    counter_stage = _retry_counter_stage(state.stage)
+    if counter_stage is None:
+        return None
+    if state.stage_retry.get(counter_stage, 0) < state.limits.stage_retry_limit:
+        return None
+    failure_shape = _event_failure_shape(event)
+    source = event.source if isinstance(event, Reject) else None
+    classification = event.classification if isinstance(event, Reject) else None
+    now = utcnow()
+    return FailedRunRecord(
+        stage=counter_stage,
+        failure_shape=failure_shape,
+        count=1,
+        first_at=now,
+        latest_at=now,
+        last_reason=message,
+        source=source,
+        classification=classification,
+        retry_limit=state.limits.stage_retry_limit,
+        failed_reason=failed_reason.value,
     )
 
 
@@ -500,6 +557,12 @@ def fail(reason: FailedReason) -> EffectFn:
             set_hook_reject_recovery_invoked=hook_delta.set_hook_reject_recovery_invoked,
             failed_reason=normalized_reason,
             failed_message=message,
+            record_failed_run=_stage_retry_exhausted_record(
+                state,
+                event,
+                failed_reason=normalized_reason,
+                message=message,
+            ),
             append_recovery_outcome=outcome,
             clear_active_recovery_trigger=state.stage == "recovering",
             clear_rejection_loop=True,

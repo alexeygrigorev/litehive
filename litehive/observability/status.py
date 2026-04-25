@@ -349,6 +349,18 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
                 "  " + (f"failure_classification={runtime.last_outcome.failure_classification} failure_phase={phase}")
             )
 
+    if runtime.failed_run_history:
+        lines.append("  failed_run_history:")
+        for key, record in sorted(runtime.failed_run_history.items()):
+            lines.append(
+                "  "
+                + (
+                    f"  {key} stage={record.stage} shape={record.failure_shape} "
+                    f"count={record.count} latest_at={record.latest_at or '-'} "
+                    f"operator_override_count={record.operator_override_count}"
+                )
+            )
+
     if task.status == "merge_failed":
         wt_path = task.runtime.git.worktree_path or task.git.worktree_path
         if wt_path:

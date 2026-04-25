@@ -1,6 +1,6 @@
 from typing import Callable
 
-from litehive.lifecycle.persistence import CommitResult
+from litehive.lifecycle.persistence import CommitResult, FailedRunRecord
 from litehive.domain.lifecycle_deltas import StateDelta
 from .events import Event, HookOk, Pass, Reject
 from .journal import NullJournal, PipelineJournal
@@ -201,6 +201,29 @@ class StateMachineRunner:
             state.recovery_failure_explanation = None
         if delta.set_recovery_failure_explanation is not None:
             state.recovery_failure_explanation = delta.set_recovery_failure_explanation
+        if delta.record_failed_run is not None:
+            StateMachineRunner._record_failed_run(state, delta.record_failed_run)
+
+    @staticmethod
+    def _record_failed_run(state: TaskState, record: FailedRunRecord) -> None:
+        existing = state.failed_run_history.get(record.key)
+        if existing is None:
+            state.failed_run_history[record.key] = record
+            return
+        state.failed_run_history[record.key] = FailedRunRecord(
+            stage=record.stage,
+            failure_shape=record.failure_shape,
+            count=existing.count + 1,
+            first_at=existing.first_at or record.first_at,
+            latest_at=record.latest_at,
+            last_reason=record.last_reason,
+            source=record.source,
+            classification=record.classification,
+            retry_limit=record.retry_limit,
+            failed_reason=record.failed_reason,
+            operator_override_count=existing.operator_override_count,
+            last_operator_override_at=existing.last_operator_override_at,
+        )
 
     def _reset_cross_agent_retry_sessions(
         self,

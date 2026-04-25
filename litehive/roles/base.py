@@ -106,6 +106,7 @@ class RoleAgent(AgentNode):
             "instruction_layers": instruction_layers,
             "last_report": state.last_report.to_payload(),
             "last_rejection": _last_rejection_payload(last_rejection) if last_rejection is not None else None,
+            "failed_run_history": _failed_run_history_payload(state),
             "runner_hooks": runner_hooks,
         }
 
@@ -219,6 +220,26 @@ def _last_rejection_payload(last_rejection: LastRejection) -> dict[str, str]:
     if last_rejection.classification is not None:
         payload["classification"] = last_rejection.classification
     return payload
+
+
+def _failed_run_history_payload(state: TaskState) -> list[dict[str, Any]]:
+    return [
+        {
+            "key": key,
+            "stage": record.stage,
+            "failure_shape": record.failure_shape,
+            "count": record.count,
+            "first_at": record.first_at,
+            "latest_at": record.latest_at,
+            "last_reason": record.last_reason,
+            "source": record.source,
+            "classification": record.classification,
+            "retry_limit": record.retry_limit,
+            "failed_reason": record.failed_reason,
+            "operator_override_count": record.operator_override_count,
+        }
+        for key, record in sorted(state.failed_run_history.items())
+    ]
 
 
 _IMPLEMENTING_RETRY_ORIGIN_BY_PHASE: dict[str, str] = {

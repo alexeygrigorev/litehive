@@ -18,6 +18,7 @@ from litehive.domain.recovery import (
     TriggerEventKind,
 )
 from litehive.lifecycle.persistence import (
+    FailedRunRecord,
     HookRejectFingerprint,
     LastRejection,
     LastReport,
@@ -114,6 +115,22 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
                 raised_at_phase="testing",
             ),
         },
+        failed_run_history={
+            "implementing:agent:tests fail": FailedRunRecord(
+                stage="implementing",
+                failure_shape="agent:tests fail",
+                count=2,
+                first_at="2026-04-24T10:00:00+00:00",
+                latest_at="2026-04-25T10:00:00+00:00",
+                last_reason="tests fail",
+                source="agent",
+                classification="semantic_reject",
+                retry_limit=5,
+                failed_reason="semantic_reject",
+                operator_override_count=1,
+                last_operator_override_at="2026-04-24T11:00:00+00:00",
+            )
+        },
         rejection_loop=RejectionLoop(
             rejection_stage="testing",
             retry_target_stage="implementing",
@@ -160,6 +177,12 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
     assert loaded.last_report.hook_ok is True
     assert loaded.last_rejection_by_stage["implementing"].source == "qa"
     assert loaded.last_rejection_by_stage["implementing"].reason == "tests fail"
+    failed_run = loaded.failed_run_history["implementing:agent:tests fail"]
+    assert failed_run.stage == "implementing"
+    assert failed_run.failure_shape == "agent:tests fail"
+    assert failed_run.count == 2
+    assert failed_run.latest_at == "2026-04-25T10:00:00+00:00"
+    assert failed_run.operator_override_count == 1
     assert loaded.rejection_loop is not None
     assert loaded.rejection_loop.rejection_stage == "testing"
     assert loaded.rejection_loop.retry_target_stage == "implementing"

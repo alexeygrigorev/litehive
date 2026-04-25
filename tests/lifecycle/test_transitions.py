@@ -187,6 +187,11 @@ def test_implementing_reject_fails_directly_when_exhausted():
     trans = step("implementing", Reject(source="agent", reason="x"), state)
     assert trans.next == "failed"
     assert trans.delta.failed_reason == "semantic_reject"
+    assert trans.delta.record_failed_run is not None
+    assert trans.delta.record_failed_run.stage == "implementing"
+    assert trans.delta.record_failed_run.failure_shape == "agent:x"
+    assert trans.delta.record_failed_run.count == 1
+    assert trans.delta.record_failed_run.retry_limit == 3
 
 
 def test_same_hook_reject_loop_fails_directly_before_stage_retry_limit():
@@ -281,6 +286,9 @@ def test_testing_reject_fails_directly_when_hooks_are_not_green():
     trans = step("testing", Reject(source="agent", reason="x"), state)
     assert trans.next == "failed"
     assert trans.delta.failed_reason == "semantic_reject"
+    assert trans.delta.record_failed_run is not None
+    assert trans.delta.record_failed_run.stage == "testing"
+    assert trans.delta.record_failed_run.retry_limit == 2
 
 
 def test_accepting_reject_routes_back_to_implementing():

@@ -107,6 +107,18 @@ def pipeline_journal_command(
                 f"{outcome.recovery_verdict} "
                 f"{outcome.disposition.value}"
             )
+    if state.failed_run_history:
+        print("failed_run_history:")
+        for key, record in state.failed_run_history.items():
+            print(
+                "  "
+                f"{key} "
+                f"stage={record.stage} "
+                f"shape={record.failure_shape} "
+                f"count={record.count} "
+                f"latest_at={record.latest_at or '-'} "
+                f"operator_override_count={record.operator_override_count}"
+            )
     if state.stage_retry:
         print(f"stage_retry: {dict(state.stage_retry)}")
     if state.failed_reason:
