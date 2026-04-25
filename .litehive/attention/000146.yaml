@@ -1,0 +1,17 @@
+id: 146
+task_id: T-0374
+created_at: '2026-04-25T10:20:03+00:00'
+kind: stale_worktree_metadata
+title: Deferred worktree metadata clearing for T-0374
+reason: Worktree removed but task metadata clearing deferred due to active runner
+  lock
+suggested_action: Wait for runner to finish, then run attention reconciliation
+dedupe_key: stale_worktree_metadata:T-0374
+status: resolved
+resolved_at: '2026-04-25T10:22:57+00:00'
+resolution: resolved by operator
+metadata:
+  worktree_path: /home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0374-log-engine-output-parse-failures-instead-of
+  deferred_operation: clear_worktree_path
+  suppressed_until_cleared: true
+  condition_cleared_after_resolution: true
