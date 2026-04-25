@@ -186,7 +186,7 @@ def _quota_checker(engine_name: str):
     return None
 
 
-def _engine_quota_block(
+def engine_quota_block(
     root: Path,
     engine_name: str,
 ) -> tuple[str | None, datetime | None]:
@@ -248,7 +248,7 @@ def select_engine(
         expired_freeze = (
             engine_name not in frozen_engines and _parse_datetime_utc(config.engine_freeze.get(engine_name)) is not None
         )
-        quota_reason, freeze_until = _engine_quota_block(root, engine_name)
+        quota_reason, freeze_until = engine_quota_block(root, engine_name)
         if quota_reason is not None:
             if freeze_until is not None:
                 _persist_engine_freeze(root, config, engine_name=engine_name, freeze_until=freeze_until)

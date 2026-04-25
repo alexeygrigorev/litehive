@@ -7,7 +7,7 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 from collections.abc import Callable
-from typing import TextIO
+from typing import TYPE_CHECKING, TextIO
 
 from litehive.config.workspace_files import workspace_dir
 from litehive.domain.common import utcnow
@@ -23,6 +23,9 @@ from litehive.tasks.constants import (
 )
 from litehive.domain.task_ops import WorkspaceConflictError, RunnerLockState
 from litehive.tasks.paths import runner_lock_path, task_dir, task_file
+
+if TYPE_CHECKING:
+    from litehive.tasks.audit import TaskAuditEntry
 
 logger = logging.getLogger(__name__)
 

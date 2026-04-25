@@ -58,7 +58,7 @@ def register_root_commands(app: typer.Typer) -> None:
     app.command("doctor", help="Alias for repair")(repair_command)
 
 
-def _print_status_issues(issues) -> int:
+def print_status_issues(issues) -> int:
     if not status_has_problems(issues):
         return 0
     print()
@@ -113,7 +113,7 @@ def status_command(
             for task in tasks:
                 for line in render_task_summary(task, active=task.id == status.active_task_id, root=root):
                     print(line)
-        return _print_status_issues(status.issues)
+        return print_status_issues(status.issues)
 
     for line in render_active_task_section(status.active_task, status.config.default_engine):
         print(line)
@@ -143,7 +143,7 @@ def status_command(
     for line in render_recent_activity_section(events):
         print(line)
 
-    return _print_status_issues(status.issues)
+    return print_status_issues(status.issues)
 
 
 def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:

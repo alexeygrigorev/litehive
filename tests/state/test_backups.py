@@ -152,7 +152,7 @@ def test_daemon_loop_creates_scheduled_backup(tmp_path: Path, monkeypatch: pytes
     fake_uv.chmod(0o755)
 
     monkeypatch.setattr(
-        "litehive.daemon.execution._default_command_prefix",
+        "litehive.daemon.execution.default_command_prefix",
         lambda: [str(fake_uv), "run", "litehive"],
     )
 

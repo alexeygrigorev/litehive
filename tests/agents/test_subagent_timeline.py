@@ -52,7 +52,7 @@ def test_claude_live_progress_report_uses_unified_transcript_for_restart_snippet
         pid=4242,
     )
 
-    manager._write_session_progress(task, base, ref, "stream partial Claude output", execution)
+    manager.write_session_progress(task, base, ref, "stream partial Claude output", execution)
 
     report = load_subagent_report(tmp_path, task.id, "SA-0001")
     assert report["status"] == "running"
@@ -118,7 +118,6 @@ def test_subagent_writes_timeline_during_live_progress(tmp_path: Path, monkeypat
             if on_update is not None:
                 on_update(first)
 
-            base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
             timeline_data = load_subagent_timeline(tmp_path, task.id, "SA-0001")
             assert timeline_data["engine"] == "opencode"
             assert timeline_data["task_id"] == task.id
@@ -147,7 +146,6 @@ def test_subagent_writes_timeline_during_live_progress(tmp_path: Path, monkeypat
     result = manager.run(task, role="swe", engine_name="opencode", prompt="stream it")
     assert result.ref.status == "completed"
 
-    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
     timeline_data = load_subagent_timeline(tmp_path, task.id, "SA-0001")
     assert len(timeline_data["events"]) == 2
     assert timeline_data["event_counts"] == {"message": 1, "usage": 1}
@@ -184,5 +182,4 @@ def test_subagent_skips_timeline_when_no_events(tmp_path: Path, monkeypatch: pyt
     result = manager.run(task, role="swe", engine_name="codex", prompt="no events")
     assert result.ref.status == "completed"
 
-    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
     assert load_subagent_timeline(tmp_path, task.id, "SA-0001") == {}

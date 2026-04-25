@@ -13,7 +13,7 @@ from typing import Mapping
 
 from litehive.agents.sandbox_support import (
     SandboxedAdapter as LitehiveSandboxedAdapter,
-    forced_engine_rw_state_dirs as _forced_engine_rw_state_dirs,
+    forced_engine_rw_state_dirs,
 )
 from heru.base import CLIInvocation
 from litehive.config.model import LitehiveConfig
@@ -230,7 +230,7 @@ class SandboxLauncher:
             allowed_env[credential.env_var] = credential.mount_path
 
         # Set up git wrapper for git operation protection
-        wrapper_paths = self._ensure_docker_git_wrappers()
+        wrapper_paths = self.ensure_docker_git_wrappers()
         real_git_path = shutil.which("git")
 
         if profile == SandboxProfile.NO_GIT:
@@ -275,7 +275,7 @@ class SandboxLauncher:
 
 
 
-    def _ensure_docker_git_wrappers(self) -> dict[str, Path]:
+    def ensure_docker_git_wrappers(self) -> dict[str, Path]:
         """Create git wrapper scripts for Docker sandbox."""
         runtime_dir = self.root / ".litehive" / "runtime" / "sandbox"
         runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -315,7 +315,7 @@ exit 127
         policy: ExternalEngineSandboxPolicy | None,
         env: Mapping[str, str] | None = None,
     ) -> tuple[Path, ...]:
-        forced_rw = _forced_engine_rw_state_dirs(engine_name, policy, env)
+        forced_rw = forced_engine_rw_state_dirs(engine_name, policy, env)
         resolved_paths: list[Path] = []
         for raw_path in () if policy is None else policy.extra_ro_binds:
             host_path = Path(raw_path).expanduser()
@@ -340,7 +340,7 @@ exit 127
         policy: ExternalEngineSandboxPolicy | None,
         env: Mapping[str, str] | None = None,
     ) -> tuple[Path, ...]:
-        forced_rw = _forced_engine_rw_state_dirs(engine_name, policy, env)
+        forced_rw = forced_engine_rw_state_dirs(engine_name, policy, env)
         resolved_paths: list[Path] = []
         seen: set[Path] = set()
         for raw_path in () if policy is None else policy.extra_rw_binds:

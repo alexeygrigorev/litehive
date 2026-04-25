@@ -407,7 +407,7 @@ def test_select_engine_records_quota_freeze_and_falls_back(
             return f"codex quota exhausted (used 100%, resets at {freeze_iso})", freeze_until
         return None, None
 
-    monkeypatch.setattr("litehive.config.engine_models._engine_quota_block", fake_quota_block)
+    monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
 
     selection = select_engine(tmp_path, task, config)
 
@@ -439,7 +439,7 @@ def test_select_engine_skips_active_freeze_without_quota_call(
         quota_calls.append(engine_name)
         return None, None
 
-    monkeypatch.setattr("litehive.config.engine_models._engine_quota_block", fake_quota_block)
+    monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
 
     selection = select_engine(tmp_path, task, config)
 
@@ -474,7 +474,7 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
             return f"codex quota exhausted (used 100%, resets at {refreshed_iso})", refreshed
         return None, None
 
-    monkeypatch.setattr("litehive.config.engine_models._engine_quota_block", fake_quota_block)
+    monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
 
     selection = select_engine(tmp_path, task, config)
 
@@ -506,7 +506,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
         quota_calls.append(engine_name)
         return None, None
 
-    monkeypatch.setattr("litehive.config.engine_models._engine_quota_block", fake_quota_block)
+    monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
 
     selection = select_engine(tmp_path, task, config)
 

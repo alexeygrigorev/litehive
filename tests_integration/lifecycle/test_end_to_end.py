@@ -386,7 +386,7 @@ def test_run_task_records_already_landed_commit_reconciliation(tmp_path: Path, m
     state.last_report.files_changed = 1
     persistence.save(state)
 
-    monkeypatch.setattr(orchestration, "_build_commit_node", lambda root: _AlreadyLandedCommitNode())
+    monkeypatch.setattr(orchestration, "build_commit_node", lambda root: _AlreadyLandedCommitNode())
 
     result = run_task(tmp_path, task, engine_factory=lambda _engine_name: _PassEngine())
     refreshed = get_task(tmp_path, task.id)

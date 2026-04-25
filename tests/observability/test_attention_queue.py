@@ -420,8 +420,8 @@ def test_pool_stops_before_running_tasks_when_attention_gate_enabled(tmp_path: P
     monkeypatch.setattr("litehive.daemon.execution.load_config", lambda workspace: config)
     monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
-    monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
-    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
+    monkeypatch.setattr("litehive.daemon.execution.maybe_run_workspace_backup", lambda *args, **kwargs: None)
 
     stream = io.StringIO()
     exit_code = run_daemon_loop(tmp_path, output_stream=stream, session_dir=tmp_path / "logs")
@@ -458,8 +458,8 @@ def test_pool_resumes_after_attention_items_are_resolved(tmp_path: Path, monkeyp
     monkeypatch.setattr("litehive.daemon.execution.load_config", lambda workspace: config)
     monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
-    monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
-    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
+    monkeypatch.setattr("litehive.daemon.execution.maybe_run_workspace_backup", lambda *args, **kwargs: None)
 
     first_stream = io.StringIO()
     first_exit_code = run_daemon_loop(tmp_path, output_stream=first_stream, session_dir=tmp_path / "logs-first")
@@ -497,8 +497,8 @@ def test_pool_halts_immediately_when_local_main_diverges_from_origin(tmp_path: P
     )
     monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
-    monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
-    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
+    monkeypatch.setattr("litehive.daemon.execution.maybe_run_workspace_backup", lambda *args, **kwargs: None)
 
     stream = io.StringIO()
     exit_code = run_daemon_loop(tmp_path, output_stream=stream, session_dir=tmp_path / "logs")
@@ -533,8 +533,8 @@ def test_daemon_loop_rebuilds_corrupt_global_registry_without_exiting(tmp_path: 
 
     monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
-    monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
-    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
+    monkeypatch.setattr("litehive.daemon.execution.maybe_run_workspace_backup", lambda *args, **kwargs: None)
 
     stream = io.StringIO()
     exit_code = run_daemon_loop(tmp_path, output_stream=stream, session_dir=tmp_path / "logs")
@@ -594,8 +594,8 @@ def test_pool_recovers_when_worktree_venv_is_broken(tmp_path: Path, monkeypatch)
 
     monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
-    monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
-    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
+    monkeypatch.setattr("litehive.daemon.execution.maybe_run_workspace_backup", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.recovery.workspace_repair.shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
     monkeypatch.setattr("litehive.recovery.workspace_repair.subprocess.run", fake_uv_sync)
 

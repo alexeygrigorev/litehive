@@ -11,7 +11,7 @@ from litehive.agents.session_store import load_subagent_artifacts
 from litehive.db.schema import connect_workspace_db
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
 from litehive.domain.recovery import TriggerEventKind
-from litehive.domain.reports import RecoveryAction, RecoveryEvidenceItem, RecoveryReport, StageReport
+from litehive.domain.reports import RecoveryAction, RecoveryEvidenceItem, RecoveryReport, StageReport, TaskActivityEntry
 from litehive.domain.task import TaskRecord
 
 from .activity import (
@@ -226,8 +226,6 @@ def record_recovery_report(
     blocker: str | None = None,
     warnings: list[str] | None = None,
 ) -> Path:
-    from litehive.domain.reports import TaskActivityEntry
-
     report = RecoveryReport(
         task_id=task.id,
         origin_stage=origin_stage,

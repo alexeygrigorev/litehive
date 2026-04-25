@@ -278,7 +278,7 @@ def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatc
     monkeypatch.setattr("litehive.cli.workspace.render_engine_health_section", lambda monitoring: [])
     monkeypatch.setattr("litehive.cli.workspace.render_engine_monitoring_lines", lambda monitoring: [])
     monkeypatch.setattr("litehive.cli.workspace.render_recent_activity_section", lambda events: [])
-    monkeypatch.setattr("litehive.cli.workspace._print_status_issues", lambda issues: 0)
+    monkeypatch.setattr("litehive.cli.workspace.print_status_issues", lambda issues: 0)
 
     exit_code = status_command(tmp_path)
     output = capsys.readouterr().out
@@ -306,7 +306,7 @@ def test_full_status_command_lists_tasks_with_strict_false(tmp_path: Path, monke
         return []
 
     monkeypatch.setattr("litehive.cli.workspace.list_tasks", fake_list_tasks)
-    monkeypatch.setattr("litehive.cli.workspace._print_status_issues", lambda issues: 0)
+    monkeypatch.setattr("litehive.cli.workspace.print_status_issues", lambda issues: 0)
 
     exit_code = status_command(tmp_path, full=True)
 

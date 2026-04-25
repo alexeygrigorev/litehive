@@ -58,7 +58,7 @@ def test_worktree_sync_creates_missing_task_worktree(tmp_path: Path) -> None:
         worktree_resolver=lambda state: workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}",
     )
 
-    changed = node._sync(_state(task.id))
+    changed = node.sync(_state(task.id))
     recorded_path = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
 
     assert changed is True
@@ -84,7 +84,7 @@ def test_worktree_sync_links_worktree_venv_to_workspace_venv(tmp_path: Path) -> 
         worktree_resolver=lambda state: workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}",
     )
 
-    changed = node._sync(_state(task.id))
+    changed = node.sync(_state(task.id))
     worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
 
     assert changed is True
@@ -109,7 +109,7 @@ def test_worktree_sync_skips_broken_venv_link_when_workspace_has_no_venv(tmp_pat
         worktree_resolver=lambda state: workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}",
     )
 
-    changed = node._sync(_state(task.id))
+    changed = node.sync(_state(task.id))
     worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
 
     assert changed is True
@@ -164,7 +164,7 @@ def test_worktree_sync_skips_dirty_worktrees(tmp_path: Path) -> None:
         workspace_root=workspace,
         worktree_resolver=lambda state: worktree,
     )
-    changed = node._sync(_state(task.id))
+    changed = node.sync(_state(task.id))
 
     assert changed is False
     assert (worktree / "app.txt").read_text(encoding="utf-8") == "base\nlocal draft\n"
@@ -205,7 +205,7 @@ def test_worktree_sync_prunes_stale_git_worktree_metadata_before_recreate(tmp_pa
         workspace_root=workspace,
         worktree_resolver=lambda state: worktree,
     )
-    changed = node._sync(_state(task.id))
+    changed = node.sync(_state(task.id))
 
     assert changed is True
     assert worktree.exists()
@@ -243,7 +243,7 @@ def test_worktree_sync_reuses_existing_branch_worktree_when_runtime_path_missing
         workspace_root=workspace,
         worktree_resolver=lambda state: worktree,
     )
-    changed = node._sync(_state(task.id))
+    changed = node.sync(_state(task.id))
 
     refreshed = get_task(workspace, task.id)
     assert refreshed is not None

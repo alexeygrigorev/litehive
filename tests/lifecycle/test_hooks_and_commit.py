@@ -13,7 +13,7 @@ from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass, Rejec
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.hook import HookNode, HookRunner, HookSpec, SubprocessHookRunner
 from litehive.lifecycle.nodes.system import GitCommitNode, StubCommitNode
-from litehive.lifecycle.orchestration import _reconcile_terminal_commit_sha, run_task
+from litehive.lifecycle.orchestration import reconcile_terminal_commit_sha, run_task
 from litehive.lifecycle.persistence import CommitResult, SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.persist import load_state
@@ -446,15 +446,15 @@ def test_commit_node_main_checkout_autocommit_skips_stale_missing_pathspecs(
 
     monkeypatch.setattr(
         node,
-        "_git_status_entries",
+        "git_status_entries",
         lambda repo_root: (
             [("??", "generated.txt"), (" D", "tmp_review_probe/.litehive/.gitignore")]
             if repo_root == main_repo
-            else GitCommitNode._git_status_entries(node, repo_root)
+            else GitCommitNode.git_status_entries(node, repo_root)
         ),
     )
 
-    cleanup_head = node._autocommit_main_checkout_changes(make_state(stage="commit"))
+    cleanup_head = node.autocommit_main_checkout_changes(make_state(stage="commit"))
 
     status = subprocess.run(
         ["git", "status", "--short"],
@@ -484,13 +484,13 @@ def test_commit_node_reports_already_landed_noop_reconciliation(git_repo_with_br
         worktree_resolver=lambda state: worktree,
     )
 
-    monkeypatch.setattr(node, "_autocommit_worktree_changes", lambda worktree, state: None)
-    monkeypatch.setattr(node, "_worktree_branch", lambda worktree: "feature")
-    monkeypatch.setattr(node, "_worktree_head", lambda worktree: "feature-head")
-    monkeypatch.setattr(node, "_main_head", lambda: "main-head")
+    monkeypatch.setattr(node, "autocommit_worktree_changes", lambda worktree, state: None)
+    monkeypatch.setattr(node, "worktree_branch", lambda worktree: "feature")
+    monkeypatch.setattr(node, "worktree_head", lambda worktree: "feature-head")
+    monkeypatch.setattr(node, "main_head", lambda: "main-head")
     monkeypatch.setattr(
         node,
-        "_git_merge",
+        "git_merge",
         lambda branch_ref: subprocess.CompletedProcess(
             args=["git", "merge", branch_ref, "--no-edit"],
             returncode=0,
@@ -498,7 +498,7 @@ def test_commit_node_reports_already_landed_noop_reconciliation(git_repo_with_br
             stderr="",
         ),
     )
-    monkeypatch.setattr(node, "_worktree_patch_already_on_main", lambda wt_head, main_head: True)
+    monkeypatch.setattr(node, "worktree_patch_already_on_main", lambda wt_head, main_head: True)
 
     event = node.run(make_state(stage="commit"))
 
@@ -858,7 +858,7 @@ def test_reconcile_terminal_commit_sha_recovers_missing_sha_from_persisted_commi
     fresh.pipeline_status = "done"
     save_task(tmp_path, fresh)
 
-    reconciled = _reconcile_terminal_commit_sha(
+    reconciled = reconcile_terminal_commit_sha(
         tmp_path,
         fresh,
         final_state=TaskState(task_id=task.id, stage="done", pipeline_mode=PipelineMode.FULL),
@@ -1215,7 +1215,7 @@ def test_main_checkout_cleanup_skips_tracked_ignored_task_reports(tmp_path: Path
     report_path.write_text("stage: testing\nsummary: updated\n", encoding="utf-8")
 
     node = GitCommitNode(main_repo_root=tmp_path, worktree_resolver=lambda state: tmp_path)
-    head = node._autocommit_main_checkout_changes(make_state(stage="commit_to_git", task_id=seed_task.id))
+    head = node.autocommit_main_checkout_changes(make_state(stage="commit_to_git", task_id=seed_task.id))
 
     status = subprocess.run(
         ["git", "status", "--short"],
@@ -1253,7 +1253,7 @@ def test_main_checkout_cleanup_commits_already_staged_deletions(tmp_path: Path) 
     subprocess.run(["git", "rm", "-q", "--", str(probe_file.relative_to(tmp_path))], cwd=tmp_path, check=True)
 
     node = GitCommitNode(main_repo_root=tmp_path, worktree_resolver=lambda state: tmp_path)
-    head = node._autocommit_main_checkout_changes(make_state(stage="commit", task_id="T-0429"))
+    head = node.autocommit_main_checkout_changes(make_state(stage="commit", task_id="T-0429"))
 
     status = subprocess.run(
         ["git", "status", "--short"],

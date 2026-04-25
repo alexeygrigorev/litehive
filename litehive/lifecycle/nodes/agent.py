@@ -259,7 +259,7 @@ class AgentNode(Node):
             try:
                 verdict = engine.run_turn(session, current_prompt, state)
                 self.sessions.persist(state.task_id, self.name, engine.name, session)
-                return self._verdict_to_event(verdict)
+                return self.verdict_to_event(verdict)
             except NudgeRequired as exc:
                 if nudges_used >= self.nudge_budget:
                     return Crash(
@@ -287,7 +287,7 @@ class AgentNode(Node):
                 return Crash(exc_type=type(exc).__name__, message=str(exc))
         return EngineBlockedError(f"retry budget ({self.retry_budget}) exhausted on {engine.name}: {last_exc}")
 
-    def _verdict_to_event(self, verdict: AgentVerdict) -> Event:
+    def verdict_to_event(self, verdict: AgentVerdict) -> Event:
         outcome = verdict.outcome.lower()
         if outcome == "pass":
             return Pass(metadata=dict(verdict.metadata or {}))

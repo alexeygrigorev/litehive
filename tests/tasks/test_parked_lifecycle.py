@@ -196,7 +196,7 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
     assert resumed.runtime.current_stage.status == "idle"
 
     monkeypatch.setattr(
-        "litehive.lifecycle.orchestration._build_commit_node",
+        "litehive.lifecycle.orchestration.build_commit_node",
         lambda root: StubCommitNode(),
     )
 

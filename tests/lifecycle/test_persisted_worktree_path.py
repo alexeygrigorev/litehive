@@ -84,7 +84,7 @@ def test_worktree_sync_persists_runtime_worktree_path(tmp_path: Path) -> None:
         worktree_resolver=lambda state: worktree,
     )
 
-    changed = node._sync(_state(task.id, "worktree_sync"))
+    changed = node.sync(_state(task.id, "worktree_sync"))
 
     stored = runtime_store(workspace).load_task_runtime(task.id)
     assert changed is True
@@ -115,7 +115,7 @@ def test_agent_and_commit_use_persisted_worktree_path(
         workspace_root=workspace,
         worktree_resolver=lambda state: worktree,
     )
-    assert sync_node._sync(_state(task.id, "worktree_sync")) is True
+    assert sync_node.sync(_state(task.id, "worktree_sync")) is True
 
     adapter = HeruEngineAdapter("codex", workspace)
     session = Session()
@@ -177,7 +177,7 @@ def test_commit_ignores_untracked_embedded_git_repos_in_task_worktree(tmp_path: 
         workspace_root=workspace,
         worktree_resolver=lambda state: worktree,
     )
-    assert sync_node._sync(_state(task.id, "worktree_sync")) is True
+    assert sync_node.sync(_state(task.id, "worktree_sync")) is True
 
     (worktree / "new.txt").write_text("agent wrote this\n", encoding="utf-8")
     scratch_repo = worktree / "$workspace"

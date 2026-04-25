@@ -276,7 +276,7 @@ def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
     assert refreshed.runtime.last_subagent.continuation.session_id == "session-42"
     assert result.continuation is not None
     assert result.continuation.resume_id == "session-42"
-    assert HeruEngineAdapter._extract_continuation_id(result, None) == "session-42"
+    assert HeruEngineAdapter.extract_continuation_id(result, None) == "session-42"
 
 
 def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
@@ -491,7 +491,7 @@ def test_subagent_manager_kills_stale_live_codex_output_after_timeout(
     os.utime(stdout_path, (stale_time, stale_time))
 
     killed: list[int] = []
-    monkeypatch.setattr(manager, "_terminate_stale_pid", killed.append)
+    monkeypatch.setattr(manager, "terminate_stale_pid", killed.append)
 
     execution = CLIExecutionResult(
         adapter="codex",
@@ -766,7 +766,7 @@ def test_subagent_manager_survives_nonfatal_progress_callback_failure_for_planne
         raise RuntimeError("progress bookkeeping failed")
 
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
-    monkeypatch.setattr(manager, "_write_session_progress", fail_progress)
+    monkeypatch.setattr(manager, "write_session_progress", fail_progress)
 
     result = manager.run(task, role="planner", engine_name="codex", prompt="groom it")
 

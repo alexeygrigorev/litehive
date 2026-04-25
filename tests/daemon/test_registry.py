@@ -152,7 +152,7 @@ def test_start_background_daemon_strips_agent_env(tmp_path: Path, monkeypatch) -
     monkeypatch.setenv("LITEHIVE_TASK_ID", "T-0446")
     monkeypatch.setattr("litehive.daemon.execution.daemon_metadata", lambda workspace: None)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda workspace: None)
-    monkeypatch.setattr("litehive.daemon.execution._ensure_workspace_venvs_ready", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.ensure_workspace_venvs_ready", lambda *args, **kwargs: None)
 
     captured: dict[str, object] = {}
 
@@ -197,9 +197,9 @@ def test_stop_workspace_daemon_escalates_to_sigkill_when_sigterm_ignored(tmp_pat
         assert entry is not None
         assert entry["status"] == "running"
         assert entry["pid"] == sleeper.pid
-        monkeypatch.setattr("litehive.daemon.execution._DAEMON_STOP_GRACE_PERIOD_SECONDS", 0.2)
-        monkeypatch.setattr("litehive.daemon.execution._DAEMON_FORCE_KILL_TIMEOUT_SECONDS", 2.0)
-        monkeypatch.setattr("litehive.daemon.execution._DAEMON_EXIT_POLL_INTERVAL_SECONDS", 0.05)
+        monkeypatch.setattr("litehive.daemon.execution.DAEMON_STOP_GRACE_PERIOD_SECONDS", 0.2)
+        monkeypatch.setattr("litehive.daemon.execution.DAEMON_FORCE_KILL_TIMEOUT_SECONDS", 2.0)
+        monkeypatch.setattr("litehive.daemon.execution.DAEMON_EXIT_POLL_INTERVAL_SECONDS", 0.05)
 
         started = time.monotonic()
         entry = stop_workspace_daemon(workspace)
@@ -240,9 +240,9 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
         assert entry is not None
         assert entry["status"] == "running"
         assert entry["pid"] == sleeper.pid
-        monkeypatch.setattr("litehive.daemon.execution._ensure_workspace_venvs_ready", lambda *args, **kwargs: None)
-        monkeypatch.setattr("litehive.daemon.execution._DAEMON_FORCE_KILL_TIMEOUT_SECONDS", 2.0)
-        monkeypatch.setattr("litehive.daemon.execution._DAEMON_EXIT_POLL_INTERVAL_SECONDS", 0.05)
+        monkeypatch.setattr("litehive.daemon.execution.ensure_workspace_venvs_ready", lambda *args, **kwargs: None)
+        monkeypatch.setattr("litehive.daemon.execution.DAEMON_FORCE_KILL_TIMEOUT_SECONDS", 2.0)
+        monkeypatch.setattr("litehive.daemon.execution.DAEMON_EXIT_POLL_INTERVAL_SECONDS", 0.05)
 
         class FakeProcess:
             pid = 4321
@@ -298,7 +298,7 @@ def test_start_background_daemon_does_not_kill_live_pid_from_stale_metadata(tmp_
         assert entry is not None
         assert entry["status"] == "stale"
         assert entry["pid"] == sleeper.pid
-        monkeypatch.setattr("litehive.daemon.execution._ensure_workspace_venvs_ready", lambda *args, **kwargs: None)
+        monkeypatch.setattr("litehive.daemon.execution.ensure_workspace_venvs_ready", lambda *args, **kwargs: None)
 
         class FakeProcess:
             pid = 4321

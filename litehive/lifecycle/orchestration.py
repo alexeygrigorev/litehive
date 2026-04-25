@@ -66,7 +66,7 @@ from .registry import build_registry
 from .runner import StateMachineRunner
 from .sessions import SqliteSessionStore
 from .transitions import Transition
-from .types import PipelineMode as _PipelineMode
+from .types import PipelineMode
 
 
 def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqlitePersistence) -> TaskState:
@@ -75,7 +75,7 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
     if task_record is None:
         raise LookupError(f"no task record for {task_id!r}")
     raw = task_record.pipeline_mode
-    mode = _PipelineMode(raw) if isinstance(raw, str) and raw else _PipelineMode.FULL
+    mode = PipelineMode(raw) if isinstance(raw, str) and raw else PipelineMode.FULL
     entry_stage = _entry_stage_for_task(task_record)
     fresh_state_kwargs = dict(
         task_id=task_id,
@@ -123,7 +123,7 @@ def _stale_launch_state_requires_reset(
     task_record: TaskRecord,
     state: TaskState,
     *,
-    pipeline_mode: _PipelineMode,
+    pipeline_mode: PipelineMode,
     entry_stage: str,
 ) -> bool:
     if not _launch_requires_fresh_pipeline_state(task_record):
@@ -299,7 +299,6 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
         else:
             task_record.status = "flagged"
             task_record.pipeline_status = "flagged"
-            origin_stage_key = _recovery_origin_stage(origin_stage)
             if failed_reason == "hook_reject_loop" or (
                 trigger is not None and trigger.reason_code == "hook_reject_loop"
             ):
@@ -453,7 +452,7 @@ def _task_recorded_worktree(root: Path, task_id: str) -> tuple[TaskRecord | None
     return task, resolve_recorded_worktree_path(root, recorded)
 
 
-def _build_commit_node(root: Path) -> CommitNode:
+def build_commit_node(root: Path) -> CommitNode:
     """Return the production ``GitCommitNode`` bound to this workspace."""
     return GitCommitNode(root, worktree_resolver=lambda state: _resolve_worktree(root, state))
 
@@ -541,7 +540,7 @@ def _cleanup_terminal_worktree(root: Path, task: TaskRecord | None) -> None:
     )
 
 
-def _reconcile_terminal_commit_sha(
+def reconcile_terminal_commit_sha(
     root: Path,
     task: TaskRecord | None,
     *,
@@ -757,7 +756,7 @@ def run_task(
             root,
             execution_root_resolver=lambda state: _resolve_hook_execution_root(root, state),
         )
-        commit_node = _build_commit_node(root)
+        commit_node = build_commit_node(root)
         worktree_sync_node = _build_worktree_sync_node(root)
         ready_node = ReadyNode(probes=[_missing_worktree_probe(root)])
         pre_exec_recovery_node = PreExecRecoveryNode(
@@ -809,7 +808,7 @@ def run_task(
         # 4. Mirror terminal state back to the v1 TaskRecord.
         updated_task = _sync_back(final_state, root) or task
         if final_state.stage in {"done", "failed"}:
-            updated_task = _reconcile_terminal_commit_sha(
+            updated_task = reconcile_terminal_commit_sha(
                 root,
                 updated_task,
                 final_state=final_state,

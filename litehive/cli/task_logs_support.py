@@ -11,7 +11,7 @@ from litehive.state.records import get_task_record, list_tasks
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 
 _DEFAULT_TAIL_LINES = 40
-_FOLLOW_POLL_SECONDS = 0.1
+FOLLOW_POLL_SECONDS = 0.1
 
 
 def show_latest_daemon_log(root: Path) -> int:
@@ -103,7 +103,7 @@ def list_task_subagents(root: Path, task) -> int:
 
 
 def follow_active_subagent(root: Path, *, task_id: str | None = None) -> int:
-    task = _resolve_follow_task(root, task_id=task_id)
+    task = resolve_follow_task(root, task_id=task_id)
     ref = None if task is None else _latest_subagent_ref(task)
     is_active = bool(
         task is not None
@@ -132,7 +132,7 @@ def follow_active_subagent(root: Path, *, task_id: str | None = None) -> int:
 
     while True:
         position = _print_follow_chunk(stdout_path, position)
-        task = _resolve_follow_task(root, task_id=task_id)
+        task = resolve_follow_task(root, task_id=task_id)
         if task is None or task.runtime.active_subagent is None:
             position = _print_follow_chunk(stdout_path, position)
             break
@@ -142,7 +142,7 @@ def follow_active_subagent(root: Path, *, task_id: str | None = None) -> int:
         if task.runtime.active_subagent.path != active_path:
             position = _print_follow_chunk(stdout_path, position)
             break
-        time.sleep(_FOLLOW_POLL_SECONDS)
+        time.sleep(FOLLOW_POLL_SECONDS)
     return 0
 
 
@@ -263,7 +263,7 @@ def _format_duration(started_at: str | datetime | None, completed_at: str | date
     return f"{total_seconds}s" if total_seconds >= 0 else "-"
 
 
-def _resolve_follow_task(root: Path, *, task_id: str | None) -> object | None:
+def resolve_follow_task(root: Path, *, task_id: str | None) -> object | None:
     if task_id is not None:
         return get_task_record(root, task_id)
     tasks = list_tasks(root, strict=False)

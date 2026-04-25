@@ -135,7 +135,7 @@ class SessionMixin:
         return extract_engine_continuation(engine_name, execution)
 
     @staticmethod
-    def _extract_execution_timeline(
+    def extract_execution_timeline(
         engine_name: str,
         stdout: str,
         *,
@@ -297,14 +297,14 @@ class SessionMixin:
         idle_seconds = max(0.0, time.time() - stdout_path.stat().st_mtime)
         if idle_seconds < limit_seconds:
             return
-        self._terminate_stale_pid(execution.pid)
+        self.terminate_stale_pid(execution.pid)
         raise SubagentInactivityTimeout(
             execution,
             idle_seconds=idle_seconds,
             limit_seconds=limit_seconds,
         )
 
-    def _terminate_stale_pid(self, pid: int) -> None:
+    def terminate_stale_pid(self, pid: int) -> None:
         try:
             os.kill(pid, signal.SIGTERM)
         except ProcessLookupError:
@@ -317,7 +317,7 @@ class SessionMixin:
         task: TaskRecord,
         stdout: str,
     ) -> None:
-        timeline = self._extract_execution_timeline(
+        timeline = self.extract_execution_timeline(
             ref.engine,
             stdout,
             task_id=task.id,

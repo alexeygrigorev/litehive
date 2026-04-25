@@ -182,7 +182,7 @@ def test_docker_sandbox_creates_git_wrappers(mock_which, temp_workspace, docker_
     launcher = SandboxLauncher(temp_workspace, docker_sandbox_config)
 
     # Trigger wrapper creation
-    wrappers = launcher._ensure_docker_git_wrappers()
+    wrappers = launcher.ensure_docker_git_wrappers()
 
     assert "merge_git" in wrappers
     assert "no_git" in wrappers

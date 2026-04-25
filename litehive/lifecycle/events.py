@@ -207,7 +207,7 @@ class OverallRetryLimitHit(Event):
 class RecoverySucceeded(Event):
     """The recovery agent returned a successful verdict.
 
-    Fired only by ``RecoveryAgent._verdict_to_event`` in response to a
+    Fired only by ``RecoveryAgent.verdict_to_event`` in response to a
     ``resume`` / ``advance`` / ``done`` outcome. The ``resume`` field
     tells the rule table where to route:
       - ``"done"`` → terminal
@@ -223,7 +223,7 @@ class RecoverySucceeded(Event):
 class RecoveryFailed(Event):
     """The recovery agent gave up without a fix.
 
-    Fired only by ``RecoveryAgent._verdict_to_event`` when the recovery
+    Fired only by ``RecoveryAgent.verdict_to_event`` when the recovery
     verdict is anything other than ``resume`` / ``advance`` / ``done`` /
     ``budget_hit``. Routes ``recovering → failed`` with
     ``failed_reason=recovery_exhausted``.
@@ -236,7 +236,7 @@ class RecoveryFailed(Event):
 class RecoveryBudgetHit(Event):
     """Recovery was requested for a stage that already used its one shot.
 
-    Fired by ``RecoveryAgent._verdict_to_event`` when the agent returns
+    Fired by ``RecoveryAgent.verdict_to_event`` when the agent returns
     outcome ``budget_hit``. Routes ``recovering → failed`` with
     ``failed_reason=recovery_budget_hit``. Since v2 enforces "one
     recovery per stage" by construction, this is currently a belt-and-

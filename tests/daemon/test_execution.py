@@ -56,9 +56,9 @@ def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monke
         return 0
 
     monkeypatch.setattr("litehive.daemon.execution.runner_status", fake_runner_status)
-    monkeypatch.setattr("litehive.daemon.execution._sleep_with_stop", fake_sleep)
-    monkeypatch.setattr("litehive.daemon.execution._run_logged_subprocess", fake_run_logged_subprocess)
-    monkeypatch.setattr("litehive.daemon.execution._maybe_run_workspace_backup", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.sleep_with_stop", fake_sleep)
+    monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
+    monkeypatch.setattr("litehive.daemon.execution.maybe_run_workspace_backup", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.check_origin_divergence", lambda *args, **kwargs: None)

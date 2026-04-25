@@ -159,7 +159,7 @@ def test_daemon_run_reports_broken_worktree_venv_before_start(
 
 def test_legacy_workspace_db_is_rebuilt_without_task_yaml_rescan(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Keep me")
+    create_task(tmp_path, title="Keep me")
     db_path = workspace_path(tmp_path, "data.db")
     db_path.unlink()
 
@@ -238,7 +238,7 @@ def test_connect_workspace_db_cache_ignores_normal_db_writes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ensure_workspace(tmp_path)
-    schema_module._MIGRATED_DB_PATHS.clear()
+    schema_module.MIGRATED_DB_PATHS.clear()
 
     apply_calls = 0
     real_apply = schema_module.apply_pending_migrations

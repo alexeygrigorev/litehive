@@ -221,7 +221,7 @@ class SubagentManager(SessionMixin):
             if execution.pid is not None:
                 engine_started = True
             try:
-                self._write_session_progress(
+                self.write_session_progress(
                     task,
                     base,
                     ref,
@@ -525,7 +525,7 @@ class SubagentManager(SessionMixin):
         )
         self.write_timeline(base, ref, task, "" if execution is None else execution.stdout)
 
-    def _write_session_progress(
+    def write_session_progress(
         self,
         task: TaskRecord,
         base: Path,

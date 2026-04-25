@@ -109,7 +109,7 @@ class WorktreeSyncNode(SystemNode):
 
     def run(self, state: TaskState) -> Event:
         try:
-            self._sync(state)
+            self.sync(state)
         except MergeConflict as exc:
             return Reject(
                 source="system",
@@ -121,7 +121,7 @@ class WorktreeSyncNode(SystemNode):
         # table routes that to the first stage phase based on mode.
         return Pass()
 
-    def _sync(self, state: TaskState) -> bool:
+    def sync(self, state: TaskState) -> bool:
         """Return True if anything was merged, False if already up-to-date
         or the worktree isn't available yet. Subclasses override to call git."""
         return False
@@ -130,7 +130,7 @@ class WorktreeSyncNode(SystemNode):
 class NoopWorktreeSyncNode(WorktreeSyncNode):
     """Always-pass variant — use when worktrees aren't in play (tests, dry runs)."""
 
-    def _sync(self, state: TaskState) -> bool:
+    def sync(self, state: TaskState) -> bool:
         return False
 
 
@@ -156,7 +156,7 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         self.worktree_resolver = worktree_resolver
         self.main_ref = main_ref
 
-    def _sync(self, state: TaskState) -> bool:
+    def sync(self, state: TaskState) -> bool:
         from litehive.state.records import get_task, get_task_worktree_path, save_task, set_task_worktree_path
         from litehive.worktree import (
             ensure_worktree_venv_link,
@@ -589,11 +589,11 @@ class GitCommitNode(CommitNode):
 
     def _merge_worktree(self, state: TaskState) -> dict[str, object] | None:
         worktree = self.worktree_resolver(state)
-        self._autocommit_worktree_changes(worktree, state)
+        self.autocommit_worktree_changes(worktree, state)
         local_only_paths = self._worktree_local_only_paths(worktree)
-        main_head_before = self._main_head()
-        branch_ref = self._worktree_branch(worktree) or self._worktree_head(worktree)
-        worktree_head = self._worktree_head(worktree)
+        main_head_before = self.main_head()
+        branch_ref = self.worktree_branch(worktree) or self.worktree_head(worktree)
+        worktree_head = self.worktree_head(worktree)
 
         if self._merge_in_progress():
             unresolved = self._unresolved_conflicts()
@@ -602,20 +602,20 @@ class GitCommitNode(CommitNode):
             self._conclude_in_progress_merge()
             return None
 
-        result = self._git_merge(branch_ref)
+        result = self.git_merge(branch_ref)
         if result.returncode == 0:
             # Clean merge or "Already up to date" (which is the case when
             # the task has no dedicated worktree and branch_ref == current
             # HEAD). Either way, commit stage passes.
-            merge_head_after = self._main_head()
+            merge_head_after = self.main_head()
             if merge_head_after is None:
                 raise GitError("git merge completed but main HEAD could not be resolved")
             self._restore_local_only_paths(worktree, local_only_paths)
-            cleanup_head = self._autocommit_main_checkout_changes(state)
+            cleanup_head = self.autocommit_main_checkout_changes(state)
             main_head_after = cleanup_head or merge_head_after
             if main_head_before == merge_head_after:
                 reason = "no_op"
-                if worktree_head != main_head_before and self._worktree_patch_already_on_main(
+                if worktree_head != main_head_before and self.worktree_patch_already_on_main(
                     worktree_head,
                     main_head_before,
                 ):
@@ -650,7 +650,7 @@ class GitCommitNode(CommitNode):
         # decides whether to abort the merge or keep investigating.
         raise MergeConflict(unresolved)
 
-    def _main_head(self) -> str | None:
+    def main_head(self) -> str | None:
         proc = subprocess.run(
             ["git", "rev-parse", "--verify", "HEAD"],
             cwd=str(self.main_repo_root),
@@ -661,7 +661,7 @@ class GitCommitNode(CommitNode):
             return None
         return proc.stdout.strip() or None
 
-    def _autocommit_worktree_changes(self, worktree: Path, state: TaskState) -> None:
+    def autocommit_worktree_changes(self, worktree: Path, state: TaskState) -> None:
         """Commit any uncommitted SWE edits inside the worktree.
 
         SWE subagents edit files but do not run `git commit`. Without this,
@@ -678,7 +678,7 @@ class GitCommitNode(CommitNode):
         """
         if worktree == self.main_repo_root:
             return
-        entries = self._git_status_entries(worktree)
+        entries = self.git_status_entries(worktree)
         if not entries:
             return
         committable = [
@@ -712,9 +712,9 @@ class GitCommitNode(CommitNode):
         if commit.returncode != 0:
             raise GitError(f"git commit failed in {worktree}: {commit.stderr.strip() or commit.stdout.strip()}")
 
-    def _autocommit_main_checkout_changes(self, state: TaskState) -> str | None:
+    def autocommit_main_checkout_changes(self, state: TaskState) -> str | None:
         """Commit any remaining dirty non-ignored files on main after a clean merge."""
-        entries = self._git_status_entries(self.main_repo_root)
+        entries = self.git_status_entries(self.main_repo_root)
         committable = [
             (code, path)
             for code, path in entries
@@ -747,12 +747,12 @@ class GitCommitNode(CommitNode):
             raise GitError(
                 f"git commit failed in {self.main_repo_root}: {commit.stderr.strip() or commit.stdout.strip()}"
             )
-        head = self._main_head()
+        head = self.main_head()
         if head is None:
             raise GitError("main cleanup commit completed but main HEAD could not be resolved")
         return head
 
-    def _git_status_entries(self, repo_root: Path) -> list[tuple[str, str]]:
+    def git_status_entries(self, repo_root: Path) -> list[tuple[str, str]]:
         return self._git_status_entries_with_options(repo_root)
 
     def _filter_stageable_paths(self, repo_root: Path, paths: list[str]) -> list[str]:
@@ -831,7 +831,7 @@ class GitCommitNode(CommitNode):
                 continue
             shutil.copy2(source, destination)
 
-    def _worktree_head(self, worktree: Path) -> str:
+    def worktree_head(self, worktree: Path) -> str:
         proc = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             cwd=str(worktree),
@@ -842,7 +842,7 @@ class GitCommitNode(CommitNode):
             raise GitError(f"cannot read worktree HEAD at {worktree}: {proc.stderr.strip()}")
         return proc.stdout.strip()
 
-    def _worktree_branch(self, worktree: Path) -> str | None:
+    def worktree_branch(self, worktree: Path) -> str | None:
         proc = subprocess.run(
             ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
             cwd=str(worktree),
@@ -853,7 +853,7 @@ class GitCommitNode(CommitNode):
             return None
         return proc.stdout.strip() or None
 
-    def _git_merge(self, branch_ref: str) -> subprocess.CompletedProcess:
+    def git_merge(self, branch_ref: str) -> subprocess.CompletedProcess:
         return subprocess.run(
             ["git", "merge", branch_ref, "--no-edit"],
             cwd=str(self.main_repo_root),
@@ -914,7 +914,7 @@ class GitCommitNode(CommitNode):
             f"{commit.stderr.strip() or commit.stdout.strip()}"
         )
 
-    def _worktree_patch_already_on_main(self, worktree_head: str, main_head: str | None) -> bool:
+    def worktree_patch_already_on_main(self, worktree_head: str, main_head: str | None) -> bool:
         if not main_head:
             return False
         cherry = subprocess.run(

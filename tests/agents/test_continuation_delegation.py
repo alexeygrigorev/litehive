@@ -51,7 +51,7 @@ def test_session_mixin_does_not_parse_native_engine_jsonl_fallback_for_supported
 
     transcript = SessionMixin.render_execution_transcript(engine_name, execution)
     continuation = SessionMixin.extract_execution_continuation(engine_name, execution)
-    timeline = SessionMixin._extract_execution_timeline(engine_name, execution.stdout)
+    timeline = SessionMixin.extract_execution_timeline(engine_name, execution.stdout)
 
     assert transcript == execution.transcript
     assert continuation is None
@@ -100,7 +100,7 @@ def test_session_mixin_consumes_unified_event_types_for_supported_engines(engine
 
     transcript = SessionMixin.render_execution_transcript(engine_name, execution)
     continuation = SessionMixin.extract_execution_continuation(engine_name, execution)
-    timeline = SessionMixin._extract_execution_timeline(
+    timeline = SessionMixin.extract_execution_timeline(
         engine_name,
         execution.stdout,
         task_id="T-0001",

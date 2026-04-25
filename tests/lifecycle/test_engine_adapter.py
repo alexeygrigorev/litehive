@@ -696,7 +696,7 @@ def test_heru_engine_adapter_retries_crash_once_with_resume_id(
     assert _ScriptedManager.last_kwargs[0]["resume_session_id"] is None
     assert _ScriptedManager.last_kwargs[1]["resume_session_id"] == expected_resume_session_id
     assert isinstance(_ScriptedManager.last_kwargs[1]["prompt"], str)
-    assert _ScriptedManager.last_kwargs[1]["prompt"].startswith(HeruEngineAdapter._CRASH_RESUME_PROMPT_PREFIX)
+    assert _ScriptedManager.last_kwargs[1]["prompt"].startswith(HeruEngineAdapter.CRASH_RESUME_PROMPT_PREFIX)
     assert session.engine_session_id == continuation.resume_id
     assert session.turn_count == 1
 
@@ -734,7 +734,7 @@ def test_heru_engine_adapter_skips_crash_resume_without_resume_id(
 
     assert _ScriptedManager.calls == 1
     assert _ScriptedManager.last_kwargs[0]["resume_session_id"] is None
-    assert not _ScriptedManager.last_kwargs[0]["prompt"].startswith(HeruEngineAdapter._CRASH_RESUME_PROMPT_PREFIX)
+    assert not _ScriptedManager.last_kwargs[0]["prompt"].startswith(HeruEngineAdapter.CRASH_RESUME_PROMPT_PREFIX)
     assert session.engine_session_id is None
 
 
@@ -891,7 +891,7 @@ def test_latest_verdict_after_allows_clean_implementing_noop(tmp_path, monkeypat
         ),
     )
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._execution_checkout_status",
+        "litehive.lifecycle.heru_factory.execution_checkout_status",
         lambda workspace_root, task: (tmp_path, []),
     )
 
@@ -935,7 +935,7 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
 
     record_stage_report(tmp_path, task, record)
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._execution_checkout_status",
+        "litehive.lifecycle.heru_factory.execution_checkout_status",
         lambda workspace_root, task: (tmp_path, []),
     )
 
@@ -986,7 +986,7 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
         ),
     )
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._execution_checkout_status",
+        "litehive.lifecycle.heru_factory.execution_checkout_status",
         lambda workspace_root, task: (tmp_path, [" M foo.py"]),
     )
 
@@ -1023,7 +1023,7 @@ def test_latest_verdict_after_includes_retry_summary_metadata(tmp_path, monkeypa
         ),
     )
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._execution_checkout_status",
+        "litehive.lifecycle.heru_factory.execution_checkout_status",
         lambda workspace_root, task: (tmp_path, [" M litehive/lifecycle/prompt_serializer.py"]),
     )
 

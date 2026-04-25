@@ -190,7 +190,7 @@ def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationP
                 dry_run=True,
             )
         db_path.unlink(missing_ok=True)
-        _MIGRATED_DB_PATHS.pop(str(db_path.resolve()), None)
+        MIGRATED_DB_PATHS.pop(str(db_path.resolve()), None)
     with _open_connection(db_path) as connection:
         applied_versions = _applied_versions(connection)
         pending = tuple(migration for migration in migrations if migration.version not in applied_versions)
@@ -232,7 +232,7 @@ def _db_fingerprint(db_path: Path) -> _DbFingerprint:
     return (stat.st_dev, stat.st_ino)
 
 
-_MIGRATED_DB_PATHS: dict[str, _DbFingerprint] = {}
+MIGRATED_DB_PATHS: dict[str, _DbFingerprint] = {}
 
 
 def connect_workspace_db(root: Path, *, migrate: bool = True) -> sqlite3.Connection:
@@ -244,9 +244,9 @@ def connect_workspace_db(root: Path, *, migrate: bool = True) -> sqlite3.Connect
         # force another migration check on the next open.
         key = str(db_path.resolve())
         fingerprint = _db_fingerprint(db_path)
-        if key not in _MIGRATED_DB_PATHS or _MIGRATED_DB_PATHS[key] != fingerprint:
+        if key not in MIGRATED_DB_PATHS or MIGRATED_DB_PATHS[key] != fingerprint:
             apply_pending_migrations(root)
-            _MIGRATED_DB_PATHS[key] = _db_fingerprint(db_path)
+            MIGRATED_DB_PATHS[key] = _db_fingerprint(db_path)
     connection = _open_connection(db_path)
     if not migrate:
         _ensure_schema_migrations_table(connection)

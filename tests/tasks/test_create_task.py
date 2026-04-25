@@ -502,7 +502,7 @@ def test_task_search_cli_returns_ranked_matches_from_existing_index(
     def fail_if_rebuilt(root: Path) -> list[object]:
         raise AssertionError("search unexpectedly rebuilt the duplicate index")
 
-    monkeypatch.setattr("litehive.tasks.duplicates._iter_indexable_tasks", fail_if_rebuilt)
+    monkeypatch.setattr("litehive.tasks.duplicates.iter_indexable_tasks", fail_if_rebuilt)
 
     result = CliRunner().invoke(
         task_app,

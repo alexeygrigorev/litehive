@@ -3,6 +3,8 @@
 import threading
 from pathlib import Path
 
+from litehive.domain.task_ops import RunnerLockState
+
 
 VALID_TASK_PRIORITIES = {"low", "medium", "high", "critical"}
 VALID_TASK_ENGINES = {"codex", "opencode", "gemini", "copilot", "claude", "goz"}
@@ -15,5 +17,5 @@ HEARTBEAT_LATE_THRESHOLD_SECONDS = 60
 CLOSED_TASK_STATUSES = {"cancelled", "wont_do", "deferred", "duplicate"}
 RESUMABLE_TASK_STATUSES = {"interrupted", "parked"}
 
-RUNNER_LOCKS: dict[Path, "_RunnerLockState"] = {}  # type: ignore[name-defined]
+RUNNER_LOCKS: dict[Path, RunnerLockState] = {}
 RUNNER_LOCKS_MUTEX = threading.Lock()

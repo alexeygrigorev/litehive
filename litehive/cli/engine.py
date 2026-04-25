@@ -25,7 +25,7 @@ def engine_command(
     until: Annotated[str | None, typer.Option(help="Freeze until this ISO date (YYYY-MM-DD)")] = None,
     reason: Annotated[str | None, typer.Option(help="Operator note")] = None,
 ) -> int:
-    config = load_config(workspace)
+    load_config(workspace)
     if action == "status":
         if name:
             print("engine status: does not take positional arguments")

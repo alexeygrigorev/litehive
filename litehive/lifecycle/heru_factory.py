@@ -117,7 +117,7 @@ def _agent_execution_root(workspace_root: Path, task, *, role: str) -> Path:
     return _execution_checkout_path(workspace_root, task)
 
 
-def _execution_checkout_status(workspace_root: Path, task) -> tuple[Path, list[str] | None]:
+def execution_checkout_status(workspace_root: Path, task) -> tuple[Path, list[str] | None]:
     checkout = _execution_checkout_path(workspace_root, task)
     if not is_git_repo(checkout):
         return checkout, None
@@ -275,7 +275,7 @@ def latest_verdict_after(
         return None
     changed_files = normalized_files_changed(latest.files_changed)
     if stage == "implementing" and latest.verdict == "pass":
-        checkout, worktree_status = _execution_checkout_status(workspace_root, task)
+        checkout, worktree_status = execution_checkout_status(workspace_root, task)
         if worktree_status == [] and changed_files:
             return _rewrite_hallucinated_implementing_pass(
                 workspace_root,
@@ -301,7 +301,7 @@ def latest_verdict_after(
 class HeruEngineAdapter:
     """``Engine`` that delegates to ``SubagentManager`` for one turn."""
 
-    _CRASH_RESUME_PROMPT_PREFIX = "Please continue where you left off. Complete the task.\n\n"
+    CRASH_RESUME_PROMPT_PREFIX = "Please continue where you left off. Complete the task.\n\n"
 
     def __init__(
         self,
@@ -408,14 +408,14 @@ class HeruEngineAdapter:
 
             # Persist the latest continuation handle even if the attempt failed;
             # same-engine retries and nudges reuse the in-memory session object.
-            new_session_id = self._extract_continuation_id(result, session.engine_session_id)
+            new_session_id = self.extract_continuation_id(result, session.engine_session_id)
             if new_session_id:
                 session.engine_session_id = new_session_id
 
             if result.failure is not None or result.exit_code == 0 or crash_resume_attempted:
                 return result
 
-            crash_resume_id = self._extract_continuation_id(result, None)
+            crash_resume_id = self.extract_continuation_id(result, None)
             if not crash_resume_id:
                 return result
 
@@ -425,7 +425,7 @@ class HeruEngineAdapter:
 
     @classmethod
     def _crash_resume_prompt(cls, prompt_text: str) -> str:
-        return f"{cls._CRASH_RESUME_PROMPT_PREFIX}{prompt_text}"
+        return f"{cls.CRASH_RESUME_PROMPT_PREFIX}{prompt_text}"
 
     def _handle_startup_failure(
         self,
@@ -540,7 +540,7 @@ class HeruEngineAdapter:
         )
 
     @staticmethod
-    def _extract_continuation_id(result, fallback: str | None) -> str | None:
+    def extract_continuation_id(result, fallback: str | None) -> str | None:
         from litehive.domain.agent import SubagentResult
 
         if not isinstance(result, SubagentResult):

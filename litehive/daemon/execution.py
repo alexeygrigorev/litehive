@@ -47,9 +47,9 @@ logger = logging.getLogger(__name__)
 
 _DAEMON_HEARTBEAT_INTERVAL_SECONDS = 1.0
 _DAEMON_HEALTH_TIMEOUT_SECONDS = 10.0
-_DAEMON_STOP_GRACE_PERIOD_SECONDS = 5.0
-_DAEMON_FORCE_KILL_TIMEOUT_SECONDS = 4.0
-_DAEMON_EXIT_POLL_INTERVAL_SECONDS = 0.1
+DAEMON_STOP_GRACE_PERIOD_SECONDS = 5.0
+DAEMON_FORCE_KILL_TIMEOUT_SECONDS = 4.0
+DAEMON_EXIT_POLL_INTERVAL_SECONDS = 0.1
 
 _EXPLICIT_POOL_STOP_REASONS = {
     "attention_required",
@@ -143,7 +143,7 @@ def _write_pool_stop_reason(workspace: Path, reason: str) -> None:
     set_pool_stop_reason(workspace, reason)
 
 
-def _sleep_with_stop(seconds: float, *, stop_requested_fn) -> None:
+def sleep_with_stop(seconds: float, *, stop_requested_fn) -> None:
     """Sleep up to ``seconds``, returning early if a stop is requested."""
     deadline = time.monotonic() + seconds
     while True:
@@ -184,7 +184,7 @@ def _is_explicit_pool_stop_reason(reason: str | None) -> bool:
     return bool(reason and reason in _EXPLICIT_POOL_STOP_REASONS)
 
 
-def _default_command_prefix() -> list[str]:
+def default_command_prefix() -> list[str]:
     override = os.environ.get("LITEHIVE_DAEMON_EXECUTABLE")
     if override:
         return shlex.split(override)
@@ -231,7 +231,7 @@ def _wait_for_pid_exit(pid: int, *, timeout_seconds: float) -> bool:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return False
-        time.sleep(min(remaining, _DAEMON_EXIT_POLL_INTERVAL_SECONDS))
+        time.sleep(min(remaining, DAEMON_EXIT_POLL_INTERVAL_SECONDS))
 
 
 def _clear_recorded_daemon(workspace: Path, *, pid: int) -> None:
@@ -249,7 +249,7 @@ def _force_kill_recorded_daemon(workspace: Path, *, pid: int) -> None:
         return
     except PermissionError as exc:
         raise RuntimeError(f"failed to send SIGKILL to daemon pid={pid}: {exc}") from exc
-    if not _wait_for_pid_exit(pid, timeout_seconds=_DAEMON_FORCE_KILL_TIMEOUT_SECONDS):
+    if not _wait_for_pid_exit(pid, timeout_seconds=DAEMON_FORCE_KILL_TIMEOUT_SECONDS):
         raise RuntimeError(f"daemon pid={pid} did not exit after SIGKILL")
     _clear_recorded_daemon(workspace, pid=pid)
 
@@ -265,7 +265,7 @@ def _terminate_recorded_daemon(workspace: Path, *, pid: int) -> None:
         return
     except PermissionError as exc:
         raise RuntimeError(f"failed to send SIGTERM to daemon pid={pid}: {exc}") from exc
-    if _wait_for_pid_exit(pid, timeout_seconds=_DAEMON_STOP_GRACE_PERIOD_SECONDS):
+    if _wait_for_pid_exit(pid, timeout_seconds=DAEMON_STOP_GRACE_PERIOD_SECONDS):
         _clear_recorded_daemon(workspace, pid=pid)
         return
     _force_kill_recorded_daemon(workspace, pid=pid)
@@ -286,7 +286,7 @@ def _emit_runner_wait(status, *, stream: TextIO | None) -> None:
     )
 
 
-def _ensure_workspace_venvs_ready(
+def ensure_workspace_venvs_ready(
     workspace: Path,
     *,
     output_stream: TextIO | None,
@@ -305,7 +305,7 @@ def _detect_iteration_cycle_start_failure(
     if failure is not None:
         return failure
     try:
-        _ensure_workspace_venvs_ready(workspace, output_stream=output_stream)
+        ensure_workspace_venvs_ready(workspace, output_stream=output_stream)
     except RuntimeError as exc:
         return LaunchFailure(
             context="cycle_start_failed",
@@ -314,7 +314,7 @@ def _detect_iteration_cycle_start_failure(
     return None
 
 
-def _maybe_run_workspace_backup(
+def maybe_run_workspace_backup(
     workspace: Path,
     *,
     now: datetime | None = None,
@@ -325,7 +325,7 @@ def _maybe_run_workspace_backup(
         _emit(f"backup_created: {backup.timestamp}", stream=stream)
 
 
-def _run_logged_subprocess(
+def run_logged_subprocess(
     command: list[str],
     *,
     cwd: Path,
@@ -355,7 +355,7 @@ def _run_logged_subprocess(
         return return_code
 
 
-def _recover_cycle_start_failure(
+def recover_cycle_start_failure(
     workspace: Path,
     failure: LaunchFailure,
     *,
@@ -384,10 +384,10 @@ def run_daemon_loop(
     preflight_failure = detect_cycle_start_failure(workspace)
     if preflight_failure is not None:
         initial_cycle_recovery_attempted = True
-        _recover_cycle_start_failure(workspace, preflight_failure, output_stream=output_stream)
+        recover_cycle_start_failure(workspace, preflight_failure, output_stream=output_stream)
     ensure_workspace(workspace)
     apply_pending_migrations(workspace)
-    command_prefix = _default_command_prefix()
+    command_prefix = default_command_prefix()
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     log_base = workspace_path(workspace, "logs", "run-all")
     log_root = session_dir or (log_base / timestamp)
@@ -454,11 +454,11 @@ def run_daemon_loop(
             live_runner = runner_status(workspace)
             if _runner_is_live(live_runner):
                 _emit_runner_wait(live_runner, stream=output_stream)
-                _sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
+                sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
                 continue
 
             try:
-                _maybe_run_workspace_backup(workspace, stream=output_stream)
+                maybe_run_workspace_backup(workspace, stream=output_stream)
             except Exception as exc:
                 logger.exception("scheduled workspace backup failed")
                 _append_attention_log(workspace, f"scheduled backup failed: {exc}")
@@ -481,12 +481,12 @@ def run_daemon_loop(
                     iteration_failed = True
                     iteration_failure_reason = startup_failure.summary
                 cycle_recovery_attempted = True
-                if not _recover_cycle_start_failure(workspace, startup_failure, output_stream=output_stream):
+                if not recover_cycle_start_failure(workspace, startup_failure, output_stream=output_stream):
                     continue
 
             repair_started = time.perf_counter()
             try:
-                repair_rc = _run_logged_subprocess(
+                repair_rc = run_logged_subprocess(
                     [*command_prefix, "repair", "--workspace", str(workspace)],
                     cwd=workspace,
                     log_path=repair_file,
@@ -502,9 +502,9 @@ def run_daemon_loop(
                 )
                 if not cycle_recovery_attempted:
                     cycle_recovery_attempted = True
-                    if _recover_cycle_start_failure(workspace, repair_failure, output_stream=output_stream):
+                    if recover_cycle_start_failure(workspace, repair_failure, output_stream=output_stream):
                         try:
-                            repair_rc = _run_logged_subprocess(
+                            repair_rc = run_logged_subprocess(
                                 [*command_prefix, "repair", "--workspace", str(workspace)],
                                 cwd=workspace,
                                 log_path=repair_file,
@@ -530,9 +530,9 @@ def run_daemon_loop(
                 )
                 if not cycle_recovery_attempted:
                     cycle_recovery_attempted = True
-                    if _recover_cycle_start_failure(workspace, repair_failure, output_stream=output_stream):
+                    if recover_cycle_start_failure(workspace, repair_failure, output_stream=output_stream):
                         try:
-                            repair_rc = _run_logged_subprocess(
+                            repair_rc = run_logged_subprocess(
                                 [*command_prefix, "repair", "--workspace", str(workspace)],
                                 cwd=workspace,
                                 log_path=repair_file,
@@ -601,7 +601,7 @@ def run_daemon_loop(
                         stream=output_stream,
                     )
                     _write_pool_stop_reason(workspace, "daemon_iteration_failures")
-                    _sleep_with_stop(300, stop_requested_fn=lambda: stop_requested)
+                    sleep_with_stop(300, stop_requested_fn=lambda: stop_requested)
                     set_pool_stop_reason(workspace, None)
                     consecutive_iteration_failures = 0
                     continue
@@ -648,7 +648,7 @@ def run_daemon_loop(
                     return 0
 
             try:
-                run_rc = _run_logged_subprocess(
+                run_rc = run_logged_subprocess(
                     [*command_prefix, "run", "--workspace", str(workspace)],
                     cwd=workspace,
                     log_path=run_file,
@@ -685,7 +685,7 @@ def run_daemon_loop(
                         stream=output_stream,
                     )
                     _write_pool_stop_reason(workspace, "daemon_iteration_failures")
-                    _sleep_with_stop(300, stop_requested_fn=lambda: stop_requested)
+                    sleep_with_stop(300, stop_requested_fn=lambda: stop_requested)
                     set_pool_stop_reason(workspace, None)
                     consecutive_iteration_failures = 0
                     continue
@@ -752,7 +752,7 @@ def start_background_daemon(workspace: Path) -> int:
             raise RuntimeError(f"daemon already running for {workspace}: pid={pid}")
     if existing is not None and existing.get("status") == "stale":
         unregister_daemon(workspace)
-    _ensure_workspace_venvs_ready(workspace, output_stream=None)
+    ensure_workspace_venvs_ready(workspace, output_stream=None)
     project_root = Path(__file__).resolve().parents[2]
     child_env = os.environ.copy()
     for key in ("LITEHIVE_AGENT_ROLE", "LITEHIVE_STAGE", "LITEHIVE_TASK_ID"):

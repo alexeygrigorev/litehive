@@ -62,7 +62,7 @@ class StateMachineRunner:
             event = node.run(state)
             trans = evaluate(self.rules, from_stage, event, state)
             self._apply_delta(state, trans.delta)
-            self._apply_event_side_effects(state, event)
+            self.apply_event_side_effects(state, event)
             state.stage = trans.next
             self._reset_cross_agent_retry_sessions(
                 task_id=state.task_id,
@@ -91,7 +91,7 @@ class StateMachineRunner:
         return state
 
     @staticmethod
-    def _apply_event_side_effects(state: TaskState, event: Event) -> None:
+    def apply_event_side_effects(state: TaskState, event: Event) -> None:
         """Apply metadata that rides on the event rather than a StateDelta.
 
         ``HookOk`` marks the latest hook run as green; hook Rejects clear

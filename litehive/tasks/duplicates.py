@@ -51,7 +51,7 @@ def ensure_duplicate_task_index(root: Path) -> Path:
 
 
 def rebuild_duplicate_task_index(root: Path) -> Path:
-    documents = [_task_to_document(task) for task in _iter_indexable_tasks(root)]
+    documents = [_task_to_document(task) for task in iter_indexable_tasks(root)]
     index = _open_duplicate_index(root)
     try:
         index.clear()
@@ -220,7 +220,7 @@ def _open_duplicate_index(root: Path) -> TextSearchIndex:
     )
 
 
-def _iter_indexable_tasks(root: Path) -> list[TaskRecord]:
+def iter_indexable_tasks(root: Path) -> list[TaskRecord]:
     from litehive.state.records import list_tasks
     from litehive.tasks.archive import list_archived_tasks
 

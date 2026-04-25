@@ -40,7 +40,7 @@ class _TrivialAgent(AgentNode):
 
 
 def test_agent_verdict_metadata_flows_into_pass_event() -> None:
-    """Verify AgentNode._verdict_to_event copies metadata onto Pass."""
+    """Verify AgentNode.verdict_to_event copies metadata onto Pass."""
     agent = _TrivialAgent(
         "implementing",
         _FixedSelector(_ReportingEngine()),
@@ -53,7 +53,7 @@ def test_agent_verdict_metadata_flows_into_pass_event() -> None:
 
 
 def test_runner_updates_state_last_report_from_pass_metadata() -> None:
-    """Runner._apply_event_side_effects copies Pass.metadata into state.last_report."""
+    """Runner.apply_event_side_effects copies Pass.metadata into state.last_report."""
     state = TaskState(task_id="T-0001", stage="implementing", pipeline_mode=PipelineMode.FULL)
     event = Pass(
         metadata={
@@ -68,7 +68,7 @@ def test_runner_updates_state_last_report_from_pass_metadata() -> None:
         }
     )
 
-    StateMachineRunner._apply_event_side_effects(state, event)
+    StateMachineRunner.apply_event_side_effects(state, event)
 
     assert state.last_report.files_changed == 2
     assert state.last_report.tests_added == 3
@@ -81,8 +81,8 @@ def test_runner_updates_state_last_report_from_pass_metadata() -> None:
 def test_runner_tracks_hook_ok_state_for_latest_hook_result() -> None:
     state = TaskState(task_id="T-0001", stage="after_implementing", pipeline_mode=PipelineMode.FULL)
 
-    StateMachineRunner._apply_event_side_effects(state, HookOk())
+    StateMachineRunner.apply_event_side_effects(state, HookOk())
     assert state.last_report.hook_ok is True
 
-    StateMachineRunner._apply_event_side_effects(state, Reject(source="hook", reason="ruff failed"))
+    StateMachineRunner.apply_event_side_effects(state, Reject(source="hook", reason="ruff failed"))
     assert state.last_report.hook_ok is False

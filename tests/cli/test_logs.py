@@ -253,7 +253,7 @@ def test_logs_follow_streams_active_stdout_until_subagent_finishes(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("litehive.cli.task_logs_support._FOLLOW_POLL_SECONDS", 0.0)
+    monkeypatch.setattr("litehive.cli.task_logs_support.FOLLOW_POLL_SECONDS", 0.0)
     task, base = _make_task_with_subagent(tmp_path, active=True)
     stdout_path = base / "stdout.log"
     stdout_path.write_text("", encoding="utf-8")
@@ -273,7 +273,7 @@ def test_logs_follow_streams_active_stdout_until_subagent_finishes(
         task.runtime.active_subagent = None
         return task
 
-    monkeypatch.setattr("litehive.cli.task_logs_support._resolve_follow_task", fake_resolve_follow_task)
+    monkeypatch.setattr("litehive.cli.task_logs_support.resolve_follow_task", fake_resolve_follow_task)
 
     exit_code = _cmd_logs(_ns(tmp_path, follow=True))
     output = capsys.readouterr().out

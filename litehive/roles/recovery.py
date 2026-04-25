@@ -107,7 +107,7 @@ class RecoveryAgent(RoleAgent):
         )
         return base
 
-    def _verdict_to_event(self, verdict: AgentVerdict) -> Event:
+    def verdict_to_event(self, verdict: AgentVerdict) -> Event:
         outcome = verdict.outcome.lower()
         if outcome == "resume":
             target = str(verdict.metadata.get("target_stage") or "").strip()

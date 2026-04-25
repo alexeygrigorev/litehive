@@ -99,7 +99,7 @@ def _neutralize_codex_quota(request, monkeypatch):
     try:
         import litehive.config.engine_models as models_mod
 
-        monkeypatch.setattr(models_mod, "_engine_quota_block", _noop_engine_quota_block)
+        monkeypatch.setattr(models_mod, "engine_quota_block", _noop_engine_quota_block)
     except (ImportError, AttributeError):
         pass
     yield
