@@ -566,6 +566,67 @@ def test_subagent_manager_enforces_300s_inactivity_timeout_for_opencode(
     assert captured["inactivity_timeout_seconds"] == 300.0
 
 
+def test_subagent_manager_omits_model_override_when_resuming_opencode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Resume opencode without model")
+    manager = SubagentManager(tmp_path)
+    captured: dict[str, object] = {}
+
+    class FakeEngine:
+        name = "opencode"
+        binary = "opencode"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run_live(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            resume_session_id: str | None = None,
+            on_started=None,
+            on_update=None,
+            extra_env: dict[str, str] | None = None,
+            emit_unified: bool = False,
+            **kwargs,
+        ) -> CLIExecutionResult:
+            del prompt, on_update, extra_env, emit_unified, kwargs
+            captured["model"] = model
+            captured["resume_session_id"] = resume_session_id
+            if on_started is not None:
+                on_started(4242)
+            return CLIExecutionResult(
+                adapter="opencode",
+                argv=("opencode", "run"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="plain transcript",
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+
+    manager.run(
+        task,
+        role="swe",
+        engine_name="opencode",
+        prompt="submit the verdict",
+        model="zai-coding-plan/glm-5-turbo",
+        resume_session_id="opencode-session-123",
+    )
+
+    assert captured["model"] is None
+    assert captured["resume_session_id"] == "opencode-session-123"
+
+
 def test_subagent_manager_preserves_workspace_timeout_for_non_opencode_live_runs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

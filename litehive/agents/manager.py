@@ -8,7 +8,7 @@ import sys
 import time
 
 from litehive.config.loading import load_config
-from heru import get_engine
+from heru import get_engine, resume_safe_model_override
 from heru.adapters import (
     EngineError,
     classify_execution_interruption,
@@ -260,7 +260,11 @@ class SubagentManager(SessionMixin):
                 "LITEHIVE_STAGE": self._agent_stage_for_task(task, role),
                 "LITEHIVE_PYTHON_PATH": sys.executable,
             }
-            effective_model = model
+            effective_model = resume_safe_model_override(
+                engine_name,
+                model,
+                resume_session_id=resume_session_id,
+            )
             if supports_live_execution(live_execution_probe):
                 run_live_callable = effective_engine_callable(execution_engine, "run_live")
                 if not callable(run_live_callable):
