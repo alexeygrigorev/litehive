@@ -36,7 +36,10 @@ def load_effective_config_data(root: Path) -> dict[str, Any]:
 
 def load_config(root: Path) -> LitehiveConfig:
     ensure_workspace(root)
-    return LitehiveConfig(**validate_config_data(load_effective_config_data(root)))
+    from litehive.config.runtime_settings import apply_runtime_settings_to_config_data
+
+    data = apply_runtime_settings_to_config_data(root, load_effective_config_data(root))
+    return LitehiveConfig(**validate_config_data(data))
 
 
 def load_context(root: Path) -> str:

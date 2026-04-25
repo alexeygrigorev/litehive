@@ -107,8 +107,8 @@ def test_ensure_workspace_bootstraps_rich_commented_config_once(tmp_path: Path) 
     contents = config_path.read_text(encoding="utf-8")
 
     for snippet in [
-        "# Edit it by hand; Litehive does not provide a `configure` command anymore.",
-        "# Default engine used for new runs unless a command explicitly overrides it.",
+        "# Static defaults can be edited by hand. Runtime engine routing values below",
+        "# Bootstrap default engine; use `litehive engine default <engine>` after init.",
         "# `pool_max_tasks: null` means \"no cap\"; set an integer to stop after N tasks.",
         "# `pool_stop_on_attention` blocks the pool whenever pending operator",
         "#   credential_inputs[{env_var, mount_path}], extra_ro_binds,",

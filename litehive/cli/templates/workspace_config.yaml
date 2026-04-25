@@ -1,8 +1,9 @@
 # Litehive workspace configuration.
 # This file is written automatically the first time Litehive bootstraps a repo.
-# Edit it by hand; Litehive does not provide a `configure` command anymore.
+# Static defaults can be edited by hand. Runtime engine routing values below
+# are used only to bootstrap the audited database-backed settings store.
 
-# Default engine used for new runs unless a command explicitly overrides it.
+# Bootstrap default engine; use `litehive engine default <engine>` after init.
 default_engine: codex
 
 # Optional engine used for recovery runs. Keep `auto` or unset to follow defaults.
@@ -101,13 +102,15 @@ external_engine_sandbox:
   #   extra_rw_binds, setenv
   engine_policies: {}
 
-# Temporary engine freezes keyed by engine name -> UTC timestamp.
+# Bootstrap engine freezes keyed by engine name -> UTC timestamp.
+# Use `litehive engine freeze/unfreeze` after init.
 # Example:
 # engine_freeze:
 #   gemini: 2026-05-01T00:00:00Z
 engine_freeze: {}
 
-# Engine fallback order when the preferred engine is unavailable.
+# Bootstrap engine fallback order when the preferred engine is unavailable.
+# Use `litehive engine preference <comma-separated-engines>` after init.
 engine_preference:
   - codex
   - opencode

@@ -12,6 +12,7 @@ from litehive.cli.common import WorkspaceOption, choice, require_subcommand
 from litehive.config.engine_models import select_engine
 from litehive.config.loading import load_config
 from litehive.config.paths import workspace_path
+from litehive.config.runtime_settings import load_runtime_setting_audit_entries, load_runtime_settings
 from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
 from heru import ENGINE_CHOICES
 from litehive.daemon.execution import (
@@ -61,6 +62,8 @@ def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: ty
     db_app.command("status", help="Show workspace database schema version and pending migrations")(db_status)
     db_app.command("migrate", help="Apply pending workspace database migrations")(db_migrate)
     db_app.command("audit", help="Show durable task audit log entries from the workspace database")(db_audit)
+    db_app.command("settings", help="Show audited runtime settings from the workspace database")(db_settings)
+    db_app.command("settings-audit", help="Show runtime settings audit log entries")(db_settings_audit)
 
 
 def start(workspace: WorkspaceOption = Path.cwd()) -> int:
@@ -547,6 +550,36 @@ def db_audit(
     return 0
 
 
+def db_settings(workspace: WorkspaceOption = Path.cwd()) -> int:
+    workspace = normalize_workspace_root(workspace, source="--workspace")
+    settings = load_runtime_settings(workspace)
+    print(f"workspace: {workspace}")
+    for key in sorted(settings):
+        print(f"{key}: {json.dumps(settings[key], sort_keys=True)}")
+    return 0
+
+
+def db_settings_audit(
+    key: Annotated[str | None, typer.Argument(help="Optional runtime setting key to filter")] = None,
+    workspace: WorkspaceOption = Path.cwd(),
+    limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum rows to show")] = 20,
+) -> int:
+    workspace = normalize_workspace_root(workspace, source="--workspace")
+    entries = load_runtime_setting_audit_entries(workspace, key=key, limit=limit)
+    print(f"workspace: {workspace}")
+    print(f"setting_audit_entries: {len(entries)}")
+    for entry in entries:
+        print(f"id: {entry.id}")
+        print(f"key: {entry.key}")
+        print(f"created_at: {entry.created_at}")
+        print(f"actor: {entry.actor}")
+        print(f"source: {entry.source}")
+        print(f"old_value: {json.dumps(entry.old_value, sort_keys=True)}")
+        print(f"new_value: {json.dumps(entry.new_value, sort_keys=True)}")
+        print(f"context: {json.dumps(entry.context, sort_keys=True)}")
+    return 0
+
+
 cmd_run = run_command
 cmd_report = report_command
 cmd_backup_create = backup_create
@@ -555,3 +588,5 @@ cmd_backup_restore = backup_restore
 cmd_db_status = db_status
 cmd_db_migrate = db_migrate
 cmd_db_audit = db_audit
+cmd_db_settings = db_settings
+cmd_db_settings_audit = db_settings_audit

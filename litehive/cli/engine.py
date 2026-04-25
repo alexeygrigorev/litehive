@@ -14,16 +14,29 @@ from heru.quota import (
 from litehive.cli.common import WorkspaceOption, choice
 from litehive.config.engine_models import clear_persisted_engine_freeze, parse_engine_freeze_until, persist_engine_freeze_iso
 from litehive.config.loading import load_config
+from litehive.config.model import normalize_engine_sequence
+from litehive.config.runtime_settings import (
+    load_runtime_setting_audit_entries,
+    set_default_engine,
+    set_engine_preference,
+)
 from litehive.domain.engine import EngineUsageRecord
 from litehive.observability.engine_monitoring import load_engine_monitoring
 
 
 def engine_command(
     workspace: WorkspaceOption = Path.cwd(),
-    action: Annotated[str, typer.Argument(click_type=choice(["freeze", "status", "unfreeze"]), help="Subcommand")] = ...,
-    name: Annotated[str | None, typer.Argument(help="Engine name for freeze/unfreeze")] = None,
+    action: Annotated[
+        str,
+        typer.Argument(
+            click_type=choice(["audit", "default", "freeze", "preference", "status", "unfreeze"]),
+            help="Subcommand",
+        ),
+    ] = ...,
+    name: Annotated[str | None, typer.Argument(help="Engine name, setting key, or comma-separated engine list")] = None,
     until: Annotated[str | None, typer.Option(help="Freeze until this ISO date (YYYY-MM-DD)")] = None,
     reason: Annotated[str | None, typer.Option(help="Operator note")] = None,
+    limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum audit rows to show")] = 20,
 ) -> int:
     load_config(workspace)
     if action == "status":
@@ -33,6 +46,47 @@ def engine_command(
         for line in _render_engine_status_lines(workspace.resolve()):
             print(line)
         return 0
+    if action == "audit":
+        for line in _render_engine_audit_lines(workspace.resolve(), key=name, limit=limit):
+            print(line)
+        return 0
+    if action == "default":
+        if name not in ENGINE_CHOICES:
+            print(f"engine default: unknown engine '{name}'")
+            return 1
+        change = set_default_engine(
+            workspace,
+            name,
+            actor="operator",
+            source="cli",
+            context={"reason": reason} if reason else None,
+        )
+        print(f"default_engine: {change.old_value} -> {change.new_value}")
+        print(f"updated: {'yes' if change.changed else 'no'}")
+        return 0
+    if action == "preference":
+        try:
+            preference = _parse_engine_preference(name)
+        except ValueError as exc:
+            print(f"engine preference: {exc}")
+            return 1
+        if preference is None:
+            print("engine preference: provide a comma-separated engine list")
+            return 1
+        try:
+            change = set_engine_preference(
+                workspace,
+                preference,
+                actor="operator",
+                source="cli",
+                context={"reason": reason} if reason else None,
+            )
+        except ValueError as exc:
+            print(f"engine preference: {exc}")
+            return 1
+        print(f"engine_preference: {_engine_list_label(change.old_value)} -> {_engine_list_label(change.new_value)}")
+        print(f"updated: {'yes' if change.changed else 'no'}")
+        return 0
     if name not in ENGINE_CHOICES:
         print(f"engine {action}: unknown engine '{name}'")
         return 1
@@ -41,14 +95,61 @@ def engine_command(
         if freeze_iso is None:
             print("engine freeze: --until must be ISO date YYYY-MM-DD")
             return 1
-        persist_engine_freeze_iso(workspace, engine_name=name, freeze_iso=freeze_iso)
+        persist_engine_freeze_iso(
+            workspace,
+            engine_name=name,
+            freeze_iso=freeze_iso,
+            actor="operator",
+            source="cli",
+            reason=reason,
+        )
         print(f"engine_frozen: {name} until {freeze_iso}" + (f" reason={reason}" if reason else ""))
         return 0
-    if not clear_persisted_engine_freeze(workspace, engine_name=name):
+    if not clear_persisted_engine_freeze(
+        workspace,
+        engine_name=name,
+        actor="operator",
+        source="cli",
+        reason=reason,
+    ):
         print(f"engine unfreeze: {name} is not frozen")
         return 1
     print(f"engine_unfrozen: {name}")
     return 0
+
+
+def _parse_engine_preference(value: str | None) -> list[str] | None:
+    if value is None:
+        return None
+    engines = [part.strip() for part in value.replace(",", " ").split() if part.strip()]
+    if not engines:
+        return None
+    return normalize_engine_sequence(engines, field_name="engine_preference")
+
+
+def _engine_list_label(value: object) -> str:
+    if isinstance(value, list):
+        return ",".join(str(item) for item in value)
+    return str(value)
+
+
+def _render_engine_audit_lines(root: Path, *, key: str | None, limit: int) -> list[str]:
+    entries = load_runtime_setting_audit_entries(root, key=key, limit=limit)
+    lines = [f"setting_audit_entries: {len(entries)}"]
+    for entry in entries:
+        lines.extend(
+            [
+                f"id: {entry.id}",
+                f"key: {entry.key}",
+                f"created_at: {entry.created_at}",
+                f"actor: {entry.actor}",
+                f"source: {entry.source}",
+                f"old_value: {entry.old_value}",
+                f"new_value: {entry.new_value}",
+                f"context: {entry.context}",
+            ]
+        )
+    return lines
 
 
 def _render_engine_status_lines(root: Path) -> list[str]:

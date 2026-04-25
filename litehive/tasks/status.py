@@ -316,11 +316,20 @@ def _archived_task_revival_message(task_id: str) -> str:
     )
 
 
-def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) -> SwitchTaskSummary:
+def switch_task_engine(
+    root: Path,
+    task_id: str,
+    *,
+    engine: str,
+    reason: str,
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> SwitchTaskSummary:
     from litehive.state.records import get_task_record, require_task
     from litehive.state.persist import load_state
     from litehive.tasks.activity import append_task_activity
     from litehive.tasks.archive import get_archived_task
+    from litehive.tasks.audit import append_task_audit_entries
     from litehive.tasks.queue import move_queued_task
     from litehive.tasks.runtime import mark_engine_switch
 
@@ -332,6 +341,7 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
         raise ValueError(_archived_task_revival_message(task_id))
 
     task = require_task(root, task_id)
+    before_task = snapshot_task_audit_state(task)
     if task.pipeline_status == "done":
         raise ValueError(f"Task {task.id} is already done")
     if task.pipeline_status == "backlog":
@@ -388,6 +398,28 @@ def switch_task_engine(root: Path, task_id: str, *, engine: str, reason: str) ->
                 prior_work_paths=prior_work_paths,
             ),
         ),
+    )
+    append_task_audit_entries(
+        root,
+        [
+            build_task_audit_entry(
+                task_id=task.id,
+                action="engine_switched",
+                actor=audit_actor,
+                source=audit_source,
+                before_task=before_task,
+                after_task=task,
+                context={
+                    "old_value": previous_engine,
+                    "new_value": engine,
+                    "from_engine": previous_engine,
+                    "to_engine": engine,
+                    "reason": reason.strip(),
+                    "prior_work_paths": prior_work_paths,
+                    "was_active": was_active,
+                },
+            )
+        ],
     )
     return SwitchTaskSummary(
         task=task,

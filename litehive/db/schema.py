@@ -42,6 +42,7 @@ _BASELINE_REQUIRED_TABLES = {
 _REQUIRED_TABLES_BY_MIGRATION = {
     4: {"recovery_reports"},
     5: {"task_intent"},
+    6: {"runtime_settings", "runtime_settings_audit_log"},
 }
 
 

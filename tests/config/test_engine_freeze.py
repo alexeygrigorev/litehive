@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 from heru import ENGINE_CHOICES
 from heru.quota import UsageStatus
@@ -20,6 +21,7 @@ from litehive.config.engine_models import (
 )
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
+from litehive.config.runtime_settings import load_runtime_setting_audit_entries
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.engine import EngineUsageRecord, EngineUsageWindow, WorkspaceEngineMonitoring
 from litehive.domain.task import TaskRecord
@@ -29,6 +31,7 @@ from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
 from litehive.state.records import create_task, get_task_record
+from litehive.tasks.audit import load_task_audit_entries
 
 
 def _run_engine(*args: str) -> tuple[int | None, str]:
@@ -59,8 +62,10 @@ class _StubLifecycleEngine:
 
 
 def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """CLI: freeze an engine, verify config, then unfreeze."""
+    """CLI: freeze an engine, verify audited DB settings, then unfreeze."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    config_path = tmp_path / ".litehive" / "config.yaml"
+    raw_config_before = config_path.read_text(encoding="utf-8")
 
     # Freeze codex until far future
     exit_code, output = _run_engine(
@@ -80,6 +85,7 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
 
     config = load_config(tmp_path)
     assert config.engine_freeze["codex"] == "2099-12-31T00:00:00Z"
+    assert config_path.read_text(encoding="utf-8") == raw_config_before
 
     # Unfreeze
     exit_code, output = _run_engine(
@@ -94,6 +100,96 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
 
     config = load_config(tmp_path)
     assert "codex" not in config.engine_freeze
+    assert config_path.read_text(encoding="utf-8") == raw_config_before
+    entries = load_runtime_setting_audit_entries(tmp_path, key="engine_freeze", limit=10)
+    assert [entry.actor for entry in entries[:2]] == ["operator", "operator"]
+    assert entries[0].context["engine"] == "codex"
+    assert entries[0].context["old_value"] == "2099-12-31T00:00:00Z"
+    assert entries[0].context["new_value"] is None
+    assert entries[1].context["engine"] == "codex"
+    assert entries[1].context["old_value"] is None
+    assert entries[1].context["new_value"] == "2099-12-31T00:00:00Z"
+
+
+def test_default_engine_cli_persists_to_audited_db_not_config_file(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    config_path = tmp_path / ".litehive" / "config.yaml"
+    raw_config_before = config_path.read_text(encoding="utf-8")
+
+    exit_code, output = _run_engine(
+        "engine",
+        "default",
+        "gemini",
+        "--workspace",
+        str(tmp_path),
+        "--reason",
+        "Prefer larger context",
+    )
+
+    assert exit_code == 0
+    assert "default_engine: codex -> gemini" in output
+    assert load_config(tmp_path).default_engine == "gemini"
+    assert config_path.read_text(encoding="utf-8") == raw_config_before
+
+    entries = load_runtime_setting_audit_entries(tmp_path, key="default_engine", limit=5)
+    assert len(entries) == 1
+    assert entries[0].actor == "operator"
+    assert entries[0].source == "cli"
+    assert entries[0].old_value == "codex"
+    assert entries[0].new_value == "gemini"
+    assert entries[0].context == {"reason": "Prefer larger context"}
+
+
+def test_engine_preference_cli_persists_to_audited_db(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+
+    exit_code, output = _run_engine(
+        "engine",
+        "preference",
+        "gemini,codex",
+        "--workspace",
+        str(tmp_path),
+        "--reason",
+        "Quota rotation",
+    )
+
+    assert exit_code == 0
+    assert "engine_preference: codex,opencode,gemini,copilot,goz -> gemini,codex" in output
+    assert load_config(tmp_path).engine_preference == ["gemini", "codex"]
+
+    audit = _run_engine(
+        "db",
+        "settings-audit",
+        "engine_preference",
+        "--workspace",
+        str(tmp_path),
+    )
+    assert audit[0] == 0
+    assert "setting_audit_entries: 1" in audit[1]
+    assert "actor: operator" in audit[1]
+    assert 'old_value: ["codex", "opencode", "gemini", "copilot", "goz"]' in audit[1]
+    assert 'new_value: ["gemini", "codex"]' in audit[1]
+
+
+def test_engine_runtime_settings_treat_config_file_drift_as_bootstrap_only(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex", engine_preference=["codex", "gemini"]))
+    first = load_config(tmp_path)
+    assert first.default_engine == "codex"
+    assert first.engine_preference == ["codex", "gemini"]
+    assert first.engine_freeze == {}
+
+    config_path = tmp_path / ".litehive" / "config.yaml"
+    raw_config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw_config["default_engine"] = "gemini"
+    raw_config["engine_preference"] = ["gemini"]
+    raw_config["engine_freeze"] = {"codex": "2099-06-15T00:00:00Z"}
+    config_path.write_text(yaml.safe_dump(raw_config, sort_keys=False), encoding="utf-8")
+
+    drifted = load_config(tmp_path)
+
+    assert drifted.default_engine == "codex"
+    assert drifted.engine_preference == ["codex", "gemini"]
+    assert drifted.engine_freeze == {}
 
 
 def test_engine_freeze_requires_iso_date(tmp_path: Path, capsys) -> None:
@@ -280,6 +376,13 @@ def test_queue_switch_cli_queues_task_for_new_engine(tmp_path: Path) -> None:
     assert refreshed is not None
     assert refreshed.runtime.last_engine_switch is not None
     assert refreshed.runtime.last_engine_switch.to_engine == "gemini"
+    entries = load_task_audit_entries(tmp_path, task_id=task.id, action="engine_switched", limit=5)
+    assert len(entries) == 1
+    assert entries[0].actor == "operator"
+    assert entries[0].source == "cli"
+    assert entries[0].context["old_value"] == "codex"
+    assert entries[0].context["new_value"] == "gemini"
+    assert entries[0].context["reason"] == "Need larger context window"
 
 
 def test_queue_switch_subcommand_still_works(tmp_path: Path) -> None:

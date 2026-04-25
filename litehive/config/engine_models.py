@@ -5,8 +5,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-import yaml
-
 from heru import get_engine
 from heru.quota import (
     UsageStatus,
@@ -18,7 +16,7 @@ from heru.quota import (
     usage_limit_block_reason,
 )
 from litehive.config.model import LitehiveConfig
-from litehive.config.workspace_files import config_path
+from litehive.config.runtime_settings import clear_engine_freeze, set_engine_freeze
 from litehive.domain.runtime import RuntimeContinuationHandoff
 from litehive.domain.task import TaskRecord
 from litehive.tasks.runtime import set_task_continuation_handoff
@@ -111,39 +109,36 @@ def active_engine_freezes(config: LitehiveConfig) -> dict[str, datetime]:
     return result
 
 
-def _load_raw_workspace_config(root: Path) -> dict[str, object]:
-    path = config_path(root)
-    raw_data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    return dict(raw_data) if isinstance(raw_data, dict) else {}
+def persist_engine_freeze_iso(
+    root: Path,
+    *,
+    engine_name: str,
+    freeze_iso: str,
+    actor: str = "system",
+    source: str = "runtime",
+    reason: str | None = None,
+) -> None:
+    context = {"reason": reason} if reason else None
+    set_engine_freeze(
+        root,
+        engine_name=engine_name,
+        freeze_iso=freeze_iso,
+        actor=actor,
+        source=source,
+        context=context,
+    )
 
 
-def _raw_engine_freeze_mapping(raw_data: dict[str, object]) -> dict[str, str]:
-    freeze_map = raw_data.get("engine_freeze")
-    return dict(freeze_map) if isinstance(freeze_map, dict) else {}
-
-
-def persist_engine_freeze_iso(root: Path, *, engine_name: str, freeze_iso: str) -> None:
-    raw_data = _load_raw_workspace_config(root)
-    freeze_map = _raw_engine_freeze_mapping(raw_data)
-    if freeze_map.get(engine_name) == freeze_iso:
-        return
-    freeze_map[engine_name] = freeze_iso
-    raw_data["engine_freeze"] = freeze_map
-    config_path(root).write_text(yaml.safe_dump(raw_data, sort_keys=False), encoding="utf-8")
-
-
-def clear_persisted_engine_freeze(root: Path, *, engine_name: str) -> bool:
-    raw_data = _load_raw_workspace_config(root)
-    freeze_map = _raw_engine_freeze_mapping(raw_data)
-    if engine_name not in freeze_map:
-        return False
-    freeze_map.pop(engine_name)
-    if freeze_map:
-        raw_data["engine_freeze"] = freeze_map
-    else:
-        raw_data.pop("engine_freeze", None)
-    config_path(root).write_text(yaml.safe_dump(raw_data, sort_keys=False), encoding="utf-8")
-    return True
+def clear_persisted_engine_freeze(
+    root: Path,
+    *,
+    engine_name: str,
+    actor: str = "system",
+    source: str = "runtime",
+    reason: str | None = None,
+) -> bool:
+    context = {"reason": reason} if reason else None
+    return clear_engine_freeze(root, engine_name=engine_name, actor=actor, source=source, context=context).changed
 
 
 def _persist_engine_freeze(
@@ -156,12 +151,12 @@ def _persist_engine_freeze(
     freeze_iso = freeze_until.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     if config.engine_freeze.get(engine_name) == freeze_iso:
         return
-    persist_engine_freeze_iso(root, engine_name=engine_name, freeze_iso=freeze_iso)
+    persist_engine_freeze_iso(root, engine_name=engine_name, freeze_iso=freeze_iso, actor="system", source="quota")
     config.engine_freeze[engine_name] = freeze_iso
 
 
 def _clear_engine_freeze(root: Path, config: LitehiveConfig, *, engine_name: str) -> None:
-    clear_persisted_engine_freeze(root, engine_name=engine_name)
+    clear_persisted_engine_freeze(root, engine_name=engine_name, actor="system", source="quota")
     config.engine_freeze.pop(engine_name, None)
 
 
