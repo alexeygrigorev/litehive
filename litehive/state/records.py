@@ -481,7 +481,10 @@ def discard_created_task(root: Path, task_id: str) -> None:
 
 def _task_record_paths(root: Path) -> list[Path]:
     paths: list[Path] = []
-    for child in sorted(tasks_root(root).iterdir()):
+    root_path = tasks_root(root, bootstrap=False)
+    if not root_path.exists():
+        return paths
+    for child in sorted(root_path.iterdir()):
         if not child.is_dir():
             continue
         path = child / "task.yaml"

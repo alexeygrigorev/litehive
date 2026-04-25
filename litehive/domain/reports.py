@@ -15,7 +15,6 @@ from .common import (
     utcnow,
 )
 from .recovery import TriggerEventKind
-from .runtime import ResourceLimitEvent
 
 
 ReportStage: TypeAlias = TaskStage | Literal["merge_resolving", "recovering"]
@@ -65,7 +64,6 @@ class StageReport(BaseModel):
     outcome_reason: str = ""                           # Human-readable outcome explanation
     failure_classification: str | None = None          # Type of failure if applicable
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)  # Detailed failure context
-    resource_limit_event: ResourceLimitEvent | None = None  # Resource limit hit during stage
     duration_seconds: int = 0                          # How long stage execution took
     created_at: str = Field(default_factory=utcnow)   # When report was generated
 

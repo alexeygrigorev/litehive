@@ -19,9 +19,7 @@ from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.agents.sandbox import SandboxError, SandboxLauncher
 from litehive.observability.events import append_event
 from heru.types import SubagentRef
-from litehive.domain.common import cap_feedback
 from litehive.domain.reports import StageReport
-from litehive.domain.runtime import ResourceLimitEvent
 from litehive.domain.task import TaskRecord
 from litehive.observability.engine_monitoring import record_engine_execution, record_engine_observation
 from litehive.agents.artifacts import (
@@ -308,42 +306,28 @@ class SubagentManager(SessionMixin):
             continuation = self.extract_execution_continuation(ref.engine, proc)
             ref.status = "completed" if proc.exit_code == 0 else "failed"
             if proc.exit_code != 0:
-                resource_limit_event = self.sandbox.classify_resource_limit_event(
-                    engine_name,
+                interruption_reason = classify_execution_interruption(
+                    transcript,
                     exit_code=proc.exit_code,
-                    stdout=proc.stdout,
-                    stderr=proc.stderr,
                 )
-                if resource_limit_event is not None:
+                if interruption_reason is not None:
+                    ref.status = "interrupted"
                     failure = EngineFailure(
-                        kind="resource_limit",
-                        reason=resource_limit_event.reason,
-                        classification=resource_limit_event.resource,
-                        resource_limit_event=resource_limit_event,
+                        kind="execution_interrupted",
+                        reason=interruption_reason,
                     )
                 else:
-                    interruption_reason = classify_execution_interruption(
-                        transcript,
-                        exit_code=proc.exit_code,
-                    )
-                    if interruption_reason is not None:
-                        ref.status = "interrupted"
-                        failure = EngineFailure(
-                            kind="execution_interrupted",
-                            reason=interruption_reason,
-                        )
+                    limit_reason = classify_execution_limit(transcript)
+                    if limit_reason is not None:
+                        failure = EngineFailure(kind="execution_limit", reason=limit_reason)
                     else:
-                        limit_reason = classify_execution_limit(transcript)
-                        if limit_reason is not None:
-                            failure = EngineFailure(kind="execution_limit", reason=limit_reason)
-                        else:
-                            retryable_failure = classify_retryable_execution_failure(transcript)
-                            if retryable_failure is not None:
-                                failure = EngineFailure(
-                                    kind="retryable_execution_error",
-                                    reason=retryable_failure.reason,
-                                    classification=retryable_failure.classification,
-                                )
+                        retryable_failure = classify_retryable_execution_failure(transcript)
+                        if retryable_failure is not None:
+                            failure = EngineFailure(
+                                kind="retryable_execution_error",
+                                reason=retryable_failure.reason,
+                                classification=retryable_failure.classification,
+                            )
         except SubagentInactivityTimeout as exc:
             timeout_note = str(exc)
             stderr = exc.execution.stderr
@@ -385,7 +369,6 @@ class SubagentManager(SessionMixin):
             interruption_reason=(
                 None if failure is None or failure.kind != "execution_interrupted" else failure.reason
             ),
-            resource_limit_event=None if failure is None else failure.resource_limit_event,
             continuation=continuation,
         )
         self._write_session_finish(
@@ -399,7 +382,6 @@ class SubagentManager(SessionMixin):
             interruption_reason=(
                 None if failure is None or failure.kind != "execution_interrupted" else failure.reason
             ),
-            resource_limit_event=None if failure is None else failure.resource_limit_event,
             continuation=continuation,
             extra_warnings=callback_warnings,
         )
@@ -451,29 +433,17 @@ class SubagentManager(SessionMixin):
         exit_code: int,
         execution: CLIExecutionResult | None,
         interruption_reason: str | None,
-        resource_limit_event: ResourceLimitEvent | None,
         continuation,
         extra_warnings: list[str],
     ) -> None:
         report_stage = self._report_stage_for_task(task, ref.role)
-        if resource_limit_event is not None:
-            report = StageReport(
-                task_id=task.id,
-                stage=report_stage,  # type: ignore[arg-type]
-                verdict="blocked",
-                summary=f"{report_stage} blocked: {resource_limit_event.reason}",
-                feedback=cap_feedback(transcript),
-                warnings=[resource_limit_event.reason],
-                resource_limit_event=resource_limit_event,
-            )
-        else:
-            report = self._parse_execution_report(
-                task=task,
-                stage=report_stage,
-                ref=ref,
-                execution=execution,
-                transcript=transcript,
-            )
+        report = self._parse_execution_report(
+            task=task,
+            stage=report_stage,
+            ref=ref,
+            execution=execution,
+            transcript=transcript,
+        )
         report = report.model_copy(update={"warnings": self._merged_warnings(report.warnings, extra_warnings)})
         record_stage_report(self.root, task, report)
         self.write_session_snapshot(
@@ -492,17 +462,11 @@ class SubagentManager(SessionMixin):
                 "warnings": report.warnings,
                 "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
                 "interruption_reason": interruption_reason,
-                "resource_limit_event": (
-                    None
-                    if report.resource_limit_event is None
-                    else report.resource_limit_event.model_dump(mode="python")
-                ),
                 "continuation": None if continuation is None else continuation.model_dump(mode="python"),
             },
             exit_code=exit_code,
             pid=None if execution is None else execution.pid,
             interruption_reason=interruption_reason,
-            resource_limit_event=resource_limit_event,
             continuation=continuation,
         )
         write_stream_artifact(base, "stdout", "" if execution is None else execution.stdout, compress=True)
@@ -588,7 +552,6 @@ class SubagentManager(SessionMixin):
             "warnings": [],
             "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
             "interruption_reason": None,
-            "resource_limit_event": None,
         }
         if transcript.strip():
             report = self._parse_execution_report(
@@ -605,11 +568,6 @@ class SubagentManager(SessionMixin):
                 "tests": report.tests,
                 "warnings": report.warnings,
                 "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
-                "resource_limit_event": (
-                    None
-                    if report.resource_limit_event is None
-                    else report.resource_limit_event.model_dump(mode="python")
-                ),
                 "continuation": None if continuation is None else continuation.model_dump(mode="python"),
             }
         self.write_session_snapshot(
@@ -624,7 +582,6 @@ class SubagentManager(SessionMixin):
             exit_code=None,
             pid=execution.pid,
             interruption_reason=None,
-            resource_limit_event=None,
             continuation=continuation,
         )
         self.write_timeline(base, ref, task, execution.stdout)

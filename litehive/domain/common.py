@@ -68,7 +68,6 @@ class OutcomeReasonCode(StringEnum):
     VERDICT_BLOCKED = "verdict_blocked"
     BLOCKED_ON_FOLLOW_UP = "blocked_on_follow_up"
     HALLUCINATED_COMPLETION = "hallucinated_completion"
-    RESOURCE_LIMIT = "resource_limit"
     MISSING_ACCEPTANCE_CRITERIA = "missing_acceptance_criteria"
     RETRY_LIMIT_EXHAUSTED = "retry_limit_exhausted"
     STAGE_RETRY_LIMIT_EXHAUSTED = "stage_retry_limit_exhausted"

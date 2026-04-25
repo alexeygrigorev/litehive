@@ -189,8 +189,10 @@ def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationP
                 pending_migrations=migrations,
                 dry_run=True,
             )
+        key = _db_cache_key(db_path)
         db_path.unlink(missing_ok=True)
-        MIGRATED_DB_PATHS.pop(str(db_path.resolve()), None)
+        MIGRATED_DB_PATHS.pop(key, None)
+        REBUILT_DB_PATHS.add(key)
     with _open_connection(db_path) as connection:
         applied_versions = _applied_versions(connection)
         pending = tuple(migration for migration in migrations if migration.version not in applied_versions)
@@ -233,6 +235,19 @@ def _db_fingerprint(db_path: Path) -> _DbFingerprint:
 
 
 MIGRATED_DB_PATHS: dict[str, _DbFingerprint] = {}
+REBUILT_DB_PATHS: set[str] = set()
+
+
+def _db_cache_key(db_path: Path) -> str:
+    return str(db_path.resolve())
+
+
+def consume_rebuilt_database_marker(root: Path) -> bool:
+    key = _db_cache_key(workspace_path(root, "data.db"))
+    if key not in REBUILT_DB_PATHS:
+        return False
+    REBUILT_DB_PATHS.remove(key)
+    return True
 
 
 def connect_workspace_db(root: Path, *, migrate: bool = True) -> sqlite3.Connection:
@@ -242,7 +257,7 @@ def connect_workspace_db(root: Path, *, migrate: bool = True) -> sqlite3.Connect
         # XDG_DATA_HOME changes can move the db even when root stays the same.
         # The cached value follows database identity, so normal writes do not
         # force another migration check on the next open.
-        key = str(db_path.resolve())
+        key = _db_cache_key(db_path)
         fingerprint = _db_fingerprint(db_path)
         if key not in MIGRATED_DB_PATHS or MIGRATED_DB_PATHS[key] != fingerprint:
             apply_pending_migrations(root)

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from litehive.db.schema import connect_workspace_db
+from litehive.db.schema import connect_workspace_db, consume_rebuilt_database_marker
 from litehive.domain.common import utcnow
 from litehive.domain.runtime import TaskRuntime
 from litehive.domain.task import TaskIntentRecord, TaskRecord, TaskStateRecord, WorkspaceState
@@ -49,6 +49,9 @@ class RuntimeStore:
         """
         with connect_workspace_db(self.root) as connection:
             self.ensure_workspace_state_rows(connection)
+            if consume_rebuilt_database_marker(self.root):
+                connection.commit()
+                return
             task_ids_on_disk, highest_task_number = self._task_ids_on_disk()
             if self._should_seed_from_disk(
                 connection,

@@ -10,9 +10,8 @@ from litehive.agents.manager import SubagentManager
 from litehive.agents.parsing import stage_report_from_subagent
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.agent import EngineFailure, SubagentResult
-from litehive.domain.common import FEEDBACK_CAP, TRUNCATION_MARKER
+from litehive.domain.common import FEEDBACK_CAP
 from litehive.domain.reports import TaskActivityEntry
-from litehive.domain.runtime import ResourceLimitEvent
 from litehive.state.records import create_task
 from litehive.tasks.paths import task_dir
 from litehive.tasks.reports import append_activity_entry
@@ -36,32 +35,6 @@ def _subagent_result(
         exit_code=1 if failure is not None else 0,
         failure=failure,
     )
-
-
-def test_stage_report_from_subagent_caps_resource_limit_feedback(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Cap resource-limit feedback")
-    transcript = "x" * (FEEDBACK_CAP + 300)
-
-    report = stage_report_from_subagent(
-        task,
-        "implementing",
-        _subagent_result(
-            transcript=transcript,
-            failure=EngineFailure(
-                kind="resource_limit",
-                reason="memory limit reached",
-                resource_limit_event=ResourceLimitEvent(
-                    resource="memory",
-                    reason="memory limit reached",
-                ),
-            ),
-        ),
-    )
-
-    assert len(report.feedback) == FEEDBACK_CAP
-    assert report.feedback.endswith(TRUNCATION_MARKER)
-    assert report.feedback != transcript
 
 
 def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Path) -> None:

@@ -21,7 +21,6 @@ from litehive.agents.session_store import (
 )
 from litehive.domain.agent import SubagentInactivityTimeout
 from litehive.domain.common import utcnow
-from litehive.domain.runtime import ResourceLimitEvent
 from litehive.domain.task import TaskRecord
 from litehive.observability.events import append_event, append_session_log, ensure_session_log
 from litehive.tasks.runtime import mark_subagent_pid
@@ -192,12 +191,10 @@ class SessionMixin:
                 "tests": {"added": 0, "passing": 0},
                 "warnings": [],
                 "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
-                "resource_limit_event": None,
             },
             exit_code=None,
             pid=None,
             interruption_reason=None,
-            resource_limit_event=None,
         )
 
     def write_session_metadata(
@@ -209,7 +206,6 @@ class SessionMixin:
         exit_code: int | None,
         pid: int | None,
         interruption_reason: str | None = None,
-        resource_limit_event: ResourceLimitEvent | None = None,
         continuation=None,
     ) -> None:
         created_at = utcnow()
@@ -234,9 +230,6 @@ class SessionMixin:
                 "exit_code": exit_code,
                 "interruption_reason": interruption_reason,
                 "resource_control": resource_control,
-                "resource_limit_event": (
-                    None if resource_limit_event is None else resource_limit_event.model_dump(mode="python")
-                ),
                 "continuation": None if continuation is None else continuation.model_dump(mode="python"),
             },
         )
@@ -252,7 +245,6 @@ class SessionMixin:
             exit_code=None,
             pid=pid,
             interruption_reason=None,
-            resource_limit_event=None,
             continuation=None,
         )
         append_event(
@@ -346,7 +338,6 @@ class SessionMixin:
         exit_code: int | None,
         pid: int | None,
         interruption_reason: str | None,
-        resource_limit_event: ResourceLimitEvent | None,
         continuation=None,
     ) -> None:
         created_at = utcnow()
@@ -371,9 +362,6 @@ class SessionMixin:
                 "exit_code": exit_code,
                 "interruption_reason": interruption_reason,
                 "resource_control": resource_control,
-                "resource_limit_event": (
-                    None if resource_limit_event is None else resource_limit_event.model_dump(mode="python")
-                ),
                 "continuation": None if continuation is None else continuation.model_dump(mode="python"),
             },
             report=report_payload,

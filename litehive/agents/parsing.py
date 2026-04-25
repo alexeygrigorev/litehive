@@ -36,23 +36,6 @@ def stage_report_from_subagent(
                 files_changed=list(latest.files_changed),
             )
 
-    # Step 2: Resource limit events produce a blocked verdict.
-    if (
-        result.failure is not None
-        and result.failure.kind == "resource_limit"
-        and result.failure.resource_limit_event is not None
-    ):
-        event = result.failure.resource_limit_event
-        return StageReport(
-            task_id=task.id,
-            stage=stage,  # type: ignore[arg-type]
-            verdict="blocked",
-            summary=f"{stage} blocked: {event.reason}",
-            feedback=cap_feedback(result.transcript),
-            warnings=[event.reason],
-            resource_limit_event=event,
-        )
-
     # No CLI verdict submitted — treat agent non-completion as reject.
     return StageReport(
         task_id=task.id,

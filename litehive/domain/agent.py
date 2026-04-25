@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from heru.base import CLIExecutionResult
 from heru.types import RuntimeEngineContinuation
 from heru.types import SubagentRef
-from litehive.domain.runtime import ResourceLimitEvent
 
 
 @dataclass(slots=True)
@@ -18,7 +17,6 @@ class EngineFailure:
     kind: str                                           # Type of failure
     reason: str                                         # Human-readable failure reason
     classification: str | None = None                   # Failure category for recovery routing
-    resource_limit_event: ResourceLimitEvent | None = None  # Resource limit that was hit
 
 
 @dataclass(slots=True)

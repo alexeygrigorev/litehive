@@ -5,7 +5,6 @@ from pathlib import Path
 from litehive.domain.common import utcnow
 from litehive.domain.reports import StageReport
 from litehive.domain.runtime import (
-    ResourceLimitEvent,
     RuntimeContinuationHandoff,
     RuntimeEngineContinuation,
     RuntimeEngineSwitch,
@@ -63,7 +62,6 @@ def _runtime_subagent_state(
     exit_code: int | None = None,
     transcript_snippet: str = "",
     interruption_reason: str = "",
-    resource_limit_event: ResourceLimitEvent | None = None,
     continuation: RuntimeEngineContinuation | None = None,
 ) -> RuntimeSubagentState:
     return RuntimeSubagentState(
@@ -81,7 +79,6 @@ def _runtime_subagent_state(
         exit_code=exit_code,
         transcript_snippet=transcript_snippet,
         interruption_reason=interruption_reason,
-        resource_limit_event=resource_limit_event,
         continuation=continuation,
     )
 
@@ -336,7 +333,6 @@ def mark_subagent_finished(
     exit_code: int,
     pid: int | None = None,
     interruption_reason: str | None = None,
-    resource_limit_event: ResourceLimitEvent | None = None,
     continuation: RuntimeEngineContinuation | None = None,
 ) -> None:
     now = utcnow()
@@ -354,7 +350,6 @@ def mark_subagent_finished(
         exit_code=exit_code,
         transcript_snippet=summarize_transcript(transcript),
         interruption_reason=interruption_reason or "",
-        resource_limit_event=resource_limit_event,
         continuation=(
             continuation
             if continuation is not None

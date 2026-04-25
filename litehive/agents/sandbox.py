@@ -18,7 +18,6 @@ from litehive.agents.sandbox_support import (
 from heru.base import CLIInvocation
 from litehive.config.model import LitehiveConfig
 from litehive.config.model import ExternalEngineSandboxPolicy
-from litehive.domain.runtime import ResourceLimitEvent
 
 
 class SandboxProfile(str, Enum):
@@ -362,16 +361,6 @@ exit 127
                 resolved_paths.append(path)
                 seen.add(path)
         return tuple(resolved_paths)
-
-    def classify_resource_limit_event(
-        self,
-        engine_name: str,
-        *,
-        exit_code: int,
-        stdout: str,
-        stderr: str,
-    ) -> ResourceLimitEvent | None:
-        return None
 
     @staticmethod
     def _translate_container_argv(
