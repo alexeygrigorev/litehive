@@ -336,10 +336,6 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
             lines.append(f"  unmerged_worktree={wt_path}")
     if task.git.commit_sha:
         lines.append(f"  commit={task.git.commit_sha}")
-    if task.git.checkpoint_base_sha:
-        lines.append(f"  checkpoint_base={task.git.checkpoint_base_sha}")
-    if task.git.rolled_back_checkpoint_attempt is not None:
-        lines.append(f"  rolled_back_attempt={task.git.rolled_back_checkpoint_attempt}")
 
     if root is not None:
         estimate = estimate_task_execution(root, task)

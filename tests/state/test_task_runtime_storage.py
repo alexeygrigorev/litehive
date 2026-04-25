@@ -193,7 +193,6 @@ def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -
     task.pipeline_status = "implementing"
     task.git.commit_sha = "abc123"
     task.git.checkpoint_attempts = 3
-    task.git.merge_agent_attempts = 1
     task.runtime.execution_status = "running"
     task.runtime.current_stage.stage = "implementing"
 
@@ -208,6 +207,5 @@ def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -
     assert restored.pipeline_status == "implementing"
     assert restored.git.commit_sha == "abc123"
     assert restored.git.checkpoint_attempts == 3
-    assert restored.git.merge_agent_attempts == 1
     assert restored.runtime.execution_status == "running"
     assert restored.runtime.current_stage.stage == "implementing"

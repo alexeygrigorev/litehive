@@ -126,9 +126,7 @@ def _apply_engine_observation(
     if observation.provider:
         record.provider = observation.provider
     record.observed_at = observed_at
-    record.last_invoked_at = observed_at
     record.last_task_id = task_id
-    record.last_exit_code = execution.exit_code
     if count_invocation:
         record.invocation_count += max(1, observation.invocation_count)
 

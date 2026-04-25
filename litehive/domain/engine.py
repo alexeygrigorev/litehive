@@ -28,9 +28,7 @@ class EngineUsageRecord(BaseModel):
     source: EngineMonitoringSource = "local"           # Where this data came from
     provider: str | None = None                         # AI provider if applicable
     observed_at: str | None = None                      # When this record was captured
-    last_invoked_at: str | None = None                  # Most recent invocation timestamp
     last_task_id: str | None = None                     # Task ID of most recent invocation
-    last_exit_code: int | None = None                   # Exit code of most recent invocation
     invocation_count: int = 0                          # Total invocations
     success_count: int = 0                             # Successful invocations
     failure_count: int = 0                             # Failed invocations

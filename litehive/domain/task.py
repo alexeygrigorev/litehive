@@ -51,10 +51,7 @@ class GitSettings(BaseModel):
     auto_commit: bool = True                           # Whether to auto-commit changes
     commit_message: str | None = None                  # Custom commit message template
     commit_sha: str | None = None                      # Current git commit SHA
-    checkpoint_base_sha: str | None = None             # Base SHA for checkpointing
     checkpoint_attempts: int = 0                       # Number of checkpoint attempts
-    rolled_back_checkpoint_attempt: int | None = None  # Last rolled-back attempt number
-    merge_agent_attempts: int = 0                      # Number of merge resolution attempts
     worktree_path: str | None = None                   # Path to git worktree
 
     def to_intent_git_settings(self) -> "TaskIntentGitSettings":
@@ -66,10 +63,7 @@ class GitSettings(BaseModel):
     def to_state_git_settings(self) -> "TaskStateGitSettings":
         return TaskStateGitSettings(
             commit_sha=self.commit_sha,
-            checkpoint_base_sha=self.checkpoint_base_sha,
             checkpoint_attempts=self.checkpoint_attempts,
-            rolled_back_checkpoint_attempt=self.rolled_back_checkpoint_attempt,
-            merge_agent_attempts=self.merge_agent_attempts,
             worktree_path=self.worktree_path,
         )
 
@@ -95,19 +89,13 @@ class TaskStateGitSettings(BaseModel):
     state without operator preferences.
     """
     commit_sha: str | None = None                      # Current git commit SHA
-    checkpoint_base_sha: str | None = None             # Base SHA for checkpointing
     checkpoint_attempts: int = 0                       # Number of checkpoint attempts
-    rolled_back_checkpoint_attempt: int | None = None  # Last rolled-back attempt number
-    merge_agent_attempts: int = 0                      # Number of merge resolution attempts
     worktree_path: str | None = None                   # Path to git worktree
 
     def to_git_updates(self) -> dict[str, str | int | None]:
         return {
             "commit_sha": self.commit_sha,
-            "checkpoint_base_sha": self.checkpoint_base_sha,
             "checkpoint_attempts": self.checkpoint_attempts,
-            "rolled_back_checkpoint_attempt": self.rolled_back_checkpoint_attempt,
-            "merge_agent_attempts": self.merge_agent_attempts,
             "worktree_path": self.worktree_path,
         }
 

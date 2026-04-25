@@ -61,7 +61,6 @@ class StageReport(BaseModel):
     retry_limit: int = 0                               # Maximum retries allowed
     outcome: OutcomeKind | None = None                 # Terminal outcome if stage completed task
     outcome_reason_code: OutcomeReasonCode | None = None  # Machine-readable outcome reason
-    outcome_reason: str = ""                           # Human-readable outcome explanation
     failure_classification: str | None = None          # Type of failure if applicable
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)  # Detailed failure context
     duration_seconds: int = 0                          # How long stage execution took
@@ -106,7 +105,6 @@ class RecoveryAction(BaseModel):
     and understanding recovery effectiveness.
     """
     action: str                 # Description of the recovery action taken
-    applied: bool = True        # Whether the action was successfully applied
     summary: str = ""           # Brief description of action results
     metadata: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)  # Additional action context
 

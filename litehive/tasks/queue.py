@@ -190,7 +190,6 @@ def prepare_completed_task_for_recovery(task: TaskRecord, *, recovery_stage: str
         pipeline_status=recovery_stage,
     )
     set_task_commit_sha(task, None)
-    task.git.rolled_back_checkpoint_attempt = None
 
 
 # --- selection ---

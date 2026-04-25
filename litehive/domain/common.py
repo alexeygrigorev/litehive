@@ -95,51 +95,14 @@ class TaskStage(StringEnum):
     """Main execution stages in the task lifecycle.
 
     Represents the high-level work phases that a task progresses through.
-    Used for coarse-grained tracking and reporting, while LifecyclePhase
-    provides the detailed internal pipeline state machine.
+    Used for coarse-grained tracking and reporting; detailed runner phases
+    are represented by node names in litehive.lifecycle.types.
     """
     GROOMING = "grooming"        # Initial planning and requirement analysis
     IMPLEMENTING = "implementing"  # Core development work
     TESTING = "testing"         # Validation and testing phase
     ACCEPTING = "accepting"     # Final review and acceptance
     COMMIT_TO_GIT = "commit_to_git"  # Git commit and merge operations
-
-
-class LifecyclePhase(StringEnum):
-    """Full internal machine state for task execution.
-
-    Set by PipelineRunner through transition rules. Used by pipeline routing,
-    prompts, journaling, recovery, and status displays. Expresses both the
-    coarse stage and exact machine state.
-
-    State patterns:
-    - before_*: pre-state hooks that run before main work phases
-    - main states: grooming, implementing, testing, accepting, commit
-    - after_*: post-state hooks that run after main work phases
-    """
-    READY = "ready"                          # Task admitted and about to start
-    WORKTREE_SYNC = "worktree_sync"         # Workspace preparation and reconciliation
-    RECOVERING_PRE_EXEC = "recovering_pre_exec"  # Cleanup before pipeline can safely start
-    BEFORE_GROOMING = "before_grooming"      # Pre-grooming hooks
-    GROOMING = "grooming"                    # Initial planning and requirement analysis
-    AFTER_GROOMING = "after_grooming"        # Post-grooming hooks
-    BEFORE_IMPLEMENTING = "before_implementing"  # Pre-implementation hooks
-    IMPLEMENTING = "implementing"            # Core development work
-    AFTER_IMPLEMENTING = "after_implementing"  # Post-implementation hooks
-    BEFORE_TESTING = "before_testing"        # Pre-testing hooks
-    TESTING = "testing"                      # Validation and testing phase
-    AFTER_TESTING = "after_testing"          # Post-testing hooks
-    BEFORE_ACCEPTING = "before_accepting"    # Pre-acceptance hooks
-    ACCEPTING = "accepting"                  # Final review and acceptance
-    AFTER_ACCEPTING = "after_accepting"      # Post-acceptance hooks
-    BEFORE_COMMIT = "before_commit"          # Pre-commit hooks
-    COMMIT = "commit"                        # Git commit and merge operations
-    AFTER_COMMIT = "after_commit"            # Post-commit hooks
-    MERGE_RESOLVING = "merge_resolving"      # Explicit merge-conflict resolution
-    RECOVERING = "recovering"                # Bounded recovery after failure or block
-    DONE = "done"                           # Terminal success
-    FAILED = "failed"                       # Terminal failure
-
 
 class TaskStatus(StringEnum):
     """High-level execution or terminal category for a task.
@@ -168,9 +131,8 @@ class TaskStatus(StringEnum):
 class PipelineStatus(StringEnum):
     """Simplified pipeline state view for external reporting and displays.
 
-    Maps to the more detailed LifecyclePhase internal state machine but
-    provides a coarser-grained view for operator interfaces and reporting.
-    Used by CLI views and dashboard displays.
+    Provides a coarser-grained view for operator interfaces and reporting.
+    Used by CLI views and task persistence.
     """
     BACKLOG = "backlog"               # Not yet started
     GROOMING = "grooming"             # In planning phase
@@ -216,7 +178,6 @@ class Verdict(StringEnum):
 
 
 RunnerExecutionStatus = RunnerStatus
-PipelineState = PipelineStatus
 
 
 __all__ = [
@@ -225,11 +186,9 @@ __all__ = [
     "FEEDBACK_CAP",
     "LiveEventKind",
     "LiveEventRole",
-    "LifecyclePhase",
     "OutcomeKind",
     "OutcomeReasonCode",
     "PipelineMode",
-    "PipelineState",
     "PipelineStatus",
     "RunnerStatus",
     "RunnerExecutionStatus",
