@@ -254,7 +254,8 @@ class TaskState:
 
     TaskState (this class) tracks:
     - High-level pipeline position (stage, pipeline_mode)
-    - Retry counts and recovery state (stage_retry, recovery_history)
+    - Retry counts and recovery state (stage_retry, active_recovery_trigger,
+      recovery_history, failed_run_history)
     - Terminal failure state (failed_reason, failed_message)
     - Merge and commit state (merge_context, commit_result)
     - Core pipeline state machine data
@@ -277,6 +278,13 @@ class TaskState:
 
     ``limits`` is runtime config (not persisted) — real persistence adapters
     should omit it on save and re-inject it on load.
+
+    RECOVERY VOCABULARY:
+
+    ``active_recovery_trigger`` stores the current ``RecoveryTrigger``: the
+    structured cause/context for the recovery turn. ``recovery_history`` stores
+    completed ``RecoveryOutcome`` objects. ``failed_run_history`` is separate
+    cross-run retry-exhaustion memory and is not a recovery outcome.
     """
 
     task_id: str

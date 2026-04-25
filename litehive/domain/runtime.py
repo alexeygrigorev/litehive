@@ -108,10 +108,13 @@ class RuntimeHookRejectFingerprint(BaseModel):
 
 
 class RuntimeRecoveryOutcome(BaseModel):
-    """Compact recovery-attempt history persisted on the task runtime.
+    """Compact projection of a ``RecoveryOutcome`` persisted on task runtime.
 
     Survives pipeline-state resets so later recovery turns can still see
-    prior failure fingerprints for the same task.
+    prior failure fingerprints for the same task. This is not a second
+    recovery model: ``TaskState.recovery_history`` owns full
+    ``RecoveryOutcome`` objects, while ``PipelineRuntime.recovery_history``
+    keeps this compact history for prompts and status surfaces.
     """
 
     origin_stage: str | None = None
@@ -153,13 +156,17 @@ class TaskOutcomeState(BaseModel):
     Captures the terminal result of task execution, including success,
     failure details, and context for follow-up actions. Used by
     reporting and recovery logic to understand task completion patterns.
+
+    ``failure_diagnostics`` is report evidence copied into the terminal
+    outcome for operator/debug visibility. Recovery identity and budget
+    tracking belong to ``FailureFingerprint`` on ``RecoveryTrigger``.
     """
     kind: OutcomeKind | None = None                    # Terminal outcome category (flagged, blocked, etc.)
     stage: str | None = None                           # Pipeline stage where outcome was determined
     reason_code: OutcomeReasonCode | None = None       # Machine-readable reason for outcome
     reason: str = ""                                   # Human-readable explanation
     failure_classification: str | None = None          # Type of failure if applicable
-    failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)  # Detailed failure context
+    failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)  # Report evidence
     follow_up_task_id: str | None = None               # ID of any follow-up task created
     retry_count: int = 0                              # Number of retries attempted
     retry_limit: int = 0                              # Maximum retries allowed
@@ -225,6 +232,11 @@ class PipelineRuntime(BaseModel):
     This slice tracks run status, stage progress, retry accounting, terminal
     outcomes, and recovery memory. It deliberately excludes subagent and
     continuation bookkeeping, which belongs to ExecutionRuntime.
+
+    Recovery memory here mirrors the canonical state-machine vocabulary:
+    ``recovery_history`` stores compact ``RuntimeRecoveryOutcome`` projections
+    of ``RecoveryOutcome`` objects, and ``failed_run_history`` stores separate
+    terminal retry-exhaustion records.
     """
 
     git: RuntimeGitState = Field(default_factory=RuntimeGitState)

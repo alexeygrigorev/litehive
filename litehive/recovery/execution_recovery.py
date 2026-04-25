@@ -191,7 +191,7 @@ def flag_task_after_failed_launch_recovery(root: Path, task: TaskRecord, failure
                 before_task=before_task,
                 after_task=flagged,
                 context={
-                    "failure_context": failure.context,
+                    "launch_failure_context": failure.context,
                     "summary": failure.summary,
                     "origin_stage": origin_stage,
                 },

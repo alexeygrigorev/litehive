@@ -1,4 +1,21 @@
-"""Recovery-domain enums and persisted value objects."""
+"""Recovery-domain enums and persisted value objects.
+
+Canonical recovery vocabulary:
+
+- ``FailureFingerprint`` is the normalized identity used for recovery
+  budgets and repeated-failure detection. It may carry small diagnostics
+  that explain how the fingerprint was derived.
+- ``RecoveryTrigger`` is the active cause/context that sent a task into
+  recovery. It is persisted as ``active_recovery_trigger`` and surfaced to
+  recovery prompts as ``recovery_trigger``.
+- ``RecoveryOutcome`` is one completed recovery attempt or denial. Outcomes
+  are persisted in ``recovery_history`` and projected into
+  ``RuntimeRecoveryOutcome`` on task runtime.
+
+There is no separate ``FailureDiagnostics``, ``RecoveryContext``, or
+``RecoveryRecord`` model. Report-level ``failure_diagnostics`` fields remain
+unstructured evidence on reports/outcomes; they are not the recovery identity.
+"""
 
 from dataclasses import dataclass, field
 from typing import Any
@@ -47,6 +64,11 @@ class FailureFingerprint:
 
     The budget_key() method determines how recovery budget is tracked:
     uses classification if available, otherwise falls back to fingerprint.
+
+    ``FailureFingerprint`` is the recovery-domain replacement for the older
+    document-only idea of a ``FailureDiagnostics`` value object. Diagnostics
+    on this object explain the fingerprint; report ``failure_diagnostics``
+    fields remain report evidence.
     """
 
     fingerprint: str                                    # Unique identifier for this failure pattern
@@ -83,6 +105,10 @@ class RecoveryTrigger:
 
     Used by RecoveryCoordinator to decide whether to attempt recovery and
     by recovery budget logic to prevent infinite recovery loops.
+
+    This is the recovery context. Code and prompts should use
+    ``RecoveryTrigger`` / ``recovery_trigger`` instead of introducing a
+    separate ``RecoveryContext`` type or payload.
     """
 
     origin_stage: str | None                            # Pipeline stage where failure occurred
@@ -132,6 +158,10 @@ class RecoveryOutcome:
     Created by RecoveryCoordinator when recovery concludes (successfully
     or unsuccessfully). Stored in TaskState recovery history to track
     all recovery attempts for the task.
+
+    This is the recovery record. Code and docs should use
+    ``RecoveryOutcome`` / ``recovery_history`` instead of a separate
+    ``RecoveryRecord`` model.
     """
 
     trigger: RecoveryTrigger                         # What triggered this recovery attempt

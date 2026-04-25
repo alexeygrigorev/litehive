@@ -385,7 +385,7 @@ def _hook_recovery_made_progress(trigger: RecoveryTrigger | None, event: Event) 
     return event.resume == "done" or (target_stage is not None and target_stage != origin_stage)
 
 
-def clear_recovery_attempt(state: TaskState, event: Event) -> StateDelta:
+def record_recovery_success(state: TaskState, event: Event) -> StateDelta:
     trigger = state.active_recovery_trigger
     outcome = None
     if isinstance(event, RecoverySucceeded) and trigger is not None:

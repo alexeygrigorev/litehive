@@ -285,10 +285,14 @@ Goal:
 
 Scope:
 
-- settle the final relationship between:
-  - `FailureDiagnostics` and `FailureFingerprint`
-  - `RecoveryRecord` / `RecoveryContext`
-  - current trigger/history structures
+- use the implemented recovery vocabulary consistently:
+  - `FailureFingerprint` for recovery identity and budget tracking
+  - report `failure_diagnostics` for report/outcome evidence only
+  - `RecoveryTrigger` / `recovery_trigger` for active recovery context
+  - `RecoveryOutcome` / `recovery_history` for completed recovery attempts
+  - `RuntimeRecoveryOutcome` for the compact runtime projection
+- document that the retired names `FailureDiagnostics`, `RecoveryRecord`, and
+  `RecoveryContext` are not domain models
 - update prompts, persistence, and transition logic consistently
 
 Acceptance criteria:

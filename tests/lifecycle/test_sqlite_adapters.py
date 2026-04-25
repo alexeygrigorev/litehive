@@ -5,6 +5,7 @@ Covers ``SqlitePersistence`` (TaskState round-trip) and ``SqliteSessionStore``
 different tasks and different engines must not see each other's rows.
 """
 
+import json
 from pathlib import Path
 
 import pytest
@@ -163,6 +164,18 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
         recovery_failure_explanation=None,
     )
     store.save(original)
+
+    with connect_workspace_db(workspace) as connection:
+        row = connection.execute("SELECT payload FROM pipeline_task_state WHERE task_id = ?", ("T-0042",)).fetchone()
+    payload = json.loads(row["payload"])
+    serialized_payload = json.dumps(payload, sort_keys=True)
+    assert payload["active_recovery_trigger"]["failure_fingerprint"]["fingerprint"] == "RuntimeError:boom"
+    assert payload["recovery_history"][0]["trigger"]["failure_fingerprint"]["fingerprint"] == "agent:blank task"
+    assert "implementing:agent:tests fail" in payload["failed_run_history"]
+    assert "RecoveryContext" not in serialized_payload
+    assert "RecoveryRecord" not in serialized_payload
+    assert "FailureDiagnostics" not in serialized_payload
+    assert "failure_context" not in serialized_payload
 
     loaded = store.load("T-0042")
     assert loaded.task_id == original.task_id

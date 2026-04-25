@@ -34,7 +34,7 @@ Litehive uses lightweight Domain-Driven Design terminology. Key concepts include
 
 - **Domain**: A coherent area of the model (workspace, task, pipeline, etc.)
 - **Entity**: Objects with stable identity that persist over time (`Task`, `SubagentRun`)  
-- **Value Object**: Descriptive objects defined by their fields (`TaskRetryPolicy`, `FailureDiagnostics`)
+- **Value Object**: Descriptive objects defined by their fields (`FailureFingerprint`, `RecoveryTrigger`)
 - **Service**: Behavior that coordinates multiple entities (`TaskService`, `PipelineRunner`)
 - **Store**: Persistence boundaries (`WorkspaceStore`, `ArtifactStore`)
 - **Actor**: People or components that do work (`Operator`, `Runner`, `Subagent`)
@@ -49,6 +49,18 @@ Litehive uses lightweight Domain-Driven Design terminology. Key concepts include
 - Use `message` for human-readable text
 - Use `reason_code` for normalized machine-readable classification
 - Use `rationale` for operator or agent explanation of a choice
+
+## Recovery Vocabulary
+
+The recovery domain uses the implemented recovery model as canonical:
+
+- `FailureFingerprint` is the recovery identity and budget key. It replaces the older document-only `FailureDiagnostics` model name.
+- `failure_diagnostics` is a report/outcome evidence field on `StageReport` and `TaskOutcomeState`; it is not a recovery-domain model.
+- `RecoveryTrigger` is the active recovery cause/context. It is stored as `TaskState.active_recovery_trigger`, serialized as `active_recovery_trigger`, and surfaced to recovery prompts as `recovery_trigger`.
+- `RecoveryOutcome` is one completed recovery attempt or denial. It is stored in `TaskState.recovery_history`.
+- `RuntimeRecoveryOutcome` is the compact task-runtime projection of `RecoveryOutcome`, stored in `TaskRuntime.pipeline.recovery_history` so recovery prompts can retain prior fingerprints after state resets.
+- `failed_run_history` is separate cross-run retry-exhaustion memory; it is not a recovery outcome.
+- `RecoveryContext` and `RecoveryRecord` are retired names. New code and docs should use `RecoveryTrigger`, `RecoveryOutcome`, `recovery_trigger`, and `recovery_history`.
 
 ## Cross-Domain Actors
 
@@ -86,7 +98,7 @@ Each domain module contains comprehensive docstrings for all models, including:
 ### Key Model Categories
 
 **Core Entities**: `Task`, `SubagentRun`, `Session` - objects with stable identity  
-**Value Objects**: `TaskRetryPolicy`, `FailureDiagnostics` - descriptive data structures  
+**Value Objects**: `TaskRetryPolicy`, `FailureFingerprint`, `RecoveryTrigger`, `RecoveryOutcome` - descriptive data structures
 **Enums**: `TaskStatus`, `PipelineState`, `StageVerdict` - normalized classification  
 **Services**: `TaskService`, `PipelineRunner` - domain behavior coordination  
 **Runtime State**: `TaskRuntime`, `PipelineRuntime`, `ExecutionRuntime` - mutable execution tracking

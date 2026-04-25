@@ -597,6 +597,20 @@ class GitCommitNode(CommitNode):
         branch_ref = self.worktree_branch(worktree) or self.worktree_head(worktree)
         worktree_head = self.worktree_head(worktree)
 
+        if worktree_head != main_head_before and self.worktree_patch_already_on_main(
+            worktree_head,
+            main_head_before,
+        ):
+            self._restore_local_only_paths(worktree, local_only_paths)
+            cleanup_head = self.autocommit_main_checkout_changes(state)
+            return {
+                "commit_result": {
+                    "status": "reconciled_noop",
+                    "reason": "already_landed",
+                    "head_sha": cleanup_head or main_head_before,
+                }
+            }
+
         if self._merge_in_progress():
             unresolved = self._unresolved_conflicts()
             if unresolved:

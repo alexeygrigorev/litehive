@@ -147,6 +147,9 @@ def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
     assert "Recovery trigger" in text
     assert "trigger_event_kind: crash" in text
     assert "origin_stage: implementing" in text
+    assert "RecoveryContext" not in text
+    assert "RecoveryRecord" not in text
+    assert "FailureDiagnostics" not in text
     assert "## Recovery startup guidance" in text  # the four built-in recovery bullets
     assert "You fix Litehive infrastructure bugs, not agent judgment disagreements." in text
     assert "litehive pipeline journal <task_id>" in text
@@ -255,6 +258,9 @@ def test_serialize_recovery_includes_repeated_fingerprint_escalation(workspace: 
     assert prompt["repeated_recovery_fingerprint"] is not None
     assert prompt["repeated_recovery_fingerprint"]["count"] == 2
     assert "Recovery history" in text
+    assert "RuntimeError:boom" in text
+    assert "RecoveryContext" not in text
+    assert "RecoveryRecord" not in text
     assert "Repeated recovery fingerprint detected" in text
     assert "Escalation required: do not resume or advance again" in text
     assert "--follow-up-task <task-id>" in text

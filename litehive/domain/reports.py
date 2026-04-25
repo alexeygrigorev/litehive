@@ -71,6 +71,10 @@ class StageReport(BaseModel):
 
     Primary consumers: PipelineRunner for routing decisions, recovery logic
     for failure analysis, and reporting systems for metrics and debugging.
+
+    ``failure_diagnostics`` is report-local evidence about this stage verdict.
+    It can help construct a ``FailureFingerprint`` later, but it is not the
+    recovery-domain identity or budget key.
     """
     model_config = ConfigDict(extra="forbid")
 
@@ -88,7 +92,7 @@ class StageReport(BaseModel):
     outcome: OutcomeKind | None = None                 # Terminal outcome if stage completed task
     outcome_reason_code: OutcomeReasonCode | None = None  # Machine-readable outcome reason
     failure_classification: str | None = None          # Type of failure if applicable
-    failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)  # Detailed failure context
+    failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)  # Report evidence
     duration_seconds: int = 0                          # How long stage execution took
     created_at: str = Field(default_factory=utcnow)   # When report was generated
 

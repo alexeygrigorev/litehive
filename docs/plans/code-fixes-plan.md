@@ -35,14 +35,10 @@ Current code shape:
   - `resume` / `advance` / `done` -> success
   - anything else -> recovery failed
   - `budget_hit` -> explicit recovery budget failure
-- `litehive/lifecycle/orchestration.py` then uses
-  `task.runtime.last_crashed_stage` to implement a same-stage crash circuit
-  breaker:
-  - first crash in stage X records `last_crashed_stage = X`
-  - if the task later crashes again in the same origin stage X after recovery,
-    the task is flagged with `crash_budget_exhausted`
-  - if the task advances out of that crash path, the marker is cleared so a
-    later crash in a different stage gets a fresh recovery attempt
+- `litehive/domain/lifecycle_deltas.py` builds a `RecoveryTrigger` with a
+  `FailureFingerprint`; completed recovery turns append `RecoveryOutcome`
+  entries to `recovery_history` so repeated crash paths can be detected without
+  a separate stage marker.
 
 Answer:
 
@@ -61,9 +57,9 @@ Answer:
 
 Concrete actions:
 
-- Replace the split same-stage crash tracking logic with one explicit recovery
-  budget model owned by lifecycle state, instead of dividing meaning between
-  `state.recovery_attempt[...]` and `task.runtime.last_crashed_stage`.
+- Use one explicit recovery budget model owned by lifecycle state:
+  `active_recovery_trigger` for the in-flight trigger and `recovery_history`
+  for completed `RecoveryOutcome` records.
 - Introduce explicit domain types for recovery bookkeeping instead of loose
   string fields:
   - `TriggerEventKind(str, Enum)` for normalized persisted trigger labels
@@ -203,7 +199,7 @@ Concrete actions:
   - `DiscussionThread`
   - `DiscussionEntry`
   - `VerdictEntry`
-  - `RecoveryContext`
+  - `RecoveryTrigger` / `RecoveryOutcome`
   - `JournalEntry`
 - Decide whether `TaskRecord.pipeline_status` should eventually become
   `pipeline_state` or remain a projected `pipeline_status` while lifecycle
@@ -228,8 +224,8 @@ Concrete actions:
 - Replace generic `trigger` fields in recovery/report models with
   `trigger_event_kind`, and replace `stage` with `origin_stage` where the field
   means the stage that triggered recovery.
-- Rename `failure_context` to `recovery_context` if the payload is only used as
-  recovery-entry context.
+- Replace generic failure payloads with `RecoveryTrigger` diagnostics or
+  `RecoveryOutcome` history when the payload is recovery-owned.
 - Distinguish `journal`, `log`, and `transcript` in both CLI help and model
   names:
   - `journal` for structured history
@@ -369,9 +365,10 @@ Follow-up actions:
 These simplifications were chosen to make the target model easier to understand
 without adding new behavior.
 
-- Merge `RecoveryDiagnostics` into `FailureDiagnostics`.
-  Reason: recovery and reporting were carrying near-duplicate structured
-  failure data.
+- Keep report `failure_diagnostics` as report/outcome evidence and use
+  `FailureFingerprint` for recovery identity and budget tracking.
+  Reason: recovery budget decisions need a normalized identity, while reports
+  need flexible diagnostic evidence for operators.
 - Split `TaskRuntime` into `PipelineRuntime` and `ExecutionRuntime`, then keep
   `TaskRuntime` as the container holding those two slices.
   Reason: one runtime record had grown to mix pipeline position and retry state
@@ -783,36 +780,14 @@ Answer:
 
 What is still left to delete:
 
-- Delete transitional recovery counters/markers that are now redundant with the
-  structured model:
-  - `TaskState.recovery_attempt`
-  - `StateDelta.inc_recovery_attempt`
-  - CLI/prompt/report code that prints or depends on the per-stage
-    `recovery_attempt` dict instead of deriving history from
-    `RecoveryOutcome`
-- Delete `TaskState.origin_stage` once resume logic reads the origin from the
-  active structured trigger or the persisted recovery outcome:
-  - `StateDelta.set_origin_stage`
-  - `StateDelta.clear_origin_stage`
-  - prompt/CLI plumbing that separately renders `origin_stage`
 - Delete `TaskState.pre_exec_recovery_attempt` and the related "counter"
   behavior if pre-exec recovery is truly one-shot:
   - replace it with a dedicated boolean/enum or a structured pre-exec recovery
     record
   - then remove the counter increment/check logic from:
     `guards.py`, `nodes/system.py`, persistence payloads, and related tests
-- Delete generic `failure_context` after splitting it into domain-specific
-  payloads:
-  - `recovery_context` or direct use of `RecoveryTrigger` /
-    `RecoveryOutcome`
-  - merge-conflict-specific context
-  - commit-result-specific context
-  - remove code that treats one free-form dict as the carrier for all of those
-    unrelated concerns
-- Delete `thread` piggybacking inside lifecycle recovery context:
-  - `RoleAgent.build_prompt()` currently reads `state.failure_context["thread"]`
-  - thread/discussion state should come from the discussion store, not from a
-    generic recovery payload
+- Remove any remaining compatibility code that treats recovery history as a
+  generic dict instead of a `RecoveryTrigger` / `RecoveryOutcome` payload.
 
 Compatibility fields/accessors left to delete:
 
@@ -840,40 +815,20 @@ Compatibility fields/accessors left to delete:
   - `PipelineState`-to-`PipelineStatus`
   - `RunnerExecutionStatus = RunnerStatus`
 
-Oversized models that still need to be broken down before more deletion:
+Models that still need follow-up cleanup before more deletion:
 
-- `TaskRuntime` is still carrying multiple concerns:
-  - run activity state
-  - current/last stage runtime state
-  - interruption state
-  - continuation handoff state
-  - engine switch state
-  - hook-reject loop bookkeeping
-  - last outcome state
-- `TaskState.failure_context` is still a junk drawer for:
-  - recovery trigger data
-  - merge conflict files / merge attempt count
-  - commit result data
-  - ad hoc prompt context
 - `tasks/runtime.py` still contains broad helper functions whose signatures and
-  internal branching are shaped around those large models; once the models are
-  split, some of those helpers should disappear rather than be mechanically
-  updated
+  internal branching span multiple runtime concerns; some of those helpers
+  should disappear rather than be mechanically updated.
 
 Concrete actions:
 
-- Migrate recovery resume/terminal logic to use only:
+- Keep recovery resume/terminal logic on the canonical fields:
   - `active_recovery_trigger`
   - `recovery_history`
   - `recovery_failure_explanation`
-  - then delete `recovery_attempt`, `origin_stage`, and their delta fields
 - Introduce a dedicated structured pre-exec recovery state and then delete
   `pre_exec_recovery_attempt`
-- Split `failure_context` into explicit domain objects/fields and then delete
-  the generic dict:
-  - recovery-owned context
-  - merge-owned context
-  - commit-result field or record
 - Remove all `step` compatibility properties and alias-accepting validation
   only after migrating:
   - runtime helpers
@@ -894,9 +849,6 @@ Concrete actions:
 Validation steps:
 
 - Add tests that fail if old payload keys are still written for new rows:
-  - `recovery_attempt`
-  - `origin_stage`
-  - `failure_context`
   - `step`
   - `trigger`
 - Add CLI tests that assert canonical output/flags only:
@@ -1970,23 +1922,18 @@ real implementation rather than against assumptions.
     - `TaskRuntime.current_stage.stage`
   - prompts and runtime surfaces still consume raw stage strings
 
-- Runtime structure is still flat:
-  - `litehive/domain/runtime.py` still has one `TaskRuntime` carrying:
-    - pipeline progression
-    - execution/subagent state
-    - git state
-    - hook-reject recovery state
-    - outcome state
-  - code does not yet use the target `TaskRuntime.pipeline` /
-    `TaskRuntime.execution` split from `docs/domain.md`
+- Runtime structure now uses the target split:
+  - `TaskRuntime.pipeline` owns pipeline progression, retry state, terminal
+    outcomes, and recovery memory
+  - `TaskRuntime.execution` owns subagent execution, interruptions,
+    continuation handoff, and engine switches
 
-- Recovery naming still reflects the current implementation model, not the
-  target document model:
+- Recovery naming now adopts the implemented model as canonical:
   - `FailureFingerprint`
   - `RecoveryTrigger`
   - `RecoveryOutcome`
   - `RecoveryDisposition`
-  - these are active in persistence, prompts, and transition logic today
+  - these are active in persistence, prompts, and transition logic
 
 ## Gradual factoring task list
 
@@ -2093,10 +2040,12 @@ The task-by-task queue mirror lives in `docs/refactoring-tasks.md`.
 
 10. Reconcile recovery naming with the chosen domain model.
     Scope:
-    - decide and implement the final relationship between:
-      - `FailureDiagnostics` and `FailureFingerprint`
-      - `RecoveryRecord` / `RecoveryContext` and the current trigger/history
-        structures
+    - use `FailureFingerprint` for recovery identity and report
+      `failure_diagnostics` for report/outcome evidence
+    - use `RecoveryTrigger` / `recovery_trigger` for active recovery context
+    - use `RecoveryOutcome` / `recovery_history` for completed recovery
+      attempts
+    - use `RuntimeRecoveryOutcome` as the compact runtime projection
     - make the runtime/recovery surfaces use the chosen names consistently
     Validation:
     - recovery prompts, persistence, and routing all use one vocabulary
@@ -2239,43 +2188,26 @@ Concrete actions:
 - narrow or split `Verdict` if the current enum is overloaded across activity,
   recovery, and lifecycle control signals
 
-### 4. Recovery/runtime structure still diverges from the document
+### 4. Recovery/runtime structure is aligned with the document
 
-Document target:
+Document target and current code:
 
-- `docs/domain.md` expects:
-  - `FailureDiagnostics`
-  - `RecoveryRecord`
-  - `RecoveryContext`
-  - `TaskRuntime.pipeline`
-  - `TaskRuntime.execution`
-
-Current code:
-
-- `litehive/domain/recovery.py` uses:
+- `litehive/domain/recovery.py` uses the canonical recovery model:
   - `FailureFingerprint`
   - `RecoveryTrigger`
   - `RecoveryOutcome`
   - `RecoveryDisposition`
-- `litehive/domain/runtime.py` still uses one flat `TaskRuntime` carrying:
-  - pipeline state
-  - execution state
-  - git state
-  - hook-reject state
-  - task outcome state
+- report `failure_diagnostics` fields are evidence, not recovery identity
+- `litehive/domain/runtime.py` uses `TaskRuntime.pipeline` and
+  `TaskRuntime.execution`
+- `RuntimeRecoveryOutcome` is the compact runtime projection of
+  `RecoveryOutcome`
 
-Concrete actions:
+Concrete follow-up rule:
 
-- decide whether `docs/domain.md` should adopt the implemented recovery model
-  or whether code should be renamed/split to match the document
-- split `TaskRuntime` into explicit pipeline and execution slices if
-  `docs/domain.md` remains the target architecture
-- move git/hook-reject/outcome concerns to explicit owned submodels rather than
-  one flat runtime bucket
-- reconcile recovery naming:
-  - `FailureDiagnostics` vs `FailureFingerprint`
-  - `RecoveryRecord` / `RecoveryContext` vs `RecoveryTrigger` /
-    `RecoveryOutcome`
+- Do not reintroduce retired recovery names as new models. Use
+  `FailureFingerprint`, `RecoveryTrigger`, `RecoveryOutcome`,
+  `recovery_trigger`, and `recovery_history`.
 
 ## Safe implementation order
 

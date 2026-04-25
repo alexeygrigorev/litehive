@@ -8,12 +8,12 @@ Ctrl+click any S.STAGE to see the node that runs there.
 
 from litehive.domain.lifecycle_deltas import (
     clear_completed_rejection_loop,
-    clear_recovery_attempt,
     enter_pre_exec_recovery,
     enter_recovery,
     exhaust_recovery_budget,
     fail,
     remember_rejection,
+    record_recovery_success,
     stash_conflict_files,
 )
 from .events import (
@@ -293,7 +293,7 @@ RULES: list[Rule] = [
         on_event=RecoverySucceeded,
         transition_to=resume_from_origin,
         when=recovery_resume_is_concrete(),
-        with_effect=clear_recovery_attempt,
+        with_effect=record_recovery_success,
     ),
     Rule(
         from_state=S.RECOVERING,

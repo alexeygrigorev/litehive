@@ -62,8 +62,9 @@ class RecoveryAgent(RoleAgent):
     """Singleton recovery node, reachable from any stage.
 
     Reads the active structured recovery trigger from ``TaskState`` — no
-    per-entry construction and no ``RecoveryRequest`` object. Fits into the
-    ``NodeRegistry`` like every other node.
+    per-entry construction, no ``RecoveryRequest`` object, and no separate
+    ``RecoveryContext`` payload. Fits into the ``NodeRegistry`` like every
+    other node.
 
     Verdict mapping differs from a regular stage agent: recovery emits
     ``RecoverySucceeded`` / ``RecoveryFailed`` / ``RecoveryBudgetHit`` instead

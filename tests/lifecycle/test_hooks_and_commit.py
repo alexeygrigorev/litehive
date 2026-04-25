@@ -498,16 +498,12 @@ def test_commit_node_reports_already_landed_noop_reconciliation(git_repo_with_br
     monkeypatch.setattr(node, "worktree_branch", lambda worktree: "feature")
     monkeypatch.setattr(node, "worktree_head", lambda worktree: "feature-head")
     monkeypatch.setattr(node, "main_head", lambda: "main-head")
-    monkeypatch.setattr(
-        node,
-        "git_merge",
-        lambda branch_ref: subprocess.CompletedProcess(
-            args=["git", "merge", branch_ref, "--no-edit"],
-            returncode=0,
-            stdout="Already up to date.\n",
-            stderr="",
-        ),
-    )
+
+    def fail_merge(branch_ref: str) -> None:
+        del branch_ref
+        pytest.fail("already-landed patches skip git merge")
+
+    monkeypatch.setattr(node, "git_merge", fail_merge)
     monkeypatch.setattr(node, "worktree_patch_already_on_main", lambda wt_head, main_head: True)
 
     event = node.run(make_state(stage="commit"))
