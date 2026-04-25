@@ -6,23 +6,26 @@ task_type: null
 pipeline_mode: full
 priority: low
 depends_on: []
-goal: Validate whether the originally named housekeeping targets still exist in the
-  current tree, and avoid queuing implementation work for cleanup that has already
-  landed or no longer has a concrete target.
+goal: Close T-0333 after confirming the named housekeeping targets no longer leave
+  a concrete implementation delta in the current tree.
 acceptance_criteria:
-- Confirm whether the named litehive/tasks stubs, litehive/engines shim, empty litehive/runner
-  and litehive/runtime directories, jinja2 dependency, and pytest-timeout runtime
-  dependency still exist in the current repo.
-- If those targets are already absent or already handled elsewhere, close T-0333 with
-  explicit rationale instead of sending it to implementation as a no-op.
-- Only keep the task open if concrete remaining files, imports, or dependency lines
-  are identified and restated explicitly.
+- litehive/engines, litehive/runner, and litehive/runtime directories are absent,
+  with no remaining internal imports to those shim paths.
+- litehive/tasks no longer contains dead stub files from the old split; tasks/__init__.py
+  is already reduced to a one-line package docstring and task-domain modules are real
+  implementation modules.
+- jinja2 is absent from pyproject.toml and uv.lock; pytest-timeout is not a runtime
+  dependency and appears only in dev dependency declarations/lock metadata.
+- T-0333 is closed rather than sent to implementation because no named cleanup target
+  remains.
 constraints:
-- Do not invent new cleanup scope beyond the targets already named on T-0333.
+- Do not expand this housekeeping task beyond the originally named targets.
 plan:
-- Inspect the current tree and pyproject/lock state for each named cleanup target.
-- Compare the remaining scope, if any, with other active compatibility-cleanup tasks.
-- Close the task if no concrete remaining implementation delta exists.
+- Verified current tree directories and imports for litehive/engines, litehive/runner,
+  litehive/runtime, and litehive/tasks.
+- Verified pyproject.toml and uv.lock for jinja2 and pytest-timeout placement.
+- Close T-0333 as a no-op cleanup because the named targets are absent or already
+  handled elsewhere.
 git:
   auto_commit: true
   commit_message: 'litehive: complete T-0333 housekeeping-dead-stubs-empty-dirs-shim-dirs-dep'
