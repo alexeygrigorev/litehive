@@ -241,7 +241,7 @@ def test_task_add_cli_warns_about_similar_tasks_in_supported_statuses(tmp_path: 
     assert "Created task T-0004" in result.output
 
 
-def test_task_add_cli_shows_done_for_archived_duplicate(tmp_path: Path) -> None:
+def test_task_add_cli_shows_terminal_status_for_archived_duplicate(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
     archived = create_task(
@@ -268,7 +268,7 @@ def test_task_add_cli_shows_done_for_archived_duplicate(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    assert f"{archived.id} [archived] {archived.title}" in result.output
+    assert f"{archived.id} [done] {archived.title}" in result.output
     assert f"{archived.id} [queued] {archived.title}" not in result.output
     assert "Created task T-0002" in result.output
 
@@ -582,6 +582,6 @@ def test_search_tasks_by_text_tracks_duplicate_index_maintenance(tmp_path: Path)
 
     archived_matches = search_tasks_by_text(tmp_path, query="duplicate dashboard widgets", limit=10)
     archived_match = next(match for match in archived_matches if match.task_id == task.id)
-    assert archived_match.status == "archived"
+    assert archived_match.status == "done"
     assert archived_match.title == "Dashboard duplicate cleanup"
     assert "duplicate web dashboard widgets" in archived_match.snippet

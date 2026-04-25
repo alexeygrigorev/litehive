@@ -26,6 +26,7 @@ from litehive.tasks.constants import (
     VALID_TASK_PRIORITIES,
     VALID_TASK_TYPES,
 )
+from litehive.tasks.archive_index import archived_task_ids
 from litehive.state.locking import workspace_lock, workspace_mutation_guard
 from litehive.state.persist import (
     load_state,
@@ -478,11 +479,12 @@ def _load_tasks_from_store(
 ) -> list[TaskRecord]:
     store = runtime_store(root)
     records: list[TaskRecord] = []
+    archived_ids = set() if include_archived else archived_task_ids(root)
     for intent in store.list_task_intents():
         try:
             state_record = store.load_task_state(intent.id)
             stateful_task = TaskRecord.from_intent_and_state(intent, state_record)
-            if stateful_task.status == "archived" and not include_archived:
+            if not include_archived and (stateful_task.status == "archived" or stateful_task.id in archived_ids):
                 continue
             if include_runtime:
                 if state_record is None:
@@ -545,7 +547,7 @@ def get_task(root: Path, task_id: str) -> TaskRecord | None:
     if intent is None:
         return None
     task = _load_task_runtime(root, TaskRecord.from_intent_and_state(intent))
-    if task.status == "archived":
+    if task.status == "archived" or task.id in archived_task_ids(root):
         return None
     return task
 
@@ -560,7 +562,7 @@ def get_task_record(root: Path, task_id: str, *, include_archived: bool = False)
         task = _load_task_runtime(root, task)
     except TaskStateMissingError:
         pass
-    if task.status == "archived" and not include_archived:
+    if not include_archived and (task.status == "archived" or task.id in archived_task_ids(root)):
         return None
     return task
 

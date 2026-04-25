@@ -175,7 +175,7 @@ def test_task_recent_rejects_invalid_since(
     assert "recent failed: Invalid duration format 'yesterday'" in output
 
 
-def test_task_recent_shows_archived_status_for_archived_history(
+def test_task_recent_shows_terminal_status_for_archived_history(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -203,4 +203,4 @@ def test_task_recent_shows_archived_status_for_archived_history(
     assert exit_code == 0
     assert task.id in output
     assert "Archived recent task" in output
-    assert "archived" in output
+    assert "done" in output

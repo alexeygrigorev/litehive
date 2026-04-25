@@ -1,4 +1,6 @@
 import argparse
+import csv
+import json
 import logging
 from pathlib import Path
 from unittest.mock import patch
@@ -8,6 +10,7 @@ from typer.testing import CliRunner
 
 from litehive.cli.app import app
 from litehive.config.workspace import ensure_workspace
+from litehive.db.schema import connect_workspace_db
 from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, list_tasks, save_task
@@ -25,7 +28,7 @@ from litehive.tasks.audit import load_task_audit_entries
 from litehive.tasks.duplicates import rebuild_duplicate_task_index, search_tasks_by_text
 from litehive.tasks.paths import task_dir
 from litehive.tasks.queue import set_active_task
-from litehive.tasks.status import requeue_task, resume_task
+from litehive.tasks.status import close_task, requeue_task, resume_task
 
 from tests.support.helpers import _cmd_queue, _cmd_requeue_task, _cmd_status
 
@@ -48,6 +51,18 @@ def _archived_at(root: Path, task_id: str) -> str:
     return archived.updated_at
 
 
+def _archive_index_rows(root: Path) -> dict[str, dict[str, str]]:
+    with (archive_root(root) / "INDEX.csv").open(newline="", encoding="utf-8") as handle:
+        return {row["id"]: row for row in csv.DictReader(handle)}
+
+
+def _raw_task_state_payload(root: Path, task_id: str) -> dict:
+    with connect_workspace_db(root) as connection:
+        row = connection.execute("SELECT payload FROM task_state WHERE task_id = ?", (task_id,)).fetchone()
+    assert row is not None
+    return json.loads(row["payload"])
+
+
 def _set_archived_at(root: Path, task_id: str, archived_at: str) -> None:
     archived = get_archived_task(root, task_id)
     assert archived is not None
@@ -68,7 +83,7 @@ def test_archive_single_done_task(tmp_path: Path) -> None:
     result = archive_task(tmp_path, task.id)
 
     assert result.id == task.id
-    assert result.status == "archived"
+    assert result.status == "done"
     assert result.pipeline_status == "done"
     # Task dir should no longer exist under tasks/
     assert not task_dir(tmp_path, task).exists()
@@ -78,7 +93,7 @@ def test_archive_single_done_task(tmp_path: Path) -> None:
     assert not (archive_dir / "task.yaml").exists()
     archived = get_archived_task(tmp_path, task.id)
     assert archived is not None
-    assert archived.status == "archived"
+    assert archived.status == "done"
     assert archived.pipeline_status == "done"
     assert archived.updated_at
 
@@ -87,8 +102,83 @@ def test_archive_rejects_non_done_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Still queued")
 
-    with pytest.raises(ValueError, match="only done tasks can be archived"):
+    with pytest.raises(ValueError, match="only done or closed terminal tasks can be archived"):
         archive_task(tmp_path, task.id)
+
+
+def test_task_archive_cli_archives_done_and_closed_tasks_preserving_statuses(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    done = _make_done_task(tmp_path, "Done archive")
+    closed = create_task(tmp_path, title="Closed archive")
+    close_task(tmp_path, closed.id, outcome="duplicate", reason="same as another task")
+
+    result = CliRunner().invoke(
+        app,
+        ["task", "archive", done.id, closed.id, "--workspace", str(tmp_path)],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert f"archived: {done.id} Done archive" in result.output
+    assert f"archived: {closed.id} Closed archive" in result.output
+    assert "status: done" in result.output
+    assert "status: duplicate" in result.output
+    assert "archived_count: 2" in result.output
+
+    assert not task_dir(tmp_path, done).exists()
+    assert not task_dir(tmp_path, closed).exists()
+    assert (archive_root(tmp_path) / f"{done.id}-{done.slug}").exists()
+    assert (archive_root(tmp_path) / f"{closed.id}-{closed.slug}").exists()
+
+    archived_done = get_archived_task(tmp_path, done.id)
+    archived_closed = get_archived_task(tmp_path, closed.id)
+    assert archived_done is not None
+    assert archived_done.status == "done"
+    assert archived_closed is not None
+    assert archived_closed.status == "closed"
+    assert archived_closed.close_reason == "duplicate"
+
+    raw_done = _raw_task_state_payload(tmp_path, done.id)
+    raw_closed = _raw_task_state_payload(tmp_path, closed.id)
+    assert raw_done["status"] == "done"
+    assert raw_closed["status"] == "closed"
+    assert raw_closed["close_reason"] == "duplicate"
+
+    index_rows = _archive_index_rows(tmp_path)
+    assert index_rows[done.id]["status"] == "done"
+    assert index_rows[closed.id]["status"] == "duplicate"
+
+
+def test_task_archive_cli_rejects_live_tasks_without_partial_archive(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    done = _make_done_task(tmp_path, "Done stays live")
+    queued = create_task(tmp_path, title="Queued stays live")
+    in_progress = create_task(tmp_path, title="Active stays live")
+    in_progress.status = "in_progress"
+    save_task(tmp_path, in_progress)
+
+    queued_result = CliRunner().invoke(
+        app,
+        ["task", "archive", done.id, queued.id, "--workspace", str(tmp_path)],
+        standalone_mode=False,
+    )
+
+    assert queued_result.return_value == 1, queued_result.output
+    assert f"archive failed: Task {queued.id} has status 'queued'" in queued_result.output
+    assert "only done or closed terminal tasks can be archived" in queued_result.output
+    assert task_dir(tmp_path, done).exists()
+    assert task_dir(tmp_path, queued).exists()
+    assert not (archive_root(tmp_path) / f"{done.id}-{done.slug}").exists()
+
+    active_result = CliRunner().invoke(
+        app,
+        ["task", "archive", in_progress.id, "--workspace", str(tmp_path)],
+        standalone_mode=False,
+    )
+
+    assert active_result.return_value == 1, active_result.output
+    assert f"archive failed: Task {in_progress.id} has status 'in_progress'" in active_result.output
+    assert task_dir(tmp_path, in_progress).exists()
 
 
 def test_archive_rejects_unknown_task(tmp_path: Path) -> None:
@@ -150,7 +240,7 @@ def test_list_archived_tasks_reads_sqlite_records(tmp_path: Path) -> None:
     archived = list_archived_tasks(tmp_path)
 
     assert len(archived) == 1
-    assert archived[0].status == "archived"
+    assert archived[0].status == "done"
     assert archived[0].pipeline_status == "done"
 
 
@@ -277,7 +367,7 @@ def test_delete_archived_task_removes_live_records_and_preserves_tombstone(tmp_p
     rebuild_duplicate_task_index(tmp_path)
     archived_matches = search_tasks_by_text(tmp_path, query="remove archived tasks from live records", limit=10)
     archived_match = next(match for match in archived_matches if match.task_id == task.id)
-    assert archived_match.status == "archived"
+    assert archived_match.status == "done"
 
     state = load_state(tmp_path)
     state.active_task_id = task.id

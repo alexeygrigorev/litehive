@@ -108,7 +108,7 @@ def test_list_filter_by_archived_status(tmp_path: Path, capsys: pytest.CaptureFi
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert f"{archived.id} [archived/done] Archived task" in output
+    assert f"{archived.id} [done/done] Archived task close_reason=done" in output
     assert live.id not in output
 
 
@@ -289,7 +289,7 @@ def test_show_prints_archived_history(tmp_path: Path, capsys: pytest.CaptureFixt
     assert exit_code == 0
     assert f"id: {task.id}" in output
     assert "title: Archived history task" in output
-    assert "status: archived" in output
+    assert "status: done" in output
     assert "pipeline_stage: done" in output
     assert "goal: Keep archived history directly inspectable" in output
 
@@ -310,7 +310,7 @@ def test_search_exact_archived_task_id_returns_archived_history(
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert f"{task.id} [archived] Archived search task" in output
+    assert f"{task.id} [done] Archived search task" in output
     assert "Find archived task history by exact task ID" in output
 
 
