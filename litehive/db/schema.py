@@ -3,14 +3,22 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import importlib.resources
+import json
+import logging
 import os
+import re
 import sqlite3
 from pathlib import Path
 from typing import TypeAlias
 
+import yaml
+from pydantic import ValidationError
+
 from litehive.config.paths import workspace_path
+from litehive.domain.task import TaskIntentRecord, TaskRecord
 
 MIGRATIONS_PACKAGE = "litehive.db.migrations"
+logger = logging.getLogger(__name__)
 _BASELINE_REQUIRED_TABLES = {
     "schema_migrations",
     "pool_state",
@@ -33,6 +41,7 @@ _BASELINE_REQUIRED_TABLES = {
 }
 _REQUIRED_TABLES_BY_MIGRATION = {
     4: {"recovery_reports"},
+    5: {"task_intent"},
 }
 
 
@@ -68,6 +77,68 @@ class MigrationApplyError(RuntimeError):
 
 def _utcnow() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+_TASK_DIR_RE = re.compile(r"^T-\d{4}-")
+
+
+def _sql_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _legacy_task_yaml_paths(root: Path) -> list[Path]:
+    tasks_dir = root / ".litehive" / "tasks"
+    if not tasks_dir.exists():
+        return []
+    paths: list[Path] = []
+    for child in sorted(tasks_dir.iterdir()):
+        if not child.is_dir() or _TASK_DIR_RE.match(child.name) is None:
+            continue
+        task_file = child / "task.yaml"
+        if task_file.exists():
+            paths.append(task_file)
+    return paths
+
+
+def _legacy_task_intent(path: Path) -> TaskIntentRecord:
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(loaded, dict):
+        raise ValueError("task file must contain a mapping")
+    try:
+        return TaskIntentRecord.model_validate(loaded)
+    except ValidationError:
+        return TaskRecord.model_validate(loaded).to_intent_record()
+
+
+def _task_intent_backfill_sql(root: Path, *, updated_at: str) -> tuple[str, tuple[Path, ...]]:
+    statements: list[str] = []
+    migrated_paths: list[Path] = []
+    for path in _legacy_task_yaml_paths(root):
+        try:
+            intent = _legacy_task_intent(path)
+        except Exception as exc:
+            logger.warning("Skipping invalid legacy task intent %s during migration 0005: %s", path, exc)
+            continue
+        payload = json.dumps(intent.model_dump(mode="json"), sort_keys=True)
+        statements.append(
+            "\n".join(
+                [
+                    "INSERT INTO task_intent (task_id, payload, updated_at)",
+                    f"VALUES ({_sql_literal(intent.id)}, {_sql_literal(payload)}, {_sql_literal(updated_at)})",
+                    "ON CONFLICT(task_id) DO NOTHING;",
+                ]
+            )
+        )
+        migrated_paths.append(path)
+    return "\n".join(statements), tuple(migrated_paths)
+
+
+def _remove_migrated_task_yaml_files(paths: tuple[Path, ...]) -> None:
+    for path in paths:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("Failed to remove migrated legacy task.yaml %s: %s", path, exc)
 
 
 def _migration_resources():
@@ -212,10 +283,19 @@ def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationP
             return MigrationPlan(applied_migrations=applied, pending_migrations=pending, dry_run=dry_run)
         for migration in pending:
             applied_at = _utcnow()
+            migration_sql = migration.sql.strip()
+            migrated_task_yaml_paths: tuple[Path, ...] = ()
+            if migration.version == 5:
+                task_intent_backfill_sql, migrated_task_yaml_paths = _task_intent_backfill_sql(
+                    root,
+                    updated_at=applied_at,
+                )
+                if task_intent_backfill_sql:
+                    migration_sql = "\n".join([migration_sql, task_intent_backfill_sql])
             script = "\n".join(
                 [
                     "BEGIN;",
-                    migration.sql.strip(),
+                    migration_sql,
                     (
                         "INSERT INTO schema_migrations (version, name, applied_at) "
                         f"VALUES ({migration.version}, '{migration.name}', '{applied_at}');"
@@ -228,6 +308,8 @@ def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationP
             except sqlite3.DatabaseError as exc:
                 connection.rollback()
                 raise MigrationApplyError(migration, exc) from exc
+            if migration.version == 5:
+                _remove_migrated_task_yaml_files(migrated_task_yaml_paths)
         applied = tuple(migrations)
     return MigrationPlan(applied_migrations=applied, pending_migrations=pending, dry_run=False)
 

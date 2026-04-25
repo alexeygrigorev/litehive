@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-import re
 from typing import Literal
 
 from litehive.config.registry import (
@@ -15,9 +14,7 @@ from litehive.config.registry import (
 )
 from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state
-from litehive.state.records import load_task_record_file
 from litehive.state.store import runtime_store
-from litehive.tasks.paths import tasks_root
 
 LaunchFailureContext = Literal[
     "cycle_start_failed",
@@ -66,9 +63,6 @@ class CorruptTaskCandidate:
     error: str
 
 
-_TASK_DIR_RE = re.compile(r"^(T-\d{4})-(.+)$")
-
-
 def best_effort_recovery_task(root: Path, *, preferred_task_id: str | None = None) -> TaskRecord | None:
     try:
         tasks, corrupt_tasks = _load_task_records_without_bootstrap(root)
@@ -102,19 +96,8 @@ def best_effort_recovery_task(root: Path, *, preferred_task_id: str | None = Non
 
 
 def corrupt_task_launch_diagnostics(root: Path, task_id: str | None) -> dict[str, str]:
-    if not task_id:
-        return {}
-    try:
-        _, corrupt_tasks = _load_task_records_without_bootstrap(root)
-    except Exception:
-        return {}
-    corrupt = corrupt_tasks.get(task_id)
-    if corrupt is None:
-        return {}
-    return {
-        "task_yaml_path": str(corrupt.path),
-        "task_yaml_error": corrupt.error,
-    }
+    del root, task_id
+    return {}
 
 
 def detect_cycle_start_failure(root: Path) -> LaunchFailure | None:
@@ -151,55 +134,12 @@ def _load_task_records_without_bootstrap(root: Path) -> tuple[list[TaskRecord], 
     records: list[TaskRecord] = []
     corrupt_tasks: dict[str, CorruptTaskCandidate] = {}
     store = runtime_store(root)
-    tasks_dir = tasks_root(root, bootstrap=False)
-    if not tasks_dir.exists():
-        return records, corrupt_tasks
-    for child in sorted(tasks_dir.iterdir()):
-        candidate = _load_task_record_candidate(store, child)
-        if candidate is None:
+    for intent in store.list_task_intents():
+        task = TaskRecord.from_intent_and_state(intent)
+        state = store.load_task_state(task.id)
+        if state is not None:
+            task = state.apply_to_task(task)
+        if task.status == "archived":
             continue
-        if isinstance(candidate, CorruptTaskCandidate):
-            corrupt_tasks[candidate.task.id] = candidate
-            continue
-        records.append(candidate)
+        records.append(task)
     return records, corrupt_tasks
-
-
-def _load_task_record_candidate(store, task_dir: Path) -> TaskRecord | CorruptTaskCandidate | None:
-    if not task_dir.is_dir():
-        return None
-    path = task_dir / "task.yaml"
-    if not path.exists():
-        return None
-    try:
-        task = load_task_record_file(path)
-    except Exception as exc:
-        return _corrupt_task_candidate(store, task_dir, path, exc)
-    return _apply_runtime_state(store, task)
-
-
-def _apply_runtime_state(store, task: TaskRecord) -> TaskRecord:
-    state = store.load_task_state(task.id)
-    if state is None:
-        return task
-    return state.apply_to_task(task)
-
-
-def _corrupt_task_candidate(store, task_dir: Path, task_yaml_path: Path, exc: Exception) -> CorruptTaskCandidate | None:
-    match = _TASK_DIR_RE.match(task_dir.name)
-    if match is None:
-        return None
-    task_id, slug = match.groups()
-    task = _apply_runtime_state(
-        store,
-        TaskRecord(
-            id=task_id,
-            slug=slug,
-            title=slug.replace("-", " ") or task_id,
-        ),
-    )
-    return CorruptTaskCandidate(
-        task=task,
-        path=task_yaml_path,
-        error=f"{type(exc).__name__}: {exc}",
-    )

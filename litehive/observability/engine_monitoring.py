@@ -1,9 +1,11 @@
 """Workspace-level engine usage and quota monitoring."""
 
+import json
 from pathlib import Path
 
 import yaml
 
+from litehive.db.schema import connect_workspace_db
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from heru.quota import UsageStatus
 from litehive.config.workspace_files import workspace_gitignore_path
@@ -15,7 +17,6 @@ from litehive.domain.engine import (
     EngineUsageWindow,
     WorkspaceEngineMonitoring,
 )
-from litehive.state.persist import atomic_write_text
 from litehive.state.locking import workspace_mutation_guard
 
 
@@ -24,6 +25,9 @@ def engine_monitoring_file(root: Path) -> Path:
 
 
 def load_engine_monitoring(root: Path) -> WorkspaceEngineMonitoring:
+    monitoring = _load_engine_monitoring_from_db(root)
+    if monitoring.engines:
+        return monitoring
     path = engine_monitoring_file(root)
     if not path.exists():
         return WorkspaceEngineMonitoring()
@@ -33,14 +37,46 @@ def load_engine_monitoring(root: Path) -> WorkspaceEngineMonitoring:
 
 def save_engine_monitoring(root: Path, monitoring: WorkspaceEngineMonitoring) -> None:
     with workspace_mutation_guard(root):
-        atomic_write_text(
-            engine_monitoring_file(root),
-            yaml.safe_dump(monitoring.model_dump(mode="json"), sort_keys=False),
-        )
+        _save_engine_monitoring_to_db(root, monitoring)
+        engine_monitoring_file(root).unlink(missing_ok=True)
         ignore_path = workspace_gitignore_path(root)
         expected = render_workspace_gitignore()
         if not ignore_path.exists() or ignore_path.read_text(encoding="utf-8") != expected:
             ignore_path.write_text(expected, encoding="utf-8")
+
+
+def _load_engine_monitoring_from_db(root: Path) -> WorkspaceEngineMonitoring:
+    with connect_workspace_db(root) as connection:
+        rows = connection.execute(
+            "SELECT engine_name, payload FROM engine_monitoring ORDER BY engine_name ASC",
+        ).fetchall()
+    engines = {}
+    for row in rows:
+        try:
+            payload = json.loads(str(row["payload"]))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            engines[str(row["engine_name"])] = payload
+    return WorkspaceEngineMonitoring(engines=engines)
+
+
+def _save_engine_monitoring_to_db(root: Path, monitoring: WorkspaceEngineMonitoring) -> None:
+    with connect_workspace_db(root) as connection:
+        connection.execute("DELETE FROM engine_monitoring")
+        for engine_name, record in monitoring.engines.items():
+            connection.execute(
+                """
+                INSERT INTO engine_monitoring (engine_name, updated_at, payload)
+                VALUES (?, ?, ?)
+                """,
+                (
+                    engine_name,
+                    record.observed_at or utcnow(),
+                    json.dumps(record.model_dump(mode="json"), sort_keys=True),
+                ),
+            )
+        connection.commit()
 
 
 def record_engine_execution(

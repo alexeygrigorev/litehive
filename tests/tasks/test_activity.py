@@ -16,7 +16,7 @@ def _dump_activity(path: Path, entries: list[TaskActivityEntry]) -> None:
     )
 
 
-def test_append_activity_entry_writes_activity_mirror_and_retires_legacy_file(tmp_path: Path) -> None:
+def test_append_activity_entry_persists_to_db_and_retires_legacy_file(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Activity")
     legacy_path = legacy_task_activity_path(tmp_path, task)
@@ -32,11 +32,9 @@ def test_append_activity_entry_writes_activity_mirror_and_retires_legacy_file(tm
         TaskActivityEntry(role="swe", stage="implementing", verdict="pass", message="new"),
     )
 
-    assert activity_path.name == "comments.yaml"
     assert not legacy_path.exists()
+    assert not activity_path.exists()
     assert [entry.message for entry in load_task_activity(tmp_path, task)] == ["legacy", "new"]
-    on_disk = yaml.safe_load(activity_path.read_text(encoding="utf-8"))
-    assert [entry["message"] for entry in on_disk] == ["legacy", "new"]
 
 
 def test_load_task_activity_prefers_activity_mirror_when_both_files_exist(tmp_path: Path) -> None:

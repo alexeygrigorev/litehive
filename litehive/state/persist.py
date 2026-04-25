@@ -11,7 +11,7 @@ from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.store import runtime_store
 from litehive.tasks.audit import TaskAuditEntry
-from litehive.tasks.paths import task_dir, task_file
+from litehive.tasks.paths import task_dir
 
 _MISSING = object()
 _SKIP_BOOTSTRAP_LOAD_STATE: ContextVar[bool] = ContextVar(
@@ -143,11 +143,8 @@ def workspace_transition_writes(
     state: WorkspaceState | None = None,
     journal_messages: dict[str, str] | None = None,
 ) -> dict[Path, str]:
-    from litehive.state.records import serialize_task_record
-
     writes: dict[Path, str] = {}
     for task in tasks:
-        writes[task_file(root, task)] = serialize_task_record(task)
         if journal_messages is None or task.id not in journal_messages:
             continue
         journal_path = task_dir(root, task) / "journal.md"
@@ -264,6 +261,7 @@ def persist_tasks_and_state(
         write_atomic_files_and_then(
             writes,
             lambda: runtime_store(root).save_runtime_transaction(
+                task_intents={task.id: task.to_intent_record() for task in tasks},
                 task_states={task.id: task_state_for_storage(task) for task in tasks},
                 workspace_state=merged_state,
                 audit_entries=audit_entries,
@@ -301,6 +299,7 @@ def persist_tasks_and_state_without_runner_guard(
     write_atomic_files_and_then(
         writes,
         lambda: runtime_store(root).save_runtime_transaction(
+            task_intents={task.id: task.to_intent_record() for task in tasks},
             task_states={task.id: task_state_for_storage(task) for task in tasks},
             workspace_state=merged_state,
             audit_entries=audit_entries,

@@ -32,7 +32,6 @@ from .paths import (
     resolve_artifact_path,
     status_entry_paths,
     task_dir,
-    task_file,
 )
 
 RETRACTED_FILESYSTEM_MARKER = "[retracted - filesystem check shows no changes landed]"
@@ -68,7 +67,6 @@ def collect_recovery_evidence(
     from litehive.worktree import resolve_recorded_worktree_path
 
     evidence: list[RecoveryEvidenceItem] = []
-    task_path = task_file(root, task)
     activity_path = resolve_task_activity_path(root, task)
     events_path = task_dir(root, task) / "events.jsonl"
     latest_report = latest_stage_report(root, task)
@@ -88,9 +86,8 @@ def collect_recovery_evidence(
     evidence.append(
         RecoveryEvidenceItem(
             kind="task",
-            label="task.yaml",
-            path=str(task_path.relative_to(root)),
-            exists=task_path.exists(),
+            label="task record",
+            exists=True,
             summary=f"status={task.status} pipeline_status={task.pipeline_status} priority={task.priority}",
         )
     )
@@ -180,9 +177,9 @@ def collect_recovery_evidence(
     evidence.append(
         RecoveryEvidenceItem(
             kind="engine_monitoring",
-            label="engine-monitoring.yaml",
-            path=str(monitoring_path.relative_to(root)),
-            exists=monitoring_path.exists(),
+            label="engine monitoring",
+            path=str(monitoring_path.relative_to(root)) if monitoring_path.exists() else None,
+            exists=bool(monitoring.engines),
             summary=(
                 "no engine record"
                 if engine_record is None

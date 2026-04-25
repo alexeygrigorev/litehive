@@ -2,13 +2,11 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+import json
 from pathlib import Path
 import re
 
-import yaml
-
 from litehive.db.schema import connect_workspace_db
-from litehive.tasks.paths import tasks_root
 
 
 _COMPACT_DURATION_RE = re.compile(r"^(\d+)([dhms])$", re.IGNORECASE)
@@ -51,7 +49,6 @@ def list_recent_task_summaries(
     cutoff = _coerce_utc(now) - timedelta(seconds=window_seconds)
     rows = _load_recent_summary_rows(root, cutoff=cutoff.replace(microsecond=0).isoformat())
     titles = _load_task_titles(root, [str(row["task_id"]) for row in rows])
-    archived_statuses = _load_archived_task_statuses(root, [str(row["task_id"]) for row in rows])
     return [
         RecentTaskSummary(
             task_id=str(row["task_id"]),
@@ -59,7 +56,7 @@ def list_recent_task_summaries(
             transition_count=int(row["transition_count"]),
             elapsed_seconds=max(0, int(row["elapsed_seconds"])),
             final_stage=str(row["final_stage"] or "-"),
-            status=archived_statuses.get(str(row["task_id"]), str(row["status"] or "-")),
+            status=str(row["status"] or "-"),
         )
         for row in rows
     ]
@@ -123,60 +120,23 @@ def _load_recent_summary_rows(root: Path, *, cutoff: str):
 
 
 def _load_task_titles(root: Path, task_ids: list[str]) -> dict[str, str]:
+    if not task_ids:
+        return {}
+    placeholders = ",".join("?" for _ in task_ids)
     titles: dict[str, str] = {}
-    active_root = tasks_root(root, bootstrap=False)
-    archive_root = active_root / "archive"
-    for task_id in task_ids:
-        for base in (active_root, archive_root):
-            task_record = _find_task_record_path(base, task_id)
-            if task_record is None:
-                continue
-            title = _read_task_title(task_record)
-            if title is not None:
-                titles[task_id] = title
-                break
-    return titles
-
-
-def _load_archived_task_statuses(root: Path, task_ids: list[str]) -> dict[str, str]:
-    statuses: dict[str, str] = {}
-    archive_root = tasks_root(root, bootstrap=False) / "archive"
-    for task_id in task_ids:
-        task_record = _find_task_record_path(archive_root, task_id)
-        if task_record is None:
+    with connect_workspace_db(root) as connection:
+        rows = connection.execute(
+            f"SELECT task_id, payload FROM task_intent WHERE task_id IN ({placeholders})",
+            tuple(task_ids),
+        ).fetchall()
+    for row in rows:
+        try:
+            payload = json.loads(str(row["payload"]))
+        except json.JSONDecodeError:
             continue
-        status = _read_task_status(task_record)
-        if status is not None:
-            statuses[task_id] = status
-    return statuses
-
-
-def _find_task_record_path(base: Path, task_id: str) -> Path | None:
-    if not base.exists():
-        return None
-    matches = sorted(base.glob(f"{task_id}-*/task.yaml"))
-    return matches[0] if matches else None
-
-
-def _read_task_title(path: Path) -> str | None:
-    try:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    title = payload.get("title")
-    return title.strip() if isinstance(title, str) and title.strip() else None
-
-
-def _read_task_status(path: Path) -> str | None:
-    try:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    status = payload.get("status")
-    if isinstance(status, str) and status.strip():
-        return status.strip()
-    return "archived"
+        if not isinstance(payload, dict):
+            continue
+        title = payload.get("title")
+        if isinstance(title, str) and title.strip():
+            titles[str(row["task_id"])] = title.strip()
+    return titles

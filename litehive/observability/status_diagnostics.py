@@ -188,9 +188,22 @@ def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue
 def _load_engine_monitoring_for_status(
     root: Path,
 ) -> tuple[WorkspaceEngineMonitoring, list[StatusIssue]]:
+    from litehive.observability.engine_monitoring import load_engine_monitoring
+
     path = workspace_dir(root) / "engine-monitoring.yaml"
     if not path.exists():
-        return WorkspaceEngineMonitoring(), []
+        try:
+            return load_engine_monitoring(root), []
+        except Exception as exc:
+            issue = StatusIssue(
+                key="engine_monitoring",
+                severity="WARN",
+                message=(
+                    f"BROKEN in workspace database ({type(exc).__name__}: {exc})"
+                    " — rerun `litehive db migrate` or restore engine usage details from backup."
+                ),
+            )
+            return WorkspaceEngineMonitoring(), [issue]
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         if not isinstance(data, Mapping):

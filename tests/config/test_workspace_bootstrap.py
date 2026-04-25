@@ -159,6 +159,7 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, mon
         "schema_migrations",
         "pool_state",
         "queue",
+        "task_intent",
         "task_state",
         "task_journal",
         "task_audit_log",
@@ -403,13 +404,13 @@ def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
         assert connection.execute("SELECT task_id FROM task_state WHERE task_id = ?", (task.id,)).fetchone() is None
 
 
-def test_ensure_workspace_bootstraps_fresh_database_from_task_files(tmp_path: Path) -> None:
+def test_ensure_workspace_does_not_bootstrap_fresh_database_from_task_files(tmp_path: Path) -> None:
     from litehive.config.paths import workspace_path
     from litehive.db.schema import connect_workspace_db
     from litehive.state.records import create_task
 
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Recovered from task file")
+    task = create_task(tmp_path, title="Not recovered from task file")
 
     db_path = workspace_path(tmp_path, "data.db")
     for path in (db_path, db_path.with_name(db_path.name + "-wal"), db_path.with_name(db_path.name + "-shm")):
@@ -421,9 +422,9 @@ def test_ensure_workspace_bootstraps_fresh_database_from_task_files(tmp_path: Pa
         task_row = connection.execute("SELECT task_id FROM task_state WHERE task_id = ?", (task.id,)).fetchone()
         queue_row = connection.execute("SELECT payload FROM queue WHERE workspace_key = ?", ("workspace",)).fetchone()
 
-    assert task_row is not None
     assert queue_row is not None
-    assert json.loads(queue_row[0]) == [task.id]
+    assert task_row is None
+    assert json.loads(queue_row[0]) == []
 
 
 def test_ensure_workspace_skips_disk_scan_for_bootstrapped_empty_workspace(

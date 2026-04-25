@@ -25,7 +25,6 @@ def render_workspace_gitignore() -> str:
         [
             ".lock",
             "pool-summary.txt",
-            "engine-monitoring.yaml",
             "",
         ]
     )

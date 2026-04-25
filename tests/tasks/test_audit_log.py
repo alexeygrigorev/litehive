@@ -1,7 +1,6 @@
 import sqlite3
 from pathlib import Path
 
-import yaml
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
@@ -9,7 +8,8 @@ from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
-from litehive.tasks.archive import archive_root, archive_task, cleanup_archived_tasks, delete_archived_task
+from litehive.state.store import runtime_store
+from litehive.tasks.archive import archive_task, cleanup_archived_tasks, delete_archived_task, get_archived_task
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.tasks.status import requeue_task
 
@@ -23,6 +23,22 @@ def _make_done_task(root: Path, title: str) -> tuple[str, str]:
     state.queue = [task_id for task_id in state.queue if task_id != task.id]
     save_state(root, state)
     return task.id, task.slug
+
+
+def _archived_at(root: Path, task_id: str) -> str:
+    archived = get_archived_task(root, task_id)
+    assert archived is not None
+    return archived.updated_at
+
+
+def _set_archived_at(root: Path, task_id: str, archived_at: str) -> None:
+    archived = get_archived_task(root, task_id)
+    assert archived is not None
+    archived.updated_at = archived_at
+    runtime_store(root).save_runtime_transaction(
+        task_intents={archived.id: archived.to_intent_record()},
+        task_states={archived.id: archived.to_storage_state_record()},
+    )
 
 
 def test_requeue_writes_durable_audit_row_to_workspace_db(tmp_path: Path) -> None:
@@ -89,14 +105,10 @@ def test_db_audit_cli_shows_requeue_entry_for_archived_task(tmp_path: Path) -> N
 
 def test_archive_cleanup_keeps_audit_trail_after_task_removal(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task_id, slug = _make_done_task(tmp_path, "Remove archived task")
+    task_id, _slug = _make_done_task(tmp_path, "Remove archived task")
     archive_task(tmp_path, task_id)
 
-    archive_dir = archive_root(tmp_path) / f"{task_id}-{slug}"
-    task_yaml = archive_dir / "task.yaml"
-    data = yaml.safe_load(task_yaml.read_text(encoding="utf-8"))
-    data["archived_at"] = "2025-01-01T00:00:00+00:00"
-    task_yaml.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    _set_archived_at(tmp_path, task_id, "2025-01-01T00:00:00+00:00")
 
     deleted = cleanup_archived_tasks(tmp_path, "30d")
 
@@ -109,11 +121,10 @@ def test_archive_cleanup_keeps_audit_trail_after_task_removal(tmp_path: Path) ->
 
 def test_db_audit_cli_shows_deleted_tombstone_for_hard_deleted_archived_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task_id, slug = _make_done_task(tmp_path, "Hard delete archived task")
+    task_id, _slug = _make_done_task(tmp_path, "Hard delete archived task")
     archive_task(tmp_path, task_id)
 
-    archive_dir = archive_root(tmp_path) / f"{task_id}-{slug}"
-    archived_at = yaml.safe_load((archive_dir / "task.yaml").read_text(encoding="utf-8"))["archived_at"]
+    archived_at = _archived_at(tmp_path, task_id)
     delete_archived_task(tmp_path, task_id, reason="Operator requested cleanup")
 
     result = CliRunner().invoke(

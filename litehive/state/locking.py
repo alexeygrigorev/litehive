@@ -22,7 +22,7 @@ from litehive.tasks.constants import (
     RUNNER_LOCKS_MUTEX,
 )
 from litehive.domain.task_ops import WorkspaceConflictError, RunnerLockState
-from litehive.tasks.paths import runner_lock_path, task_dir, task_file
+from litehive.tasks.paths import runner_lock_path, task_dir
 
 if TYPE_CHECKING:
     from litehive.tasks.audit import TaskAuditEntry
@@ -409,14 +409,12 @@ def persist_future_task_update(
     audit_entries: list["TaskAuditEntry"] | None = None,
 ) -> None:
     from litehive.state.store import runtime_store
-    from litehive.state.records import ensure_runtime_ignored, serialize_task_record, task_state_for_storage
+    from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
     from litehive.state.persist import write_atomic_files_and_then
     from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
 
     task.updated_at = utcnow()
-    writes = {
-        task_file(root, task): serialize_task_record(task),
-    }
+    writes = {}
     if journal_message is not None:
         journal_path = task_dir(root, task) / "journal.md"
         existing = journal_path.read_text(encoding="utf-8") if journal_path.exists() else ""
@@ -424,6 +422,7 @@ def persist_future_task_update(
     write_atomic_files_and_then(
         writes,
         lambda: runtime_store(root).save_runtime_transaction(
+            task_intents={task.id: task.to_intent_record()},
             task_states={task.id: task_state_for_storage(task)},
             audit_entries=audit_entries,
         ),

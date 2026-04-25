@@ -4,15 +4,10 @@
 # Transient litehive runtime state
 .lock
 pool-summary.txt
-engine-monitoring.yaml
 
 # Task runtime artifacts (not durable project state)
 tasks/*/journal.md
 tasks/archive/*/journal.md
-tasks/*/comments.yaml
-tasks/archive/*/comments.yaml
-tasks/*/thread.yaml
-tasks/archive/*/thread.yaml
 tasks/*/brief.md
 tasks/*/events.jsonl
 tasks/*/reports/

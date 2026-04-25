@@ -21,7 +21,8 @@ def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
     task.pipeline_status = "testing"
     task.runtime.execution_status = "flagged"
 
-    def fail_runtime_transaction(self, *, task_states=None, workspace_state=None):
+    def fail_runtime_transaction(self, *, task_intents=None, task_states=None, workspace_state=None):
+        del task_intents, task_states, workspace_state
         raise OSError("runtime write failed")
 
     monkeypatch.setattr(RuntimeStore, "save_runtime_transaction", fail_runtime_transaction)

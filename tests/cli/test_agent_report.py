@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-import yaml
 from typer.testing import CliRunner
 
 from litehive.cli.agent_cli import agent_app
@@ -10,9 +9,11 @@ from litehive.config.workspace import ensure_workspace
 from litehive.lifecycle.persistence import SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, TaskActivityEntry
+from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state, save_state
-from litehive.state.records import get_task_record
 from litehive.state.records import create_task
+from litehive.state.records import get_task_record
+from litehive.state.store import runtime_store
 from litehive.tasks.activity import load_task_activity
 
 
@@ -31,27 +32,27 @@ def _assert_activity_entries(
         assert actual_entry.created_at
 
 
+def _save_intent_only_task(root: Path) -> None:
+    (root / ".litehive" / "tasks" / "T-0001-missing-runtime").mkdir(parents=True, exist_ok=True)
+    runtime_store(root).save_task_intent(
+        "T-0001",
+        TaskRecord(
+            id="T-0001",
+            slug="missing-runtime",
+            title="Missing runtime row",
+            pipeline_mode="full",
+            priority="medium",
+            git={
+                "auto_commit": True,
+                "commit_message": "missing runtime row",
+            },
+        ).to_intent_record(),
+    )
+
+
 def test_agent_report_uses_intent_record_when_runtime_row_is_missing(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-missing-runtime"
-    task_dir.mkdir(parents=True)
-    (task_dir / "task.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "id": "T-0001",
-                "slug": "missing-runtime",
-                "title": "Missing runtime row",
-                "pipeline_mode": "full",
-                "priority": "medium",
-                "git": {
-                    "auto_commit": True,
-                    "commit_message": "missing runtime row",
-                },
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
+    _save_intent_only_task(tmp_path)
 
     result = CliRunner().invoke(
         agent_app,
@@ -163,25 +164,7 @@ def test_agent_report_rejects_recovery_resume_without_target_stage(tmp_path: Pat
 
 def test_agent_report_uses_env_stage_when_runtime_row_is_missing(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
-    task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-missing-runtime"
-    task_dir.mkdir(parents=True)
-    (task_dir / "task.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "id": "T-0001",
-                "slug": "missing-runtime",
-                "title": "Missing runtime row",
-                "pipeline_mode": "full",
-                "priority": "medium",
-                "git": {
-                    "auto_commit": True,
-                    "commit_message": "missing runtime row",
-                },
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
+    _save_intent_only_task(tmp_path)
     monkeypatch.setenv("LITEHIVE_STAGE", "grooming")
 
     result = CliRunner().invoke(

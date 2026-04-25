@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -5,6 +6,7 @@ import yaml
 from pydantic import ValidationError
 
 from litehive.config.workspace import ensure_workspace
+from litehive.db.schema import connect_workspace_db
 from litehive.domain.task import TaskRecord
 from litehive.state.records import (
     TaskStateMissingError,
@@ -16,6 +18,13 @@ from litehive.state.records import (
     save_task_runtime,
 )
 from litehive.state.store import runtime_store
+
+
+def _task_intent_payload(root: Path, task_id: str) -> dict:
+    with connect_workspace_db(root) as connection:
+        row = connection.execute("SELECT payload FROM task_intent WHERE task_id = ?", (task_id,)).fetchone()
+    assert row is not None
+    return json.loads(row["payload"])
 
 
 def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
@@ -47,7 +56,7 @@ def test_get_task_preserves_commit_sha_when_runtime_copy_is_missing(tmp_path: Pa
     assert loaded.runtime.git.commit_sha == "abc123"
 
 
-def test_task_yaml_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path: Path) -> None:
+def test_task_intent_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Intent only", auto_commit=False)
     task.model = "gpt-5.4"
@@ -62,8 +71,9 @@ def test_task_yaml_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path:
     save_task(tmp_path, task)
 
     task_path = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "task.yaml"
-    data = yaml.safe_load(task_path.read_text(encoding="utf-8"))
+    data = _task_intent_payload(tmp_path, task.id)
 
+    assert not task_path.exists()
     assert set(data) == {
         "id",
         "slug",
@@ -97,24 +107,19 @@ def test_task_yaml_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path:
 
 def test_get_task_raises_when_sqlite_runtime_state_row_is_missing(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-missing-runtime"
-    task_dir.mkdir(parents=True)
-    (task_dir / "task.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "id": "T-0001",
-                "slug": "missing-runtime",
-                "title": "Missing runtime row",
-                "pipeline_mode": "full",
-                "priority": "medium",
-                "git": {
-                    "auto_commit": True,
-                    "commit_message": "missing runtime row",
-                },
+    runtime_store(tmp_path).save_task_intent(
+        "T-0001",
+        TaskRecord(
+            id="T-0001",
+            slug="missing-runtime",
+            title="Missing runtime row",
+            pipeline_mode="full",
+            priority="medium",
+            git={
+                "auto_commit": True,
+                "commit_message": "missing runtime row",
             },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
+        ).to_intent_record(),
     )
 
     with pytest.raises(TaskStateMissingError, match="missing its SQLite runtime state row"):
@@ -125,24 +130,19 @@ def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Pat
     ensure_workspace(tmp_path)
     present = create_task(tmp_path, title="Has runtime")
 
-    task_dir = tmp_path / ".litehive" / "tasks" / "T-0002-missing-runtime"
-    task_dir.mkdir(parents=True)
-    (task_dir / "task.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "id": "T-0002",
-                "slug": "missing-runtime",
-                "title": "Missing runtime row",
-                "pipeline_mode": "full",
-                "priority": "medium",
-                "git": {
-                    "auto_commit": True,
-                    "commit_message": "missing runtime row",
-                },
+    runtime_store(tmp_path).save_task_intent(
+        "T-0002",
+        TaskRecord(
+            id="T-0002",
+            slug="missing-runtime",
+            title="Missing runtime row",
+            pipeline_mode="full",
+            priority="medium",
+            git={
+                "auto_commit": True,
+                "commit_message": "missing runtime row",
             },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
+        ).to_intent_record(),
     )
 
     tasks = list_tasks(tmp_path, include_runtime=False)

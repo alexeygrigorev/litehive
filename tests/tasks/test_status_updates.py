@@ -2,13 +2,32 @@ from pathlib import Path
 import inspect
 
 import pytest
-import yaml
 
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.task import TaskRecord
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, require_task, save_task
+from litehive.state.store import runtime_store
 from litehive.tasks.status import close_task, update_task
+
+
+def _save_intent_only_task(root: Path, task_id: str = "T-0001", *, goal: str = "") -> None:
+    runtime_store(root).save_task_intent(
+        task_id,
+        TaskRecord(
+            id=task_id,
+            slug="missing-runtime",
+            title="Missing runtime row",
+            pipeline_mode="full",
+            priority="medium",
+            goal=goal,
+            git={
+                "auto_commit": True,
+                "commit_message": "missing runtime row",
+            },
+        ).to_intent_record(),
+    )
 
 
 def test_update_task_signature_excludes_removed_engine_kwarg() -> None:
@@ -122,25 +141,7 @@ def test_update_task_ignores_unrelated_missing_runtime_rows(tmp_path: Path) -> N
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Target task")
 
-    missing_dir = tmp_path / ".litehive" / "tasks" / "T-0002-missing-runtime"
-    missing_dir.mkdir(parents=True)
-    (missing_dir / "task.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "id": "T-0002",
-                "slug": "missing-runtime",
-                "title": "Missing runtime row",
-                "pipeline_mode": "full",
-                "priority": "medium",
-                "git": {
-                    "auto_commit": True,
-                    "commit_message": "missing runtime row",
-                },
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
+    _save_intent_only_task(tmp_path, "T-0002")
 
     update_task(tmp_path, task.id, goal="Updated safely")
 
@@ -150,26 +151,7 @@ def test_update_task_ignores_unrelated_missing_runtime_rows(tmp_path: Path) -> N
 
 def test_update_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-missing-runtime"
-    task_dir.mkdir(parents=True)
-    (task_dir / "task.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "id": "T-0001",
-                "slug": "missing-runtime",
-                "title": "Missing runtime row",
-                "pipeline_mode": "full",
-                "priority": "medium",
-                "goal": "Original goal",
-                "git": {
-                    "auto_commit": True,
-                    "commit_message": "missing runtime row",
-                },
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
+    _save_intent_only_task(tmp_path, goal="Original goal")
 
     update_task(tmp_path, "T-0001", goal="Updated safely")
 
@@ -179,25 +161,7 @@ def test_update_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path
 
 def test_close_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-missing-runtime"
-    task_dir.mkdir(parents=True)
-    (task_dir / "task.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "id": "T-0001",
-                "slug": "missing-runtime",
-                "title": "Missing runtime row",
-                "pipeline_mode": "full",
-                "priority": "medium",
-                "git": {
-                    "auto_commit": True,
-                    "commit_message": "missing runtime row",
-                },
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
+    _save_intent_only_task(tmp_path)
 
     close_task(tmp_path, "T-0001", outcome="duplicate", reason="duplicate umbrella")
 

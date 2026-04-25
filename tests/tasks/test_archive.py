@@ -5,7 +5,6 @@ from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
-import yaml
 
 from litehive.cli.app import app
 from litehive.config.workspace import ensure_workspace
@@ -43,6 +42,22 @@ def _make_done_task(root: Path, title: str = "Done task") -> TaskRecord:
     return get_task(root, task.id)
 
 
+def _archived_at(root: Path, task_id: str) -> str:
+    archived = get_archived_task(root, task_id)
+    assert archived is not None
+    return archived.updated_at
+
+
+def _set_archived_at(root: Path, task_id: str, archived_at: str) -> None:
+    archived = get_archived_task(root, task_id)
+    assert archived is not None
+    archived.updated_at = archived_at
+    runtime_store(root).save_runtime_transaction(
+        task_intents={archived.id: archived.to_intent_record()},
+        task_states={archived.id: archived.to_storage_state_record()},
+    )
+
+
 # ── archive_task ─────────────────────────────────────────────────────
 
 
@@ -60,11 +75,12 @@ def test_archive_single_done_task(tmp_path: Path) -> None:
     # Should exist under archive/
     archive_dir = archive_root(tmp_path) / f"{task.id}-{task.slug}"
     assert archive_dir.exists()
-    # archived_at should be set in task.yaml
-    data = yaml.safe_load((archive_dir / "task.yaml").read_text(encoding="utf-8"))
-    assert "archived_at" in data
-    assert data["status"] == "archived"
-    assert data["pipeline_status"] == "done"
+    assert not (archive_dir / "task.yaml").exists()
+    archived = get_archived_task(tmp_path, task.id)
+    assert archived is not None
+    assert archived.status == "archived"
+    assert archived.pipeline_status == "done"
+    assert archived.updated_at
 
 
 def test_archive_rejects_non_done_task(tmp_path: Path) -> None:
@@ -126,17 +142,10 @@ def test_list_archived_tasks(tmp_path: Path) -> None:
     assert archived[0].id == task.id
 
 
-def test_list_archived_tasks_defaults_legacy_records_to_archived(tmp_path: Path) -> None:
+def test_list_archived_tasks_reads_sqlite_records(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = _make_done_task(tmp_path, "Legacy archive")
     archive_task(tmp_path, task.id)
-
-    archive_dir = archive_root(tmp_path) / f"{task.id}-{task.slug}"
-    task_yaml = archive_dir / "task.yaml"
-    data = yaml.safe_load(task_yaml.read_text(encoding="utf-8"))
-    data.pop("status", None)
-    data.pop("pipeline_status", None)
-    task_yaml.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
     archived = list_archived_tasks(tmp_path)
 
@@ -263,8 +272,7 @@ def test_delete_archived_task_removes_live_records_and_preserves_tombstone(tmp_p
     archive_task(tmp_path, task.id)
 
     archive_dir = archive_root(tmp_path) / f"{task.id}-{task.slug}"
-    task_yaml = archive_dir / "task.yaml"
-    archived_at = yaml.safe_load(task_yaml.read_text(encoding="utf-8"))["archived_at"]
+    archived_at = _archived_at(tmp_path, task.id)
 
     rebuild_duplicate_task_index(tmp_path)
     archived_matches = search_tasks_by_text(tmp_path, query="remove archived tasks from live records", limit=10)
@@ -319,12 +327,9 @@ def test_cleanup_deletes_old_archived_tasks(
 
     # Backdate archived_at to 60 days ago
     archive_dir = archive_root(tmp_path) / f"{task.id}-{task.slug}"
-    task_yaml = archive_dir / "task.yaml"
-    data = yaml.safe_load(task_yaml.read_text(encoding="utf-8"))
     from datetime import datetime, timedelta, timezone
 
-    data["archived_at"] = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
-    task_yaml.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    _set_archived_at(tmp_path, task.id, (datetime.now(timezone.utc) - timedelta(days=60)).isoformat())
 
     with caplog.at_level(logging.INFO, logger="litehive.tasks.archive"):
         deleted = cleanup_archived_tasks(tmp_path, "30d")
@@ -371,12 +376,9 @@ def test_cleanup_logs_target_and_raises_on_archived_task_cleanup_failure(
     archive_task(tmp_path, task.id)
 
     archive_dir = archive_root(tmp_path) / f"{task.id}-{task.slug}"
-    task_yaml = archive_dir / "task.yaml"
-    data = yaml.safe_load(task_yaml.read_text(encoding="utf-8"))
     from datetime import datetime, timedelta, timezone
 
-    data["archived_at"] = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
-    task_yaml.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    _set_archived_at(tmp_path, task.id, (datetime.now(timezone.utc) - timedelta(days=60)).isoformat())
 
     with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
         with caplog.at_level(logging.INFO, logger="litehive.tasks.archive"):

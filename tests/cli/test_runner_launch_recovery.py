@@ -43,15 +43,6 @@ def _assert_flagged_with_recovery_activity(root: Path, task_id: str) -> None:
     assert any(entry.role == "recovery" for entry in load_task_activity(root, refreshed))
 
 
-def _write_broken_yaml(root: Path, task) -> Path:
-    task_dir = root / ".litehive" / "tasks" / f"{task.id}-{task.slug}"
-    (task_dir / "task.yaml").write_text(
-        f"id: {task.id}\nacceptance_criteria:\n  - broken: colon\n",
-        encoding="utf-8",
-    )
-    return task_dir
-
-
 def test_record_recovery_report_uses_sqlite_storage(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery storage")
@@ -160,42 +151,6 @@ def test_run_once_handles_unrecoverable_launch_failure(
         assert result.final_stage == "done"
     else:
         assert result.final_stage is None
-
-
-@pytest.mark.parametrize("stub_recovery", [False, True])
-def test_run_once_handles_corrupt_task_yaml_once(tmp_path: Path, monkeypatch, stub_recovery: bool) -> None:
-    ensure_workspace(tmp_path)
-    broken = create_task(tmp_path, title="Broken yaml", acceptance_criteria=["ok"])
-    runnable = create_task(tmp_path, title="Runnable after bad")
-    broken_task_dir = _write_broken_yaml(tmp_path, broken)
-    recovery_calls: list[tuple[str, str]] = []
-    run_calls: list[str] = []
-
-    if stub_recovery:
-        def fake_recovery(root: Path, candidate, failure: LaunchFailure) -> LaunchRecoveryResult:
-            del root
-            recovery_calls.append((candidate.id, failure.context))
-            return LaunchRecoveryResult(fixed=False, summary="no fix")
-
-        monkeypatch.setattr("litehive.cli.runner.attempt_launch_recovery", fake_recovery)
-
-    def fake_run_task(root: Path, task, **kwargs) -> _Result:
-        del root, kwargs
-        run_calls.append(task.id)
-        return _Result(task=task, final_stage="done")
-
-    monkeypatch.setattr("litehive.cli.runner.run_task", fake_run_task)
-
-    result = run_once(tmp_path)
-
-    assert result.exit_code == 0
-    assert result.ran_task is True
-    assert run_calls == [runnable.id]
-    if stub_recovery:
-        assert recovery_calls == [(broken.id, "pre_stage_setup_failed")]
-    else:
-        assert sorted(broken_task_dir.glob("task.yaml.corrupt-*"))
-    _assert_flagged_with_recovery_activity(tmp_path, broken.id)
 
 
 def test_daemon_worker_defers_preflight_to_run_daemon_loop(monkeypatch, tmp_path: Path) -> None:

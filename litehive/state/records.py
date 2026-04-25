@@ -2,7 +2,6 @@
 
 import logging
 import os
-import re
 from pathlib import Path
 
 import yaml
@@ -34,12 +33,11 @@ from litehive.state.persist import (
 )
 from litehive.tasks.audit import (
     TaskAuditEntry,
-    append_task_audit_entries,
     build_task_audit_entry,
     snapshot_task_audit_state,
 )
 from litehive.tasks.normalization import normalize_acceptance_criteria
-from litehive.tasks.paths import slugify, task_dir, tasks_root
+from litehive.tasks.paths import slugify, task_dir
 
 logger = logging.getLogger(__name__)
 
@@ -57,22 +55,15 @@ def _load_task_record_mapping(path: Path) -> dict:
     return dict(loaded)
 
 
-def _highest_task_number_on_disk(root: Path) -> int:
-    existing = []
-    for child in tasks_root(root, bootstrap=False).iterdir():
-        if not child.is_dir():
-            continue
-        match = re.match(r"^T-(\d{4})-", child.name)
-        if match:
-            existing.append(int(match.group(1)))
-    return max(existing, default=0)
+def _highest_task_number_in_store(root: Path) -> int:
+    return runtime_store(root).highest_task_number()
 
 
 def _reserve_next_task_numbers(root, state, *, count: int = 1) -> list[int]:
     if count < 1:
         raise ValueError("count must be 1 or greater")
     if state.next_task_number <= 0:
-        state.next_task_number = _highest_task_number_on_disk(root)
+        state.next_task_number = _highest_task_number_in_store(root)
     start = state.next_task_number + 1
     state.next_task_number += count
     return list(range(start, start + count))
@@ -224,6 +215,7 @@ def _persist_created_tasks(
 
         def callback() -> None:
             runtime_store(root).save_runtime_transaction(
+                task_intents={task.id: task.to_intent_record() for task in tasks},
                 task_states={task.id: task_state_for_storage(task) for task in tasks},
                 workspace_state=merged_state,
                 audit_entries=audit_entries,
@@ -317,7 +309,6 @@ def create_task(
         _create_task_runtime_dirs(base)
         state.queue.append(task.id)
         writes = {
-            base / "task.yaml": serialize_task_record(task),
             base / "journal.md": f"# {task.id} {task.title}\n\n## {utcnow()}\nTask created.\n",
         }
         actor = "operator"
@@ -404,7 +395,6 @@ def create_follow_up_tasks(
             _create_task_runtime_dirs(base)
             created_dirs.append(base)
             state.queue.append(task.id)
-            writes[base / "task.yaml"] = serialize_task_record(task)
             writes[base / "journal.md"] = (
                 f"# {task.id} {task.title}\n\n"
                 f"## {utcnow()}\n"
@@ -460,9 +450,9 @@ def discard_created_task(root: Path, task_id: str) -> None:
             td = task_dir(root, task)
             if td.exists():
                 remove_tree_logged(td, logger=logger, target_label="task directory")
-        append_task_audit_entries(
-            root,
-            [
+        runtime_store(root).delete_task_records_preserving_audit(
+            task_id,
+            audit_entries=[
                 build_task_audit_entry(
                     task_id=task_id,
                     action="removed",
@@ -479,32 +469,27 @@ def discard_created_task(root: Path, task_id: str) -> None:
         refresh_duplicate_task_index_if_initialized(root)
 
 
-def _task_record_paths(root: Path) -> list[Path]:
-    paths: list[Path] = []
-    root_path = tasks_root(root, bootstrap=False)
-    if not root_path.exists():
-        return paths
-    for child in sorted(root_path.iterdir()):
-        if not child.is_dir():
-            continue
-        path = child / "task.yaml"
-        if path.exists():
-            paths.append(path)
-    return paths
-
-
-def _load_tasks_from_disk(
+def _load_tasks_from_store(
     root: Path,
     *,
     include_runtime: bool,
     strict: bool,
+    include_archived: bool = False,
 ) -> list[TaskRecord]:
+    store = runtime_store(root)
     records: list[TaskRecord] = []
-    for path in _task_record_paths(root):
+    for intent in store.list_task_intents():
         try:
-            task = load_task_record_file(path)
+            state_record = store.load_task_state(intent.id)
+            stateful_task = TaskRecord.from_intent_and_state(intent, state_record)
+            if stateful_task.status == "archived" and not include_archived:
+                continue
             if include_runtime:
-                task = _load_task_runtime(root, task)
+                if state_record is None:
+                    raise TaskStateMissingError(f"Task {intent.id} is missing its SQLite runtime state row")
+                task = stateful_task
+            else:
+                task = TaskRecord.from_intent_and_state(intent)
         except (TaskStateMissingError, ValueError):
             if strict:
                 raise
@@ -518,8 +503,14 @@ def list_tasks(
     *,
     include_runtime: bool = True,
     strict: bool = True,
+    include_archived: bool = False,
 ) -> list[TaskRecord]:
-    return _load_tasks_from_disk(root, include_runtime=include_runtime, strict=strict)
+    return _load_tasks_from_store(
+        root,
+        include_runtime=include_runtime,
+        strict=strict,
+        include_archived=include_archived,
+    )
 
 
 def list_tasks_state_first(
@@ -528,7 +519,7 @@ def list_tasks_state_first(
     state: WorkspaceState | None = None,
     include_runtime: bool = False,
 ) -> list[TaskRecord]:
-    task_by_id = {task.id: task for task in _load_tasks_from_disk(root, include_runtime=include_runtime, strict=True)}
+    task_by_id = {task.id: task for task in _load_tasks_from_store(root, include_runtime=include_runtime, strict=True)}
 
     workspace_state = load_state(root) if state is None else state
     ordered_ids: list[str] = []
@@ -550,25 +541,28 @@ def list_tasks_state_first(
 
 
 def get_task(root: Path, task_id: str) -> TaskRecord | None:
-    for path in _task_record_paths(root):
-        task = load_task_record_file(path)
-        if task.id != task_id:
-            continue
-        return _load_task_runtime(root, task)
-    return None
+    intent = runtime_store(root).load_task_intent(task_id)
+    if intent is None:
+        return None
+    task = _load_task_runtime(root, TaskRecord.from_intent_and_state(intent))
+    if task.status == "archived":
+        return None
+    return task
 
 
-def get_task_record(root: Path, task_id: str) -> TaskRecord | None:
+def get_task_record(root: Path, task_id: str, *, include_archived: bool = False) -> TaskRecord | None:
     """Return the task record, tolerating missing runtime rows."""
-    for path in _task_record_paths(root):
-        task = load_task_record_file(path)
-        if task.id != task_id:
-            continue
-        try:
-            return _load_task_runtime(root, task)
-        except TaskStateMissingError:
-            return task
-    return None
+    intent = runtime_store(root).load_task_intent(task_id)
+    if intent is None:
+        return None
+    task = TaskRecord.from_intent_and_state(intent)
+    try:
+        task = _load_task_runtime(root, task)
+    except TaskStateMissingError:
+        pass
+    if task.status == "archived" and not include_archived:
+        return None
+    return task
 
 
 def require_task(root: Path, task_id: str) -> TaskRecord:
@@ -587,7 +581,10 @@ def save_task(root: Path, task: TaskRecord) -> None:
         writes = workspace_transition_writes(root, tasks=[task])
         write_atomic_files_and_then(
             writes,
-            lambda: runtime_store(root).save_runtime_transaction(task_states={task.id: task_state_for_storage(task)}),
+            lambda: runtime_store(root).save_runtime_transaction(
+                task_intents={task.id: task.to_intent_record()},
+                task_states={task.id: task_state_for_storage(task)},
+            ),
         )
         ensure_runtime_ignored(root)
         refresh_duplicate_task_index_if_initialized(root)

@@ -1,7 +1,6 @@
-"""Persistent operator-attention queue backed by `.litehive/attention/*.yaml`."""
+"""Persistent operator-attention queue backed by the workspace SQLite DB."""
 
 import json
-import os
 import re
 import sqlite3
 from contextlib import contextmanager
@@ -112,7 +111,7 @@ class AttentionStore:
     def resolve(self, item_id: int, *, resolution: str) -> AttentionItem | None:
         with self._store_lock():
             self._ensure_store_ready_locked()
-            item = self._read_item_path_locked(self._item_path(item_id))
+            item = self._read_item_locked(item_id)
             if item is None:
                 return None
             if item.status == "resolved":
@@ -212,11 +211,33 @@ class AttentionStore:
         )
 
     def _load_items_locked(self) -> list[AttentionItem]:
-        return [
-            item
-            for path in self._item_paths_locked()
-            if (item := self._read_item_path_locked(path)) is not None
-        ]
+        try:
+            with connect_workspace_db(self.root) as connection:
+                rows = connection.execute(
+                    "SELECT id, task_id, created_at, kind, payload FROM attention ORDER BY id ASC"
+                ).fetchall()
+        except sqlite3.Error:
+            return []
+        items: list[AttentionItem] = []
+        for row in rows:
+            try:
+                items.append(self._row_to_item(row))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+        return items
+
+    def _read_item_locked(self, item_id: int) -> AttentionItem | None:
+        try:
+            with connect_workspace_db(self.root) as connection:
+                row = connection.execute(
+                    "SELECT id, task_id, created_at, kind, payload FROM attention WHERE id = ?",
+                    (item_id,),
+                ).fetchone()
+        except sqlite3.Error:
+            return None
+        if row is None:
+            return None
+        return self._row_to_item(row)
 
     def _read_item_path_locked(self, path: Path) -> AttentionItem | None:
         if not path.exists():
@@ -234,43 +255,47 @@ class AttentionStore:
     def _write_item_locked(self, item: AttentionItem) -> None:
         if item.id is None:
             raise ValueError("attention item id is required before writing")
-        path = self._item_path(item.id)
-        tmp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
         payload = item.model_dump(mode="json")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with tmp_path.open("w", encoding="utf-8") as handle:
-            yaml.safe_dump(payload, handle, sort_keys=False)
-        tmp_path.replace(path)
+        with connect_workspace_db(self.root) as connection:
+            connection.execute(
+                """
+                INSERT INTO attention (id, task_id, created_at, kind, payload)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    task_id = excluded.task_id,
+                    created_at = excluded.created_at,
+                    kind = excluded.kind,
+                    payload = excluded.payload
+                """,
+                (
+                    item.id,
+                    item.task_id,
+                    item.created_at,
+                    item.kind,
+                    json.dumps(payload, sort_keys=True),
+                ),
+            )
+            connection.commit()
 
     def _ensure_store_ready_locked(self) -> None:
         items_dir = self._items_dir()
         items_dir.mkdir(parents=True, exist_ok=True)
         marker_path = items_dir / _MIGRATION_MARKER
-        if marker_path.exists():
+        legacy_paths = self._item_paths_locked()
+        if marker_path.exists() and not legacy_paths:
             return
-        if any(self._item_paths_locked()):
-            marker_path.write_text(f"completed_at: {utcnow()}\n", encoding="utf-8")
-            return
-        for legacy_item in self._legacy_db_items():
-            if legacy_item.id is None:
-                continue
+        for legacy_item in self._legacy_file_items():
             self._write_item_locked(legacy_item)
-        marker_path.write_text(f"completed_at: {utcnow()}\n", encoding="utf-8")
+        for path in legacy_paths:
+            path.unlink(missing_ok=True)
+        marker_path.write_text(f"completed_at={utcnow()}\n", encoding="utf-8")
 
-    def _legacy_db_items(self) -> list[AttentionItem]:
-        try:
-            with connect_workspace_db(self.root, migrate=False) as connection:
-                rows = connection.execute(
-                    "SELECT id, task_id, created_at, kind, payload FROM attention ORDER BY id ASC"
-                ).fetchall()
-        except sqlite3.Error:
-            return []
+    def _legacy_file_items(self) -> list[AttentionItem]:
         items: list[AttentionItem] = []
-        for row in rows:
-            try:
-                items.append(self._row_to_item(row))
-            except (TypeError, ValueError, json.JSONDecodeError):
-                continue
+        for path in self._item_paths_locked():
+            item = self._read_item_path_locked(path)
+            if item is not None:
+                items.append(item)
         return items
 
     @staticmethod
@@ -455,18 +480,10 @@ def _duplicate_id_items(root: Path) -> list[AttentionItem]:
     for child in sorted(tasks_root(root).iterdir()):
         if not child.is_dir():
             continue
-        task_path = child / "task.yaml"
-        if not task_path.exists():
+        match = re.match(r"^(T-\d{4})-", child.name)
+        if match is None:
             continue
-        try:
-            payload = yaml.safe_load(task_path.read_text(encoding="utf-8")) or {}
-        except (OSError, yaml.YAMLError):
-            continue
-        if not isinstance(payload, dict):
-            continue
-        task_id = str(payload.get("id") or "").strip()
-        if not task_id:
-            continue
+        task_id = match.group(1)
         counts[task_id] = counts.get(task_id, 0) + 1
     items: list[AttentionItem] = []
     for task_id, count in sorted(counts.items()):

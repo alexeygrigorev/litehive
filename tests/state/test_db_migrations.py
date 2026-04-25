@@ -1,14 +1,19 @@
+import json
 from pathlib import Path
 import sqlite3
 
 import pytest
+import yaml
 from typer.testing import CliRunner
 
 from litehive.agents.session_store import load_subagent_report, save_subagent_artifacts
 from litehive.cli.app import app
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
-from litehive.state.records import create_task
+from litehive.domain.task import TaskRecord, TaskStateRecord, WorkspaceState
+from litehive.state.records import create_task, get_task, list_tasks
+from litehive.state.store import RuntimeStore
+from litehive.tasks.queue import peek_next_task
 from litehive.db import schema as schema_module
 from litehive.db.schema import (
     Migration,
@@ -17,6 +22,24 @@ from litehive.db.schema import (
     available_migrations,
     connect_workspace_db,
 )
+
+
+def _install_workspace_db_schema(root: Path, *, through_version: int) -> None:
+    db_path = workspace_path(root, "data.db")
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)"
+        )
+        for migration in available_migrations():
+            if migration.version > through_version:
+                continue
+            connection.executescript(migration.sql)
+            connection.execute(
+                "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
+                (migration.version, migration.name, f"2026-04-15T00:00:0{migration.version}Z"),
+            )
+        connection.commit()
 
 
 def _write_cache_tool(cache_target: Path) -> None:
@@ -43,6 +66,7 @@ def test_embedded_initial_migration_is_discoverable() -> None:
         "0002_task_audit_log.sql",
         "0003_stage_reports_pipeline_state.sql",
         "0004_recovery_reports.sql",
+        "0005_task_intent.sql",
     ]
     assert migrations[0].version == 1
     assert "CREATE TABLE IF NOT EXISTS pool_state" in migrations[0].sql
@@ -54,13 +78,15 @@ def test_embedded_initial_migration_is_discoverable() -> None:
     assert "RENAME COLUMN stage TO pipeline_state" in migrations[2].sql
     assert migrations[3].version == 4
     assert "CREATE TABLE IF NOT EXISTS recovery_reports" in migrations[3].sql
+    assert migrations[4].version == 5
+    assert "CREATE TABLE IF NOT EXISTS task_intent" in migrations[4].sql
 
 
 def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     staged = (
         *available_migrations(),
-        Migration(version=5, name="0005_add_marker.sql", sql="CREATE TABLE marker (id INTEGER PRIMARY KEY);"),
+        Migration(version=6, name="0006_add_marker.sql", sql="CREATE TABLE marker (id INTEGER PRIMARY KEY);"),
     )
     monkeypatch.setattr("litehive.db.schema.available_migrations", lambda: staged)
 
@@ -68,13 +94,13 @@ def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeyp
     dry_run = CliRunner().invoke(app, ["db", "migrate", "--dry-run", "--workspace", str(tmp_path)])
 
     assert status.exit_code == 0, status.output
-    assert "schema_version: 4" in status.output
+    assert "schema_version: 5" in status.output
     assert "pending_migrations: 1" in status.output
-    assert "pending: 0005_add_marker.sql" in status.output
+    assert "pending: 0006_add_marker.sql" in status.output
 
     assert dry_run.exit_code == 0, dry_run.output
     assert "dry_run: yes" in dry_run.output
-    assert "would_apply: 0005_add_marker.sql" in dry_run.output
+    assert "would_apply: 0006_add_marker.sql" in dry_run.output
 
     with sqlite3.connect(workspace_path(tmp_path, "data.db")) as connection:
         marker = connection.execute(
@@ -88,8 +114,8 @@ def test_apply_pending_migrations_rolls_back_failed_migration(tmp_path: Path, mo
     staged = (
         *available_migrations(),
         Migration(
-            version=5,
-            name="0005_broken.sql",
+            version=6,
+            name="0006_broken.sql",
             sql=("CREATE TABLE broken_marker (id INTEGER PRIMARY KEY);INSERT INTO missing_table(value) VALUES (1);"),
         ),
     )
@@ -106,8 +132,80 @@ def test_apply_pending_migrations_rolls_back_failed_migration(tmp_path: Path, mo
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'broken_marker'"
         ).fetchone()
 
-    assert applied_versions == [1, 2, 3, 4]
+    assert applied_versions == [1, 2, 3, 4, 5]
     assert broken_marker is None
+
+
+def test_migration_0005_backfills_existing_task_intent_from_legacy_task_yaml(tmp_path: Path) -> None:
+    litehive_dir = tmp_path / ".litehive"
+    task_dir = litehive_dir / "tasks" / "T-0001-existing-task"
+    task_dir.mkdir(parents=True)
+    (litehive_dir / "config.yaml").write_text("default_engine: codex\n", encoding="utf-8")
+
+    task = TaskRecord(
+        id="T-0001",
+        slug="existing-task",
+        title="Existing task",
+        goal="Keep existing incomplete task intent",
+        acceptance_criteria=["Existing task can still launch"],
+        git={
+            "auto_commit": True,
+            "commit_message": "T-0001 existing-task",
+        },
+    )
+    legacy_task_yaml = task_dir / "task.yaml"
+    legacy_task_yaml.write_text(
+        yaml.safe_dump(task.to_intent_record().model_dump(mode="json"), sort_keys=False),
+        encoding="utf-8",
+    )
+
+    _install_workspace_db_schema(tmp_path, through_version=4)
+    updated_at = "2026-04-15T00:00:10Z"
+    workspace_state_payload = WorkspaceState(queue=["T-0001"], next_task_number=1).model_dump(mode="json")
+    queue_payload = json.dumps(workspace_state_payload.pop("queue"), sort_keys=True)
+    task_state_payload = TaskStateRecord().model_dump(mode="json")
+    task_state_payload["updated_at"] = updated_at
+    with sqlite3.connect(workspace_path(tmp_path, "data.db")) as connection:
+        connection.execute(
+            "INSERT INTO pool_state (workspace_key, payload, updated_at) VALUES (?, ?, ?)",
+            ("workspace", json.dumps(workspace_state_payload, sort_keys=True), updated_at),
+        )
+        connection.execute(
+            "INSERT INTO queue (workspace_key, payload, updated_at) VALUES (?, ?, ?)",
+            ("workspace", queue_payload, updated_at),
+        )
+        connection.execute(
+            "INSERT INTO task_state (task_id, payload, updated_at) VALUES (?, ?, ?)",
+            ("T-0001", json.dumps(task_state_payload, sort_keys=True), updated_at),
+        )
+        connection.commit()
+
+    apply_pending_migrations(tmp_path)
+    RuntimeStore(tmp_path).bootstrap()
+
+    with connect_workspace_db(tmp_path) as connection:
+        intent_rows = connection.execute("SELECT task_id, payload FROM task_intent ORDER BY task_id").fetchall()
+        queue_row = connection.execute("SELECT payload FROM queue WHERE workspace_key = ?", ("workspace",)).fetchone()
+        applied_versions = [
+            row[0] for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
+        ]
+
+    loaded = get_task(tmp_path, "T-0001")
+    listed = list_tasks(tmp_path, strict=False)
+    selected = peek_next_task(tmp_path)
+
+    assert applied_versions == [1, 2, 3, 4, 5]
+    assert len(intent_rows) == 1
+    assert intent_rows[0]["task_id"] == "T-0001"
+    assert json.loads(intent_rows[0]["payload"])["goal"] == "Keep existing incomplete task intent"
+    assert queue_row is not None
+    assert json.loads(queue_row["payload"]) == ["T-0001"]
+    assert loaded is not None
+    assert loaded.title == "Existing task"
+    assert [task.id for task in listed] == ["T-0001"]
+    assert selected is not None
+    assert selected.id == "T-0001"
+    assert not legacy_task_yaml.exists()
 
 
 def test_daemon_run_applies_pending_migrations_before_start(
@@ -117,8 +215,8 @@ def test_daemon_run_applies_pending_migrations_before_start(
     staged = (
         *available_migrations(),
         Migration(
-            version=5,
-            name="0005_daemon_marker.sql",
+            version=6,
+            name="0006_daemon_marker.sql",
             sql="CREATE TABLE daemon_marker (id INTEGER PRIMARY KEY);",
         ),
     )
@@ -141,7 +239,7 @@ def test_daemon_run_applies_pending_migrations_before_start(
         daemon_marker = connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'daemon_marker'"
         ).fetchone()
-    assert applied_versions == [1, 2, 3, 4, 5]
+    assert applied_versions == [1, 2, 3, 4, 5, 6]
     assert daemon_marker is not None
 
 
@@ -203,7 +301,7 @@ def test_legacy_workspace_db_is_rebuilt_without_task_yaml_rescan(tmp_path: Path)
         rows = connection.execute("SELECT task_id FROM task_state ORDER BY task_id").fetchall()
         queue_row = connection.execute("SELECT payload FROM queue WHERE workspace_key = 'workspace'").fetchone()
 
-    assert applied_versions == [1, 2, 3, 4]
+    assert applied_versions == [1, 2, 3, 4, 5]
     assert rows == []
     assert queue_row is not None
     assert queue_row[0] == "[]"

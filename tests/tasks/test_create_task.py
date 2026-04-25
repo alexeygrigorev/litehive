@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -5,17 +6,24 @@ from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
-import yaml
 
 import litehive.state.records as tasks_crud
 from litehive.cli.task_cli import app as task_app
 from litehive.config.workspace import ensure_workspace
+from litehive.db.schema import connect_workspace_db
 from litehive.domain.reports import FollowUpTaskSpec
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_follow_up_tasks, create_task, get_task, list_tasks, save_task
 from litehive.tasks.archive import archive_task
 from litehive.tasks.duplicates import rebuild_duplicate_task_index, search_tasks_by_text
 from litehive.tasks.status import update_task_metadata
+
+
+def _task_intent_payload(root: Path, task_id: str) -> dict:
+    with connect_workspace_db(root) as connection:
+        row = connection.execute("SELECT payload FROM task_intent WHERE task_id = ?", (task_id,)).fetchone()
+    assert row is not None
+    return json.loads(row["payload"])
 
 
 def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
@@ -28,7 +36,10 @@ def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
     assert task.id == "T-0001"
     assert len(tasks) == 1
     assert state.queue == ["T-0001"]
-    assert (tmp_path / ".litehive" / "tasks" / "T-0001-fix-login-race" / "task.yaml").exists()
+    task_path = tmp_path / ".litehive" / "tasks" / "T-0001-fix-login-race"
+    assert task_path.exists()
+    assert not (task_path / "task.yaml").exists()
+    assert _task_intent_payload(tmp_path, task.id)["title"] == "Fix login race"
 
 
 def test_create_task_persists_manual_creation_provenance(
@@ -41,8 +52,7 @@ def test_create_task_persists_manual_creation_provenance(
 
     task = create_task(tmp_path, title="Manual provenance")
     persisted = get_task(tmp_path, task.id)
-    task_yaml = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "task.yaml"
-    data = yaml.safe_load(task_yaml.read_text(encoding="utf-8"))
+    data = _task_intent_payload(tmp_path, task.id)
 
     assert persisted is not None
     assert persisted.created_from is not None
@@ -231,7 +241,7 @@ def test_task_add_cli_warns_about_similar_tasks_in_supported_statuses(tmp_path: 
     assert "Created task T-0004" in result.output
 
 
-def test_task_add_cli_shows_done_for_legacy_archived_duplicate(tmp_path: Path) -> None:
+def test_task_add_cli_shows_done_for_archived_duplicate(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
     archived = create_task(
@@ -243,13 +253,6 @@ def test_task_add_cli_shows_done_for_legacy_archived_duplicate(tmp_path: Path) -
     archived.pipeline_status = "done"
     save_task(tmp_path, archived)
     archive_task(tmp_path, archived.id)
-
-    archive_dir = tmp_path / ".litehive" / "tasks" / "archive" / f"{archived.id}-{archived.slug}"
-    task_yaml = archive_dir / "task.yaml"
-    data = yaml.safe_load(task_yaml.read_text(encoding="utf-8"))
-    data.pop("status", None)
-    data.pop("pipeline_status", None)
-    task_yaml.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
     result = CliRunner().invoke(
         task_app,
@@ -411,7 +414,7 @@ def test_create_task_uses_persisted_next_task_number_without_rescanning(
     def fail_scan(root: Path) -> int:
         raise AssertionError("task id allocation should not rescan task directories")
 
-    monkeypatch.setattr(tasks_crud, "_highest_task_number_on_disk", fail_scan)
+    monkeypatch.setattr(tasks_crud, "_highest_task_number_in_store", fail_scan)
 
     created = create_task(tmp_path, title="Second task")
 

@@ -104,14 +104,6 @@ def _deserialize_task_activity_payload(payload: object) -> tuple[list[TaskActivi
     return activity, valid
 
 
-def _write_task_activity_file(path: Path, activity: list[TaskActivityEntry]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        yaml.safe_dump([entry.model_dump(mode="json") for entry in activity], sort_keys=False),
-        encoding="utf-8",
-    )
-
-
 def _save_task_activity_to_db(root: Path, task_id: str, activity: list[TaskActivityEntry]) -> None:
     with connect_workspace_db(root) as connection:
         connection.execute("DELETE FROM task_activity WHERE task_id = ?", (task_id,))
@@ -129,10 +121,9 @@ def _save_task_activity_to_db(root: Path, task_id: str, activity: list[TaskActiv
 
 def save_task_activity(root: Path, task: TaskRecord, activity: list[TaskActivityEntry]) -> None:
     _save_task_activity_to_db(root, task.id, activity)
-    _write_task_activity_file(task_activity_path(root, task), activity)
-    legacy_path = legacy_task_activity_path(root, task)
-    if legacy_path.exists():
-        legacy_path.unlink()
+    for path in (task_activity_path(root, task), legacy_task_activity_path(root, task)):
+        if path.exists():
+            path.unlink()
 
 
 def append_task_activity(root: Path, task: TaskRecord, entry: TaskActivityEntry) -> None:
@@ -190,21 +181,30 @@ def migrate_legacy_task_activity_files(root: Path) -> bool:
             continue
         activity_path = legacy_path.with_name("comments.yaml")
         if activity_path.exists():
+            parsed = _read_task_activity_file(activity_path)
+            if parsed is not None and parsed[1]:
+                task_id = _task_id_from_task_dir_name(activity_path.parent.name)
+                if task_id is not None:
+                    _save_task_activity_to_db(root, task_id, parsed[0])
+            activity_path.unlink()
             legacy_path.unlink()
             mutated = True
             continue
 
-        legacy_path.replace(activity_path)
-        mutated = True
-
         task_id = _task_id_from_task_dir_name(activity_path.parent.name)
         if task_id is None:
+            legacy_path.unlink()
+            mutated = True
             continue
 
-        parsed = _read_task_activity_file(activity_path)
+        parsed = _read_task_activity_file(legacy_path)
         if parsed is None or not parsed[1]:
+            legacy_path.unlink()
+            mutated = True
             continue
         _save_task_activity_to_db(root, task_id, parsed[0])
+        legacy_path.unlink()
+        mutated = True
 
     return mutated
 

@@ -1,10 +1,9 @@
 import io
+import json
 from pathlib import Path
 import shutil
 import sqlite3
 import subprocess
-
-import yaml
 
 from litehive.attention import list_attention, record_attention, resolve_attention, waiting_for_you_lines
 from litehive.cli.attention import cmd_attention_list, cmd_attention_resolve
@@ -43,6 +42,17 @@ def _attention_item_paths(root: Path) -> list[Path]:
     return sorted((root / ".litehive" / "attention").glob("*.yaml"))
 
 
+def _attention_payloads(root: Path) -> list[dict]:
+    with connect_workspace_db(root) as connection:
+        rows = connection.execute("SELECT id, payload FROM attention ORDER BY id ASC").fetchall()
+    payloads = []
+    for row in rows:
+        payload = json.loads(row["payload"])
+        payload["id"] = row["id"]
+        payloads.append(payload)
+    return payloads
+
+
 def test_attention_list_and_resolve_persist_items(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     item = record_attention(
@@ -62,9 +72,8 @@ def test_attention_list_and_resolve_persist_items(tmp_path: Path, capsys) -> Non
     assert f"attention: {item.id}" in output
     assert "Destructive git command was blocked" in output
     assert "suggested_action:" in output
-    item_paths = _attention_item_paths(tmp_path)
-    assert len(item_paths) == 1
-    persisted = yaml.safe_load(item_paths[0].read_text(encoding="utf-8"))
+    assert _attention_item_paths(tmp_path) == []
+    persisted = _attention_payloads(tmp_path)[0]
     assert persisted["id"] == item.id
     assert persisted["title"] == "Destructive git command was blocked"
     assert persisted["reason"] == "`git push --force origin main` was rejected."
@@ -77,7 +86,7 @@ def test_attention_list_and_resolve_persist_items(tmp_path: Path, capsys) -> Non
     assert resolve_code == 0
     assert f"resolved_attention: {item.id}" in resolved_output
     assert list_attention(tmp_path) == []
-    resolved_payload = yaml.safe_load(item_paths[0].read_text(encoding="utf-8"))
+    resolved_payload = _attention_payloads(tmp_path)[0]
     assert resolved_payload["status"] == "resolved"
     assert resolved_payload["resolution"] == "resolved by operator"
     assert resolved_payload["resolved_at"] is not None
@@ -118,19 +127,6 @@ def test_status_reconciles_detectable_attention_items_without_prior_listing(tmp_
     primary = create_task(tmp_path, title="Primary task")
     duplicate_dir = tmp_path / ".litehive" / "tasks" / f"{primary.id}-duplicate-copy"
     duplicate_dir.mkdir(parents=True)
-    (duplicate_dir / "task.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "id": primary.id,
-                "slug": "duplicate-copy",
-                "title": "Duplicate copy",
-                "mode": "implementation",
-                "pipeline_mode": "full",
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
 
     exit_code = fast_status(["--workspace", str(tmp_path)])
     output = capsys.readouterr().out
@@ -139,10 +135,11 @@ def test_status_reconciles_detectable_attention_items_without_prior_listing(tmp_
     assert "attention_items: 1" in output
     assert "waiting for you:" in output
     assert f"Duplicate task id detected for {primary.id}" in output
-    assert len(_attention_item_paths(tmp_path)) == 1
+    assert _attention_item_paths(tmp_path) == []
+    assert len(_attention_payloads(tmp_path)) == 1
 
 
-def test_git_wrapper_block_records_attention_yaml_item(tmp_path: Path, capsys) -> None:
+def test_git_wrapper_block_records_attention_db_item(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
 
     exit_code = git_wrapper_main(
@@ -159,12 +156,12 @@ def test_git_wrapper_block_records_attention_yaml_item(tmp_path: Path, capsys) -
     item = items[0]
     assert item.kind == "destructive_git_denied"
     assert item.reason == "`git push --force origin main` was rejected: push with force or mirror is not allowed"
-    payload = yaml.safe_load(_attention_item_paths(tmp_path)[0].read_text(encoding="utf-8"))
+    payload = _attention_payloads(tmp_path)[0]
     assert payload["kind"] == "destructive_git_denied"
     assert payload["metadata"]["command"] == "git push --force origin main"
 
 
-def test_attention_store_migrates_legacy_database_rows_to_yaml(tmp_path: Path) -> None:
+def test_attention_store_reads_legacy_database_rows(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     with connect_workspace_db(tmp_path) as connection:
         connection.execute(
@@ -186,8 +183,8 @@ def test_attention_store_migrates_legacy_database_rows_to_yaml(tmp_path: Path) -
 
     assert len(items) == 1
     assert items[0].title == "Legacy item"
-    assert len(_attention_item_paths(tmp_path)) == 1
-    migrated = yaml.safe_load(_attention_item_paths(tmp_path)[0].read_text(encoding="utf-8"))
+    assert _attention_item_paths(tmp_path) == []
+    migrated = _attention_payloads(tmp_path)[0]
     assert migrated["title"] == "Legacy item"
     assert migrated["dedupe_key"] == "legacy-key"
 
@@ -198,19 +195,6 @@ def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, mon
     primary = create_task(tmp_path, title="Primary task")
     duplicate_dir = tmp_path / ".litehive" / "tasks" / f"{primary.id}-duplicate-copy"
     duplicate_dir.mkdir(parents=True)
-    (duplicate_dir / "task.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "id": primary.id,
-                "slug": "duplicate-copy",
-                "title": "Duplicate copy",
-                "mode": "implementation",
-                "pipeline_mode": "full",
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
 
     flagged = create_task(tmp_path, title="Flag me")
     flagged.status = "flagged"
@@ -331,17 +315,16 @@ def test_merge_failed_attention_refreshes_to_recovery_follow_up_when_commit_reco
     )
 
 
-def test_duplicate_id_detection_ignores_non_mapping_task_yaml(tmp_path: Path) -> None:
+def test_duplicate_id_detection_uses_task_directory_ids_without_task_yaml(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
     primary = create_task(tmp_path, title="Primary task")
     duplicate_dir = tmp_path / ".litehive" / "tasks" / f"{primary.id}-broken-copy"
     duplicate_dir.mkdir(parents=True)
-    (duplicate_dir / "task.yaml").write_text("- not-a-task-mapping\n", encoding="utf-8")
 
     items = list_attention(tmp_path)
 
-    assert all(item.kind != "duplicate_task_id" for item in items)
+    assert any(item.kind == "duplicate_task_id" for item in items)
 
 
 def test_operator_resolve_suppresses_detectable_attention_until_condition_clears(tmp_path: Path) -> None:
@@ -350,19 +333,6 @@ def test_operator_resolve_suppresses_detectable_attention_until_condition_clears
     primary = create_task(tmp_path, title="Primary task")
     duplicate_dir = tmp_path / ".litehive" / "tasks" / f"{primary.id}-duplicate-copy"
     duplicate_dir.mkdir(parents=True)
-    (duplicate_dir / "task.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "id": primary.id,
-                "slug": "duplicate-copy",
-                "title": "Duplicate copy",
-                "mode": "implementation",
-                "pipeline_mode": "full",
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
 
     first_items = list_attention(tmp_path)
     first = next(item for item in first_items if item.kind == "duplicate_task_id")
@@ -376,19 +346,6 @@ def test_operator_resolve_suppresses_detectable_attention_until_condition_clears
     assert list_attention(tmp_path) == []
 
     duplicate_dir.mkdir(parents=True)
-    (duplicate_dir / "task.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "id": primary.id,
-                "slug": "duplicate-copy",
-                "title": "Duplicate copy",
-                "mode": "implementation",
-                "pipeline_mode": "full",
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
 
     second_items = list_attention(tmp_path)
     second = next(item for item in second_items if item.kind == "duplicate_task_id")
