@@ -129,23 +129,12 @@ def _task_exists(root: Path, task_id: str) -> bool:
     return any(tasks_root.glob(f"{task_id}-*"))
 
 
-def resolve_workspace(
-    task_id: str | None,
+def _resolve_workspace_from_search_root(
+    search_root: Path,
     *,
-    cwd: Path | None = None,
-    register: bool = True,
-) -> Path:
-    effective_task_id = task_id or os.environ.get("LITEHIVE_TASK_ID")
-
-    env_workspace = os.environ.get("LITEHIVE_WORKSPACE_ROOT")
-    if env_workspace:
-        resolved_env_workspace = normalize_workspace_root(Path(env_workspace), source="LITEHIVE_WORKSPACE_ROOT")
-        if _task_matches(resolved_env_workspace, effective_task_id):
-            if register:
-                _register_workspace(resolved_env_workspace)
-            return resolved_env_workspace
-
-    search_root = (cwd or Path.cwd()).resolve()
+    effective_task_id: str | None,
+    register: bool,
+) -> Path | None:
     resolved_search_root = normalize_workspace_root(search_root, source=f"cwd:{search_root}")
     if resolved_search_root != search_root and _task_matches(resolved_search_root, effective_task_id):
         if register:
@@ -160,6 +149,44 @@ def resolve_workspace(
             continue
         if register:
             _register_workspace(resolved)
+        return resolved
+    return None
+
+
+def resolve_workspace(
+    task_id: str | None,
+    *,
+    cwd: Path | None = None,
+    register: bool = True,
+) -> Path:
+    effective_task_id = task_id
+    if effective_task_id is None and cwd is None:
+        effective_task_id = os.environ.get("LITEHIVE_TASK_ID")
+    search_root = (cwd or Path.cwd()).resolve()
+
+    if cwd is not None:
+        resolved = _resolve_workspace_from_search_root(
+            search_root,
+            effective_task_id=effective_task_id,
+            register=register,
+        )
+        if resolved is not None:
+            return resolved
+
+    env_workspace = os.environ.get("LITEHIVE_WORKSPACE_ROOT")
+    if env_workspace:
+        resolved_env_workspace = normalize_workspace_root(Path(env_workspace), source="LITEHIVE_WORKSPACE_ROOT")
+        if _task_matches(resolved_env_workspace, effective_task_id):
+            if register:
+                _register_workspace(resolved_env_workspace)
+            return resolved_env_workspace
+
+    resolved = _resolve_workspace_from_search_root(
+        search_root,
+        effective_task_id=effective_task_id,
+        register=register,
+    )
+    if resolved is not None:
         return resolved
 
     if effective_task_id:

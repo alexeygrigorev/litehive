@@ -258,6 +258,7 @@ def _needs_manual_intervention(task: TaskRecord) -> bool:
                 "merge_failed",
                 "rejection_loop_detected",
                 "semantic_reject",
+                "time_budget_exceeded",
             }
         )
     )

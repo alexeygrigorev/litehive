@@ -90,4 +90,5 @@ class FailedReason(StringEnum):
     RECOVERY_MISSING_TARGET_STAGE = "recovery_missing_target_stage"
     PRE_EXEC_RECOVERY_FAILED = "pre_exec_recovery_failed"
     OPERATOR_ABANDONED = "operator_abandoned"
+    TIME_BUDGET_EXCEEDED = "time_budget_exceeded"
     UNRECOVERABLE_ERROR = "unrecoverable_error"

@@ -2,7 +2,7 @@ import pytest
 
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION
 from litehive.domain.recovery import TriggerEventKind
-from litehive.lifecycle.events import Crash, Event, Reject, Timeout
+from litehive.lifecycle.events import Crash, Event, Pass, Reject, Timeout
 from litehive.lifecycle.journal import InMemoryJournal
 from litehive.lifecycle.nodes.base import Node, NodeRegistry
 from litehive.lifecycle.persistence import InMemoryPersistence, Limits, TaskState
@@ -82,3 +82,61 @@ def test_crash_and_timeout_enter_recovery(event: Event, expected_kind: TriggerEv
     assert final_state.active_recovery_trigger is not None
     assert final_state.active_recovery_trigger.trigger_event_kind == expected_kind
     assert final_state.failed_reason is None
+
+
+class _FakeClock:
+    def __init__(self) -> None:
+        self.value = 0.0
+
+    def __call__(self) -> float:
+        return self.value
+
+    def advance(self, seconds: float) -> None:
+        self.value += seconds
+
+
+class _TimedPassNode(Node):
+    node_type = NodeType.AGENT
+
+    def __init__(self, name: str, clock: _FakeClock, seconds: float) -> None:
+        self.name = name
+        self.clock = clock
+        self.seconds = seconds
+
+    def run(self, state: TaskState) -> Event:
+        del state
+        self.clock.advance(self.seconds)
+        return Pass()
+
+
+def test_task_time_budget_exceeded_fails_before_next_pre_commit_stage() -> None:
+    clock = _FakeClock()
+    state = TaskState(
+        task_id="T-0001",
+        stage="implementing",
+        pipeline_mode=PipelineMode.FULL,
+    )
+    registry = NodeRegistry()
+    registry.register(_TimedPassNode("implementing", clock, seconds=61.0))
+    persistence = InMemoryPersistence()
+    persistence.save(state)
+    journal = InMemoryJournal()
+    runner = StateMachineRunner(
+        registry,
+        persistence,
+        journal=journal,
+        task_time_budget_seconds=60.0,
+        clock=clock,
+    )
+
+    final_state = runner.run_task(state.task_id)
+
+    assert final_state.stage == "failed"
+    assert final_state.failed_reason == "time_budget_exceeded"
+    assert final_state.agent_elapsed_seconds == 61.0
+    transition_payloads = [record["payload"] for record in journal.records if record["kind"] == "transition"]
+    budget_transition = transition_payloads[-1]
+    assert budget_transition["from_stage"] == "after_implementing"
+    assert budget_transition["event_type"] == "TaskTimeBudgetExceeded"
+    assert budget_transition["to_stage"] == "failed"
+    assert budget_transition["delta"]["failed_reason"] == "time_budget_exceeded"

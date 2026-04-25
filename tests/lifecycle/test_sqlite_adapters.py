@@ -108,6 +108,7 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
             )
         ],
         pre_exec_recovery_attempt=1,
+        agent_elapsed_seconds=12.5,
         merge_context=MergeContext(
             conflict_files=["conflicted.py"],
             merge_attempt=2,
@@ -171,6 +172,7 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
     serialized_payload = json.dumps(payload, sort_keys=True)
     assert payload["active_recovery_trigger"]["failure_fingerprint"]["fingerprint"] == "RuntimeError:boom"
     assert payload["recovery_history"][0]["trigger"]["failure_fingerprint"]["fingerprint"] == "agent:blank task"
+    assert payload["agent_elapsed_seconds"] == 12.5
     assert "implementing:agent:tests fail" in payload["failed_run_history"]
     assert "RecoveryContext" not in serialized_payload
     assert "RecoveryRecord" not in serialized_payload
@@ -186,6 +188,7 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
     assert loaded.active_recovery_trigger.trigger_event_kind == TriggerEventKind.CRASH
     assert loaded.recovery_history[0].disposition == RecoveryDisposition.RESUMED
     assert loaded.pre_exec_recovery_attempt == 1
+    assert loaded.agent_elapsed_seconds == 12.5
     assert loaded.merge_context is not None
     assert loaded.merge_context.conflict_files == ("conflicted.py",)
     assert loaded.merge_context.merge_attempt == 2

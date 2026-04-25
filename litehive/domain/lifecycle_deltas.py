@@ -21,6 +21,7 @@ from litehive.lifecycle.events import (
     RecoverySucceeded,
     Reject,
     StageRetryLimitHit,
+    TaskTimeBudgetExceeded,
     Timeout,
 )
 from litehive.lifecycle.persistence import (
@@ -534,6 +535,11 @@ def fail(reason: FailedReason) -> EffectFn:
             message = f"Stage retry limit exhausted for {event.stage}"
         elif isinstance(event, OverallRetryLimitHit):
             message = "Overall retry limit exhausted"
+        elif isinstance(event, TaskTimeBudgetExceeded):
+            message = (
+                f"Task time budget exceeded before commit: "
+                f"{event.elapsed_seconds:.1f}s elapsed, budget {event.budget_seconds:.1f}s"
+            )
         else:
             message = ""
         outcome = None

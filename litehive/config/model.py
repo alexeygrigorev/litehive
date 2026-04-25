@@ -39,6 +39,7 @@ VALID_RUNNER_HOOK_ENTRY_KEYS = frozenset(
 )
 LEGACY_RUNNER_HOOK_ENTRY_KEYS = frozenset({"reject_on_failure", "blocking"})
 DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS = 300.0
+DEFAULT_TASK_TIME_BUDGET_SECONDS = 3600.0
 
 
 # --- supporting dataclasses ---
@@ -114,6 +115,7 @@ class LitehiveConfig:
     pool_stop_on_dirty_git: bool = False
     pool_stop_on_attention: bool = False
     runner_hooks: dict[str, list[dict[str, object]]] = field(default_factory=dict)
+    task_time_budget_seconds: float | None = DEFAULT_TASK_TIME_BUDGET_SECONDS
     subagent_inactivity_timeout_seconds: float = DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS
     inactivity_timeout_seconds: float | None = None
     external_engine_sandbox: ExternalEngineSandboxConfig = field(default_factory=ExternalEngineSandboxConfig)
@@ -135,6 +137,10 @@ class LitehiveConfig:
         self.runner_hooks = normalize_runner_hooks(self.runner_hooks)
         if self.default_rejection_loop_limit < 1:
             raise ValueError("default_rejection_loop_limit must be greater than 0")
+        if self.task_time_budget_seconds is not None:
+            self.task_time_budget_seconds = float(self.task_time_budget_seconds)
+            if self.task_time_budget_seconds <= 0:
+                raise ValueError("task_time_budget_seconds must be greater than 0 when set")
         self.subagent_inactivity_timeout_seconds = float(self.subagent_inactivity_timeout_seconds)
         if self.subagent_inactivity_timeout_seconds <= 0:
             raise ValueError("subagent_inactivity_timeout_seconds must be greater than 0")

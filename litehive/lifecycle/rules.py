@@ -33,6 +33,7 @@ from .events import (
     RecoverySucceeded,
     Reject,
     StageRetryLimitHit,
+    TaskTimeBudgetExceeded,
     Timeout,
 )
 from .guards import (
@@ -286,6 +287,18 @@ RULES: list[Rule] = [
         on_event=OverallRetryLimitHit,
         transition_to=S.FAILED,
         with_effect=fail("unrecoverable_error"),
+    ),
+    Rule(
+        from_state=S.ALL_STAGE_PHASES,
+        on_event=TaskTimeBudgetExceeded,
+        transition_to=S.FAILED,
+        with_effect=fail("time_budget_exceeded"),
+    ),
+    Rule(
+        from_state=S.RECOVERING,
+        on_event=TaskTimeBudgetExceeded,
+        transition_to=S.FAILED,
+        with_effect=fail("time_budget_exceeded"),
     ),
     # ── recovering ─────────────────────────────────────────────
     Rule(

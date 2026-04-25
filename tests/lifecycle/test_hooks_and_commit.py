@@ -4,6 +4,7 @@ import shlex
 import subprocess
 import json
 import os
+import time
 from pathlib import Path
 
 import pytest
@@ -604,6 +605,17 @@ class _AlwaysPassEngine:
         return AgentVerdict(outcome="pass")
 
 
+class _SlowPassEngine:
+    def __init__(self, name: str, sleep_seconds: float) -> None:
+        self.name = name
+        self.sleep_seconds = sleep_seconds
+
+    def run_turn(self, session, prompt, state) -> AgentVerdict:
+        del session, prompt, state
+        time.sleep(self.sleep_seconds)
+        return AgentVerdict(outcome="pass")
+
+
 class _RejectRecoveryEngine:
     def __init__(self, name: str) -> None:
         self.name = name
@@ -708,6 +720,47 @@ def test_run_task_single_mode_executes_only_implementing_then_finishes(tmp_path:
     assert pipeline_state.stage == "done"
     assert workspace_state.active_task_id is None
     assert task.id not in workspace_state.queue
+
+
+def test_run_task_flags_time_budget_exceeded_and_preserves_worktree(tmp_path: Path) -> None:
+    _init_workspace_git_repo(tmp_path, config=LitehiveConfig(task_time_budget_seconds=0.01))
+    first = create_task(tmp_path, title="Time budget task")
+    second = create_task(tmp_path, title="Next task")
+    task = dequeue_next_task(tmp_path)
+    assert task is not None
+    assert task.id == first.id
+    worktree = task_worktree_path(tmp_path, task)
+    branch = task_worktree_branch(task)
+
+    result = run_task(
+        tmp_path,
+        task,
+        engine_factory=lambda engine_name: _SlowPassEngine(engine_name, sleep_seconds=0.02),
+    )
+    refreshed = get_task(tmp_path, task.id)
+    workspace_state = load_state(tmp_path)
+    branch_lookup = subprocess.run(
+        ["git", "branch", "--list", branch],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert result.final_stage == "failed"
+    assert result.failed_reason == "time_budget_exceeded"
+    assert refreshed is not None
+    assert refreshed.status == "flagged"
+    assert refreshed.pipeline_status == "flagged"
+    assert refreshed.flag_reason == "time_budget_exceeded"
+    assert worktree.exists()
+    assert branch in branch_lookup.stdout
+    assert workspace_state.active_task_id is None
+    assert task.id not in workspace_state.queue
+
+    next_task = dequeue_next_task(tmp_path)
+    assert next_task is not None
+    assert next_task.id == second.id
 
 
 def test_run_task_runs_after_implementing_hook_in_task_worktree(tmp_path: Path) -> None:

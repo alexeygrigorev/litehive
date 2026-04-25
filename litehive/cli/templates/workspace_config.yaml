@@ -69,6 +69,10 @@ pool_stop_on_attention: false
 runner_hooks: {}
 
 # Timeout budget for detecting hung live subagents and top-level runs.
+# `task_time_budget_seconds` is the cumulative wall-clock budget for all
+# subagent turns on one task before commit_to_git. When it is exceeded before
+# commit, Litehive flags the task for manual review and moves on.
+task_time_budget_seconds: 3600.0
 # Litehive kills a stalled live Codex subprocess after 300 seconds without new
 # stdout, then lets the normal stage retry flow restart that stage.
 # `inactivity_timeout_seconds` is separate daemon/runner stale-state handling.

@@ -205,6 +205,21 @@ class OverallRetryLimitHit(Event):
 
 
 @dataclass(frozen=True)
+class TaskTimeBudgetExceeded(Event):
+    """A task exceeded its cumulative agent wall-clock budget before commit.
+
+    Fired by ``StateMachineRunner`` after agent-backed node execution pushes
+    the task over the workspace ``task_time_budget_seconds`` limit while the
+    task is still in a pre-commit pipeline phase. Routes directly to
+    ``failed`` so the task layer can flag it for manual review and preserve
+    its worktree.
+    """
+
+    elapsed_seconds: float
+    budget_seconds: float
+
+
+@dataclass(frozen=True)
 class RecoverySucceeded(Event):
     """The recovery agent returned a successful verdict.
 

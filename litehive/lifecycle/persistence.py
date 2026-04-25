@@ -295,6 +295,7 @@ class TaskState:
     active_recovery_trigger: RecoveryTrigger | None = None
     recovery_history: list[RecoveryOutcome] = field(default_factory=list)
     pre_exec_recovery_attempt: int = 0
+    agent_elapsed_seconds: float = 0.0
     merge_context: MergeContext | None = None
     commit_result: CommitResult | None = None
     last_report: LastReport = field(default_factory=LastReport)
@@ -374,6 +375,7 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
         ),
         "recovery_history": [outcome.to_payload() for outcome in state.recovery_history],
         "pre_exec_recovery_attempt": state.pre_exec_recovery_attempt,
+        "agent_elapsed_seconds": state.agent_elapsed_seconds,
         "merge_context": (state.merge_context.to_payload() if state.merge_context is not None else None),
         "commit_result": (state.commit_result.to_payload() if state.commit_result is not None else None),
         "last_report": state.last_report.to_payload(),
@@ -425,6 +427,7 @@ def _state_from_row(
             RecoveryOutcome.from_payload(dict(item)) for item in list(recovery_history or []) if isinstance(item, dict)
         ],
         pre_exec_recovery_attempt=int(payload.get("pre_exec_recovery_attempt") or 0),
+        agent_elapsed_seconds=float(payload.get("agent_elapsed_seconds") or 0.0),
         merge_context=(MergeContext.from_payload(dict(merge_context)) if isinstance(merge_context, dict) else None),
         commit_result=(CommitResult.from_payload(dict(commit_result)) if isinstance(commit_result, dict) else None),
         last_report=LastReport.from_payload(last_report_data),

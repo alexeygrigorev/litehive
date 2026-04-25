@@ -155,6 +155,7 @@ def _stale_launch_state_requires_reset(
 _MANUAL_REVIEW_FLAG_REASONS = {
     "hook_reject_loop",
     "rejection_loop_detected",
+    "time_budget_exceeded",
 }
 
 
@@ -388,6 +389,8 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
                 task_record.flag_reason = "rejection_loop_detected"
             elif failed_reason == "semantic_reject":
                 task_record.flag_reason = "semantic_reject"
+            elif failed_reason == "time_budget_exceeded":
+                task_record.flag_reason = "time_budget_exceeded"
             elif failed_reason == "recovery_exhausted":
                 task_record.flag_reason = "recovery_failed"
             elif failed_reason == "recovery_budget_hit":
@@ -883,6 +886,7 @@ def run_task(
                 trans,
             ),
             session_store=sessions,
+            task_time_budget_seconds=config.task_time_budget_seconds,
         )
 
         # 3. Run under the heartbeat so `litehive status` sees the active task.

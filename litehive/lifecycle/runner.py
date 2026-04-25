@@ -1,19 +1,30 @@
+import time
 from typing import Callable
 
+from litehive.domain.common import PipelineState
 from litehive.lifecycle.persistence import CommitResult, FailedRunRecord
 from litehive.domain.lifecycle_deltas import StateDelta
-from .events import Event, HookOk, Pass, Reject
+from .events import Event, HookOk, Pass, Reject, TaskTimeBudgetExceeded
 from .journal import NullJournal, PipelineJournal
 from .nodes.base import NodeRegistry
 from .persistence import Persistence, TaskState
 from .transitions import Rule, Transition, evaluate
 from .rules import RULES
-from .types import AGENT_STAGES, TERMINAL_NODES, pipeline_stage_for_phase
+from .types import AGENT_STAGES, TERMINAL_NODES, NodeType, pipeline_stage_for_phase
 
 
 StopPredicate = Callable[[], bool]
 StateSyncCallback = Callable[[TaskState], None]
 TransitionObserver = Callable[[TaskState, str, Event, Transition], None]
+Clock = Callable[[], float]
+
+_COMMIT_REACHED_PHASES = frozenset(
+    {
+        PipelineState.COMMIT,
+        PipelineState.AFTER_COMMIT,
+        PipelineState.MERGE_RESOLVING,
+    }
+)
 
 
 class StateMachineRunner:
@@ -43,6 +54,8 @@ class StateMachineRunner:
         stop_requested: StopPredicate | None = None,
         state_sync: StateSyncCallback | None = None,
         transition_observer: TransitionObserver | None = None,
+        task_time_budget_seconds: float | None = None,
+        clock: Clock | None = None,
     ) -> None:
         self.registry = registry
         self.persistence = persistence
@@ -52,43 +65,78 @@ class StateMachineRunner:
         self._stop_requested = stop_requested or (lambda: False)
         self._state_sync = state_sync
         self._transition_observer = transition_observer
+        self._task_time_budget_seconds = task_time_budget_seconds
+        self._clock = clock or time.monotonic
 
     def run_task(self, task_id: str) -> TaskState:
         state = self.persistence.load(task_id)
         self.journal.task_started(task_id, state.stage)
         while state.stage not in TERMINAL_NODES:
+            budget_event = self._task_time_budget_event(state)
+            if budget_event is not None:
+                self._apply_transition(state, from_stage=state.stage, event=budget_event, task_id=task_id)
+                continue
             from_stage = state.stage
             node = self.registry.get(from_stage)
+            started_at = self._clock() if node.node_type == NodeType.AGENT else None
             event = node.run(state)
-            trans = evaluate(self.rules, from_stage, event, state)
-            self._apply_delta(state, trans.delta)
-            self.apply_event_side_effects(state, event)
-            state.stage = trans.next
-            self._reset_cross_agent_retry_sessions(
-                task_id=state.task_id,
-                from_stage=from_stage,
-                to_stage=trans.next,
-                event=event,
-            )
-            self._reset_hook_reject_tracking_on_progress(state, from_stage, trans.next, event)
-            self.persistence.save(state)
-            if self._state_sync is not None:
-                self._state_sync(state)
-            self.journal.transition(
-                task_id=task_id,
-                from_stage=from_stage,
-                event=event,
-                to_stage=trans.next,
-                rule_description=trans.rule.description,
-                delta=trans.delta,
-            )
-            if self._transition_observer is not None:
-                self._transition_observer(state, from_stage, event, trans)
+            if started_at is not None:
+                state.agent_elapsed_seconds += max(0.0, self._clock() - started_at)
+            self._apply_transition(state, from_stage=from_stage, event=event, task_id=task_id)
             if self._stop_requested():
                 self.journal.stop_requested(task_id, state.stage)
                 return state
         self.journal.task_finished(task_id, state.stage)
         return state
+
+    def _task_time_budget_event(
+        self,
+        state: TaskState,
+    ) -> TaskTimeBudgetExceeded | None:
+        budget = self._task_time_budget_seconds
+        if budget is None:
+            return None
+        if state.stage in _COMMIT_REACHED_PHASES:
+            return None
+        if state.agent_elapsed_seconds < budget:
+            return None
+        return TaskTimeBudgetExceeded(
+            elapsed_seconds=state.agent_elapsed_seconds,
+            budget_seconds=budget,
+        )
+
+    def _apply_transition(
+        self,
+        state: TaskState,
+        *,
+        from_stage: str,
+        event: Event,
+        task_id: str,
+    ) -> None:
+        trans = evaluate(self.rules, from_stage, event, state)
+        self._apply_delta(state, trans.delta)
+        self.apply_event_side_effects(state, event)
+        state.stage = trans.next
+        self._reset_cross_agent_retry_sessions(
+            task_id=state.task_id,
+            from_stage=from_stage,
+            to_stage=trans.next,
+            event=event,
+        )
+        self._reset_hook_reject_tracking_on_progress(state, from_stage, trans.next, event)
+        self.persistence.save(state)
+        if self._state_sync is not None:
+            self._state_sync(state)
+        self.journal.transition(
+            task_id=task_id,
+            from_stage=from_stage,
+            event=event,
+            to_stage=trans.next,
+            rule_description=trans.rule.description,
+            delta=trans.delta,
+        )
+        if self._transition_observer is not None:
+            self._transition_observer(state, from_stage, event, trans)
 
     @staticmethod
     def apply_event_side_effects(state: TaskState, event: Event) -> None:

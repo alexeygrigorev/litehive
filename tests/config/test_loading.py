@@ -6,6 +6,7 @@ import yaml
 from litehive.config.loading import load_config
 from litehive.config.model import (
     DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS,
+    DEFAULT_TASK_TIME_BUDGET_SECONDS,
     LitehiveConfig,
 )
 from litehive.config.paths import litehive_root
@@ -189,6 +190,7 @@ def test_litehive_config_defaults_include_flat_retry_on() -> None:
     config = LitehiveConfig()
 
     assert config.subagent_inactivity_timeout_seconds == DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS
+    assert config.task_time_budget_seconds == DEFAULT_TASK_TIME_BUDGET_SECONDS
     assert config.retry_on == ["execution_limit", "timeout"]
     assert config.runner_hooks == {}
 
@@ -205,6 +207,25 @@ def test_load_config_reads_subagent_inactivity_timeout_override(tmp_path: Path) 
     config = load_config(tmp_path)
 
     assert config.subagent_inactivity_timeout_seconds == 42.0
+
+
+def test_load_config_reads_task_time_budget_override(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
+    raw_config["task_time_budget_seconds"] = 90
+    (tmp_path / ".litehive" / "config.yaml").write_text(
+        yaml.safe_dump(raw_config, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.task_time_budget_seconds == 90.0
+
+
+def test_litehive_config_rejects_non_positive_task_time_budget() -> None:
+    with pytest.raises(ValueError, match="task_time_budget_seconds must be greater than 0"):
+        LitehiveConfig(task_time_budget_seconds=0)
 
 
 def test_litehive_config_rejects_unknown_retry_on_kind() -> None:
