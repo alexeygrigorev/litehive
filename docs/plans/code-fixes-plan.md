@@ -837,7 +837,7 @@ Compatibility fields/accessors left to delete:
   - `fail -> reject`
   - agents/CLI/tests should submit canonical verdicts only
 - Delete type-alias bridges once the canonical enum names are chosen:
-  - `PipelineState = PipelineStatus`
+  - `PipelineState`-to-`PipelineStatus`
   - `RunnerExecutionStatus = RunnerStatus`
 
 Oversized models that still need to be broken down before more deletion:
@@ -1962,9 +1962,9 @@ real implementation rather than against assumptions.
     persist those values directly
 
 - Pipeline vocabulary is still split:
-  - `PipelineState = PipelineStatus` alias still exists in
+  - `PipelineState` is now a real internal machine-state enum in
     `litehive/domain/common.py`
-  - actual machine phase is still represented elsewhere:
+  - some machine-state usage is still represented elsewhere:
     - `LifecyclePhase`
     - `TaskState.stage`
     - `TaskRuntime.current_stage.stage`
@@ -2190,9 +2190,9 @@ Document target:
 
 Current code:
 
-- `litehive/domain/common.py` uses `PipelineState` as an alias for the coarse
-  business-stage `PipelineStatus`
-- actual machine state lives elsewhere:
+- `litehive/domain/common.py` defines `PipelineState` as the internal
+  machine-state enum and keeps it separate from coarse `PipelineStatus`
+- some machine-state usage still lives elsewhere:
   - `LifecyclePhase`
   - `TaskState.stage`
   - runtime strings in `litehive/domain/runtime.py`

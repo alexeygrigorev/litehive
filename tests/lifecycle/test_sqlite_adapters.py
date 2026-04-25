@@ -10,6 +10,8 @@ from pathlib import Path
 import pytest
 
 from litehive.config.workspace import ensure_workspace
+from litehive.db.schema import connect_workspace_db
+from litehive.domain.common import PipelineState
 from litehive.domain.recovery import (
     FailureFingerprint,
     RecoveryDisposition,
@@ -57,6 +59,18 @@ def test_persistence_initialize_is_idempotent(workspace: Path) -> None:
     # Second call is a no-op: must not overwrite the existing row
     assert second.pipeline_mode == PipelineMode.SINGLE
     assert second.stage == "ready"
+
+
+def test_persistence_roundtrip_uses_canonical_pipeline_state(workspace: Path) -> None:
+    store = SqlitePersistence(workspace)
+    store.save(TaskState(task_id="T-0002", stage="after_implementing", pipeline_mode=PipelineMode.FULL))
+
+    loaded = store.load("T-0002")
+
+    assert loaded.stage is PipelineState.AFTER_IMPLEMENTING
+    with connect_workspace_db(workspace) as connection:
+        row = connection.execute("SELECT stage FROM pipeline_task_state WHERE task_id = ?", ("T-0002",)).fetchone()
+    assert row["stage"] == "after_implementing"
 
 
 def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:

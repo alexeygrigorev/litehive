@@ -1,6 +1,6 @@
 from enum import Enum
 
-from litehive.domain.common import StringEnum
+from litehive.domain.common import PipelineState, StringEnum, canonical_pipeline_state
 
 
 class NodeType(str, Enum):
@@ -15,66 +15,69 @@ class PipelineMode(str, Enum):
     SINGLE = "single"
 
 
-NodeName = str
+NodeName = PipelineState
 
 AGENT_STAGES: tuple[NodeName, ...] = (
-    "grooming",
-    "implementing",
-    "testing",
-    "accepting",
+    PipelineState.GROOMING,
+    PipelineState.IMPLEMENTING,
+    PipelineState.TESTING,
+    PipelineState.ACCEPTING,
 )
-SYSTEM_STAGES: tuple[NodeName, ...] = ("commit",)
+SYSTEM_STAGES: tuple[NodeName, ...] = (PipelineState.COMMIT,)
 STAGES: tuple[NodeName, ...] = AGENT_STAGES + SYSTEM_STAGES
 
 
-def before(stage: NodeName) -> NodeName:
-    return f"before_{stage}"
+def before(stage: str | NodeName) -> NodeName:
+    return canonical_pipeline_state(f"before_{stage}")
 
 
-def after(stage: NodeName) -> NodeName:
-    return f"after_{stage}"
+def after(stage: str | NodeName) -> NodeName:
+    return canonical_pipeline_state(f"after_{stage}")
 
 
 STAGE_PHASES: tuple[NodeName, ...] = (
-    "before_grooming",
-    "grooming",
-    "after_grooming",
-    "before_implementing",
-    "implementing",
-    "after_implementing",
-    "before_testing",
-    "testing",
-    "after_testing",
-    "before_accepting",
-    "accepting",
-    "after_accepting",
-    "commit",
-    "after_commit",
+    PipelineState.BEFORE_GROOMING,
+    PipelineState.GROOMING,
+    PipelineState.AFTER_GROOMING,
+    PipelineState.BEFORE_IMPLEMENTING,
+    PipelineState.IMPLEMENTING,
+    PipelineState.AFTER_IMPLEMENTING,
+    PipelineState.BEFORE_TESTING,
+    PipelineState.TESTING,
+    PipelineState.AFTER_TESTING,
+    PipelineState.BEFORE_ACCEPTING,
+    PipelineState.ACCEPTING,
+    PipelineState.AFTER_ACCEPTING,
+    PipelineState.COMMIT,
+    PipelineState.AFTER_COMMIT,
 )
 
 
-def pipeline_stage_for_phase(phase: NodeName) -> NodeName:
-    if phase == "recovering":
-        return "grooming"
-    if phase in STAGES:
-        return phase
-    if phase.startswith("before_"):
-        candidate = phase.removeprefix("before_")
-        if candidate in STAGES:
-            return candidate
-    if phase.startswith("after_"):
-        candidate = phase.removeprefix("after_")
-        if candidate in STAGES:
-            return candidate
-    return phase
+_PRIMARY_STAGE_BY_PHASE: dict[PipelineState, PipelineState] = {
+    PipelineState.BEFORE_GROOMING: PipelineState.GROOMING,
+    PipelineState.AFTER_GROOMING: PipelineState.GROOMING,
+    PipelineState.BEFORE_IMPLEMENTING: PipelineState.IMPLEMENTING,
+    PipelineState.AFTER_IMPLEMENTING: PipelineState.IMPLEMENTING,
+    PipelineState.BEFORE_TESTING: PipelineState.TESTING,
+    PipelineState.AFTER_TESTING: PipelineState.TESTING,
+    PipelineState.BEFORE_ACCEPTING: PipelineState.ACCEPTING,
+    PipelineState.AFTER_ACCEPTING: PipelineState.ACCEPTING,
+    PipelineState.AFTER_COMMIT: PipelineState.COMMIT,
+    PipelineState.RECOVERING: PipelineState.GROOMING,
+}
+
+
+def pipeline_stage_for_phase(phase: str | NodeName) -> NodeName:
+    state = canonical_pipeline_state(phase)
+    return _PRIMARY_STAGE_BY_PHASE.get(state, state)
 
 ANY_STAGE_PHASE: frozenset[NodeName] = frozenset(STAGE_PHASES)
 
-TERMINAL_NODES: frozenset[NodeName] = frozenset({"done", "failed"})
+TERMINAL_NODES: frozenset[NodeName] = frozenset({PipelineState.DONE, PipelineState.FAILED})
 
-PRE_EXEC_NODE: NodeName = "recovering_pre_exec"
-RECOVERING: NodeName = "recovering"
-READY: NodeName = "ready"
+PRE_EXEC_NODE: NodeName = PipelineState.RECOVERING_PRE_EXEC
+RECOVERING: NodeName = PipelineState.RECOVERING
+READY: NodeName = PipelineState.READY
 
 
 class FailedReason(StringEnum):

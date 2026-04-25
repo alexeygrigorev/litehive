@@ -8,6 +8,7 @@ import yaml
 
 from litehive.agents.session_store import save_subagent_artifacts
 from litehive.db.schema import connect_workspace_db
+from litehive.domain.common import PipelineState
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.domain.runtime import RuntimeRecoveryOutcome, RuntimeSubagentState
 from litehive.roles.planner import PlannerAgent
@@ -96,6 +97,7 @@ def test_serialize_includes_header_goal_acceptance_plan(workspace: Path) -> None
     prompt = agent.build_prompt(state)
     text = serialize_prompt(prompt, task_record=task)
 
+    assert prompt["stage"] is PipelineState.IMPLEMENTING
     assert f"Task: {task.id}" in text
     assert "Add v2 prompt serializer" in text
     assert "Stage: implementing" in text

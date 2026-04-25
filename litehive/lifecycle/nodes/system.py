@@ -4,6 +4,8 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Callable
 
+from litehive.domain.common import PipelineState
+
 from ..events import (
     CleanState,
     Crash,
@@ -62,7 +64,7 @@ class ReadyNode(SystemNode):
         self,
         probes: "list[Callable[[TaskState], bool]] | None" = None,
     ) -> None:
-        super().__init__("ready")
+        super().__init__(PipelineState.READY)
         self.probes = list(probes or [])
 
     def run(self, state: TaskState) -> Event:
@@ -105,7 +107,7 @@ class WorktreeSyncNode(SystemNode):
     """
 
     def __init__(self) -> None:
-        super().__init__("worktree_sync")
+        super().__init__(PipelineState.WORKTREE_SYNC)
 
     def run(self, state: TaskState) -> Event:
         try:

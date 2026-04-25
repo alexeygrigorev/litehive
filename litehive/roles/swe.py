@@ -1,3 +1,5 @@
+from litehive.domain.common import PipelineState
+
 from .base import RoleAgent
 
 ROLE_GUIDANCE = """\
@@ -45,7 +47,7 @@ RETRY_ATTEMPT_GUIDANCE = """\
 class SWEAgent(RoleAgent):
     """Implementing stage: write the code and the tests."""
 
-    NODE_NAME = "implementing"
+    NODE_NAME = PipelineState.IMPLEMENTING
     ROLE = "swe"
     ROLE_INSTRUCTIONS = ROLE_GUIDANCE
     FRESH_ATTEMPT_INSTRUCTIONS = FRESH_ATTEMPT_GUIDANCE

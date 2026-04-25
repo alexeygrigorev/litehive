@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from litehive.db.schema import connect_workspace_db
-from litehive.domain.common import utcnow
+from litehive.domain.common import PipelineState, canonical_pipeline_state, utcnow
 from litehive.domain.recovery import RecoveryOutcome, RecoveryTrigger
 
 from .types import FailedReason, NodeName, PipelineMode
@@ -67,7 +67,7 @@ class HookRejectFingerprint:
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "HookRejectFingerprint":
         return cls(
-            point=payload["point"],
+            point=canonical_pipeline_state(payload["point"]),
             command=payload["command"],
             description=payload.get("description", ""),
             fingerprint=payload["fingerprint"],
@@ -104,7 +104,7 @@ class LastRejection:
         return cls(
             source=payload["source"],
             reason=payload["reason"],
-            raised_at_phase=payload["raised_at_phase"],
+            raised_at_phase=canonical_pipeline_state(payload["raised_at_phase"]),
             classification=payload.get("classification"),
         )
 
@@ -301,6 +301,17 @@ class TaskState:
     recovery_failure_explanation: str | None = None
     limits: Limits = field(default_factory=Limits)
 
+    def __post_init__(self) -> None:
+        self.stage = canonical_pipeline_state(self.stage)
+        if self.entry_stage is not None:
+            self.entry_stage = canonical_pipeline_state(self.entry_stage)
+        self.stage_retry = {
+            canonical_pipeline_state(stage): retry_count for stage, retry_count in self.stage_retry.items()
+        }
+        self.last_rejection_by_stage = {
+            canonical_pipeline_state(stage): rejection for stage, rejection in self.last_rejection_by_stage.items()
+        }
+
     def recovery_attempts_for_origin(self, origin_stage: NodeName) -> int:
         count = sum(1 for outcome in self.recovery_history if outcome.trigger.origin_stage == origin_stage)
         if self.active_recovery_trigger is not None and self.active_recovery_trigger.origin_stage == origin_stage:
@@ -348,8 +359,8 @@ def _string_list(value: Any) -> list[str]:
 
 def _state_payload(state: TaskState) -> dict[str, Any]:
     return {
-        "entry_stage": state.entry_stage,
-        "stage_retry": dict(state.stage_retry),
+        "entry_stage": None if state.entry_stage is None else str(state.entry_stage),
+        "stage_retry": {str(stage): count for stage, count in state.stage_retry.items()},
         "active_recovery_trigger": (
             state.active_recovery_trigger.to_payload() if state.active_recovery_trigger is not None else None
         ),
@@ -358,7 +369,7 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
         "merge_context": (state.merge_context.to_payload() if state.merge_context is not None else None),
         "commit_result": (state.commit_result.to_payload() if state.commit_result is not None else None),
         "last_report": state.last_report.to_payload(),
-        "last_rejection_by_stage": {stage: rej.to_payload() for stage, rej in state.last_rejection_by_stage.items()},
+        "last_rejection_by_stage": {str(stage): rej.to_payload() for stage, rej in state.last_rejection_by_stage.items()},
         "failed_run_history": {key: record.to_payload() for key, record in state.failed_run_history.items()},
         "rejection_loop": (state.rejection_loop.to_payload() if state.rejection_loop is not None else None),
         "consecutive_same_hook_rejects": state.consecutive_same_hook_rejects,
@@ -374,7 +385,7 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
 
 def _state_from_row(
     task_id: str,
-    stage: NodeName,
+    stage: str | PipelineState,
     pipeline_mode: str,
     payload: dict[str, Any],
     limits: Limits,
@@ -390,10 +401,13 @@ def _state_from_row(
     rejection_loop = payload.get("rejection_loop")
     return TaskState(
         task_id=task_id,
-        stage=stage,
+        stage=canonical_pipeline_state(stage),
         pipeline_mode=PipelineMode(pipeline_mode),
-        entry_stage=payload.get("entry_stage"),
-        stage_retry=dict(payload.get("stage_retry") or {}),
+        entry_stage=(None if payload.get("entry_stage") is None else canonical_pipeline_state(payload["entry_stage"])),
+        stage_retry={
+            canonical_pipeline_state(stage_name): int(retry_count)
+            for stage_name, retry_count in (payload.get("stage_retry") or {}).items()
+        },
         active_recovery_trigger=(
             RecoveryTrigger.from_payload(dict(active_recovery_trigger))
             if isinstance(active_recovery_trigger, dict)
@@ -407,7 +421,8 @@ def _state_from_row(
         commit_result=(CommitResult.from_payload(dict(commit_result)) if isinstance(commit_result, dict) else None),
         last_report=LastReport.from_payload(last_report_data),
         last_rejection_by_stage={
-            stage_name: LastRejection.from_payload(rej) for stage_name, rej in last_rejections_data.items()
+            canonical_pipeline_state(stage_name): LastRejection.from_payload(rej)
+            for stage_name, rej in last_rejections_data.items()
         },
         failed_run_history={
             str(key): FailedRunRecord.from_payload(dict(record))
@@ -462,7 +477,7 @@ class SqlitePersistence:
                 """,
                 (
                     state.task_id,
-                    state.stage,
+                    str(state.stage),
                     state.pipeline_mode.value,
                     payload_json,
                     utcnow(),
@@ -504,7 +519,7 @@ class SqlitePersistence:
         task_id: str,
         *,
         pipeline_mode: PipelineMode = PipelineMode.FULL,
-        stage: NodeName = "ready",
+        stage: NodeName = PipelineState.READY,
         entry_stage: NodeName | None = None,
     ) -> TaskState:
         """Create a fresh ``TaskState`` row for a task entering the machine.

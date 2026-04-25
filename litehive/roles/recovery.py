@@ -3,6 +3,7 @@ from typing import Any
 
 from litehive.agents.session_store import load_subagent_report, load_subagent_session
 from litehive.config.loading import load_config
+from litehive.domain.common import PipelineState
 from litehive.domain.runtime import RuntimeRecoveryOutcome
 from litehive.lifecycle.events import Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
 from litehive.lifecycle.nodes.agent import AgentVerdict
@@ -69,7 +70,7 @@ class RecoveryAgent(RoleAgent):
     of ``Pass`` / ``Reject``.
     """
 
-    NODE_NAME = "recovering"
+    NODE_NAME = PipelineState.RECOVERING
     ROLE = "recovery"
     ROLE_INSTRUCTIONS = ROLE_GUIDANCE
     FRESH_ATTEMPT_INSTRUCTIONS = FRESH_ATTEMPT_GUIDANCE

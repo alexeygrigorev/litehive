@@ -1,3 +1,5 @@
+from litehive.domain.common import PipelineState
+
 from .base import RoleAgent
 
 ROLE_GUIDANCE = """\
@@ -25,7 +27,7 @@ RETRY_ATTEMPT_GUIDANCE = """\
 class QAAgent(RoleAgent):
     """Testing stage: verify the implementation against its acceptance criteria."""
 
-    NODE_NAME = "testing"
+    NODE_NAME = PipelineState.TESTING
     ROLE = "qa"
     ROLE_INSTRUCTIONS = ROLE_GUIDANCE
     FRESH_ATTEMPT_INSTRUCTIONS = FRESH_ATTEMPT_GUIDANCE

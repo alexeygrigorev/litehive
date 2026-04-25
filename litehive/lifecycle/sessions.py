@@ -84,7 +84,7 @@ class SqliteSessionStore:
                 FROM pipeline_sessions
                 WHERE task_id = ? AND node_name = ? AND engine_name = ?
                 """,
-                (task_id, node_name, engine_name),
+                (task_id, str(node_name), engine_name),
             ).fetchone()
         if row is None:
             return Session()
@@ -113,7 +113,7 @@ class SqliteSessionStore:
                 """,
                 (
                     task_id,
-                    node_name,
+                    str(node_name),
                     engine_name,
                     session.engine_session_id,
                     session.conversation_id,
@@ -128,6 +128,6 @@ class SqliteSessionStore:
         with connect_workspace_db(self.workspace_root) as connection:
             connection.execute(
                 "DELETE FROM pipeline_sessions WHERE task_id = ? AND node_name = ?",
-                (task_id, node_name),
+                (task_id, str(node_name)),
             )
             connection.commit()

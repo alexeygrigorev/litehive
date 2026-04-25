@@ -15,7 +15,11 @@ def pipeline_rules_command() -> int:
     from litehive.lifecycle.transitions import list_transitions
 
     for rule in list_transitions():
-        from_state = "|".join(sorted(rule.from_state)) if isinstance(rule.from_state, frozenset) else rule.from_state
+        from_state = (
+            "|".join(str(stage) for stage in sorted(rule.from_state))
+            if isinstance(rule.from_state, frozenset)
+            else str(rule.from_state)
+        )
         to = rule.transition_to if not callable(rule.transition_to) else f"<{rule.transition_to.__name__}>"
         event_name = rule.on_event.__name__
         desc = f"  # {rule.description}" if rule.description else ""
@@ -29,6 +33,7 @@ def pipeline_set_state_command(
     stage: Annotated[str, typer.Argument(help="Target stage")],
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
 ) -> None:
+    from litehive.domain.common import canonical_pipeline_state
     from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 
     store = SqlitePersistence(workspace)
@@ -38,7 +43,7 @@ def pipeline_set_state_command(
         print(f"no v2 state row for {task_id}; use 'litehive pipeline add-task' first")
         raise typer.Exit(1)
     old_stage = state.stage
-    state.stage = stage
+    state.stage = canonical_pipeline_state(stage)
     store.save(state)
     print(f"task: {task_id}")
     print(f"stage: {old_stage} → {stage}")

@@ -1,3 +1,5 @@
+from litehive.domain.common import PipelineState
+
 from .base import RoleAgent
 
 INSTRUCTIONS = """\
@@ -20,6 +22,6 @@ INSTRUCTIONS = """\
 class PlannerAgent(RoleAgent):
     """Grooming stage: clarify scope and acceptance criteria."""
 
-    NODE_NAME = "grooming"
+    NODE_NAME = PipelineState.GROOMING
     ROLE = "planner"
     INSTRUCTIONS = INSTRUCTIONS

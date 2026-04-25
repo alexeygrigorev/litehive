@@ -18,6 +18,7 @@ plumbing.
 """
 
 from litehive.roles.base import PromptContext, RoleAgent
+from litehive.domain.common import PipelineState
 from litehive.roles.merge import MergeAgent
 from litehive.roles.planner import PlannerAgent
 from litehive.roles.qa import QAAgent
@@ -38,15 +39,15 @@ from .nodes.agent import EngineSelector, SessionProvider
 from .types import NodeName
 
 HOOK_PHASES: tuple[NodeName, ...] = (
-    "before_grooming",
-    "after_grooming",
-    "before_implementing",
-    "after_implementing",
-    "before_testing",
-    "after_testing",
-    "before_accepting",
-    "after_accepting",
-    "after_commit",
+    PipelineState.BEFORE_GROOMING,
+    PipelineState.AFTER_GROOMING,
+    PipelineState.BEFORE_IMPLEMENTING,
+    PipelineState.AFTER_IMPLEMENTING,
+    PipelineState.BEFORE_TESTING,
+    PipelineState.AFTER_TESTING,
+    PipelineState.BEFORE_ACCEPTING,
+    PipelineState.AFTER_ACCEPTING,
+    PipelineState.AFTER_COMMIT,
 )
 def _phase_hook_node(name: NodeName, hooks: list[HookSpec], runner: HookRunner) -> HookNode:
     return HookNode(name, hooks=hooks, runner=runner)
@@ -138,7 +139,7 @@ def build_registry(
     )
 
     # Terminals
-    registry.register(TerminalNode("done"))
-    registry.register(TerminalNode("failed"))
+    registry.register(TerminalNode(PipelineState.DONE))
+    registry.register(TerminalNode(PipelineState.FAILED))
 
     return registry

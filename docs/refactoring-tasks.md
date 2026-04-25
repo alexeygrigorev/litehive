@@ -242,7 +242,7 @@ Scope:
 Acceptance criteria:
 
 - prompts, persistence, and transition logic agree on one `PipelineState`
-- no alias `PipelineState = PipelineStatus` remains
+- no `PipelineState`-to-`PipelineStatus` alias remains
 
 Suggested validation:
 

@@ -31,7 +31,14 @@ from litehive.git.ops import GitError, current_head, remove_worktree
 from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.domain.runtime import RuntimeFailedRunRecord, RuntimeHookRejectFingerprint, RuntimeRecoveryOutcome
-from litehive.domain.common import cap_feedback, utcnow
+from litehive.domain.common import (
+    PipelineState,
+    canonical_pipeline_state,
+    cap_feedback,
+    pipeline_status_for_pipeline_state,
+    task_stage_for_pipeline_state,
+    utcnow,
+)
 from litehive.state.records import (
     clear_task_worktree_path,
     get_task,
@@ -80,7 +87,7 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
     fresh_state_kwargs = dict(
         task_id=task_id,
         pipeline_mode=mode,
-        stage="ready",
+        stage=PipelineState.READY,
         entry_stage=entry_stage,
     )
 
@@ -115,7 +122,7 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
     return state
 
 
-def _entry_stage_for_task(task_record: TaskRecord) -> str | None:
+def _entry_stage_for_task(task_record: TaskRecord) -> PipelineState | None:
     stage = (
         task_record.runtime.current_stage.stage
         or (None if task_record.runtime.interruption is None else task_record.runtime.interruption.resume_stage)
@@ -124,8 +131,8 @@ def _entry_stage_for_task(task_record: TaskRecord) -> str | None:
     if stage in {None, "backlog", "done", "flagged"}:
         return None
     if stage == "commit_to_git":
-        return "commit"
-    return stage
+        return PipelineState.COMMIT
+    return canonical_pipeline_state(stage)
 
 
 def _launch_requires_fresh_pipeline_state(task_record: TaskRecord) -> bool:
@@ -137,34 +144,13 @@ def _stale_launch_state_requires_reset(
     state: TaskState,
     *,
     pipeline_mode: PipelineMode,
-    entry_stage: str,
+    entry_stage: PipelineState,
 ) -> bool:
     if not _launch_requires_fresh_pipeline_state(task_record):
         return False
     if state.pipeline_mode != pipeline_mode:
         return True
-    return state.stage != "ready" or state.entry_stage != entry_stage
-
-
-_STAGE_TO_PIPELINE_STATUS: dict[str, str] = {
-    "ready": "backlog",
-    "before_grooming": "grooming",
-    "grooming": "grooming",
-    "after_grooming": "grooming",
-    "before_implementing": "implementing",
-    "implementing": "implementing",
-    "after_implementing": "implementing",
-    "before_testing": "testing",
-    "testing": "testing",
-    "after_testing": "testing",
-    "before_accepting": "accepting",
-    "accepting": "accepting",
-    "after_accepting": "accepting",
-    "commit": "commit_to_git",
-    "after_commit": "commit_to_git",
-    "merge_resolving": "commit_to_git",
-    "recovering": "grooming",
-}
+    return state.stage != PipelineState.READY or state.entry_stage != entry_stage
 
 _MANUAL_REVIEW_FLAG_REASONS = {
     "hook_reject_loop",
@@ -315,7 +301,7 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
         task_record.runtime.failed_run_history,
         state,
     )
-    if state.stage in {"done", "failed"}:
+    if state.stage in {PipelineState.DONE, PipelineState.FAILED}:
         task_record.runtime.execution_status = "idle"
         task_record.runtime.current_stage = task_record.runtime.current_stage.model_copy(
             update={
@@ -350,23 +336,19 @@ def _latest_recovery_trigger(state: TaskState):
 
 
 def _recovery_origin_stage(origin_stage: str | None) -> str | None:
-    if origin_stage in {"before_grooming", "grooming", "after_grooming", "recovering"}:
-        return "grooming"
-    if origin_stage in {"before_implementing", "implementing", "after_implementing"}:
-        return "implementing"
-    if origin_stage in {"before_testing", "testing", "after_testing"}:
-        return "testing"
-    if origin_stage in {"before_accepting", "accepting", "after_accepting"}:
-        return "accepting"
-    if origin_stage in {"before_commit", "commit", "after_commit", "merge_resolving"}:
-        return "commit_to_git"
-    return origin_stage
+    if origin_stage is None:
+        return None
+    try:
+        task_stage = task_stage_for_pipeline_state(origin_stage)
+    except ValueError:
+        return origin_stage
+    return origin_stage if task_stage is None else str(task_stage)
 
 
 def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | None:
     journal_message: str | None = None
     commit_result = state.commit_result
-    if state.stage == "done":
+    if state.stage == PipelineState.DONE:
         task_record.status = "done"
         task_record.pipeline_status = "done"
         task_record.close_reason = "done"
@@ -382,7 +364,7 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
                     f"commit_to_git reconciled as a no-op on main at {commit_result.head_sha}; "
                     "no new integration commit was needed."
                 )
-    elif state.stage == "failed":
+    elif state.stage == PipelineState.FAILED:
         trigger = _latest_recovery_trigger(state)
         origin_stage = trigger.origin_stage if trigger is not None else None
         failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
@@ -417,7 +399,7 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
         task_record.status = "in_progress"
         task_record.close_reason = None
         task_record.flag_reason = None
-        task_record.pipeline_status = _STAGE_TO_PIPELINE_STATUS.get(state.stage, task_record.pipeline_status)
+        task_record.pipeline_status = pipeline_status_for_pipeline_state(state.stage)
     return journal_message
 
 
@@ -438,9 +420,9 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
         or before_last_outcome != task_record.runtime.last_outcome
     ):
         action = "status_changed"
-        if state.stage == "failed":
+        if state.stage == PipelineState.FAILED:
             action = "failed"
-        elif state.stage == "done" and task_record.status == "done":
+        elif state.stage == PipelineState.DONE and task_record.status == "done":
             action = "completed"
         audit_entries.append(
             build_task_audit_entry(
@@ -470,7 +452,7 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
 
 def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskState) -> None:
     failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
-    if state.stage != "failed":
+    if state.stage != PipelineState.FAILED:
         return
     if failed_reason != "recovery_exhausted":
         return
@@ -538,7 +520,7 @@ def _resolve_worktree(root: Path, state: TaskState) -> Path:
 
 def _resolve_hook_execution_root(root: Path, state: TaskState) -> Path:
     """Run pre-commit hooks in the task checkout and keep after_commit on main."""
-    if state.stage == "after_commit":
+    if state.stage == PipelineState.AFTER_COMMIT:
         return root
     return _resolve_worktree(root, state)
 
@@ -648,7 +630,7 @@ def reconcile_terminal_commit_sha(
     final_state: TaskState,
     persistence: SqlitePersistence,
 ) -> TaskRecord | None:
-    if task is None or final_state.stage != "done":
+    if task is None or final_state.stage != PipelineState.DONE:
         return task
     if task.git.commit_sha and task.runtime.git.commit_sha:
         return task
@@ -694,8 +676,15 @@ def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
     return out
 
 
-def _report_stage_for_phase(phase: str) -> str:
-    return _STAGE_TO_PIPELINE_STATUS.get(phase, phase)
+def _report_stage_for_phase(phase: str | PipelineState) -> str:
+    try:
+        state = canonical_pipeline_state(phase)
+    except ValueError:
+        return str(phase)
+    if state in {PipelineState.MERGE_RESOLVING, PipelineState.RECOVERING}:
+        return str(state)
+    task_stage = task_stage_for_pipeline_state(state)
+    return str(state) if task_stage is None else str(task_stage)
 
 
 def _record_hook_warnings(
@@ -908,7 +897,7 @@ def run_task(
 
         # 4. Mirror terminal state back to the v1 TaskRecord.
         updated_task = _sync_back(final_state, root) or task
-        if final_state.stage in {"done", "failed"}:
+        if final_state.stage in {PipelineState.DONE, PipelineState.FAILED}:
             updated_task = reconcile_terminal_commit_sha(
                 root,
                 updated_task,

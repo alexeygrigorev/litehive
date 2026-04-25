@@ -18,6 +18,7 @@ from litehive.domain.lifecycle_deltas import (
     fail_rejection_loop,
     inc_stage_retry,
 )
+from litehive.domain.common import PipelineState, canonical_pipeline_state
 from .events import Event, PreExecRecoverySucceeded, RecoverySucceeded, Reject
 from .guards import (
     Guard,
@@ -28,19 +29,22 @@ from .guards import (
 )
 from .persistence import TaskState
 from .stages import Stage
-from .types import FailedReason, STAGES, NodeName
+from .types import FailedReason, STAGES
 
-ToFn = Callable[[TaskState, Event], NodeName]
-ToSpec = NodeName | ToFn | Stage
+ToFn = Callable[[TaskState, Event], PipelineState]
+ToSpec = PipelineState | str | ToFn | Stage
 
 
-def _entry_phase(stage: NodeName) -> NodeName:
-    return "commit" if stage == "commit" else f"before_{stage}"
+def _entry_phase(stage: str | PipelineState) -> PipelineState:
+    pipeline_state = canonical_pipeline_state(stage)
+    if pipeline_state == PipelineState.COMMIT:
+        return PipelineState.COMMIT
+    return canonical_pipeline_state(f"before_{pipeline_state}")
 
 
 @dataclass(frozen=True)
 class Rule:
-    from_state: NodeName | frozenset | Stage
+    from_state: PipelineState | str | frozenset | Stage
     on_event: type[Event]
     transition_to: ToSpec
     when: Guard | None = None
@@ -50,42 +54,43 @@ class Rule:
 
 @dataclass(frozen=True)
 class Transition:
-    next: NodeName
+    next: PipelineState
     delta: StateDelta
     rule: Rule
 
 
 class NoTransitionError(RuntimeError):
-    def __init__(self, current: NodeName, event: Event) -> None:
+    def __init__(self, current: str | PipelineState, event: Event) -> None:
         super().__init__(f"no transition rule matched: current={current!r} event={type(event).__name__}")
         self.current = current
         self.event = event
 
 
-def _matches_from(pattern, current: str) -> bool:
+def _matches_from(pattern, current: PipelineState) -> bool:
     if isinstance(pattern, frozenset):
         return current in pattern
     if isinstance(pattern, Stage):
         return pattern.name == current
-    return pattern == current
+    return canonical_pipeline_state(pattern) == current
 
 
 def _matches_event(pattern: type[Event], event: Event) -> bool:
     return isinstance(event, pattern)
 
 
-def _resolve_to(to: ToSpec, state: TaskState, event: Event) -> NodeName:
+def _resolve_to(to: ToSpec, state: TaskState, event: Event) -> PipelineState:
     if callable(to) and not isinstance(to, Stage):
-        return to(state, event)
+        return canonical_pipeline_state(to(state, event))
     if isinstance(to, Stage):
         return to.name
-    return to
+    return canonical_pipeline_state(to)
 
 
-def evaluate(rules: list[Rule], current: NodeName, event: Event, state: TaskState) -> Transition:
+def evaluate(rules: list[Rule], current: str | PipelineState, event: Event, state: TaskState) -> Transition:
     """First-match evaluation. Pure function — no I/O, no mutation."""
+    current_state = canonical_pipeline_state(current)
     for rule in rules:
-        if not _matches_from(rule.from_state, current):
+        if not _matches_from(rule.from_state, current_state):
             continue
         if not _matches_event(rule.on_event, event):
             continue
@@ -100,10 +105,10 @@ def evaluate(rules: list[Rule], current: NodeName, event: Event, state: TaskStat
 # ── callable transition_to targets ──────────────────────────────────────
 
 
-def resume_from_origin(state: TaskState, event: Event) -> NodeName:
+def resume_from_origin(state: TaskState, event: Event) -> PipelineState:
     e: RecoverySucceeded = event  # type: ignore[assignment]
     if e.resume == "done":
-        return "done"
+        return PipelineState.DONE
     if not e.resume:
         trigger = state.active_recovery_trigger
         if trigger is not None and trigger.origin_stage in STAGES:
@@ -111,25 +116,25 @@ def resume_from_origin(state: TaskState, event: Event) -> NodeName:
         raise ValueError("RecoverySucceeded missing resume destination")
     if e.resume in STAGES:
         return _entry_phase(e.resume)
-    return e.resume
+    return canonical_pipeline_state(e.resume)
 
 
-def resume_from_pre_exec(state: TaskState, event: Event) -> NodeName:
+def resume_from_pre_exec(state: TaskState, event: Event) -> PipelineState:
     e: PreExecRecoverySucceeded = event  # type: ignore[assignment]
     if e.resume_stage in STAGES:
         return _entry_phase(e.resume_stage)
-    return e.resume_stage
+    return canonical_pipeline_state(e.resume_stage)
 
 
-def entry_from_worktree_sync(state: TaskState, event: Event) -> NodeName:
+def entry_from_worktree_sync(state: TaskState, event: Event) -> PipelineState:
     del event
     if state.entry_stage in STAGES:
         return _entry_phase(state.entry_stage)
     if state.entry_stage:
-        return state.entry_stage
+        return canonical_pipeline_state(state.entry_stage)
     if state.pipeline_mode == "single":
-        return "before_implementing"
-    return "before_grooming"
+        return PipelineState.BEFORE_IMPLEMENTING
+    return PipelineState.BEFORE_GROOMING
 
 
 # ── rule generators (used by rules.py) ──────────────────────────────────

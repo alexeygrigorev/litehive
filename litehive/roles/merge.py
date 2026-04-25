@@ -1,5 +1,6 @@
 from typing import Any
 
+from litehive.domain.common import PipelineState
 from litehive.lifecycle.persistence import TaskState
 from .base import RoleAgent
 
@@ -43,7 +44,7 @@ class MergeAgent(RoleAgent):
     assembly.
     """
 
-    NODE_NAME = "merge_resolving"
+    NODE_NAME = PipelineState.MERGE_RESOLVING
     ROLE = "merge-resolver"
     ROLE_INSTRUCTIONS = ROLE_GUIDANCE
     FRESH_ATTEMPT_INSTRUCTIONS = FRESH_ATTEMPT_GUIDANCE

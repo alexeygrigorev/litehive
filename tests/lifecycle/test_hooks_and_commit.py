@@ -1230,7 +1230,7 @@ def test_main_checkout_cleanup_skips_tracked_ignored_task_reports(tmp_path: Path
     report_path.write_text("stage: testing\nsummary: updated\n", encoding="utf-8")
 
     node = GitCommitNode(main_repo_root=tmp_path, worktree_resolver=lambda state: tmp_path)
-    head = node.autocommit_main_checkout_changes(make_state(stage="commit_to_git", task_id=seed_task.id))
+    head = node.autocommit_main_checkout_changes(make_state(stage="commit", task_id=seed_task.id))
 
     status = subprocess.run(
         ["git", "status", "--short"],

@@ -61,7 +61,7 @@ class PipelineJournal(ABC):
     # ── public entry points used by the Runner ───────────────────────
 
     def task_started(self, task_id: str, stage: NodeName) -> None:
-        self._append(KIND_TASK_STARTED, task_id, {"stage": stage})
+        self._append(KIND_TASK_STARTED, task_id, {"stage": str(stage)})
 
     def transition(
         self,
@@ -76,20 +76,20 @@ class PipelineJournal(ABC):
             KIND_TRANSITION,
             task_id,
             {
-                "from_stage": from_stage,
+                "from_stage": str(from_stage),
                 "event_type": type(event).__name__,
                 "event_payload": _event_payload(event),
-                "to_stage": to_stage,
+                "to_stage": str(to_stage),
                 "rule_description": rule_description,
                 "delta": _delta_payload(delta),
             },
         )
 
     def stop_requested(self, task_id: str, stage: NodeName) -> None:
-        self._append(KIND_STOP_REQUESTED, task_id, {"stage": stage})
+        self._append(KIND_STOP_REQUESTED, task_id, {"stage": str(stage)})
 
     def task_finished(self, task_id: str, stage: NodeName) -> None:
-        self._append(KIND_TASK_FINISHED, task_id, {"stage": stage})
+        self._append(KIND_TASK_FINISHED, task_id, {"stage": str(stage)})
 
     # ── template method ──────────────────────────────────────────────
 

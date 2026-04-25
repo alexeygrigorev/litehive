@@ -94,6 +94,44 @@ class PipelineMode(StringEnum):
     FULL = "full"      # Run the full pipeline from grooming through commit
 
 
+class PipelineState(StringEnum):
+    """Canonical internal state-machine positions.
+
+    These are the real nodes the pipeline runner persists, evaluates in
+    transition rules, and passes into prompts. They are intentionally separate
+    from ``PipelineStatus`` and ``TaskStage``, which are operator-facing
+    projections that collapse hook/system nodes into broader task phases.
+    """
+
+    READY = "ready"
+    WORKTREE_SYNC = "worktree_sync"
+    RECOVERING_PRE_EXEC = "recovering_pre_exec"
+
+    BEFORE_GROOMING = "before_grooming"
+    GROOMING = "grooming"
+    AFTER_GROOMING = "after_grooming"
+
+    BEFORE_IMPLEMENTING = "before_implementing"
+    IMPLEMENTING = "implementing"
+    AFTER_IMPLEMENTING = "after_implementing"
+
+    BEFORE_TESTING = "before_testing"
+    TESTING = "testing"
+    AFTER_TESTING = "after_testing"
+
+    BEFORE_ACCEPTING = "before_accepting"
+    ACCEPTING = "accepting"
+    AFTER_ACCEPTING = "after_accepting"
+
+    COMMIT = "commit"
+    AFTER_COMMIT = "after_commit"
+    MERGE_RESOLVING = "merge_resolving"
+
+    RECOVERING = "recovering"
+    DONE = "done"
+    FAILED = "failed"
+
+
 class TaskStage(StringEnum):
     """Main execution stages in the task lifecycle.
 
@@ -143,6 +181,68 @@ class PipelineStatus(StringEnum):
     FLAGGED = "flagged"              # Requires operator attention
 
 
+def canonical_pipeline_state(value: str | PipelineState) -> PipelineState:
+    """Normalize a persisted or caller-supplied value to ``PipelineState``."""
+    if isinstance(value, PipelineState):
+        return value
+    return PipelineState(str(value))
+
+
+_TASK_STAGE_BY_PIPELINE_STATE: dict[PipelineState, TaskStage] = {
+    PipelineState.BEFORE_GROOMING: TaskStage.GROOMING,
+    PipelineState.GROOMING: TaskStage.GROOMING,
+    PipelineState.AFTER_GROOMING: TaskStage.GROOMING,
+    PipelineState.RECOVERING: TaskStage.GROOMING,
+    PipelineState.BEFORE_IMPLEMENTING: TaskStage.IMPLEMENTING,
+    PipelineState.IMPLEMENTING: TaskStage.IMPLEMENTING,
+    PipelineState.AFTER_IMPLEMENTING: TaskStage.IMPLEMENTING,
+    PipelineState.BEFORE_TESTING: TaskStage.TESTING,
+    PipelineState.TESTING: TaskStage.TESTING,
+    PipelineState.AFTER_TESTING: TaskStage.TESTING,
+    PipelineState.BEFORE_ACCEPTING: TaskStage.ACCEPTING,
+    PipelineState.ACCEPTING: TaskStage.ACCEPTING,
+    PipelineState.AFTER_ACCEPTING: TaskStage.ACCEPTING,
+    PipelineState.COMMIT: TaskStage.COMMIT_TO_GIT,
+    PipelineState.AFTER_COMMIT: TaskStage.COMMIT_TO_GIT,
+    PipelineState.MERGE_RESOLVING: TaskStage.COMMIT_TO_GIT,
+}
+
+
+_PIPELINE_STATUS_BY_PIPELINE_STATE: dict[PipelineState, PipelineStatus] = {
+    PipelineState.READY: PipelineStatus.BACKLOG,
+    PipelineState.WORKTREE_SYNC: PipelineStatus.BACKLOG,
+    PipelineState.RECOVERING_PRE_EXEC: PipelineStatus.BACKLOG,
+    PipelineState.BEFORE_GROOMING: PipelineStatus.GROOMING,
+    PipelineState.GROOMING: PipelineStatus.GROOMING,
+    PipelineState.AFTER_GROOMING: PipelineStatus.GROOMING,
+    PipelineState.RECOVERING: PipelineStatus.GROOMING,
+    PipelineState.BEFORE_IMPLEMENTING: PipelineStatus.IMPLEMENTING,
+    PipelineState.IMPLEMENTING: PipelineStatus.IMPLEMENTING,
+    PipelineState.AFTER_IMPLEMENTING: PipelineStatus.IMPLEMENTING,
+    PipelineState.BEFORE_TESTING: PipelineStatus.TESTING,
+    PipelineState.TESTING: PipelineStatus.TESTING,
+    PipelineState.AFTER_TESTING: PipelineStatus.TESTING,
+    PipelineState.BEFORE_ACCEPTING: PipelineStatus.ACCEPTING,
+    PipelineState.ACCEPTING: PipelineStatus.ACCEPTING,
+    PipelineState.AFTER_ACCEPTING: PipelineStatus.ACCEPTING,
+    PipelineState.COMMIT: PipelineStatus.COMMIT_TO_GIT,
+    PipelineState.AFTER_COMMIT: PipelineStatus.COMMIT_TO_GIT,
+    PipelineState.MERGE_RESOLVING: PipelineStatus.COMMIT_TO_GIT,
+    PipelineState.DONE: PipelineStatus.DONE,
+    PipelineState.FAILED: PipelineStatus.FLAGGED,
+}
+
+
+def task_stage_for_pipeline_state(value: str | PipelineState) -> TaskStage | None:
+    """Return the user-facing work stage for an internal pipeline state."""
+    return _TASK_STAGE_BY_PIPELINE_STATE.get(canonical_pipeline_state(value))
+
+
+def pipeline_status_for_pipeline_state(value: str | PipelineState) -> PipelineStatus:
+    """Return the operator-facing task pipeline status for a machine state."""
+    return _PIPELINE_STATUS_BY_PIPELINE_STATE[canonical_pipeline_state(value)]
+
+
 class RunnerStatus(StringEnum):
     """Status for monitoring the top-level runner process.
 
@@ -187,6 +287,7 @@ __all__ = [
     "LiveEventRole",
     "OutcomeKind",
     "OutcomeReasonCode",
+    "PipelineState",
     "PipelineMode",
     "PipelineStatus",
     "RunnerStatus",
@@ -197,5 +298,8 @@ __all__ = [
     "TRUNCATION_MARKER",
     "Verdict",
     "cap_feedback",
+    "canonical_pipeline_state",
+    "pipeline_status_for_pipeline_state",
+    "task_stage_for_pipeline_state",
     "utcnow",
 ]

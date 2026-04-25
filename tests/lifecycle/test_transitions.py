@@ -13,6 +13,7 @@ from litehive.domain.recovery import (
     RecoveryTrigger,
     TriggerEventKind,
 )
+from litehive.domain.common import PipelineState
 from litehive.lifecycle.rules import RULES
 from litehive.lifecycle.transitions import evaluate, list_transitions
 from litehive.lifecycle.events import (
@@ -106,6 +107,13 @@ FULL_HAPPY_PATH = [
 def test_full_mode_happy_path(stage, event, expected):
     state = make_state(stage, mode=PipelineMode.FULL)
     assert step(stage, event, state).next == expected
+
+
+def test_transition_targets_are_canonical_pipeline_state_values():
+    state = make_state("ready", mode=PipelineMode.FULL)
+    transition = step("ready", CleanState(), state)
+
+    assert transition.next is PipelineState.WORKTREE_SYNC
 
 
 def test_single_mode_entry_skips_grooming_testing_accepting():

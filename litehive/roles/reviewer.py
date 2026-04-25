@@ -1,3 +1,5 @@
+from litehive.domain.common import PipelineState
+
 from .base import RoleAgent
 
 ROLE_GUIDANCE = """\
@@ -31,7 +33,7 @@ RETRY_ATTEMPT_GUIDANCE = """\
 class ReviewerAgent(RoleAgent):
     """Accepting stage: final done/not-done judgment before commit."""
 
-    NODE_NAME = "accepting"
+    NODE_NAME = PipelineState.ACCEPTING
     ROLE = "reviewer"
     ROLE_INSTRUCTIONS = ROLE_GUIDANCE
     FRESH_ATTEMPT_INSTRUCTIONS = FRESH_ATTEMPT_GUIDANCE
