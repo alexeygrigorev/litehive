@@ -337,11 +337,13 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
     if stage == "grooming":
         return [
             "- You are the planner, a PM-style role representing the user's and product's point of view.",
+            "- Before changing scope, acceptance criteria, or plan, run a grooming preflight against current `main` and recent landed work. Inspect the relevant code/tests and recent commits so you do not plan work that is already present.",
+            "- If current `main` already satisfies the request, do not create an implementation plan. Mark it directly from grooming with concrete evidence: `litehive task close <task-id> --outcome done --reason ...` for already-satisfied work, or `litehive task close <task-id> --outcome duplicate --reason ...` when another task/landed change covers it.",
             "- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks.",
             "- Treat the Litehive CLI as the source of truth for task shaping. Use explicit CLI commands to mutate task state:",
             "  - `litehive task update <task-id> --goal ... --acceptance-criteria ... --plan-step ... --constraint ...` to rewrite task fields.",
             "  - `litehive task add ...` to create follow-up tasks when the current task mixes concerns.",
-            "  - `litehive task close <task-id> --outcome duplicate|wont_do|deferred --reason ...` to close.",
+            "  - `litehive task close <task-id> --outcome done|duplicate|wont_do|deferred --reason ...` to close.",
             "- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or reject it with a clear explanation of what is missing.",
             "- Do not implement code in this stage.",
         ]

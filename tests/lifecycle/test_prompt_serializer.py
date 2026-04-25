@@ -410,6 +410,19 @@ def test_planner_prompt_surfaces_failed_run_history(workspace: Path) -> None:
     assert "reason=tests fail" in text
 
 
+def test_planner_prompt_requires_current_main_preflight_before_scoping(workspace: Path) -> None:
+    task = create_task(workspace, title="Avoid redundant implementation", goal="check current main first")
+    agent = PlannerAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
+
+    text = serialize_prompt(agent.build_prompt(make_state(task.id, stage="grooming")), task_record=task)
+
+    preflight_idx = text.index("run a grooming preflight against current `main` and recent landed work")
+    planning_idx = text.index("Frame the real user problem")
+    assert preflight_idx < planning_idx
+    assert "`litehive task close <task-id> --outcome done --reason ...`" in text
+    assert "`litehive task close <task-id> --outcome duplicate --reason ...`" in text
+
+
 def test_retry_prompt_includes_prior_work_summary_from_last_report(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())

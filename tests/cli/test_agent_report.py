@@ -474,6 +474,43 @@ def test_root_task_close_allows_reviewer_agent_api(tmp_path: Path, monkeypatch) 
     assert updated.runtime.last_outcome.reason == "already tracked elsewhere"
 
 
+def test_root_task_close_allows_planner_to_mark_done_from_grooming(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Already satisfied on main")
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
+    monkeypatch.setenv("LITEHIVE_STAGE", "grooming")
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        root_app,
+        [
+            "task",
+            "close",
+            task.id,
+            "--workspace",
+            str(tmp_path),
+            "--outcome",
+            "done",
+            "--reason",
+            "verified current main already satisfies the request",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "status: done" in result.output
+    assert "pipeline_stage: done" in result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    assert updated.status == "done"
+    assert updated.pipeline_status == "done"
+    assert updated.runtime.execution_status == "done"
+    assert updated.runtime.last_outcome is not None
+    assert updated.runtime.last_outcome.kind == "done"
+    assert updated.runtime.last_outcome.reason_code == "done"
+    assert updated.runtime.last_outcome.reason == "verified current main already satisfies the request"
+
+
 def test_agent_report_rejects_legacy_recovery_pass_verdict(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery verdict contract")

@@ -621,9 +621,10 @@ def abandon_task(root: Path, task_id: str) -> TaskRecord:
         return task
 
 
-_CLOSE_OUTCOME_REASON_CODES = {"wont_do", "deferred", "duplicate", "execution_cancelled"}
+_CLOSE_OUTCOME_REASON_CODES = {"done", "wont_do", "deferred", "duplicate", "execution_cancelled"}
 
 _CLOSE_REASON_CODE_LABELS: dict[str, str] = {
+    "done": "Task already satisfied.",
     "wont_do": "Task closed as won't do.",
     "deferred": "Task deferred.",
     "duplicate": "Task closed as duplicate.",
@@ -667,10 +668,10 @@ def _apply_close_task_state(
     follow_up_task_id: str | None = None,
     pipeline_status: str | None = None,
 ) -> str:
-    clear_task_run_activity(task, execution_status="cancelled")
+    execution_status = "done" if outcome == "done" else "cancelled"
+    clear_task_run_activity(task, execution_status=execution_status)
     task.status = outcome  # type: ignore[assignment]
-    if pipeline_status is not None:
-        task.pipeline_status = pipeline_status
+    task.pipeline_status = pipeline_status or ("done" if outcome == "done" else task.pipeline_status)
     apply_task_outcome(
         task,
         kind=outcome,
@@ -714,9 +715,9 @@ def close_task(
     from litehive.state.persist import load_state
     from litehive.state.persist import persist_task_and_state_without_runner_guard
 
-    """Mark a task as explicitly closed with a non-implementation outcome.
+    """Mark a task as explicitly closed with a terminal outcome.
 
-    Valid outcomes: ``wont_do``, ``deferred``, ``duplicate``, ``execution_cancelled``.
+    Valid outcomes: ``done``, ``wont_do``, ``deferred``, ``duplicate``, ``execution_cancelled``.
     The task is removed from the queue.
     """
     if outcome not in _CLOSE_OUTCOME_REASON_CODES:

@@ -37,12 +37,13 @@ def cap_feedback(text: str, *, limit: int = FEEDBACK_CAP) -> str:
 
 
 class OutcomeKind(StringEnum):
-    """Terminal outcome categories for tasks that don't complete successfully.
+    """Terminal outcome categories for tasks.
 
-    Used by TaskService and CLI close actions to classify why a task ended
-    without successful completion. Maps to task close reasons and interruption
-    types for reporting and operator workflow management.
+    Used by TaskService and CLI close actions to classify why a task ended.
+    Maps to task close reasons and interruption types for reporting and
+    operator workflow management.
     """
+    DONE = "done"          # Task was already or successfully completed
     FLAGGED = "flagged"      # Requires explicit operator attention
     BLOCKED = "blocked"      # Progress requires external input or missing dependency
     INTERRUPTED = "interrupted"  # Execution stopped, potentially resumable
@@ -76,6 +77,7 @@ class OutcomeReasonCode(StringEnum):
     STAGE_EXCEPTION = "stage_exception"
     UNSUPPORTED_VERDICT = "unsupported_verdict"
     MERGE_CONFLICT = "merge_conflict"
+    DONE = "done"
     WONT_DO = "wont_do"
     DEFERRED = "deferred"
     DUPLICATE = "duplicate"
