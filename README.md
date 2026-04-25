@@ -237,7 +237,7 @@ Repo-local control files stay in the repository:
       brief.md         # structured task brief
       reports/         # stage verdicts (gitignored)
       subagents/       # execution artifacts (gitignored)
-      comments.yaml    # agent discussion history (gitignored)
+      comments.yaml    # task activity mirror (gitignored)
       journal.md       # event log (gitignored)
 ```
 
@@ -311,7 +311,7 @@ litehive task recent --since 72h # widen the reporting window
 
 Litehive keeps `task.yaml`, `runtime.yaml`, stage reports, `comments.yaml`, `journal.md`, `events.jsonl`, `session.yaml`, and `report.yaml` as the durable evidence surface for status, repair, recovery, and handoff.
 
-During migration, Litehive still reads legacy per-task `thread.yaml` discussion files when `comments.yaml` is absent, and `litehive repair` rewrites legacy task discussion files to `comments.yaml`.
+During migration, Litehive still reads legacy per-task `thread.yaml` activity files when `comments.yaml` is absent, and `litehive repair` rewrites legacy task activity files to `comments.yaml`.
 
 High-volume raw execution artifacts are treated as disposable support data:
 

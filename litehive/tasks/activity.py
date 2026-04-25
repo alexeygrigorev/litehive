@@ -1,4 +1,4 @@
-"""Task activity boundary over the SQLite-backed store plus comments.yaml mirroring."""
+"""Task activity boundary over the SQLite-backed store plus filesystem mirroring."""
 
 from datetime import UTC, datetime
 import json
@@ -26,20 +26,20 @@ def legacy_task_activity_path(root: Path, task: TaskRecord) -> Path:
 
 
 def resolve_task_activity_path(root: Path, task: TaskRecord) -> Path:
-    comments_path = task_activity_path(root, task)
-    if comments_path.exists():
-        return comments_path
+    activity_path = task_activity_path(root, task)
+    if activity_path.exists():
+        return activity_path
     legacy_path = legacy_task_activity_path(root, task)
     if legacy_path.exists():
         return legacy_path
-    return comments_path
+    return activity_path
 
 
 def load_task_activity(root: Path, task: TaskRecord) -> list[TaskActivityEntry]:
-    comments_payload = _read_task_activity_file(task_activity_path(root, task))
-    if comments_payload is not None:
-        if comments_payload[1]:
-            return comments_payload[0]
+    activity_payload = _read_task_activity_file(task_activity_path(root, task))
+    if activity_payload is not None:
+        if activity_payload[1]:
+            return activity_payload[0]
         return _load_task_activity_from_db(root, task)
     legacy_payload = _read_task_activity_file(legacy_task_activity_path(root, task))
     if legacy_payload is not None:
@@ -188,20 +188,20 @@ def migrate_legacy_task_activity_files(root: Path) -> bool:
     for legacy_path in legacy_paths:
         if not legacy_path.is_file():
             continue
-        comments_path = legacy_path.with_name("comments.yaml")
-        if comments_path.exists():
+        activity_path = legacy_path.with_name("comments.yaml")
+        if activity_path.exists():
             legacy_path.unlink()
             mutated = True
             continue
 
-        legacy_path.replace(comments_path)
+        legacy_path.replace(activity_path)
         mutated = True
 
-        task_id = _task_id_from_task_dir_name(comments_path.parent.name)
+        task_id = _task_id_from_task_dir_name(activity_path.parent.name)
         if task_id is None:
             continue
 
-        parsed = _read_task_activity_file(comments_path)
+        parsed = _read_task_activity_file(activity_path)
         if parsed is None or not parsed[1]:
             continue
         _save_task_activity_to_db(root, task_id, parsed[0])

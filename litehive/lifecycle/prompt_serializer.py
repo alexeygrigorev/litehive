@@ -51,7 +51,7 @@ def serialize_prompt(
     if task_record is None and workspace_root is not None:
         task_record = get_task(workspace_root, prompt["task_id"])
 
-    activity = prompt.get("activity") or prompt.get("thread") or []
+    activity = prompt.get("activity") or []
     if not activity and workspace_root is not None and task_record is not None:
         activity = _load_task_activity_history(workspace_root, task_record)
 

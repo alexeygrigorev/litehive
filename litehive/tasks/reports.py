@@ -1,4 +1,4 @@
-"""Recovery evidence, task comments, and report helpers."""
+"""Recovery evidence, task activity, and report helpers."""
 
 import json
 from pathlib import Path
@@ -18,7 +18,6 @@ from .activity import (
     append_task_activity,
     load_task_activity,
     resolve_task_activity_path,
-    save_task_activity,
 )
 from .paths import (
     latest_path,
@@ -90,7 +89,7 @@ def collect_recovery_evidence(
             label=activity_path.name,
             path=str(activity_path.relative_to(root)),
             exists=activity_path.exists(),
-            summary=f"discussion entries={len(load_task_activity(root, task))}",
+            summary=f"activity entries={len(load_task_activity(root, task))}",
         )
     )
     evidence.append(
@@ -260,10 +259,6 @@ def append_activity_entry(root: Path, task: TaskRecord, entry: "TaskActivityEntr
     append_task_activity(root, task, entry)
 
 
-def append_task_comment(root: Path, task: TaskRecord, entry: "TaskActivityEntry") -> None:
-    append_activity_entry(root, task, entry)
-
-
 def write_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Path:
     reports_dir = task_dir(root, task) / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
@@ -421,22 +416,3 @@ def render_task_activity(root: Path, task: TaskRecord, *, for_prompt: bool = Fal
         if entry.files_changed:
             lines.append(f"Files: {', '.join(entry.files_changed)}")
     return "\n".join(lines)
-
-
-def load_task_comments(root: Path, task: TaskRecord) -> list["TaskActivityEntry"]:
-    return load_task_activity(root, task)
-
-
-def save_task_comments(root: Path, task: TaskRecord, comments: list["TaskActivityEntry"]) -> None:
-    save_task_activity(root, task, comments)
-
-
-def render_task_comments(root: Path, task: TaskRecord, *, for_prompt: bool = False) -> str:
-    return render_task_activity(root, task, for_prompt=for_prompt)
-
-
-# Legacy aliases kept for straggler imports during the filename migration.
-append_thread_comment = append_task_comment
-load_task_thread = load_task_comments
-save_task_thread = save_task_comments
-render_task_thread = render_task_comments

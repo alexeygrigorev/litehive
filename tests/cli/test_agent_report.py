@@ -13,7 +13,7 @@ from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, TaskActivity
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import get_task_record
 from litehive.state.records import create_task
-from litehive.tasks.reports import load_task_activity
+from litehive.tasks.activity import load_task_activity
 
 
 @pytest.fixture(autouse=True)
