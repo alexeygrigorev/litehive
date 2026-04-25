@@ -7,9 +7,11 @@ reason: Worktree removed but task metadata clearing deferred due to active runne
   lock
 suggested_action: Wait for runner to finish, then run attention reconciliation
 dedupe_key: stale_worktree_metadata:T-0298
-status: pending
-resolved_at: null
-resolution: null
+status: resolved
+resolved_at: '2026-04-24T11:44:31+00:00'
+resolution: resolved by operator
 metadata:
   worktree_path: /home/alexey/.local/share/litehive/c16deb0d1ee209d7/worktrees/T-0298-archive-semantics-delete-files-from-filesystem
   deferred_operation: clear_worktree_path
+  suppressed_until_cleared: true
+  condition_cleared_after_resolution: true

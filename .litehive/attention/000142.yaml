@@ -1,0 +1,15 @@
+id: 142
+task_id: T-0269
+created_at: '2026-04-25T04:21:57+00:00'
+kind: merge_failed_task
+title: Task T-0269 needs merge recovery
+reason: Checkpoint commit or merge resolution failed and the managed worktree needs
+  operator recovery.
+suggested_action: Run `litehive task debug T-0269 --worktree` and then `litehive queue
+  requeue T-0269`.
+dedupe_key: merge_failed_task:T-0269
+status: resolved
+resolved_at: '2026-04-25T04:30:16+00:00'
+resolution: auto-resolved by attention reconciliation
+metadata:
+  pipeline_status: merge_failed

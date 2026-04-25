@@ -215,10 +215,8 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
     _register_workspace(root)
 
     workspace_path(root, "data.db").parent.mkdir(parents=True, exist_ok=True)
-    from litehive.db.schema import connect_workspace_db
     from litehive.state.store import RuntimeStore
 
-    with connect_workspace_db(root) as connection:
-        RuntimeStore.ensure_workspace_state_rows(connection)
+    RuntimeStore(root).bootstrap()
 
     return base

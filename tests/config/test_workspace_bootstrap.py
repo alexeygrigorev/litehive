@@ -1,4 +1,5 @@
 from concurrent.futures import ProcessPoolExecutor
+import json
 import multiprocessing
 import os
 from pathlib import Path
@@ -399,6 +400,29 @@ def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
 
     with connect_workspace_db(tmp_path) as connection:
         assert connection.execute("SELECT task_id FROM task_state WHERE task_id = ?", (task.id,)).fetchone() is None
+
+
+def test_ensure_workspace_bootstraps_fresh_database_from_task_files(tmp_path: Path) -> None:
+    from litehive.config.paths import workspace_path
+    from litehive.db.schema import connect_workspace_db
+    from litehive.state.records import create_task
+
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Recovered from task file")
+
+    db_path = workspace_path(tmp_path, "data.db")
+    for path in (db_path, db_path.with_name(db_path.name + "-wal"), db_path.with_name(db_path.name + "-shm")):
+        path.unlink(missing_ok=True)
+
+    ensure_workspace(tmp_path)
+
+    with connect_workspace_db(tmp_path) as connection:
+        task_row = connection.execute("SELECT task_id FROM task_state WHERE task_id = ?", (task.id,)).fetchone()
+        queue_row = connection.execute("SELECT payload FROM queue WHERE workspace_key = ?", ("workspace",)).fetchone()
+
+    assert task_row is not None
+    assert queue_row is not None
+    assert json.loads(queue_row[0]) == [task.id]
 
 
 def test_ensure_workspace_skips_disk_scan_for_bootstrapped_empty_workspace(
