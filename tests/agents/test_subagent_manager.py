@@ -504,7 +504,7 @@ def test_subagent_manager_kills_stale_live_codex_output_after_timeout(
     )
 
     with pytest.raises(SubagentInactivityTimeout, match="1s without new stdout"):
-        manager._check_stdout_inactivity(base, "codex", execution)
+        manager.check_stdout_inactivity(base, "codex", execution)
 
     assert killed == [4242]
 
@@ -682,7 +682,7 @@ def test_subagent_manager_survives_nonfatal_start_callback_failure_for_planner(
         raise RuntimeError("pid bookkeeping failed")
 
     monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
-    monkeypatch.setattr(manager, "_record_subagent_pid", fail_record_pid)
+    monkeypatch.setattr(manager, "record_subagent_pid", fail_record_pid)
 
     result = manager.run(task, role="planner", engine_name="codex", prompt="groom it")
 

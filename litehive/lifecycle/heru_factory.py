@@ -250,7 +250,7 @@ def _extract_test_results(message: str) -> list[str]:
     return results[:4]
 
 
-def _latest_verdict_after(
+def latest_verdict_after(
     workspace_root: Path,
     task_id: str,
     stage: str,
@@ -371,7 +371,7 @@ class HeruEngineAdapter:
         session.turn_count = (session.turn_count or 0) + 1
 
         # Did the agent submit a verdict during this turn?
-        verdict = _latest_verdict_after(self.workspace_root, state.task_id, stage, before_turn)
+        verdict = latest_verdict_after(self.workspace_root, state.task_id, stage, before_turn)
         if verdict is None:
             raise NudgeRequired(f"{self.name} finished {stage} without a litehive report submission")
 
@@ -476,7 +476,7 @@ class HeruEngineAdapter:
         )
         if state.stage != "recovering":
             return None
-        return _latest_verdict_after(self.workspace_root, state.task_id, "recovering", after_ts)
+        return latest_verdict_after(self.workspace_root, state.task_id, "recovering", after_ts)
 
     def _direct_recovery_prompt(self, *, task, state: TaskState, startup_message: str) -> str:
         recovery_state = self._direct_recovery_state(state, startup_message)

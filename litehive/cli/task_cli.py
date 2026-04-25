@@ -225,7 +225,7 @@ def debug(
     all_: Annotated[bool, typer.Option("--all", help="List all subagents")] = False,
     worktree: Annotated[bool, typer.Option(help="Show worktree details")] = False,
 ) -> int:
-    from litehive.cli.task_debug_support import _debug_all, _debug_latest, _debug_worktree
+    from litehive.cli.task_debug_support import debug_all, debug_latest, debug_worktree
 
     ensure_workspace(workspace)
     try:
@@ -234,10 +234,10 @@ def debug(
         print(f"task not found: {task_id}")
         return 1
     if worktree:
-        return _debug_worktree(workspace, task)
+        return debug_worktree(workspace, task)
     if all_:
-        return _debug_all(workspace, task)
-    return _debug_latest(workspace, task)
+        return debug_all(workspace, task)
+    return debug_latest(workspace, task)
 
 
 @app.command("logs", help="Show daemon, task journal, and subagent logs")
@@ -250,31 +250,31 @@ def logs(
     follow: Annotated[bool, typer.Option(help="Follow live stdout")] = False,
 ) -> int:
     from litehive.cli.task_logs_support import (
-        _follow_active_subagent,
-        _list_daemon_sessions,
-        _list_task_subagents,
-        _load_task_with_runtime,
-        _show_latest_daemon_log,
-        _show_latest_subagent,
-        _show_task_journal,
+        follow_active_subagent,
+        list_daemon_sessions,
+        list_task_subagents,
+        load_task_with_runtime,
+        show_latest_daemon_log,
+        show_latest_subagent,
+        show_task_journal,
     )
 
     ensure_workspace(workspace)
     if follow:
-        return _follow_active_subagent(workspace, task_id=task_id)
+        return follow_active_subagent(workspace, task_id=task_id)
     if daemon:
-        return _list_daemon_sessions(workspace)
+        return list_daemon_sessions(workspace)
     if task_id:
-        task = _load_task_with_runtime(workspace, task_id)
+        task = load_task_with_runtime(workspace, task_id)
         if task is None:
             print(f"task not found: {task_id}")
             return 1
         if agent:
             if all_:
-                return _list_task_subagents(workspace, task)
-            return _show_latest_subagent(workspace, task)
-        return _show_task_journal(workspace, task)
-    return _show_latest_daemon_log(workspace)
+                return list_task_subagents(workspace, task)
+            return show_latest_subagent(workspace, task)
+        return show_task_journal(workspace, task)
+    return show_latest_daemon_log(workspace)
 
 
 @app.command("list", help="Compact task listing with optional filters")

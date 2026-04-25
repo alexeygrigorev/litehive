@@ -121,7 +121,7 @@ def test_agent_and_commit_use_persisted_worktree_path(
     session = Session()
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        "litehive.lifecycle.heru_factory.latest_verdict_after",
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 

@@ -11,14 +11,14 @@ from litehive.config.paths import litehive_root, workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.config.workspace_files import workspace_dir
 from litehive.domain.task import WorkspaceState
-from litehive.main import _fast_status
+from litehive.main import fast_status
 from litehive.state.persist import save_state
 
 from tests.support.helpers import _cmd_status
 
 
 def _run_fast_status(workspace: Path, capsys) -> tuple[int, str]:
-    exit_code = _fast_status(["--workspace", str(workspace)])
+    exit_code = fast_status(["--workspace", str(workspace)])
     return exit_code, capsys.readouterr().out
 
 

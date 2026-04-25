@@ -15,7 +15,7 @@ def _fmt_seconds(seconds: float) -> str:
     return f"{h}h{m:02d}m"
 
 
-def _task_stage_outcomes(root, task_id, slug):
+def task_stage_outcomes(root, task_id, slug):
     reports_dir = root / ".litehive" / "tasks" / f"{task_id}-{slug}" / "reports"
     if not reports_dir.exists():
         return []
@@ -45,7 +45,7 @@ def _task_reports_dir(root, task_id):
     return None
 
 
-def _collect_task_stage_stats(root, task_id):
+def collect_task_stage_stats(root, task_id):
     """Collect stage/verdict/duration_seconds from all reports for a task."""
     reports_dir = _task_reports_dir(root, task_id)
     if reports_dir is None or not reports_dir.exists():
@@ -70,7 +70,7 @@ def _collect_task_stage_stats(root, task_id):
     return stats
 
 
-def _compute_pool_flow_statistics(root, task_entries):
+def compute_pool_flow_statistics(root, task_entries):
     """Compute aggregate flow statistics from all task stage reports.
 
     Returns a dict with stages_executed, per-stage duration metrics (avg_seconds,
@@ -86,7 +86,7 @@ def _compute_pool_flow_statistics(root, task_entries):
         task_id = entry.get("task_id")
         if not task_id:
             continue
-        for stat in _collect_task_stage_stats(root, task_id):
+        for stat in collect_task_stage_stats(root, task_id):
             stage = stat["stage"]
             verdict = stat["verdict"]
             duration = stat["duration_seconds"]
@@ -138,7 +138,7 @@ def _pool_task_report_entry(
     reason=None,
     follow_up_task_id=None,
 ):
-    stage_outcomes = _task_stage_outcomes(root, task_id, slug) if slug is not None else []
+    stage_outcomes = task_stage_outcomes(root, task_id, slug) if slug is not None else []
     return {
         "task_id": task_id,
         "title": title,
@@ -301,7 +301,7 @@ def _pool_summary_report_data(
     resumable = _resumable_pool_tasks(root)
     closed = _closed_pool_tasks(root)
     progress_status, summary = _pool_no_useful_progress_report(stop_reason)
-    flow_statistics = _compute_pool_flow_statistics(root, list(completed) + list(flagged))
+    flow_statistics = compute_pool_flow_statistics(root, list(completed) + list(flagged))
     return {
         "created_at": utcnow(),
         "summary": summary,

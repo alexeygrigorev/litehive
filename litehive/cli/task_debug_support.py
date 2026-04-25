@@ -16,7 +16,7 @@ from litehive.tasks.reports import latest_stage_report
 from litehive.worktree import resolve_recorded_worktree_path
 
 
-def _debug_all(root: Path, task):
+def debug_all(root: Path, task):
     """List all subagents with status summary."""
     if not task.subagents:
         print(f"{task.id}: no subagents")
@@ -31,7 +31,7 @@ def _debug_all(root: Path, task):
     return 0
 
 
-def _debug_latest(root: Path, task):
+def debug_latest(root: Path, task):
     """Show detailed info for the latest subagent."""
     # Find the latest subagent ref and its artifact directory
     if not task.subagents:
@@ -102,7 +102,7 @@ def _debug_latest(root: Path, task):
     return 0
 
 
-def _debug_worktree(root: Path, task):
+def debug_worktree(root: Path, task):
     """Show whether the task worktree exists and what changed inside it."""
     worktree_rel = get_task_worktree_path(task)
     print(f"task: {task.id}")

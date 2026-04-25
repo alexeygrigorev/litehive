@@ -198,7 +198,7 @@ class SubagentManager(SessionMixin):
         task.subagents.append(ref)
         save_task(self.root, task)
         mark_subagent_started(self.root, task, ref)
-        self._write_session_start(task, base, ref, prompt)
+        self.write_session_start(task, base, ref, prompt)
         failure: EngineFailure | None = None
         callback_warnings: list[str] = []
         engine_started = False
@@ -207,7 +207,7 @@ class SubagentManager(SessionMixin):
             nonlocal engine_started
             engine_started = True
             try:
-                self._record_subagent_pid(task, base, ref, pid)
+                self.record_subagent_pid(task, base, ref, pid)
             except Exception as exc:  # callback failures must not crash the runner
                 self._record_live_callback_failure(
                     ref=ref,
@@ -258,7 +258,7 @@ class SubagentManager(SessionMixin):
                 run_live_callable = effective_engine_callable(execution_engine, "run_live")
                 if not callable(run_live_callable):
                     run_live_callable = execution_engine.run_live
-                inactivity_timeout_seconds = self._subagent_inactivity_timeout_seconds(engine_name)
+                inactivity_timeout_seconds = self.subagent_inactivity_timeout_seconds(engine_name)
                 live_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
                     "model": effective_model,
@@ -298,14 +298,14 @@ class SubagentManager(SessionMixin):
                     prompt,
                     **filter_supported_kwargs(run_callable, run_kwargs),
                 )
-            completed_timeout = self._completed_inactivity_timeout(engine_name, proc)
+            completed_timeout = self.completed_inactivity_timeout(engine_name, proc)
             if completed_timeout is not None:
                 raise completed_timeout
-            transcript = self._render_execution_transcript(
+            transcript = self.render_execution_transcript(
                 ref.engine,
                 proc,
             )
-            continuation = self._extract_execution_continuation(ref.engine, proc)
+            continuation = self.extract_execution_continuation(ref.engine, proc)
             ref.status = "completed" if proc.exit_code == 0 else "failed"
             if proc.exit_code != 0:
                 resource_limit_event = self.sandbox.classify_resource_limit_event(
@@ -350,11 +350,11 @@ class SubagentManager(SessionMixin):
             if timeout_note not in stderr:
                 stderr = f"{stderr.rstrip()}\n{timeout_note}".strip()
             proc = replace(exc.execution, exit_code=124, stderr=stderr)
-            transcript = self._render_execution_transcript(
+            transcript = self.render_execution_transcript(
                 ref.engine,
                 proc,
             )
-            continuation = self._extract_execution_continuation(ref.engine, proc)
+            continuation = self.extract_execution_continuation(ref.engine, proc)
             ref.status = "failed"
             failure = EngineFailure(
                 kind="retryable_execution_error",
@@ -476,7 +476,7 @@ class SubagentManager(SessionMixin):
             )
         report = report.model_copy(update={"warnings": self._merged_warnings(report.warnings, extra_warnings)})
         record_stage_report(self.root, task, report)
-        self._write_session_snapshot(
+        self.write_session_snapshot(
             task,
             base,
             ref,
@@ -508,8 +508,8 @@ class SubagentManager(SessionMixin):
         write_stream_artifact(base, "stdout", "" if execution is None else execution.stdout, compress=True)
         write_stream_artifact(base, "stderr", "" if execution is None else execution.stderr, compress=True)
         if execution is not None:
-            self._append_stream_delta(base, ref, "stdout", execution.stdout)
-            self._append_stream_delta(base, ref, "stderr", execution.stderr)
+            self.append_stream_delta(base, ref, "stdout", execution.stdout)
+            self.append_stream_delta(base, ref, "stderr", execution.stderr)
         append_event(
             self.root,
             task,
@@ -523,7 +523,7 @@ class SubagentManager(SessionMixin):
                 "interruption_reason": interruption_reason,
             },
         )
-        self._write_timeline(base, ref, task, "" if execution is None else execution.stdout)
+        self.write_timeline(base, ref, task, "" if execution is None else execution.stdout)
 
     def _write_session_progress(
         self,
@@ -534,11 +534,11 @@ class SubagentManager(SessionMixin):
         execution: CLIExecutionResult,
     ) -> None:
         engine = get_engine(ref.engine)
-        transcript = self._render_execution_transcript(
+        transcript = self.render_execution_transcript(
             ref.engine,
             execution,
         )
-        continuation = self._extract_execution_continuation(ref.engine, execution)
+        continuation = self.extract_execution_continuation(ref.engine, execution)
         if isinstance(engine, ExternalCLIAdapter):
             record_engine_observation(
                 self.root,
@@ -547,7 +547,7 @@ class SubagentManager(SessionMixin):
                 adapter=engine,
                 execution=execution,
             )
-        self._record_subagent_pid(task, base, ref, execution.pid)
+        self.record_subagent_pid(task, base, ref, execution.pid)
         mark_subagent_progress(
             self.root,
             task,
@@ -555,7 +555,7 @@ class SubagentManager(SessionMixin):
             transcript=transcript,
             continuation=continuation,
         )
-        self._write_session_metadata(
+        self.write_session_metadata(
             task,
             base,
             ref,
@@ -568,8 +568,8 @@ class SubagentManager(SessionMixin):
         write_text_if_changed(base / "transcript.md", transcript)
         write_text_if_changed(base / "stdout.txt", execution.stdout)
         write_text_if_changed(base / "stderr.txt", execution.stderr)
-        self._append_stream_delta(base, ref, "stdout", execution.stdout)
-        self._append_stream_delta(base, ref, "stderr", execution.stderr)
+        self.append_stream_delta(base, ref, "stdout", execution.stdout)
+        self.append_stream_delta(base, ref, "stderr", execution.stderr)
         append_event(
             self.root,
             task,
@@ -612,7 +612,7 @@ class SubagentManager(SessionMixin):
                 ),
                 "continuation": None if continuation is None else continuation.model_dump(mode="python"),
             }
-        self._write_session_snapshot(
+        self.write_session_snapshot(
             task,
             base,
             ref,
@@ -627,8 +627,8 @@ class SubagentManager(SessionMixin):
             resource_limit_event=None,
             continuation=continuation,
         )
-        self._write_timeline(base, ref, task, execution.stdout)
-        self._check_stdout_inactivity(base, ref.engine, execution)
+        self.write_timeline(base, ref, task, execution.stdout)
+        self.check_stdout_inactivity(base, ref.engine, execution)
 
     def _parse_execution_report(
         self,

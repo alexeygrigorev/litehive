@@ -366,7 +366,7 @@ def resolve_task_rejection_loop_limit(task: TaskRecord, config: LitehiveConfig) 
     return config.default_rejection_loop_limit
 
 
-def _set_continuation_handoff(
+def set_continuation_handoff(
     root: Path,
     task: TaskRecord,
     *,

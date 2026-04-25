@@ -332,7 +332,7 @@ def test_fast_status_prefers_runner_active_task_id(
         ],
     )
 
-    exit_code = main_module._fast_status([])
+    exit_code = main_module.fast_status([])
     output = capsys.readouterr().out
 
     assert exit_code == 0

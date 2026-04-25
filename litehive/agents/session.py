@@ -115,7 +115,7 @@ class SessionMixin:
     """
 
     @staticmethod
-    def _render_execution_transcript(
+    def render_execution_transcript(
         engine_name: str,
         execution: CLIExecutionResult | None,
     ) -> str:
@@ -128,7 +128,7 @@ class SessionMixin:
         return _render_transcript_from_events(events, stderr=execution.stderr)
 
     @staticmethod
-    def _extract_execution_continuation(
+    def extract_execution_continuation(
         engine_name: str,
         execution: CLIExecutionResult | None,
     ) -> RuntimeEngineContinuation | None:
@@ -149,7 +149,7 @@ class SessionMixin:
             subagent_id=subagent_id,
         )
 
-    def _append_stream_delta(self, base: Path, ref: SubagentRef, stream: str, full_content: str) -> None:
+    def append_stream_delta(self, base: Path, ref: SubagentRef, stream: str, full_content: str) -> None:
         """Append only the new portion of a stream to the append-only log."""
         key = f"{ref.id}:{stream}"
         prev = self._stream_offsets.get(key, 0)
@@ -157,7 +157,7 @@ class SessionMixin:
             append_session_log(base, stream, full_content[prev:])
             self._stream_offsets[key] = len(full_content)
 
-    def _write_session_start(
+    def write_session_start(
         self,
         task: TaskRecord,
         base: Path,
@@ -177,7 +177,7 @@ class SessionMixin:
                 "sandboxed": ref.sandboxed,
             },
         )
-        self._write_session_snapshot(
+        self.write_session_snapshot(
             task,
             base,
             ref,
@@ -200,7 +200,7 @@ class SessionMixin:
             resource_limit_event=None,
         )
 
-    def _write_session_metadata(
+    def write_session_metadata(
         self,
         task: TaskRecord,
         base: Path,
@@ -241,11 +241,11 @@ class SessionMixin:
             },
         )
 
-    def _record_subagent_pid(self, task: TaskRecord, base: Path, ref: SubagentRef, pid: int | None) -> None:
+    def record_subagent_pid(self, task: TaskRecord, base: Path, ref: SubagentRef, pid: int | None) -> None:
         if pid is None:
             return
         mark_subagent_pid(self.root, task, pid)
-        self._write_session_metadata(
+        self.write_session_metadata(
             task,
             base,
             ref,
@@ -262,12 +262,12 @@ class SessionMixin:
             data={"subagent_id": ref.id, "pid": pid},
         )
 
-    def _subagent_inactivity_timeout_seconds(self, engine_name: str) -> float:
+    def subagent_inactivity_timeout_seconds(self, engine_name: str) -> float:
         if engine_name == "opencode":
             return _OPENCODE_INACTIVITY_TIMEOUT_SECONDS
         return self.config.subagent_inactivity_timeout_seconds
 
-    def _completed_inactivity_timeout(
+    def completed_inactivity_timeout(
         self,
         engine_name: str,
         execution: CLIExecutionResult,
@@ -282,7 +282,7 @@ class SessionMixin:
             limit_seconds=limit_seconds,
         )
 
-    def _check_stdout_inactivity(
+    def check_stdout_inactivity(
         self,
         base: Path,
         engine_name: str,
@@ -293,7 +293,7 @@ class SessionMixin:
         stdout_path = base / "stdout.txt"
         if not stdout_path.exists():
             return
-        limit_seconds = self._subagent_inactivity_timeout_seconds(engine_name)
+        limit_seconds = self.subagent_inactivity_timeout_seconds(engine_name)
         idle_seconds = max(0.0, time.time() - stdout_path.stat().st_mtime)
         if idle_seconds < limit_seconds:
             return
@@ -310,7 +310,7 @@ class SessionMixin:
         except ProcessLookupError:
             return
 
-    def _write_timeline(
+    def write_timeline(
         self,
         base: Path,
         ref: SubagentRef,
@@ -332,7 +332,7 @@ class SessionMixin:
             timeline=timeline.model_dump(mode="python"),
         )
 
-    def _write_session_snapshot(
+    def write_session_snapshot(
         self,
         task: TaskRecord,
         base: Path,

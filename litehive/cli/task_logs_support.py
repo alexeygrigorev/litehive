@@ -14,7 +14,7 @@ _DEFAULT_TAIL_LINES = 40
 _FOLLOW_POLL_SECONDS = 0.1
 
 
-def _show_latest_daemon_log(root: Path) -> int:
+def show_latest_daemon_log(root: Path) -> int:
     latest_dir = latest_run_all_log_dir(root)
     log_path = _latest_daemon_log_path(latest_dir)
     if log_path is None:
@@ -26,7 +26,7 @@ def _show_latest_daemon_log(root: Path) -> int:
     return 0
 
 
-def _list_daemon_sessions(root: Path) -> int:
+def list_daemon_sessions(root: Path) -> int:
     logs_root = workspace_path(root.resolve(), "logs", "run-all")
     if not logs_root.exists():
         print("No daemon run logs found.")
@@ -45,7 +45,7 @@ def _list_daemon_sessions(root: Path) -> int:
     return 0
 
 
-def _show_task_journal(root: Path, task) -> int:
+def show_task_journal(root: Path, task) -> int:
     journal_path = task_dir(root, task) / "journal.md"
     if not journal_path.exists():
         print(f"{task.id}: journal not found")
@@ -54,7 +54,7 @@ def _show_task_journal(root: Path, task) -> int:
     return 0
 
 
-def _show_latest_subagent(root: Path, task) -> int:
+def show_latest_subagent(root: Path, task) -> int:
     ref = _latest_subagent_ref(task)
     if ref is None:
         print(f"{task.id}: no subagents")
@@ -76,7 +76,7 @@ def _show_latest_subagent(root: Path, task) -> int:
     return 0
 
 
-def _list_task_subagents(root: Path, task) -> int:
+def list_task_subagents(root: Path, task) -> int:
     if not task.subagents:
         print(f"{task.id}: no subagents")
         return 0
@@ -102,7 +102,7 @@ def _list_task_subagents(root: Path, task) -> int:
     return 0
 
 
-def _follow_active_subagent(root: Path, *, task_id: str | None = None) -> int:
+def follow_active_subagent(root: Path, *, task_id: str | None = None) -> int:
     task = _resolve_follow_task(root, task_id=task_id)
     ref = None if task is None else _latest_subagent_ref(task)
     is_active = bool(
@@ -273,7 +273,7 @@ def _resolve_follow_task(root: Path, *, task_id: str | None) -> object | None:
     return next((task for task in tasks if task.subagents), None)
 
 
-def _load_task_with_runtime(root: Path, task_id: str):
+def load_task_with_runtime(root: Path, task_id: str):
     return get_task_record(root, task_id)
 
 

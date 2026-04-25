@@ -8,6 +8,22 @@ import tempfile
 
 import pytest
 
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _bootstrap_heru_import_path() -> None:
+    candidates = [
+        *sorted((_REPO_ROOT / ".venv" / "lib").glob("python*/site-packages")),
+        *sorted((_REPO_ROOT / "packages").glob("heru-*.whl")),
+    ]
+    for candidate in reversed(candidates):
+        entry = str(candidate)
+        if entry not in sys.path:
+            sys.path.insert(0, entry)
+
+
+_bootstrap_heru_import_path()
+_codex_quota_mod = importlib.import_module("heru.quota.codex_quota")
 
 _PREVIOUS_TEST_ENV = {
     key: os.environ.get(key)
@@ -43,11 +59,12 @@ os.environ["GIT_CONFIG_COUNT"] = "1"
 os.environ["GIT_CONFIG_KEY_0"] = "init.defaultBranch"
 os.environ["GIT_CONFIG_VALUE_0"] = "main"
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
 _PYTHONPATH_ENTRIES = [str(_REPO_ROOT)]
 _SITE_PACKAGES = _REPO_ROOT / ".venv" / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
 if _SITE_PACKAGES.exists():
     _PYTHONPATH_ENTRIES.append(str(_SITE_PACKAGES.resolve()))
+_HERU_IMPORT_ROOT = Path(_codex_quota_mod.__file__).resolve().parents[2]
+_PYTHONPATH_ENTRIES.append(str(_HERU_IMPORT_ROOT))
 for entry in reversed(_PYTHONPATH_ENTRIES):
     if entry not in sys.path:
         sys.path.insert(0, entry)

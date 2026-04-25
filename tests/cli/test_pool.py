@@ -1,7 +1,7 @@
 from litehive.cli.pool import (
-    _collect_task_stage_stats,
-    _compute_pool_flow_statistics,
-    _task_stage_outcomes,
+    collect_task_stage_stats,
+    compute_pool_flow_statistics,
+    task_stage_outcomes,
 )
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.reports import StageReport
@@ -24,8 +24,8 @@ def test_pool_reads_canonical_stage_reports(tmp_path) -> None:
         ),
     )
 
-    assert _task_stage_outcomes(tmp_path, task.id, task.slug) == ["implementing=pass"]
-    assert _collect_task_stage_stats(tmp_path, task.id) == [
+    assert task_stage_outcomes(tmp_path, task.id, task.slug) == ["implementing=pass"]
+    assert collect_task_stage_stats(tmp_path, task.id) == [
         {"stage": "implementing", "verdict": "pass", "duration_seconds": 12.0}
     ]
 
@@ -45,7 +45,7 @@ def test_pool_flow_statistics_use_canonical_stage_keys(tmp_path) -> None:
         ),
     )
 
-    flow_statistics = _compute_pool_flow_statistics(tmp_path, [{"task_id": task.id}])
+    flow_statistics = compute_pool_flow_statistics(tmp_path, [{"task_id": task.id}])
 
     assert flow_statistics is not None
     assert flow_statistics["stages_executed"] == 1

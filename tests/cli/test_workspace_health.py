@@ -7,10 +7,10 @@ from typer.testing import CliRunner
 
 from litehive.cli.app import app
 from litehive.cli.workspace import (
-    _collect_quota_health,
-    _health_daemon_status,
-    _quota_health,
-    _repair_summary_lines,
+    collect_quota_health,
+    health_daemon_status,
+    quota_health,
+    repair_summary_lines,
     status_command,
 )
 from litehive.config.paths import workspace_path
@@ -30,7 +30,7 @@ _RUNNER = CliRunner()
 def test_health_daemon_status_defaults_to_stopped(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("litehive.cli.workspace.daemon_metadata", lambda root: None)
 
-    assert _health_daemon_status(tmp_path) == ("stopped", "-")
+    assert health_daemon_status(tmp_path) == ("stopped", "-")
 
 
 def test_health_daemon_status_reports_running_pid(tmp_path: Path, monkeypatch) -> None:
@@ -39,7 +39,7 @@ def test_health_daemon_status_reports_running_pid(tmp_path: Path, monkeypatch) -
         lambda root: {"status": "running", "pid": 4242},
     )
 
-    assert _health_daemon_status(tmp_path) == ("running", "4242")
+    assert health_daemon_status(tmp_path) == ("running", "4242")
 
 
 def test_repair_summary_lines_omit_empty_fields() -> None:
@@ -49,7 +49,7 @@ def test_repair_summary_lines_omit_empty_fields() -> None:
         requeued_task_ids=["T-0002"],
     )
 
-    lines = _repair_summary_lines(
+    lines = repair_summary_lines(
         summary,
         result_label="repaired",
         include_empty=False,
@@ -67,7 +67,7 @@ def test_repair_summary_lines_omit_empty_fields() -> None:
 def test_repair_summary_lines_include_empty_fields_for_repair_mode() -> None:
     summary = WorkspaceRepairSummary()
 
-    lines = _repair_summary_lines(
+    lines = repair_summary_lines(
         summary,
         result_label="repaired",
         include_empty=True,
@@ -91,7 +91,7 @@ def test_quota_health_formats_status_and_reset() -> None:
         long_term=UsageWindow(percent_remaining=45.0, reset_at="2026-04-15T00:00:00Z"),
     )
 
-    health = _quota_health("codex", status, reset_at="2026-04-15T00:00:00Z")
+    health = quota_health("codex", status, reset_at="2026-04-15T00:00:00Z")
 
     assert health.engine == "codex"
     assert health.status == "warning"
@@ -123,7 +123,7 @@ def test_collect_quota_health_reuses_shared_statuses(monkeypatch) -> None:
     monkeypatch.setattr("litehive.cli.workspace.check_copilot_quota", lambda: copilot_status)
     monkeypatch.setattr("litehive.cli.workspace.check_zai_quota", lambda: zai_status)
 
-    items = _collect_quota_health()
+    items = collect_quota_health()
     by_engine = {item.engine: item for item in items}
 
     assert [item.engine for item in items] == list(ENGINE_CHOICES)

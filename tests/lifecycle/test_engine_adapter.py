@@ -8,7 +8,7 @@ from litehive.domain.agent import EngineFailure, SubagentResult
 from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.agents.manager import SubagentStartupError
-from litehive.lifecycle.heru_factory import HeruEngineAdapter, _latest_verdict_after
+from litehive.lifecycle.heru_factory import HeruEngineAdapter, latest_verdict_after
 from litehive.lifecycle.nodes.agent import AgentVerdict, NudgeRequired, TransientError, UnrecoverableError
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.sessions import Session
@@ -56,7 +56,7 @@ def test_heru_engine_adapter_updates_session_from_subagent_result_continuation(t
 
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        "litehive.lifecycle.heru_factory.latest_verdict_after",
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
@@ -88,7 +88,7 @@ def test_heru_engine_adapter_passes_resume_session_id_to_subagent_manager(tmp_pa
     _StubManager.last_kwargs = None
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        "litehive.lifecycle.heru_factory.latest_verdict_after",
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
@@ -153,7 +153,7 @@ def test_heru_engine_adapter_launches_all_supported_engines(
     _StubManager.last_kwargs = None
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _EngineSpecificStubManager)
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        "litehive.lifecycle.heru_factory.latest_verdict_after",
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
@@ -306,7 +306,7 @@ def test_heru_engine_adapter_runs_recovery_from_litehive_source_checkout(tmp_pat
 
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        "litehive.lifecycle.heru_factory.latest_verdict_after",
         lambda *args, **kwargs: AgentVerdict(outcome="resume", reason="fixed", metadata={"target_stage": "testing"}),
     )
 
@@ -603,7 +603,7 @@ def test_heru_engine_adapter_reuses_failed_turn_continuation_on_retry(tmp_path, 
     _TimeoutThenResumeManager.calls = 0
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _TimeoutThenResumeManager)
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        "litehive.lifecycle.heru_factory.latest_verdict_after",
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
@@ -685,7 +685,7 @@ def test_heru_engine_adapter_retries_crash_once_with_resume_id(
 
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _ScriptedManager)
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        "litehive.lifecycle.heru_factory.latest_verdict_after",
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
@@ -727,7 +727,7 @@ def test_heru_engine_adapter_skips_crash_resume_without_resume_id(
     ]
 
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _ScriptedManager)
-    monkeypatch.setattr("litehive.lifecycle.heru_factory._latest_verdict_after", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.latest_verdict_after", lambda *args, **kwargs: None)
 
     with pytest.raises(NudgeRequired, match="without a litehive report submission"):
         adapter.run_turn(session, _heru_prompt(task.id), state)
@@ -759,7 +759,7 @@ def test_heru_engine_adapter_crash_resume_requires_fresh_resume_id(tmp_path, mon
     ]
 
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _ScriptedManager)
-    monkeypatch.setattr("litehive.lifecycle.heru_factory._latest_verdict_after", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.latest_verdict_after", lambda *args, **kwargs: None)
 
     with pytest.raises(NudgeRequired, match="without a litehive report submission"):
         adapter.run_turn(session, _heru_prompt(task.id), state)
@@ -797,7 +797,7 @@ def test_heru_engine_adapter_only_attempts_crash_resume_once(tmp_path, monkeypat
     ]
 
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _ScriptedManager)
-    monkeypatch.setattr("litehive.lifecycle.heru_factory._latest_verdict_after", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.lifecycle.heru_factory.latest_verdict_after", lambda *args, **kwargs: None)
 
     with pytest.raises(NudgeRequired, match="without a litehive report submission"):
         adapter.run_turn(session, _heru_prompt(task.id), state)
@@ -822,7 +822,7 @@ def test_heru_engine_adapter_runs_subagent_in_task_worktree(tmp_path, monkeypatc
 
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        "litehive.lifecycle.heru_factory.latest_verdict_after",
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
@@ -855,7 +855,7 @@ def test_heru_engine_adapter_passes_selected_model_to_subagent_manager(
     _StubManager.last_kwargs = None
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(
-        "litehive.lifecycle.heru_factory._latest_verdict_after",
+        "litehive.lifecycle.heru_factory.latest_verdict_after",
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
@@ -895,7 +895,7 @@ def test_latest_verdict_after_allows_clean_implementing_noop(tmp_path, monkeypat
         lambda workspace_root, task: (tmp_path, []),
     )
 
-    verdict = _latest_verdict_after(
+    verdict = latest_verdict_after(
         tmp_path,
         task.id,
         "implementing",
@@ -939,7 +939,7 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
         lambda workspace_root, task: (tmp_path, []),
     )
 
-    verdict = _latest_verdict_after(
+    verdict = latest_verdict_after(
         tmp_path,
         task.id,
         "implementing",
@@ -990,7 +990,7 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
         lambda workspace_root, task: (tmp_path, [" M foo.py"]),
     )
 
-    verdict = _latest_verdict_after(
+    verdict = latest_verdict_after(
         tmp_path,
         task.id,
         "implementing",
@@ -1027,7 +1027,7 @@ def test_latest_verdict_after_includes_retry_summary_metadata(tmp_path, monkeypa
         lambda workspace_root, task: (tmp_path, [" M litehive/lifecycle/prompt_serializer.py"]),
     )
 
-    verdict = _latest_verdict_after(
+    verdict = latest_verdict_after(
         tmp_path,
         task.id,
         "implementing",
@@ -1064,7 +1064,7 @@ def test_latest_verdict_after_accepts_recovery_resume(tmp_path) -> None:
         ),
     )
 
-    verdict = _latest_verdict_after(
+    verdict = latest_verdict_after(
         tmp_path,
         task.id,
         "recovering",
@@ -1093,7 +1093,7 @@ def test_latest_verdict_after_preserves_recovery_advance_target_stage(tmp_path) 
         ),
     )
 
-    verdict = _latest_verdict_after(
+    verdict = latest_verdict_after(
         tmp_path,
         task.id,
         "recovering",

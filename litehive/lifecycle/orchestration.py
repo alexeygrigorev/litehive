@@ -518,6 +518,9 @@ def _mark_task_interrupted_on_crash(root: Path, task: TaskRecord, persistence: o
 def _cleanup_terminal_worktree(root: Path, task: TaskRecord | None) -> None:
     if task is None:
         return
+    fresh = get_task(root, task.id)
+    if fresh is not None:
+        task = fresh
     if task.status == "flagged" and task.flag_reason in _MANUAL_REVIEW_FLAG_REASONS:
         return
     worktree_rel = get_task_worktree_path(task)

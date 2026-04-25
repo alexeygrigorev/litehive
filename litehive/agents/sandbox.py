@@ -11,7 +11,7 @@ import shutil
 import sys
 from typing import Mapping
 
-from litehive.agents._sandbox import (
+from litehive.agents.sandbox_support import (
     SandboxedAdapter as LitehiveSandboxedAdapter,
     forced_engine_rw_state_dirs as _forced_engine_rw_state_dirs,
 )

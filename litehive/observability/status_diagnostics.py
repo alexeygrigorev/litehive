@@ -49,7 +49,7 @@ class StatusSnapshot:
 
 def collect_status_snapshot(root: Path) -> StatusSnapshot:
     root = root.resolve()
-    registry_issues = _probe_registry_files()
+    registry_issues = probe_registry_files()
     config, config_issues = _load_config_for_status(root)
     state, state_issues = _load_state_for_status(root)
     runner, runner_issue = _load_runner_status_for_status(root)
@@ -91,7 +91,7 @@ def render_issue_lines(issues: list[StatusIssue]) -> list[str]:
     return [*(issue.render() for issue in issues), render_health_summary(issues)]
 
 
-def _probe_registry_files() -> list[StatusIssue]:
+def probe_registry_files() -> list[StatusIssue]:
     issues: list[StatusIssue] = []
     registry_error = workspace_registry_error()
     if registry_error is not None:

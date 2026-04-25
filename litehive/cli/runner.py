@@ -136,7 +136,7 @@ class _RunCommandIteration:
     final_stage: str | None = None
 
 
-def _run_once(
+def run_once(
     workspace: Path,
     *,
     engine: str | None = None,
@@ -249,7 +249,7 @@ def _run_single(
     engine: str | None = None,
     model: str | None = None,
 ) -> int:
-    iteration = _run_once(workspace, engine=engine, model=model)
+    iteration = run_once(workspace, engine=engine, model=model)
     if not iteration.ran_task:
         print("No queued task.")
     return iteration.exit_code
@@ -309,7 +309,7 @@ def _run_drain(
             print("Pool stopped: dirty_git_state")
             return 0
 
-        iteration = _run_once(workspace, engine=engine, model=model)
+        iteration = run_once(workspace, engine=engine, model=model)
         if iteration.exit_code != 0:
             return iteration.exit_code
         if not iteration.ran_task:
