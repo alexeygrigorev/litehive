@@ -12,6 +12,14 @@ Canonical recovery vocabulary:
   are persisted in ``recovery_history`` and projected into
   ``RuntimeRecoveryOutcome`` on task runtime.
 
+Model relationships:
+- ``RecoveryTrigger`` CONTAINS a ``FailureFingerprint`` to identify the
+  failure pattern and enable budget tracking across similar failures.
+- ``RecoveryOutcome`` CONTAINS a ``RecoveryTrigger`` to record what originally
+  triggered the recovery attempt that this outcome describes.
+- Collections: ``recovery_history`` contains multiple ``RecoveryOutcome``
+  instances; each task has one active ``RecoveryTrigger`` at most.
+
 There is no separate ``FailureDiagnostics``, ``RecoveryContext``, or
 ``RecoveryRecord`` model. Report-level ``failure_diagnostics`` fields remain
 unstructured evidence on reports/outcomes; they are not the recovery identity.
