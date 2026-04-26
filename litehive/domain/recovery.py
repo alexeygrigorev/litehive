@@ -32,6 +32,7 @@ class TriggerEventKind(StringEnum):
     """
 
     REJECT = "reject"  # Stage verdict was reject
+    SEMANTIC_REJECT = "semantic_reject"  # QA/reviewer judgment-based reject
     BLOCKED = "blocked"  # Stage verdict was blocked
     CRASH = "crash"  # Subagent or system crashed
     TIMEOUT = "timeout"  # Operation timed out

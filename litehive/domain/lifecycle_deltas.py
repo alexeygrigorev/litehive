@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from litehive.domain.common import utcnow
+from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION
 from litehive.domain.recovery import (
     FailureFingerprint,
     RecoveryDisposition,
@@ -147,6 +148,8 @@ def _reason_code_from_event(state: TaskState, event: Event) -> str | None:
 
 def _trigger_event_kind(event: Event) -> TriggerEventKind:
     if isinstance(event, Reject):
+        if event.classification == SEMANTIC_REJECT_CLASSIFICATION:
+            return TriggerEventKind.SEMANTIC_REJECT
         return TriggerEventKind.REJECT
     if isinstance(event, Blocked):
         return TriggerEventKind.BLOCKED
