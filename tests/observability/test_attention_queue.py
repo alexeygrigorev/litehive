@@ -483,38 +483,47 @@ def test_pool_halts_immediately_when_local_main_diverges_from_origin(tmp_path: P
     assert load_state(tmp_path).pool_stop_reason == "diverged_from_origin"
 
 
-def test_daemon_loop_rebuilds_corrupt_global_registry_without_exiting(tmp_path: Path, monkeypatch) -> None:
+def test_daemon_loop_rebuilds_corrupt_or_missing_global_registry_without_exiting(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
     ensure_workspace(tmp_path)
-    create_task(tmp_path, title="Queued work")
-    workspace_registry_path().write_bytes(b"not a sqlite database")
-
-    calls: list[tuple[str, ...]] = []
-
-    def fake_run_logged_subprocess(command, **kwargs):
-        calls.append(tuple(command))
-        if any(arg == "run" for arg in command[2:]):
-            state = load_state(tmp_path)
-            state.queue = []
-            save_state(tmp_path, state)
-        return 0
 
     monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
-    monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
     monkeypatch.setattr("litehive.daemon.execution.maybe_run_workspace_backup", lambda *args, **kwargs: None)
 
-    stream = io.StringIO()
-    exit_code = run_daemon_loop(tmp_path, output_stream=stream, session_dir=tmp_path / "logs")
-    output = stream.getvalue()
+    for scenario in ("corrupt", "missing"):
+        create_task(tmp_path, title=f"Queued work {scenario}")
+        registry_path = workspace_registry_path()
+        if scenario == "corrupt":
+            registry_path.write_bytes(b"not a sqlite database")
+        else:
+            for path in (registry_path, registry_path.with_name(registry_path.name + "-wal")):
+                path.unlink(missing_ok=True)
+            registry_path.with_name(registry_path.name + "-shm").unlink(missing_ok=True)
 
-    assert exit_code == 0
-    assert any("repair" in command for command in calls)
-    assert any("run" in command for command in calls)
-    assert "== iteration 1 ==" in output
+        calls: list[tuple[str, ...]] = []
 
-    with sqlite3.connect(workspace_registry_path()) as connection:
-        rows = connection.execute(
-            "SELECT root FROM workspace_registry ORDER BY registered_at DESC, root DESC"
-        ).fetchall()
-    assert rows == [(str(tmp_path.resolve()),)]
+        def fake_run_logged_subprocess(command, **kwargs):
+            calls.append(tuple(command))
+            if any(arg == "run" for arg in command[2:]):
+                state = load_state(tmp_path)
+                state.queue = []
+                save_state(tmp_path, state)
+            return 0
+
+        monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
+
+        stream = io.StringIO()
+        exit_code = run_daemon_loop(tmp_path, output_stream=stream, session_dir=tmp_path / f"logs-{scenario}")
+        output = stream.getvalue()
+
+        assert exit_code == 0
+        assert any("repair" in command for command in calls)
+        assert any("run" in command for command in calls)
+        assert "== iteration 1 ==" in output
+
+        with sqlite3.connect(workspace_registry_path()) as connection:
+            rows = connection.execute(
+                "SELECT root FROM workspace_registry ORDER BY registered_at DESC, root DESC"
+            ).fetchall()
+        assert rows == [(str(tmp_path.resolve()),)]
