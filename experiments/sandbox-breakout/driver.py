@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 from pathlib import Path
 import shutil
@@ -11,6 +12,9 @@ from litehive.agents.sandbox import SandboxLauncher
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.config import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
+from litehive.fs_cleanup import remove_tree_logged
+
+logger = logging.getLogger(__name__)
 
 
 def _init_repo(repo: Path, remote: Path) -> None:
@@ -121,7 +125,11 @@ def main() -> int:
         return completed.returncode
     finally:
         if not args.keep_temp:
-            shutil.rmtree(temp_root, ignore_errors=True)
+            try:
+                remove_tree_logged(temp_root, logger=logger, target_label="temporary sandbox directory")
+            except OSError:
+                # Log error already handled by remove_tree_logged, but don't let cleanup failure crash the program
+                pass
 
 
 if __name__ == "__main__":

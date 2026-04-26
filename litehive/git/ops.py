@@ -2,12 +2,12 @@
 
 import logging
 import re
-import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from litehive.domain.task import TaskRecord
+from litehive.fs_cleanup import remove_tree_logged
 
 logger = logging.getLogger(__name__)
 
@@ -275,7 +275,7 @@ def abort_revert(root: Path) -> None:
             conflict_path = root / relative_path
             if conflict_path.is_dir():
                 try:
-                    shutil.rmtree(conflict_path)
+                    remove_tree_logged(conflict_path, logger=logger, target_label="git conflict directory")
                 except OSError as exc:
                     logger.warning("Failed to remove conflict path %s: %s", conflict_path, exc)
             elif conflict_path.exists():
