@@ -233,12 +233,9 @@ Repo-local control files stay in the repository:
   .gitignore           # keeps runtime artifacts out of git
   tasks/
     T-0001-example/
-      task.yaml        # task definition and status
-      brief.md         # structured task brief
-      reports/         # stage verdicts (gitignored)
-      subagents/       # execution artifacts (gitignored)
-      comments.yaml    # task activity mirror (gitignored)
-      journal.md       # event log (gitignored)
+      reports/         # stage verdict artifacts
+      subagents/       # execution artifacts
+      artifacts/        # supporting files captured for repair/debugging
 ```
 
 Global Litehive state lives under one XDG root:
@@ -259,6 +256,8 @@ Global Litehive state lives under one XDG root:
 ```
 
 Set `LITEHIVE_HOME=/custom/path` to override that root for tests or alternate installs.
+
+Task intent, queue state, runtime status, activity, and pipeline history are stored in the per-workspace `data.db` under this root. Litehive no longer uses `.litehive/state.yaml` or `~/.config/litehive` as active state locations; old files in `~/.config/litehive` are imported into the unified root on first run.
 
 Each task runs in its own git worktree. When it passes all stages, the worktree is merged into main and cleaned up.
 
@@ -309,9 +308,9 @@ litehive task recent --since 72h # widen the reporting window
 
 ## Artifact retention
 
-Litehive keeps `task.yaml`, `runtime.yaml`, stage reports, `comments.yaml`, `journal.md`, `events.jsonl`, `session.yaml`, and `report.yaml` as the durable evidence surface for status, repair, recovery, and handoff.
+Litehive keeps task intent, queue state, runtime status, activity, and pipeline history in SQLite. Stage reports, `events.jsonl`, `session.yaml`, `report.yaml`, and raw execution artifacts remain as the file-backed evidence surface for repair, recovery, and handoff.
 
-During migration, Litehive still reads legacy per-task `thread.yaml` activity files when `comments.yaml` is absent, and `litehive repair` rewrites legacy task activity files to `comments.yaml`.
+During migration, Litehive imports legacy per-task activity YAML files into SQLite and removes them after a successful import.
 
 High-volume raw execution artifacts are treated as disposable support data:
 

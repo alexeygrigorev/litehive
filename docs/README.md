@@ -103,8 +103,9 @@ litehive status
 
 - The workspace root is your project root. Litehive keeps its own state in
   `.litehive/`.
-- `task.yaml` is the durable task record. Reports and runtime artifacts add
-  evidence around that record.
+- Task intent, queue state, runtime status, and pipeline history live in the
+  per-workspace SQLite database under `${LITEHIVE_HOME:-$XDG_DATA_HOME/litehive}`.
+  Repo-local `.litehive/` task directories hold supporting evidence and artifacts.
 - `litehive run` executes one selection cycle. `litehive run --drain` keeps
   going until Litehive reaches an explicit stop condition.
 - `litehive repair` is the manual recovery entrypoint for stale active tasks,
