@@ -264,6 +264,32 @@ def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, mon
     assert remaining == []
 
 
+def test_stale_worktree_metadata_auto_resolves_when_path_already_clear(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    task = create_task(tmp_path, title="Already cleared worktree metadata")
+    task.status = "done"
+    task.pipeline_status = "done"
+    task.runtime.git.worktree_path = None
+    save_task(tmp_path, task)
+
+    record_attention(
+        tmp_path,
+        task_id=task.id,
+        kind="stale_worktree_metadata",
+        title=f"Deferred worktree metadata clearing for {task.id}",
+        reason="Worktree removed but task metadata clearing deferred due to active runner lock",
+        suggested_action="Wait for runner to finish, then run attention reconciliation",
+        dedupe_key=f"stale_worktree_metadata:{task.id}",
+    )
+
+    assert list_attention(tmp_path) == []
+    payloads = _attention_payloads(tmp_path)
+    assert len(payloads) == 1
+    assert payloads[0]["status"] == "resolved"
+    assert payloads[0]["resolution"] == "auto-resolved: worktree metadata already clear"
+
+
 def test_attention_ignores_non_task_directories_under_worktrees(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     (workspace_path(tmp_path, "worktrees") / "heru").mkdir(parents=True)

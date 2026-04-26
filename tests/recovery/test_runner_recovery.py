@@ -174,6 +174,42 @@ def test_recover_stale_runner_state_canonicalizes_nonrunning_stranded_task(
     assert refreshed_state.queue[0] == task.id
 
 
+def test_recover_stale_runner_state_canonicalizes_queued_interrupted_marker(
+    tmp_path: Path,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(
+        tmp_path,
+        title="Queued interrupted task",
+        acceptance_criteria=["resume from grooming"],
+    )
+    task.status = "queued"
+    task.pipeline_status = "grooming"
+    task.runtime.execution_status = "interrupted"
+    task.runtime.current_stage.stage = "grooming"
+    task.runtime.current_stage.status = "running"
+    save_task(tmp_path, task)
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = [task.id]
+    save_state(tmp_path, state)
+
+    assert recover_stale_runner_state(tmp_path) is True
+
+    refreshed = get_task(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.status == "queued"
+    assert refreshed.pipeline_status == "grooming"
+    assert refreshed.runtime.execution_status == "idle"
+    assert refreshed.runtime.current_stage.stage == "grooming"
+    assert refreshed.runtime.current_stage.status == "idle"
+
+    refreshed_state = load_state(tmp_path)
+    assert refreshed_state.active_task_id is None
+    assert refreshed_state.queue == [task.id]
+
+
 def test_recover_stale_runner_state_clears_non_running_active_task_id(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Flagged but not running")

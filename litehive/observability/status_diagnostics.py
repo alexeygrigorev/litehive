@@ -89,6 +89,7 @@ def collect_status_snapshot(root: Path) -> StatusSnapshot:
         *_probe_heru_link(root),
         *_probe_pool_stop_reason(state),
         *_probe_origin_divergence(root, state),
+        *_probe_task_index_references(root, state, state_issues),
         *_probe_task_status_damage(root, state, runner, state_issues),
     ]
     return StatusSnapshot(
@@ -374,6 +375,39 @@ def _probe_pool_stop_reason(state: WorkspaceState) -> list[StatusIssue]:
             message=(
                 f"CRITICAL: pool stopped after {failure_count} consecutive task failures"
                 " — inspect the latest flagged tasks, fix the blocker, then clear the stop reason."
+            ),
+        )
+    ]
+
+
+def _probe_task_index_references(
+    root: Path,
+    state: WorkspaceState,
+    state_issues: list[StatusIssue],
+) -> list[StatusIssue]:
+    if any(issue.key in _TASKS_UNAVAILABLE_KEYS for issue in state_issues):
+        return []
+    try:
+        from litehive.state.rebuild_safety import sqlite_task_ids
+
+        db_ids = sqlite_task_ids(workspace_path(root, "data.db"))
+    except Exception:
+        return []
+    referenced_ids = set(state.queue)
+    if state.active_task_id is not None:
+        referenced_ids.add(state.active_task_id)
+    missing_ids = tuple(sorted(referenced_ids - db_ids))
+    if not missing_ids:
+        return []
+    sample = ", ".join(missing_ids[:10])
+    suffix = "" if len(missing_ids) <= 10 else f", ... ({len(missing_ids)} total)"
+    return [
+        StatusIssue(
+            key="task_index",
+            severity="ERROR",
+            message=(
+                f"SQLite task index is missing {len(missing_ids)} queued/active task reference(s): {sample}{suffix}"
+                " — restore/reconcile the workspace database or remove stale queue references before scheduling."
             ),
         )
     ]

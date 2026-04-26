@@ -1115,9 +1115,14 @@ def _normalize_nonrunning_resumable_tasks(
             continue
         if task.status not in {"queued", "in_progress", "interrupted"}:
             continue
-        if task.status != "interrupted" and not is_task_eligible_for_execution(task):
+        has_resume_marker = task_has_resume_marker(task)
+        # Crash cleanup can leave a task queued with execution_status
+        # "interrupted" and a trusted stage marker. That state is not eligible
+        # for normal dequeue, but repair must still canonicalize it back to a
+        # runnable queued/idle task.
+        if task.status != "interrupted" and not is_task_eligible_for_execution(task) and not has_resume_marker:
             continue
-        if task.status == "queued" and task.id != state.active_task_id and not task_has_resume_marker(task):
+        if task.status == "queued" and task.id != state.active_task_id and not has_resume_marker:
             continue
         stage = resumable_queue_stage(task)
         if stage is None:

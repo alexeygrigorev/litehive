@@ -15,6 +15,7 @@ from litehive.config.paths import workspace_path
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskIntentRecord, TaskStateRecord, WorkspaceState
+from litehive.state.rebuild_safety import assert_database_rebuild_safe, backup_database_before_rebuild
 
 TASK_EVENT_LOG_NAME = "task-events.jsonl"
 TASK_EVENT_LOG_SCHEMA_VERSION = 1
@@ -203,6 +204,11 @@ def rebuild_sqlite_from_task_event_log(root: Path, *, clear_existing: bool = Tru
     replay_state = _ReplayState.empty()
     for event in events:
         _apply_event(replay_state, event)
+    if clear_existing:
+        replay_task_ids = set(replay_state.task_intents) | set(replay_state.task_states)
+        db_path = workspace_path(root, "data.db")
+        assert_database_rebuild_safe(root, db_path, replay_task_ids=replay_task_ids, operation="event-log replay")
+        backup_database_before_rebuild(root, db_path, label="before-event-log-replay")
     with suppress_task_event_logging(), connect_workspace_db(root) as connection:
         if clear_existing:
             _clear_replay_tables(connection)

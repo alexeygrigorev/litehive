@@ -170,6 +170,22 @@ def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_
     }
 
 
+def test_db_rebuild_from_events_refuses_incomplete_replay_source(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Do not silently drop me")
+    task_event_log_path(tmp_path).unlink()
+
+    result = CliRunner().invoke(
+        app,
+        ["db", "rebuild-from-events", "--workspace", str(tmp_path)],
+        standalone_mode=False,
+    )
+
+    assert result.return_value == 1
+    assert "db rebuild-from-events failed: refusing event-log replay" in result.output
+    assert get_task(tmp_path, task.id) is not None
+
+
 def test_replay_skips_truncated_partial_log_record(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Partial replay")

@@ -10,6 +10,7 @@ import yaml
 
 from heru import get_engine
 from heru.base import CLIExecutionResult
+from litehive.db.schema import connect_workspace_db
 from litehive.config.paths import litehive_root, workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.config.workspace_files import workspace_dir
@@ -223,6 +224,23 @@ def test_status_reports_stopped_runner_for_empty_lock_file(tmp_path: Path, capsy
 
     assert exit_code == 0
     assert "runner_status: stopped" in output
+
+
+def test_status_reports_queued_task_missing_from_sqlite_index(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Still queued")
+    save_state(tmp_path, WorkspaceState(queue=[task.id]))
+    with connect_workspace_db(tmp_path) as connection:
+        connection.execute("DELETE FROM task_state WHERE task_id = ?", (task.id,))
+        connection.execute("DELETE FROM task_intent WHERE task_id = ?", (task.id,))
+        connection.commit()
+
+    exit_code, output = _run_fast_status(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert f"task_index: SQLite task index is missing 1 queued/active task reference(s): {task.id}" in output
+    assert "restore/reconcile the workspace database" in output
+    assert "health:" in output
 
 
 def test_runner_status_diagnostic_copies_serialize_without_pydantic_warnings(

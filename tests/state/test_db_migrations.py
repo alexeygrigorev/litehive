@@ -22,6 +22,8 @@ from litehive.db.schema import (
     available_migrations,
     connect_workspace_db,
 )
+from litehive.state.rebuild_safety import RebuildSafetyError
+from litehive.tasks.event_log import task_event_log_path
 
 
 def _install_workspace_db_schema(root: Path, *, through_version: int) -> None:
@@ -87,6 +89,16 @@ def test_embedded_initial_migration_is_discoverable() -> None:
     assert migrations[6].version == 7
     assert "ALTER TABLE task_intent ADD COLUMN slug" in migrations[6].sql
     assert "CREATE TABLE IF NOT EXISTS runtime_process_state" in migrations[6].sql
+
+
+def test_connect_workspace_db_closes_connection_on_context_exit(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    with connect_workspace_db(tmp_path) as connection:
+        connection.execute("SELECT 1")
+
+    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+        connection.execute("SELECT 1")
 
 
 def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -294,7 +306,7 @@ def test_legacy_workspace_db_rebuild_replays_task_event_log_without_task_yaml_re
         )
         connection.execute(
             "INSERT INTO task_state (task_id, payload, updated_at) VALUES (?, ?, ?)",
-            ("T-9999", "{}", "2026-04-15T00:00:03Z"),
+            (task.id, "{}", "2026-04-15T00:00:03Z"),
         )
         connection.commit()
 
@@ -312,6 +324,28 @@ def test_legacy_workspace_db_rebuild_replays_task_event_log_without_task_yaml_re
     assert rows == [(task.id,)]
     assert queue_row is not None
     assert json.loads(queue_row[0]) == [task.id]
+
+
+def test_migration_rebuild_refuses_to_drop_tasks_missing_from_event_log(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Historical task before event log")
+    task_event_log_path(tmp_path).unlink()
+    db_path = workspace_path(tmp_path, "data.db")
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "UPDATE schema_migrations SET name = ? WHERE version = ?",
+            ("0002_legacy_name.sql", 2),
+        )
+        connection.commit()
+
+    with pytest.raises(RebuildSafetyError, match="refusing migration-triggered database rebuild"):
+        apply_pending_migrations(tmp_path)
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute("SELECT task_id FROM task_state WHERE task_id = ?", (task.id,)).fetchone()
+
+    assert row == (task.id,)
 
 
 def test_connect_workspace_db_rebuilds_replaced_cached_db(tmp_path: Path) -> None:

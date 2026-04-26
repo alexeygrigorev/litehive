@@ -9,6 +9,8 @@ import os
 import re
 import sqlite3
 from pathlib import Path
+from contextlib import contextmanager
+from collections.abc import Iterator
 from typing import TypeAlias
 
 import yaml
@@ -16,6 +18,7 @@ from pydantic import ValidationError
 
 from litehive.config.paths import workspace_path
 from litehive.domain.task import TaskIntentRecord, TaskRecord, TaskStateRecord
+from litehive.state.rebuild_safety import assert_database_rebuild_safe, backup_database_before_rebuild
 
 MIGRATIONS_PACKAGE = "litehive.db.migrations"
 logger = logging.getLogger(__name__)
@@ -414,6 +417,8 @@ def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationP
                 dry_run=True,
             )
         key = _db_cache_key(db_path)
+        assert_database_rebuild_safe(root, db_path, operation="migration-triggered database rebuild")
+        backup_database_before_rebuild(root, db_path, label="before-migration-rebuild")
         db_path.unlink(missing_ok=True)
         MIGRATED_DB_PATHS.pop(key, None)
         REBUILT_DB_PATHS.add(key)
@@ -489,7 +494,8 @@ def consume_rebuilt_database_marker(root: Path) -> bool:
     return True
 
 
-def connect_workspace_db(root: Path, *, migrate: bool = True) -> sqlite3.Connection:
+@contextmanager
+def connect_workspace_db(root: Path, *, migrate: bool = True) -> Iterator[sqlite3.Connection]:
     db_path = workspace_path(root, "data.db")
     if migrate:
         # In-process cache keyed on the absolute db_path (not root), because
@@ -504,4 +510,11 @@ def connect_workspace_db(root: Path, *, migrate: bool = True) -> sqlite3.Connect
     connection = _open_connection(db_path)
     if not migrate:
         _ensure_schema_migrations_table(connection)
-    return connection
+    try:
+        yield connection
+        connection.commit()
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()

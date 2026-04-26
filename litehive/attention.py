@@ -397,9 +397,9 @@ def reconcile_attention(root: Path, *, auto_resolve: bool = True) -> list[Attent
     root = _existing_workspace_root(root, source="reconcile_attention")
     state = load_state(root, bootstrap=False)
     _import_attention_log_events(root)
-    detected = _detect_attention_items(root, state.pool_stop_reason)
     if auto_resolve:
         _auto_resolve_stale_worktree_metadata_items(root)
+    detected = _detect_attention_items(root, state.pool_stop_reason)
     unresolved = attention_store(root).reconcile(detected)
     if state.pool_stop_reason == "attention_required" and not unresolved:
         set_pool_stop_reason(root, None)
@@ -694,7 +694,13 @@ def _auto_resolve_stale_worktree_metadata_items(root: Path) -> None:
 
         try:
             task = get_task(root, item.task_id)
-            if task is not None and task.runtime.pipeline.git.worktree_path is not None:
+            if task is None:
+                store.resolve(item.id or 0, resolution="auto-resolved: task no longer exists")
+                continue
+            if task.runtime.pipeline.git.worktree_path is None:
+                store.resolve(item.id or 0, resolution="auto-resolved: worktree metadata already clear")
+                continue
+            if task.runtime.pipeline.git.worktree_path is not None:
                 clear_task_worktree_path(task)
                 save_task(root, task)
                 store.resolve(item.id or 0, resolution="auto-resolved: worktree metadata cleared")
