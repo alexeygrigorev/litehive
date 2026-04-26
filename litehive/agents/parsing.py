@@ -50,6 +50,6 @@ def stage_report_from_subagent(
         pipeline_state=stage,  # type: ignore[arg-type]
         verdict="reject",
         summary=f"{stage} rejected: agent did not submit verdict via litehive report CLI",
-        feedback=cap_feedback(result.transcript),
+        feedback=cap_feedback(result.execution_trace),
         warnings=["Agent did not submit verdict via litehive report CLI."],
     )

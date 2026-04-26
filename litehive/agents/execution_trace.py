@@ -136,7 +136,7 @@ def load_subagent_execution_trace(
 
     base = task_dir(root, task) / ref.path
     if not active and ref.status != "running":
-        cached = resolve_artifact_path(base, "transcript.md")
+        cached = resolve_artifact_path(base, "execution_trace.md")
         if cached is not None:
             return ExecutionTraceView(
                 text=read_text_artifact(cached),
@@ -165,9 +165,9 @@ def load_subagent_execution_trace(
             source = stderr.source
         return ExecutionTraceView(text=trace, source=source)
 
-    snippet = "" if runtime_state is None else runtime_state.transcript_snippet.strip()
+    snippet = "" if runtime_state is None else runtime_state.execution_trace_snippet.strip()
     if snippet:
-        return ExecutionTraceView(text=snippet, source="runtime:transcript_snippet")
+        return ExecutionTraceView(text=snippet, source="runtime:execution_trace_snippet")
     return None
 
 

@@ -321,7 +321,7 @@ class _TimeoutThenPassManager:
                     path="subagents/SA-0001-swe",
                 ),
                 execution=None,
-                transcript="",
+                execution_trace="",
                 exit_code=124,
                 failure=EngineFailure(
                     kind="retryable_execution_error",
@@ -339,7 +339,7 @@ class _TimeoutThenPassManager:
                 path="subagents/SA-0002-swe",
             ),
             execution=None,
-            transcript="",
+            execution_trace="",
             exit_code=0,
             continuation=_TimeoutThenPassManager.continuation,
         )
@@ -368,7 +368,7 @@ class _TimeoutThenNudgeThenPassManager:
                     path=f"subagents/{subagent_id}-swe",
                 ),
                 execution=None,
-                transcript="timeout transcript",
+                execution_trace="timeout transcript",
                 exit_code=124,
                 failure=EngineFailure(
                     kind="retryable_execution_error",
@@ -386,7 +386,7 @@ class _TimeoutThenNudgeThenPassManager:
                 path=f"subagents/{subagent_id}-swe",
             ),
             execution=None,
-            transcript=f"attempt {_TimeoutThenNudgeThenPassManager.calls}",
+            execution_trace=f"attempt {_TimeoutThenNudgeThenPassManager.calls}",
             exit_code=0,
             continuation=_TimeoutThenNudgeThenPassManager.continuation,
         )

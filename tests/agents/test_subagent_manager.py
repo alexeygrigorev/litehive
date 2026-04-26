@@ -264,7 +264,7 @@ def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
     assert captured["emit_unified"] is True
-    assert result.transcript == "implemented via unified events"
+    assert result.execution_trace == "implemented via unified events"
 
     report = load_subagent_report(tmp_path, task.id, result.ref.id)
     session = load_subagent_session(tmp_path, task.id, result.ref.id)

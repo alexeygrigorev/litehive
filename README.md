@@ -412,7 +412,7 @@ def fake_run(self, task, role, engine_name, prompt, model=None, max_turns=None, 
         execution=CLIExecutionResult(adapter=engine_name, argv=(engine_name, "exec"), cwd=tmp_path, exit_code=0,
             stdout="VERDICT: PASS\nSUMMARY: ok\nFILES_CHANGED:\n- app.txt\nTESTS_ADDED: 1\nTESTS_PASSING: 1\nWARNINGS:\n",
             stderr=""),
-        transcript="", exit_code=0,
+        execution_trace="", exit_code=0,
     )
 monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
 ```

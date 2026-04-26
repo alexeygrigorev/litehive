@@ -252,7 +252,7 @@ def test_debug_gzipped_artifacts(tmp_path: Path, capsys: pytest.CaptureFixture[s
         f.write("gzipped stdout content")
 
     # Write gzipped execution trace
-    with gzip.open(sa_dir / "transcript.md.gz", "wt", encoding="utf-8") as f:
+    with gzip.open(sa_dir / "execution_trace.md.gz", "wt", encoding="utf-8") as f:
         f.write("gzipped transcript content")
 
     exit_code = _cmd_debug(_ns(tmp_path, task.id))

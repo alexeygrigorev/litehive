@@ -427,7 +427,7 @@ class SubagentManager(SessionMixin):
         return SubagentResult(
             ref=ref,
             execution=proc,
-            transcript=transcript,
+            execution_trace=transcript,
             exit_code=0 if proc is None else proc.exit_code,
             failure=failure,
             continuation=continuation,
@@ -640,7 +640,7 @@ class SubagentManager(SessionMixin):
             SubagentResult(
                 ref=ref,
                 execution=execution,
-                transcript=transcript,
+                execution_trace=transcript,
                 exit_code=0 if execution is None else execution.exit_code,
             ),
             root=self.root,

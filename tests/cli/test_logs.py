@@ -196,7 +196,7 @@ def test_logs_agent_derives_active_plain_text_trace_without_transcript(
 
 def test_logs_agent_reads_compressed_completed_artifacts(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     task, base = _make_task_with_subagent(tmp_path, active=False)
-    with gzip.open(base / "transcript.md.gz", "wt", encoding="utf-8") as handle:
+    with gzip.open(base / "execution_trace.md.gz", "wt", encoding="utf-8") as handle:
         handle.write("final transcript\n")
     with gzip.open(base / "stdout.txt.gz", "wt", encoding="utf-8") as handle:
         handle.write("final stdout\n")

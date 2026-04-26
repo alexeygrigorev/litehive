@@ -6,7 +6,7 @@ from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
 
 from litehive.agents.manager import SubagentManager
-from litehive.agents.session_store import load_subagent_artifacts, load_subagent_event_stream, load_subagent_report
+from litehive.agents.session_store import load_subagent_report, load_subagent_event_stream
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.recovery.execution_recovery import mark_interrupted_subagent
@@ -54,9 +54,6 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
 
     manager.write_session_progress(task, base, ref, "stream partial Claude output", execution)
 
-    assert not (base / "transcript.md").exists()
-    assert not (base / "transcript.md.gz").exists()
-
     report = load_subagent_report(tmp_path, task.id, "SA-0001")
     assert report["status"] == "running"
     assert "did not submit verdict" in report["summary"]
@@ -72,7 +69,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
     )
 
     assert interrupted is not None
-    assert "did not submit verdict" in interrupted.transcript_snippet
+    assert "did not submit verdict" in interrupted.execution_trace_snippet
 
     resumed_report = load_subagent_report(tmp_path, task.id, "SA-0001")
     assert resumed_report["status"] == "interrupted"
@@ -125,9 +122,6 @@ def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monke
             assert event_stream_data["engine"] == "opencode"
             assert event_stream_data["task_id"] == task.id
             assert len(event_stream_data["events"]) == 1
-            base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
-            assert not (base / "transcript.md").exists()
-            assert not (base / "transcript.md.gz").exists()
 
             return CLIExecutionResult(
                 adapter="opencode",
@@ -154,9 +148,6 @@ def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monke
     event_stream_data = load_subagent_event_stream(tmp_path, task.id, "SA-0001")
     assert len(event_stream_data["events"]) == 2
     assert event_stream_data["event_counts"] == {"message": 1, "usage": 1}
-    artifacts = load_subagent_artifacts(tmp_path, task.id, "SA-0001")
-    assert "event_stream" in artifacts
-    assert "timeline" not in artifacts
 
 
 def test_subagent_skips_event_stream_when_no_events(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

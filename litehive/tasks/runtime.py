@@ -41,7 +41,7 @@ def _runtime_subagent_state(
     pid: int | None = None,
     completed_at: str | None = None,
     exit_code: int | None = None,
-    transcript_snippet: str = "",
+    execution_trace_snippet: str = "",
     interruption_reason: str = "",
     continuation: RuntimeEngineContinuation | None = None,
 ) -> RuntimeSubagentState:
@@ -58,7 +58,7 @@ def _runtime_subagent_state(
         updated_at=updated_at,
         completed_at=completed_at,
         exit_code=exit_code,
-        transcript_snippet=transcript_snippet,
+        execution_trace_snippet=execution_trace_snippet,
         interruption_reason=interruption_reason,
         continuation=continuation,
     )
@@ -284,7 +284,7 @@ def mark_subagent_progress(
     if pid is not None:
         updates["pid"] = pid
     if transcript is not None:
-        updates["transcript_snippet"] = summarize_transcript(transcript)
+        updates["execution_trace_snippet"] = summarize_transcript(transcript)
     if continuation is not None:
         updates["continuation"] = continuation
     task.runtime.execution.active_subagent = task.runtime.execution.active_subagent.model_copy(update=updates)

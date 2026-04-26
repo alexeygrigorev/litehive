@@ -31,7 +31,7 @@ class SubagentResult:
 
     ref: SubagentRef  # Reference to the subagent that ran
     execution: CLIExecutionResult | None  # Low-level execution results
-    transcript: str  # Rendered subagent execution trace
+    execution_trace: str  # Rendered subagent execution trace
     exit_code: int  # Process exit code
     failure: EngineFailure | None = None  # Failure details if subagent failed
     continuation: RuntimeEngineContinuation | None = None  # Context for resuming if interrupted

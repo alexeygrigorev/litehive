@@ -84,7 +84,7 @@ class RuntimeSubagentState(BaseModel):
     updated_at: str  # Last status update timestamp
     completed_at: str | None = None  # Completion timestamp if finished
     exit_code: int | None = None  # Process exit code if applicable
-    transcript_snippet: str = ""  # Brief execution-trace excerpt
+    execution_trace_snippet: str = ""  # Brief execution-trace excerpt
     interruption_reason: str = ""  # Why subagent was interrupted
     continuation: RuntimeEngineContinuation | None = None  # Continuation context for resuming
 

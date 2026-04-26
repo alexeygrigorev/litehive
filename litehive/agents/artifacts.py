@@ -67,8 +67,8 @@ def prune_superseded_subagent_artifacts(task_root: Path, *, keep_subagent_id: st
         return
     raw_names = (
         "prompt.txt",
-        "transcript.md",
-        "transcript.md.gz",
+        "execution_trace.md",
+        "execution_trace.md.gz",
         "stdout.log",
         "stdout.txt",
         "stdout.txt.gz",

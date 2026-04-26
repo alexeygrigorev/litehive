@@ -297,8 +297,8 @@ class SessionMixin:
         )
         write_text_artifact(base, "prompt", ".txt", prompt, compress=False)
         if ref.status == "running":
-            remove_text_artifact(base, "transcript", ".md")
+            remove_text_artifact(base, "execution_trace", ".md")
         else:
-            write_text_artifact(base, "transcript", ".md", transcript, compress=True)
+            write_text_artifact(base, "execution_trace", ".md", transcript, compress=True)
         write_stream_artifact(base, "stdout", stdout, compress=False)
         write_stream_artifact(base, "stderr", stderr, compress=False)

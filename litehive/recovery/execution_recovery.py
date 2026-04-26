@@ -45,7 +45,7 @@ def mark_interrupted_subagent(root: Path, task: TaskRecord, *, reason: str, stag
             if ref.id == active.id and ref.status == "running":
                 ref.status = "interrupted"
                 break
-    snippet = source.transcript_snippet
+    snippet = source.execution_trace_snippet
     if active is not None or not snippet:
         snippet = _interrupted_subagent_snippet(root, task, source)
     interrupted = source.model_copy(
@@ -53,7 +53,7 @@ def mark_interrupted_subagent(root: Path, task: TaskRecord, *, reason: str, stag
             "status": "interrupted",
             "updated_at": now,
             "completed_at": source.completed_at or now,
-            "transcript_snippet": snippet,
+            "execution_trace_snippet": snippet,
             "interruption_reason": _interrupted_subagent_reason(task, reason),
         }
     )
@@ -110,8 +110,8 @@ def interruption_journal_message(task: TaskRecord) -> str:
             f"Subagent `{subagent.id}` ({subagent.role}/{subagent.engine}, pid={pid}, "
             f"path `{subagent.path}`) stopped with status `{subagent.status}`."
         )
-        if subagent.transcript_snippet:
-            parts.append(f"Last snippet: {subagent.transcript_snippet}.")
+        if subagent.execution_trace_snippet:
+            parts.append(f"Last snippet: {subagent.execution_trace_snippet}.")
     parts.append(f"Resume from `{interruption.resume_stage or task.pipeline_status}`.")
     return " ".join(parts)
 
@@ -267,7 +267,7 @@ def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeS
         snippet = "" if trace is None else summarize_transcript(trace.text)
         if snippet:
             return snippet
-    return active.transcript_snippet or "runner interrupted before subagent completion"
+    return active.execution_trace_snippet or "runner interrupted before subagent completion"
 
 
 def _interrupted_subagent_reason(task: TaskRecord, reason: str) -> str:
@@ -310,7 +310,7 @@ def _write_interrupted_subagent_artifacts(
         }
     )
     report_payload["status"] = subagent.status
-    report_payload["summary"] = report_payload.get("summary") or subagent.transcript_snippet
+    report_payload["summary"] = report_payload.get("summary") or subagent.execution_trace_snippet
     report_payload["interruption_reason"] = subagent.interruption_reason or None
     report_payload["resume_stage"] = resume_stage
     report_payload["continuation"] = None

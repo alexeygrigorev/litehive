@@ -102,5 +102,7 @@ def load_subagent_event_stream(root: Path, task_id: str, subagent_id: str) -> di
     return legacy_event_stream if isinstance(legacy_event_stream, dict) else {}
 
 
+# Deprecated: use load_subagent_event_stream directly
 def load_subagent_timeline(root: Path, task_id: str, subagent_id: str) -> dict[str, Any]:
+    """Legacy alias for load_subagent_event_stream. Use load_subagent_event_stream instead."""
     return load_subagent_event_stream(root, task_id, subagent_id)

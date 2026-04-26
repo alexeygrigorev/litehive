@@ -60,7 +60,7 @@ class _StubManager:
                 path="subagents/SA-0001-swe",
             ),
             execution=None,
-            transcript="",
+            execution_trace="",
             exit_code=0,
             continuation=None,
         )

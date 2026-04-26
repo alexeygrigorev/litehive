@@ -19,7 +19,7 @@ from litehive.tasks.reports import append_activity_entry
 
 def _subagent_result(
     *,
-    transcript: str,
+    execution_trace: str,
     failure: EngineFailure | None = None,
 ) -> SubagentResult:
     return SubagentResult(
@@ -31,7 +31,7 @@ def _subagent_result(
             path="subagents/SA-0001-swe",
         ),
         execution=None,
-        transcript=transcript,
+        execution_trace=execution_trace,
         exit_code=1 if failure is not None else 0,
         failure=failure,
     )
@@ -57,7 +57,7 @@ def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Pat
     report = stage_report_from_subagent(
         task,
         "implementing",
-        _subagent_result(transcript="x" * (FEEDBACK_CAP + 500)),
+        _subagent_result(execution_trace="x" * (FEEDBACK_CAP + 500)),
         root=tmp_path,
     )
 
@@ -86,7 +86,7 @@ def test_stage_report_from_subagent_preserves_semantic_reject_classification(tmp
     report = stage_report_from_subagent(
         task,
         "accepting",
-        _subagent_result(transcript="reviewer submitted reject"),
+        _subagent_result(execution_trace="reviewer submitted reject"),
         root=tmp_path,
     )
 
@@ -184,7 +184,7 @@ def test_subagent_manager_keeps_full_transcript_artifacts(
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
     subagent_dir = task_dir(tmp_path, task) / result.ref.path
 
-    transcript_cache = resolve_artifact_path(subagent_dir, "transcript.md")
+    transcript_cache = resolve_artifact_path(subagent_dir, "execution_trace.md")
     assert transcript_cache is not None
     assert read_text_artifact(transcript_cache) == f"{transcript}\n"
     assert (subagent_dir / "stdout.txt").read_text(encoding="utf-8") == transcript
