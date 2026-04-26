@@ -95,7 +95,7 @@ def require_real_engine(engine_name: str) -> None:
     if not engine.is_available():
         pytest.skip(f"{engine_name} binary not available on PATH")
     quota_reason = _engine_quota_block_reason(engine_name)
-    if quota_reason:
+    if quota_reason and engine_name not in requested_engines:
         pytest.skip(f"{engine_name} quota too high: {quota_reason}")
 
 
