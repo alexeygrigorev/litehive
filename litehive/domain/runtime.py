@@ -4,9 +4,10 @@ RuntimeEngineContinuation now lives in heru.types. This module re-exports it
 and keeps the litehive-only runtime state models authoritative here.
 """
 
+from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 
 from heru.types import (
     RuntimeEngineContinuation,
@@ -20,6 +21,12 @@ from .common import (
     SubagentStatus,
     utcnow,
 )
+
+
+def _json_enum_value(value: object) -> object:
+    if isinstance(value, Enum):
+        return value.value
+    return value
 
 
 class RuntimeGitState(BaseModel):
@@ -167,6 +174,8 @@ class TaskOutcomeState(BaseModel):
     tracking belong to ``FailureFingerprint`` on ``RecoveryTrigger``.
     """
 
+    model_config = ConfigDict(validate_assignment=True)
+
     kind: OutcomeKind | None = None  # Terminal outcome category (flagged, blocked, etc.)
     stage: str | None = None  # Pipeline stage where outcome was determined
     reason_code: OutcomeReasonCode | None = None  # Machine-readable reason for outcome
@@ -177,6 +186,10 @@ class TaskOutcomeState(BaseModel):
     retry_count: int = 0  # Number of retries attempted
     retry_limit: int = 0  # Maximum retries allowed
     recorded_at: str | None = None  # When outcome was recorded
+
+    @field_serializer("kind", "reason_code", when_used="json")
+    def _serialize_runtime_enum_value(self, value: object) -> object:
+        return _json_enum_value(value)
 
 
 class RuntimeInterruptionState(BaseModel):
@@ -363,6 +376,8 @@ class RunnerStatusState(BaseModel):
     interfaces to track runner health and current activity.
     """
 
+    model_config = ConfigDict(validate_assignment=True)
+
     status: RunnerExecutionStatus = RunnerExecutionStatus.IDLE  # Current runner status (idle, running, late, stale)
     pid: int | None = None  # Process ID of the runner
     workspace: str = ""  # Current workspace path
@@ -370,3 +385,7 @@ class RunnerStatusState(BaseModel):
     started_at: str | None = None  # When runner process started
     heartbeat_at: str | None = None  # Last heartbeat timestamp
     active_task_id: str | None = None  # ID of currently executing task
+
+    @field_serializer("status", when_used="json")
+    def _serialize_status(self, value: object) -> object:
+        return _json_enum_value(value)

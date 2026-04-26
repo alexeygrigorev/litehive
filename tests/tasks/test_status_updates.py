@@ -81,6 +81,8 @@ def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None
     raw_state = _raw_task_state_payload(tmp_path, task.id)
     assert raw_state["status"] == "closed"
     assert raw_state["close_reason"] == "wont_do"
+    assert raw_state["runtime"]["pipeline"]["last_outcome"]["kind"] == "closed"
+    assert raw_state["runtime"]["pipeline"]["last_outcome"]["reason_code"] == "wont_do"
     with pytest.raises(TaskNotFound):
         persistence.load(task.id)
 
@@ -188,6 +190,8 @@ def test_close_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path)
     raw_state = _raw_task_state_payload(tmp_path, "T-0001")
     assert raw_state["status"] == "closed"
     assert raw_state["close_reason"] == "duplicate"
+    assert raw_state["runtime"]["pipeline"]["last_outcome"]["kind"] == "closed"
+    assert raw_state["runtime"]["pipeline"]["last_outcome"]["reason_code"] == "duplicate"
 
 
 def test_close_task_resets_pipeline_state_row(tmp_path: Path) -> None:

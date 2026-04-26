@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import warnings
 
 import pytest
 import yaml
@@ -162,6 +163,36 @@ def test_task_runtime_persists_pipeline_and_execution_slices(tmp_path: Path) -> 
     assert loaded.runtime.execution.active_subagent.id == "sa-1"
     assert loaded.runtime.execution.interruption is not None
     assert loaded.runtime.execution.interruption.resume_stage == "implementing"
+
+
+@pytest.mark.parametrize(
+    ("kind", "reason_code"),
+    [
+        ("done", "done"),
+        ("closed", "duplicate"),
+        ("closed", "execution_cancelled"),
+    ],
+)
+def test_task_runtime_outcome_string_mutations_persist_without_pydantic_warnings(
+    tmp_path: Path,
+    kind: str,
+    reason_code: str,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title=f"{reason_code} outcome")
+    task.runtime.pipeline.last_outcome.kind = kind
+    task.runtime.pipeline.last_outcome.reason_code = reason_code
+    task.runtime.pipeline.last_outcome.reason = "runtime outcome"
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("error", message="Pydantic serializer warnings", category=UserWarning)
+        save_task_runtime(tmp_path, task)
+
+    outcome_payload = _task_state_payload(tmp_path, task.id)["runtime"]["pipeline"]["last_outcome"]
+
+    assert outcome_payload["kind"] == kind
+    assert outcome_payload["reason_code"] == reason_code
+    assert outcome_payload["reason"] == "runtime outcome"
 
 
 def test_get_task_preserves_commit_sha_when_runtime_copy_is_missing(tmp_path: Path) -> None:

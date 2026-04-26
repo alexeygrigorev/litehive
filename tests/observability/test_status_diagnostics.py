@@ -4,6 +4,7 @@ import argparse
 from datetime import UTC, datetime, timedelta
 import os
 from pathlib import Path
+import warnings
 
 import yaml
 
@@ -18,6 +19,7 @@ from litehive.lifecycle.persistence import SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
 from litehive.main import fast_status
 from litehive.observability.engine_monitoring import record_engine_execution
+from litehive.observability.status_diagnostics import _load_runner_status_for_status
 from litehive.state.records import create_task, save_task
 from litehive.state.persist import save_state
 
@@ -221,6 +223,41 @@ def test_status_reports_stopped_runner_for_empty_lock_file(tmp_path: Path, capsy
 
     assert exit_code == 0
     assert "runner_status: stopped" in output
+
+
+def test_runner_status_diagnostic_copies_serialize_without_pydantic_warnings(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    lock_path = workspace_path(tmp_path, "runtime", ".runner.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+    for pid_is_alive, expected_status in ((True, "running"), (False, "stale")):
+        lock_path.write_text(
+            yaml.safe_dump(
+                {
+                    "pid": 4242,
+                    "active_task_id": "T-0002",
+                    "started_at": "2026-04-12T00:00:00Z",
+                    "heartbeat_at": "2026-04-12T00:00:00Z",
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "litehive.observability.status_diagnostics.runner_pid_is_alive",
+            lambda pid, alive=pid_is_alive: alive,
+        )
+
+        status, issue = _load_runner_status_for_status(tmp_path)
+
+        assert issue is None
+        with warnings.catch_warnings():
+            warnings.filterwarnings("error", message="Pydantic serializer warnings", category=UserWarning)
+            payload = status.model_dump(mode="json")
+        assert payload["status"] == expected_status
 
 
 def test_status_reports_wedged_runner_heartbeat(tmp_path: Path, capsys) -> None:

@@ -17,6 +17,7 @@ from litehive.config.registry import workspace_registry_error, workspace_registr
 from litehive.config.workspace_files import config_path
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.daemon.registry import daemon_metadata, pid_is_alive
+from litehive.domain.common import RunnerStatus
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
@@ -628,9 +629,9 @@ def _load_runner_status_for_status(root: Path) -> tuple[RunnerStatusState, Statu
             ),
         )
     if runner_pid_is_alive(status.pid):
-        return status.model_copy(update={"status": "running"}), None
+        return status.model_copy(update={"status": RunnerStatus.RUNNING}), None
     if runner_metadata_present(status):
-        return status.model_copy(update={"status": "stale"}), None
+        return status.model_copy(update={"status": RunnerStatus.STALE}), None
     return RunnerStatusState(), None
 
 
