@@ -52,10 +52,7 @@ def mark_failed_run_operator_override(
 
 def failed_run_block_message(task: TaskRecord, records: list[RuntimeFailedRunRecord]) -> str:
     details = "; ".join(
-        (
-            f"{record.stage} shape={record.failure_shape} "
-            f"count={record.count} latest_at={record.latest_at or '-'}"
-        )
+        (f"{record.stage} shape={record.failure_shape} count={record.count} latest_at={record.latest_at or '-'}")
         for record in records
     )
     return (

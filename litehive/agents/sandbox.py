@@ -234,25 +234,35 @@ class SandboxLauncher:
 
         if profile == SandboxProfile.NO_GIT:
             # Block all git commands
-            argv.extend([
-                "--mount",
-                self._bind_mount_spec(wrapper_paths["no_git"], PurePosixPath("/usr/local/bin/git"), read_only=True),
-            ])
+            argv.extend(
+                [
+                    "--mount",
+                    self._bind_mount_spec(wrapper_paths["no_git"], PurePosixPath("/usr/local/bin/git"), read_only=True),
+                ]
+            )
             allowed_env["PATH"] = "/usr/local/bin:/usr/bin:/bin"
         elif profile == SandboxProfile.MERGE_RESOLVER and real_git_path is not None:
             # Allow git commands but with protection wrapper
-            argv.extend([
-                "--mount",
-                self._bind_mount_spec(wrapper_paths["merge_git"], PurePosixPath("/usr/local/bin/git"), read_only=True),
-                "--mount",
-                self._bind_mount_spec(Path(real_git_path).resolve(), PurePosixPath("/litehive/bin/git.real"), read_only=True),
-            ])
+            argv.extend(
+                [
+                    "--mount",
+                    self._bind_mount_spec(
+                        wrapper_paths["merge_git"], PurePosixPath("/usr/local/bin/git"), read_only=True
+                    ),
+                    "--mount",
+                    self._bind_mount_spec(
+                        Path(real_git_path).resolve(), PurePosixPath("/litehive/bin/git.real"), read_only=True
+                    ),
+                ]
+            )
             # Mount litehive source code for the wrapper
             source_root = Path(__file__).resolve().parents[2]
-            argv.extend([
-                "--mount",
-                self._bind_mount_spec(source_root, PurePosixPath(str(source_root)), read_only=True),
-            ])
+            argv.extend(
+                [
+                    "--mount",
+                    self._bind_mount_spec(source_root, PurePosixPath(str(source_root)), read_only=True),
+                ]
+            )
             allowed_env["PATH"] = "/usr/local/bin:/usr/bin:/bin"
             allowed_env["LITEHIVE_REAL_GIT_PATH"] = "/litehive/bin/git.real"
             allowed_env["LITEHIVE_WORKSPACE_ROOT"] = str(workspace_mount)
@@ -260,10 +270,12 @@ class SandboxLauncher:
             allowed_env["LITEHIVE_PYTHON_PATH"] = sys.executable
             # Mount Python executable
             python_path = Path(sys.executable).resolve()
-            argv.extend([
-                "--mount",
-                self._bind_mount_spec(python_path, PurePosixPath(sys.executable), read_only=True),
-            ])
+            argv.extend(
+                [
+                    "--mount",
+                    self._bind_mount_spec(python_path, PurePosixPath(sys.executable), read_only=True),
+                ]
+            )
 
         for env_name, value in sorted(allowed_env.items()):
             argv.extend(["--env", f"{env_name}={value}"])
@@ -271,8 +283,6 @@ class SandboxLauncher:
         argv.append(runtime_config.image)
         argv.extend(container_argv)
         return CLIInvocation(argv=tuple(argv), cwd=invocation.cwd, env=invocation.env)
-
-
 
     def ensure_docker_git_wrappers(self) -> dict[str, Path]:
         """Create git wrapper scripts for Docker sandbox."""

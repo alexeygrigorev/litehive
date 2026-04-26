@@ -122,26 +122,26 @@ def _init_workspace_git_repo(root: Path, *, config: LitehiveConfig | None = None
 def _always_fail_until_fixed_command(task_id: str) -> str:
     return (
         f'if [ "$LITEHIVE_TASK_ID" != "{task_id}" ]; then exit 0; fi; '
-        'if [ -f .hook_fixed ]; then exit 0; fi; '
-        'count=$(cat .hook_reject_count 2>/dev/null || echo 0); '
-        'count=$((count + 1)); '
+        "if [ -f .hook_fixed ]; then exit 0; fi; "
+        "count=$(cat .hook_reject_count 2>/dev/null || echo 0); "
+        "count=$((count + 1)); "
         'printf "%s" "$count" > .hook_reject_count; '
         'echo "pytest timeout $count" >&2; '
-        'exit 1'
+        "exit 1"
     )
 
 
 def _fail_twice_then_pass_command(task_id: str) -> str:
     return (
         f'if [ "$LITEHIVE_TASK_ID" != "{task_id}" ]; then exit 0; fi; '
-        'count=$(cat .hook_reject_count 2>/dev/null || echo 0); '
-        'count=$((count + 1)); '
+        "count=$(cat .hook_reject_count 2>/dev/null || echo 0); "
+        "count=$((count + 1)); "
         'printf "%s" "$count" > .hook_reject_count; '
         'if [ "$count" -le 2 ]; then '
         'echo "pytest timeout $count" >&2; '
-        'exit 1; '
-        'fi; '
-        'exit 0'
+        "exit 1; "
+        "fi; "
+        "exit 0"
     )
 
 

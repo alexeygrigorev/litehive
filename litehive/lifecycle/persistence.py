@@ -380,7 +380,9 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
         "merge_context": (state.merge_context.to_payload() if state.merge_context is not None else None),
         "commit_result": (state.commit_result.to_payload() if state.commit_result is not None else None),
         "last_report": state.last_report.to_payload(),
-        "last_rejection_by_stage": {str(stage): rej.to_payload() for stage, rej in state.last_rejection_by_stage.items()},
+        "last_rejection_by_stage": {
+            str(stage): rej.to_payload() for stage, rej in state.last_rejection_by_stage.items()
+        },
         "failed_run_history": {key: record.to_payload() for key, record in state.failed_run_history.items()},
         "rejection_loop": (state.rejection_loop.to_payload() if state.rejection_loop is not None else None),
         "consecutive_same_hook_rejects": state.consecutive_same_hook_rejects,

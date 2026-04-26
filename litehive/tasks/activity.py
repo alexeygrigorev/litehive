@@ -1,4 +1,4 @@
-"""Task activity boundary over the SQLite-backed store plus filesystem mirroring."""
+"""Task activity boundary over the SQLite-backed store plus legacy imports."""
 
 from datetime import UTC, datetime
 import json
@@ -19,11 +19,11 @@ _TASK_DIR_ID_PATTERN = re.compile(r"^(T-\d{4})-")
 
 
 def task_activity_path(root: Path, task: TaskRecord) -> Path:
-    return task_dir(root, task) / "comments.yaml"
+    return task_dir(root, task, bootstrap=False) / "comments.yaml"
 
 
 def legacy_task_activity_path(root: Path, task: TaskRecord) -> Path:
-    return task_dir(root, task) / "thread.yaml"
+    return task_dir(root, task, bootstrap=False) / "thread.yaml"
 
 
 def resolve_task_activity_path(root: Path, task: TaskRecord) -> Path:
@@ -37,17 +37,22 @@ def resolve_task_activity_path(root: Path, task: TaskRecord) -> Path:
 
 
 def load_task_activity(root: Path, task: TaskRecord) -> list[TaskActivityEntry]:
-    activity_payload = _read_task_activity_file(task_activity_path(root, task))
-    if activity_payload is not None:
-        if activity_payload[1]:
-            return activity_payload[0]
-        return _load_task_activity_from_db(root, task)
-    legacy_payload = _read_task_activity_file(legacy_task_activity_path(root, task))
-    if legacy_payload is not None:
-        if legacy_payload[1]:
-            return legacy_payload[0]
-        return _load_task_activity_from_db(root, task)
-    return _load_task_activity_from_db(root, task)
+    db_activity = _load_task_activity_from_db(root, task)
+    if db_activity:
+        _remove_legacy_task_activity_files(root, task)
+        return db_activity
+    for path in (task_activity_path(root, task), legacy_task_activity_path(root, task)):
+        legacy_payload = _read_task_activity_file(path)
+        if legacy_payload is None:
+            continue
+        entries, valid = legacy_payload
+        if valid:
+            if entries:
+                _save_task_activity_to_db(root, task.id, entries)
+            _remove_legacy_task_activity_files(root, task)
+            return entries
+        path.unlink(missing_ok=True)
+    return []
 
 
 def _load_task_activity_from_db(root: Path, task: TaskRecord) -> list[TaskActivityEntry]:
@@ -128,15 +133,18 @@ def _save_task_activity_to_db(root: Path, task_id: str, activity: list[TaskActiv
 
 def save_task_activity(root: Path, task: TaskRecord, activity: list[TaskActivityEntry]) -> None:
     _save_task_activity_to_db(root, task.id, activity)
-    for path in (task_activity_path(root, task), legacy_task_activity_path(root, task)):
-        if path.exists():
-            path.unlink()
+    _remove_legacy_task_activity_files(root, task)
 
 
 def append_task_activity(root: Path, task: TaskRecord, entry: TaskActivityEntry) -> None:
     activity = load_task_activity(root, task)
     activity.append(entry)
     save_task_activity(root, task, activity)
+
+
+def _remove_legacy_task_activity_files(root: Path, task: TaskRecord) -> None:
+    for path in (task_activity_path(root, task), legacy_task_activity_path(root, task)):
+        path.unlink(missing_ok=True)
 
 
 def latest_task_activity_entry(
@@ -178,16 +186,18 @@ def migrate_legacy_task_activity_files(root: Path) -> bool:
         return False
 
     mutated = False
-    legacy_paths = sorted(tasks_dir.glob("*/thread.yaml"))
+    legacy_paths = sorted(tasks_dir.glob("*/comments.yaml"))
+    legacy_paths.extend(sorted(tasks_dir.glob("*/thread.yaml")))
     archive_dir = tasks_dir / "archive"
     if archive_dir.exists():
+        legacy_paths.extend(sorted(archive_dir.glob("*/comments.yaml")))
         legacy_paths.extend(sorted(archive_dir.glob("*/thread.yaml")))
 
     for legacy_path in legacy_paths:
         if not legacy_path.is_file():
             continue
         activity_path = legacy_path.with_name("comments.yaml")
-        if activity_path.exists():
+        if legacy_path.name == "thread.yaml" and activity_path.exists():
             parsed = _read_task_activity_file(activity_path)
             if parsed is not None and parsed[1]:
                 task_id = _task_id_from_task_dir_name(activity_path.parent.name)

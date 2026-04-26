@@ -20,7 +20,6 @@ from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_sta
 from litehive.tasks.archive_index import (
     archive_index_path,
     archive_root as archive_index_root,
-    archived_task_ids,
 )
 from .paths import task_dir
 from litehive.state.persist import atomic_write_text
@@ -29,6 +28,12 @@ logger = logging.getLogger(__name__)
 
 _ARCHIVABLE_TASK_STATUSES = {"done", "closed"}
 _CLOSE_REASON_INDEX_STATUS = {"execution_cancelled": "cancelled"}
+_LEGACY_RUNTIME_YAML_FILES = (
+    "comments.yaml",
+    "report.yaml",
+    "task.yaml",
+    "thread.yaml",
+)
 
 
 def archive_root(root: Path) -> Path:
@@ -40,6 +45,13 @@ def _archive_index_path(root: Path) -> Path:
 
 
 def _archive_index_status(task: TaskRecord) -> str:
+    if str(task.status) == "archived":
+        reason = task.close_reason or task.runtime.pipeline.last_outcome.reason_code
+        if reason:
+            return _CLOSE_REASON_INDEX_STATUS.get(str(reason), str(reason))
+        if str(task.pipeline_status) == "done":
+            return "done"
+        return "archived"
     if str(task.status) == "closed":
         close_reason = task.close_reason or task.runtime.pipeline.last_outcome.reason_code
         return _CLOSE_REASON_INDEX_STATUS.get(str(close_reason), str(close_reason or "closed"))
@@ -83,6 +95,11 @@ def _archive_task_path(root: Path, task_id: str) -> Path | None:
         return None
     matches = sorted(path for path in archive.glob(f"{task_id}-*") if path.is_dir())
     return matches[0] if matches else None
+
+
+def _remove_legacy_runtime_yaml_files(path: Path) -> None:
+    for name in _LEGACY_RUNTIME_YAML_FILES:
+        (path / name).unlink(missing_ok=True)
 
 
 def _archived_at_for_tombstone(task: TaskRecord) -> str:
@@ -153,7 +170,6 @@ def _validate_archivable_tasks(root: Path, task_ids: list[str]) -> list[TaskReco
     if not task_ids:
         raise ValueError("At least one task id is required")
     seen: set[str] = set()
-    archived_ids = archived_task_ids(root)
     tasks: list[TaskRecord] = []
     for task_id in task_ids:
         normalized_task_id = task_id.strip()
@@ -165,7 +181,7 @@ def _validate_archivable_tasks(root: Path, task_ids: list[str]) -> list[TaskReco
         task = get_task_record(root, normalized_task_id, include_archived=True)
         if task is None:
             raise ValueError(f"Task {normalized_task_id} not found")
-        if task.status == "archived" or task.id in archived_ids:
+        if task.status == "archived":
             raise ValueError(f"Task {task.id} is already archived")
         if str(task.status) not in _ARCHIVABLE_TASK_STATUSES:
             raise ValueError(
@@ -195,6 +211,9 @@ def _archive_validated_task(
     dst = archive_root(root) / src.name
     now = utcnow()
     task.updated_at = now
+    if task.close_reason is None and str(task.status) == "done":
+        task.close_reason = "done"
+    task.status = "archived"
     if state.active_task_id == task.id:
         state.active_task_id = None
     state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
@@ -220,6 +239,7 @@ def _archive_validated_task(
         shutil.move(str(src), str(dst))
     else:
         dst.mkdir(parents=True, exist_ok=True)
+    _remove_legacy_runtime_yaml_files(dst)
     _update_archive_index(root, [task])
     refresh_duplicate_task_index_if_initialized(root)
     return task
@@ -285,22 +305,21 @@ def archive_done_tasks(
     for task in tasks:
         if task.status == "done" and task.pipeline_status == "done":
             try:
-                archive_task(root, task.id)
+                archived_task = archive_task(root, task.id)
             except (ValueError, FileNotFoundError) as exc:
                 if on_skip is not None:
                     on_skip(task.id, exc)
                 continue
-            archived.append(task)
+            archived.append(archived_task)
     return archived
 
 
 def list_archived_tasks(root: Path) -> list[TaskRecord]:
     """List tasks moved into the archive."""
-    archived_ids = archived_task_ids(root)
     return [
         task
         for task in list_tasks(root, include_runtime=True, strict=False, include_archived=True)
-        if task.status == "archived" or task.id in archived_ids
+        if task.status == "archived"
     ]
 
 
@@ -309,7 +328,7 @@ def get_archived_task(root: Path, task_id: str) -> TaskRecord | None:
     task = get_task_record(root, task_id, include_archived=True)
     if task is None:
         return None
-    if task.status != "archived" and task.id not in archived_task_ids(root):
+    if task.status != "archived":
         return None
     return task
 
@@ -346,9 +365,7 @@ def delete_archived_task(
         if task is None:
             live_task = get_task_record(root, task_id)
             if live_task is not None:
-                raise ValueError(
-                    f"Task {task_id} has status '{live_task.status}' — only archived tasks can be deleted"
-                )
+                raise ValueError(f"Task {task_id} has status '{live_task.status}' — only archived tasks can be deleted")
             raise ValueError(f"Task {task_id} not found")
         state = load_state(root)
         task = _hard_delete_archived_task(

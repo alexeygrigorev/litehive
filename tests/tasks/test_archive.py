@@ -83,7 +83,7 @@ def test_archive_single_done_task(tmp_path: Path) -> None:
     result = archive_task(tmp_path, task.id)
 
     assert result.id == task.id
-    assert result.status == "done"
+    assert result.status == "archived"
     assert result.pipeline_status == "done"
     # Task dir should no longer exist under tasks/
     assert not task_dir(tmp_path, task).exists()
@@ -93,9 +93,25 @@ def test_archive_single_done_task(tmp_path: Path) -> None:
     assert not (archive_dir / "task.yaml").exists()
     archived = get_archived_task(tmp_path, task.id)
     assert archived is not None
-    assert archived.status == "done"
+    assert archived.status == "archived"
     assert archived.pipeline_status == "done"
+    assert archived.close_reason == "done"
     assert archived.updated_at
+
+
+def test_archive_drops_legacy_runtime_yaml_artifacts(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = _make_done_task(tmp_path, "Archive legacy runtime files")
+    source_dir = task_dir(tmp_path, task)
+    for name in ("comments.yaml", "report.yaml", "task.yaml", "thread.yaml"):
+        (source_dir / name).write_text("stale: true\n", encoding="utf-8")
+
+    archive_task(tmp_path, task.id)
+
+    archive_dir = archive_root(tmp_path) / f"{task.id}-{task.slug}"
+    assert archive_dir.exists()
+    for name in ("comments.yaml", "report.yaml", "task.yaml", "thread.yaml"):
+        assert not (archive_dir / name).exists()
 
 
 def test_archive_rejects_non_done_task(tmp_path: Path) -> None:
@@ -133,15 +149,17 @@ def test_task_archive_cli_archives_done_and_closed_tasks_preserving_statuses(tmp
     archived_done = get_archived_task(tmp_path, done.id)
     archived_closed = get_archived_task(tmp_path, closed.id)
     assert archived_done is not None
-    assert archived_done.status == "done"
+    assert archived_done.status == "archived"
+    assert archived_done.close_reason == "done"
     assert archived_closed is not None
-    assert archived_closed.status == "closed"
+    assert archived_closed.status == "archived"
     assert archived_closed.close_reason == "duplicate"
 
     raw_done = _raw_task_state_payload(tmp_path, done.id)
     raw_closed = _raw_task_state_payload(tmp_path, closed.id)
-    assert raw_done["status"] == "done"
-    assert raw_closed["status"] == "closed"
+    assert raw_done["status"] == "archived"
+    assert raw_done["close_reason"] == "done"
+    assert raw_closed["status"] == "archived"
     assert raw_closed["close_reason"] == "duplicate"
 
     index_rows = _archive_index_rows(tmp_path)
@@ -240,7 +258,7 @@ def test_list_archived_tasks_reads_sqlite_records(tmp_path: Path) -> None:
     archived = list_archived_tasks(tmp_path)
 
     assert len(archived) == 1
-    assert archived[0].status == "done"
+    assert archived[0].status == "archived"
     assert archived[0].pipeline_status == "done"
 
 
@@ -367,7 +385,7 @@ def test_delete_archived_task_removes_live_records_and_preserves_tombstone(tmp_p
     rebuild_duplicate_task_index(tmp_path)
     archived_matches = search_tasks_by_text(tmp_path, query="remove archived tasks from live records", limit=10)
     archived_match = next(match for match in archived_matches if match.task_id == task.id)
-    assert archived_match.status == "done"
+    assert archived_match.status == "archived"
 
     state = load_state(tmp_path)
     state.active_task_id = task.id

@@ -78,7 +78,9 @@ def test_create_task_surfaces_cleanup_failure_when_rollback_removal_fails(
     monkeypatch.setattr("litehive.fs_cleanup.shutil.rmtree", fail_rmtree)
 
     with caplog.at_level(logging.INFO, logger="litehive.state.records"):
-        with pytest.raises(ExceptionGroup, match="failed to persist created tasks and roll back created task directories") as excinfo:
+        with pytest.raises(
+            ExceptionGroup, match="failed to persist created tasks and roll back created task directories"
+        ) as excinfo:
             create_task(tmp_path, title="Cleanup failure surfaces")
 
     assert any("intent write failed" in str(error) for error in excinfo.value.exceptions)

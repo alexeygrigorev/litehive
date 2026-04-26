@@ -30,15 +30,16 @@ class TriggerEventKind(StringEnum):
     initiated a recovery attempt. Each kind may have different recovery
     strategies and budget tracking.
     """
-    REJECT = "reject"                               # Stage verdict was reject
-    BLOCKED = "blocked"                             # Stage verdict was blocked
-    CRASH = "crash"                                 # Subagent or system crashed
-    TIMEOUT = "timeout"                             # Operation timed out
-    STAGE_RETRY_LIMIT = "stage_retry_limit"         # Per-stage retry limit exceeded
-    RETRY_LIMIT = "retry_limit"                     # Overall retry limit exceeded
-    FLAGGED_TASK = "flagged_task"                   # Task was flagged for operator attention
-    STALE_RUNNER_RECOVERY = "stale_runner_recovery" # Runner became unresponsive
-    UNKNOWN = "unknown"                             # Unclassified recovery trigger
+
+    REJECT = "reject"  # Stage verdict was reject
+    BLOCKED = "blocked"  # Stage verdict was blocked
+    CRASH = "crash"  # Subagent or system crashed
+    TIMEOUT = "timeout"  # Operation timed out
+    STAGE_RETRY_LIMIT = "stage_retry_limit"  # Per-stage retry limit exceeded
+    RETRY_LIMIT = "retry_limit"  # Overall retry limit exceeded
+    FLAGGED_TASK = "flagged_task"  # Task was flagged for operator attention
+    STALE_RUNNER_RECOVERY = "stale_runner_recovery"  # Runner became unresponsive
+    UNKNOWN = "unknown"  # Unclassified recovery trigger
 
 
 class RecoveryDisposition(StringEnum):
@@ -48,10 +49,11 @@ class RecoveryDisposition(StringEnum):
     to task execution after recovery was invoked. Used for tracking
     recovery effectiveness and debugging recovery patterns.
     """
-    RESUMED = "resumed"         # Task execution resumed from where it left off
-    ADVANCED = "advanced"       # Task was moved forward to next stage
-    COMPLETED = "completed"     # Task was completed as part of recovery
-    TERMINATED = "terminated"   # Task execution was terminated
+
+    RESUMED = "resumed"  # Task execution resumed from where it left off
+    ADVANCED = "advanced"  # Task was moved forward to next stage
+    COMPLETED = "completed"  # Task was completed as part of recovery
+    TERMINATED = "terminated"  # Task execution was terminated
 
 
 @dataclass(frozen=True)
@@ -71,8 +73,8 @@ class FailureFingerprint:
     fields remain report evidence.
     """
 
-    fingerprint: str                                    # Unique identifier for this failure pattern
-    classification: str | None = None                   # Optional failure category for budget grouping
+    fingerprint: str  # Unique identifier for this failure pattern
+    classification: str | None = None  # Optional failure category for budget grouping
     diagnostics: dict[str, Any] = field(default_factory=dict)  # Additional failure context
 
     def budget_key(self) -> str:
@@ -111,12 +113,12 @@ class RecoveryTrigger:
     separate ``RecoveryContext`` type or payload.
     """
 
-    origin_stage: str | None                            # Pipeline stage where failure occurred
-    trigger_event_kind: TriggerEventKind                # Type of event that triggered recovery
-    failure_fingerprint: FailureFingerprint             # Normalized failure pattern for budget tracking
-    source: str | None = None                           # Component that detected the failure
-    reason_code: str | None = None                      # Machine-readable reason for recovery
-    message: str = ""                                   # Human-readable explanation
+    origin_stage: str | None  # Pipeline stage where failure occurred
+    trigger_event_kind: TriggerEventKind  # Type of event that triggered recovery
+    failure_fingerprint: FailureFingerprint  # Normalized failure pattern for budget tracking
+    source: str | None = None  # Component that detected the failure
+    reason_code: str | None = None  # Machine-readable reason for recovery
+    message: str = ""  # Human-readable explanation
     diagnostics: dict[str, Any] = field(default_factory=dict)  # Additional failure context
 
     def budget_key(self) -> str:
@@ -164,11 +166,11 @@ class RecoveryOutcome:
     ``RecoveryRecord`` model.
     """
 
-    trigger: RecoveryTrigger                         # What triggered this recovery attempt
-    recovery_verdict: str                            # Final verdict from recovery process
-    disposition: RecoveryDisposition                 # How the recovery attempt concluded
-    reason_code: str | None = None                   # Machine-readable outcome classification
-    message: str = ""                                # Human-readable outcome explanation
+    trigger: RecoveryTrigger  # What triggered this recovery attempt
+    recovery_verdict: str  # Final verdict from recovery process
+    disposition: RecoveryDisposition  # How the recovery attempt concluded
+    reason_code: str | None = None  # Machine-readable outcome classification
+    message: str = ""  # Human-readable outcome explanation
     created_at: str = field(default_factory=utcnow)  # When the recovery outcome was recorded
 
     def to_payload(self) -> dict[str, Any]:

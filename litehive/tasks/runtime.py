@@ -279,7 +279,10 @@ def apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
     task.runtime.pipeline.updated_at = now
     task.runtime.pipeline.last_stage = _completed_stage_state(report, started_at=started_at, completed_at=now)
     task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now)
-    if task.runtime.execution.continuation_handoff is not None and task.runtime.execution.continuation_handoff.stage == report.pipeline_state:
+    if (
+        task.runtime.execution.continuation_handoff is not None
+        and task.runtime.execution.continuation_handoff.stage == report.pipeline_state
+    ):
         task.runtime.execution.continuation_handoff = None
 
 
@@ -291,11 +294,17 @@ def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> Non
 
 
 def mark_subagent_pid(root: Path, task: TaskRecord, pid: int | None) -> None:
-    if pid is None or task.runtime.execution.active_subagent is None or task.runtime.execution.active_subagent.pid == pid:
+    if (
+        pid is None
+        or task.runtime.execution.active_subagent is None
+        or task.runtime.execution.active_subagent.pid == pid
+    ):
         return
     now = utcnow()
     task.runtime.pipeline.updated_at = now
-    task.runtime.execution.active_subagent = task.runtime.execution.active_subagent.model_copy(update={"pid": pid, "updated_at": now})
+    task.runtime.execution.active_subagent = task.runtime.execution.active_subagent.model_copy(
+        update={"pid": pid, "updated_at": now}
+    )
     save_task_runtime(root, task)
 
 

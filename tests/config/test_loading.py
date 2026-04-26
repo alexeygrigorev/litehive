@@ -302,7 +302,6 @@ def test_load_config_rejects_unknown_process_profile(tmp_path: Path) -> None:
         load_config(tmp_path)
 
 
-
 def test_load_config_still_rejects_unknown_keys(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))

@@ -47,9 +47,7 @@ def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path:
     assert "health:" in output
 
 
-def test_status_reports_corrupt_workspace_registry_without_raising(
-    tmp_path: Path, capsys, monkeypatch
-) -> None:
+def test_status_reports_corrupt_workspace_registry_without_raising(tmp_path: Path, capsys, monkeypatch) -> None:
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     ensure_workspace(tmp_path)
     registry_path = litehive_root() / "workspaces.db"
@@ -117,9 +115,7 @@ def test_status_reports_legacy_engine_fallbacks_config_error(tmp_path: Path, cap
     assert "unexpected keyword argument 'engine_fallbacks'" in output
 
 
-def test_status_ignores_legacy_engine_monitoring_yaml_and_renders_db_data(
-    tmp_path: Path, capsys
-) -> None:
+def test_status_ignores_legacy_engine_monitoring_yaml_and_renders_db_data(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     record_engine_execution(
         tmp_path,

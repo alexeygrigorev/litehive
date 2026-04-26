@@ -26,8 +26,7 @@ _bootstrap_heru_import_path()
 _codex_quota_mod = importlib.import_module("heru.quota.codex_quota")
 
 _PREVIOUS_TEST_ENV = {
-    key: os.environ.get(key)
-    for key in ("LITEHIVE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME")
+    key: os.environ.get(key) for key in ("LITEHIVE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME")
 }
 _TEST_XDG_ROOT = Path(tempfile.mkdtemp(prefix="litehive-test-xdg-"))
 _TEST_XDG_PATHS = {
@@ -60,7 +59,9 @@ os.environ["GIT_CONFIG_KEY_0"] = "init.defaultBranch"
 os.environ["GIT_CONFIG_VALUE_0"] = "main"
 
 _PYTHONPATH_ENTRIES = [str(_REPO_ROOT)]
-_SITE_PACKAGES = _REPO_ROOT / ".venv" / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+_SITE_PACKAGES = (
+    _REPO_ROOT / ".venv" / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+)
 if _SITE_PACKAGES.exists():
     _PYTHONPATH_ENTRIES.append(str(_SITE_PACKAGES.resolve()))
 _HERU_IMPORT_ROOT = Path(_codex_quota_mod.__file__).resolve().parents[2]

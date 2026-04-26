@@ -152,6 +152,7 @@ class LitehiveConfig:
             self.litehive_source_path = self.litehive_source_path.strip() or None
         self.external_engine_sandbox = normalize_external_engine_sandbox_config(self.external_engine_sandbox)
 
+
 _VALID_CONFIG_KEYS = frozenset(field.name for field in fields(LitehiveConfig))
 
 

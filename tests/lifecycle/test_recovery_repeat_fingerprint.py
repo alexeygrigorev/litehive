@@ -73,7 +73,9 @@ def _run_with_repeat_engine(tmp_path: Path, task, follow_up_ids: list[str]):
     return run_pipeline_task(
         tmp_path,
         task,
-        engine_factory=lambda name: _RepeatRecoveryEscalationEngine(name, workspace=tmp_path, follow_up_ids=follow_up_ids),
+        engine_factory=lambda name: _RepeatRecoveryEscalationEngine(
+            name, workspace=tmp_path, follow_up_ids=follow_up_ids
+        ),
     )
 
 

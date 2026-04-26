@@ -104,8 +104,7 @@ def test_run_task_happy_path_against_real_workspace(live_workspace: Path) -> Non
     )
 
     assert result.final_stage == "done", (
-        f"expected done, got {result.final_stage!r} "
-        f"(reason={result.failed_reason!r}, msg={result.failed_message!r})"
+        f"expected done, got {result.final_stage!r} (reason={result.failed_reason!r}, msg={result.failed_message!r})"
     )
     assert len(calls) >= 1
 
@@ -130,8 +129,7 @@ def test_run_task_full_mode_walks_every_stage(live_workspace: Path) -> None:
     )
 
     assert result.final_stage == "done", (
-        f"expected done, got {result.final_stage!r} "
-        f"(reason={result.failed_reason!r}, msg={result.failed_message!r})"
+        f"expected done, got {result.final_stage!r} (reason={result.failed_reason!r}, msg={result.failed_message!r})"
     )
     # Every agent stage must have run at least once
     stages_called = {stage for _, stage in calls}

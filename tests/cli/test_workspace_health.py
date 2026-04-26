@@ -168,6 +168,7 @@ def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tm
     assert refreshed.runtime.current_stage.status == "idle"
     assert load_state(tmp_path).queue == [task.id]
 
+
 def test_repair_skips_legacy_disk_only_tasks_missing_runtime_state(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Repair stale resumable task")

@@ -53,11 +53,15 @@ def _read_metadata(path: Path) -> dict[str, object] | None:
 
 
 def _read_locked_metadata(handle: TextIO) -> dict[str, object]:
-    return WorkspaceLockManager(Path(handle.name), pid_is_alive=pid_is_alive, fsync_writes=True).read_locked_metadata(handle)
+    return WorkspaceLockManager(Path(handle.name), pid_is_alive=pid_is_alive, fsync_writes=True).read_locked_metadata(
+        handle
+    )
 
 
 def _write_locked_metadata(handle: TextIO, payload: dict[str, object]) -> None:
-    WorkspaceLockManager(Path(handle.name), pid_is_alive=pid_is_alive, fsync_writes=True).write_locked_metadata(handle, payload)
+    WorkspaceLockManager(Path(handle.name), pid_is_alive=pid_is_alive, fsync_writes=True).write_locked_metadata(
+        handle, payload
+    )
 
 
 @contextmanager
@@ -91,6 +95,22 @@ def _write_daemon_registry(entries: list[dict[str, object]]) -> None:
     path.write_text(yaml.safe_dump(entries, sort_keys=False), encoding="utf-8")
 
 
+def _save_daemon_process_state(workspace: Path, payload: dict[str, object], *, status: str = "running") -> None:
+    from litehive.state.store import runtime_store
+
+    runtime_store(workspace).save_process_state(
+        "daemon",
+        status=status,
+        payload=payload,
+    )
+
+
+def _clear_daemon_process_state(workspace: Path) -> None:
+    from litehive.state.store import runtime_store
+
+    runtime_store(workspace).clear_process_state("daemon")
+
+
 def _upsert_daemon_registry_entry(workspace: Path, payload: dict[str, object]) -> None:
     with _DAEMON_REGISTRY_MUTEX:
         with _locked_daemon_registry():
@@ -115,6 +135,7 @@ def _clear_stale_daemon_metadata(workspace: Path, *, pid: int | None = None) -> 
     workspace = workspace.resolve()
     if _daemon_lock_manager(workspace).clear_metadata_if_unlocked(expected_pid=pid, require_stale_pid=True):
         _remove_daemon_registry_entry(workspace)
+        _clear_daemon_process_state(workspace)
 
 
 def daemon_metadata(workspace: Path) -> dict[str, object] | None:
@@ -166,6 +187,7 @@ def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
             if existing_handle is not None:
                 raise RuntimeError(f"daemon already registered in-process for {workspace}")
             _DAEMON_LOCKS[workspace] = handle
+        _save_daemon_process_state(workspace, payload)
         _upsert_daemon_registry_entry(workspace, payload)
     except Exception:
         try:
@@ -188,6 +210,7 @@ def unregister_daemon(workspace: Path, *, pid: int | None = None) -> None:
                 return
         finally:
             manager.release(handle, clear_metadata=True)
+        _clear_daemon_process_state(workspace)
         _remove_daemon_registry_entry(workspace)
         return
     _clear_stale_daemon_metadata(workspace, pid=pid)
@@ -205,6 +228,7 @@ def touch_daemon(workspace: Path, *, pid: int | None = None) -> bool:
             return False
         metadata["heartbeat_at"] = utcnow()
         manager.write_locked_metadata(handle, metadata)
+        _save_daemon_process_state(workspace, metadata)
     return True
 
 

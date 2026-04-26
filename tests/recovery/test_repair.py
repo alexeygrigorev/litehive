@@ -58,7 +58,9 @@ def test_repair_workspace_state_rebuilds_broken_checkout_venv(tmp_path: Path, mo
     )
     _create_broken_venv_binary(checkout, "ruff", tmp_path / "fake-home" / ".cache" / "uv")
 
-    def fake_sync(args: list[str], *, cwd: str, capture_output: bool, text: bool, check: bool) -> subprocess.CompletedProcess[str]:
+    def fake_sync(
+        args: list[str], *, cwd: str, capture_output: bool, text: bool, check: bool
+    ) -> subprocess.CompletedProcess[str]:
         assert args == ["uv", "sync", "--extra", "dev"]
         assert capture_output is True and text is True and check is False
         bin_dir = Path(cwd) / ".venv" / "bin"
@@ -68,7 +70,9 @@ def test_repair_workspace_state_rebuilds_broken_checkout_venv(tmp_path: Path, mo
         binary.chmod(0o755)
         return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
 
-    monkeypatch.setattr("litehive.recovery.workspace_repair.shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "litehive.recovery.workspace_repair.shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
     monkeypatch.setattr("litehive.recovery.workspace_repair.subprocess.run", fake_sync)
 
     summary = repair_workspace_state(tmp_path, repair_broken_venvs_in_checkouts=True)

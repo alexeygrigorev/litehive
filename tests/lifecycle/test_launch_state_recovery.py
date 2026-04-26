@@ -41,7 +41,9 @@ def _init_workspace_git_repo(root: Path) -> None:
 
 
 def _seed_terminal_pipeline_state(root: Path, task_id: str, *, entry_stage: str, stage: str = "failed") -> None:
-    SqlitePersistence(root).save(TaskState(task_id=task_id, stage=stage, pipeline_mode=PipelineMode.FULL, entry_stage=entry_stage))
+    SqlitePersistence(root).save(
+        TaskState(task_id=task_id, stage=stage, pipeline_mode=PipelineMode.FULL, entry_stage=entry_stage)
+    )
 
 
 def _run_recovered_task(tmp_path: Path, monkeypatch, task_id: str) -> tuple[object, list[str], list[str]]:

@@ -283,10 +283,7 @@ def quota_health(
         return _QuotaHealth(engine, "unavailable", status.error)
     short_term = status.short_term
     long_term = status.long_term
-    summary = (
-        f"hours remaining={short_term.percent_remaining:.1f}% "
-        f"weeks remaining={long_term.percent_remaining:.1f}%"
-    )
+    summary = f"hours remaining={short_term.percent_remaining:.1f}% weeks remaining={long_term.percent_remaining:.1f}%"
     if reset_at is not None:
         summary += f" reset={reset_at}"
     return _QuotaHealth(engine, "warning" if status.limit_reached else "ok", summary, status.limit_reached)

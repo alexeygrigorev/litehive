@@ -66,11 +66,15 @@ def _canonicalized_task_state_payload(data):
         close_reason = close_reason or _last_outcome_reason_code(payload) or "unknown"
     elif status == "done":
         close_reason = close_reason or "done"
+    elif status == "archived":
+        close_reason = close_reason or _last_outcome_reason_code(payload)
+        if close_reason is None and pipeline_status == "done":
+            close_reason = "done"
     else:
         close_reason = None
 
     payload["close_reason"] = close_reason
-    if payload.get("status") in {"closed", "done"}:
+    if payload.get("status") in {"closed", "done", "archived"}:
         payload["flag_reason"] = None
     return payload
 
@@ -100,16 +104,21 @@ def canonicalize_task_terminal_state(task: "TaskRecord") -> None:
     elif status == "closed":
         outcome_reason_code = task.runtime.pipeline.last_outcome.reason_code
         task.close_reason = (
-            task.close_reason
-            or (None if outcome_reason_code is None else str(outcome_reason_code))
-            or "unknown"
+            task.close_reason or (None if outcome_reason_code is None else str(outcome_reason_code)) or "unknown"
         )
     elif status == "done":
         task.close_reason = task.close_reason or "done"
+    elif status == "archived":
+        outcome_reason_code = task.runtime.pipeline.last_outcome.reason_code
+        task.close_reason = (
+            task.close_reason
+            or (None if outcome_reason_code is None else str(outcome_reason_code))
+            or ("done" if str(task.pipeline_status) == "done" else "archived")
+        )
     else:
         task.close_reason = None
 
-    if str(task.status) in {"closed", "done"}:
+    if str(task.status) in {"closed", "done", "archived"}:
         task.flag_reason = None
 
 
@@ -119,9 +128,10 @@ class TaskRetryPolicy(BaseModel):
     Set by task creation and task-edit flows. Used by PipelineRunner and
     recovery logic when deciding whether another attempt is allowed.
     """
-    max_retries: int | None = None          # Overall retry limit across all stages
-    stage_retry_limit: int | None = None    # Per-stage retry limit
-    rejection_loop_limit: int | None = None # Limit on consecutive rejections
+
+    max_retries: int | None = None  # Overall retry limit across all stages
+    stage_retry_limit: int | None = None  # Per-stage retry limit
+    rejection_loop_limit: int | None = None  # Limit on consecutive rejections
 
 
 class TaskCreationSource(BaseModel):
@@ -131,14 +141,15 @@ class TaskCreationSource(BaseModel):
     in-agent task creation, and follow-up task flows. Helps track task
     relationships and creation provenance for debugging and auditing.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     source: Literal["manual", "agent", "follow_up"] = "follow_up"
-    task_id: str | None = None    # Parent/current task id when available
-    stage: str | None = None      # Parent/current stage when available
-    role: str | None = None       # Creating agent role for agent-created tasks
-    rationale: str = ""           # Operator or agent explanation for creating this task
-    blocking: bool = False        # Whether this task blocks the parent's progress
+    task_id: str | None = None  # Parent/current task id when available
+    stage: str | None = None  # Parent/current stage when available
+    role: str | None = None  # Creating agent role for agent-created tasks
+    rationale: str = ""  # Operator or agent explanation for creating this task
+    blocking: bool = False  # Whether this task blocks the parent's progress
 
 
 class GitSettings(BaseModel):
@@ -148,11 +159,12 @@ class GitSettings(BaseModel):
     state tracking (commit_sha, checkpoint attempts) for git operations
     during task execution.
     """
-    auto_commit: bool = True                           # Whether to auto-commit changes
-    commit_message: str | None = None                  # Custom commit message template
-    commit_sha: str | None = None                      # Current git commit SHA
-    checkpoint_attempts: int = 0                       # Number of checkpoint attempts
-    worktree_path: str | None = None                   # Path to git worktree
+
+    auto_commit: bool = True  # Whether to auto-commit changes
+    commit_message: str | None = None  # Custom commit message template
+    commit_sha: str | None = None  # Current git commit SHA
+    checkpoint_attempts: int = 0  # Number of checkpoint attempts
+    worktree_path: str | None = None  # Path to git worktree
 
     def to_intent_git_settings(self) -> "TaskIntentGitSettings":
         return TaskIntentGitSettings(
@@ -175,9 +187,10 @@ class TaskIntentGitSettings(BaseModel):
     runtime state tracking. Used for persistence of operator preferences
     without runtime execution details.
     """
+
     model_config = ConfigDict(extra="forbid")
 
-    auto_commit: bool = True           # Whether to auto-commit changes
+    auto_commit: bool = True  # Whether to auto-commit changes
     commit_message: str | None = None  # Custom commit message template
 
 
@@ -188,9 +201,10 @@ class TaskStateGitSettings(BaseModel):
     separated from operator intent. Used for persistence of execution
     state without operator preferences.
     """
-    commit_sha: str | None = None                      # Current git commit SHA
-    checkpoint_attempts: int = 0                       # Number of checkpoint attempts
-    worktree_path: str | None = None                   # Path to git worktree
+
+    commit_sha: str | None = None  # Current git commit SHA
+    checkpoint_attempts: int = 0  # Number of checkpoint attempts
+    worktree_path: str | None = None  # Path to git worktree
 
     def to_git_updates(self) -> dict[str, str | int | None]:
         return {
@@ -211,22 +225,23 @@ class TaskIntentRecord(BaseModel):
     Primary consumers: task creation flows, operator editing, and
     persistence when separating intent from runtime state.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    slug: str                                                           # Human-readable task identifier
-    title: str                                                          # Brief task summary
+    slug: str  # Human-readable task identifier
+    title: str  # Brief task summary
     created_at: str = Field(default_factory=utcnow)
-    task_type: str | None = None                                        # Optional task categorization
-    pipeline_mode: PipelineMode = PipelineMode.FULL                     # Execution mode (full vs single)
-    priority: str = "medium"                                            # Task scheduling priority
-    depends_on: list[str] = Field(default_factory=list)                # Upstream task IDs
-    goal: str = ""                                                      # Main intended result
-    acceptance_criteria: list[str] = Field(default_factory=list)       # Concrete completion conditions
-    constraints: list[str] = Field(default_factory=list)               # Limitations or rules to respect
-    plan: list[str] = Field(default_factory=list)                      # Current working plan
+    task_type: str | None = None  # Optional task categorization
+    pipeline_mode: PipelineMode = PipelineMode.FULL  # Execution mode (full vs single)
+    priority: str = "medium"  # Task scheduling priority
+    depends_on: list[str] = Field(default_factory=list)  # Upstream task IDs
+    goal: str = ""  # Main intended result
+    acceptance_criteria: list[str] = Field(default_factory=list)  # Concrete completion conditions
+    constraints: list[str] = Field(default_factory=list)  # Limitations or rules to respect
+    plan: list[str] = Field(default_factory=list)  # Current working plan
     git: TaskIntentGitSettings = Field(default_factory=TaskIntentGitSettings)  # Git operator preferences
-    created_from: TaskCreationSource | None = None                     # What created this task
+    created_from: TaskCreationSource | None = None  # What created this task
 
 
 class TaskStateRecord(BaseModel):
@@ -240,17 +255,18 @@ class TaskStateRecord(BaseModel):
     Primary consumers: PipelineRunner, RecoveryCoordinator, and persistence
     when separating runtime state from operator intent.
     """
-    model: str | None = None                                        # AI model being used
-    status: TaskStatus = TaskStatus.QUEUED                          # High-level execution status
-    close_reason: str | None = None                                 # Reason if task was explicitly closed
-    flag_reason: str | None = None                                  # Reason if task is flagged
-    flag_count: int = 0                                            # Number of times flagged
-    pipeline_status: PipelineStatus = PipelineStatus.BACKLOG       # Current pipeline position
-    updated_at: str = Field(default_factory=utcnow)               # Last state change timestamp
-    subagents: list[SubagentRef] = Field(default_factory=list)    # Active/recent subagent references
+
+    model: str | None = None  # AI model being used
+    status: TaskStatus = TaskStatus.QUEUED  # High-level execution status
+    close_reason: str | None = None  # Reason if task was explicitly closed
+    flag_reason: str | None = None  # Reason if task is flagged
+    flag_count: int = 0  # Number of times flagged
+    pipeline_status: PipelineStatus = PipelineStatus.BACKLOG  # Current pipeline position
+    updated_at: str = Field(default_factory=utcnow)  # Last state change timestamp
+    subagents: list[SubagentRef] = Field(default_factory=list)  # Active/recent subagent references
     git: TaskStateGitSettings = Field(default_factory=TaskStateGitSettings)  # Git execution state
-    retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)   # Retry configuration
-    runtime: TaskRuntime = Field(default_factory=TaskRuntime)                # Detailed execution state
+    retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)  # Retry configuration
+    runtime: TaskRuntime = Field(default_factory=TaskRuntime)  # Detailed execution state
 
     @model_validator(mode="before")
     @classmethod
@@ -302,30 +318,33 @@ class TaskRecord(BaseModel):
     new instance per task. Using runtime: TaskRuntime = TaskRuntime()
     directly would risk sharing one instance across multiple tasks.
     """
+
     id: str
-    slug: str                                                           # Human-readable task identifier
-    title: str                                                          # Brief task summary
-    depends_on: list[str] = Field(default_factory=list)                # Upstream task IDs that must complete first
-    task_type: str | None = None                                        # Optional task categorization
-    model: str | None = None                                            # AI model being used for execution
-    pipeline_mode: PipelineMode = PipelineMode.FULL                     # Execution mode (full vs single stage)
-    status: TaskStatus = TaskStatus.QUEUED                              # High-level execution or terminal category
-    close_reason: str | None = None                                      # Reason when status is closed or done
-    flag_reason: str | None = None                                      # Reason if task requires operator attention
-    flag_count: int = 0                                                # Number of times task has been flagged
-    pipeline_status: PipelineStatus = PipelineStatus.BACKLOG           # Current position in pipeline
-    priority: str = "medium"                                            # Scheduling priority
-    created_at: str = Field(default_factory=utcnow)                    # Task creation timestamp
-    updated_at: str = Field(default_factory=utcnow)                    # Last modification timestamp
-    goal: str = ""                                                      # Main intended result
-    acceptance_criteria: list[str] = Field(default_factory=list)       # Concrete completion conditions
-    constraints: list[str] = Field(default_factory=list)               # Limitations or rules that must be respected
-    plan: list[str] = Field(default_factory=list)                      # Current working plan for the task
-    subagents: list[SubagentRef] = Field(default_factory=list)        # Active/recent subagent references
-    git: GitSettings = Field(default_factory=GitSettings)              # Git configuration and state
+    slug: str  # Human-readable task identifier
+    title: str  # Brief task summary
+    depends_on: list[str] = Field(default_factory=list)  # Upstream task IDs that must complete first
+    task_type: str | None = None  # Optional task categorization
+    model: str | None = None  # AI model being used for execution
+    pipeline_mode: PipelineMode = PipelineMode.FULL  # Execution mode (full vs single stage)
+    status: TaskStatus = TaskStatus.QUEUED  # High-level execution or terminal category
+    close_reason: str | None = None  # Reason when status is closed or done
+    flag_reason: str | None = None  # Reason if task requires operator attention
+    flag_count: int = 0  # Number of times task has been flagged
+    pipeline_status: PipelineStatus = PipelineStatus.BACKLOG  # Current position in pipeline
+    priority: str = "medium"  # Scheduling priority
+    created_at: str = Field(default_factory=utcnow)  # Task creation timestamp
+    updated_at: str = Field(default_factory=utcnow)  # Last modification timestamp
+    goal: str = ""  # Main intended result
+    acceptance_criteria: list[str] = Field(default_factory=list)  # Concrete completion conditions
+    constraints: list[str] = Field(default_factory=list)  # Limitations or rules that must be respected
+    plan: list[str] = Field(default_factory=list)  # Current working plan for the task
+    subagents: list[SubagentRef] = Field(default_factory=list)  # Active/recent subagent references
+    git: GitSettings = Field(default_factory=GitSettings)  # Git configuration and state
     retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)  # Retry limits configuration
-    created_from: TaskCreationSource | None = None                     # What created this task (if from another task)
-    runtime: TaskRuntime = Field(default_factory=TaskRuntime, exclude=True)  # Mutable execution state, excluded from serialization
+    created_from: TaskCreationSource | None = None  # What created this task (if from another task)
+    runtime: TaskRuntime = Field(
+        default_factory=TaskRuntime, exclude=True
+    )  # Mutable execution state, excluded from serialization
 
     @model_validator(mode="before")
     @classmethod

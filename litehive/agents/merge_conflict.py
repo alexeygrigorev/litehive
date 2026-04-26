@@ -23,13 +23,7 @@ class MergeConflictAgent:
     def __init__(self, workspace: Path) -> None:
         self.workspace = workspace.resolve()
 
-    def resolve_conflict(
-        self,
-        task_id: str,
-        conflict_details: str,
-        base_sha: str,
-        task_sha: str
-    ) -> Dict[str, Any]:
+    def resolve_conflict(self, task_id: str, conflict_details: str, base_sha: str, task_sha: str) -> Dict[str, Any]:
         """
         Invoke the merge conflict resolution agent for a specific task conflict.
 
@@ -45,15 +39,10 @@ class MergeConflictAgent:
         try:
             task = get_task(self.workspace, task_id)
             if task is None:
-                return {
-                    "success": False,
-                    "error": f"Task {task_id} not found"
-                }
+                return {"success": False, "error": f"Task {task_id} not found"}
 
             # Create a specialized prompt for merge conflict resolution
-            prompt = self._build_conflict_resolution_prompt(
-                task, conflict_details, base_sha, task_sha
-            )
+            prompt = self._build_conflict_resolution_prompt(task, conflict_details, base_sha, task_sha)
 
             # Create temporary task record for the merge agent
             merge_task = self._create_merge_agent_task(task, conflict_details)
@@ -95,11 +84,7 @@ class MergeConflictAgent:
             }
 
     def _build_conflict_resolution_prompt(
-        self,
-        task: TaskRecord,
-        conflict_details: str,
-        base_sha: str,
-        task_sha: str
+        self, task: TaskRecord, conflict_details: str, base_sha: str, task_sha: str
     ) -> str:
         """Build the prompt for the merge conflict resolution agent."""
         return f"""Task: Resolve merge conflicts for parallel task integration
@@ -165,13 +150,13 @@ Focus on creating a clean, working resolution that integrates the parallel task 
                 "All merge conflicts are resolved with no conflict markers remaining",
                 "Both main branch and task changes are preserved appropriately",
                 "Merge commit is successfully created",
-                "No functionality is broken by the conflict resolution"
+                "No functionality is broken by the conflict resolution",
             ],
             constraints=[
                 "Only modify files necessary to resolve conflicts",
                 "Preserve semantic intent of both change sets",
-                "Use clear commit messages"
-            ]
+                "Use clear commit messages",
+            ],
         )
         return merge_task
 
@@ -180,57 +165,34 @@ Focus on creating a clean, working resolution that integrates the parallel task 
         try:
             # Check git status to see if merge is still in progress
             result = subprocess.run(
-                ["git", "status", "--porcelain"],
-                cwd=self.workspace,
-                capture_output=True,
-                text=True,
-                check=True
+                ["git", "status", "--porcelain"], cwd=self.workspace, capture_output=True, text=True, check=True
             )
 
             # If there are unmerged paths, merge is still in progress
             unmerged_files = [
-                line for line in result.stdout.split('\n')
-                if line.startswith('UU') or line.startswith('AA') or 'both modified' in line
+                line
+                for line in result.stdout.split("\n")
+                if line.startswith("UU") or line.startswith("AA") or "both modified" in line
             ]
 
             if unmerged_files:
-                return {
-                    "completed": False,
-                    "in_progress": True,
-                    "unmerged_files": len(unmerged_files)
-                }
+                return {"completed": False, "in_progress": True, "unmerged_files": len(unmerged_files)}
 
             # Check if we're in a merge state
             merge_head_path = self.workspace / ".git" / "MERGE_HEAD"
             if merge_head_path.exists():
-                return {
-                    "completed": False,
-                    "in_progress": True,
-                    "status": "merge_in_progress"
-                }
+                return {"completed": False, "in_progress": True, "status": "merge_in_progress"}
 
             # No merge in progress and no conflicts - merge is complete
-            return {
-                "completed": True,
-                "in_progress": False,
-                "status": "resolved"
-            }
+            return {"completed": True, "in_progress": False, "status": "resolved"}
 
         except subprocess.CalledProcessError as exc:
             logger.exception("Error checking merge resolution status")
-            return {
-                "completed": False,
-                "in_progress": False,
-                "error": str(exc)
-            }
+            return {"completed": False, "in_progress": False, "error": str(exc)}
 
 
 def invoke_merge_conflict_agent(
-    workspace: Path,
-    task_id: str,
-    conflict_details: str,
-    base_sha: str,
-    task_sha: str
+    workspace: Path, task_id: str, conflict_details: str, base_sha: str, task_sha: str
 ) -> Dict[str, Any]:
     """Convenience function to invoke the merge conflict resolution agent."""
     agent = MergeConflictAgent(workspace)

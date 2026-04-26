@@ -189,10 +189,7 @@ def _migration_timestamps(count: int) -> list[str]:
     if count <= 0:
         return []
     now = datetime.now(UTC)
-    return [
-        (now - timedelta(microseconds=index)).isoformat().replace("+00:00", "Z")
-        for index in range(count)
-    ]
+    return [(now - timedelta(microseconds=index)).isoformat().replace("+00:00", "Z") for index in range(count)]
 
 
 def _migrate_legacy_registry_if_needed(

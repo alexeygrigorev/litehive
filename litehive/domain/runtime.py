@@ -28,8 +28,9 @@ class RuntimeGitState(BaseModel):
     Tracks the current git context where the task is executing.
     Updated by PipelineRunner as git operations occur.
     """
-    commit_sha: str | None = None      # Current git commit SHA being worked on
-    worktree_path: str | None = None   # Path to the git worktree if using worktrees
+
+    commit_sha: str | None = None  # Current git commit SHA being worked on
+    worktree_path: str | None = None  # Path to the git worktree if using worktrees
 
 
 class RuntimeStageState(BaseModel):
@@ -39,14 +40,15 @@ class RuntimeStageState(BaseModel):
     Used by PipelineRunner to record stage progress and by CLI/reporting
     for displaying current stage status.
     """
-    stage: str | None = None          # Pipeline stage being executed
-    status: str = "idle"              # Execution status (idle, running, completed, failed)
-    started_at: str | None = None     # When stage execution started
-    completed_at: str | None = None   # When stage execution finished
-    updated_at: str | None = None     # Last status update timestamp
-    duration_seconds: int = 0         # How long the stage has been running
-    verdict: str | None = None        # Final verdict (accept, reject, blocked) if completed
-    summary: str = ""                 # Brief description of stage results
+
+    stage: str | None = None  # Pipeline stage being executed
+    status: str = "idle"  # Execution status (idle, running, completed, failed)
+    started_at: str | None = None  # When stage execution started
+    completed_at: str | None = None  # When stage execution finished
+    updated_at: str | None = None  # Last status update timestamp
+    duration_seconds: int = 0  # How long the stage has been running
+    verdict: str | None = None  # Final verdict (accept, reject, blocked) if completed
+    summary: str = ""  # Brief description of stage results
 
 
 class RuntimeSubagentState(BaseModel):
@@ -60,21 +62,22 @@ class RuntimeSubagentState(BaseModel):
     CLI/reporting for displaying active subagent status. Note that detailed
     logs and traces belong in artifacts, not in this runtime state.
     """
-    id: str                                                # Unique subagent identifier
-    role: str                                              # Execution role (planner, swe, qa, etc.)
-    engine: str                                            # AI engine being used
-    status: SubagentStatus                                 # Current lifecycle status
-    path: str                                              # Filesystem path where subagent runs
-    pid: int | None = None                                 # Process ID if applicable
-    sandboxed: bool = False                                # Whether running in sandbox
-    sandbox_summary: str = ""                              # Brief sandbox status
-    started_at: str                                        # Subagent start timestamp
-    updated_at: str                                        # Last status update timestamp
-    completed_at: str | None = None                        # Completion timestamp if finished
-    exit_code: int | None = None                          # Process exit code if applicable
-    transcript_snippet: str = ""                          # Brief execution-trace excerpt
-    interruption_reason: str = ""                         # Why subagent was interrupted
-    continuation: RuntimeEngineContinuation | None = None   # Continuation context for resuming
+
+    id: str  # Unique subagent identifier
+    role: str  # Execution role (planner, swe, qa, etc.)
+    engine: str  # AI engine being used
+    status: SubagentStatus  # Current lifecycle status
+    path: str  # Filesystem path where subagent runs
+    pid: int | None = None  # Process ID if applicable
+    sandboxed: bool = False  # Whether running in sandbox
+    sandbox_summary: str = ""  # Brief sandbox status
+    started_at: str  # Subagent start timestamp
+    updated_at: str  # Last status update timestamp
+    completed_at: str | None = None  # Completion timestamp if finished
+    exit_code: int | None = None  # Process exit code if applicable
+    transcript_snippet: str = ""  # Brief execution-trace excerpt
+    interruption_reason: str = ""  # Why subagent was interrupted
+    continuation: RuntimeEngineContinuation | None = None  # Continuation context for resuming
 
 
 SubagentRef = HeruSubagentRef
@@ -87,10 +90,11 @@ class RuntimeEngineSwitch(BaseModel):
     Used for debugging engine routing decisions and understanding task
     execution patterns across different AI engines.
     """
-    stage: str                                    # Pipeline stage where switch occurred
-    from_engine: str                             # Previous engine
-    to_engine: str                               # New engine
-    reason: str                                  # Rationale for the engine switch
+
+    stage: str  # Pipeline stage where switch occurred
+    from_engine: str  # Previous engine
+    to_engine: str  # New engine
+    reason: str  # Rationale for the engine switch
     happened_at: str = Field(default_factory=utcnow)  # When the switch occurred
 
 
@@ -101,10 +105,11 @@ class RuntimeHookRejectFingerprint(BaseModel):
     recovery when the same type of hook failure happens repeatedly.
     Helps prevent infinite retry loops on persistent hook failures.
     """
-    point: str          # Hook point where rejection occurred (before_*, after_*)
-    command: str        # Hook command that was executed
+
+    point: str  # Hook point where rejection occurred (before_*, after_*)
+    command: str  # Hook command that was executed
     description: str = ""  # Brief description of the rejection
-    fingerprint: str    # Computed fingerprint for detecting repeated rejections
+    fingerprint: str  # Computed fingerprint for detecting repeated rejections
 
 
 class RuntimeRecoveryOutcome(BaseModel):
@@ -161,16 +166,17 @@ class TaskOutcomeState(BaseModel):
     outcome for operator/debug visibility. Recovery identity and budget
     tracking belong to ``FailureFingerprint`` on ``RecoveryTrigger``.
     """
-    kind: OutcomeKind | None = None                    # Terminal outcome category (flagged, blocked, etc.)
-    stage: str | None = None                           # Pipeline stage where outcome was determined
-    reason_code: OutcomeReasonCode | None = None       # Machine-readable reason for outcome
-    reason: str = ""                                   # Human-readable explanation
-    failure_classification: str | None = None          # Type of failure if applicable
+
+    kind: OutcomeKind | None = None  # Terminal outcome category (flagged, blocked, etc.)
+    stage: str | None = None  # Pipeline stage where outcome was determined
+    reason_code: OutcomeReasonCode | None = None  # Machine-readable reason for outcome
+    reason: str = ""  # Human-readable explanation
+    failure_classification: str | None = None  # Type of failure if applicable
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)  # Report evidence
-    follow_up_task_id: str | None = None               # ID of any follow-up task created
-    retry_count: int = 0                              # Number of retries attempted
-    retry_limit: int = 0                              # Maximum retries allowed
-    recorded_at: str | None = None                    # When outcome was recorded
+    follow_up_task_id: str | None = None  # ID of any follow-up task created
+    retry_count: int = 0  # Number of retries attempted
+    retry_limit: int = 0  # Maximum retries allowed
+    recorded_at: str | None = None  # When outcome was recorded
 
 
 class RuntimeInterruptionState(BaseModel):
@@ -180,16 +186,17 @@ class RuntimeInterruptionState(BaseModel):
     needed for potential resumption. Used by PipelineRunner to handle
     graceful interruption and by resume logic to restore execution state.
     """
+
     source: Literal["runner", "subagent"] = "runner"  # What initiated the interruption
-    stage: str | None = None                          # Pipeline stage when interrupted
-    pipeline_status: str | None = None                # Pipeline status when interrupted
-    resume_stage: str | None = None                   # Stage to resume from if applicable
-    reason: str = ""                                  # Why the interruption occurred
-    summary: str = ""                                 # Brief description of interruption context
-    interrupted_at: str | None = None                 # When interruption was initiated
-    detected_at: str | None = None                    # When interruption was detected
-    run_started_at: str | None = None                 # When the interrupted run started
-    stage_started_at: str | None = None               # When the interrupted stage started
+    stage: str | None = None  # Pipeline stage when interrupted
+    pipeline_status: str | None = None  # Pipeline status when interrupted
+    resume_stage: str | None = None  # Stage to resume from if applicable
+    reason: str = ""  # Why the interruption occurred
+    summary: str = ""  # Brief description of interruption context
+    interrupted_at: str | None = None  # When interruption was initiated
+    detected_at: str | None = None  # When interruption was detected
+    run_started_at: str | None = None  # When the interrupted run started
+    stage_started_at: str | None = None  # When the interrupted stage started
     subagent: RuntimeSubagentState | None = None
 
 
@@ -205,16 +212,17 @@ class RuntimeContinuationHandoff(BaseModel):
 
     Used by PipelineRunner when resuming interrupted tasks.
     """
-    stage: str                                       # Stage where continuation should occur
+
+    stage: str  # Stage where continuation should occur
     kind: Literal["retry", "engine_switch", "restart"]  # Type of continuation
-    reason: str                                      # Why continuation is needed
-    from_engine: str | None = None                   # Previous engine if engine_switch
-    to_engine: str | None = None                     # New engine if engine_switch
-    from_model: str | None = None                    # Previous model if changing
-    to_model: str | None = None                      # New model if changing
-    subagent_id: str | None = None                   # Subagent to resume if applicable
-    subagent_path: str | None = None                 # Path context for subagent
-    status: str | None = None                        # Status context for continuation
+    reason: str  # Why continuation is needed
+    from_engine: str | None = None  # Previous engine if engine_switch
+    to_engine: str | None = None  # New engine if engine_switch
+    from_model: str | None = None  # Previous model if changing
+    to_model: str | None = None  # New model if changing
+    subagent_id: str | None = None  # Subagent to resume if applicable
+    subagent_path: str | None = None  # Path context for subagent
+    status: str | None = None  # Status context for continuation
     attempt: int | None = None
     summary: str = ""
     transcript_snippet: str = ""
@@ -354,10 +362,11 @@ class RunnerStatusState(BaseModel):
     of individual task state. Used by monitoring systems and operator
     interfaces to track runner health and current activity.
     """
+
     status: RunnerExecutionStatus = RunnerExecutionStatus.IDLE  # Current runner status (idle, running, late, stale)
-    pid: int | None = None                                       # Process ID of the runner
-    workspace: str = ""                                          # Current workspace path
-    command: str = ""                                            # Command being executed if running
-    started_at: str | None = None                                # When runner process started
-    heartbeat_at: str | None = None                              # Last heartbeat timestamp
-    active_task_id: str | None = None                            # ID of currently executing task
+    pid: int | None = None  # Process ID of the runner
+    workspace: str = ""  # Current workspace path
+    command: str = ""  # Command being executed if running
+    started_at: str | None = None  # When runner process started
+    heartbeat_at: str | None = None  # Last heartbeat timestamp
+    active_task_id: str | None = None  # ID of currently executing task

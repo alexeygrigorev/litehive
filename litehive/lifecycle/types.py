@@ -71,6 +71,7 @@ def pipeline_stage_for_phase(phase: str | NodeName) -> NodeName:
     state = canonical_pipeline_state(phase)
     return _PRIMARY_STAGE_BY_PHASE.get(state, state)
 
+
 ANY_STAGE_PHASE: frozenset[NodeName] = frozenset(STAGE_PHASES)
 
 TERMINAL_NODES: frozenset[NodeName] = frozenset({PipelineState.DONE, PipelineState.FAILED})

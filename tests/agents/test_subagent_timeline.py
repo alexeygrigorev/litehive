@@ -129,8 +129,7 @@ def test_subagent_writes_timeline_during_live_progress(tmp_path: Path, monkeypat
                 cwd=cwd,
                 exit_code=0,
                 stdout=(
-                    partial_stdout
-                    + '{"kind":"usage","engine":"opencode","sequence":1,'
+                    partial_stdout + '{"kind":"usage","engine":"opencode","sequence":1,'
                     '"timestamp":"2026-04-12T00:00:01+00:00","usage_delta":{"total_tokens":50},'
                     '"raw":{},"metadata":{"total_tokens":50}}\n'
                 ),

@@ -375,9 +375,7 @@ def test_subagent_manager_prefers_bound_instance_run_override_over_inherited_run
     assert result.failure == EngineFailure(kind="execution_limit", reason="usage limit reached")
 
 
-def test_subagent_manager_wraps_unexpected_pre_start_failures(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_subagent_manager_wraps_unexpected_pre_start_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Startup failure")
     manager = SubagentManager(tmp_path)
@@ -440,9 +438,7 @@ def test_subagent_manager_wraps_unavailable_engine_as_startup_failure(
         manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
 
-def test_subagent_manager_preserves_started_run_failures(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_subagent_manager_preserves_started_run_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Started failure")
     manager = SubagentManager(tmp_path)

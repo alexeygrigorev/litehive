@@ -48,7 +48,9 @@ def test_daemon_loop_recovers_corrupt_workspace_registry_db_before_cycle_start(t
     assert any("run" in command for command in calls)
     assert sorted(registry_path.parent.glob("workspaces.db.corrupt-*"))
     with sqlite3.connect(registry_path) as connection:
-        rows = connection.execute("SELECT root FROM workspace_registry ORDER BY registered_at DESC, root DESC").fetchall()
+        rows = connection.execute(
+            "SELECT root FROM workspace_registry ORDER BY registered_at DESC, root DESC"
+        ).fetchall()
     assert rows == [(str(tmp_path.resolve()),)]
     assert any(entry.role == "recovery" for entry in load_task_activity(tmp_path, task))
     assert "launch recovery fixed: cycle_start_failed" in stream.getvalue()
@@ -86,7 +88,9 @@ def test_daemon_loop_recovers_corrupt_legacy_workspace_registry_yaml_before_cycl
     assert any("run" in command for command in calls)
     assert sorted(legacy_path.parent.glob("workspaces.yaml.corrupt-*"))
     with sqlite3.connect(workspace_registry_path()) as connection:
-        rows = connection.execute("SELECT root FROM workspace_registry ORDER BY registered_at DESC, root DESC").fetchall()
+        rows = connection.execute(
+            "SELECT root FROM workspace_registry ORDER BY registered_at DESC, root DESC"
+        ).fetchall()
     assert rows == [(str(tmp_path.resolve()),)]
     assert any(entry.role == "recovery" for entry in load_task_activity(tmp_path, task))
     assert "launch recovery fixed: cycle_start_failed" in stream.getvalue()

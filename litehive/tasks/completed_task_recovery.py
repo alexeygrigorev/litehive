@@ -27,8 +27,7 @@ def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
         if task is None:
             if get_archived_task(root, task_id) is not None:
                 raise GitError(
-                    f"Task {task_id} is archived and cannot be recovered. "
-                    "Create a new task for follow-up work instead."
+                    f"Task {task_id} is archived and cannot be recovered. Create a new task for follow-up work instead."
                 )
             raise GitError(f"Task {task_id} not found")
         before_task = snapshot_task_audit_state(task)

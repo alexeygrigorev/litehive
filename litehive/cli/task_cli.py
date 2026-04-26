@@ -1,6 +1,5 @@
 from pathlib import Path
 from typing import Annotated
-import csv
 
 import typer
 
@@ -13,8 +12,7 @@ from litehive.cli.parse import (
 )
 from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
-from litehive.tasks.archive import archive_root, archive_tasks, get_archived_task, list_archived_tasks
-from litehive.tasks.archive_index import archived_task_ids
+from litehive.tasks.archive import archive_tasks, get_archived_task, list_archived_tasks
 from litehive.tasks.browse import list_recently_created_tasks
 from litehive.tasks.recent import (
     format_elapsed_duration,
@@ -24,7 +22,12 @@ from litehive.state.records import create_task, get_task, list_tasks as load_tas
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
-from litehive.tasks.duplicates import DuplicateTaskMatch, TaskSearchMatch, find_potential_duplicate_tasks, search_tasks_by_text
+from litehive.tasks.duplicates import (
+    DuplicateTaskMatch,
+    TaskSearchMatch,
+    find_potential_duplicate_tasks,
+    search_tasks_by_text,
+)
 from litehive.tasks.status import abandon_task, close_task, update_task_metadata
 
 app = make_typer(invoke_without_command=True)
@@ -37,7 +40,7 @@ def _display_flag_reason(task) -> str:
 
 
 def _display_close_reason(task) -> str:
-    if task.status not in {"closed", "done"}:
+    if task.status not in {"closed", "done", "archived"}:
         return "-"
     return task.close_reason or task.runtime.pipeline.last_outcome.reason_code or "unknown"
 
@@ -46,18 +49,14 @@ def _show_dependency_label(root, task) -> str:
     if not task.depends_on:
         return "-"
 
-    active_statuses = {record.id: record.status for record in load_tasks(root, include_runtime=True, strict=False)}
-    index_path = archive_root(root) / "INDEX.csv"
-    archived_ids: set[str] = set()
-    if index_path.exists():
-        with index_path.open(newline="", encoding="utf-8") as handle:
-            archived_ids = {row["id"] for row in csv.DictReader(handle) if row.get("id")}
+    active_statuses = {
+        record.id: record.status
+        for record in load_tasks(root, include_runtime=True, strict=False, include_archived=True)
+    }
     labels: list[str] = []
     for dependency_id in task.depends_on:
         if dependency_id in active_statuses:
             labels.append(f"{dependency_id} ({active_statuses[dependency_id]})")
-        elif dependency_id in archived_ids:
-            labels.append(f"{dependency_id} (archived)")
         else:
             labels.append(f"{dependency_id} (missing)")
     return ", ".join(labels)
@@ -80,6 +79,15 @@ def _load_task_list_with_archive_history(root: Path, *, include_archived: bool) 
 
 
 def _terminal_status_label(task) -> str:
+    if task.status == "archived":
+        reason = task.close_reason or task.runtime.pipeline.last_outcome.reason_code
+        if reason:
+            if str(reason) == "execution_cancelled":
+                return "cancelled"
+            return str(reason)
+        if str(task.pipeline_status) == "done":
+            return "done"
+        return "archived"
     if task.status != "closed":
         return str(task.status)
     close_reason = task.close_reason or task.runtime.pipeline.last_outcome.reason_code or "closed"
@@ -138,10 +146,7 @@ def _print_recent_task_table(summaries) -> None:
         }
         for summary in summaries
     ]
-    widths = {
-        key: max(len(header), *(len(row[key]) for row in rows))
-        for key, header in columns
-    }
+    widths = {key: max(len(header), *(len(row[key]) for row in rows)) for key, header in columns}
     print("  ".join(header.ljust(widths[key]) for key, header in columns))
     for row in rows:
         print("  ".join(row[key].ljust(widths[key]) for key, _ in columns))
@@ -165,10 +170,7 @@ def _print_created_task_table(rows) -> None:
         }
         for row in rows
     ]
-    widths = {
-        key: max(len(header), *(len(row[key]) for row in rendered))
-        for key, header in columns
-    }
+    widths = {key: max(len(header), *(len(row[key]) for row in rendered)) for key, header in columns}
     print("  ".join(header.ljust(widths[key]) for key, header in columns))
     for row in rendered:
         print("  ".join(row[key].ljust(widths[key]) for key, _ in columns))
@@ -309,10 +311,9 @@ def list_tasks(
         workspace,
         include_archived=show_all or filter_status == "archived",
     )
-    archived_ids = archived_task_ids(workspace)
     filtered = []
     for task in tasks:
-        archived = task.status == "archived" or task.id in archived_ids
+        archived = task.status == "archived"
         if not show_all and filter_status != "archived" and task.status == "done":
             continue
         if filter_status == "archived":
@@ -327,7 +328,9 @@ def list_tasks(
         filtered.append(task)
     for task in filtered:
         flag_reason = f" flag_reason={_display_flag_reason(task)}" if task.status == "flagged" else ""
-        close_reason = f" close_reason={_display_close_reason(task)}" if task.status in {"closed", "done"} else ""
+        close_reason = (
+            f" close_reason={_display_close_reason(task)}" if task.status in {"closed", "done", "archived"} else ""
+        )
         print(f"{task.id} [{task.status}/{task.pipeline_status}] {task.title}{flag_reason}{close_reason}")
     return 0
 
@@ -507,12 +510,8 @@ def update(
     goal: Annotated[str | None, typer.Option(help="Replace the task goal")] = None,
     depends_on: Annotated[list[str] | None, typer.Option(help="Replace task dependencies")] = None,
     acceptance_criteria: Annotated[list[str] | None, typer.Option(help="Replace acceptance criteria")] = None,
-    constraints: Annotated[
-        list[str] | None, typer.Option("--constraint", help="Replace task constraints")
-    ] = None,
-    plan: Annotated[
-        list[str] | None, typer.Option("--plan-step", help="Replace task plan steps")
-    ] = None,
+    constraints: Annotated[list[str] | None, typer.Option("--constraint", help="Replace task constraints")] = None,
+    plan: Annotated[list[str] | None, typer.Option("--plan-step", help="Replace task plan steps")] = None,
 ) -> int:
     from litehive.cli.agent_cli import current_agent_role, require_agent_role
 

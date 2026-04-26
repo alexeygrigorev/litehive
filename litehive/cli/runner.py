@@ -370,7 +370,9 @@ def run_command(
 def report_command(
     verdict: Annotated[
         str,
-        typer.Option(click_type=choice(["advance", "blocked", "budget_hit", "comment", "done", "pass", "reject", "resume"])),
+        typer.Option(
+            click_type=choice(["advance", "blocked", "budget_hit", "comment", "done", "pass", "reject", "resume"])
+        ),
     ] = ...,
     message: Annotated[str, typer.Option(help="Detailed explanation (use - for stdin)")] = "",
     message_file: Annotated[Path | None, typer.Option("--message-file", help="Read message from file")] = None,

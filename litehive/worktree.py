@@ -50,6 +50,7 @@ _CLEANABLE_STATUSES = {"closed", "done"}
 @dataclass(slots=True)
 class ManagedWorktree:
     """Information about a Litehive-managed task worktree."""
+
     task_id: str
     status: str
     worktree_rel: str
@@ -65,6 +66,7 @@ class ManagedWorktree:
 @dataclass(slots=True)
 class RescueCandidate:
     """A worktree that may need rescue (cherry-pick to main)."""
+
     task_id: str
     worktree_rel: str
     worktree_path: Path
@@ -74,6 +76,7 @@ class RescueCandidate:
 @dataclass(slots=True)
 class RescueResult:
     """Result of attempting to rescue a worktree."""
+
     task_id: str
     worktree_rel: str
     status: str
@@ -83,6 +86,7 @@ class RescueResult:
 
 
 # === Path Utilities ===
+
 
 def task_worktree_path(root: Path, task: TaskRecord) -> Path:
     """Get the expected worktree path for a task."""
@@ -123,6 +127,7 @@ def serialize_worktree_path(path: Path) -> str:
 
 
 # === Worktree Lifecycle ===
+
 
 def ensure_worktree_venv_link(root: Path, worktree_path: Path) -> Path | None:
     """Ensure the worktree has a venv symlink to the main venv."""
@@ -272,6 +277,7 @@ def resolve_task_execution_root(
 
 # === Worktree Discovery and Listing ===
 
+
 def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
     """Collect all Litehive-managed worktrees with their metadata."""
     state = load_state(root)
@@ -305,6 +311,7 @@ def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
 
 # === Worktree Cleanup ===
 
+
 def remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
     """Remove cleanable worktrees and return categorized results."""
     worktrees = collect_managed_worktrees(root)
@@ -335,6 +342,7 @@ def remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[str
                 except WorkspaceConflictError:
                     # Defer metadata clearing when workspace is locked by active runner
                     from litehive.attention import record_attention
+
                     record_attention(
                         root,
                         kind="stale_worktree_metadata",
@@ -342,7 +350,7 @@ def remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[str
                         reason="Worktree removed but task metadata clearing deferred due to active runner lock",
                         suggested_action="Wait for runner to finish, then run attention reconciliation",
                         task_id=item.task_id,
-                        metadata={"worktree_path": item.worktree_rel, "deferred_operation": "clear_worktree_path"}
+                        metadata={"worktree_path": item.worktree_rel, "deferred_operation": "clear_worktree_path"},
                     )
                     deferred.append(item)
                     continue
@@ -360,6 +368,7 @@ def remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[str
 
 
 # === Worktree Rescue Operations ===
+
 
 def collect_rescue_candidates(root: Path) -> list[RescueCandidate]:
     """Collect worktrees that need rescue (cherry-pick to main)."""
@@ -628,6 +637,7 @@ def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResu
 
 
 # === Private Helper Functions ===
+
 
 def _dirty_entry_paths(dirty_entries: list[str]) -> list[str]:
     """Extract file paths from git status --porcelain output."""

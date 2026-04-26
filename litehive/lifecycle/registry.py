@@ -49,6 +49,8 @@ HOOK_PHASES: tuple[NodeName, ...] = (
     PipelineState.AFTER_ACCEPTING,
     PipelineState.AFTER_COMMIT,
 )
+
+
 def _phase_hook_node(name: NodeName, hooks: list[HookSpec], runner: HookRunner) -> HookNode:
     return HookNode(name, hooks=hooks, runner=runner)
 

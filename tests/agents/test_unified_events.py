@@ -84,7 +84,9 @@ def test_unified_output_logs_parse_failures_with_line_context(caplog) -> None:
 
     messages = [record.message for record in caplog.records]
     assert any("unparseable JSONL line 1" in message and "not-json" in message for message in messages)
-    assert any("invalid unified event at line 3" in message and "engine: Field required" in message for message in messages)
+    assert any(
+        "invalid unified event at line 3" in message and "engine: Field required" in message for message in messages
+    )
 
 
 def test_invalid_unified_output_logs_warning_before_fallback_transcript(caplog) -> None:
@@ -106,7 +108,9 @@ def test_invalid_unified_output_logs_warning_before_fallback_transcript(caplog) 
 
     assert execution_trace == "fallback transcript"
     messages = [record.message for record in caplog.records]
-    assert any("invalid unified event at line 1" in message and "engine: Field required" in message for message in messages)
+    assert any(
+        "invalid unified event at line 1" in message and "engine: Field required" in message for message in messages
+    )
     assert any("found no valid events" in message for message in messages)
 
 

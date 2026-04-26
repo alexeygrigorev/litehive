@@ -54,6 +54,9 @@ class RuntimeStore:
             from litehive.tasks.event_log import rebuild_sqlite_from_task_event_log
 
             rebuild_sqlite_from_task_event_log(self.root)
+        from litehive.tasks.activity import migrate_legacy_task_activity_files
+
+        migrate_legacy_task_activity_files(self.root)
 
     def _should_rebuild_from_task_event_log(self) -> bool:
         from litehive.tasks.event_log import sqlite_task_tables_empty, task_event_log_has_events
@@ -144,6 +147,7 @@ class RuntimeStore:
         task_intents: dict[str, TaskIntentRecord] | None = None,
         task_states: dict[str, TaskStateRecord] | None = None,
         workspace_state: WorkspaceState | None = None,
+        task_journal_messages: dict[str, str] | None = None,
         audit_entries: list[TaskAuditEntry] | None = None,
     ) -> None:
         with connect_workspace_db(self.root) as connection:
@@ -153,11 +157,16 @@ class RuntimeStore:
                 self._save_task_intent(connection, task_id, intent)
             for task_id, state in (task_states or {}).items():
                 self._save_task_state(connection, task_id, state)
+            task_journal_entries: dict[str, list[dict[str, object]]] = {}
+            for task_id, message in (task_journal_messages or {}).items():
+                entry = self._append_task_journal(connection, task_id, message)
+                task_journal_entries.setdefault(task_id, []).append(entry)
             insert_task_audit_entries(connection, audit_entries or [])
             self._append_runtime_transaction_events(
                 task_intents=task_intents or {},
                 task_states=task_states or {},
                 workspace_state=workspace_state,
+                task_journal_entries=task_journal_entries,
                 audit_entries=audit_entries or [],
             )
             connection.commit()
@@ -203,6 +212,7 @@ class RuntimeStore:
         task_intents: dict[str, TaskIntentRecord],
         task_states: dict[str, TaskStateRecord],
         workspace_state: WorkspaceState | None,
+        task_journal_entries: dict[str, list[dict[str, object]]],
         audit_entries: list[TaskAuditEntry],
     ) -> None:
         logged_task_ids: set[str] = set()
@@ -214,6 +224,8 @@ class RuntimeStore:
                 payload["task_intent"] = task_intents[task_id].model_dump(mode="json")
             if task_id in task_states:
                 payload["task_state"] = task_states[task_id].model_dump(mode="json")
+            if task_id in task_journal_entries:
+                payload["task_journal"] = task_journal_entries[task_id]
             if workspace_payload is not None:
                 payload["workspace_state"] = workspace_payload
             return payload
@@ -233,6 +245,15 @@ class RuntimeStore:
             append_task_event(
                 self.root,
                 event_type="task_state_saved",
+                task_id=task_id,
+                payload=payload_for_task(task_id),
+            )
+            logged_task_ids.add(task_id)
+
+        for task_id in sorted(set(task_journal_entries) - logged_task_ids):
+            append_task_event(
+                self.root,
+                event_type="task_journal_recorded",
                 task_id=task_id,
                 payload=payload_for_task(task_id),
             )
@@ -301,6 +322,14 @@ class RuntimeStore:
             """,
             (task_id, json.dumps(payload, sort_keys=True), now),
         )
+        connection.execute(
+            """
+            UPDATE task_intent
+            SET lifecycle_status = ?, pipeline_status = ?
+            WHERE task_id = ?
+            """,
+            (str(state.status), str(state.pipeline_status), task_id),
+        )
 
     def _save_task_intent(
         self,
@@ -310,16 +339,197 @@ class RuntimeStore:
     ) -> None:
         now = utcnow()
         payload = intent.model_dump(mode="json")
+        existing_state = _load_task_state_for_intent_columns(connection, task_id)
+        column_values = _task_intent_column_values(intent, existing_state)
         connection.execute(
             """
-            INSERT INTO task_intent (task_id, payload, updated_at)
-            VALUES (?, ?, ?)
+            INSERT INTO task_intent (
+                task_id,
+                payload,
+                updated_at,
+                slug,
+                title,
+                created_at,
+                priority,
+                goal,
+                acceptance_criteria_json,
+                constraints_json,
+                plan_json,
+                dependencies_json,
+                provenance_json,
+                lifecycle_status,
+                pipeline_status
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(task_id) DO UPDATE SET
                 payload = excluded.payload,
-                updated_at = excluded.updated_at
+                updated_at = excluded.updated_at,
+                slug = excluded.slug,
+                title = excluded.title,
+                created_at = excluded.created_at,
+                priority = excluded.priority,
+                goal = excluded.goal,
+                acceptance_criteria_json = excluded.acceptance_criteria_json,
+                constraints_json = excluded.constraints_json,
+                plan_json = excluded.plan_json,
+                dependencies_json = excluded.dependencies_json,
+                provenance_json = excluded.provenance_json
             """,
-            (task_id, json.dumps(payload, sort_keys=True), now),
+            (
+                task_id,
+                json.dumps(payload, sort_keys=True),
+                now,
+                column_values["slug"],
+                column_values["title"],
+                column_values["created_at"],
+                column_values["priority"],
+                column_values["goal"],
+                column_values["acceptance_criteria_json"],
+                column_values["constraints_json"],
+                column_values["plan_json"],
+                column_values["dependencies_json"],
+                column_values["provenance_json"],
+                column_values["lifecycle_status"],
+                column_values["pipeline_status"],
+            ),
         )
+
+    def append_task_journal(self, task_id: str, message: str) -> None:
+        with connect_workspace_db(self.root) as connection:
+            entry = self._append_task_journal(connection, task_id, message)
+            append_task_event(
+                self.root,
+                event_type="task_journal_recorded",
+                task_id=task_id,
+                payload={"task_journal": [entry]},
+            )
+            connection.commit()
+
+    def _append_task_journal(
+        self,
+        connection: sqlite3.Connection,
+        task_id: str,
+        message: str,
+    ) -> dict[str, object]:
+        created_at = utcnow()
+        row = connection.execute(
+            "SELECT COALESCE(MAX(entry_index) + 1, 0) AS next_index FROM task_journal WHERE task_id = ?",
+            (task_id,),
+        ).fetchone()
+        entry_index = 0 if row is None else int(row["next_index"])
+        metadata = "{}"
+        connection.execute(
+            """
+            INSERT INTO task_journal (task_id, entry_index, created_at, message, metadata)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (task_id, entry_index, created_at, message, metadata),
+        )
+        return {
+            "task_id": task_id,
+            "entry_index": entry_index,
+            "created_at": created_at,
+            "message": message,
+            "metadata": {},
+        }
+
+    def save_process_state(
+        self,
+        process_key: str,
+        *,
+        status: str,
+        payload: dict[str, object],
+    ) -> None:
+        now = utcnow()
+        with connect_workspace_db(self.root) as connection:
+            connection.execute(
+                """
+                INSERT INTO runtime_process_state (
+                    process_key,
+                    status,
+                    pid,
+                    workspace,
+                    command,
+                    active_task_id,
+                    log_dir,
+                    started_at,
+                    heartbeat_at,
+                    payload,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(process_key) DO UPDATE SET
+                    status = excluded.status,
+                    pid = excluded.pid,
+                    workspace = excluded.workspace,
+                    command = excluded.command,
+                    active_task_id = excluded.active_task_id,
+                    log_dir = excluded.log_dir,
+                    started_at = excluded.started_at,
+                    heartbeat_at = excluded.heartbeat_at,
+                    payload = excluded.payload,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    process_key,
+                    status,
+                    _optional_int(payload.get("pid")),
+                    _optional_str(payload.get("workspace")),
+                    _optional_str(payload.get("command")),
+                    _optional_str(payload.get("active_task_id")),
+                    _optional_str(payload.get("log_dir")),
+                    _optional_str(payload.get("started_at")),
+                    _optional_str(payload.get("heartbeat_at")),
+                    json.dumps(payload, sort_keys=True),
+                    now,
+                ),
+            )
+            connection.commit()
+
+    def clear_process_state(self, process_key: str) -> None:
+        with connect_workspace_db(self.root) as connection:
+            connection.execute("DELETE FROM runtime_process_state WHERE process_key = ?", (process_key,))
+            connection.commit()
+
+    def load_process_state(self, process_key: str) -> dict[str, object] | None:
+        with connect_workspace_db(self.root) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    process_key,
+                    status,
+                    pid,
+                    workspace,
+                    command,
+                    active_task_id,
+                    log_dir,
+                    started_at,
+                    heartbeat_at,
+                    payload
+                FROM runtime_process_state
+                WHERE process_key = ?
+                """,
+                (process_key,),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = json.loads(str(row["payload"]))
+        if not isinstance(payload, dict):
+            return None
+        for key in (
+            "process_key",
+            "status",
+            "pid",
+            "workspace",
+            "command",
+            "active_task_id",
+            "log_dir",
+            "started_at",
+            "heartbeat_at",
+        ):
+            if payload.get(key) is None and row[key] is not None:
+                payload[key] = row[key]
+        return payload
 
     def highest_task_number(self) -> int:
         task_ids: set[str] = set()
@@ -361,5 +571,59 @@ class RuntimeStore:
         )
         connection.commit()
 
+
 def runtime_store(root: Path) -> RuntimeStore:
     return RuntimeStore(root)
+
+
+def _load_task_state_for_intent_columns(
+    connection: sqlite3.Connection,
+    task_id: str,
+) -> TaskStateRecord | None:
+    row = connection.execute("SELECT payload FROM task_state WHERE task_id = ?", (task_id,)).fetchone()
+    if row is None:
+        return None
+    try:
+        payload = json.loads(str(row["payload"]))
+        return TaskStateRecord.model_validate(payload)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        logger.warning("Ignoring invalid task_state row while saving task_intent columns for %s", task_id)
+        return None
+
+
+def _task_intent_column_values(
+    intent: TaskIntentRecord,
+    state: TaskStateRecord | None = None,
+) -> dict[str, str]:
+    return {
+        "slug": intent.slug,
+        "title": intent.title,
+        "created_at": intent.created_at,
+        "priority": intent.priority,
+        "goal": intent.goal,
+        "acceptance_criteria_json": json.dumps(intent.acceptance_criteria, sort_keys=True),
+        "constraints_json": json.dumps(intent.constraints, sort_keys=True),
+        "plan_json": json.dumps(intent.plan, sort_keys=True),
+        "dependencies_json": json.dumps(intent.depends_on, sort_keys=True),
+        "provenance_json": json.dumps(
+            {} if intent.created_from is None else intent.created_from.model_dump(mode="json"),
+            sort_keys=True,
+        ),
+        "lifecycle_status": "queued" if state is None else str(state.status),
+        "pipeline_status": "backlog" if state is None else str(state.pipeline_status),
+    }
+
+
+def _optional_str(value: object) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+
+
+def _optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None

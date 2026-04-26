@@ -829,11 +829,7 @@ class GitCommitNode(CommitNode):
 
     def _worktree_local_only_paths(self, worktree: Path) -> list[str]:
         entries = self._git_status_entries_with_options(worktree, include_ignored=True)
-        return [
-            path
-            for code, path in entries
-            if code == "!!" or _is_main_checkout_cleanup_excluded(path)
-        ]
+        return [path for code, path in entries if code == "!!" or _is_main_checkout_cleanup_excluded(path)]
 
     def _restore_local_only_paths(self, worktree: Path, relpaths: list[str]) -> None:
         for relpath in relpaths:

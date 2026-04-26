@@ -13,7 +13,7 @@ from litehive.lifecycle.nodes.agent import AgentVerdict, NudgeRequired, Transien
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.sessions import Session
 from litehive.lifecycle.types import PipelineMode
-from litehive.tasks.paths import task_dir
+from litehive.tasks.journal import render_task_journal
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.reports import append_activity_entry, load_stage_reports
 from heru.types import RuntimeEngineContinuation, SubagentRef
@@ -964,7 +964,7 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
     assert reports[0].outcome_reason_code == "hallucinated_completion"
     assert reports[0].failure_diagnostics["claimed_files_changed"] == ["foo.py"]
 
-    journal = (task_dir(tmp_path, task) / "journal.md").read_text(encoding="utf-8")
+    journal = render_task_journal(tmp_path, task)
     assert "Rejected implementing pass as hallucinated completion." in journal
     assert "`git status --porcelain`" in journal
 

@@ -70,7 +70,7 @@ def test_sandbox_launcher_policy_summary_enabled(temp_workspace, docker_sandbox_
     assert summary.workspace_mode == "rw"
 
 
-@patch('shutil.which')
+@patch("shutil.which")
 def test_docker_sandbox_wraps_invocation(mock_which, temp_workspace, docker_sandbox_config):
     """Test that Docker sandbox properly wraps invocations."""
     # Mock docker and codex binaries as available
@@ -98,7 +98,7 @@ def test_docker_sandbox_wraps_invocation(mock_which, temp_workspace, docker_sand
     assert "litehive-external-engine:latest" in wrapped.argv
 
 
-@patch('shutil.which')
+@patch("shutil.which")
 def test_docker_sandbox_git_wrapper_no_git_role(mock_which, temp_workspace, docker_sandbox_config):
     """Test that non-merge-resolver roles get no-git wrapper."""
     mock_which.side_effect = lambda name: {
@@ -118,13 +118,13 @@ def test_docker_sandbox_git_wrapper_no_git_role(mock_which, temp_workspace, dock
     wrapped = launcher.wrap_invocation("codex", "codex", original_invocation, role="swe")
 
     # Should mount the no-git wrapper
-    mount_specs = [arg for i, arg in enumerate(wrapped.argv) if wrapped.argv[i-1] == "--mount"]
+    mount_specs = [arg for i, arg in enumerate(wrapped.argv) if wrapped.argv[i - 1] == "--mount"]
     git_mounts = [spec for spec in mount_specs if "/usr/local/bin/git" in spec]
     assert len(git_mounts) == 1
     assert "no-git" in git_mounts[0]
 
 
-@patch('shutil.which')
+@patch("shutil.which")
 def test_docker_sandbox_git_wrapper_merge_resolver_role(mock_which, temp_workspace, docker_sandbox_config):
     """Test that merge-resolver role gets merge-git wrapper."""
     mock_which.side_effect = lambda name: {
@@ -144,13 +144,13 @@ def test_docker_sandbox_git_wrapper_merge_resolver_role(mock_which, temp_workspa
     wrapped = launcher.wrap_invocation("codex", "codex", original_invocation, role="merge-resolver")
 
     # Should mount the merge-git wrapper and related dependencies
-    mount_specs = [arg for i, arg in enumerate(wrapped.argv) if wrapped.argv[i-1] == "--mount"]
+    mount_specs = [arg for i, arg in enumerate(wrapped.argv) if wrapped.argv[i - 1] == "--mount"]
     git_mounts = [spec for spec in mount_specs if "/usr/local/bin/git" in spec]
     assert len(git_mounts) == 1
     assert "merge-git" in git_mounts[0]
 
     # Should have environment variables for git wrapper
-    env_specs = [arg for i, arg in enumerate(wrapped.argv) if wrapped.argv[i-1] == "--env"]
+    env_specs = [arg for i, arg in enumerate(wrapped.argv) if wrapped.argv[i - 1] == "--env"]
     env_dict = {spec.split("=", 1)[0]: spec.split("=", 1)[1] for spec in env_specs if "=" in spec}
     assert "LITEHIVE_REAL_GIT_PATH" in env_dict
     assert "LITEHIVE_WORKSPACE_ROOT" in env_dict
@@ -170,7 +170,7 @@ def test_docker_sandbox_unsupported_backend_raises_error():
     assert "external_engine_sandbox.backend must be one of: docker" in str(exc_info.value)
 
 
-@patch('shutil.which')
+@patch("shutil.which")
 def test_docker_sandbox_creates_git_wrappers(mock_which, temp_workspace, docker_sandbox_config):
     """Test that git wrapper scripts are created."""
     mock_which.side_effect = lambda name: {

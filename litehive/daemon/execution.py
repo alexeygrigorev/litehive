@@ -131,8 +131,7 @@ def _halt_for_origin_divergence(
     _write_pool_stop_reason(workspace, "diverged_from_origin")
     _append_attention_log(workspace, divergence_reason)
     _emit(
-        "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. "
-        "Halting pool: diverged_from_origin",
+        "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. Halting pool: diverged_from_origin",
         stream=output_stream,
     )
     _emit(divergence_reason, stream=output_stream)
@@ -476,7 +475,9 @@ def run_daemon_loop(
                     task = best_effort_recovery_task(workspace)
                     if task is not None:
                         flag_task_after_failed_launch_recovery(workspace, task, startup_failure)
-                        _emit(f"launch recovery budget exhausted; flagged {task.id} and continuing", stream=output_stream)
+                        _emit(
+                            f"launch recovery budget exhausted; flagged {task.id} and continuing", stream=output_stream
+                        )
                         continue
                     iteration_failed = True
                     iteration_failure_reason = startup_failure.summary

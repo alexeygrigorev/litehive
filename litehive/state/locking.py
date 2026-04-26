@@ -10,7 +10,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, TextIO
 
 from litehive.config.workspace_files import workspace_dir
-from litehive.domain.common import utcnow
+from litehive.domain.common import RunnerStatus, utcnow
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.lock_manager import WorkspaceLockManager
@@ -22,7 +22,7 @@ from litehive.tasks.constants import (
     RUNNER_LOCKS_MUTEX,
 )
 from litehive.domain.task_ops import WorkspaceConflictError, RunnerLockState
-from litehive.tasks.paths import runner_lock_path, task_dir
+from litehive.tasks.paths import runner_lock_path
 
 if TYPE_CHECKING:
     from litehive.tasks.audit import TaskAuditEntry
@@ -71,6 +71,22 @@ def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> Non
     )
 
 
+def _save_runner_process_state(root: Path, status: RunnerStatusState) -> None:
+    from litehive.state.store import runtime_store
+
+    runtime_store(root).save_process_state(
+        "runner",
+        status=str(status.status or RunnerStatus.RUNNING),
+        payload=status.model_dump(mode="json"),
+    )
+
+
+def _clear_runner_process_state(root: Path) -> None:
+    from litehive.state.store import runtime_store
+
+    runtime_store(root).clear_process_state("runner")
+
+
 def read_runner_lock_metadata(root: Path) -> RunnerStatusState:
     data = _runner_lock_manager(root.resolve()).read_metadata(strict=True)
     if data is None:
@@ -109,6 +125,7 @@ def runner_status_needs_reconciliation(root: Path) -> bool:
 def clear_runner_lock_metadata(root: Path) -> None:
     root = root.resolve()
     _runner_lock_manager(root, held_in_process=lambda: root in RUNNER_LOCKS).clear_metadata_if_unlocked()
+    _clear_runner_process_state(root)
 
 
 def heartbeat_is_late(heartbeat_at: str | None) -> bool:
@@ -129,12 +146,12 @@ def runner_status(root: Path) -> RunnerStatusState:
     status = read_runner_lock_metadata(root)
     if runner_lock_is_active(root):
         if heartbeat_is_late(status.heartbeat_at):
-            return status.model_copy(update={"status": "late"})
-        return status.model_copy(update={"status": "running"})
+            return status.model_copy(update={"status": RunnerStatus.LATE})
+        return status.model_copy(update={"status": RunnerStatus.RUNNING})
     if not runner_metadata_present(status):
         return RunnerStatusState()
     if runner_status_needs_reconciliation(root):
-        return status.model_copy(update={"status": "stale"})
+        return status.model_copy(update={"status": RunnerStatus.STALE})
     clear_runner_lock_metadata(root)
     return RunnerStatusState()
 
@@ -152,10 +169,10 @@ def runner_status_readonly(root: Path) -> RunnerStatusState:
     # If the recorded PID is alive, the runner is (or was recently) active.
     if runner_pid_is_alive(status.pid):
         if heartbeat_is_late(status.heartbeat_at):
-            return status.model_copy(update={"status": "late"})
-        return status.model_copy(update={"status": "running"})
+            return status.model_copy(update={"status": RunnerStatus.LATE})
+        return status.model_copy(update={"status": RunnerStatus.RUNNING})
     # PID is gone — metadata is stale.
-    return status.model_copy(update={"status": "stale"})
+    return status.model_copy(update={"status": RunnerStatus.STALE})
 
 
 def touch_runner_status(
@@ -169,10 +186,11 @@ def touch_runner_status(
         return
     with lock_state.metadata_lock:
         lock_state.status.heartbeat_at = utcnow()
-        lock_state.status.status = "running"
+        lock_state.status.status = RunnerStatus.RUNNING
         if active_task_id is not MISSING:
             lock_state.status.active_task_id = active_task_id
         write_runner_lock_metadata(lock_state.handle, lock_state.status)
+        _save_runner_process_state(root, lock_state.status)
 
 
 @contextmanager
@@ -315,6 +333,7 @@ def workspace_runner_guard(root: Path):
                     should_close = False
             if should_close:
                 manager.release(lock_state.handle, clear_metadata=True)
+                _clear_runner_process_state(root)
         return
 
     try:
@@ -328,7 +347,7 @@ def workspace_runner_guard(root: Path):
         _auto_repair_stale_state(root)
         now = utcnow()
         status = RunnerStatusState(
-            status="running",
+            status=RunnerStatus.RUNNING,
             pid=os.getpid(),
             workspace=str(root),
             command=" ".join(sys.argv),
@@ -336,6 +355,7 @@ def workspace_runner_guard(root: Path):
             heartbeat_at=now,
         )
         write_runner_lock_metadata(handle, status)
+        _save_runner_process_state(root, status)
         with RUNNER_LOCKS_MUTEX:
             RUNNER_LOCKS[root] = RunnerLockState(handle=handle, depth=1, status=status, owner_thread_id=owner_thread_id)
     except Exception:
@@ -349,6 +369,7 @@ def workspace_runner_guard(root: Path):
         with RUNNER_LOCKS_MUTEX:
             RUNNER_LOCKS.pop(root, None)
         manager.release(handle, clear_metadata=True)
+        _clear_runner_process_state(root)
 
 
 @contextmanager
@@ -410,22 +431,14 @@ def persist_future_task_update(
 ) -> None:
     from litehive.state.store import runtime_store
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
-    from litehive.state.persist import write_atomic_files_and_then
     from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
 
     task.updated_at = utcnow()
-    writes = {}
-    if journal_message is not None:
-        journal_path = task_dir(root, task) / "journal.md"
-        existing = journal_path.read_text(encoding="utf-8") if journal_path.exists() else ""
-        writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_message}\n"
-    write_atomic_files_and_then(
-        writes,
-        lambda: runtime_store(root).save_runtime_transaction(
-            task_intents={task.id: task.to_intent_record()},
-            task_states={task.id: task_state_for_storage(task)},
-            audit_entries=audit_entries,
-        ),
+    runtime_store(root).save_runtime_transaction(
+        task_intents={task.id: task.to_intent_record()},
+        task_states={task.id: task_state_for_storage(task)},
+        task_journal_messages=None if journal_message is None else {task.id: journal_message},
+        audit_entries=audit_entries,
     )
     ensure_runtime_ignored(root)
     refresh_duplicate_task_index_if_initialized(root)

@@ -312,9 +312,7 @@ class AttentionStore:
         if not items_dir.exists():
             return []
         candidates = [
-            path
-            for path in items_dir.iterdir()
-            if path.is_file() and path.suffix == ".yaml" and path.stem.isdigit()
+            path for path in items_dir.iterdir() if path.is_file() and path.suffix == ".yaml" and path.stem.isdigit()
         ]
         return sorted(candidates, key=lambda path: int(path.stem))
 
@@ -554,8 +552,7 @@ def _flagged_and_merge_failed_items(root: Path, tasks: list[TaskRecord]) -> list
                     title=title,
                     reason=reason,
                     suggested_action=(
-                        f"Run `litehive task debug {task.id} --worktree` and then "
-                        f"`litehive queue requeue {task.id}`."
+                        f"Run `litehive task debug {task.id} --worktree` and then `litehive queue requeue {task.id}`."
                     ),
                     dedupe_key=f"merge_failed_task:{task.id}",
                     metadata=metadata,
@@ -674,9 +671,7 @@ def _stale_worktree_metadata_items(root: Path, tasks: list[TaskRecord]) -> list[
     del tasks
     store = attention_store(root)
     existing_items = store.list_items(include_resolved=True)
-    return [
-        item for item in existing_items if item.kind == "stale_worktree_metadata" and item.status == "pending"
-    ]
+    return [item for item in existing_items if item.kind == "stale_worktree_metadata" and item.status == "pending"]
 
 
 def _auto_resolve_stale_worktree_metadata_items(root: Path) -> None:
@@ -689,7 +684,9 @@ def _auto_resolve_stale_worktree_metadata_items(root: Path) -> None:
 
     store = attention_store(root)
     existing_items = store.list_items(include_resolved=True)
-    deferred_items = [item for item in existing_items if item.kind == "stale_worktree_metadata" and item.status == "pending"]
+    deferred_items = [
+        item for item in existing_items if item.kind == "stale_worktree_metadata" and item.status == "pending"
+    ]
 
     for item in deferred_items:
         if item.task_id is None:

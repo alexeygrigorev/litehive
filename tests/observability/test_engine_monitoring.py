@@ -250,10 +250,7 @@ def test_load_engine_monitoring_ignores_legacy_workspace_yaml(tmp_path: Path) ->
     ensure_workspace(tmp_path)
     monitoring_file = tmp_path / ".litehive" / "engine-monitoring.yaml"
     monitoring_file.write_text(
-        "engines:\n"
-        "  codex:\n"
-        "    engine: codex\n"
-        "    last_limit_kind: capacity\n",
+        "engines:\n  codex:\n    engine: codex\n    last_limit_kind: capacity\n",
         encoding="utf-8",
     )
 

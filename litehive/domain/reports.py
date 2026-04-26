@@ -76,25 +76,26 @@ class StageReport(BaseModel):
     It can help construct a ``FailureFingerprint`` later, but it is not the
     recovery-domain identity or budget key.
     """
+
     model_config = ConfigDict(extra="forbid")
 
-    task_id: str                                        # Task this report belongs to
-    pipeline_state: ReportPipelineState                 # Pipeline state that was executed
-    verdict: StageReportVerdict                         # Final pipeline-state verdict
-    source: Literal["agent", "hook"] = "agent"          # What generated this report
-    summary: str                                        # Brief description of pipeline-state results
-    feedback: str = ""                                  # Detailed feedback or explanation
-    submitted_via_cli: bool = False                     # Whether submitted via CLI vs internal
+    task_id: str  # Task this report belongs to
+    pipeline_state: ReportPipelineState  # Pipeline state that was executed
+    verdict: StageReportVerdict  # Final pipeline-state verdict
+    source: Literal["agent", "hook"] = "agent"  # What generated this report
+    summary: str  # Brief description of pipeline-state results
+    feedback: str = ""  # Detailed feedback or explanation
+    submitted_via_cli: bool = False  # Whether submitted via CLI vs internal
     tests: dict[str, int] = Field(default_factory=lambda: {"added": 0, "passing": 0})  # Test metrics
     warnings: list[str] = Field(default_factory=list)  # Non-fatal warnings
-    retry_count: int = 0                               # Current retry attempt number
-    retry_limit: int = 0                               # Maximum retries allowed
-    outcome: OutcomeKind | None = None                 # Terminal outcome if stage completed task
+    retry_count: int = 0  # Current retry attempt number
+    retry_limit: int = 0  # Maximum retries allowed
+    outcome: OutcomeKind | None = None  # Terminal outcome if stage completed task
     outcome_reason_code: OutcomeReasonCode | None = None  # Machine-readable outcome reason
-    failure_classification: str | None = None          # Type of failure if applicable
+    failure_classification: str | None = None  # Type of failure if applicable
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)  # Report evidence
-    duration_seconds: int = 0                          # How long stage execution took
-    created_at: str = Field(default_factory=utcnow)   # When report was generated
+    duration_seconds: int = 0  # How long stage execution took
+    created_at: str = Field(default_factory=utcnow)  # When report was generated
 
 
 class FollowUpTaskSpec(BaseModel):
@@ -104,12 +105,13 @@ class FollowUpTaskSpec(BaseModel):
     that should be tracked as a separate task. Captures the intent and
     requirements for the follow-up task creation.
     """
-    title: str                                           # Brief title for the follow-up task
-    rationale: str                                       # Why this follow-up task is needed
-    blocking: bool = False                               # Whether this blocks the current task
-    goal: str = ""                                       # Main objective of the follow-up task
+
+    title: str  # Brief title for the follow-up task
+    rationale: str  # Why this follow-up task is needed
+    blocking: bool = False  # Whether this blocks the current task
+    goal: str = ""  # Main objective of the follow-up task
     acceptance_criteria: list[str] = Field(default_factory=list)  # Completion conditions
-    task_type: str | None = None                         # Optional task type classification
+    task_type: str | None = None  # Optional task type classification
 
 
 class RecoveryEvidenceItem(BaseModel):
@@ -119,11 +121,12 @@ class RecoveryEvidenceItem(BaseModel):
     to understand the failure context and determine appropriate recovery
     actions. Used to document what was checked during recovery.
     """
-    kind: str                   # Type of evidence (file, log, state, etc.)
-    label: str                  # Human-readable description
-    path: str | None = None     # Filesystem path if applicable
-    exists: bool = False        # Whether the evidence was found/valid
-    summary: str = ""           # Brief summary of findings
+
+    kind: str  # Type of evidence (file, log, state, etc.)
+    label: str  # Human-readable description
+    path: str | None = None  # Filesystem path if applicable
+    exists: bool = False  # Whether the evidence was found/valid
+    summary: str = ""  # Brief summary of findings
     metadata: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)  # Additional context
 
 
@@ -134,8 +137,9 @@ class RecoveryAction(BaseModel):
     issue that triggered recovery. Used for recovery audit trails
     and understanding recovery effectiveness.
     """
-    action: str                 # Description of the recovery action taken
-    summary: str = ""           # Brief description of action results
+
+    action: str  # Description of the recovery action taken
+    summary: str = ""  # Brief description of action results
     metadata: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)  # Additional action context
 
 
@@ -149,17 +153,18 @@ class RecoveryReport(BaseModel):
     Used by RecoveryCoordinator to decide next steps and by operators
     to understand recovery patterns and effectiveness.
     """
-    task_id: str                                        # Task that underwent recovery
-    origin_stage: str | None = None                     # Stage where failure occurred
-    trigger_event_kind: TriggerEventKind               # What triggered recovery
-    summary: str                                        # Brief recovery summary
-    failure_classification: str | None = None          # Type of failure detected
+
+    task_id: str  # Task that underwent recovery
+    origin_stage: str | None = None  # Stage where failure occurred
+    trigger_event_kind: TriggerEventKind  # What triggered recovery
+    summary: str  # Brief recovery summary
+    failure_classification: str | None = None  # Type of failure detected
     runnable_state: Literal["runnable", "parked", "blocked"] = "blocked"  # Final task state after recovery
-    blocker: str | None = None                         # What's blocking progress if blocked
+    blocker: str | None = None  # What's blocking progress if blocked
     evidence: list[RecoveryEvidenceItem] = Field(default_factory=list)  # Evidence collected during diagnosis
-    actions: list[RecoveryAction] = Field(default_factory=list)         # Actions taken during recovery
-    warnings: list[str] = Field(default_factory=list) # Non-fatal issues encountered
-    created_at: str = Field(default_factory=utcnow)   # When recovery report was generated
+    actions: list[RecoveryAction] = Field(default_factory=list)  # Actions taken during recovery
+    warnings: list[str] = Field(default_factory=list)  # Non-fatal issues encountered
+    created_at: str = Field(default_factory=utcnow)  # When recovery report was generated
 
 
 class ExecutionEstimate(BaseModel):
@@ -170,9 +175,9 @@ class ExecutionEstimate(BaseModel):
     operator interfaces to understand expected completion times.
     """
 
-    stage_duration_seconds: float = 0.0      # Average time per stage based on history
-    remaining_seconds: float = 0.0           # Estimated time to complete remaining work
-    velocity_stages_per_hour: float = 0.0    # Rate of stage completion
+    stage_duration_seconds: float = 0.0  # Average time per stage based on history
+    remaining_seconds: float = 0.0  # Estimated time to complete remaining work
+    velocity_stages_per_hour: float = 0.0  # Rate of stage completion
 
 
 class TaskActivityEntry(BaseModel):
@@ -188,15 +193,15 @@ class TaskActivityEntry(BaseModel):
     live in dedicated fields on reports and runtime records.
     """
 
-    role: str                                           # Who created this entry (agent role, operator, system)
-    stage: str                                          # Pipeline stage where activity occurred
-    target_stage: str | None = None                     # Target stage if this is a transition
-    verdict: TaskActivityVerdict = "comment"            # Associated verdict if applicable
-    verdict_classification: str | None = None            # Machine-readable verdict classification
-    message: str                                        # Free-form human-readable activity description
+    role: str  # Who created this entry (agent role, operator, system)
+    stage: str  # Pipeline stage where activity occurred
+    target_stage: str | None = None  # Target stage if this is a transition
+    verdict: TaskActivityVerdict = "comment"  # Associated verdict if applicable
+    verdict_classification: str | None = None  # Machine-readable verdict classification
+    message: str  # Free-form human-readable activity description
     files_changed: list[str] = Field(default_factory=list)  # Files modified as part of this activity
-    follow_up_task_id: str | None = None                # Optional follow-up task reference
-    created_at: str = Field(default_factory=utcnow)    # When the activity occurred
+    follow_up_task_id: str | None = None  # Optional follow-up task reference
+    created_at: str = Field(default_factory=utcnow)  # When the activity occurred
 
 
 __all__ = [

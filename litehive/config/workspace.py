@@ -75,8 +75,11 @@ def _reject_litehive_control_paths(path: Path, *, source: str) -> None:
 
     # Check if path is inside managed worktrees
     managed_worktree = next(
-        (ancestor for ancestor in (resolved_path, *resolved_path.parents)
-         if ancestor.name == "worktrees" and ancestor.parent.name == ".litehive"),
+        (
+            ancestor
+            for ancestor in (resolved_path, *resolved_path.parents)
+            if ancestor.name == "worktrees" and ancestor.parent.name == ".litehive"
+        ),
         None,
     )
     if managed_worktree is not None:
@@ -87,8 +90,7 @@ def _reject_litehive_control_paths(path: Path, *, source: str) -> None:
 
     # Check if path is inside any .litehive control directory
     control_ancestor = next(
-        (ancestor for ancestor in (resolved_path, *resolved_path.parents)
-         if ancestor.name == ".litehive"),
+        (ancestor for ancestor in (resolved_path, *resolved_path.parents) if ancestor.name == ".litehive"),
         None,
     )
     if control_ancestor is not None:

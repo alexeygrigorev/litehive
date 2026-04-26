@@ -286,7 +286,9 @@ def _run_engine_subprocess(
 
         try:
             stdout, stderr = process.communicate(timeout=0.2)
-            return subprocess.CompletedProcess(args=argv, returncode=process.returncode or 0, stdout=stdout, stderr=stderr)
+            return subprocess.CompletedProcess(
+                args=argv, returncode=process.returncode or 0, stdout=stdout, stderr=stderr
+            )
         except subprocess.TimeoutExpired as exc:
             if time.monotonic() < deadline:
                 continue
@@ -294,7 +296,9 @@ def _run_engine_subprocess(
             stdout, stderr = process.communicate(timeout=1.0)
             if allow_timeout:
                 return subprocess.CompletedProcess(args=argv, returncode=124, stdout=stdout, stderr=stderr)
-            raise subprocess.TimeoutExpired(argv, timeout_seconds, output=stdout or exc.stdout, stderr=stderr or exc.stderr)
+            raise subprocess.TimeoutExpired(
+                argv, timeout_seconds, output=stdout or exc.stdout, stderr=stderr or exc.stderr
+            )
 
 
 def execute_engine_prompt(
@@ -342,8 +346,7 @@ def execute_engine_prompt(
                     {
                         key: os.environ[f"LITEHIVE_REAL_{key}"]
                         for key in _REAL_XDG_ENV_VARS
-                        if engine_name in {"copilot", "opencode"}
-                        and os.environ.get(f"LITEHIVE_REAL_{key}")
+                        if engine_name in {"copilot", "opencode"} and os.environ.get(f"LITEHIVE_REAL_{key}")
                     }
                 ),
                 **(extra_env or {}),
@@ -580,9 +583,7 @@ def assert_nudge_verdict_submission(
         time.sleep(0.2)
     assert nudge_run.exit_code == 0, nudge_run.stderr
     assert len(verdicts) >= 1, (
-        f"Expected verdict from {engine_name}, got: {thread}\n"
-        f"stdout:\n{nudge_run.stdout}\n"
-        f"stderr:\n{nudge_run.stderr}"
+        f"Expected verdict from {engine_name}, got: {thread}\nstdout:\n{nudge_run.stdout}\nstderr:\n{nudge_run.stderr}"
     )
     assert verdicts[-1].verdict == "pass"
     assert verdicts[-1].role == "swe"

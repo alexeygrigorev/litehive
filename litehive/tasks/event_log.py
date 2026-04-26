@@ -45,6 +45,7 @@ _ACTION_EVENT_TYPES = {
 _REPLAY_CLEARED_TABLES = (
     "task_state",
     "task_intent",
+    "task_journal",
     "task_activity",
     "stage_reports",
     "recovery_reports",
@@ -77,6 +78,7 @@ class TaskEventLogReplaySummary:
 class _ReplayState:
     task_intents: dict[str, dict[str, Any]]
     task_states: dict[str, dict[str, Any]]
+    task_journal: dict[str, list[dict[str, Any]]]
     task_activity: dict[str, list[dict[str, Any]]]
     task_audit_entries: list[dict[str, Any]]
     stage_reports: list[dict[str, Any]]
@@ -92,6 +94,7 @@ class _ReplayState:
             workspace_state=None,
             task_intents={},
             task_states={},
+            task_journal={},
             task_activity={},
             task_audit_entries=[],
             stage_reports=[],
@@ -252,6 +255,12 @@ def _apply_event(replay_state: _ReplayState, event: dict[str, Any]) -> None:
     if task_id and isinstance(activity, list):
         replay_state.task_activity[task_id] = [dict(entry) for entry in activity if isinstance(entry, dict)]
 
+    task_journal = payload.get("task_journal")
+    if task_id and isinstance(task_journal, list):
+        replay_state.task_journal.setdefault(task_id, []).extend(
+            dict(entry) for entry in task_journal if isinstance(entry, dict)
+        )
+
     audit_entry = payload.get("audit_entry")
     if isinstance(audit_entry, dict):
         replay_state.task_audit_entries.append(dict(audit_entry))
@@ -287,6 +296,7 @@ def _apply_event(replay_state: _ReplayState, event: dict[str, Any]) -> None:
 def _delete_task_scoped_replay_state(replay_state: _ReplayState, task_id: str) -> None:
     replay_state.task_intents.pop(task_id, None)
     replay_state.task_states.pop(task_id, None)
+    replay_state.task_journal.pop(task_id, None)
     replay_state.task_activity.pop(task_id, None)
     replay_state.pipeline_task_state.pop(task_id, None)
     replay_state.stage_reports = [
@@ -298,9 +308,7 @@ def _delete_task_scoped_replay_state(replay_state: _ReplayState, task_id: str) -
     replay_state.pipeline_transitions = [
         row for row in replay_state.pipeline_transitions if str(row.get("task_id")) != task_id
     ]
-    replay_state.pipeline_journal = [
-        row for row in replay_state.pipeline_journal if str(row.get("task_id")) != task_id
-    ]
+    replay_state.pipeline_journal = [row for row in replay_state.pipeline_journal if str(row.get("task_id")) != task_id]
 
 
 def _rewrite_latest_stage_report(replay_state: _ReplayState, report: dict[str, Any]) -> None:
@@ -327,6 +335,8 @@ def _write_replay_state(connection: sqlite3.Connection, replay_state: _ReplaySta
         _insert_task_intent(connection, task_id, intent)
     for task_id, state in sorted(replay_state.task_states.items()):
         _insert_task_state(connection, task_id, state)
+    for task_id, journal in sorted(replay_state.task_journal.items()):
+        _insert_task_journal(connection, task_id, journal)
     for task_id, activity in sorted(replay_state.task_activity.items()):
         _insert_task_activity(connection, task_id, activity)
     for report in replay_state.stage_reports:
@@ -388,15 +398,58 @@ def _insert_workspace_state(connection: sqlite3.Connection, payload: dict[str, A
 def _insert_task_intent(connection: sqlite3.Connection, task_id: str, payload: dict[str, Any]) -> None:
     intent = TaskIntentRecord.model_validate(payload)
     updated_at = str(payload.get("updated_at") or intent.created_at or utcnow())
+    column_values = _task_intent_column_values(intent)
     connection.execute(
         """
-        INSERT INTO task_intent (task_id, payload, updated_at)
-        VALUES (?, ?, ?)
+        INSERT INTO task_intent (
+            task_id,
+            payload,
+            updated_at,
+            slug,
+            title,
+            created_at,
+            priority,
+            goal,
+            acceptance_criteria_json,
+            constraints_json,
+            plan_json,
+            dependencies_json,
+            provenance_json,
+            lifecycle_status,
+            pipeline_status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(task_id) DO UPDATE SET
             payload = excluded.payload,
-            updated_at = excluded.updated_at
+            updated_at = excluded.updated_at,
+            slug = excluded.slug,
+            title = excluded.title,
+            created_at = excluded.created_at,
+            priority = excluded.priority,
+            goal = excluded.goal,
+            acceptance_criteria_json = excluded.acceptance_criteria_json,
+            constraints_json = excluded.constraints_json,
+            plan_json = excluded.plan_json,
+            dependencies_json = excluded.dependencies_json,
+            provenance_json = excluded.provenance_json
         """,
-        (task_id, json.dumps(intent.model_dump(mode="json"), sort_keys=True), updated_at),
+        (
+            task_id,
+            json.dumps(intent.model_dump(mode="json"), sort_keys=True),
+            updated_at,
+            column_values["slug"],
+            column_values["title"],
+            column_values["created_at"],
+            column_values["priority"],
+            column_values["goal"],
+            column_values["acceptance_criteria_json"],
+            column_values["constraints_json"],
+            column_values["plan_json"],
+            column_values["dependencies_json"],
+            column_values["provenance_json"],
+            column_values["lifecycle_status"],
+            column_values["pipeline_status"],
+        ),
     )
 
 
@@ -413,6 +466,30 @@ def _insert_task_state(connection: sqlite3.Connection, task_id: str, payload: di
         """,
         (task_id, json.dumps(state.model_dump(mode="json"), sort_keys=True), updated_at),
     )
+    connection.execute(
+        """
+        UPDATE task_intent
+        SET lifecycle_status = ?, pipeline_status = ?
+        WHERE task_id = ?
+        """,
+        (str(state.status), str(state.pipeline_status), task_id),
+    )
+
+
+def _insert_task_journal(connection: sqlite3.Connection, task_id: str, journal: list[dict[str, Any]]) -> None:
+    for fallback_index, entry in enumerate(journal):
+        entry_index = int(entry.get("entry_index") if entry.get("entry_index") is not None else fallback_index)
+        created_at = str(entry.get("created_at") or utcnow())
+        message = str(entry.get("message") or "")
+        metadata = entry.get("metadata")
+        metadata_payload = metadata if isinstance(metadata, dict) else {}
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO task_journal (task_id, entry_index, created_at, message, metadata)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (task_id, entry_index, created_at, message, json.dumps(metadata_payload, sort_keys=True)),
+        )
 
 
 def _insert_task_activity(connection: sqlite3.Connection, task_id: str, activity: list[dict[str, Any]]) -> None:
@@ -564,3 +641,23 @@ def _optional_int(value: object) -> int | None:
     if value is None:
         return None
     return int(value)
+
+
+def _task_intent_column_values(intent: TaskIntentRecord) -> dict[str, str]:
+    return {
+        "slug": intent.slug,
+        "title": intent.title,
+        "created_at": intent.created_at,
+        "priority": intent.priority,
+        "goal": intent.goal,
+        "acceptance_criteria_json": json.dumps(intent.acceptance_criteria, sort_keys=True),
+        "constraints_json": json.dumps(intent.constraints, sort_keys=True),
+        "plan_json": json.dumps(intent.plan, sort_keys=True),
+        "dependencies_json": json.dumps(intent.depends_on, sort_keys=True),
+        "provenance_json": json.dumps(
+            {} if intent.created_from is None else intent.created_from.model_dump(mode="json"),
+            sort_keys=True,
+        ),
+        "lifecycle_status": "queued",
+        "pipeline_status": "backlog",
+    }

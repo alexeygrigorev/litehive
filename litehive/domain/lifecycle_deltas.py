@@ -294,7 +294,9 @@ def _hook_reject_delta(state: TaskState, event: Event, *, recovery_invoked: bool
     )
 
 
-def _next_rejection_loop(state: TaskState, event: Event, *, retry_target_stage: NodeName | None) -> RejectionLoop | None:
+def _next_rejection_loop(
+    state: TaskState, event: Event, *, retry_target_stage: NodeName | None
+) -> RejectionLoop | None:
     if not isinstance(event, Reject) or event.source != "agent":
         return None
     rejection_stage = _pipeline_stage_key(state.stage)

@@ -11,7 +11,6 @@ from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.store import runtime_store
 from litehive.tasks.audit import TaskAuditEntry
-from litehive.tasks.paths import task_dir
 
 _MISSING = object()
 _SKIP_BOOTSTRAP_LOAD_STATE: ContextVar[bool] = ContextVar(
@@ -143,14 +142,8 @@ def workspace_transition_writes(
     state: WorkspaceState | None = None,
     journal_messages: dict[str, str] | None = None,
 ) -> dict[Path, str]:
-    writes: dict[Path, str] = {}
-    for task in tasks:
-        if journal_messages is None or task.id not in journal_messages:
-            continue
-        journal_path = task_dir(root, task) / "journal.md"
-        existing = journal_path.read_text(encoding="utf-8") if journal_path.exists() else ""
-        writes[journal_path] = f"{existing}\n## {utcnow()}\n{journal_messages[task.id]}\n"
-    return writes
+    del root, tasks, state, journal_messages
+    return {}
 
 
 def _merge_queue_preserving_future_changes(
@@ -246,26 +239,18 @@ def persist_tasks_and_state(
 
     for task in tasks:
         task.updated_at = utcnow()
-    writes = workspace_transition_writes(
-        root,
-        tasks=tasks,
-        state=state,
-        journal_messages=journal_messages,
-    )
     with workspace_mutation_guard(root):
         merged_state = merged_state_for_runner_owned_write(
             root,
             state=state,
             protected_task_ids=[*protected_task_ids, *[task.id for task in tasks]],
         )
-        write_atomic_files_and_then(
-            writes,
-            lambda: runtime_store(root).save_runtime_transaction(
-                task_intents={task.id: task.to_intent_record() for task in tasks},
-                task_states={task.id: task_state_for_storage(task) for task in tasks},
-                workspace_state=merged_state,
-                audit_entries=audit_entries,
-            ),
+        runtime_store(root).save_runtime_transaction(
+            task_intents={task.id: task.to_intent_record() for task in tasks},
+            task_states={task.id: task_state_for_storage(task) for task in tasks},
+            workspace_state=merged_state,
+            task_journal_messages=journal_messages,
+            audit_entries=audit_entries,
         )
         ensure_runtime_ignored(root)
         refresh_duplicate_task_index_if_initialized(root)
@@ -285,25 +270,17 @@ def persist_tasks_and_state_without_runner_guard(
 
     for task in tasks:
         task.updated_at = utcnow()
-    writes = workspace_transition_writes(
-        root,
-        tasks=tasks,
-        state=state,
-        journal_messages=journal_messages,
-    )
     merged_state = merged_state_for_runner_owned_write(
         root,
         state=state,
         protected_task_ids=[*protected_task_ids, *[task.id for task in tasks]],
     )
-    write_atomic_files_and_then(
-        writes,
-        lambda: runtime_store(root).save_runtime_transaction(
-            task_intents={task.id: task.to_intent_record() for task in tasks},
-            task_states={task.id: task_state_for_storage(task) for task in tasks},
-            workspace_state=merged_state,
-            audit_entries=audit_entries,
-        ),
+    runtime_store(root).save_runtime_transaction(
+        task_intents={task.id: task.to_intent_record() for task in tasks},
+        task_states={task.id: task_state_for_storage(task) for task in tasks},
+        workspace_state=merged_state,
+        task_journal_messages=journal_messages,
+        audit_entries=audit_entries,
     )
     ensure_runtime_ignored(root)
     refresh_duplicate_task_index_if_initialized(root)

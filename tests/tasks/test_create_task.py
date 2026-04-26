@@ -42,9 +42,7 @@ def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
     assert _task_intent_payload(tmp_path, task.id)["title"] == "Fix login race"
 
 
-def test_create_task_persists_manual_creation_provenance(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_create_task_persists_manual_creation_provenance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
     monkeypatch.delenv("LITEHIVE_STAGE", raising=False)
@@ -268,7 +266,7 @@ def test_task_add_cli_shows_terminal_status_for_archived_duplicate(tmp_path: Pat
     )
 
     assert result.exit_code == 0, result.output
-    assert f"{archived.id} [done] {archived.title}" in result.output
+    assert f"{archived.id} [archived] {archived.title}" in result.output
     assert f"{archived.id} [queued] {archived.title}" not in result.output
     assert "Created task T-0002" in result.output
 
@@ -582,6 +580,6 @@ def test_search_tasks_by_text_tracks_duplicate_index_maintenance(tmp_path: Path)
 
     archived_matches = search_tasks_by_text(tmp_path, query="duplicate dashboard widgets", limit=10)
     archived_match = next(match for match in archived_matches if match.task_id == task.id)
-    assert archived_match.status == "done"
+    assert archived_match.status == "archived"
     assert archived_match.title == "Dashboard duplicate cleanup"
     assert "duplicate web dashboard widgets" in archived_match.snippet

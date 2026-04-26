@@ -36,6 +36,32 @@ def _task_state_payload(root: Path, task_id: str) -> dict:
     return json.loads(row["payload"])
 
 
+def _task_intent_columns(root: Path, task_id: str) -> dict:
+    with connect_workspace_db(root) as connection:
+        row = connection.execute(
+            """
+            SELECT
+                slug,
+                title,
+                created_at,
+                priority,
+                goal,
+                acceptance_criteria_json,
+                constraints_json,
+                plan_json,
+                dependencies_json,
+                provenance_json,
+                lifecycle_status,
+                pipeline_status
+            FROM task_intent
+            WHERE task_id = ?
+            """,
+            (task_id,),
+        ).fetchone()
+    assert row is not None
+    return dict(row)
+
+
 def test_task_runtime_normalizes_legacy_flat_payload() -> None:
     runtime = TaskRuntime.model_validate(
         {
@@ -200,6 +226,39 @@ def test_task_intent_persists_only_intent_fields_and_runtime_moves_to_db(tmp_pat
     assert loaded.git.checkpoint_attempts == 3
     assert loaded.runtime.execution_status == "running"
     assert loaded.runtime.current_stage.stage == "implementing"
+
+
+def test_task_intent_canonical_columns_preserve_existing_runtime_status(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = TaskRecord(
+        id="T-0001",
+        slug="state-first",
+        title="State first",
+        goal="Persist canonical task metadata in SQLite.",
+        acceptance_criteria=["metadata columns populated"],
+        constraints=["no task.yaml"],
+        plan=["save state first", "save intent second"],
+        depends_on=["T-0000"],
+        created_from={"source": "manual", "rationale": "test"},
+    )
+    task.status = "flagged"
+    task.pipeline_status = "implementing"
+    runtime_store(tmp_path).save_task_state(task.id, task.to_storage_state_record())
+    runtime_store(tmp_path).save_task_intent(task.id, task.to_intent_record())
+
+    columns = _task_intent_columns(tmp_path, task.id)
+
+    assert columns["slug"] == "state-first"
+    assert columns["title"] == "State first"
+    assert columns["priority"] == "medium"
+    assert columns["goal"] == "Persist canonical task metadata in SQLite."
+    assert json.loads(columns["acceptance_criteria_json"]) == ["metadata columns populated"]
+    assert json.loads(columns["constraints_json"]) == ["no task.yaml"]
+    assert json.loads(columns["plan_json"]) == ["save state first", "save intent second"]
+    assert json.loads(columns["dependencies_json"]) == ["T-0000"]
+    assert json.loads(columns["provenance_json"])["source"] == "manual"
+    assert columns["lifecycle_status"] == "flagged"
+    assert columns["pipeline_status"] == "implementing"
 
 
 def test_get_task_raises_when_sqlite_runtime_state_row_is_missing(tmp_path: Path) -> None:

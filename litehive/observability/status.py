@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from litehive.config.paths import workspace_path
 from litehive.config.engine_models import active_engine_freezes
 from litehive.config.model import LitehiveConfig
+from litehive.db.schema import connect_workspace_db
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.reports import ExecutionEstimate
 from litehive.domain.runtime import RunnerStatusState
@@ -150,9 +151,7 @@ def _collect_report_durations(root: Path) -> list[float]:
     from litehive.tasks.reports import load_workspace_stage_reports
 
     return [
-        float(report.duration_seconds)
-        for report in load_workspace_stage_reports(root)
-        if report.duration_seconds > 0
+        float(report.duration_seconds) for report in load_workspace_stage_reports(root) if report.duration_seconds > 0
     ]
 
 
@@ -175,7 +174,13 @@ def _task_last_verdict_label(task: TaskRecord) -> str:
 
 
 def _task_last_summary_label(task: TaskRecord) -> str:
-    return task.runtime.pipeline.last_stage.summary or task.runtime.pipeline.last_outcome.reason or task.flag_reason or task.close_reason or "-"
+    return (
+        task.runtime.pipeline.last_stage.summary
+        or task.runtime.pipeline.last_outcome.reason
+        or task.flag_reason
+        or task.close_reason
+        or "-"
+    )
 
 
 def _latest_stage_failure_classification(root: Path | None, task: TaskRecord) -> str | None:
@@ -226,7 +231,9 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
         if runtime.pipeline.current_stage.status != "idle":
             parts.append(f"stage_status={runtime.pipeline.current_stage.status}")
         if runtime.pipeline.current_stage.stage:
-            stage_duration = _duration_label(runtime.pipeline.current_stage.started_at, runtime.pipeline.current_stage.duration_seconds)
+            stage_duration = _duration_label(
+                runtime.pipeline.current_stage.started_at, runtime.pipeline.current_stage.duration_seconds
+            )
             parts.append(f"stage={runtime.pipeline.current_stage.stage}")
             parts.append(f"stage_duration={stage_duration}")
         elif runtime.pipeline.last_stage.stage:
@@ -338,7 +345,10 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
         if runtime.pipeline.last_outcome.failure_classification is not None:
             phase = runtime.pipeline.last_outcome.failure_diagnostics.get("phase", "-")
             lines.append(
-                "  " + (f"failure_classification={runtime.pipeline.last_outcome.failure_classification} failure_phase={phase}")
+                "  "
+                + (
+                    f"failure_classification={runtime.pipeline.last_outcome.failure_classification} failure_phase={phase}"
+                )
             )
 
     if runtime.pipeline.failed_run_history:
@@ -671,26 +681,26 @@ def render_engine_health_section(monitoring: WorkspaceEngineMonitoring) -> list[
 
 
 def collect_recent_activity(root: Path, *, limit: int = 5) -> list[dict[str, Any]]:
-    """Scan events.jsonl across all task dirs, return most recent events."""
-    tasks_dir = root / ".litehive" / "tasks"
-    if not tasks_dir.exists():
-        return []
-    all_events: list[dict[str, Any]] = []
-    for events_path in tasks_dir.glob("*/events.jsonl"):
+    """Return recent task events from SQLite."""
+    with connect_workspace_db(root) as connection:
+        rows = connection.execute(
+            """
+            SELECT payload
+            FROM events
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    events: list[dict[str, Any]] = []
+    for row in rows:
         try:
-            text = events_path.read_text(encoding="utf-8")
-        except OSError:
+            payload = json.loads(str(row["payload"]))
+        except json.JSONDecodeError:
             continue
-        for line in text.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                all_events.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    all_events.sort(key=lambda e: e.get("ts", ""), reverse=True)
-    return all_events[:limit]
+        if isinstance(payload, dict):
+            events.append(payload)
+    return events
 
 
 _EVENT_LABELS: dict[str, str] = {

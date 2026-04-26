@@ -304,15 +304,17 @@ def test_engine_status_prints_monitoring_and_live_quota(tmp_path: Path, monkeypa
         "observed_at=2026-04-20T00:00:00Z"
     ) in output
     assert (
-        "quota: 5h utilization=12.5% reset=2026-04-14T12:00:00Z | "
-        "7d utilization=45.0% reset=2026-04-15T00:00:00Z"
+        "quota: 5h utilization=12.5% reset=2026-04-14T12:00:00Z | 7d utilization=45.0% reset=2026-04-15T00:00:00Z"
     ) in output
     assert "quota: 5h used=30.0% reset=2026-04-14T17:00:00Z | weekly used=65.0% reset=2026-04-21T00:00:00Z" in output
     assert "quota: premium remaining=120/300 used=60.0% reset=2026-04-30T00:00:00Z" in output
-    assert output.count(
-        "quota: api calls used=15.0% remaining=85/100 window=24h | "
-        "tokens used=45.0% remaining=5500/10000 window=24h"
-    ) == 2
+    assert (
+        output.count(
+            "quota: api calls used=15.0% remaining=85/100 window=24h | "
+            "tokens used=45.0% remaining=5500/10000 window=24h"
+        )
+        == 2
+    )
     assert "quota: unsupported" in output
 
 

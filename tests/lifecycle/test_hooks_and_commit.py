@@ -22,6 +22,7 @@ from litehive.lifecycle.persistence import CommitResult, SqlitePersistence, Task
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task, set_task_worktree_path
+from litehive.tasks.journal import render_task_journal
 from litehive.tasks.queue import dequeue_next_task
 from litehive.tasks.paths import task_dir
 from litehive.tasks.activity import load_task_activity
@@ -889,7 +890,7 @@ def test_run_task_reconciles_noop_commit_stage_and_records_main_head(tmp_path: P
     pipeline_state = SqlitePersistence(tmp_path).load(task.id)
 
     assert refreshed is not None
-    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    journal = render_task_journal(tmp_path, refreshed)
 
     assert result.final_stage == "done"
     assert refreshed.status == "done"
@@ -900,8 +901,7 @@ def test_run_task_reconciles_noop_commit_stage_and_records_main_head(tmp_path: P
     assert pipeline_state.commit_result.reason == "no_op"
     assert (tmp_path / "merged.txt").read_text() == "merged\n"
     assert (
-        f"commit_to_git reconciled as a no-op on main at {final_head}; "
-        "no new integration commit was needed."
+        f"commit_to_git reconciled as a no-op on main at {final_head}; no new integration commit was needed."
     ) in journal
     assert landed_head != ""
     assert not worktree.exists()
@@ -1023,7 +1023,7 @@ def test_run_task_merge_conflict_failure_journal_stays_distinct_from_noop_reconc
     refreshed = get_task(tmp_path, task.id)
 
     assert refreshed is not None
-    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    journal = render_task_journal(tmp_path, refreshed)
 
     assert result.final_stage == "failed"
     assert refreshed.status == "flagged"
@@ -1035,10 +1035,7 @@ def test_run_task_merge_conflict_failure_journal_stays_distinct_from_noop_reconc
     assert raw_state["flag_reason"] == "merge_failed"
     assert refreshed.runtime.git.commit_sha is None
     assert "reconciled as a no-op" not in journal
-    assert (
-        "commit_to_git failed during merge reconciliation: "
-        "merge conflict remained after manual attempt"
-    ) in journal
+    assert ("commit_to_git failed during merge reconciliation: merge conflict remained after manual attempt") in journal
 
 
 def test_run_task_before_accepting_hook_retries_and_continues(
@@ -1098,7 +1095,7 @@ def test_run_task_before_accepting_hook_retries_and_continues(
     assert report.warnings
     assert "lint failed" in report.feedback
 
-    journal = (task_dir(tmp_path, refreshed) / "journal.md").read_text(encoding="utf-8")
+    journal = render_task_journal(tmp_path, refreshed)
     assert "Runner hook at `before_accepting` rejected the stage." in journal
 
 

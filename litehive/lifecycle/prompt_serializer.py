@@ -7,8 +7,8 @@ section-based document an engine adapter can pipe to ``codex run`` or
 ``claude run`` etc.
 
 The serializer:
-  - reads the v1 ``TaskRecord`` for goal / acceptance / plan / constraints
-    (the dict only carries task_id; the rest comes from task.yaml)
+  - reads the SQLite-backed ``TaskRecord`` for goal / acceptance / plan / constraints
+    (the dict only carries task_id; the rest comes from the task store)
   - composes the selected instruction layers from the dict
   - surfaces ``last_rejection`` as context for retry prompts
   - surfaces ``recovery_trigger`` for recovery agents

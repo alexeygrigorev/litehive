@@ -56,14 +56,18 @@ def test_attempt_launch_recovery_logs_target_and_raises_on_worktree_cleanup_fail
     worktree.mkdir()
     task.runtime.git.worktree_path = str(worktree)
 
-    with patch("litehive.recovery.execution_recovery.remove_worktree", side_effect=GitError("registered worktree missing")):
+    with patch(
+        "litehive.recovery.execution_recovery.remove_worktree", side_effect=GitError("registered worktree missing")
+    ):
         with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
             with caplog.at_level(logging.INFO, logger="litehive.recovery.execution_recovery"):
                 with pytest.raises(OSError, match="failed to delete stale task worktree directory .*permission denied"):
                     attempt_launch_recovery(
                         tmp_path,
                         task,
-                        LaunchFailure(context="worktree_setup_failed", summary="git worktree add failed: stale metadata"),
+                        LaunchFailure(
+                            context="worktree_setup_failed", summary="git worktree add failed: stale metadata"
+                        ),
                     )
 
     assert f"Deleting stale task worktree directory {worktree}" in caplog.text
@@ -78,7 +82,9 @@ def test_attempt_launch_recovery_rebuilds_symlinked_task_venv(tmp_path: Path) ->
     assert worktree.joinpath(".venv").is_symlink()
     real_run = subprocess.run
 
-    def fake_sync(args: list[str], *, cwd: str, capture_output: bool, text: bool, check: bool) -> subprocess.CompletedProcess[str]:
+    def fake_sync(
+        args: list[str], *, cwd: str, capture_output: bool, text: bool, check: bool
+    ) -> subprocess.CompletedProcess[str]:
         if args == ["uv", "sync", "--extra", "dev"]:
             assert capture_output is True and text is True and check is False
             Path(cwd, ".venv").mkdir()

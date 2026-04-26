@@ -109,7 +109,7 @@ def test_ensure_workspace_bootstraps_rich_commented_config_once(tmp_path: Path) 
     for snippet in [
         "# Static defaults can be edited by hand. Runtime engine routing values below",
         "# Bootstrap default engine; use `litehive engine default <engine>` after init.",
-        "# `pool_max_tasks: null` means \"no cap\"; set an integer to stop after N tasks.",
+        '# `pool_max_tasks: null` means "no cap"; set an integer to stop after N tasks.',
         "# `pool_stop_on_attention` blocks the pool whenever pending operator",
         "#   credential_inputs[{env_var, mount_path}], extra_ro_binds,",
         "#   extra_rw_binds, setenv",

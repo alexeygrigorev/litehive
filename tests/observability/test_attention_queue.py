@@ -555,7 +555,9 @@ def test_pool_recovers_when_worktree_venv_is_broken(tmp_path: Path, monkeypatch)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
     monkeypatch.setattr("litehive.daemon.execution.maybe_run_workspace_backup", lambda *args, **kwargs: None)
-    monkeypatch.setattr("litehive.recovery.workspace_repair.shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "litehive.recovery.workspace_repair.shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
     monkeypatch.setattr("litehive.recovery.workspace_repair.subprocess.run", fake_uv_sync)
 
     stream = io.StringIO()

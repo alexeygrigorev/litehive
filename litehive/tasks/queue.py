@@ -401,7 +401,9 @@ def plan_task_selections(root: Path) -> TaskPlan:
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
         validate_single_active_task(root, state)
-        tasks_by_id = {task.id: task.model_copy(deep=True) for task in list_tasks(root, strict=False)}
+        tasks_by_id = {
+            task.id: task.model_copy(deep=True) for task in list_tasks(root, strict=False, include_archived=True)
+        }
 
         planned: list[TaskRecord] = []
         simulated_state = state.model_copy(deep=True)
@@ -544,6 +546,12 @@ def _auto_recovery_stage_for_flagged_task(task: TaskRecord) -> str:
 
 
 def _is_task_completed(task: TaskRecord) -> bool:
+    if (
+        task.status == "archived"
+        and task.pipeline_status == "done"
+        and (task.close_reason is None or task.close_reason == "done")
+    ):
+        return True
     return task.status == "done" and task.pipeline_status == "done"
 
 
@@ -566,7 +574,7 @@ def _task_blockers(task: TaskRecord, tasks_by_id: dict[str, TaskRecord]) -> list
 def validate_task_dependencies(root: Path, *, task_id: str, depends_on: list[str]) -> None:
     from litehive.state.records import list_tasks
 
-    tasks_by_id = {task.id: task for task in list_tasks(root, strict=False)}
+    tasks_by_id = {task.id: task for task in list_tasks(root, strict=False, include_archived=True)}
     seen: set[str] = set()
     for dependency_id in depends_on:
         if dependency_id in seen:
@@ -650,7 +658,7 @@ def _resolve_next_task_from_state(
     from litehive.state.store import runtime_store
     from litehive.recovery.detection import TaskLaunchFailure
 
-    tasks_by_id = {task.id: task for task in list_tasks(root, strict=False)}
+    tasks_by_id = {task.id: task for task in list_tasks(root, strict=False, include_archived=True)}
     store = runtime_store(root)
     for queued_task_id in state.queue:
         if queued_task_id in tasks_by_id:

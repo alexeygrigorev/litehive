@@ -101,9 +101,7 @@ def test_resolve_workspace_rejects_unresolved_workspace_root_env(
         resolve_workspace(None)
 
 
-def test_resolve_workspace_rejects_nested_workspace_root_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_resolve_workspace_rejects_nested_workspace_root_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Nested env probe")
     legacy = tmp_path / ".litehive" / "worktrees" / f"{task.id}-bad" / "repo"

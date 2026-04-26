@@ -128,9 +128,7 @@ def agent_report_command(
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
     try:
         root = (
-            resolve_workspace(tid)
-            if workspace is None
-            else normalize_workspace_root(workspace, source="--workspace")
+            resolve_workspace(tid) if workspace is None else normalize_workspace_root(workspace, source="--workspace")
         )
     except ValueError as exc:
         print(f"report failed: {exc}")

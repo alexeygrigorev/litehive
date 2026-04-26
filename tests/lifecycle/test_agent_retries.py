@@ -481,9 +481,7 @@ def test_agent_node_nudges_timeout_retry_with_existing_codex_thread_id(tmp_path,
                 reason="nudged report",
                 metadata={"parsed_from_call": 3},
             )
-        raise AssertionError(
-            f"unexpected verdict lookup after manager call {_TimeoutThenNudgeThenPassManager.calls}"
-        )
+        raise AssertionError(f"unexpected verdict lookup after manager call {_TimeoutThenNudgeThenPassManager.calls}")
 
     monkeypatch.setattr(
         "litehive.lifecycle.heru_factory.latest_verdict_after",

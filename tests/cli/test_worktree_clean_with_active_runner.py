@@ -49,8 +49,9 @@ def test_worktree_clean_defers_metadata_clear_when_runner_active(tmp_path: Path,
     # Capture stdout
     import io
     import sys
+
     captured_output = io.StringIO()
-    monkeypatch.setattr(sys, 'stdout', captured_output)
+    monkeypatch.setattr(sys, "stdout", captured_output)
 
     # Run the clean command
     result = clean(workspace=workspace, dry_run=False)
@@ -107,8 +108,9 @@ def test_worktree_clean_succeeds_when_no_runner_conflict(tmp_path: Path, monkeyp
     # Capture stdout
     import io
     import sys
+
     captured_output = io.StringIO()
-    monkeypatch.setattr(sys, 'stdout', captured_output)
+    monkeypatch.setattr(sys, "stdout", captured_output)
 
     # Run the clean command
     result = clean(workspace=workspace, dry_run=False)

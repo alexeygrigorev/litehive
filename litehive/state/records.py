@@ -26,7 +26,6 @@ from litehive.tasks.constants import (
     VALID_TASK_PRIORITIES,
     VALID_TASK_TYPES,
 )
-from litehive.tasks.archive_index import archived_task_ids
 from litehive.state.locking import workspace_lock, workspace_mutation_guard
 from litehive.state.persist import (
     load_state,
@@ -200,6 +199,7 @@ def _persist_created_tasks(
     tasks: list[TaskRecord],
     state: WorkspaceState,
     writes: dict[Path, str],
+    task_journal_messages: dict[str, str] | None = None,
     cleanup_dirs: list[Path],
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
@@ -219,6 +219,7 @@ def _persist_created_tasks(
                 task_intents={task.id: task.to_intent_record() for task in tasks},
                 task_states={task.id: task_state_for_storage(task) for task in tasks},
                 workspace_state=merged_state,
+                task_journal_messages=task_journal_messages,
                 audit_entries=audit_entries,
             )
 
@@ -309,9 +310,7 @@ def create_task(
         base = task_dir(root, task, bootstrap=False)
         _create_task_runtime_dirs(base)
         state.queue.append(task.id)
-        writes = {
-            base / "journal.md": f"# {task.id} {task.title}\n\n## {utcnow()}\nTask created.\n",
-        }
+        writes: dict[Path, str] = {}
         actor = "operator"
         source = "manual"
         if task.created_from is not None and task.created_from.source == "agent":
@@ -325,6 +324,7 @@ def create_task(
             tasks=[task],
             state=state,
             writes=writes,
+            task_journal_messages={task.id: "Task created."},
             cleanup_dirs=[base],
             audit_entries=[
                 build_task_audit_entry(
@@ -396,13 +396,6 @@ def create_follow_up_tasks(
             _create_task_runtime_dirs(base)
             created_dirs.append(base)
             state.queue.append(task.id)
-            writes[base / "journal.md"] = (
-                f"# {task.id} {task.title}\n\n"
-                f"## {utcnow()}\n"
-                "Task created.\n\n"
-                f"Created as a follow-up from `{parent_task.id}` during `{stage}`.\n"
-                f"Rationale: {follow_up.rationale}\n"
-            )
             created_tasks.append(task)
 
         _persist_created_tasks(
@@ -410,6 +403,14 @@ def create_follow_up_tasks(
             tasks=created_tasks,
             state=state,
             writes=writes,
+            task_journal_messages={
+                task.id: (
+                    "Task created.\n\n"
+                    f"Created as a follow-up from `{parent_task.id}` during `{stage}`.\n"
+                    f"Rationale: {follow_up.rationale}"
+                )
+                for task, follow_up in zip(created_tasks, follow_ups)
+            },
             cleanup_dirs=created_dirs,
             audit_entries=[
                 build_task_audit_entry(
@@ -479,12 +480,11 @@ def _load_tasks_from_store(
 ) -> list[TaskRecord]:
     store = runtime_store(root)
     records: list[TaskRecord] = []
-    archived_ids = set() if include_archived else archived_task_ids(root)
     for intent in store.list_task_intents():
         try:
             state_record = store.load_task_state(intent.id)
             stateful_task = TaskRecord.from_intent_and_state(intent, state_record)
-            if not include_archived and (stateful_task.status == "archived" or stateful_task.id in archived_ids):
+            if not include_archived and stateful_task.status == "archived":
                 continue
             if include_runtime:
                 if state_record is None:
@@ -547,7 +547,7 @@ def get_task(root: Path, task_id: str) -> TaskRecord | None:
     if intent is None:
         return None
     task = _load_task_runtime(root, TaskRecord.from_intent_and_state(intent))
-    if task.status == "archived" or task.id in archived_task_ids(root):
+    if task.status == "archived":
         return None
     return task
 
@@ -562,7 +562,7 @@ def get_task_record(root: Path, task_id: str, *, include_archived: bool = False)
         task = _load_task_runtime(root, task)
     except TaskStateMissingError:
         pass
-    if not include_archived and (task.status == "archived" or task.id in archived_task_ids(root)):
+    if not include_archived and task.status == "archived":
         return None
     return task
 

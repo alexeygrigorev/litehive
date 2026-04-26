@@ -123,15 +123,14 @@ def test_logs_daemon_lists_latest_sessions_with_outcomes(tmp_path: Path, capsys:
 def test_logs_task_journal_prints_journal(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Journal task", auto_commit=False)
-    journal = task_dir(tmp_path, task) / "journal.md"
-    journal.write_text("# journal\nentry\n", encoding="utf-8")
 
     exit_code = _cmd_logs(_ns(tmp_path, task.id))
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "# journal" in output
-    assert "entry" in output
+    assert f"# {task.id} Journal task" in output
+    assert "Task created." in output
+    assert not (task_dir(tmp_path, task) / "journal.md").exists()
 
 
 def test_logs_task_journal_tolerates_unrelated_missing_runtime_rows(
@@ -139,22 +138,16 @@ def test_logs_task_journal_tolerates_unrelated_missing_runtime_rows(
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Journal task", auto_commit=False)
-    journal = task_dir(tmp_path, task) / "journal.md"
-    journal.write_text("# journal\nentry\n", encoding="utf-8")
 
     missing_dir = tmp_path / ".litehive" / "tasks" / "T-0002-missing-runtime"
     missing_dir.mkdir(parents=True)
-    (missing_dir / "task.yaml").write_text(
-        "id: T-0002\nslug: missing-runtime\ntitle: Missing runtime row\npipeline_mode: full\npriority: medium\ngit:\n  auto_commit: true\n  commit_message: missing runtime row\n",
-        encoding="utf-8",
-    )
 
     exit_code = _cmd_logs(_ns(tmp_path, task.id))
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "# journal" in output
-    assert "entry" in output
+    assert f"# {task.id} Journal task" in output
+    assert "Task created." in output
 
 
 def test_logs_agent_prefers_live_stdout_for_active_subagent(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

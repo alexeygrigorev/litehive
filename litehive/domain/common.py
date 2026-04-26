@@ -43,15 +43,16 @@ class OutcomeKind(StringEnum):
     Maps to task close reasons and interruption types for reporting and
     operator workflow management.
     """
-    DONE = "done"          # Task was already or successfully completed
-    CLOSED = "closed"      # Explicitly closed with a close_reason
-    FLAGGED = "flagged"      # Requires explicit operator attention
-    BLOCKED = "blocked"      # Progress requires external input or missing dependency
+
+    DONE = "done"  # Task was already or successfully completed
+    CLOSED = "closed"  # Explicitly closed with a close_reason
+    FLAGGED = "flagged"  # Requires explicit operator attention
+    BLOCKED = "blocked"  # Progress requires external input or missing dependency
     INTERRUPTED = "interrupted"  # Execution stopped, potentially resumable
     CANCELLED = "cancelled"  # Operator intentionally stopped this task
-    WONT_DO = "wont_do"     # Task is no longer worth doing
-    DEFERRED = "deferred"   # Task should wait for later
-    DUPLICATE = "duplicate" # Another task already covers the same work
+    WONT_DO = "wont_do"  # Task is no longer worth doing
+    DEFERRED = "deferred"  # Task should wait for later
+    DUPLICATE = "duplicate"  # Another task already covers the same work
 
 
 class OutcomeReasonCode(StringEnum):
@@ -65,6 +66,7 @@ class OutcomeReasonCode(StringEnum):
     Used by PipelineRunner for routing decisions, recovery logic, and
     reporting for machine-readable summaries and filtering.
     """
+
     VERDICT_FAIL = "verdict_fail"
     VERDICT_REJECT = "verdict_reject"
     VERDICT_BLOCKED = "verdict_blocked"
@@ -90,8 +92,9 @@ class PipelineMode(StringEnum):
     Set by task creation or operator task-edit commands. Used by PipelineRunner
     when deciding which states are eligible for the task.
     """
+
     SINGLE = "single"  # Skip early planning states, start directly in implementation
-    FULL = "full"      # Run the full pipeline from grooming through commit
+    FULL = "full"  # Run the full pipeline from grooming through commit
 
 
 class PipelineState(StringEnum):
@@ -139,11 +142,13 @@ class TaskStage(StringEnum):
     Used for coarse-grained tracking and reporting; detailed runner phases
     are represented by node names in litehive.lifecycle.types.
     """
-    GROOMING = "grooming"        # Initial planning and requirement analysis
+
+    GROOMING = "grooming"  # Initial planning and requirement analysis
     IMPLEMENTING = "implementing"  # Core development work
-    TESTING = "testing"         # Validation and testing phase
-    ACCEPTING = "accepting"     # Final review and acceptance
+    TESTING = "testing"  # Validation and testing phase
+    ACCEPTING = "accepting"  # Final review and acceptance
     COMMIT_TO_GIT = "commit_to_git"  # Git commit and merge operations
+
 
 class TaskStatus(StringEnum):
     """High-level execution or terminal category for a task.
@@ -155,14 +160,15 @@ class TaskStatus(StringEnum):
     Note: There is no separate 'cancelled' status because 'close_reason'
     explains why a task was closed, avoiding status/reason duplication.
     """
-    QUEUED = "queued"               # Waiting in the queue
-    IN_PROGRESS = "in_progress"     # Currently executing
-    INTERRUPTED = "interrupted"     # Execution stopped, potentially resumable
-    PARKED = "parked"              # Intentionally paused by Litehive or operator
-    DONE = "done"                  # Completed successfully
-    CLOSED = "closed"              # Explicitly closed with a close_reason
-    ARCHIVED = "archived"          # Completed and moved to history-only archive
-    FLAGGED = "flagged"            # Requires explicit operator attention
+
+    QUEUED = "queued"  # Waiting in the queue
+    IN_PROGRESS = "in_progress"  # Currently executing
+    INTERRUPTED = "interrupted"  # Execution stopped, potentially resumable
+    PARKED = "parked"  # Intentionally paused by Litehive or operator
+    DONE = "done"  # Completed successfully
+    CLOSED = "closed"  # Explicitly closed with a close_reason
+    ARCHIVED = "archived"  # Completed and moved to history-only archive
+    FLAGGED = "flagged"  # Requires explicit operator attention
 
 
 class PipelineStatus(StringEnum):
@@ -171,14 +177,15 @@ class PipelineStatus(StringEnum):
     Provides a coarser-grained view for operator interfaces and reporting.
     Used by CLI views and task persistence.
     """
-    BACKLOG = "backlog"               # Not yet started
-    GROOMING = "grooming"             # In planning phase
-    IMPLEMENTING = "implementing"     # In development phase
-    TESTING = "testing"              # In validation phase
-    ACCEPTING = "accepting"          # In review phase
+
+    BACKLOG = "backlog"  # Not yet started
+    GROOMING = "grooming"  # In planning phase
+    IMPLEMENTING = "implementing"  # In development phase
+    TESTING = "testing"  # In validation phase
+    ACCEPTING = "accepting"  # In review phase
     COMMIT_TO_GIT = "commit_to_git"  # In git operations phase
-    DONE = "done"                    # Completed successfully
-    FLAGGED = "flagged"              # Requires operator attention
+    DONE = "done"  # Completed successfully
+    FLAGGED = "flagged"  # Requires operator attention
 
 
 def canonical_pipeline_state(value: str | PipelineState) -> PipelineState:
@@ -249,10 +256,11 @@ class RunnerStatus(StringEnum):
     Used by monitoring and operator interfaces to track the health and
     activity state of the task execution runner.
     """
-    IDLE = "idle"        # Runner is active but not executing a task
+
+    IDLE = "idle"  # Runner is active but not executing a task
     RUNNING = "running"  # Runner is actively executing a task
-    LATE = "late"        # Runner missed expected heartbeat timing
-    STALE = "stale"      # Runner appears to be unresponsive
+    LATE = "late"  # Runner missed expected heartbeat timing
+    STALE = "stale"  # Runner appears to be unresponsive
 
 
 class Verdict(StringEnum):
@@ -264,15 +272,16 @@ class Verdict(StringEnum):
     TaskOutcome as the canonical submitted decision value. StageReport maps
     submitted decisions into its narrower pass/reject/blocked verdict set.
     """
-    PASS = "pass"              # General positive outcome
-    ACCEPT = "accept"          # Stage goal was achieved
-    FAIL = "fail"              # General negative outcome
-    REJECT = "reject"          # Result not acceptable, but can continue
-    BLOCKED = "blocked"        # Progress requires external operator input
-    COMMENT = "comment"        # Informational, no decision
-    RESUME = "resume"          # Continue from where left off
-    ADVANCE = "advance"        # Move to next stage
-    DONE = "done"              # Task completed successfully
+
+    PASS = "pass"  # General positive outcome
+    ACCEPT = "accept"  # Stage goal was achieved
+    FAIL = "fail"  # General negative outcome
+    REJECT = "reject"  # Result not acceptable, but can continue
+    BLOCKED = "blocked"  # Progress requires external operator input
+    COMMENT = "comment"  # Informational, no decision
+    RESUME = "resume"  # Continue from where left off
+    ADVANCE = "advance"  # Move to next stage
+    DONE = "done"  # Task completed successfully
     BUDGET_HIT = "budget_hit"  # Resource limits reached
 
 

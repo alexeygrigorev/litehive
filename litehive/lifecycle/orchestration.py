@@ -125,7 +125,11 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
 def _entry_stage_for_task(task_record: TaskRecord) -> PipelineState | None:
     stage = (
         task_record.runtime.pipeline.current_stage.stage
-        or (None if task_record.runtime.execution.interruption is None else task_record.runtime.execution.interruption.resume_stage)
+        or (
+            None
+            if task_record.runtime.execution.interruption is None
+            else task_record.runtime.execution.interruption.resume_stage
+        )
         or task_record.pipeline_status
     )
     if stage in {None, "backlog", "done", "flagged"}:
@@ -151,6 +155,7 @@ def _stale_launch_state_requires_reset(
     if state.pipeline_mode != pipeline_mode:
         return True
     return state.stage != PipelineState.READY or state.entry_stage != entry_stage
+
 
 _MANUAL_REVIEW_FLAG_REASONS = {
     "hook_reject_loop",
@@ -438,7 +443,9 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
                 context={
                     "lifecycle_stage": state.stage,
                     "failed_reason": (
-                        None if state.failed_reason is None else getattr(state.failed_reason, "value", state.failed_reason)
+                        None
+                        if state.failed_reason is None
+                        else getattr(state.failed_reason, "value", state.failed_reason)
                     ),
                     "failed_message": state.failed_message,
                 },
@@ -714,11 +721,7 @@ def _record_hook_warnings(
         },
     )
     report_path = record_stage_report(root, task, report)
-    message = (
-        f"{summary}\n\n"
-        f"{feedback}\n\n"
-        f"report: {report_path.relative_to(root)}"
-    )
+    message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(root)}"
     append_task_activity(
         root,
         task,
@@ -732,10 +735,7 @@ def _record_hook_warnings(
     append_journal(
         root,
         task,
-        (
-            f"Runner hooks at `{phase}` reported warnings.\n"
-            f"report: `{report_path.relative_to(root)}`"
-        ),
+        (f"Runner hooks at `{phase}` reported warnings.\nreport: `{report_path.relative_to(root)}`"),
     )
 
 
@@ -779,11 +779,7 @@ def _record_hook_reject(
         failure_diagnostics=failure_diagnostics,
     )
     report_path = record_stage_report(root, task, report)
-    message = (
-        f"{summary}\n\n"
-        f"{feedback}\n\n"
-        f"report: {report_path.relative_to(root)}"
-    )
+    message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(root)}"
     append_task_activity(
         root,
         task,
@@ -797,10 +793,7 @@ def _record_hook_reject(
     append_journal(
         root,
         task,
-        (
-            f"Runner hook at `{phase}` rejected the stage.\n"
-            f"report: `{report_path.relative_to(root)}`"
-        ),
+        (f"Runner hook at `{phase}` rejected the stage.\nreport: `{report_path.relative_to(root)}`"),
     )
 
 

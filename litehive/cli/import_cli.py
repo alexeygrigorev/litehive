@@ -25,7 +25,6 @@ class GhAuthError(RuntimeError):
     pass
 
 
-
 LABEL_TO_PRIORITY: dict[str, str] = {
     "priority: critical": "critical",
     "priority: high": "high",
@@ -137,7 +136,18 @@ def fetch_issue(repo: str, issue_number: int, cwd: Path | None = None) -> dict:
 
 def fetch_open_issues(repo: str, cwd: Path | None = None) -> list[dict]:
     raw = run_gh(
-        ["issue", "list", "--repo", repo, "--state", "open", "--json", "number,title,body,labels,url", "--limit", "1000"],
+        [
+            "issue",
+            "list",
+            "--repo",
+            repo,
+            "--state",
+            "open",
+            "--json",
+            "number,title,body,labels,url",
+            "--limit",
+            "1000",
+        ],
         cwd=cwd,
     )
     data = json.loads(raw)

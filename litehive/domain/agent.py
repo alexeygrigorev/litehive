@@ -14,9 +14,10 @@ class EngineFailure:
     Captures the specifics of why a subagent failed, including
     classification for recovery decisions and resource limit context.
     """
-    kind: str                                           # Type of failure
-    reason: str                                         # Human-readable failure reason
-    classification: str | None = None                   # Failure category for recovery routing
+
+    kind: str  # Type of failure
+    reason: str  # Human-readable failure reason
+    classification: str | None = None  # Failure category for recovery routing
 
 
 @dataclass(slots=True)
@@ -27,11 +28,12 @@ class SubagentResult:
     execution, including success/failure details and context for
     potential continuation or recovery.
     """
-    ref: SubagentRef                                    # Reference to the subagent that ran
-    execution: CLIExecutionResult | None               # Low-level execution results
-    transcript: str                                     # Rendered subagent execution trace
-    exit_code: int                                      # Process exit code
-    failure: EngineFailure | None = None               # Failure details if subagent failed
+
+    ref: SubagentRef  # Reference to the subagent that ran
+    execution: CLIExecutionResult | None  # Low-level execution results
+    transcript: str  # Rendered subagent execution trace
+    exit_code: int  # Process exit code
+    failure: EngineFailure | None = None  # Failure details if subagent failed
     continuation: RuntimeEngineContinuation | None = None  # Context for resuming if interrupted
 
 

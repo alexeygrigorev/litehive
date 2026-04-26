@@ -26,7 +26,6 @@ from litehive.tasks.event_log import append_task_event
 from .activity import (
     append_task_activity,
     load_task_activity,
-    resolve_task_activity_path,
 )
 from .paths import (
     latest_run_all_log_path,
@@ -64,13 +63,14 @@ def collect_recovery_evidence(
     stage: str | None = None,
 ) -> list[RecoveryEvidenceItem]:
     from litehive.observability.engine_monitoring import load_engine_monitoring
+    from litehive.observability.events import read_events
 
     from litehive.state.records import get_task_worktree_path
     from litehive.worktree import resolve_recorded_worktree_path
 
     evidence: list[RecoveryEvidenceItem] = []
-    activity_path = resolve_task_activity_path(root, task)
-    events_path = task_dir(root, task) / "events.jsonl"
+    activity_entries = load_task_activity(root, task)
+    task_events = read_events(root, task)
     latest_report = latest_stage_report(root, task)
     latest_run_log = latest_run_all_log_path(root)
     monitoring = load_engine_monitoring(root)
@@ -109,19 +109,17 @@ def collect_recovery_evidence(
     evidence.append(
         RecoveryEvidenceItem(
             kind="activity",
-            label=activity_path.name,
-            path=str(activity_path.relative_to(root)),
-            exists=activity_path.exists(),
-            summary=f"activity entries={len(load_task_activity(root, task))}",
+            label="sqlite activity",
+            exists=bool(activity_entries),
+            summary=f"activity entries={len(activity_entries)}",
         )
     )
     evidence.append(
         RecoveryEvidenceItem(
             kind="events",
-            label="events.jsonl",
-            path=str(events_path.relative_to(root)),
-            exists=events_path.exists(),
-            summary="task lifecycle and subagent event stream",
+            label="sqlite events",
+            exists=bool(task_events),
+            summary=f"task lifecycle and subagent event stream entries={len(task_events)}",
         )
     )
     if latest_report is not None:

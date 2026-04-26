@@ -15,7 +15,7 @@ import yaml
 from pydantic import ValidationError
 
 from litehive.config.paths import workspace_path
-from litehive.domain.task import TaskIntentRecord, TaskRecord
+from litehive.domain.task import TaskIntentRecord, TaskRecord, TaskStateRecord
 
 MIGRATIONS_PACKAGE = "litehive.db.migrations"
 logger = logging.getLogger(__name__)
@@ -43,6 +43,7 @@ _REQUIRED_TABLES_BY_MIGRATION = {
     4: {"recovery_reports"},
     5: {"task_intent"},
     6: {"runtime_settings", "runtime_settings_audit_log"},
+    7: {"runtime_process_state"},
 }
 
 
@@ -92,23 +93,55 @@ def _legacy_task_yaml_paths(root: Path) -> list[Path]:
     if not tasks_dir.exists():
         return []
     paths: list[Path] = []
-    for child in sorted(tasks_dir.iterdir()):
-        if not child.is_dir() or _TASK_DIR_RE.match(child.name) is None:
-            continue
-        task_file = child / "task.yaml"
-        if task_file.exists():
-            paths.append(task_file)
+    scan_roots = [tasks_dir]
+    archive_dir = tasks_dir / "archive"
+    if archive_dir.exists():
+        scan_roots.append(archive_dir)
+    for scan_root in scan_roots:
+        for child in sorted(scan_root.iterdir()):
+            if not child.is_dir() or _TASK_DIR_RE.match(child.name) is None:
+                continue
+            task_file = child / "task.yaml"
+            if task_file.exists():
+                paths.append(task_file)
     return paths
 
 
-def _legacy_task_intent(path: Path) -> TaskIntentRecord:
+def _legacy_task_record(path: Path) -> TaskRecord:
     loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(loaded, dict):
         raise ValueError("task file must contain a mapping")
     try:
-        return TaskIntentRecord.model_validate(loaded)
+        intent = TaskIntentRecord.model_validate(loaded)
+        task = TaskRecord.from_intent_and_state(intent)
     except ValidationError:
-        return TaskRecord.model_validate(loaded).to_intent_record()
+        task = TaskRecord.model_validate(loaded)
+    if path.parent.parent.name == "archive":
+        task.status = "archived"
+    return task
+
+
+def _task_intent_column_values(
+    intent: TaskIntentRecord,
+    state: TaskStateRecord | None = None,
+) -> dict[str, str]:
+    return {
+        "slug": intent.slug,
+        "title": intent.title,
+        "created_at": intent.created_at,
+        "priority": intent.priority,
+        "goal": intent.goal,
+        "acceptance_criteria_json": json.dumps(intent.acceptance_criteria, sort_keys=True),
+        "constraints_json": json.dumps(intent.constraints, sort_keys=True),
+        "plan_json": json.dumps(intent.plan, sort_keys=True),
+        "dependencies_json": json.dumps(intent.depends_on, sort_keys=True),
+        "provenance_json": json.dumps(
+            {} if intent.created_from is None else intent.created_from.model_dump(mode="json"),
+            sort_keys=True,
+        ),
+        "lifecycle_status": "queued" if state is None else str(state.status),
+        "pipeline_status": "backlog" if state is None else str(state.pipeline_status),
+    }
 
 
 def _task_intent_backfill_sql(root: Path, *, updated_at: str) -> tuple[str, tuple[Path, ...]]:
@@ -116,16 +149,22 @@ def _task_intent_backfill_sql(root: Path, *, updated_at: str) -> tuple[str, tupl
     migrated_paths: list[Path] = []
     for path in _legacy_task_yaml_paths(root):
         try:
-            intent = _legacy_task_intent(path)
+            task = _legacy_task_record(path)
         except Exception as exc:
             logger.warning("Skipping invalid legacy task intent %s during migration 0005: %s", path, exc)
             continue
+        intent = task.to_intent_record()
+        state = task.to_storage_state_record()
+        state_payload = json.dumps(state.model_dump(mode="json"), sort_keys=True)
         payload = json.dumps(intent.model_dump(mode="json"), sort_keys=True)
         statements.append(
             "\n".join(
                 [
                     "INSERT INTO task_intent (task_id, payload, updated_at)",
                     f"VALUES ({_sql_literal(intent.id)}, {_sql_literal(payload)}, {_sql_literal(updated_at)})",
+                    "ON CONFLICT(task_id) DO NOTHING;",
+                    "INSERT INTO task_state (task_id, payload, updated_at)",
+                    f"VALUES ({_sql_literal(intent.id)}, {_sql_literal(state_payload)}, {_sql_literal(updated_at)})",
                     "ON CONFLICT(task_id) DO NOTHING;",
                 ]
             )
@@ -140,6 +179,108 @@ def _remove_migrated_task_yaml_files(paths: tuple[Path, ...]) -> None:
             path.unlink(missing_ok=True)
         except OSError as exc:
             logger.warning("Failed to remove migrated legacy task.yaml %s: %s", path, exc)
+
+
+def _sync_task_intent_columns(connection: sqlite3.Connection) -> None:
+    rows = connection.execute(
+        """
+        SELECT intent.task_id, intent.payload AS intent_payload, state.payload AS state_payload
+        FROM task_intent AS intent
+        LEFT JOIN task_state AS state ON state.task_id = intent.task_id
+        """
+    ).fetchall()
+    for row in rows:
+        try:
+            intent_payload = json.loads(str(row["intent_payload"]))
+            intent = TaskIntentRecord.model_validate(intent_payload)
+            state = None
+            if row["state_payload"] is not None:
+                state_payload = json.loads(str(row["state_payload"]))
+                state = TaskStateRecord.model_validate(state_payload)
+        except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
+            logger.warning("Skipping invalid task_intent column backfill for %s: %s", row["task_id"], exc)
+            continue
+        values = _task_intent_column_values(intent, state)
+        connection.execute(
+            """
+            UPDATE task_intent
+            SET
+                slug = ?,
+                title = ?,
+                created_at = ?,
+                priority = ?,
+                goal = ?,
+                acceptance_criteria_json = ?,
+                constraints_json = ?,
+                plan_json = ?,
+                dependencies_json = ?,
+                provenance_json = ?,
+                lifecycle_status = ?,
+                pipeline_status = ?
+            WHERE task_id = ?
+            """,
+            (
+                values["slug"],
+                values["title"],
+                values["created_at"],
+                values["priority"],
+                values["goal"],
+                values["acceptance_criteria_json"],
+                values["constraints_json"],
+                values["plan_json"],
+                values["dependencies_json"],
+                values["provenance_json"],
+                values["lifecycle_status"],
+                values["pipeline_status"],
+                row["task_id"],
+            ),
+        )
+
+
+def _legacy_archived_task_ids(root: Path) -> set[str]:
+    archive_dir = root / ".litehive" / "tasks" / "archive"
+    if not archive_dir.exists():
+        return set()
+    archived: set[str] = set()
+    for child in archive_dir.iterdir():
+        if not child.is_dir():
+            continue
+        match = re.match(r"^(T-\d{4})-", child.name)
+        if match is not None:
+            archived.add(match.group(1))
+    index_path = archive_dir / "INDEX.csv"
+    if index_path.exists():
+        try:
+            import csv
+
+            with index_path.open(newline="", encoding="utf-8") as handle:
+                archived.update(row["id"] for row in csv.DictReader(handle) if row.get("id"))
+        except OSError:
+            pass
+    return archived
+
+
+def _mark_legacy_archived_tasks(connection: sqlite3.Connection, root: Path) -> None:
+    for task_id in sorted(_legacy_archived_task_ids(root)):
+        row = connection.execute("SELECT payload FROM task_state WHERE task_id = ?", (task_id,)).fetchone()
+        if row is None:
+            continue
+        try:
+            payload = json.loads(str(row["payload"]))
+            state = TaskStateRecord.model_validate(payload)
+        except (json.JSONDecodeError, ValidationError, TypeError, ValueError):
+            continue
+        state.status = "archived"  # type: ignore[assignment]
+        state.updated_at = state.updated_at or _utcnow()
+        state_payload = state.model_dump(mode="json")
+        connection.execute(
+            """
+            UPDATE task_state
+            SET payload = ?, updated_at = ?
+            WHERE task_id = ?
+            """,
+            (json.dumps(state_payload, sort_keys=True), state.updated_at, task_id),
+        )
 
 
 def _migration_resources():
@@ -311,6 +452,10 @@ def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationP
                 raise MigrationApplyError(migration, exc) from exc
             if migration.version == 5:
                 _remove_migrated_task_yaml_files(migrated_task_yaml_paths)
+            if migration.version == 7:
+                _mark_legacy_archived_tasks(connection, root)
+                _sync_task_intent_columns(connection)
+                connection.commit()
         applied = tuple(migrations)
     return MigrationPlan(applied_migrations=applied, pending_migrations=pending, dry_run=False)
 

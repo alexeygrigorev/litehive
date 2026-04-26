@@ -42,6 +42,7 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.lifecycle.orchestration import run_task
 from litehive.state.records import create_task
+from litehive.tasks.journal import render_task_journal
 
 pytestmark = pytest.mark.integration
 
@@ -90,9 +91,7 @@ class _RecoveringEngine(_PassEngine):
         outcome = self.plan.get(state.stage, "pass")
         if outcome == "resume":
             trigger = state.active_recovery_trigger
-            origin_stage = (
-                trigger.origin_stage if isinstance(trigger, RecoveryTrigger) else "implementing"
-            )
+            origin_stage = trigger.origin_stage if isinstance(trigger, RecoveryTrigger) else "implementing"
             return AgentVerdict(outcome="resume", metadata={"target_stage": origin_stage or "implementing"})
         return AgentVerdict(outcome=outcome)
 
@@ -397,9 +396,7 @@ def test_run_task_records_already_landed_commit_reconciliation(tmp_path: Path, m
     assert refreshed.pipeline_status == "done"
     assert refreshed.git.commit_sha == "deadbeefcafebabe"
 
-    journal = (tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "journal.md").read_text(
-        encoding="utf-8"
-    )
+    journal = render_task_journal(tmp_path, refreshed)
     assert "patch already landed on main at deadbeefcafebabe" in journal
 
 
@@ -502,9 +499,7 @@ def test_reject_from_implementing_retries_then_fails(workspace: Path) -> None:
 
     transitions = journal.load_transitions("T-E2E-RECOVER")
     implementing_rejects = [
-        row
-        for row in transitions
-        if row["from_stage"] == "implementing" and row["event_type"] == "Reject"
+        row for row in transitions if row["from_stage"] == "implementing" and row["event_type"] == "Reject"
     ]
     seen_recovering = any(row["to_stage"] == "recovering" for row in transitions)
     assert len(implementing_rejects) == 3
