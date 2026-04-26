@@ -5,7 +5,6 @@ from pathlib import Path
 from litehive.domain.common import utcnow
 from litehive.domain.reports import StageReport
 from litehive.domain.runtime import (
-    RuntimeContinuationHandoff,
     RuntimeEngineContinuation,
     RuntimeEngineSwitch,
     RuntimeStageState,
@@ -31,24 +30,6 @@ def _running_stage_state(stage: str, *, started_at: str) -> RuntimeStageState:
         status="running",
         started_at=started_at,
         updated_at=started_at,
-    )
-
-
-def _completed_stage_state(
-    report: StageReport,
-    *,
-    started_at: str | None,
-    completed_at: str,
-) -> RuntimeStageState:
-    return RuntimeStageState(
-        stage=report.pipeline_state,
-        status="completed" if report.verdict == "pass" else report.verdict,
-        started_at=started_at,
-        completed_at=completed_at,
-        updated_at=completed_at,
-        duration_seconds=duration_seconds(started_at, completed_at),
-        verdict=report.verdict,
-        summary=report.summary,
     )
 
 
@@ -171,22 +152,6 @@ def clear_task_outcome(root: Path, task: TaskRecord) -> None:
     save_task_runtime(root, task)
 
 
-def set_task_continuation_handoff(
-    root: Path,
-    task: TaskRecord,
-    handoff: RuntimeContinuationHandoff | None,
-) -> None:
-    task.runtime.pipeline.updated_at = utcnow()
-    task.runtime.execution.continuation_handoff = handoff
-    save_task_runtime(root, task)
-
-
-def clear_task_continuation_handoff(root: Path, task: TaskRecord) -> None:
-    if task.runtime.execution.continuation_handoff is None:
-        return
-    set_task_continuation_handoff(root, task, None)
-
-
 def _apply_task_retry_state(
     task: TaskRecord,
     *,
@@ -275,15 +240,8 @@ def mark_stage_finished(root: Path, task: TaskRecord, report: StageReport) -> No
 
 def apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
     now = utcnow()
-    started_at = task.runtime.pipeline.current_stage.started_at
     task.runtime.pipeline.updated_at = now
-    task.runtime.pipeline.last_stage = _completed_stage_state(report, started_at=started_at, completed_at=now)
     task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now)
-    if (
-        task.runtime.execution.continuation_handoff is not None
-        and task.runtime.execution.continuation_handoff.stage == report.pipeline_state
-    ):
-        task.runtime.execution.continuation_handoff = None
 
 
 def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> None:
@@ -344,28 +302,8 @@ def mark_subagent_finished(
     continuation: RuntimeEngineContinuation | None = None,
 ) -> None:
     now = utcnow()
-    started_at = task.runtime.execution.active_subagent.started_at if task.runtime.execution.active_subagent else now
-    runtime_pid = pid
-    if runtime_pid is None and task.runtime.execution.active_subagent is not None:
-        runtime_pid = task.runtime.execution.active_subagent.pid
     task.runtime.pipeline.updated_at = now
-    task.runtime.execution.last_subagent = _runtime_subagent_state(
-        ref,
-        started_at=started_at,
-        updated_at=now,
-        pid=runtime_pid,
-        completed_at=now,
-        exit_code=exit_code,
-        transcript_snippet=summarize_transcript(transcript),
-        interruption_reason=interruption_reason or "",
-        continuation=(
-            continuation
-            if continuation is not None
-            else task.runtime.execution.active_subagent.continuation
-            if task.runtime.execution.active_subagent is not None
-            else None
-        ),
-    )
+    del ref, transcript, exit_code, pid, interruption_reason, continuation
     task.runtime.execution.active_subagent = None
     save_task_runtime(root, task)
 

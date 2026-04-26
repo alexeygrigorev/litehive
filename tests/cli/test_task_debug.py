@@ -10,9 +10,8 @@ from litehive.agents.session_store import save_subagent_artifacts
 from heru.types import SubagentRef
 
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.runtime import RuntimeSubagentState
 from litehive.domain.reports import StageReport, TaskActivityEntry
-from litehive.state.records import create_task, save_task, save_task_runtime
+from litehive.state.records import create_task, save_task
 from litehive.tasks.paths import task_dir
 from litehive.tasks.reports import append_activity_entry, record_stage_report
 
@@ -370,28 +369,17 @@ def test_debug_all_no_subagents(tmp_path: Path, capsys: pytest.CaptureFixture[st
 # -- Runtime subagent state (exit code, timing) --
 
 
-def test_debug_shows_exit_code_from_runtime(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_debug_shows_exit_code_from_session(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     task, sa_dir = _make_task_with_subagent(tmp_path)
-    task.runtime.last_subagent = RuntimeSubagentState(
-        id="SA-implementing",
-        role="swe",
-        engine="codex",
-        status="completed",
-        path="subagents/SA-implementing",
-        started_at="2026-04-09T08:00:00Z",
-        updated_at="2026-04-09T08:05:00Z",
-        completed_at="2026-04-09T08:05:00Z",
-        exit_code=0,
-    )
-    save_task_runtime(tmp_path, task)
+    _write_session_record(tmp_path, task.id, exit_code=0)
 
     exit_code = _cmd_debug(_ns(tmp_path, task.id))
     output = capsys.readouterr().out
 
     assert exit_code == 0
     assert "exit_code: 0" in output
-    assert "started_at: 2026-04-09T08:00:00Z" in output
-    assert "completed_at: 2026-04-09T08:05:00Z" in output
+    assert "created_at: 2026-04-09T10:00:00Z" in output
+    assert "session_updated_at: 2026-04-09T10:05:00Z" in output
 
 
 def test_debug_worktree_shows_uncommitted_changes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

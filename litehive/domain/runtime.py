@@ -213,46 +213,12 @@ class RuntimeInterruptionState(BaseModel):
     subagent: RuntimeSubagentState | None = None
 
 
-class RuntimeContinuationHandoff(BaseModel):
-    """Context for resuming or continuing task execution.
-
-    Provides the information needed to resume task execution after an
-    interruption, retry, or engine switch. Different continuation kinds
-    require different context:
-    - retry: same engine/model, resume from failure point
-    - engine_switch: different engine, may have session_token empty
-    - restart: clean slate, minimal context preservation
-
-    Used by PipelineRunner when resuming interrupted tasks.
-    """
-
-    stage: str  # Stage where continuation should occur
-    kind: Literal["retry", "engine_switch", "restart"]  # Type of continuation
-    reason: str  # Why continuation is needed
-    from_engine: str | None = None  # Previous engine if engine_switch
-    to_engine: str | None = None  # New engine if engine_switch
-    from_model: str | None = None  # Previous model if changing
-    to_model: str | None = None  # New model if changing
-    subagent_id: str | None = None  # Subagent to resume if applicable
-    subagent_path: str | None = None  # Path context for subagent
-    status: str | None = None  # Status context for continuation
-    attempt: int | None = None
-    summary: str = ""
-    transcript_snippet: str = ""
-    warnings: list[str] = Field(default_factory=list)
-    session_path: str | None = None
-    report_path: str | None = None
-    transcript_path: str | None = None
-    continuation: RuntimeEngineContinuation | None = None
-    updated_at: str = Field(default_factory=utcnow)
-
-
 class PipelineRuntime(BaseModel):
     """Mutable runtime state owned by the task pipeline.
 
     This slice tracks run status, stage progress, retry accounting, terminal
     outcomes, and recovery memory. It deliberately excludes subagent and
-    continuation bookkeeping, which belongs to ExecutionRuntime.
+    engine-switch bookkeeping, which belongs to ExecutionRuntime.
 
     Recovery memory here mirrors the canonical state-machine vocabulary:
     ``recovery_history`` stores compact ``RuntimeRecoveryOutcome`` projections
@@ -267,7 +233,6 @@ class PipelineRuntime(BaseModel):
     retry_count: int = 0
     retry_limit: int = 0
     current_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
-    last_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
     consecutive_same_hook_rejects: int = 0
     last_hook_reject_fingerprint: RuntimeHookRejectFingerprint | None = None
     hook_reject_recovery_invoked: bool = False
@@ -279,14 +244,12 @@ class PipelineRuntime(BaseModel):
 class ExecutionRuntime(BaseModel):
     """Mutable runtime state owned by subagent execution.
 
-    This slice tracks active/recent subagent state plus interruption,
-    continuation, and engine-switch context used to resume or redirect work.
+    This slice tracks active subagent state plus interruption and engine-switch
+    context used to resume or redirect work.
     """
 
     active_subagent: RuntimeSubagentState | None = None
-    last_subagent: RuntimeSubagentState | None = None
     interruption: RuntimeInterruptionState | None = None
-    continuation_handoff: RuntimeContinuationHandoff | None = None
     last_engine_switch: RuntimeEngineSwitch | None = None
 
 
@@ -308,7 +271,7 @@ class TaskRuntime(BaseModel):
     TaskRuntime keeps persistence atomic for a task while separating mutable
     runtime state into:
     - pipeline: run status, stage progress, retries, outcomes, and recovery
-    - execution: subagents, interruptions, handoffs, and engine switching
+    - execution: active subagent, interruption, and engine-switch state
 
     Legacy flat runtime payloads are accepted during validation and normalized
     into these slices before storage.

@@ -60,16 +60,21 @@ def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
             updated_at="2026-04-09T10:00:01Z",
         )
     else:
-        task.runtime.last_subagent = RuntimeSubagentState(
-            id="SA-0001",
-            role="swe",
-            engine="codex",
-            status="completed",
-            path="subagents/SA-0001-swe",
-            started_at="2026-04-09T10:00:00Z",
-            updated_at="2026-04-09T10:00:05Z",
-            completed_at="2026-04-09T10:00:05Z",
-            exit_code=0,
+        save_subagent_artifacts(
+            tmp_path,
+            task.id,
+            "SA-0001",
+            session={
+                "id": "SA-0001",
+                "role": "swe",
+                "engine": "codex",
+                "status": "completed",
+                "created_at": "2026-04-09T10:00:00Z",
+                "started_at": "2026-04-09T10:00:00Z",
+                "updated_at": "2026-04-09T10:00:05Z",
+                "completed_at": "2026-04-09T10:00:05Z",
+                "exit_code": 0,
+            },
         )
     save_task(tmp_path, task)
     save_task_runtime(tmp_path, task)

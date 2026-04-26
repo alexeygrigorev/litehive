@@ -10,7 +10,7 @@ from litehive.agents.session_store import save_subagent_artifacts
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import PipelineState
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
-from litehive.domain.runtime import RuntimeRecoveryOutcome, RuntimeSubagentState
+from litehive.domain.runtime import RuntimeRecoveryOutcome, SubagentRef
 from litehive.roles.planner import PlannerAgent
 from litehive.roles.qa import QAAgent
 from litehive.roles.recovery import RecoveryAgent
@@ -160,16 +160,8 @@ def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
 
 def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
-    task.runtime.last_subagent = RuntimeSubagentState(
-        id="SA-0001",
-        role="swe",
-        engine="codex",
-        status="failed",
-        path="subagents/SA-0001-swe",
-        started_at="2026-04-20T10:00:00Z",
-        updated_at="2026-04-20T10:01:00Z",
-        completed_at="2026-04-20T10:01:05Z",
-        exit_code=17,
+    task.subagents.append(
+        SubagentRef(id="SA-0001", role="swe", engine="codex", status="failed", path="subagents/SA-0001-swe")
     )
     save_task(workspace, task)
 

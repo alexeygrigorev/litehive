@@ -36,9 +36,7 @@ def sqlite_task_ids(db_path: Path) -> set[str]:
         return set()
     try:
         with sqlite3.connect(db_path) as connection:
-            table_rows = connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            ).fetchall()
+            table_rows = connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
             tables = {str(row[0]) for row in table_rows}
             task_ids: set[str] = set()
             for table_name in ("task_state", "task_intent"):

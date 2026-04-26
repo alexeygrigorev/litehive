@@ -263,21 +263,14 @@ def stop_current_task(
 def _effective_task_engine(root: Path, task: TaskRecord) -> str:
     if task.runtime.execution.active_subagent is not None:
         return task.runtime.execution.active_subagent.engine
-    if task.runtime.execution.last_subagent is not None:
-        return task.runtime.execution.last_subagent.engine
+    if task.subagents:
+        return task.subagents[-1].engine
     return load_config(root).default_engine
 
 
 def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
     paths: list[str] = []
-    handoff = task.runtime.execution.continuation_handoff
-    for candidate in (
-        None if handoff is None else handoff.subagent_path,
-        None if handoff is None else handoff.transcript_path,
-        None if handoff is None else handoff.report_path,
-        None if handoff is None else handoff.session_path,
-        None if task.runtime.execution.last_subagent is None else task.runtime.execution.last_subagent.path,
-    ):
+    for candidate in (ref.path for ref in reversed(task.subagents)):
         if candidate and candidate not in paths:
             paths.append(candidate)
     base = latest_subagent_base(root, task)
@@ -597,9 +590,6 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
             clear_last_outcome=task.status not in {"interrupted", "parked", "flagged"}
             and not stranded_in_progress
             and not already_queued_resumable,
-            preserve_continuation_handoff=task.status in {"interrupted", "parked"}
-            or stranded_in_progress
-            or already_queued_resumable,
         )
         _reset_pipeline_state(root, task.id)
         _queue_task(state, task.id, front=front)

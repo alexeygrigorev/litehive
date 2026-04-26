@@ -17,7 +17,6 @@ from litehive.domain.common import utcnow
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.runtime import (
-    RuntimeContinuationHandoff,
     RuntimeInterruptionState,
     RuntimeSubagentState,
 )
@@ -34,7 +33,8 @@ from litehive.tasks.runtime import (
 
 def mark_interrupted_subagent(root: Path, task: TaskRecord, *, reason: str, stage: str) -> RuntimeSubagentState | None:
     active = task.runtime.execution.active_subagent
-    existing = task.runtime.execution.last_subagent if task.runtime.execution.last_subagent is not None else None
+    interruption = task.runtime.execution.interruption
+    existing = None if interruption is None else interruption.subagent
     if active is None and (existing is None or existing.status != "interrupted"):
         return None
     now = utcnow()
@@ -57,7 +57,6 @@ def mark_interrupted_subagent(root: Path, task: TaskRecord, *, reason: str, stag
             "interruption_reason": _interrupted_subagent_reason(task, reason),
         }
     )
-    task.runtime.execution.last_subagent = interrupted
     task.runtime.execution.active_subagent = None
     _write_interrupted_subagent_artifacts(root, task, interrupted, resume_stage=stage)
     return interrupted
@@ -273,13 +272,14 @@ def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeS
 
 def _interrupted_subagent_reason(task: TaskRecord, reason: str) -> str:
     active = task.runtime.execution.active_subagent
-    last_subagent = task.runtime.execution.last_subagent
+    interruption = task.runtime.execution.interruption
+    last_interrupted = None if interruption is None else interruption.subagent
     if (
-        last_subagent is not None
-        and last_subagent.interruption_reason
-        and (active is None or last_subagent.id == active.id)
+        last_interrupted is not None
+        and last_interrupted.interruption_reason
+        and (active is None or last_interrupted.id == active.id)
     ):
-        return last_subagent.interruption_reason
+        return last_interrupted.interruption_reason
     return reason
 
 
@@ -375,24 +375,6 @@ def _set_interruption_metadata(
         run_started_at=run_started_at,
         stage_started_at=stage_started_at,
         subagent=interrupted_subagent,
-    )
-    task.runtime.execution.continuation_handoff = RuntimeContinuationHandoff(
-        stage=stage,
-        kind="restart",
-        reason=reason,
-        from_engine=None if interrupted_subagent is None else interrupted_subagent.engine,
-        to_engine=None if interrupted_subagent is None else interrupted_subagent.engine,
-        subagent_id=None if interrupted_subagent is None else interrupted_subagent.id,
-        subagent_path=None if interrupted_subagent is None else interrupted_subagent.path,
-        status=None if interrupted_subagent is None else interrupted_subagent.status,
-        summary=summary,
-        transcript_snippet="" if interrupted_subagent is None else interrupted_subagent.transcript_snippet,
-        warnings=[],
-        session_path=None,
-        report_path=None,
-        transcript_path=None,
-        continuation=None if interrupted_subagent is None else interrupted_subagent.continuation,
-        updated_at=now,
     )
     task.runtime.pipeline.current_stage = task.runtime.pipeline.current_stage.model_copy(
         update={
@@ -662,13 +644,9 @@ def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                         OR json_extract(payload, '$.runtime.execution.interruption.pipeline_status')
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
-                        OR json_extract(payload, '$.runtime.execution.continuation_handoff.stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                         OR json_extract(payload, '$.runtime.interruption.resume_stage')
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                         OR json_extract(payload, '$.runtime.interruption.pipeline_status')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
-                        OR json_extract(payload, '$.runtime.continuation_handoff.stage')
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                     )
                 ) OR (
@@ -704,13 +682,9 @@ def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                         OR json_extract(payload, '$.runtime.execution.interruption.pipeline_status')
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
-                        OR json_extract(payload, '$.runtime.execution.continuation_handoff.stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                         OR json_extract(payload, '$.runtime.interruption.resume_stage')
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                         OR json_extract(payload, '$.runtime.interruption.pipeline_status')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
-                        OR json_extract(payload, '$.runtime.continuation_handoff.stage')
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
                     )
                 )

@@ -254,7 +254,9 @@ def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) ->
 
     rel_path = str(subagent_base.relative_to(task_dir(root, task_record)))
     runtime_state = None
-    for candidate in (task_record.runtime.execution.last_subagent, task_record.runtime.execution.active_subagent):
+    interruption = task_record.runtime.execution.interruption
+    interrupted_subagent = None if interruption is None else interruption.subagent
+    for candidate in (task_record.runtime.execution.active_subagent, interrupted_subagent):
         if candidate is not None and (candidate.path == rel_path or subagent_base.name.startswith(candidate.id)):
             runtime_state = candidate
             break

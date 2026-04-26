@@ -51,9 +51,7 @@ def debug_latest(root: Path, task):
 
     # Prefer task runtime state loaded from SQLite; fall back to session artifacts when needed.
     runtime_sa = None
-    if task.runtime.execution.last_subagent and task.runtime.execution.last_subagent.id == ref.id:
-        runtime_sa = task.runtime.execution.last_subagent
-    elif task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id:
+    if task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id:
         runtime_sa = task.runtime.execution.active_subagent
 
     if runtime_sa is not None:

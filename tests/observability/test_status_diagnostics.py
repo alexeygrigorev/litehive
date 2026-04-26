@@ -456,8 +456,7 @@ def test_status_reports_terminal_recovery_failure_from_lifecycle_state(tmp_path:
 
     assert exit_code == 1
     assert (
-        "recovery_failure: Task T-0001 has recovery failure (recovery_missing_target_stage) at `implementing`"
-        in output
+        "recovery_failure: Task T-0001 has recovery failure (recovery_missing_target_stage) at `implementing`" in output
     )
     assert "recovery reported success but did not provide a target stage" in output
     assert "litehive task debug T-0001 --worktree" in output
@@ -482,9 +481,7 @@ def test_status_reports_queued_backlog_task_with_resumable_runtime_stage(tmp_pat
     assert "health: 1 broken, 0 warning" in output
 
 
-def test_status_reports_backlog_runtime_stage_when_task_is_missing_from_queue(
-    tmp_path: Path, capsys
-) -> None:
+def test_status_reports_backlog_runtime_stage_when_task_is_missing_from_queue(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Backlog damaged task missing from queue")
     task.status = "queued"

@@ -38,10 +38,10 @@ def task_interruption_label(task):
         label += f" interruption={interruption.source}"
     if task.runtime.pipeline.last_outcome.reason_code:
         label += f" reason_code={task.runtime.pipeline.last_outcome.reason_code}"
-    if task.runtime.execution.last_subagent is not None:
+    interrupted_subagent = None if interruption is None else interruption.subagent
+    if interrupted_subagent is not None:
         label += (
-            " last_subagent="
-            f"{task.runtime.execution.last_subagent.id}:{task.runtime.execution.last_subagent.role}/{task.runtime.execution.last_subagent.engine}"
+            f" interrupted_subagent={interrupted_subagent.id}:{interrupted_subagent.role}/{interrupted_subagent.engine}"
         )
     if interruption is not None and interruption.reason:
         label += f" reason={interruption.reason}"

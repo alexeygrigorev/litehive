@@ -85,9 +85,6 @@ def test_run_task_restarts_recovered_completed_task_from_ready(tmp_path: Path, m
     task = create_task(tmp_path, title="Recover completed task")
     task.status = "done"
     task.pipeline_status = "done"
-    task.runtime.last_stage.stage = "accepting"
-    task.runtime.last_stage.verdict = "pass"
-    task.runtime.last_stage.summary = "Task already passed once."
     save_task(tmp_path, task)
     _seed_terminal_pipeline_state(tmp_path, task.id, entry_stage="implementing", stage="done")
 

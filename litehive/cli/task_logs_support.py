@@ -93,8 +93,6 @@ def list_task_subagents(root: Path, task) -> int:
     runtime_by_id = {}
     if task.runtime.execution.active_subagent is not None:
         runtime_by_id[task.runtime.execution.active_subagent.id] = task.runtime.execution.active_subagent
-    if task.runtime.execution.last_subagent is not None:
-        runtime_by_id[task.runtime.execution.last_subagent.id] = task.runtime.execution.last_subagent
 
     for ref in reversed(task.subagents):
         runtime_state = runtime_by_id.get(ref.id)
@@ -211,8 +209,6 @@ def _latest_subagent_ref(task):
     preferred_ids: list[str] = []
     if task.runtime.execution.active_subagent is not None:
         preferred_ids.append(task.runtime.execution.active_subagent.id)
-    if task.runtime.execution.last_subagent is not None:
-        preferred_ids.append(task.runtime.execution.last_subagent.id)
     for subagent_id in preferred_ids:
         for ref in reversed(task.subagents):
             if ref.id == subagent_id:
@@ -234,9 +230,9 @@ def _artifact_for_kind(base: Path, kind: str, *, active: bool) -> Path | None:
 
 
 def _runtime_state_for_ref(task, subagent_id: str):
-    for state in (task.runtime.execution.active_subagent, task.runtime.execution.last_subagent):
-        if state is not None and state.id == subagent_id:
-            return state
+    state = task.runtime.execution.active_subagent
+    if state is not None and state.id == subagent_id:
+        return state
     return None
 
 

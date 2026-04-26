@@ -217,17 +217,24 @@ def test_render_health_task_sections(tmp_path: Path) -> None:
     flagged.status = "flagged"
     flagged.pipeline_status = "testing"
     flagged.flag_reason = "needs review"
-    flagged.runtime.last_stage.verdict = "reject"
-    flagged.runtime.last_stage.summary = "missing evidence"
+    record_stage_report(
+        tmp_path,
+        flagged,
+        StageReport(task_id=flagged.id, pipeline_state="testing", verdict="reject", summary="missing evidence"),
+    )
 
     done = create_task(tmp_path, title="Done health task")
     done.status = "done"
     done.updated_at = "2026-04-14T10:15:00Z"
-    done.runtime.last_stage.summary = "all checks passed"
+    record_stage_report(
+        tmp_path,
+        done,
+        StageReport(task_id=done.id, pipeline_state="accepting", verdict="pass", summary="all checks passed"),
+    )
 
     active_lines = render_health_active_task_lines(active)
-    flagged_lines = render_health_flagged_task_lines([flagged])
-    completion_lines = render_health_recent_completion_lines([done])
+    flagged_lines = render_health_flagged_task_lines([flagged], root=tmp_path)
+    completion_lines = render_health_recent_completion_lines([done], root=tmp_path)
 
     assert active_lines == [
         "=== Active Task ===",

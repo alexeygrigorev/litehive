@@ -1,4 +1,4 @@
-"""Model and engine resolution and continuation handoff."""
+"""Model and engine resolution."""
 
 from collections.abc import Collection
 from dataclasses import dataclass
@@ -17,9 +17,7 @@ from heru.quota import (
 )
 from litehive.config.model import LitehiveConfig
 from litehive.config.runtime_settings import clear_engine_freeze, set_engine_freeze
-from litehive.domain.runtime import RuntimeContinuationHandoff
 from litehive.domain.task import TaskRecord
-from litehive.tasks.runtime import set_task_continuation_handoff
 
 
 def _engine_attempt_order(initial_engine_names: list[str], engine_preference: list[str]) -> list[str]:
@@ -364,55 +362,11 @@ def resolve_task_rejection_loop_limit(task: TaskRecord, config: LitehiveConfig) 
     return config.default_rejection_loop_limit
 
 
-def set_continuation_handoff(
-    root: Path,
-    task: TaskRecord,
-    *,
-    stage: str,
-    kind: str,
-    reason: str,
-    result,
-    from_engine: str,
-    to_engine: str | None,
-    from_model: str | None,
-    to_model: str | None,
-    attempt: int,
-) -> RuntimeContinuationHandoff:
-    transcript_snippet = ""
-    summary = ""
-    warnings: list[str] = []
-    if result.transcript:
-        transcript_snippet = result.transcript.splitlines()[0].strip()
-    continuation = getattr(result, "continuation", None)
-
-    handoff = RuntimeContinuationHandoff(
-        stage=stage,
-        kind=kind,  # type: ignore[arg-type]
-        reason=reason,
-        from_engine=from_engine,
-        to_engine=to_engine,
-        from_model=from_model,
-        to_model=to_model,
-        subagent_id=result.ref.id,
-        subagent_path=result.ref.path,
-        status=result.ref.status,
-        attempt=attempt,
-        summary=summary,
-        transcript_snippet=transcript_snippet,
-        warnings=warnings,
-        session_path=None,
-        report_path=None,
-        transcript_path=None,
-        continuation=continuation,
-    )
-    set_task_continuation_handoff(root, task, handoff)
-    return handoff
-
-
 def _is_recovery_run(task: TaskRecord) -> bool:
-    if task.runtime.execution.continuation_handoff is not None:
-        return True
-    return task.runtime.pipeline.last_outcome.kind in {"flagged", "interrupted"}
+    return task.runtime.execution.interruption is not None or task.runtime.pipeline.last_outcome.kind in {
+        "flagged",
+        "interrupted",
+    }
 
 
 def _role_for_stage(stage: str, task: TaskRecord | None = None) -> str:

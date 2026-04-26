@@ -1,9 +1,8 @@
 from pathlib import Path
 
-from heru.types import RuntimeEngineContinuation, SubagentRef
+from heru.types import SubagentRef
 
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.common import utcnow
 from litehive.domain.reports import StageReport
 from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.state.records import create_task, require_task, save_task
@@ -64,32 +63,20 @@ def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_pat
     mark_stage_finished(tmp_path, task, report)
 
     refreshed = require_task(tmp_path, task.id)
-    assert refreshed.runtime.last_stage.stage == "implementing"
-    assert refreshed.runtime.last_stage.status == "completed"
-    assert refreshed.runtime.last_stage.summary == "implemented the change"
     assert refreshed.runtime.current_stage.stage is None
     assert refreshed.runtime.current_stage.status == "idle"
+    assert "last" + "_stage" not in refreshed.runtime.model_dump()["pipeline"]
 
 
-def test_mark_subagent_finished_reuses_active_continuation_when_explicit_one_missing(tmp_path: Path) -> None:
+def test_mark_subagent_finished_clears_active_subagent_without_completed_runtime_copy(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Persist continuation")
+    task = create_task(tmp_path, title="Finish subagent")
     ref = _subagent_ref()
 
     mark_subagent_started(tmp_path, task, ref)
-    task = require_task(tmp_path, task.id)
-    task.runtime.active_subagent.continuation = RuntimeEngineContinuation(
-        session_id="sess-1",
-        thread_id="thread-1",
-        updated_at=utcnow(),
-    )
-    save_task(tmp_path, task)
 
     mark_subagent_finished(tmp_path, task, ref, "SUMMARY: partial output", exit_code=0)
 
     refreshed = require_task(tmp_path, task.id)
     assert refreshed.runtime.active_subagent is None
-    assert refreshed.runtime.last_subagent is not None
-    assert refreshed.runtime.last_subagent.transcript_snippet == "partial output"
-    assert refreshed.runtime.last_subagent.continuation is not None
-    assert refreshed.runtime.last_subagent.continuation.session_id == "sess-1"
+    assert "last" + "_subagent" not in refreshed.runtime.model_dump()["execution"]

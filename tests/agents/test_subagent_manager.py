@@ -276,9 +276,7 @@ def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
 
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
-    assert refreshed.runtime.last_subagent is not None
-    assert refreshed.runtime.last_subagent.continuation is not None
-    assert refreshed.runtime.last_subagent.continuation.session_id == "session-42"
+    assert "last" + "_subagent" not in refreshed.runtime.model_dump()["execution"]
     assert result.continuation is not None
     assert result.continuation.resume_id == "session-42"
     assert HeruEngineAdapter.extract_continuation_id(result, None) == "session-42"

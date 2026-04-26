@@ -74,13 +74,11 @@ def collect_recovery_evidence(
     latest_report = latest_stage_report(root, task)
     latest_run_log = latest_run_all_log_path(root)
     monitoring = load_engine_monitoring(root)
-    engine_name = (
-        task.runtime.execution.active_subagent.engine
-        if task.runtime.execution.active_subagent is not None
-        else task.runtime.execution.last_subagent.engine
-        if task.runtime.execution.last_subagent is not None
-        else None
-    )
+    engine_name = None
+    if task.runtime.execution.active_subagent is not None:
+        engine_name = task.runtime.execution.active_subagent.engine
+    elif task.subagents:
+        engine_name = task.subagents[-1].engine
     engine_record = monitoring.engines.get(engine_name or "")
     subagent_base = latest_subagent_base(root, task)
 
@@ -145,14 +143,13 @@ def collect_recovery_evidence(
         event_stream = {} if subagent_ref is None else load_subagent_event_stream(root, task.id, subagent_ref.id)
         runtime_state = None
         if subagent_ref is not None:
-            runtime_state = next(
-                (
-                    state
-                    for state in (task.runtime.execution.active_subagent, task.runtime.execution.last_subagent)
-                    if state is not None and state.id == subagent_ref.id
-                ),
-                None,
-            )
+            active_subagent = task.runtime.execution.active_subagent
+            interruption = task.runtime.execution.interruption
+            interrupted_subagent = None if interruption is None else interruption.subagent
+            for state in (active_subagent, interrupted_subagent):
+                if state is not None and state.id == subagent_ref.id:
+                    runtime_state = state
+                    break
         trace_view = (
             None
             if subagent_ref is None

@@ -162,7 +162,6 @@ def reset_task_for_recovery(
     status: str,
     pipeline_status: str,
     clear_last_outcome: bool = True,
-    preserve_continuation_handoff: bool = False,
 ) -> None:
     now = utcnow()
     task.status = status
@@ -172,8 +171,6 @@ def reset_task_for_recovery(
     clear_task_run_activity(task, execution_status="idle", updated_at=now, clear_interruption=True)
     task.runtime.pipeline.retry_count = 0
     task.runtime.pipeline.retry_limit = 0
-    if not preserve_continuation_handoff:
-        task.runtime.execution.continuation_handoff = None
     task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage=pipeline_status)
     if clear_last_outcome:
         task.runtime.pipeline.last_outcome = TaskOutcomeState()
@@ -206,13 +203,11 @@ def _normalize_resumable_stage_name(stage: str | None) -> str | None:
 
 def resumable_queue_stage(task: TaskRecord) -> str | None:
     interruption = task.runtime.execution.interruption
-    handoff = task.runtime.execution.continuation_handoff
     current_stage = task.runtime.pipeline.current_stage
     candidates = [
         task.pipeline_status,
         None if interruption is None else interruption.resume_stage,
         None if interruption is None else interruption.pipeline_status,
-        None if handoff is None else handoff.stage,
     ]
     if current_stage.status in _TRUSTED_STAGE_MARKER_STATUSES:
         candidates.append(current_stage.stage)
@@ -308,9 +303,6 @@ def task_has_resume_marker(task: TaskRecord) -> bool:
         return True
     interruption = task.runtime.execution.interruption
     if interruption is not None and (interruption.resume_stage == stage or interruption.pipeline_status == stage):
-        return True
-    handoff = task.runtime.execution.continuation_handoff
-    if handoff is not None and handoff.stage == stage:
         return True
     return False
 

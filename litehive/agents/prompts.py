@@ -175,48 +175,11 @@ def stage_prompt(
             ]
         )
 
-    handoff = task.runtime.execution.continuation_handoff
-    if handoff is not None and handoff.stage == stage:
-        lines.extend(["", "Continuation handoff:"])
-        lines.append(f"- Kind: {handoff.kind}")
-        lines.append(f"- Reason: {handoff.reason}")
-        if handoff.from_engine or handoff.to_engine:
-            lines.append(
-                f"- Engine path: {handoff.from_engine or '-'} -> {handoff.to_engine or handoff.from_engine or '-'}"
-            )
-        if handoff.from_model or handoff.to_model:
-            lines.append(
-                f"- Model path: {handoff.from_model or '-'} -> {handoff.to_model or handoff.from_model or '-'}"
-            )
-        if handoff.attempt is not None:
-            lines.append(f"- Prior attempt: {handoff.attempt}")
-        if handoff.subagent_id or handoff.subagent_path:
-            lines.append(f"- Prior subagent: {handoff.subagent_id or '-'} at `{handoff.subagent_path or '-'}`")
-        if handoff.summary:
-            lines.append(f"- Prior summary: {handoff.summary}")
-        if handoff.transcript_snippet:
-            lines.append(f"- Prior snippet: {handoff.transcript_snippet}")
-        if handoff.continuation is not None and handoff.continuation.resume_id:
-            lines.append(f"- Engine resume id: {handoff.continuation.resume_id}")
-        artifact_parts = [
-            path
-            for path in (
-                handoff.session_path,
-                handoff.report_path,
-                handoff.transcript_path,
-            )
-            if path
-        ]
-        if artifact_parts:
-            lines.append(f"- Handoff artifacts: {', '.join(f'`{path}`' for path in artifact_parts)}")
-        if handoff.warnings:
-            lines.extend(["- Prior warnings:"] + [f"  - {warning}" for warning in handoff.warnings])
-        lines.extend(
-            [
-                "- Continue from the prior stage context instead of restarting discovery from scratch.",
-                "- Reuse the recorded artifacts and continuation identifiers when they help you preserve progress safely.",
-            ]
-        )
+    engine_switch = task.runtime.execution.last_engine_switch
+    if engine_switch is not None and engine_switch.stage == stage:
+        lines.extend(["", "Engine switch:"])
+        lines.append(f"- Engine path: {engine_switch.from_engine} -> {engine_switch.to_engine}")
+        lines.append(f"- Reason: {engine_switch.reason}")
 
     lines.extend(["", "Plan:"])
     if task.plan:

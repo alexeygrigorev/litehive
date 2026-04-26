@@ -271,8 +271,8 @@ def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> N
     assert task.runtime.interruption.reason == "received ctrl-c"
     assert task.runtime.interruption.resume_stage == "implementing"
     assert task.runtime.active_subagent is None
-    assert task.runtime.last_subagent is not None
-    assert task.runtime.last_subagent.status == "interrupted"
+    assert task.runtime.interruption.subagent is not None
+    assert task.runtime.interruption.subagent.status == "interrupted"
 
     session = load_subagent_session(tmp_path, task.id, "SA-1234")
     report = load_subagent_report(tmp_path, task.id, "SA-1234")

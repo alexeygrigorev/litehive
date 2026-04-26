@@ -156,26 +156,38 @@ def _collect_report_durations(root: Path) -> list[float]:
 
 
 def _task_engine_label(task: TaskRecord, default_engine: str) -> str:
-    return (
-        task.runtime.execution.active_subagent.engine
-        if task.runtime.execution.active_subagent is not None
-        else task.runtime.execution.last_subagent.engine
-        if task.runtime.execution.last_subagent is not None
-        else default_engine
-    )
+    if task.runtime.execution.active_subagent is not None:
+        return task.runtime.execution.active_subagent.engine
+    subagents = getattr(task, "subagents", [])
+    if subagents:
+        return subagents[-1].engine
+    return default_engine
 
 
 def _task_stage_label(task: TaskRecord) -> str:
     return task.runtime.pipeline.current_stage.stage or task.pipeline_status or "-"
 
 
-def _task_last_verdict_label(task: TaskRecord) -> str:
-    return task.runtime.pipeline.last_stage.verdict or task.runtime.pipeline.last_outcome.kind or "-"
+def _latest_stage_report_for_task(root: Path | None, task: TaskRecord) -> Any | None:
+    if root is None:
+        return None
+    try:
+        from litehive.tasks.reports import latest_stage_report
+
+        return latest_stage_report(root, task)
+    except Exception:
+        return None
 
 
-def _task_last_summary_label(task: TaskRecord) -> str:
+def _task_last_verdict_label(task: TaskRecord, *, root: Path | None = None) -> str:
+    latest_report = _latest_stage_report_for_task(root, task)
+    return (None if latest_report is None else latest_report.verdict) or task.runtime.pipeline.last_outcome.kind or "-"
+
+
+def _task_last_summary_label(task: TaskRecord, *, root: Path | None = None) -> str:
+    latest_report = _latest_stage_report_for_task(root, task)
     return (
-        task.runtime.pipeline.last_stage.summary
+        (None if latest_report is None else latest_report.summary)
         or task.runtime.pipeline.last_outcome.reason
         or task.flag_reason
         or task.close_reason
@@ -216,13 +228,13 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
         lines.append(f"  close_reason={task.close_reason or 'unknown'}")
 
     runtime = task.runtime
+    latest_report = _latest_stage_report_for_task(root, task)
     configured_limit = retry_policy if retry_policy is not None else "default"
     lines.append(f"  retry_policy=configured:{configured_limit} effective:{runtime.pipeline.retry_limit}")
     if (
         runtime.pipeline.execution_status != "idle"
         or runtime.pipeline.current_stage.stage
         or runtime.pipeline.current_stage.status != "idle"
-        or runtime.pipeline.last_stage.stage
     ):
         parts = [f"run={runtime.pipeline.execution_status}"]
         parts.append(f"retries={runtime.pipeline.retry_count}/{runtime.pipeline.retry_limit}")
@@ -236,9 +248,6 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
             )
             parts.append(f"stage={runtime.pipeline.current_stage.stage}")
             parts.append(f"stage_duration={stage_duration}")
-        elif runtime.pipeline.last_stage.stage:
-            parts.append(f"last_stage={runtime.pipeline.last_stage.stage}")
-            parts.append(f"last_stage_duration={_seconds_label(runtime.pipeline.last_stage.duration_seconds)}")
         lines.append("  " + " ".join(parts))
 
     if runtime.execution.active_subagent is not None:
@@ -255,23 +264,6 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
                 f"{runtime.execution.active_subagent.status} {pid_label} duration={subagent_duration} {sandbox_label}"
             )
         )
-    elif runtime.execution.last_subagent is not None:
-        snippet = runtime.execution.last_subagent.transcript_snippet or "-"
-        pid_label = _pid_label(runtime.execution.last_subagent.pid)
-        sandbox_label = _sandbox_label(
-            runtime.execution.last_subagent.sandboxed,
-            runtime.execution.last_subagent.sandbox_summary,
-        )
-        lines.append(
-            "  "
-            + (
-                f"last_subagent={runtime.execution.last_subagent.id} {runtime.execution.last_subagent.role}/{runtime.execution.last_subagent.engine} "
-                f"{runtime.execution.last_subagent.status} {pid_label} {sandbox_label} snippet={snippet}"
-            )
-        )
-        if runtime.execution.last_subagent.interruption_reason:
-            lines.append(f"  last_subagent_interruption_reason={runtime.execution.last_subagent.interruption_reason}")
-
     if runtime.execution.last_engine_switch is not None:
         lines.append(
             "  "
@@ -295,30 +287,13 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
             )
         )
 
-    if runtime.execution.continuation_handoff is not None:
-        handoff = runtime.execution.continuation_handoff
-        continuation_parts = [
-            f"continuation={handoff.kind}",
-            f"stage={handoff.stage}",
-            f"reason={handoff.reason}",
-        ]
-        if handoff.from_engine or handoff.to_engine:
-            continuation_parts.append(
-                f"engine={handoff.from_engine or '-'}->{handoff.to_engine or handoff.from_engine or '-'}"
-            )
-        if handoff.subagent_id:
-            continuation_parts.append(f"subagent={handoff.subagent_id}")
-        if handoff.continuation is not None and handoff.continuation.resume_id:
-            continuation_parts.append(f"resume_id={handoff.continuation.resume_id}")
-        lines.append("  " + " ".join(continuation_parts))
-
-    if runtime.pipeline.last_stage.stage:
-        summary = runtime.pipeline.last_stage.summary or "-"
+    if latest_report is not None:
+        summary = latest_report.summary or "-"
         lines.append(
             "  "
             + (
-                f"last_report={runtime.pipeline.last_stage.stage}/{runtime.pipeline.last_stage.verdict} "
-                f"duration={_seconds_label(runtime.pipeline.last_stage.duration_seconds)} summary={summary}"
+                f"last_report={latest_report.pipeline_state}/{latest_report.verdict} "
+                f"duration={_seconds_label(latest_report.duration_seconds)} summary={summary}"
             )
         )
     report_classification = _latest_stage_failure_classification(root, task)
@@ -567,7 +542,7 @@ def render_health_active_task_lines(task: TaskRecord | None) -> list[str]:
     return lines
 
 
-def render_health_flagged_task_lines(flagged_tasks: list[TaskRecord]) -> list[str]:
+def render_health_flagged_task_lines(flagged_tasks: list[TaskRecord], *, root: Path | None = None) -> list[str]:
     lines = ["=== Flagged Tasks ===", f"flagged_count: {len(flagged_tasks)}"]
     if not flagged_tasks:
         lines.append("flagged: none")
@@ -576,8 +551,8 @@ def render_health_flagged_task_lines(flagged_tasks: list[TaskRecord]) -> list[st
         lines.append(
             f"flagged: {task.id} stage={_task_stage_label(task)} "
             f"reason={task.flag_reason or 'unknown'} "
-            f"last_verdict={_task_last_verdict_label(task)} "
-            f"summary={_task_last_summary_label(task)}"
+            f"last_verdict={_task_last_verdict_label(task, root=root)} "
+            f"summary={_task_last_summary_label(task, root=root)}"
         )
     return lines
 
@@ -626,7 +601,7 @@ def render_health_daemon_lines(daemon_status: str, daemon_pid: str) -> list[str]
     ]
 
 
-def render_health_recent_completion_lines(completed: list[TaskRecord]) -> list[str]:
+def render_health_recent_completion_lines(completed: list[TaskRecord], *, root: Path | None = None) -> list[str]:
     lines = ["=== Recent Completions ==="]
     if not completed:
         lines.append("completed: none")
@@ -634,7 +609,7 @@ def render_health_recent_completion_lines(completed: list[TaskRecord]) -> list[s
     for task in completed:
         lines.append(
             f"completed: {task.id} title={task.title} when={task.updated_at or '-'} "
-            f"summary={_task_last_summary_label(task)}"
+            f"summary={_task_last_summary_label(task, root=root)}"
         )
     return lines
 

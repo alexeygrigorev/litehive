@@ -194,7 +194,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(line)
 
     print()
-    for line in render_health_flagged_task_lines(flagged_tasks):
+    for line in render_health_flagged_task_lines(flagged_tasks, root=root):
         print(line)
 
     print()
@@ -215,7 +215,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(line)
 
     print()
-    for line in render_health_recent_completion_lines(completed):
+    for line in render_health_recent_completion_lines(completed, root=root):
         print(line)
 
     has_quota_problem = any(item.problem for item in quota_health)

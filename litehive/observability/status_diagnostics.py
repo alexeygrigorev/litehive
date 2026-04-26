@@ -495,9 +495,7 @@ def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureC
 
     failed_reason = None
     if state.failed_reason is not None:
-        failed_reason = (
-            state.failed_reason.value if hasattr(state.failed_reason, "value") else str(state.failed_reason)
-        )
+        failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else str(state.failed_reason)
     if failed_reason in _RECOVERY_FAILURE_STATE_REASONS:
         context.failed_reason = failed_reason
     context.explanation = state.recovery_failure_explanation or state.failed_message
@@ -538,9 +536,7 @@ def _backlog_damage_issue(
     runtime_stage = _runtime_resume_stage(task)
     if pipeline_status == "backlog" and runtime_stage is not None:
         queue_detail = (
-            " It is missing from WorkspaceState.queue, so the scheduler will not see it."
-            if missing_from_queue
-            else ""
+            " It is missing from WorkspaceState.queue, so the scheduler will not see it." if missing_from_queue else ""
         )
         return StatusIssue(
             key="backlog_damage",
@@ -573,9 +569,6 @@ def _runtime_resume_stage(task: TaskRecord) -> str | None:
     interruption = task.runtime.execution.interruption
     if interruption is not None:
         candidates.extend([interruption.resume_stage, interruption.pipeline_status, interruption.stage])
-    handoff = task.runtime.execution.continuation_handoff
-    if handoff is not None:
-        candidates.append(handoff.stage)
     current_stage = task.runtime.pipeline.current_stage
     if current_stage.status in _TRUSTED_STAGE_MARKER_STATUSES:
         candidates.append(current_stage.stage)
@@ -592,9 +585,6 @@ def _task_has_resume_marker(task: TaskRecord) -> bool:
         return True
     interruption = task.runtime.execution.interruption
     if interruption is not None and (interruption.resume_stage == stage or interruption.pipeline_status == stage):
-        return True
-    handoff = task.runtime.execution.continuation_handoff
-    if handoff is not None and handoff.stage == stage:
         return True
     return False
 
