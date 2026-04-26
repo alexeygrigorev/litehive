@@ -15,7 +15,6 @@ from litehive.fs_cleanup import remove_tree_logged
 from litehive.domain.task import (
     TaskCreationSource,
     TaskRecord,
-    TaskIntentRecord,
     TaskStateRecord,
     WorkspaceState,
     canonicalize_task_terminal_state,
@@ -49,11 +48,6 @@ class TaskStateMissingError(RuntimeError):
     """Raised when a task has no SQLite runtime state row."""
 
 
-def _load_task_record_mapping(path: Path) -> dict:
-    loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(loaded, dict):
-        raise ValueError(f"Task file must contain a mapping: {path}")
-    return dict(loaded)
 
 
 def _highest_task_number_in_store(root: Path) -> int:
@@ -251,10 +245,6 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
     return task
 
 
-def load_task_record_file(path: Path) -> TaskRecord:
-    data = _load_task_record_mapping(path)
-    intent = TaskIntentRecord.model_validate(data)
-    return TaskRecord.from_intent_and_state(intent)
 
 
 def create_task(

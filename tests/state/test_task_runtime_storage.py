@@ -3,8 +3,6 @@ from pathlib import Path
 import warnings
 
 import pytest
-import yaml
-from pydantic import ValidationError
 
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
@@ -16,7 +14,6 @@ from litehive.state.records import (
     create_task,
     get_task,
     list_tasks,
-    load_task_record_file,
     save_task,
     save_task_runtime,
 )
@@ -337,37 +334,6 @@ def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Pat
     assert [task.id for task in tasks] == [present.id, "T-0002"]
 
 
-def test_load_task_record_file_rejects_legacy_intent_fields(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    task_dir = tmp_path / ".litehive" / "tasks" / "T-0001-legacy-intent"
-    task_dir.mkdir(parents=True)
-    task_path = task_dir / "task.yaml"
-    task_path.write_text(
-        yaml.safe_dump(
-            {
-                "id": "T-0001",
-                "slug": "legacy-intent",
-                "title": "Legacy intent",
-                "mode": "implementation",
-                "pipeline_mode": "full",
-                "priority": "medium",
-                "pm_complexity": "moderate",
-                "planned_effort": "s",
-                "human_checkpoints": [],
-                "upstream_origin": None,
-                "github_origin": None,
-                "git": {
-                    "auto_commit": True,
-                    "commit_message": "legacy intent",
-                },
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-        load_task_record_file(task_path)
 
 
 def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -> None:

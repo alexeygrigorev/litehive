@@ -51,8 +51,6 @@ def task_dir(root: Path, task: TaskRecord, *, bootstrap: bool = True) -> Path:
     return tasks_root(root, bootstrap=bootstrap) / f"{task.id}-{task.slug}"
 
 
-def task_file(root: Path, task: TaskRecord, *, bootstrap: bool = True) -> Path:
-    return task_dir(root, task, bootstrap=bootstrap) / "task.yaml"
 
 
 def task_recovery_dir(root: Path, task: TaskRecord, *, bootstrap: bool = True) -> Path:
