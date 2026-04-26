@@ -254,6 +254,8 @@ def latest_verdict_after(
     task_id: str,
     stage: str,
     after_ts: datetime,
+    *,
+    source_subagent_id: str | None = None,
 ) -> AgentVerdict | None:
     """Return the most recent activity entry for ``(task_id, stage)`` whose
     ``created_at`` is newer than ``after_ts``, mapped to an ``AgentVerdict``.
@@ -267,6 +269,7 @@ def latest_verdict_after(
         workspace_root,
         task,
         stage=stage,
+        source_subagent_id=source_subagent_id,
         verdicts=_allowed_verdicts_for_stage(stage),
         after=after_ts,
     )
@@ -375,7 +378,13 @@ class HeruEngineAdapter:
         session.turn_count = (session.turn_count or 0) + 1
 
         # Did the agent submit a verdict during this turn?
-        verdict = latest_verdict_after(self.workspace_root, state.task_id, stage, before_turn)
+        verdict = latest_verdict_after(
+            self.workspace_root,
+            state.task_id,
+            stage,
+            before_turn,
+            source_subagent_id=result.ref.id,
+        )
         if verdict is None:
             raise NudgeRequired(f"{self.name} finished {stage} without a litehive report submission")
 
@@ -473,14 +482,22 @@ class HeruEngineAdapter:
             )
             if previous_recovery is not None:
                 after_ts = previous_recovery.created_at
+        source_subagent_id = "direct-recovery"
         self._run_direct_recovery_turn(
             task_id=state.task_id,
             execution_root=recovery_execution_root,
             prompt_text=recovery_prompt,
+            source_subagent_id=source_subagent_id,
         )
         if state.stage != "recovering":
             return None
-        return latest_verdict_after(self.workspace_root, state.task_id, "recovering", after_ts)
+        return latest_verdict_after(
+            self.workspace_root,
+            state.task_id,
+            "recovering",
+            after_ts,
+            source_subagent_id=source_subagent_id,
+        )
 
     def _direct_recovery_prompt(self, *, task, state: TaskState, startup_message: str) -> str:
         recovery_state = self._direct_recovery_state(state, startup_message)
@@ -530,7 +547,21 @@ class HeruEngineAdapter:
         task_id: str,
         execution_root: Path,
         prompt_text: str,
+        source_subagent_id: str,
     ):
+        from litehive.agents.session_store import save_subagent_artifacts
+
+        save_subagent_artifacts(
+            self.workspace_root,
+            task_id,
+            source_subagent_id,
+            session={
+                "id": source_subagent_id,
+                "role": "recovery",
+                "engine": "codex",
+                "status": "running",
+            },
+        )
         adapter = CodexCLIAdapter()
         return adapter.run(
             prompt_text,
@@ -539,6 +570,7 @@ class HeruEngineAdapter:
                 "LITEHIVE_TASK_ID": task_id,
                 "LITEHIVE_WORKSPACE_ROOT": str(self.workspace_root),
                 "LITEHIVE_AGENT_ROLE": "recovery",
+                "LITEHIVE_SUBAGENT_ID": source_subagent_id,
                 "LITEHIVE_STAGE": "recovering",
             },
         )

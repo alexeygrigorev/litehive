@@ -38,13 +38,13 @@ ROLE_GUIDANCE = """\
 - If this workspace is not already the Litehive repo, switch into the repo at `litehive_source_path` and repair Litehive there.
 - Work in the Litehive source repo so you can fix the orchestrator, adapters, prompts, report wiring, resume logic, or other infrastructure bugs with the smallest safe change.
 - Example: if the failed agent tried `litehive report` and got a Litehive traceback, fix Litehive's report path or resume wiring here, verify the Litehive fix, then submit a recovery verdict.
-- Non-example: do not rerun the failed stage's tests, do not finish the task's feature work, and do not submit `--role swe|qa|reviewer` on the failed agent's behalf.
+- Non-example: do not rerun the failed stage's tests, do not finish the task's feature work, and do not submit a verdict on the failed agent's behalf.
 - run `uv run pytest` in the Litehive repo before reporting success when you changed Litehive code; keep verification targeted.
 - If the evidence points to a project/task bug rather than a Litehive bug, do not implement the task; report that no Litehive infrastructure fix was found and leave the task for the normal stage owner.
 - Submit your own recovery verdict describing the root cause, the Litehive fix you made, and why the failed stage should be retried.
 - If you submit `resume` or `advance`, include a concrete `--target-stage <stage>`; do not leave the destination implicit.
 - If the prompt shows a repeated recovery fingerprint for the same origin stage, do not `resume` or `advance` again.
-- On a repeated recovery fingerprint, create a follow-up bug task for the unfixable failure, then submit `litehive report --verdict reject --role recovery --follow-up-task <task-id> --message "<fingerprint + follow-up reference>"` so Litehive flags the current task with the reference instead of re-routing it.
+- On a repeated recovery fingerprint, create a follow-up bug task for the unfixable failure, then submit `litehive report --verdict reject --follow-up-task <task-id> --message "<fingerprint + follow-up reference>"` so Litehive flags the current task with the reference instead of re-routing it.
 """
 
 FRESH_ATTEMPT_GUIDANCE = """\

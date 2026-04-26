@@ -50,6 +50,7 @@ def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Pat
             stage="implementing",
             verdict="pass",
             message=message,
+            source_subagent_id="SA-0001",
         ),
     )
 
@@ -78,6 +79,7 @@ def test_stage_report_from_subagent_preserves_semantic_reject_classification(tmp
             verdict="reject",
             verdict_classification=SEMANTIC_REJECT_CLASSIFICATION,
             message="acceptance evidence is incomplete",
+            source_subagent_id="SA-0001",
         ),
     )
 

@@ -151,8 +151,8 @@ Use `litehive queue move` or `litehive queue promote` when operator ordering mat
 Agent interaction:
 
 ```bash
-litehive report --verdict pass --role qa --stage testing --message "All tests pass"
-litehive report --verdict reject --role qa --stage testing --message "Expected: login returns 200. Observed: returns 500."
+litehive report --verdict pass --stage testing --message "All tests pass"
+litehive report --verdict reject --stage testing --message "Expected: login returns 200. Observed: returns 500."
 ```
 
 ## Self-healing

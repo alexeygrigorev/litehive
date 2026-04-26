@@ -338,6 +338,7 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_on_pre_start_subagent
             extra_env: dict[str, str] | None = None,
         ) -> CLIExecutionResult:
             del model
+            assert extra_env is not None
             captured["prompt"] = prompt
             captured["cwd"] = cwd
             captured["extra_env"] = extra_env
@@ -350,6 +351,7 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_on_pre_start_subagent
                     verdict="resume",
                     target_stage="implementing",
                     message="repaired the startup path",
+                    source_subagent_id=extra_env["LITEHIVE_SUBAGENT_ID"],
                 ),
             )
             return CLIExecutionResult(
@@ -372,6 +374,7 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_on_pre_start_subagent
         "LITEHIVE_TASK_ID": task.id,
         "LITEHIVE_WORKSPACE_ROOT": str(tmp_path),
         "LITEHIVE_AGENT_ROLE": "recovery",
+        "LITEHIVE_SUBAGENT_ID": "direct-recovery",
         "LITEHIVE_STAGE": "recovering",
     }
     assert captured["cwd"] == tmp_path
@@ -417,6 +420,7 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_when_engine_is_unavai
             extra_env: dict[str, str] | None = None,
         ) -> CLIExecutionResult:
             del model
+            assert extra_env is not None
             captured["prompt"] = prompt
             captured["cwd"] = cwd
             captured["extra_env"] = extra_env
@@ -429,6 +433,7 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_when_engine_is_unavai
                     verdict="resume",
                     target_stage="implementing",
                     message="repaired missing engine configuration",
+                    source_subagent_id=extra_env["LITEHIVE_SUBAGENT_ID"],
                 ),
             )
             return CLIExecutionResult(
@@ -454,6 +459,7 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_when_engine_is_unavai
         "LITEHIVE_TASK_ID": task.id,
         "LITEHIVE_WORKSPACE_ROOT": str(tmp_path),
         "LITEHIVE_AGENT_ROLE": "recovery",
+        "LITEHIVE_SUBAGENT_ID": "direct-recovery",
         "LITEHIVE_STAGE": "recovering",
     }
     assert captured["cwd"] == tmp_path
@@ -556,7 +562,8 @@ def test_heru_engine_adapter_returns_direct_recovery_verdict_during_recovering_s
             *,
             extra_env: dict[str, str] | None = None,
         ) -> CLIExecutionResult:
-            del model, extra_env
+            del model
+            assert extra_env is not None
             captured["prompt"] = prompt
             append_activity_entry(
                 tmp_path,
@@ -567,6 +574,7 @@ def test_heru_engine_adapter_returns_direct_recovery_verdict_during_recovering_s
                     verdict="resume",
                     target_stage="testing",
                     message="fixed the runner startup path",
+                    source_subagent_id=extra_env["LITEHIVE_SUBAGENT_ID"],
                 ),
             )
             return CLIExecutionResult(
@@ -1027,6 +1035,46 @@ def test_latest_verdict_after_returns_semantic_reject_classification(tmp_path) -
     assert verdict.outcome == "reject"
     assert verdict.classification == SEMANTIC_REJECT_CLASSIFICATION
     assert verdict.metadata["verdict_classification"] == SEMANTIC_REJECT_CLASSIFICATION
+
+
+def test_latest_verdict_after_can_filter_to_source_subagent_id(tmp_path) -> None:
+    from litehive.state.records import create_task
+
+    task = create_task(tmp_path, title="source-bound verdict")
+    append_activity_entry(
+        tmp_path,
+        task,
+        TaskActivityEntry(
+            role="swe",
+            stage="implementing",
+            verdict="pass",
+            message="wrong session",
+            source_subagent_id="SA-0002",
+        ),
+    )
+    append_activity_entry(
+        tmp_path,
+        task,
+        TaskActivityEntry(
+            role="swe",
+            stage="implementing",
+            verdict="reject",
+            message="current session",
+            source_subagent_id="SA-0001",
+        ),
+    )
+
+    verdict = latest_verdict_after(
+        tmp_path,
+        task.id,
+        "implementing",
+        datetime.now(UTC) - timedelta(minutes=1),
+        source_subagent_id="SA-0001",
+    )
+
+    assert verdict is not None
+    assert verdict.outcome == "reject"
+    assert verdict.reason == "current session"
 
 
 def test_latest_verdict_after_includes_retry_summary_metadata(tmp_path, monkeypatch) -> None:

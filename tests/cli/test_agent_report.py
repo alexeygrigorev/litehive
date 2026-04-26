@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from litehive.agents.session_store import save_subagent_artifacts
 from litehive.cli.agent_cli import agent_app
 from litehive.cli.app import app as root_app
 from litehive.config.workspace import ensure_workspace
@@ -28,8 +29,36 @@ def _assert_activity_entries(
 ) -> None:
     assert len(actual) == len(expected)
     for actual_entry, expected_entry in zip(actual, expected, strict=True):
-        assert actual_entry.model_dump(exclude={"created_at"}) == expected_entry.model_dump(exclude={"created_at"})
+        actual_payload = actual_entry.model_dump(exclude={"created_at"})
+        expected_payload = expected_entry.model_dump(exclude={"created_at"})
+        if expected_entry.source_subagent_id is None:
+            actual_payload.pop("source_subagent_id", None)
+            expected_payload.pop("source_subagent_id", None)
+        assert actual_payload == expected_payload
         assert actual_entry.created_at
+
+
+def _bind_report_identity(
+    root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    task_id: str,
+    role: str,
+    subagent_id: str = "SA-0001",
+) -> None:
+    save_subagent_artifacts(
+        root,
+        task_id,
+        subagent_id,
+        session={
+            "id": subagent_id,
+            "role": role,
+            "engine": "codex",
+            "status": "running",
+        },
+    )
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", role)
+    monkeypatch.setenv("LITEHIVE_SUBAGENT_ID", subagent_id)
 
 
 def _save_intent_only_task(root: Path) -> None:
@@ -50,9 +79,94 @@ def _save_intent_only_task(root: Path) -> None:
     )
 
 
-def test_agent_report_uses_intent_record_when_runtime_row_is_missing(tmp_path: Path) -> None:
+def test_agent_report_derives_role_from_subagent_session_and_records_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Session-bound report")
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="qa", subagent_id="SA-0042")
+    monkeypatch.setenv("LITEHIVE_STAGE", "testing")
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "report",
+            "--verdict",
+            "pass",
+            "--message",
+            "verified",
+            "--task-id",
+            task.id,
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "role: qa" in result.output
+    assert "source_subagent_id: SA-0042" in result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    _assert_activity_entries(
+        load_task_activity(tmp_path, updated),
+        [
+            TaskActivityEntry(
+                role="qa",
+                stage="testing",
+                verdict="pass",
+                message="verified",
+                files_changed=[],
+                source_subagent_id="SA-0042",
+            )
+        ],
+    )
+
+
+def test_agent_report_rejects_legacy_role_override_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="No role spoofing")
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="qa")
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "report",
+            "--verdict",
+            "pass",
+            "--message",
+            "trying to spoof",
+            "--role",
+            "swe",
+            "--task-id",
+            task.id,
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 1
+    assert "--role cannot override subagent session identity" in result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    assert load_task_activity(tmp_path, updated) == []
+
+
+def test_agent_report_help_does_not_advertise_role_flag() -> None:
+    result = CliRunner().invoke(agent_app, ["report", "--help"], standalone_mode=False)
+
+    assert result.exit_code == 0
+    assert "--role" not in result.output
+
+
+def test_agent_report_uses_intent_record_when_runtime_row_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     ensure_workspace(tmp_path)
     _save_intent_only_task(tmp_path)
+    _bind_report_identity(tmp_path, monkeypatch, task_id="T-0001", role="recovery")
 
     result = CliRunner().invoke(
         agent_app,
@@ -62,8 +176,6 @@ def test_agent_report_uses_intent_record_when_runtime_row_is_missing(tmp_path: P
             "resume",
             "--message",
             "recovery completed",
-            "--role",
-            "recovery",
             "--stage",
             "grooming",
             "--target-stage",
@@ -93,9 +205,13 @@ def test_agent_report_uses_intent_record_when_runtime_row_is_missing(tmp_path: P
     )
 
 
-def test_agent_report_persists_hidden_recovery_target_stage(tmp_path: Path) -> None:
+def test_agent_report_persists_hidden_recovery_target_stage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Persist target stage")
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
 
     result = CliRunner().invoke(
         agent_app,
@@ -105,8 +221,6 @@ def test_agent_report_persists_hidden_recovery_target_stage(tmp_path: Path) -> N
             "resume",
             "--message",
             "retry implementing",
-            "--role",
-            "recovery",
             "--stage",
             "recovering",
             "--target-stage",
@@ -136,9 +250,13 @@ def test_agent_report_persists_hidden_recovery_target_stage(tmp_path: Path) -> N
     )
 
 
-def test_agent_report_rejects_recovery_resume_without_target_stage(tmp_path: Path) -> None:
+def test_agent_report_rejects_recovery_resume_without_target_stage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery target stage required")
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
 
     result = CliRunner().invoke(
         agent_app,
@@ -148,8 +266,6 @@ def test_agent_report_rejects_recovery_resume_without_target_stage(tmp_path: Pat
             "resume",
             "--message",
             "retry implementing",
-            "--role",
-            "recovery",
             "--stage",
             "recovering",
             "--task-id",
@@ -165,6 +281,7 @@ def test_agent_report_rejects_recovery_resume_without_target_stage(tmp_path: Pat
 def test_agent_report_uses_env_stage_when_runtime_row_is_missing(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     _save_intent_only_task(tmp_path)
+    _bind_report_identity(tmp_path, monkeypatch, task_id="T-0001", role="planner")
     monkeypatch.setenv("LITEHIVE_STAGE", "grooming")
 
     result = CliRunner().invoke(
@@ -175,8 +292,6 @@ def test_agent_report_uses_env_stage_when_runtime_row_is_missing(tmp_path: Path,
             "pass",
             "--message",
             "planner completed",
-            "--role",
-            "planner",
             "--task-id",
             "T-0001",
         ],
@@ -205,6 +320,7 @@ def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Prefer env stage")
     SqlitePersistence(tmp_path).save(TaskState(task_id=task.id, stage="implementing", pipeline_mode=PipelineMode.FULL))
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="planner")
     monkeypatch.setenv("LITEHIVE_STAGE", "grooming")
 
     result = CliRunner().invoke(
@@ -215,8 +331,6 @@ def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path
             "reject",
             "--message",
             "planner rejected",
-            "--role",
-            "planner",
             "--task-id",
             task.id,
         ],
@@ -250,11 +364,13 @@ def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path
 )
 def test_agent_report_classifies_qa_reviewer_rejects_as_semantic(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     role: str,
     stage: str,
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title=f"{role} semantic reject")
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role=role)
 
     result = CliRunner().invoke(
         agent_app,
@@ -264,8 +380,6 @@ def test_agent_report_classifies_qa_reviewer_rejects_as_semantic(
             "reject",
             "--message",
             "acceptance evidence is incomplete",
-            "--role",
-            role,
             "--stage",
             stage,
             "--task-id",
@@ -284,9 +398,13 @@ def test_agent_report_classifies_qa_reviewer_rejects_as_semantic(
     assert activity_entries[0].verdict_classification == SEMANTIC_REJECT_CLASSIFICATION
 
 
-def test_agent_report_rejects_agent_blocked_verdict(tmp_path: Path) -> None:
+def test_agent_report_rejects_agent_blocked_verdict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Agent blocked verdict rejected")
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
 
     result = CliRunner().invoke(
         agent_app,
@@ -296,8 +414,6 @@ def test_agent_report_rejects_agent_blocked_verdict(tmp_path: Path) -> None:
             "blocked",
             "--message",
             "cannot proceed",
-            "--role",
-            "swe",
             "--stage",
             "implementing",
             "--task-id",
@@ -310,9 +426,13 @@ def test_agent_report_rejects_agent_blocked_verdict(tmp_path: Path) -> None:
     assert "not authorized" in result.output
 
 
-def test_agent_report_rejects_removed_fail_verdict_alias(tmp_path: Path) -> None:
+def test_agent_report_rejects_removed_fail_verdict_alias(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Legacy fail verdict")
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
 
     result = CliRunner().invoke(
         agent_app,
@@ -322,8 +442,6 @@ def test_agent_report_rejects_removed_fail_verdict_alias(tmp_path: Path) -> None
             "fail",
             "--message",
             "legacy failure wording",
-            "--role",
-            "swe",
             "--stage",
             "implementing",
             "--task-id",
@@ -495,9 +613,13 @@ def test_root_task_close_allows_planner_to_mark_done_from_grooming(tmp_path: Pat
     assert updated.runtime.last_outcome.reason == "verified current main already satisfies the request"
 
 
-def test_agent_report_rejects_legacy_recovery_pass_verdict(tmp_path: Path) -> None:
+def test_agent_report_rejects_legacy_recovery_pass_verdict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery verdict contract")
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
     result = CliRunner().invoke(
         agent_app,
         [
@@ -506,8 +628,6 @@ def test_agent_report_rejects_legacy_recovery_pass_verdict(tmp_path: Path) -> No
             "pass",
             "--message",
             "fixed it",
-            "--role",
-            "recovery",
             "--task-id",
             task.id,
         ],
@@ -518,9 +638,13 @@ def test_agent_report_rejects_legacy_recovery_pass_verdict(tmp_path: Path) -> No
     assert "not authorized" in result.output
 
 
-def test_agent_report_accepts_recovery_resume_verdict(tmp_path: Path) -> None:
+def test_agent_report_accepts_recovery_resume_verdict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery resume verdict")
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
 
     result = CliRunner().invoke(
         agent_app,
@@ -530,8 +654,6 @@ def test_agent_report_accepts_recovery_resume_verdict(tmp_path: Path) -> None:
             "resume",
             "--message",
             "fixed the runner; retry grooming",
-            "--role",
-            "recovery",
             "--stage",
             "recovering",
             "--target-stage",
@@ -560,9 +682,13 @@ def test_agent_report_accepts_recovery_resume_verdict(tmp_path: Path) -> None:
     )
 
 
-def test_agent_report_rejects_removed_step_alias(tmp_path: Path) -> None:
+def test_agent_report_rejects_removed_step_alias(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Agent report step alias")
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
 
     result = CliRunner().invoke(
         agent_app,
@@ -572,8 +698,6 @@ def test_agent_report_rejects_removed_step_alias(tmp_path: Path) -> None:
             "pass",
             "--message",
             "integration report from codex",
-            "--role",
-            "swe",
             "--step",
             "implementing",
             "--task-id",
@@ -748,6 +872,7 @@ def test_agent_report_accepts_workspace_override(tmp_path: Path, monkeypatch) ->
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Agent report workspace override")
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
 
     result = CliRunner().invoke(
         agent_app,
@@ -757,8 +882,6 @@ def test_agent_report_accepts_workspace_override(tmp_path: Path, monkeypatch) ->
             str(tmp_path),
             "--task-id",
             task.id,
-            "--role",
-            "swe",
             "--stage",
             "implementing",
             "--verdict",

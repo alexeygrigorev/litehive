@@ -200,6 +200,7 @@ class TaskActivityEntry(BaseModel):
     verdict_classification: str | None = None  # Machine-readable verdict classification
     message: str  # Free-form human-readable activity description
     files_changed: list[str] = Field(default_factory=list)  # Files modified as part of this activity
+    source_subagent_id: str | None = None  # Subagent session that submitted this entry, when applicable
     follow_up_task_id: str | None = None  # Optional follow-up task reference
     created_at: str = Field(default_factory=utcnow)  # When the activity occurred
 

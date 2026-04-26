@@ -120,7 +120,7 @@ def test_serialize_includes_role_instructions(workspace: Path) -> None:
     assert "## Fresh attempt guidance" in text
     assert "You are the SWE" in text  # from the swe.py INSTRUCTIONS
     assert "Fresh attempt: implement from the task contract" in text
-    assert 'litehive report --verdict pass --role swe --message "your report text"' in text
+    assert 'litehive report --verdict pass --message "your report text"' in text
     assert "litehive agent report" not in text
     assert "Never exit without calling `litehive report`." in text
 
@@ -663,7 +663,7 @@ def test_serialize_works_without_task_record() -> None:
     assert "Task: T-XYZ" in text
     assert "Goal:\n(task record not loaded)" in text
     assert "Acceptance criteria:\n- (none defined)" in text
-    assert 'litehive report --verdict pass --role planner --message "your report text"' in text
+    assert 'litehive report --verdict pass --message "your report text"' in text
     assert "litehive agent report" not in text
 
 
@@ -708,7 +708,7 @@ def test_serialize_includes_nudge_message_when_present(workspace: Path) -> None:
     assert "this is a nudge" in text
     assert "without a verdict submission" in text
     assert "Please review your work and submit your verdict now." in text
-    assert "litehive report --verdict <pass|reject> --role <role>" in text
+    assert "litehive report --verdict <pass|reject>" in text
 
 
 def test_implementing_retry_activity_keeps_only_grooming_and_dedups_last_rejection_by_source_and_reason(

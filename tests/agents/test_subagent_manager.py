@@ -83,6 +83,7 @@ def test_subagent_manager_passes_workspace_root_in_extra_env(tmp_path: Path, mon
     assert captured["cwd"] == execution_root
     assert captured["extra_env"]["LITEHIVE_TASK_ID"] == task.id
     assert captured["extra_env"]["LITEHIVE_WORKSPACE_ROOT"] == str(tmp_path)
+    assert captured["extra_env"]["LITEHIVE_SUBAGENT_ID"] == "SA-0001"
     assert captured["extra_env"]["LITEHIVE_STAGE"] == "implementing"
 
 
@@ -110,6 +111,7 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
             *,
             extra_env: dict[str, str] | None = None,
         ) -> CLIExecutionResult:
+            assert extra_env is not None
             append_activity_entry(
                 tmp_path,
                 task,
@@ -119,6 +121,7 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
                     verdict="reject",
                     message="REJECT\n\nregroom this task",
                     files_changed=[],
+                    source_subagent_id=extra_env["LITEHIVE_SUBAGENT_ID"],
                 ),
             )
             return CLIExecutionResult(
@@ -172,6 +175,7 @@ def test_subagent_manager_uses_recovering_stage_for_recovery_cli_verdict(
             *,
             extra_env: dict[str, str] | None = None,
         ) -> CLIExecutionResult:
+            assert extra_env is not None
             append_activity_entry(
                 tmp_path,
                 task,
@@ -181,6 +185,7 @@ def test_subagent_manager_uses_recovering_stage_for_recovery_cli_verdict(
                     verdict="resume",
                     message="Resume from commit",
                     files_changed=[],
+                    source_subagent_id=extra_env["LITEHIVE_SUBAGENT_ID"],
                 ),
             )
             return CLIExecutionResult(

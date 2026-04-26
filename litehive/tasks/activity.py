@@ -153,6 +153,7 @@ def latest_task_activity_entry(
     *,
     role: str | None = None,
     stage: str | None = None,
+    source_subagent_id: str | None = None,
     verdicts: Iterable[str] | None = None,
     after: datetime | None = None,
 ) -> TaskActivityEntry | None:
@@ -161,6 +162,8 @@ def latest_task_activity_entry(
         if role is not None and entry.role != role:
             continue
         if stage is not None and entry.stage != stage:
+            continue
+        if source_subagent_id is not None and entry.source_subagent_id != source_subagent_id:
             continue
         entry_verdict = str(entry.verdict)
         if allowed_verdicts is not None and entry_verdict not in allowed_verdicts:

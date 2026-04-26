@@ -62,8 +62,20 @@ _DEFAULT_STAGE_FOR_ROLE = {
 logger = logging.getLogger(__name__)
 
 
-def _latest_report_files_changed(root: Path, task: TaskRecord, pipeline_state: str) -> list[str]:
-    latest = latest_task_activity_entry(root, task, stage=pipeline_state, verdicts=_REPORT_FILE_VERDICTS)
+def _latest_report_files_changed(
+    root: Path,
+    task: TaskRecord,
+    pipeline_state: str,
+    *,
+    source_subagent_id: str | None = None,
+) -> list[str]:
+    latest = latest_task_activity_entry(
+        root,
+        task,
+        stage=pipeline_state,
+        source_subagent_id=source_subagent_id,
+        verdicts=_REPORT_FILE_VERDICTS,
+    )
     if latest is None:
         return []
     return normalized_files_changed(latest.files_changed)
@@ -259,6 +271,7 @@ class SubagentManager(SessionMixin):
                 "LITEHIVE_TASK_ID": task.id,
                 "LITEHIVE_WORKSPACE_ROOT": str(self.root),
                 "LITEHIVE_AGENT_ROLE": role,
+                "LITEHIVE_SUBAGENT_ID": ref.id,
                 "LITEHIVE_STAGE": self._agent_stage_for_task(task, role),
                 "LITEHIVE_PYTHON_PATH": sys.executable,
             }
@@ -460,7 +473,12 @@ class SubagentManager(SessionMixin):
             transcript=transcript,
         )
         report = report.model_copy(update={"warnings": self._merged_warnings(report.warnings, extra_warnings)})
-        files_changed = _latest_report_files_changed(self.root, task, str(report.pipeline_state))
+        files_changed = _latest_report_files_changed(
+            self.root,
+            task,
+            str(report.pipeline_state),
+            source_subagent_id=ref.id,
+        )
         record_stage_report(self.root, task, report)
         self.write_session_snapshot(
             task,
@@ -579,7 +597,12 @@ class SubagentManager(SessionMixin):
             report_payload = {
                 "status": ref.status,
                 "summary": report.summary,
-                "files_changed": _latest_report_files_changed(self.root, task, str(report.pipeline_state)),
+                "files_changed": _latest_report_files_changed(
+                    self.root,
+                    task,
+                    str(report.pipeline_state),
+                    source_subagent_id=ref.id,
+                ),
                 "tests": report.tests,
                 "warnings": report.warnings,
                 "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),

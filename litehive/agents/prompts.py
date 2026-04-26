@@ -132,9 +132,9 @@ def stage_prompt(
             lines.extend(
                 [
                     "- Structured acceptance criteria are still missing on the task record, but the current task context is sufficient to infer them.",
-                    '- As the planner for grooming, either provide explicit `ACCEPTANCE_CRITERIA:` bullets or let the runner persist the inferred version after you submit `litehive report --verdict pass --role planner --message "criteria confirmed"`.',
+                    '- As the planner for grooming, either provide explicit `ACCEPTANCE_CRITERIA:` bullets or let the runner persist the inferred version after you submit `litehive report --verdict pass --message "criteria confirmed"`.',
                     "- You may submit that pass verdict without restating the inferred criteria; the runner will persist them after grooming.",
-                    '- If the current task context is not sufficient after all, submit `litehive report --verdict reject --role planner --message "missing context"` instead of passing grooming without criteria.',
+                    '- If the current task context is not sufficient after all, submit `litehive report --verdict reject --message "missing context"` instead of passing grooming without criteria.',
                     "- To override the inferred version, you may add an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets that can be persisted directly.",
                     "- If the inferred criteria are incomplete or incorrect and the task still needs more information, do not pass grooming; explain the gap clearly in your report.",
                     "",
@@ -153,7 +153,7 @@ def stage_prompt(
                 lines.extend(
                     [
                         "- As the planner for grooming, provide an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets before passing grooming.",
-                        '- If the context is still insufficient, explain the missing information in your report and submit `litehive report --verdict reject --role planner --message "missing context"`.',
+                        '- If the context is still insufficient, explain the missing information in your report and submit `litehive report --verdict reject --message "missing context"`.',
                     ]
                 )
 
@@ -253,7 +253,7 @@ def stage_prompt(
         [
             "",
             "IMPORTANT: When you are done, you MUST submit your verdict by running:",
-            f'  litehive report --verdict {example_verdict} --role {stage_owner} --message "your report text"',
+            f'  litehive report --verdict {example_verdict} --message "your report text"',
             f"Your allowed verdicts are {verdicts}.",
             f"The environment variable LITEHIVE_TASK_ID is set to {task.id} for this session. Workspace and task resolution should use the injected environment automatically.",
             "",
@@ -363,7 +363,7 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
             "- Treat the task goal, acceptance criteria, and plan as the execution contract; if they are missing or contradictory, route the issue back through grooming or recovery instead of guessing.",
             "- Before assuming the work is already implemented, run `git diff main...HEAD` in your worktree.",
             "- If there are no changes, implement from scratch regardless of what prior stage reports claim.",
-            '- Only skip implementation and submit `litehive report --verdict pass --role swe --message "already implemented and verified"` if `git diff main...HEAD` shows the expected changes and the acceptance criteria are met.',
+            '- Only skip implementation and submit `litehive report --verdict pass --message "already implemented and verified"` if `git diff main...HEAD` shows the expected changes and the acceptance criteria are met.',
             "- Never exit the stage without calling `litehive report`.",
             "- If the task needs scope correction rather than code changes, use `litehive task update` to narrow scope or adjust the acceptance criteria so the task re-enters the pipeline with the corrected contract.",
             "- If the task is genuinely obsolete or duplicated, use `litehive task close --outcome wont_do` or `litehive task close --outcome duplicate` with a concrete reason instead of exiting silently.",

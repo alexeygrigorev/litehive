@@ -1,8 +1,10 @@
 """Restricted CLI helpers for agents running inside the v2 pipeline.
 
 When ``LITEHIVE_AGENT_ROLE`` is set, top-level ``litehive report`` is routed
-through this restricted implementation. The hidden ``litehive agent ...``
-command remains as a backward-compatible alias.
+through this restricted implementation. Report submissions resolve the role
+from the orchestrator-created subagent session instead of trusting a CLI flag.
+The hidden ``litehive agent ...`` command remains as a backward-compatible
+alias.
 
 This module also exposes small helpers that other CLI commands can use to
 distinguish operator-only surfaces from the limited agent-facing API.
@@ -10,11 +12,13 @@ distinguish operator-only surfaces from the limited agent-facing API.
 
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
+from litehive.agents.session_store import load_subagent_session
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
@@ -45,6 +49,11 @@ def _current_role() -> str | None:
     return os.environ.get("LITEHIVE_AGENT_ROLE")
 
 
+def _current_subagent_id() -> str | None:
+    subagent_id = os.environ.get("LITEHIVE_SUBAGENT_ID")
+    return subagent_id.strip() if subagent_id and subagent_id.strip() else None
+
+
 def current_agent_role() -> str | None:
     return _current_role()
 
@@ -72,6 +81,45 @@ def _allowed_verdicts_for_role(role: str) -> set[str]:
     return VERDICT_ALLOWLIST.get(role, {"pass", "reject"})
 
 
+@dataclass(frozen=True)
+class AgentReportIdentity:
+    role: str
+    subagent_id: str
+
+
+def _resolve_report_identity(root: Path, task, legacy_role: str | None) -> AgentReportIdentity:
+    subagent_id = _current_subagent_id()
+    if subagent_id is None:
+        print("report failed: LITEHIVE_SUBAGENT_ID not set")
+        raise SystemExit(1)
+
+    session = load_subagent_session(root, task.id, subagent_id)
+    if not session:
+        print(f"report failed: subagent session {subagent_id} not found for task {task.id}")
+        raise SystemExit(1)
+
+    payload_id = session.get("id")
+    if isinstance(payload_id, str) and payload_id and payload_id != subagent_id:
+        print(f"report failed: subagent session id mismatch for {subagent_id}")
+        raise SystemExit(1)
+
+    role = session.get("role")
+    if not isinstance(role, str) or not role.strip():
+        print(f"report failed: subagent session {subagent_id} has no role")
+        raise SystemExit(1)
+    role = role.strip()
+
+    env_role = _current_role()
+    if env_role and env_role != role:
+        print("report failed: LITEHIVE_AGENT_ROLE does not match subagent session identity")
+        raise SystemExit(1)
+    if legacy_role and legacy_role != role:
+        print("report failed: --role cannot override subagent session identity")
+        raise SystemExit(1)
+
+    return AgentReportIdentity(role=role, subagent_id=subagent_id)
+
+
 def block_if_agent() -> None:
     """Call at the top of any command agents should not use."""
     if _current_role() is not None:
@@ -84,7 +132,14 @@ def agent_report_command(
     verdict: Annotated[str, typer.Option("--verdict", help="Stage verdict")],
     message: Annotated[str, typer.Option("--message", help="Your report text (use - for stdin)")] = "",
     message_file: Annotated[Path | None, typer.Option("--message-file", help="Read message from file")] = None,
-    role: Annotated[str | None, typer.Option("--role", help="Override role (default: from env)")] = None,
+    legacy_role: Annotated[
+        str | None,
+        typer.Option(
+            "--role",
+            help="Deprecated compatibility option; role is resolved from the subagent session",
+            hidden=True,
+        ),
+    ] = None,
     stage: Annotated[str | None, typer.Option("--stage", help="Override stage (default: from task)")] = None,
     target_stage: Annotated[
         str | None,
@@ -106,25 +161,7 @@ def agent_report_command(
     elif message_file is not None:
         message = message_file.read_text(encoding="utf-8")
 
-    agent_role = role or _current_role()
-    if not agent_role:
-        print("report failed: LITEHIVE_AGENT_ROLE not set and --role not provided")
-        raise SystemExit(1)
-
     normalized_verdict = verdict.strip().lower()
-    allowed = _allowed_verdicts_for_role(agent_role)
-    if normalized_verdict not in allowed:
-        print("You are not authorized to perform this command.")
-        raise SystemExit(1)
-    normalized_target_stage = target_stage.strip() if target_stage else None
-    if agent_role == "recovery" and normalized_verdict in {"resume", "advance"}:
-        if not normalized_target_stage:
-            print(f"report failed: recovery verdict '{normalized_verdict}' requires --target-stage")
-            raise SystemExit(1)
-    elif normalized_target_stage:
-        print("report failed: --target-stage is only valid with recovery resume/advance verdicts")
-        raise SystemExit(1)
-
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
     try:
         root = (
@@ -143,6 +180,22 @@ def agent_report_command(
     if task is None:
         print(f"report failed: task {tid} not found")
         raise SystemExit(1)
+    identity = _resolve_report_identity(root, task, legacy_role)
+    agent_role = identity.role
+
+    allowed = _allowed_verdicts_for_role(agent_role)
+    if normalized_verdict not in allowed:
+        print("You are not authorized to perform this command.")
+        raise SystemExit(1)
+    normalized_target_stage = target_stage.strip() if target_stage else None
+    if agent_role == "recovery" and normalized_verdict in {"resume", "advance"}:
+        if not normalized_target_stage:
+            print(f"report failed: recovery verdict '{normalized_verdict}' requires --target-stage")
+            raise SystemExit(1)
+    elif normalized_target_stage:
+        print("report failed: --target-stage is only valid with recovery resume/advance verdicts")
+        raise SystemExit(1)
+
     normalized_follow_up_task = follow_up_task.strip() if follow_up_task else None
     if normalized_follow_up_task:
         if normalized_follow_up_task == task.id:
@@ -171,6 +224,7 @@ def agent_report_command(
         verdict_classification=verdict_classification,
         message=message,
         files_changed=list(files_changed or []),
+        source_subagent_id=identity.subagent_id,
         follow_up_task_id=normalized_follow_up_task,
     )
     append_task_activity(root, task, entry)
@@ -178,6 +232,7 @@ def agent_report_command(
     print(f"stage: {actual_stage}")
     print(f"verdict: {normalized_verdict}")
     print(f"role: {agent_role}")
+    print(f"source_subagent_id: {identity.subagent_id}")
     if verdict_classification:
         print(f"verdict_classification: {verdict_classification}")
     if normalized_target_stage:

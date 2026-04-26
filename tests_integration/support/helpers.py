@@ -36,11 +36,13 @@ INTEGRATION_ENV = "LITEHIVE_INTEGRATION_ENGINES"
 TIMEOUT_ENV = "LITEHIVE_INTEGRATION_TIMEOUT_SECONDS"
 DEFAULT_TIMEOUT_SECONDS = 30
 ENGINE_MATRIX = tuple(sorted(VALID_ENGINE_NAMES))
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 _GOZ_TRANSIENT_ERROR_MARKERS = ("ResponseNotRead",)
 _LITEHIVE_SESSION_ENV_VARS = (
     "LITEHIVE_TASK_ID",
     "LITEHIVE_WORKSPACE_ROOT",
     "LITEHIVE_AGENT_ROLE",
+    "LITEHIVE_SUBAGENT_ID",
     "LITEHIVE_STAGE",
 )
 _REAL_XDG_ENV_VARS = (
@@ -235,6 +237,10 @@ def sandboxed_integration_workspace(root: Path) -> Path:
 
 def smoke_prompt(engine_name: str) -> str:
     return f"Reply with exactly: {engine_name} integration smoke."
+
+
+def litehive_python_shell_prefix() -> str:
+    return f"PYTHONPATH={shlex.quote(str(_REPO_ROOT))}${{PYTHONPATH:+:$PYTHONPATH}} "
 
 
 def _run_engine_subprocess(
@@ -532,6 +538,7 @@ def assert_nudge_verdict_submission(
     smoke_session: SmokeSession | None = None,
 ) -> None:
     """Verify the nudge flow: run engine, then nudge to submit verdict via CLI."""
+    from litehive.agents.session_store import save_subagent_artifacts
     from litehive.state.records import require_task
     from litehive.tasks.activity import load_task_activity
 
@@ -542,10 +549,18 @@ def assert_nudge_verdict_submission(
     else:
         assert session.engine_name == engine_name, (session.engine_name, engine_name)
 
+    subagent_id = "SI-nudge-swe"
+    save_subagent_artifacts(
+        session.cwd,
+        session.task_id,
+        subagent_id,
+        session={"id": subagent_id, "role": "swe", "engine": engine_name, "status": "running"},
+    )
     report_command = (
+        f"{litehive_python_shell_prefix()}"
+        f"LITEHIVE_AGENT_ROLE=swe LITEHIVE_SUBAGENT_ID={subagent_id} "
         f"{shlex.quote(sys.executable)} -m litehive.main report "
         "--verdict pass "
-        "--role swe "
         "--stage implementing "
         f"--task-id {session.task_id} "
         f"--workspace {shlex.quote(str(session.cwd))} "
@@ -555,7 +570,12 @@ def assert_nudge_verdict_submission(
     def verdict_persisted() -> bool:
         thread = load_task_activity(session.cwd, require_task(session.cwd, session.task_id))
         verdicts = [c for c in thread if c.verdict != "comment"]
-        return bool(verdicts and verdicts[-1].verdict == "pass" and verdicts[-1].role == "swe")
+        return bool(
+            verdicts
+            and verdicts[-1].verdict == "pass"
+            and verdicts[-1].role == "swe"
+            and verdicts[-1].source_subagent_id == subagent_id
+        )
 
     # Step 2: nudge — submit verdict via litehive report CLI
     _, nudge_run = execute_engine_prompt(
@@ -564,7 +584,12 @@ def assert_nudge_verdict_submission(
         cwd=session.cwd,
         max_turns=1,
         resume_session_id=session.resume_session_id,
-        extra_env={"LITEHIVE_TASK_ID": session.task_id},
+        extra_env={
+            "LITEHIVE_TASK_ID": session.task_id,
+            "LITEHIVE_AGENT_ROLE": "swe",
+            "LITEHIVE_SUBAGENT_ID": subagent_id,
+            "LITEHIVE_STAGE": "implementing",
+        },
         stop_when=verdict_persisted,
     )
     _skip_if_execution_limited(engine_name, nudge_run)
@@ -577,6 +602,7 @@ def assert_nudge_verdict_submission(
         if verdicts:
             assert verdicts[-1].verdict == "pass"
             assert verdicts[-1].role == "swe"
+            assert verdicts[-1].source_subagent_id == subagent_id
             return
         if time.monotonic() >= deadline:
             break
@@ -587,6 +613,7 @@ def assert_nudge_verdict_submission(
     )
     assert verdicts[-1].verdict == "pass"
     assert verdicts[-1].role == "swe"
+    assert verdicts[-1].source_subagent_id == subagent_id
 
 
 def cli_command(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:

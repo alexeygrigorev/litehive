@@ -689,10 +689,9 @@ def _runner_hooks_section(stage: str | None, hooks: list[dict[str, Any]]) -> str
 def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
     verdicts = "<resume|advance|done|budget_hit|reject>" if prompt.get("role") == "recovery" else "<pass|reject>"
     example_verdict = "resume" if prompt.get("role") == "recovery" else "pass"
-    role = prompt.get("role") or "swe"
     return (
         "IMPORTANT: when you are done, submit your verdict by running:\n"
-        f'  litehive report --verdict {example_verdict} --role {role} --message "your report text"\n'
+        f'  litehive report --verdict {example_verdict} --message "your report text"\n'
         f"Allowed verdicts for your role: {verdicts}.\n\n"
         "If the message is multiline or contains shell-sensitive characters, write it to /tmp/verdict_msg.txt and pass --message-file /tmp/verdict_msg.txt instead.\n"
         "Your message is the primary signal the next agent receives — write it as if it's the only thing they read.\n"
