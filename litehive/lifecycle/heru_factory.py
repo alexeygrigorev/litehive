@@ -457,9 +457,10 @@ class HeruEngineAdapter:
             )
         except Exception:
             logger.exception("Direct recovery handoff failed after subagent startup failure")
-        else:
-            if role == "recovery" and recovery_verdict is not None:
-                return recovery_verdict
+            recovery_verdict = None
+
+        if role == "recovery" and recovery_verdict is not None:
+            return recovery_verdict
         self._reraise(original_exc)
         raise AssertionError("unreachable")
 
