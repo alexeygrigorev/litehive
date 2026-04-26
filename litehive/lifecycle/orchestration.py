@@ -314,7 +314,6 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
                 "stage": None,
                 "status": "idle",
                 "started_at": None,
-                "completed_at": None,
                 "updated_at": now,
             }
         )
@@ -327,7 +326,6 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
             "stage": state.stage,
             "status": "running",
             "started_at": started_at,
-            "completed_at": None,
             "updated_at": now,
         }
     )

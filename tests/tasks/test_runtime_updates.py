@@ -4,7 +4,7 @@ from heru.types import SubagentRef
 
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.reports import StageReport
-from litehive.domain.runtime import RuntimeInterruptionState
+from litehive.domain.runtime import RuntimeInterruptionState, RuntimeStageState
 from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.runtime import (
     mark_stage_finished,
@@ -23,6 +23,20 @@ def _subagent_ref() -> SubagentRef:
         status="running",
         path="subagents/SA-0001-swe",
     )
+
+
+def _assert_runtime_stage_has_no_removed_fields(stage: RuntimeStageState) -> None:
+    for field_name in ("completed_at", "verdict", "summary"):
+        assert not hasattr(stage, field_name)
+
+
+def test_runtime_stage_model_copy_does_not_resurrect_removed_fields() -> None:
+    stage = RuntimeStageState(stage="testing").model_copy(
+        update={"completed_at": "x", "verdict": "blocked", "summary": "old", "updated_at": "now"}
+    )
+
+    assert stage.updated_at == "now"
+    _assert_runtime_stage_has_no_removed_fields(stage)
 
 
 def test_mark_task_run_started_resets_stage_and_active_subagent(tmp_path: Path) -> None:
@@ -45,6 +59,7 @@ def test_mark_task_run_started_resets_stage_and_active_subagent(tmp_path: Path) 
     assert refreshed.runtime.current_stage.status == "idle"
     assert refreshed.runtime.active_subagent is None
     assert refreshed.runtime.interruption is None
+    _assert_runtime_stage_has_no_removed_fields(refreshed.runtime.current_stage)
 
 
 def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_path: Path) -> None:
@@ -66,6 +81,7 @@ def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_pat
     assert refreshed.runtime.current_stage.stage is None
     assert refreshed.runtime.current_stage.status == "idle"
     assert "last" + "_stage" not in refreshed.runtime.model_dump()["pipeline"]
+    _assert_runtime_stage_has_no_removed_fields(refreshed.runtime.current_stage)
 
 
 def test_mark_subagent_finished_clears_active_subagent_without_completed_runtime_copy(tmp_path: Path) -> None:

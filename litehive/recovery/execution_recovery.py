@@ -381,11 +381,8 @@ def _set_interruption_metadata(
             "stage": stage,
             "status": "interrupted",
             "started_at": started_at,
-            "completed_at": now,
             "updated_at": now,
             "duration_seconds": duration_seconds(started_at, now),
-            "verdict": "blocked",
-            "summary": summary,
         }
     )
 

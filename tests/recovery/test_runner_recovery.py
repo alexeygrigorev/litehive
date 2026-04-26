@@ -6,7 +6,7 @@ import pytest
 from litehive.agents.session_store import load_subagent_report, load_subagent_session, save_subagent_artifacts
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
-from litehive.domain.runtime import RuntimeSubagentState
+from litehive.domain.runtime import RuntimeStageState, RuntimeSubagentState
 from litehive.recovery.execution_recovery import prepare_interrupted_task, recover_stale_runner_state
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, save_task
@@ -58,6 +58,11 @@ def _task_state_runtime_payload(root: Path, task_id: str) -> dict:
     return json.loads(row["payload"])["runtime"]
 
 
+def _assert_runtime_stage_has_no_removed_fields(stage: RuntimeStageState) -> None:
+    for field_name in ("completed_at", "verdict", "summary"):
+        assert not hasattr(stage, field_name)
+
+
 @pytest.mark.parametrize(
     ("stage", "active"),
     [("implementing", True), ("commit_to_git", True), ("implementing", False)],
@@ -77,6 +82,7 @@ def test_recover_stale_runner_state_requeues_running_task(tmp_path: Path, stage:
     assert refreshed.runtime.interruption is not None
     assert refreshed.runtime.interruption.stage == expected_stage
     assert refreshed.runtime.interruption.resume_stage == expected_stage
+    _assert_runtime_stage_has_no_removed_fields(refreshed.runtime.current_stage)
 
     refreshed_state = load_state(tmp_path)
     assert refreshed_state.active_task_id is None
@@ -273,6 +279,7 @@ def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> N
     assert task.runtime.active_subagent is None
     assert task.runtime.interruption.subagent is not None
     assert task.runtime.interruption.subagent.status == "interrupted"
+    _assert_runtime_stage_has_no_removed_fields(task.runtime.current_stage)
 
     session = load_subagent_session(tmp_path, task.id, "SA-1234")
     report = load_subagent_report(tmp_path, task.id, "SA-1234")

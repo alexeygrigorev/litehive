@@ -2,6 +2,7 @@ import subprocess
 from pathlib import Path
 
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.runtime import RuntimeStageState
 from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.system import StubCommitNode
@@ -56,6 +57,11 @@ def _run_recovered_task(tmp_path: Path, monkeypatch, task_id: str) -> tuple[obje
     return result, engine.calls, routes
 
 
+def _assert_runtime_stage_has_no_removed_fields(stage: RuntimeStageState) -> None:
+    for field_name in ("completed_at", "verdict", "summary"):
+        assert not hasattr(stage, field_name)
+
+
 def test_run_task_restarts_recovered_stale_runner_task_from_ready(tmp_path: Path, monkeypatch) -> None:
     _init_workspace_git_repo(tmp_path)
     task = create_task(tmp_path, title="Recover stale runner task")
@@ -76,6 +82,8 @@ def test_run_task_restarts_recovered_stale_runner_task_from_ready(tmp_path: Path
     result, calls, routes = _run_recovered_task(tmp_path, monkeypatch, task.id)
 
     assert result.final_stage == "done"
+    assert result.task is not None
+    _assert_runtime_stage_has_no_removed_fields(result.task.runtime.current_stage)
     assert calls == ["implementing", "testing", "accepting"]
     assert routes[:2] == ["worktree_sync", "before_implementing"]
 

@@ -5,7 +5,7 @@ and keeps the litehive-only runtime state models authoritative here.
 """
 
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal, Mapping, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 
@@ -43,7 +43,7 @@ class RuntimeGitState(BaseModel):
 class RuntimeStageState(BaseModel):
     """Runtime state for a specific pipeline stage execution.
 
-    Tracks the current or most recent stage execution details.
+    Tracks the current stage execution details.
     Used by PipelineRunner to record stage progress and by CLI/reporting
     for displaying current stage status.
     """
@@ -51,11 +51,13 @@ class RuntimeStageState(BaseModel):
     stage: str | None = None  # Pipeline stage being executed
     status: str = "idle"  # Execution status (idle, running, completed, failed)
     started_at: str | None = None  # When stage execution started
-    completed_at: str | None = None  # When stage execution finished
     updated_at: str | None = None  # Last status update timestamp
     duration_seconds: int = 0  # How long the stage has been running
-    verdict: str | None = None  # Final verdict (accept, reject, blocked) if completed
-    summary: str = ""  # Brief description of stage results
+
+    def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
+        if update is not None:
+            update = {key: value for key, value in update.items() if key in type(self).model_fields}
+        return super().model_copy(update=update, deep=deep)
 
 
 class RuntimeSubagentState(BaseModel):
