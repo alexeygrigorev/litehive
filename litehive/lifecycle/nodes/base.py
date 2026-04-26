@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 
+from litehive.domain.common import PipelineState
 from ..events import Event
 from ..persistence import TaskState
-from ..types import NodeName, NodeType
+from ..types import NodeType
 
 
 class Node(ABC):
@@ -13,7 +14,7 @@ class Node(ABC):
     (Pass / Reject / Blocked / Crash / Timeout / HookOk) are returned.
     """
 
-    name: NodeName
+    name: PipelineState
     node_type: NodeType
     grace_period_seconds: int | None = None
 
@@ -25,20 +26,20 @@ class NodeRegistry:
     """Maps node names to their Node implementations."""
 
     def __init__(self) -> None:
-        self._nodes: dict[NodeName, Node] = {}
+        self._nodes: dict[PipelineState, Node] = {}
 
     def register(self, node: Node) -> None:
         if node.name in self._nodes:
             raise ValueError(f"node {node.name!r} already registered")
         self._nodes[node.name] = node
 
-    def get(self, name: NodeName) -> Node:
+    def get(self, name: PipelineState) -> Node:
         try:
             return self._nodes[name]
         except KeyError as exc:
             raise KeyError(f"no node registered for {name!r}") from exc
 
-    def names(self) -> list[NodeName]:
+    def names(self) -> list[PipelineState]:
         return list(self._nodes)
 
     def __contains__(self, name: object) -> bool:

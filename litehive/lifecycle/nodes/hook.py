@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Protocol
 
-from litehive.domain.common import cap_feedback
+from litehive.domain.common import PipelineState, cap_feedback
 
 from ..events import Event, HookOk, Reject
 from ..persistence import TaskState
-from ..types import NodeName, NodeType
+from ..types import NodeType
 from .base import Node
 
 log = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ class SubprocessHookRunner(HookRunner):
 class HookNode(Node):
     node_type = NodeType.HOOK
 
-    def __init__(self, name: NodeName, hooks: list[HookSpec], runner: HookRunner) -> None:
+    def __init__(self, name: PipelineState, hooks: list[HookSpec], runner: HookRunner) -> None:
         self.name = name
         self.hooks = hooks
         self.runner = runner
@@ -97,7 +97,7 @@ class HookNode(Node):
         return HookOk()
 
 
-def _reject(point: NodeName, spec: HookSpec, result: subprocess.CompletedProcess[str], state: TaskState) -> Reject:
+def _reject(point: PipelineState, spec: HookSpec, result: subprocess.CompletedProcess[str], state: TaskState) -> Reject:
     description = (spec.description or "").strip()
     hook = {
         "point": point,

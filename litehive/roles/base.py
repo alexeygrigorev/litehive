@@ -5,9 +5,9 @@ from typing import Any
 from pydantic import ValidationError
 import yaml
 
+from litehive.domain.common import PipelineState
 from litehive.lifecycle.nodes.agent import AgentNode, EngineSelector, SessionProvider
 from litehive.lifecycle.persistence import LastRejection, TaskState
-from litehive.lifecycle.types import NodeName
 from .guidance import default_startup_guidance
 
 
@@ -59,7 +59,7 @@ class RoleAgent(AgentNode):
     6. An optional process-profile overlay keyed by stage name.
     """
 
-    NODE_NAME: NodeName = ""
+    NODE_NAME: PipelineState = ""
     ROLE: str = ""
     ROLE_INSTRUCTIONS: str = ""
     INSTRUCTIONS: str = ""

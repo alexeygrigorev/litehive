@@ -36,9 +36,7 @@ from .nodes.system import (
 )
 from .nodes.terminal import TerminalNode
 from .nodes.agent import EngineSelector, SessionProvider
-from .types import NodeName
-
-HOOK_PHASES: tuple[NodeName, ...] = (
+HOOK_PHASES: tuple[PipelineState, ...] = (
     PipelineState.BEFORE_GROOMING,
     PipelineState.AFTER_GROOMING,
     PipelineState.BEFORE_IMPLEMENTING,
@@ -51,7 +49,7 @@ HOOK_PHASES: tuple[NodeName, ...] = (
 )
 
 
-def _phase_hook_node(name: NodeName, hooks: list[HookSpec], runner: HookRunner) -> HookNode:
+def _phase_hook_node(name: PipelineState, hooks: list[HookSpec], runner: HookRunner) -> HookNode:
     return HookNode(name, hooks=hooks, runner=runner)
 
 
@@ -65,7 +63,7 @@ def build_registry(
     ready_node: ReadyNode | None = None,
     pre_exec_recovery_node: PreExecRecoveryNode | None = None,
     prompt_context: PromptContext | None = None,
-    hook_specs: dict[NodeName, list[HookSpec]] | None = None,
+    hook_specs: dict[PipelineState, list[HookSpec]] | None = None,
     retry_budget: int = 3,
     retry_on: tuple[str, ...] = ("execution_limit", "timeout"),
     retry_backoff_seconds: float = 0.0,

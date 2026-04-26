@@ -5,9 +5,10 @@ from litehive.domain.lifecycle_deltas import (
     recovery_trigger_from_event,
     rejection_loop_detected as rejection_loop_detected_delta,
 )
+from litehive.domain.common import PipelineState
 from .events import Event, RecoverySucceeded, Reject
 from .persistence import TaskState
-from .types import NodeName, PipelineMode
+from .types import PipelineMode
 
 GuardFn = Callable[[TaskState, Event], bool]
 
@@ -56,14 +57,14 @@ def mode(m: PipelineMode | str) -> Guard:
     return Guard(check, f"mode={want.value}")
 
 
-def stage_retries_remaining(stage: NodeName) -> Guard:
+def stage_retries_remaining(stage: PipelineState) -> Guard:
     def check(state: TaskState, event: Event) -> bool:
         return state.stage_retry.get(stage, 0) < state.limits.stage_retry_limit
 
     return Guard(check, f"stage_retries_remaining({stage})")
 
 
-def stage_retries_exhausted(stage: NodeName) -> Guard:
+def stage_retries_exhausted(stage: PipelineState) -> Guard:
     def check(state: TaskState, event: Event) -> bool:
         return state.stage_retry.get(stage, 0) >= state.limits.stage_retry_limit
 
@@ -87,7 +88,7 @@ def hook_reject_loop_detected() -> Guard:
     return Guard(check, "hook_reject_loop_detected")
 
 
-def rejection_loop_detected(retry_target_stage: NodeName) -> Guard:
+def rejection_loop_detected(retry_target_stage: PipelineState) -> Guard:
     def check(state: TaskState, event: Event) -> bool:
         return rejection_loop_detected_delta(state, event, retry_target_stage=retry_target_stage)
 

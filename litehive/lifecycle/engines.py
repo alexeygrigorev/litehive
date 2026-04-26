@@ -28,8 +28,8 @@ from litehive.state.records import get_task
 from .nodes.agent import (
     Engine,
 )
+from litehive.domain.common import PipelineState
 from .persistence import TaskState
-from .types import NodeName
 
 
 EngineFactory = Callable[[str], Engine]
@@ -68,7 +68,7 @@ class ConfigBackedEngineSelector:
         self.model_override = model_override
         self.check_quota = check_quota
 
-    def _selection_task(self, state: TaskState, node_name: NodeName) -> TaskRecord | None:
+    def _selection_task(self, state: TaskState, node_name: PipelineState) -> TaskRecord | None:
         if self.workspace_root is None:
             return None
         if getattr(state, "task_id", None):
@@ -87,7 +87,7 @@ class ConfigBackedEngineSelector:
     def select(
         self,
         state: TaskState,
-        node_name: NodeName,
+        node_name: PipelineState,
         excluded: frozenset[str],
     ) -> Engine | None:
         task = self._selection_task(state, node_name)

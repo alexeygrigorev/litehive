@@ -1,6 +1,7 @@
+from litehive.domain.common import PipelineState
 from ..events import Event, Pass
 from ..persistence import TaskState
-from ..types import NodeName, NodeType
+from ..types import NodeType
 from .base import Node
 
 
@@ -13,7 +14,7 @@ class TerminalNode(Node):
 
     node_type = NodeType.TERMINAL
 
-    def __init__(self, name: NodeName) -> None:
+    def __init__(self, name: PipelineState) -> None:
         self.name = name
 
     def run(self, state: TaskState) -> Event:

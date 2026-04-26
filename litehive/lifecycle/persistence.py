@@ -8,7 +8,7 @@ from litehive.domain.common import PipelineState, canonical_pipeline_state, utcn
 from litehive.domain.recovery import RecoveryOutcome, RecoveryTrigger
 from litehive.tasks.event_log import append_task_event
 
-from .types import FailedReason, NodeName, PipelineMode
+from .types import FailedReason, PipelineMode
 
 
 @dataclass(frozen=True)
@@ -52,7 +52,7 @@ class LastReport:
 
 @dataclass
 class HookRejectFingerprint:
-    point: NodeName
+    point: PipelineState
     command: str
     description: str = ""
     fingerprint: str = ""
@@ -87,7 +87,7 @@ class LastRejection:
 
     source: str  # "agent" | "hook" | "guard" | "system"
     reason: str
-    raised_at_phase: NodeName  # the phase that emitted the reject
+    raised_at_phase: PipelineState  # the phase that emitted the reject
     classification: str | None = None
 
     def to_payload(self) -> dict[str, str | None]:
@@ -151,8 +151,8 @@ class CommitResult:
 
 @dataclass
 class RejectionLoop:
-    rejection_stage: NodeName
-    retry_target_stage: NodeName
+    rejection_stage: PipelineState
+    retry_target_stage: PipelineState
     count: int = 0
 
     def to_payload(self) -> dict[str, Any]:
@@ -180,7 +180,7 @@ class FailedRunRecord:
     that a task repeatedly exhausted the same stage retry budget.
     """
 
-    stage: NodeName
+    stage: PipelineState
     failure_shape: str
     count: int = 0
     first_at: str | None = None
@@ -289,10 +289,10 @@ class TaskState:
     """
 
     task_id: str
-    stage: NodeName
+    stage: PipelineState
     pipeline_mode: PipelineMode
-    entry_stage: NodeName | None = None
-    stage_retry: dict[NodeName, int] = field(default_factory=dict)
+    entry_stage: PipelineState | None = None
+    stage_retry: dict[PipelineState, int] = field(default_factory=dict)
     active_recovery_trigger: RecoveryTrigger | None = None
     recovery_history: list[RecoveryOutcome] = field(default_factory=list)
     pre_exec_recovery_attempt: int = 0
@@ -300,7 +300,7 @@ class TaskState:
     merge_context: MergeContext | None = None
     commit_result: CommitResult | None = None
     last_report: LastReport = field(default_factory=LastReport)
-    last_rejection_by_stage: dict[NodeName, LastRejection] = field(default_factory=dict)
+    last_rejection_by_stage: dict[PipelineState, LastRejection] = field(default_factory=dict)
     failed_run_history: dict[str, FailedRunRecord] = field(default_factory=dict)
     rejection_loop: RejectionLoop | None = None
     consecutive_same_hook_rejects: int = 0
@@ -322,7 +322,7 @@ class TaskState:
             canonical_pipeline_state(stage): rejection for stage, rejection in self.last_rejection_by_stage.items()
         }
 
-    def recovery_attempts_for_origin(self, origin_stage: NodeName) -> int:
+    def recovery_attempts_for_origin(self, origin_stage: PipelineState) -> int:
         count = sum(1 for outcome in self.recovery_history if outcome.trigger.origin_stage == origin_stage)
         if self.active_recovery_trigger is not None and self.active_recovery_trigger.origin_stage == origin_stage:
             count += 1
@@ -555,8 +555,8 @@ class SqlitePersistence:
         task_id: str,
         *,
         pipeline_mode: PipelineMode = PipelineMode.FULL,
-        stage: NodeName = PipelineState.READY,
-        entry_stage: NodeName | None = None,
+        stage: PipelineState = PipelineState.READY,
+        entry_stage: PipelineState | None = None,
     ) -> TaskState:
         """Create a fresh ``TaskState`` row for a task entering the machine.
 

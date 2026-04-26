@@ -4,9 +4,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from litehive.db.schema import connect_workspace_db
-from litehive.domain.common import utcnow
-
-from .types import NodeName
+from litehive.domain.common import PipelineState, utcnow
 
 
 @dataclass
@@ -40,26 +38,26 @@ class SessionStore(Protocol):
     shared persistent store.
     """
 
-    def get_or_create(self, task_id: str, node_name: NodeName, engine_name: str) -> Session: ...
+    def get_or_create(self, task_id: str, node_name: PipelineState, engine_name: str) -> Session: ...
 
-    def persist(self, task_id: str, node_name: NodeName, engine_name: str, session: Session) -> None: ...
+    def persist(self, task_id: str, node_name: PipelineState, engine_name: str, session: Session) -> None: ...
 
-    def clear_node_sessions(self, task_id: str, node_name: NodeName) -> None: ...
+    def clear_node_sessions(self, task_id: str, node_name: PipelineState) -> None: ...
 
 
 class InMemorySessionStore:
     """Reference implementation for tests; keeps everything in a dict."""
 
     def __init__(self) -> None:
-        self._sessions: dict[tuple[str, NodeName, str], Session] = {}
+        self._sessions: dict[tuple[str, PipelineState, str], Session] = {}
 
-    def get_or_create(self, task_id: str, node_name: NodeName, engine_name: str) -> Session:
+    def get_or_create(self, task_id: str, node_name: PipelineState, engine_name: str) -> Session:
         return self._sessions.setdefault((task_id, node_name, engine_name), Session())
 
-    def persist(self, task_id: str, node_name: NodeName, engine_name: str, session: Session) -> None:
+    def persist(self, task_id: str, node_name: PipelineState, engine_name: str, session: Session) -> None:
         self._sessions[(task_id, node_name, engine_name)] = session
 
-    def clear_node_sessions(self, task_id: str, node_name: NodeName) -> None:
+    def clear_node_sessions(self, task_id: str, node_name: PipelineState) -> None:
         for key in [k for k in self._sessions if k[:2] == (task_id, node_name)]:
             del self._sessions[key]
 
@@ -76,7 +74,7 @@ class SqliteSessionStore:
     def __init__(self, workspace_root: Path) -> None:
         self.workspace_root = workspace_root
 
-    def get_or_create(self, task_id: str, node_name: NodeName, engine_name: str) -> Session:
+    def get_or_create(self, task_id: str, node_name: PipelineState, engine_name: str) -> Session:
         with connect_workspace_db(self.workspace_root) as connection:
             row = connection.execute(
                 """
@@ -95,7 +93,7 @@ class SqliteSessionStore:
             metadata=json.loads(row["metadata"] or "{}"),
         )
 
-    def persist(self, task_id: str, node_name: NodeName, engine_name: str, session: Session) -> None:
+    def persist(self, task_id: str, node_name: PipelineState, engine_name: str, session: Session) -> None:
         metadata_json = json.dumps(session.metadata, sort_keys=True)
         with connect_workspace_db(self.workspace_root) as connection:
             connection.execute(
@@ -124,7 +122,7 @@ class SqliteSessionStore:
             )
             connection.commit()
 
-    def clear_node_sessions(self, task_id: str, node_name: NodeName) -> None:
+    def clear_node_sessions(self, task_id: str, node_name: PipelineState) -> None:
         with connect_workspace_db(self.workspace_root) as connection:
             connection.execute(
                 "DELETE FROM pipeline_sessions WHERE task_id = ? AND node_name = ?",

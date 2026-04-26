@@ -18,7 +18,7 @@ from ..events import (
     Reject,
 )
 from ..persistence import TaskState
-from ..types import NodeName, NodeType
+from ..types import NodeType
 from .base import Node
 
 
@@ -39,7 +39,7 @@ class GitError(Exception):
 class SystemNode(Node):
     node_type = NodeType.SYSTEM
 
-    def __init__(self, name: NodeName) -> None:
+    def __init__(self, name: PipelineState) -> None:
         self.name = name
 
     @abstractmethod

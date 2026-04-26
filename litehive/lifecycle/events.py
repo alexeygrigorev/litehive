@@ -13,7 +13,7 @@ adding a new rule that matches an event, or before inventing a new event.
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from .types import NodeName
+from litehive.domain.common import PipelineState
 
 
 @dataclass(frozen=True)
@@ -189,7 +189,7 @@ class StageRetryLimitHit(Event):
     consolidate the two-rule pattern.
     """
 
-    stage: NodeName
+    stage: PipelineState
 
 
 @dataclass(frozen=True)
@@ -231,7 +231,7 @@ class RecoverySucceeded(Event):
       - a bare phase name → that phase directly
     """
 
-    resume: NodeName | Literal["done"]
+    resume: PipelineState | Literal["done"]
     disposition_hint: Literal["resume", "advance", "done"] = "resume"
 
 
@@ -270,7 +270,7 @@ class PreExecRecoverySucceeded(Event):
     routes to ``before_<resume_stage>``.
     """
 
-    resume_stage: NodeName
+    resume_stage: PipelineState
 
 
 @dataclass(frozen=True)

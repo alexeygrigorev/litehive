@@ -2,9 +2,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, Protocol
 
+from litehive.domain.common import PipelineState
 from ..events import Blocked, Crash, Event, Pass, Reject
 from ..persistence import TaskState
-from ..types import NodeName, NodeType
+from ..types import NodeType
 from .base import Node
 
 
@@ -97,15 +98,15 @@ class EngineSelector(Protocol):
     def select(
         self,
         state: TaskState,
-        node_name: NodeName,
+        node_name: PipelineState,
         excluded: frozenset[str],
     ) -> Engine | None: ...
 
 
 class SessionProvider(Protocol):
-    def get_or_create(self, task_id: str, node_name: NodeName, engine_name: str) -> Any: ...
+    def get_or_create(self, task_id: str, node_name: PipelineState, engine_name: str) -> Any: ...
 
-    def persist(self, task_id: str, node_name: NodeName, engine_name: str, session: Any) -> None: ...
+    def persist(self, task_id: str, node_name: PipelineState, engine_name: str, session: Any) -> None: ...
 
 
 class AgentNode(Node):
@@ -148,7 +149,7 @@ class AgentNode(Node):
 
     def __init__(
         self,
-        name: NodeName,
+        name: PipelineState,
         selector: EngineSelector,
         session_provider: SessionProvider,
         *,

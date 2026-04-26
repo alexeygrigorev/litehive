@@ -15,27 +15,25 @@ class PipelineMode(str, Enum):
     SINGLE = "single"
 
 
-NodeName = PipelineState
-
-AGENT_STAGES: tuple[NodeName, ...] = (
+AGENT_STAGES: tuple[PipelineState, ...] = (
     PipelineState.GROOMING,
     PipelineState.IMPLEMENTING,
     PipelineState.TESTING,
     PipelineState.ACCEPTING,
 )
-SYSTEM_STAGES: tuple[NodeName, ...] = (PipelineState.COMMIT,)
-STAGES: tuple[NodeName, ...] = AGENT_STAGES + SYSTEM_STAGES
+SYSTEM_STAGES: tuple[PipelineState, ...] = (PipelineState.COMMIT,)
+STAGES: tuple[PipelineState, ...] = AGENT_STAGES + SYSTEM_STAGES
 
 
-def before(stage: str | NodeName) -> NodeName:
+def before(stage: str | PipelineState) -> PipelineState:
     return canonical_pipeline_state(f"before_{stage}")
 
 
-def after(stage: str | NodeName) -> NodeName:
+def after(stage: str | PipelineState) -> PipelineState:
     return canonical_pipeline_state(f"after_{stage}")
 
 
-STAGE_PHASES: tuple[NodeName, ...] = (
+STAGE_PHASES: tuple[PipelineState, ...] = (
     PipelineState.BEFORE_GROOMING,
     PipelineState.GROOMING,
     PipelineState.AFTER_GROOMING,
@@ -67,18 +65,18 @@ _PRIMARY_STAGE_BY_PHASE: dict[PipelineState, PipelineState] = {
 }
 
 
-def pipeline_stage_for_phase(phase: str | NodeName) -> NodeName:
+def pipeline_stage_for_phase(phase: str | PipelineState) -> PipelineState:
     state = canonical_pipeline_state(phase)
     return _PRIMARY_STAGE_BY_PHASE.get(state, state)
 
 
-ANY_STAGE_PHASE: frozenset[NodeName] = frozenset(STAGE_PHASES)
+ANY_STAGE_PHASE: frozenset[PipelineState] = frozenset(STAGE_PHASES)
 
-TERMINAL_NODES: frozenset[NodeName] = frozenset({PipelineState.DONE, PipelineState.FAILED})
+TERMINAL_NODES: frozenset[PipelineState] = frozenset({PipelineState.DONE, PipelineState.FAILED})
 
-PRE_EXEC_NODE: NodeName = PipelineState.RECOVERING_PRE_EXEC
-RECOVERING: NodeName = PipelineState.RECOVERING
-READY: NodeName = PipelineState.READY
+PRE_EXEC_NODE: PipelineState = PipelineState.RECOVERING_PRE_EXEC
+RECOVERING: PipelineState = PipelineState.RECOVERING
+READY: PipelineState = PipelineState.READY
 
 
 class FailedReason(StringEnum):

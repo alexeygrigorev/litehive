@@ -18,9 +18,9 @@ from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
 from litehive.tasks.event_log import append_task_event
 
+from litehive.domain.common import PipelineState
 from litehive.domain.lifecycle_deltas import StateDelta
 from .events import Event
-from .types import NodeName
 
 logger = logging.getLogger(__name__)
 
@@ -61,15 +61,15 @@ class PipelineJournal(ABC):
 
     # ── public entry points used by the Runner ───────────────────────
 
-    def task_started(self, task_id: str, stage: NodeName) -> None:
+    def task_started(self, task_id: str, stage: PipelineState) -> None:
         self._append(KIND_TASK_STARTED, task_id, {"stage": str(stage)})
 
     def transition(
         self,
         task_id: str,
-        from_stage: NodeName,
+        from_stage: PipelineState,
         event: Event,
-        to_stage: NodeName,
+        to_stage: PipelineState,
         rule_description: str,
         delta: StateDelta,
     ) -> None:
@@ -86,10 +86,10 @@ class PipelineJournal(ABC):
             },
         )
 
-    def stop_requested(self, task_id: str, stage: NodeName) -> None:
+    def stop_requested(self, task_id: str, stage: PipelineState) -> None:
         self._append(KIND_STOP_REQUESTED, task_id, {"stage": str(stage)})
 
-    def task_finished(self, task_id: str, stage: NodeName) -> None:
+    def task_finished(self, task_id: str, stage: PipelineState) -> None:
         self._append(KIND_TASK_FINISHED, task_id, {"stage": str(stage)})
 
     # ── template method ──────────────────────────────────────────────
