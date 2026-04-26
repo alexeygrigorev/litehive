@@ -19,11 +19,26 @@ from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.daemon.registry import daemon_metadata, pid_is_alive
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
-from litehive.domain.task import WorkspaceState
+from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.store import runtime_store
 from litehive.state.locking import runner_metadata_present, runner_pid_is_alive
 
 _STATUS_WEDGED_HEARTBEAT_SECONDS = 10 * 60
+_RECOVERY_FAILURE_FLAG_REASONS = {
+    "crash_budget_exhausted",
+    "recovery_budget_exhausted",
+    "recovery_failed",
+}
+_RECOVERY_FAILURE_STATE_REASONS = {
+    "pre_exec_recovery_failed",
+    "recovery_budget_hit",
+    "recovery_crashed",
+    "recovery_exhausted",
+    "recovery_missing_target_stage",
+}
+_RESUMABLE_PIPELINE_STAGES = {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
+_TRUSTED_STAGE_MARKER_STATUSES = {"idle", "paused", "interrupted", "running"}
+_TASKS_UNAVAILABLE_KEYS = {"state"}
 
 StatusSeverity = Literal["WARN", "ERROR"]
 
@@ -47,6 +62,13 @@ class StatusSnapshot:
     issues: list[StatusIssue]
 
 
+@dataclass(slots=True)
+class _RecoveryFailureContext:
+    failed_reason: str | None = None
+    explanation: str | None = None
+    origin_stage: str | None = None
+
+
 def collect_status_snapshot(root: Path) -> StatusSnapshot:
     root = root.resolve()
     registry_issues = probe_registry_files()
@@ -65,6 +87,7 @@ def collect_status_snapshot(root: Path) -> StatusSnapshot:
         *_probe_last_cycle(root),
         *_probe_heru_link(root),
         *_probe_origin_divergence(root, state),
+        *_probe_task_status_damage(root, state, runner, state_issues),
     ]
     return StatusSnapshot(
         config=config,
@@ -336,6 +359,192 @@ def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIs
             message=(f"!!! ATTENTION REQUIRED !!! {detail}"),
         )
     ]
+
+
+def _probe_task_status_damage(
+    root: Path,
+    state: WorkspaceState,
+    runner: RunnerStatusState,
+    state_issues: list[StatusIssue],
+) -> list[StatusIssue]:
+    if any(issue.key in _TASKS_UNAVAILABLE_KEYS for issue in state_issues):
+        return []
+    try:
+        from litehive.state.records import list_tasks
+
+        tasks = list_tasks(root, strict=False)
+    except Exception:
+        return []
+
+    issues: list[StatusIssue] = []
+    active_task_id = runner.active_task_id or state.active_task_id
+    active_stage = _live_active_pipeline_stage(active_task_id, tasks)
+    queued_ids = set(state.queue)
+
+    for task in sorted(tasks, key=lambda candidate: candidate.id):
+        recovery_issue = _recovery_failure_issue(root, task)
+        if recovery_issue is not None:
+            issues.append(recovery_issue)
+        backlog_issue = _backlog_damage_issue(
+            task,
+            queued_ids=queued_ids,
+            active_task_id=active_task_id,
+            active_stage=active_stage,
+        )
+        if backlog_issue is not None:
+            issues.append(backlog_issue)
+    return issues
+
+
+def _live_active_pipeline_stage(active_task_id: str | None, tasks: list[TaskRecord]) -> str | None:
+    if active_task_id is None:
+        return None
+    active_task = next((task for task in tasks if task.id == active_task_id), None)
+    if active_task is None:
+        return None
+    current_stage = active_task.runtime.pipeline.current_stage
+    if str(active_task.runtime.pipeline.execution_status) == "running" or current_stage.status == "running":
+        return str(current_stage.stage or active_task.pipeline_status)
+    return None
+
+
+def _recovery_failure_issue(root: Path, task: TaskRecord) -> StatusIssue | None:
+    flag_reason = None if task.flag_reason is None else str(task.flag_reason)
+    context = _recovery_failure_context(root, task)
+    if flag_reason not in _RECOVERY_FAILURE_FLAG_REASONS and context.failed_reason is None:
+        return None
+
+    stage = _task_issue_stage(task, context.origin_stage)
+    reason = context.failed_reason or flag_reason or "recovery_failed"
+    detail = (
+        context.explanation
+        or task.runtime.pipeline.last_outcome.reason
+        or "recovery could not return the task to a runnable state"
+    )
+    return StatusIssue(
+        key="recovery_failure",
+        severity="ERROR",
+        message=(
+            f"Task {task.id} has recovery failure ({reason}) at `{stage}`: {detail}"
+            f" — run `litehive task debug {task.id} --worktree`, inspect recovery diagnostics,"
+            f" then `litehive queue requeue {task.id}` when it is ready to continue."
+        ),
+    )
+
+
+def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureContext:
+    context = _RecoveryFailureContext()
+    try:
+        from litehive.lifecycle.persistence import SqlitePersistence
+
+        state = SqlitePersistence(root).load(task.id)
+    except Exception:
+        return context
+
+    failed_reason = None
+    if state.failed_reason is not None:
+        failed_reason = (
+            state.failed_reason.value if hasattr(state.failed_reason, "value") else str(state.failed_reason)
+        )
+    if failed_reason in _RECOVERY_FAILURE_STATE_REASONS:
+        context.failed_reason = failed_reason
+    context.explanation = state.recovery_failure_explanation or state.failed_message
+    trigger = state.active_recovery_trigger
+    if trigger is None and state.recovery_history:
+        trigger = state.recovery_history[-1].trigger
+    if trigger is not None and trigger.origin_stage is not None:
+        context.origin_stage = str(trigger.origin_stage)
+    return context
+
+
+def _task_issue_stage(task: TaskRecord, preferred_stage: str | None = None) -> str:
+    if preferred_stage:
+        return preferred_stage
+    return str(
+        task.runtime.pipeline.last_outcome.stage
+        or task.runtime.pipeline.current_stage.stage
+        or task.pipeline_status
+        or "-"
+    )
+
+
+def _backlog_damage_issue(
+    task: TaskRecord,
+    *,
+    queued_ids: set[str],
+    active_task_id: str | None,
+    active_stage: str | None,
+) -> StatusIssue | None:
+    if task.id == active_task_id:
+        return None
+    status = str(task.status)
+    pipeline_status = str(task.pipeline_status)
+    if status not in {"queued", "in_progress", "interrupted"}:
+        return None
+    missing_from_queue = status == "queued" and task.id not in queued_ids
+
+    runtime_stage = _runtime_resume_stage(task)
+    if pipeline_status == "backlog" and runtime_stage is not None:
+        queue_detail = (
+            " It is missing from WorkspaceState.queue, so the scheduler will not see it."
+            if missing_from_queue
+            else ""
+        )
+        return StatusIssue(
+            key="backlog_damage",
+            severity="ERROR",
+            message=(
+                f"Task {task.id} is {status}/backlog but runtime says resume from `{runtime_stage}`"
+                f" — run `litehive repair` before starting unrelated work, or resume the task with"
+                f" `litehive queue resume {task.id}`.{queue_detail}"
+            ),
+        )
+
+    if (
+        status == "queued"
+        and pipeline_status not in {"backlog", "done", active_stage}
+        and not _task_has_resume_marker(task)
+    ):
+        return StatusIssue(
+            key="backlog_damage",
+            severity="WARN",
+            message=(
+                f"Task {task.id} is queued at stale pipeline_status=`{pipeline_status}` with no resume marker"
+                " — the queue will normalize it back to backlog; run `litehive repair` now if this was unexpected."
+            ),
+        )
+    return None
+
+
+def _runtime_resume_stage(task: TaskRecord) -> str | None:
+    candidates: list[str | None] = []
+    interruption = task.runtime.execution.interruption
+    if interruption is not None:
+        candidates.extend([interruption.resume_stage, interruption.pipeline_status, interruption.stage])
+    handoff = task.runtime.execution.continuation_handoff
+    if handoff is not None:
+        candidates.append(handoff.stage)
+    current_stage = task.runtime.pipeline.current_stage
+    if current_stage.status in _TRUSTED_STAGE_MARKER_STATUSES:
+        candidates.append(current_stage.stage)
+    for candidate in candidates:
+        if candidate is not None and str(candidate) in _RESUMABLE_PIPELINE_STAGES:
+            return str(candidate)
+    return None
+
+
+def _task_has_resume_marker(task: TaskRecord) -> bool:
+    stage = str(task.pipeline_status)
+    current_stage = task.runtime.pipeline.current_stage
+    if current_stage.stage == stage and current_stage.status in _TRUSTED_STAGE_MARKER_STATUSES:
+        return True
+    interruption = task.runtime.execution.interruption
+    if interruption is not None and (interruption.resume_stage == stage or interruption.pipeline_status == stage):
+        return True
+    handoff = task.runtime.execution.continuation_handoff
+    if handoff is not None and handoff.stage == stage:
+        return True
+    return False
 
 
 def _safe_yaml_mapping(
