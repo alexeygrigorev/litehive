@@ -41,11 +41,9 @@ class TaskPlan:
 class WorkspaceRepairSummary:
     mutated: bool = False
     stale_runner_recovered: bool = False
-    stale_unmerged_worktrees_removed: int = 0
     cleared_active_task_id: str | None = None
     requeued_task_ids: list[str] = field(default_factory=list)
     stale_process_task_ids: list[str] = field(default_factory=list)
-    broken_venv_binaries: list[str] = field(default_factory=list)
 
     @property
     def repaired(self) -> bool:

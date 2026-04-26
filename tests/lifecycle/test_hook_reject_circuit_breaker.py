@@ -225,7 +225,6 @@ def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_p
     )
 
     recovery_calls: list[str] = []
-    monkeypatch.setattr("litehive.cli.runner.prepare_task_launch", lambda root, task: None)
     monkeypatch.setattr(
         "litehive.cli.runner.run_task",
         lambda root, task, **kwargs: run_pipeline_task(

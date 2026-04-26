@@ -25,19 +25,7 @@ from litehive.daemon.registry import get_workspace_daemon, list_daemon_instances
 from litehive.db.schema import MigrationApplyError, apply_pending_migrations, migration_status
 from litehive.git.ops import has_non_litehive_changes, is_git_repo
 from litehive.domain.reports import TaskActivityEntry
-from litehive.domain.task import TaskRecord
 from litehive.lifecycle.orchestration import run_task
-from litehive.recovery.detection import (
-    LaunchFailure,
-    TaskLaunchFailure,
-    best_effort_recovery_task,
-    corrupt_task_launch_diagnostics,
-)
-from litehive.recovery.execution_recovery import (
-    attempt_launch_recovery,
-    flag_task_after_failed_launch_recovery,
-    prepare_task_launch,
-)
 from litehive.state.backup import create_workspace_backup, list_workspace_backups, restore_workspace_backup
 from litehive.state.records import get_task
 from litehive.domain.task_ops import WorkspaceConflictError
@@ -150,13 +138,6 @@ class _RunCommandIteration:
     pool_stop_reason: str | None = None
 
 
-@dataclass(slots=True)
-class _LaunchFailureHandling:
-    recovered: bool
-    consecutive_task_failures: int = 0
-    pool_stop_reason: str | None = None
-
-
 def run_once(
     workspace: Path,
     *,
@@ -167,7 +148,6 @@ def run_once(
     if stopped_iteration is not None:
         return stopped_iteration
 
-    selection_recovery_attempted = False
     while True:
         try:
             task = dequeue_next_task(workspace)
@@ -175,35 +155,8 @@ def run_once(
             print(f"run failed: {exc}")
             return _RunCommandIteration(exit_code=1, ran_task=False)
         except Exception as exc:
-            recovery_task = best_effort_recovery_task(workspace)
-            if recovery_task is None:
-                print(f"run failed: {exc}")
-                return _RunCommandIteration(exit_code=1, ran_task=False)
-            failure = LaunchFailure(
-                context="pre_stage_setup_failed",
-                summary=f"failed to select the next task: {exc}",
-                diagnostics=corrupt_task_launch_diagnostics(workspace, recovery_task.id),
-            )
-            used_recovery_budget = not selection_recovery_attempted
-            handling = _handle_failed_launch(
-                workspace,
-                recovery_task,
-                failure,
-                recovery_attempted=selection_recovery_attempted,
-            )
-            if handling.recovered:
-                selection_recovery_attempted = True
-            elif used_recovery_budget:
-                selection_recovery_attempted = True
-            if handling.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
-                _emit_consecutive_task_failure_stop(handling.consecutive_task_failures)
-                return _RunCommandIteration(
-                    exit_code=0,
-                    ran_task=False,
-                    consecutive_task_failures=handling.consecutive_task_failures,
-                    pool_stop_reason=handling.pool_stop_reason,
-                )
-            continue
+            print(f"run failed: {exc}")
+            return _RunCommandIteration(exit_code=1, ran_task=False)
 
         if task is None:
             state = load_state(workspace)
@@ -214,104 +167,37 @@ def run_once(
                 pool_stop_reason=state.pool_stop_reason,
             )
 
-        recovery_attempted = False
-        launch_recovery_enabled = isinstance(task, TaskRecord)
-        while True:
-            try:
-                if launch_recovery_enabled:
-                    prepare_task_launch(workspace, task)
-                result = run_task(
-                    workspace,
-                    task,
-                    engine_override=engine,
-                    model_override=model,
-                )
-            except TaskLaunchFailure as exc:
-                if not launch_recovery_enabled:
-                    raise
-                handling = _handle_failed_launch(
-                    workspace,
-                    task,
-                    exc.as_failure(),
-                    recovery_attempted=recovery_attempted,
-                )
-                if handling.recovered:
-                    recovery_attempted = True
-                    continue
-                if handling.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
-                    _emit_consecutive_task_failure_stop(handling.consecutive_task_failures)
-                    return _RunCommandIteration(
-                        exit_code=0,
-                        ran_task=False,
-                        consecutive_task_failures=handling.consecutive_task_failures,
-                        pool_stop_reason=handling.pool_stop_reason,
-                    )
-                break
-            except Exception as exc:
-                if not launch_recovery_enabled:
-                    raise
-                handling = _handle_failed_launch(
-                    workspace,
-                    task,
-                    LaunchFailure(
-                        context="pre_stage_setup_failed",
-                        summary=f"task launch crashed before stage entry: {exc}",
-                    ),
-                    recovery_attempted=recovery_attempted,
-                )
-                if handling.recovered:
-                    recovery_attempted = True
-                    continue
-                if handling.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
-                    _emit_consecutive_task_failure_stop(handling.consecutive_task_failures)
-                    return _RunCommandIteration(
-                        exit_code=0,
-                        ran_task=False,
-                        consecutive_task_failures=handling.consecutive_task_failures,
-                        pool_stop_reason=handling.pool_stop_reason,
-                    )
-                break
-
-            if result.task is not None:
-                print(f"task: {result.task.id} {result.task.title}")
-            print(f"final_stage: {result.final_stage}")
-            if result.failed_reason:
-                print(f"failed_reason: {result.failed_reason}")
-            if result.failed_message:
-                print(f"failed_message: {result.failed_message}")
-            consecutive_task_failures, pool_stop_reason = record_task_completion(
+        try:
+            result = run_task(
                 workspace,
-                final_stage=result.final_stage,
+                task,
+                engine_override=engine,
+                model_override=model,
             )
-            if pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
-                _emit_consecutive_task_failure_stop(consecutive_task_failures)
-            return _RunCommandIteration(
-                exit_code=0,
-                ran_task=True,
-                final_stage=result.final_stage,
-                consecutive_task_failures=consecutive_task_failures,
-                pool_stop_reason=pool_stop_reason,
-            )
+        except Exception as exc:
+            print(f"run failed: {exc}")
+            return _RunCommandIteration(exit_code=1, ran_task=False)
 
-
-def _handle_failed_launch(
-    workspace: Path,
-    task,
-    failure: LaunchFailure,
-    *,
-    recovery_attempted: bool,
-) -> _LaunchFailureHandling:
-    if not recovery_attempted:
-        recovery = attempt_launch_recovery(workspace, task, failure)
-        if recovery.fixed:
-            return _LaunchFailureHandling(recovered=True)
-    flag_task_after_failed_launch_recovery(workspace, task, failure)
-    consecutive_task_failures, pool_stop_reason = record_task_completion(workspace, final_stage="flagged")
-    return _LaunchFailureHandling(
-        recovered=False,
-        consecutive_task_failures=consecutive_task_failures,
-        pool_stop_reason=pool_stop_reason,
-    )
+        if result.task is not None:
+            print(f"task: {result.task.id} {result.task.title}")
+        print(f"final_stage: {result.final_stage}")
+        if result.failed_reason:
+            print(f"failed_reason: {result.failed_reason}")
+        if result.failed_message:
+            print(f"failed_message: {result.failed_message}")
+        consecutive_task_failures, pool_stop_reason = record_task_completion(
+            workspace,
+            final_stage=result.final_stage,
+        )
+        if pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
+            _emit_consecutive_task_failure_stop(consecutive_task_failures)
+        return _RunCommandIteration(
+            exit_code=0,
+            ran_task=True,
+            final_stage=result.final_stage,
+            consecutive_task_failures=consecutive_task_failures,
+            pool_stop_reason=pool_stop_reason,
+        )
 
 
 def _existing_consecutive_task_failure_stop(workspace: Path) -> _RunCommandIteration | None:

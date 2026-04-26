@@ -20,15 +20,6 @@ from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import apply_pending_migrations
 from litehive.observability.status import render_runner_status_line
 from litehive.observability.venv_health import daemon_broken_venv_message, probe_broken_venv_executables
-from litehive.recovery.detection import (
-    LaunchFailure,
-    best_effort_recovery_task,
-    detect_cycle_start_failure,
-)
-from litehive.recovery.execution_recovery import (
-    attempt_launch_recovery,
-    flag_task_after_failed_launch_recovery,
-)
 from litehive.state.backup import create_scheduled_workspace_backup
 from litehive.state.persist import load_state, set_pool_stop_reason
 from litehive.state.locking import runner_status
@@ -296,24 +287,6 @@ def ensure_workspace_venvs_ready(
         raise RuntimeError(daemon_broken_venv_message(workspace, findings))
 
 
-def _detect_iteration_cycle_start_failure(
-    workspace: Path,
-    *,
-    output_stream: TextIO | None,
-) -> LaunchFailure | None:
-    failure = detect_cycle_start_failure(workspace)
-    if failure is not None:
-        return failure
-    try:
-        ensure_workspace_venvs_ready(workspace, output_stream=output_stream)
-    except RuntimeError as exc:
-        return LaunchFailure(
-            context="cycle_start_failed",
-            summary=str(exc),
-        )
-    return None
-
-
 def maybe_run_workspace_backup(
     workspace: Path,
     *,
@@ -355,24 +328,6 @@ def run_logged_subprocess(
         return return_code
 
 
-def recover_cycle_start_failure(
-    workspace: Path,
-    failure: LaunchFailure,
-    *,
-    output_stream: TextIO | None,
-) -> bool:
-    task = best_effort_recovery_task(workspace)
-    if task is None:
-        return False
-    recovery = attempt_launch_recovery(workspace, task, failure)
-    if recovery.fixed:
-        _emit(f"launch recovery fixed: {failure.context}", stream=output_stream)
-        return True
-    flag_task_after_failed_launch_recovery(workspace, task, failure)
-    _emit(f"launch recovery failed; flagged {task.id} and continuing", stream=output_stream)
-    return False
-
-
 def run_daemon_loop(
     workspace: Path,
     *,
@@ -380,11 +335,6 @@ def run_daemon_loop(
     session_dir: Path | None = None,
 ) -> int:
     workspace = workspace.resolve()
-    initial_cycle_recovery_attempted = False
-    preflight_failure = detect_cycle_start_failure(workspace)
-    if preflight_failure is not None:
-        initial_cycle_recovery_attempted = True
-        recover_cycle_start_failure(workspace, preflight_failure, output_stream=output_stream)
     ensure_workspace(workspace)
     apply_pending_migrations(workspace)
     command_prefix = default_command_prefix()
@@ -441,7 +391,6 @@ def run_daemon_loop(
                 return 0
 
             iteration += 1
-            cycle_recovery_attempted = initial_cycle_recovery_attempted if iteration == 1 else False
             prefix = f"{iteration:04d}"
             repair_file = log_root / f"{prefix}-repair.log"
             pre_status_file = log_root / f"{prefix}-pre-status.log"
@@ -470,22 +419,6 @@ def run_daemon_loop(
             if _halt_for_origin_divergence(workspace, output_stream=output_stream):
                 return 0
 
-            startup_failure = _detect_iteration_cycle_start_failure(workspace, output_stream=output_stream)
-            if startup_failure is not None:
-                if cycle_recovery_attempted:
-                    task = best_effort_recovery_task(workspace)
-                    if task is not None:
-                        flag_task_after_failed_launch_recovery(workspace, task, startup_failure)
-                        _emit(
-                            f"launch recovery budget exhausted; flagged {task.id} and continuing", stream=output_stream
-                        )
-                        continue
-                    iteration_failed = True
-                    iteration_failure_reason = startup_failure.summary
-                cycle_recovery_attempted = True
-                if not recover_cycle_start_failure(workspace, startup_failure, output_stream=output_stream):
-                    continue
-
             repair_started = time.perf_counter()
             try:
                 repair_rc = run_logged_subprocess(
@@ -497,69 +430,15 @@ def run_daemon_loop(
                 )
             except Exception as exc:
                 logger.exception("repair subprocess raised")
-                repair_failure = LaunchFailure(
-                    context="cycle_start_failed",
-                    summary=f"repair raised: {exc}",
-                    diagnostics={"repair_log": str(repair_file)},
-                )
-                if not cycle_recovery_attempted:
-                    cycle_recovery_attempted = True
-                    if recover_cycle_start_failure(workspace, repair_failure, output_stream=output_stream):
-                        try:
-                            repair_rc = run_logged_subprocess(
-                                [*command_prefix, "repair", "--workspace", str(workspace)],
-                                cwd=workspace,
-                                log_path=repair_file,
-                                output_stream=None,
-                                current_child=current_child,
-                            )
-                        except Exception as retry_exc:
-                            _emit(f"repair retry raised: {retry_exc}", stream=output_stream)
-                            repair_rc = -1
-                    else:
-                        continue
-                else:
-                    _emit(f"repair raised: {exc}", stream=output_stream)
-                    iteration_failed = True
-                    iteration_failure_reason = f"repair raised: {exc}"
-                    repair_rc = -1
+                _emit(f"repair raised: {exc}", stream=output_stream)
+                iteration_failed = True
+                iteration_failure_reason = f"repair raised: {exc}"
+                repair_rc = -1
             repair_elapsed_ms = int((time.perf_counter() - repair_started) * 1000)
             if repair_rc != 0 and not iteration_failed:
-                repair_failure = LaunchFailure(
-                    context="cycle_start_failed",
-                    summary=f"litehive repair failed (rc={repair_rc}); see {repair_file}",
-                    diagnostics={"repair_log": str(repair_file), "repair_rc": repair_rc},
-                )
-                if not cycle_recovery_attempted:
-                    cycle_recovery_attempted = True
-                    if recover_cycle_start_failure(workspace, repair_failure, output_stream=output_stream):
-                        try:
-                            repair_rc = run_logged_subprocess(
-                                [*command_prefix, "repair", "--workspace", str(workspace)],
-                                cwd=workspace,
-                                log_path=repair_file,
-                                output_stream=None,
-                                current_child=current_child,
-                            )
-                        except Exception as retry_exc:
-                            _emit(f"repair retry raised: {retry_exc}", stream=output_stream)
-                            repair_rc = -1
-                        repair_elapsed_ms = int((time.perf_counter() - repair_started) * 1000)
-                    else:
-                        continue
-                if repair_rc != 0:
-                    if cycle_recovery_attempted:
-                        task = best_effort_recovery_task(workspace)
-                        if task is not None:
-                            flag_task_after_failed_launch_recovery(workspace, task, repair_failure)
-                            _emit(
-                                f"launch retry still failed; flagged {task.id} and continuing",
-                                stream=output_stream,
-                            )
-                            continue
-                    _emit(f"litehive repair failed (rc={repair_rc}); see {repair_file}", stream=output_stream)
-                    iteration_failed = True
-                    iteration_failure_reason = f"repair exited {repair_rc}"
+                _emit(f"litehive repair failed (rc={repair_rc}); see {repair_file}", stream=output_stream)
+                iteration_failed = True
+                iteration_failure_reason = f"repair exited {repair_rc}"
             elif repair_rc == 0:
                 repair_status = "completed"
                 try:
