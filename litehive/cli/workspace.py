@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Annotated
+import time
 
 import typer
 from dataclasses import dataclass
@@ -147,11 +148,15 @@ def status_command(
 
 def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     ensure_workspace(workspace)
+    start_time = time.perf_counter()
     try:
         summary = repair_workspace_state(workspace)
     except WorkspaceConflictError as exc:
         print(f"repair failed: {exc}")
         return 1
+    end_time = time.perf_counter()
+    duration_ms = (end_time - start_time) * 1000
+
     state = load_runtime_state(workspace)
     for line in repair_summary_lines(
         summary,
@@ -162,6 +167,13 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(line)
     print(f"active_task_id: {state.active_task_id}")
     print(f"queue_length: {len(state.queue)}")
+
+    # Add explicit clean-run message with timing
+    if not summary.repaired:
+        print(f"repair completed clean run in {duration_ms:.1f}ms - no inconsistencies found")
+    else:
+        print(f"repair completed in {duration_ms:.1f}ms")
+
     return 0
 
 
