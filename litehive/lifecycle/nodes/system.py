@@ -92,8 +92,9 @@ class WorktreeSyncNode(SystemNode):
 
     - worktree doesn't exist yet (first run of the task) → ``Pass``
       (nothing to sync; the worktree will be created by the SWE flow).
-    - worktree up to date with ``origin/main`` → ``Pass``.
-    - clean merge of main into worktree → ``Pass``.
+    - resumed/requeued worktree up to date with local main → ``Pass``.
+    - clean rebase of a resumed/requeued task worktree onto local main → ``Pass``.
+    - clean merge of ``origin/main`` into worktree when available → ``Pass``.
     - merge conflict → ``Reject(source="system")`` — the state machine
       routes to ``recovering`` and the recovery agent decides what to
       do (abort, requeue, delegate to merge-resolve, etc.).
@@ -140,10 +141,13 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
     """Real worktree sync — provisions a task worktree, then syncs from ``main``.
 
     Takes the workspace root plus a ``worktree_resolver`` callable that returns
-    the on-disk worktree path for a given task, and a ``main_ref`` (default
-    ``origin/main``) naming the upstream branch to merge from. When a task does
-    not yet have a recorded worktree, the node creates one with a dedicated task
-    branch before any agent stage runs.
+    the on-disk worktree path for a given task. Existing worktrees for
+    requeued/resumed launches are rebased onto the workspace's current local
+    HEAD before any agent stage resumes. ``main_ref`` (default ``origin/main``)
+    names an optional upstream branch to merge afterward when the task worktree
+    still has an ``origin`` remote. When a task does not yet have a recorded
+    worktree, the node creates one with a dedicated task branch before any
+    agent stage runs.
     """
 
     def __init__(
@@ -199,21 +203,22 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
                 save_task(self.workspace_root, task)
                 return True
 
-        worktree = self.worktree_resolver(state)
+        worktree = Path(self.worktree_resolver(state))
         if not Path(worktree).exists():
             return False
 
-        if not self._has_origin(worktree):
-            return False
+        main_changed = False
+        if state.entry_stage is not None:
+            main_changed = self._rebase_existing_worktree_onto_local_main(worktree)
 
         if self._is_dirty(worktree):
-            # Worktree has uncommitted changes — typically the SWE's
-            # work-in-progress from a previous run that was interrupted.
-            # Merging main into a dirty worktree would fail ("your local
-            # changes would be overwritten") or produce a confusing
-            # conflict between WIP and main. Skip the sync and let the
-            # agent resume on the existing state.
-            return False
+            # Dirty WIP has been rebased onto local main above. Skip the
+            # optional origin merge so the resume path hands the agent back its
+            # uncommitted changes intact.
+            return main_changed
+
+        if not self._has_origin(worktree):
+            return main_changed
 
         stash_ref = self._stash_local_changes(worktree)
         restored_stash = False
@@ -237,7 +242,7 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
                 changed = "Already up to date" not in merge.stdout
                 self._restore_local_changes(worktree, stash_ref)
                 restored_stash = True
-                return changed
+                return main_changed or changed
 
             unresolved = self._unresolved(worktree)
             if unresolved:
@@ -269,6 +274,37 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
             text=True,
         )
         return proc.returncode == 0 and proc.stdout.strip() == "true"
+
+    def _rebase_existing_worktree_onto_local_main(self, worktree: Path) -> bool:
+        from litehive.git.ops import current_head, rebase_worktree_onto
+
+        if worktree.resolve() == self.workspace_root.resolve():
+            return False
+        main_head = current_head(self.workspace_root)
+        if main_head is None:
+            return False
+        before = self._head(worktree)
+        rebased = rebase_worktree_onto(worktree, main_head)
+        if rebased:
+            after = self._head(worktree)
+            return after is not None and after != before
+
+        unresolved = self._unresolved(worktree)
+        if unresolved:
+            raise MergeConflict(unresolved)
+        raise GitError(f"worktree_sync rebase onto local main {main_head[:8]} failed")
+
+    @staticmethod
+    def _head(worktree: Path) -> str | None:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            return None
+        return proc.stdout.strip() or None
 
     @staticmethod
     def prune_stale_worktrees(root: Path) -> None:

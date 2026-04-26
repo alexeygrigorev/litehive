@@ -33,11 +33,12 @@ def _configure_repo(path: Path) -> None:
     _git_ok(path, "config", "user.name", "Test User")
 
 
-def _state(task_id: str) -> TaskState:
+def _state(task_id: str, *, entry_stage: str | None = None) -> TaskState:
     return TaskState(
         task_id=task_id,
         stage="worktree_sync",
         pipeline_mode=PipelineMode.SINGLE,
+        entry_stage=entry_stage,
     )
 
 
@@ -115,6 +116,107 @@ def test_worktree_sync_skips_broken_venv_link_when_workspace_has_no_venv(tmp_pat
     assert changed is True
     assert not worktree.joinpath(".venv").exists()
     assert not worktree.joinpath(".venv").is_symlink()
+
+
+def test_worktree_sync_rebases_existing_task_worktree_onto_local_main(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _git_ok(workspace, "init", "-b", "main")
+    _configure_repo(workspace)
+    ensure_workspace(workspace)
+
+    (workspace / "app.txt").write_text("base\n", encoding="utf-8")
+    _git_ok(workspace, "add", "app.txt")
+    _git_ok(workspace, "commit", "-m", "initial")
+
+    task = create_task(workspace, title="Rebase before resume")
+    worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
+    worktree.parent.mkdir(parents=True, exist_ok=True)
+    _git_ok(
+        workspace,
+        "worktree",
+        "add",
+        "--force",
+        "-B",
+        task_worktree_branch(task),
+        str(worktree),
+        "HEAD",
+    )
+    task.runtime.git.worktree_path = str(worktree.resolve())
+    save_task(workspace, task)
+
+    (worktree / "feature.txt").write_text("feature\n", encoding="utf-8")
+    _git_ok(worktree, "add", "feature.txt")
+    _git_ok(worktree, "commit", "-m", "feature")
+    feature_head_before = _git_ok(worktree, "rev-parse", "HEAD")
+
+    (workspace / "infra.txt").write_text("main advanced\n", encoding="utf-8")
+    _git_ok(workspace, "add", "infra.txt")
+    _git_ok(workspace, "commit", "-m", "main advanced")
+    main_head = _git_ok(workspace, "rev-parse", "HEAD")
+
+    node = GitWorktreeSyncNode(
+        workspace_root=workspace,
+        worktree_resolver=lambda state: worktree,
+    )
+    changed = node.sync(_state(task.id, entry_stage="implementing"))
+
+    assert changed is True
+    assert (worktree / "infra.txt").read_text(encoding="utf-8") == "main advanced\n"
+    assert (worktree / "feature.txt").read_text(encoding="utf-8") == "feature\n"
+    assert _git(worktree, "merge-base", "--is-ancestor", main_head, "HEAD").returncode == 0
+    assert _git_ok(worktree, "rev-parse", "HEAD") != feature_head_before
+    assert _git_ok(worktree, "status", "--porcelain") == ""
+
+
+def test_worktree_sync_rebases_dirty_resumed_worktree_and_preserves_wip(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _git_ok(workspace, "init", "-b", "main")
+    _configure_repo(workspace)
+    ensure_workspace(workspace)
+
+    (workspace / "app.txt").write_text("base\n", encoding="utf-8")
+    _git_ok(workspace, "add", "app.txt")
+    _git_ok(workspace, "commit", "-m", "initial")
+
+    task = create_task(workspace, title="Dirty resume")
+    worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
+    worktree.parent.mkdir(parents=True, exist_ok=True)
+    _git_ok(
+        workspace,
+        "worktree",
+        "add",
+        "--force",
+        "-B",
+        task_worktree_branch(task),
+        str(worktree),
+        "HEAD",
+    )
+    task.runtime.git.worktree_path = str(worktree.resolve())
+    save_task(workspace, task)
+
+    (worktree / "app.txt").write_text("base\nlocal draft\n", encoding="utf-8")
+    (worktree / "notes.txt").write_text("untracked draft\n", encoding="utf-8")
+
+    (workspace / "infra.txt").write_text("main advanced\n", encoding="utf-8")
+    _git_ok(workspace, "add", "infra.txt")
+    _git_ok(workspace, "commit", "-m", "main advanced")
+    main_head = _git_ok(workspace, "rev-parse", "HEAD")
+
+    node = GitWorktreeSyncNode(
+        workspace_root=workspace,
+        worktree_resolver=lambda state: worktree,
+    )
+    changed = node.sync(_state(task.id, entry_stage="testing"))
+
+    assert changed is True
+    assert (worktree / "infra.txt").read_text(encoding="utf-8") == "main advanced\n"
+    assert (worktree / "app.txt").read_text(encoding="utf-8") == "base\nlocal draft\n"
+    assert (worktree / "notes.txt").read_text(encoding="utf-8") == "untracked draft\n"
+    assert _git(worktree, "merge-base", "--is-ancestor", main_head, "HEAD").returncode == 0
+    assert _git_ok(worktree, "status", "--porcelain") == "M app.txt\n?? notes.txt"
+    assert _git_ok(worktree, "stash", "list") == ""
 
 
 def test_worktree_sync_skips_dirty_worktrees(tmp_path: Path) -> None:
