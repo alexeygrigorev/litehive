@@ -219,6 +219,7 @@ def pool_stop_condition_label(stop_reason):
         "stop_condition_reached": "custom stop condition reached",
         "max_tasks_reached": "max tasks reached",
         "failure_detected": "failure detected",
+        "consecutive_task_failures": "consecutive task failures",
         "dirty_git_state": "dirty git state",
         "diverged_from_origin": "local main diverged from origin/main",
         "attention_required": "attention required",
@@ -250,6 +251,10 @@ def _pool_no_useful_progress_report(stop_reason):
         "attention_required": (
             "operator_action_required",
             "Pool stopped because unresolved attention items require operator action before more work starts.",
+        ),
+        "consecutive_task_failures": (
+            "operator_action_required",
+            "Pool stopped after three consecutive task failures. Inspect the latest failed tasks before restarting.",
         ),
     }
     return reports.get(stop_reason, (None, None))

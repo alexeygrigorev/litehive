@@ -197,6 +197,66 @@ def test_run_drain_runs_until_queue_is_empty(tmp_path, monkeypatch) -> None:
     assert queue == []
 
 
+def test_run_drain_stops_after_three_consecutive_task_failures(tmp_path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+
+    class Task:
+        def __init__(self, tid: str, title: str) -> None:
+            self.id = tid
+            self.title = title
+
+    queue = [
+        Task("T-1", "first failure"),
+        Task("T-2", "second failure"),
+        Task("T-3", "successful reset"),
+        Task("T-4", "third failure"),
+        Task("T-5", "fourth failure"),
+        Task("T-6", "fifth failure"),
+        Task("T-7", "must not run"),
+    ]
+    outcomes = {
+        "T-1": "failed",
+        "T-2": "failed",
+        "T-3": "done",
+        "T-4": "failed",
+        "T-5": "failed",
+        "T-6": "failed",
+        "T-7": "done",
+    }
+    calls: list[str] = []
+
+    def fake_dequeue_next_task(workspace):  # type: ignore[no-untyped-def]
+        del workspace
+        return queue.pop(0) if queue else None
+
+    def fake_run_task(workspace, task, engine_override=None, model_override=None):  # type: ignore[no-untyped-def]
+        del workspace, engine_override, model_override
+        calls.append(task.id)
+        return SimpleNamespace(
+            task=task,
+            final_stage=outcomes[task.id],
+            failed_reason=None,
+            failed_message=None,
+        )
+
+    monkeypatch.setattr("litehive.cli.runner.dequeue_next_task", fake_dequeue_next_task)
+    monkeypatch.setattr("litehive.cli.runner.run_task", fake_run_task)
+
+    result = CliRunner().invoke(
+        modern_cli.app,
+        ["run", "--drain", "--workspace", str(tmp_path)],
+        catch_exceptions=False,
+    )
+
+    state = load_state(tmp_path)
+    assert result.exit_code == 0, result.output
+    assert calls == ["T-1", "T-2", "T-3", "T-4", "T-5", "T-6"]
+    assert "critical_status: stopped after 3 consecutive task failures" in result.output
+    assert "Pool stopped: consecutive_task_failures" in result.output
+    assert state.consecutive_task_failures == 3
+    assert state.pool_stop_reason == "consecutive_task_failures"
+
+
 def test_run_dry_run_previews_next_task_without_mutating_queue(tmp_path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Preview task")

@@ -415,5 +415,6 @@ class WorkspaceState(BaseModel):
     active_task_id: str | None = None
     queue: list[str] = Field(default_factory=list)
     pool_stop_reason: str | None = None
+    consecutive_task_failures: int = 0
     next_task_number: int = 0
     unmerged_worktrees: list[UnmergedWorktree] = Field(default_factory=list)

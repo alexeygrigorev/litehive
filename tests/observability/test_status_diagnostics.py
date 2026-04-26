@@ -333,6 +333,24 @@ def test_status_reports_origin_divergence_as_attention_required(tmp_path: Path, 
     assert "git log --oneline --left-right main...origin/main" in output
 
 
+def test_full_status_reports_consecutive_task_failures_as_critical(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+    save_state(
+        tmp_path,
+        WorkspaceState(
+            pool_stop_reason="consecutive_task_failures",
+            consecutive_task_failures=3,
+        ),
+    )
+
+    exit_code, output = _run_full_status(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert "pool_stop_reason: consecutive_task_failures" in output
+    assert "critical_status: CRITICAL: pool stopped after 3 consecutive task failures" in output
+    assert "health: 1 broken, 0 warning" in output
+
+
 def test_status_reports_recovery_failed_tasks_as_operator_health_issue(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery failed task")

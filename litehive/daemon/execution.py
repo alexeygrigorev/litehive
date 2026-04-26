@@ -55,6 +55,7 @@ _EXPLICIT_POOL_STOP_REASONS = {
     "attention_required",
     "dirty_git_state",
     "diverged_from_origin",
+    "consecutive_task_failures",
     "max_tasks_reached",
     "failure_detected",
     "stop_condition_reached",

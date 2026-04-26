@@ -41,7 +41,12 @@ from litehive.recovery.execution_recovery import (
 from litehive.state.backup import create_workspace_backup, list_workspace_backups, restore_workspace_backup
 from litehive.state.records import get_task
 from litehive.domain.task_ops import WorkspaceConflictError
-from litehive.state.persist import load_state, set_pool_stop_reason
+from litehive.state.persist import (
+    CONSECUTIVE_TASK_FAILURE_STOP_REASON,
+    load_state,
+    record_task_completion,
+    set_pool_stop_reason,
+)
 from litehive.tasks.event_log import rebuild_sqlite_from_task_event_log
 from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection
 from litehive.tasks.activity import append_task_activity
@@ -141,6 +146,15 @@ class _RunCommandIteration:
     exit_code: int
     ran_task: bool
     final_stage: str | None = None
+    consecutive_task_failures: int = 0
+    pool_stop_reason: str | None = None
+
+
+@dataclass(slots=True)
+class _LaunchFailureHandling:
+    recovered: bool
+    consecutive_task_failures: int = 0
+    pool_stop_reason: str | None = None
 
 
 def run_once(
@@ -149,6 +163,10 @@ def run_once(
     engine: str | None = None,
     model: str | None = None,
 ) -> _RunCommandIteration:
+    stopped_iteration = _existing_consecutive_task_failure_stop(workspace)
+    if stopped_iteration is not None:
+        return stopped_iteration
+
     selection_recovery_attempted = False
     while True:
         try:
@@ -167,19 +185,34 @@ def run_once(
                 diagnostics=corrupt_task_launch_diagnostics(workspace, recovery_task.id),
             )
             used_recovery_budget = not selection_recovery_attempted
-            if _handle_failed_launch(
+            handling = _handle_failed_launch(
                 workspace,
                 recovery_task,
                 failure,
                 recovery_attempted=selection_recovery_attempted,
-            ):
+            )
+            if handling.recovered:
                 selection_recovery_attempted = True
             elif used_recovery_budget:
                 selection_recovery_attempted = True
+            if handling.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
+                _emit_consecutive_task_failure_stop(handling.consecutive_task_failures)
+                return _RunCommandIteration(
+                    exit_code=0,
+                    ran_task=False,
+                    consecutive_task_failures=handling.consecutive_task_failures,
+                    pool_stop_reason=handling.pool_stop_reason,
+                )
             continue
 
         if task is None:
-            return _RunCommandIteration(exit_code=0, ran_task=False)
+            state = load_state(workspace)
+            return _RunCommandIteration(
+                exit_code=0,
+                ran_task=False,
+                consecutive_task_failures=state.consecutive_task_failures,
+                pool_stop_reason=state.pool_stop_reason,
+            )
 
         recovery_attempted = False
         launch_recovery_enabled = isinstance(task, TaskRecord)
@@ -196,19 +229,28 @@ def run_once(
             except TaskLaunchFailure as exc:
                 if not launch_recovery_enabled:
                     raise
-                if _handle_failed_launch(
+                handling = _handle_failed_launch(
                     workspace,
                     task,
                     exc.as_failure(),
                     recovery_attempted=recovery_attempted,
-                ):
+                )
+                if handling.recovered:
                     recovery_attempted = True
                     continue
+                if handling.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
+                    _emit_consecutive_task_failure_stop(handling.consecutive_task_failures)
+                    return _RunCommandIteration(
+                        exit_code=0,
+                        ran_task=False,
+                        consecutive_task_failures=handling.consecutive_task_failures,
+                        pool_stop_reason=handling.pool_stop_reason,
+                    )
                 break
             except Exception as exc:
                 if not launch_recovery_enabled:
                     raise
-                if _handle_failed_launch(
+                handling = _handle_failed_launch(
                     workspace,
                     task,
                     LaunchFailure(
@@ -216,9 +258,18 @@ def run_once(
                         summary=f"task launch crashed before stage entry: {exc}",
                     ),
                     recovery_attempted=recovery_attempted,
-                ):
+                )
+                if handling.recovered:
                     recovery_attempted = True
                     continue
+                if handling.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
+                    _emit_consecutive_task_failure_stop(handling.consecutive_task_failures)
+                    return _RunCommandIteration(
+                        exit_code=0,
+                        ran_task=False,
+                        consecutive_task_failures=handling.consecutive_task_failures,
+                        pool_stop_reason=handling.pool_stop_reason,
+                    )
                 break
 
             if result.task is not None:
@@ -228,10 +279,18 @@ def run_once(
                 print(f"failed_reason: {result.failed_reason}")
             if result.failed_message:
                 print(f"failed_message: {result.failed_message}")
+            consecutive_task_failures, pool_stop_reason = record_task_completion(
+                workspace,
+                final_stage=result.final_stage,
+            )
+            if pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
+                _emit_consecutive_task_failure_stop(consecutive_task_failures)
             return _RunCommandIteration(
                 exit_code=0,
                 ran_task=True,
                 final_stage=result.final_stage,
+                consecutive_task_failures=consecutive_task_failures,
+                pool_stop_reason=pool_stop_reason,
             )
 
 
@@ -241,13 +300,36 @@ def _handle_failed_launch(
     failure: LaunchFailure,
     *,
     recovery_attempted: bool,
-) -> bool:
+) -> _LaunchFailureHandling:
     if not recovery_attempted:
         recovery = attempt_launch_recovery(workspace, task, failure)
         if recovery.fixed:
-            return True
+            return _LaunchFailureHandling(recovered=True)
     flag_task_after_failed_launch_recovery(workspace, task, failure)
-    return False
+    consecutive_task_failures, pool_stop_reason = record_task_completion(workspace, final_stage="flagged")
+    return _LaunchFailureHandling(
+        recovered=False,
+        consecutive_task_failures=consecutive_task_failures,
+        pool_stop_reason=pool_stop_reason,
+    )
+
+
+def _existing_consecutive_task_failure_stop(workspace: Path) -> _RunCommandIteration | None:
+    state = load_state(workspace)
+    if state.pool_stop_reason != CONSECUTIVE_TASK_FAILURE_STOP_REASON:
+        return None
+    _emit_consecutive_task_failure_stop(state.consecutive_task_failures)
+    return _RunCommandIteration(
+        exit_code=0,
+        ran_task=False,
+        consecutive_task_failures=state.consecutive_task_failures,
+        pool_stop_reason=state.pool_stop_reason,
+    )
+
+
+def _emit_consecutive_task_failure_stop(consecutive_task_failures: int) -> None:
+    failure_count = max(3, int(consecutive_task_failures))
+    print(f"critical_status: stopped after {failure_count} consecutive task failures")
 
 
 def _run_single(
@@ -257,6 +339,9 @@ def _run_single(
     model: str | None = None,
 ) -> int:
     iteration = run_once(workspace, engine=engine, model=model)
+    if iteration.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
+        print(f"Pool stopped: {CONSECUTIVE_TASK_FAILURE_STOP_REASON}")
+        return iteration.exit_code
     if not iteration.ran_task:
         print("No queued task.")
     return iteration.exit_code
@@ -319,6 +404,9 @@ def _run_drain(
         iteration = run_once(workspace, engine=engine, model=model)
         if iteration.exit_code != 0:
             return iteration.exit_code
+        if iteration.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
+            print(f"Pool stopped: {CONSECUTIVE_TASK_FAILURE_STOP_REASON}")
+            return 0
         if not iteration.ran_task:
             if tasks_run == 0:
                 state = load_state(workspace)

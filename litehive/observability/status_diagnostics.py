@@ -86,6 +86,7 @@ def collect_status_snapshot(root: Path) -> StatusSnapshot:
         *_probe_daemon_status(root),
         *_probe_last_cycle(root),
         *_probe_heru_link(root),
+        *_probe_pool_stop_reason(state),
         *_probe_origin_divergence(root, state),
         *_probe_task_status_damage(root, state, runner, state_issues),
     ]
@@ -357,6 +358,22 @@ def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIs
             key="origin_divergence",
             severity="ERROR",
             message=(f"!!! ATTENTION REQUIRED !!! {detail}"),
+        )
+    ]
+
+
+def _probe_pool_stop_reason(state: WorkspaceState) -> list[StatusIssue]:
+    if state.pool_stop_reason != "consecutive_task_failures":
+        return []
+    failure_count = max(3, int(state.consecutive_task_failures))
+    return [
+        StatusIssue(
+            key="critical_status",
+            severity="ERROR",
+            message=(
+                f"CRITICAL: pool stopped after {failure_count} consecutive task failures"
+                " — inspect the latest flagged tasks, fix the blocker, then clear the stop reason."
+            ),
         )
     ]
 

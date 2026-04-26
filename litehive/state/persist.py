@@ -17,6 +17,8 @@ _SKIP_BOOTSTRAP_LOAD_STATE: ContextVar[bool] = ContextVar(
     "litehive_skip_bootstrap_load_state",
     default=False,
 )
+CONSECUTIVE_TASK_FAILURE_LIMIT = 3
+CONSECUTIVE_TASK_FAILURE_STOP_REASON = "consecutive_task_failures"
 
 
 @contextmanager
@@ -125,11 +127,28 @@ def save_state_without_runner_guard(
     runtime_store(root).save_workspace_state(state)
 
 
+def record_task_completion(root: Path, *, final_stage: str | None) -> tuple[int, str | None]:
+    from litehive.state.locking import workspace_lock
+
+    with workspace_lock(root):
+        state = load_state(root)
+        if final_stage == "done":
+            state.consecutive_task_failures = 0
+        else:
+            state.consecutive_task_failures = max(0, int(state.consecutive_task_failures)) + 1
+            if state.consecutive_task_failures >= CONSECUTIVE_TASK_FAILURE_LIMIT:
+                state.pool_stop_reason = CONSECUTIVE_TASK_FAILURE_STOP_REASON
+        save_state_without_runner_guard(root, state)
+        return state.consecutive_task_failures, state.pool_stop_reason
+
+
 def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
     from litehive.state.locking import workspace_lock
 
     with workspace_lock(root):
         state = load_state(root)
+        if stop_reason is None and state.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
+            state.consecutive_task_failures = 0
         state.pool_stop_reason = stop_reason
         save_state_without_runner_guard(root, state)
         return state
