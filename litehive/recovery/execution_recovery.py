@@ -632,33 +632,33 @@ def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
                     ) != 'running'
                     AND (
                         json_extract(payload, '$.pipeline_status')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
                         OR json_extract(payload, '$.runtime.pipeline.current_stage.stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
                         OR json_extract(payload, '$.runtime.current_stage.stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
                         OR json_extract(payload, '$.runtime.execution.interruption.resume_stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
                         OR json_extract(payload, '$.runtime.execution.interruption.pipeline_status')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
                         OR json_extract(payload, '$.runtime.interruption.resume_stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
                         OR json_extract(payload, '$.runtime.interruption.pipeline_status')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
                     )
                 ) OR (
                     json_extract(payload, '$.status') = 'interrupted'
                     AND (
                         json_extract(payload, '$.pipeline_status')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
                         OR json_extract(payload, '$.runtime.execution.interruption.resume_stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
                         OR json_extract(payload, '$.runtime.execution.interruption.pipeline_status')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
                         OR json_extract(payload, '$.runtime.interruption.resume_stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
                         OR json_extract(payload, '$.runtime.interruption.pipeline_status')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
                     )
                 ) OR (
                     json_extract(payload, '$.status') = 'queued'
@@ -668,7 +668,7 @@ def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
                                 json_extract(payload, '$.runtime.pipeline.current_stage.stage'),
                                 json_extract(payload, '$.runtime.current_stage.stage')
                             )
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
                             AND COALESCE(
                                 json_extract(payload, '$.runtime.pipeline.current_stage.status'),
                                 json_extract(payload, '$.runtime.current_stage.status')
@@ -676,13 +676,13 @@ def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
                             )
                         )
                         OR json_extract(payload, '$.runtime.execution.interruption.resume_stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
                         OR json_extract(payload, '$.runtime.execution.interruption.pipeline_status')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
                         OR json_extract(payload, '$.runtime.interruption.resume_stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
                         OR json_extract(payload, '$.runtime.interruption.pipeline_status')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'merge_failed')
+                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
                     )
                 )
                 LIMIT 1
