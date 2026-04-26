@@ -100,7 +100,7 @@ def test_quota_health_formats_status_and_reset() -> None:
         long_term=UsageWindow(percent_remaining=45.0, reset_at="2026-04-15T00:00:00Z"),
     )
 
-    health = quota_health("codex", status, reset_at="2026-04-15T00:00:00Z")
+    health = quota_health("codex", status)
 
     assert health.engine == "codex"
     assert health.status == "warning"

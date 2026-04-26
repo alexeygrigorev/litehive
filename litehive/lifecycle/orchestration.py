@@ -833,6 +833,7 @@ def run_task(
             workspace_root=root,
             engine_override=engine_override,
             model_override=model_override,
+            check_quota=engine_factory is None,
         )
         sessions = SqliteSessionStore(root)
         journal = SqliteJournal(root)

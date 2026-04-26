@@ -5,7 +5,7 @@ from pathlib import Path
 
 from litehive.db.schema import connect_workspace_db
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
-from heru.quota import UsageStatus
+from heru.quota import preferred_reset_at
 from litehive.domain.common import utcnow
 from litehive.domain.engine import (
     EngineUsageObservation,
@@ -183,10 +183,12 @@ def record_codex_quota_check(
     status: object,
 ) -> None:
     """Record proactive codex quota status into engine monitoring."""
-    if not isinstance(status, UsageStatus):
-        return
-    if status.error is not None:
+    if getattr(status, "error", None) is not None:
         return  # Don't overwrite good data with error state
+    short_term = getattr(status, "short_term", None)
+    long_term = getattr(status, "long_term", None)
+    if short_term is None or long_term is None:
+        return
 
     monitoring = load_engine_monitoring(root)
     record = monitoring.engines.get("codex")
@@ -197,10 +199,8 @@ def record_codex_quota_check(
     record.provider = "openai"
     record.observed_at = utcnow()
 
-    short_term = status.short_term
-    long_term = status.long_term
-    used_pct = int(long_term.used_percent)
-    reset_at = _preferred_reset_at(status)
+    used_pct = int(_used_percent(long_term))
+    reset_at = preferred_reset_at(status)
     record.usage = EngineUsageWindow(
         used=used_pct,
         limit=100,
@@ -208,19 +208,22 @@ def record_codex_quota_check(
         unit="percent",
         reset_at=reset_at,
     )
-    if status.limit_reached:
+    limit_reached = bool(getattr(status, "limit_reached", False))
+    if limit_reached:
         record.last_limit_reason = "codex usage limit reached"
         record.last_limit_kind = "quota"
     record.metadata = {
         **record.metadata,
-        "hours_percent_remaining": int(short_term.percent_remaining),
-        "weeks_percent_remaining": int(long_term.percent_remaining),
-        "quota_limit_reached": status.limit_reached,
+        "hours_percent_remaining": int(_percent_remaining(short_term)),
+        "weeks_percent_remaining": int(_percent_remaining(long_term)),
+        "quota_limit_reached": limit_reached,
     }
-    if short_term.reset_at:
-        record.metadata["hours_reset_at"] = short_term.reset_at
-    if long_term.reset_at:
-        record.metadata["weeks_reset_at"] = long_term.reset_at
+    short_reset_at = getattr(short_term, "reset_at", None)
+    long_reset_at = getattr(long_term, "reset_at", None)
+    if short_reset_at:
+        record.metadata["hours_reset_at"] = short_reset_at
+    if long_reset_at:
+        record.metadata["weeks_reset_at"] = long_reset_at
 
     monitoring.engines["codex"] = record
     save_engine_monitoring(root, monitoring)
@@ -281,13 +284,15 @@ def _limit_kind(reason: str | None) -> str | None:
     return None
 
 
-def _preferred_reset_at(
-    status: UsageStatus,
-    *,
-    include_short_term_fallback: bool = False,
-) -> str | None:
-    if status.long_term.reset_at:
-        return status.long_term.reset_at
-    if include_short_term_fallback:
-        return status.short_term.reset_at
-    return None
+def _percent_remaining(window: object) -> float:
+    value = getattr(window, "percent_remaining", None)
+    if value is None:
+        return 100.0
+    return float(value)
+
+
+def _used_percent(window: object) -> float:
+    value = getattr(window, "used_percent", None)
+    if value is not None:
+        return float(value)
+    return max(0.0, 100.0 - _percent_remaining(window))

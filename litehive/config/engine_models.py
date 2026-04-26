@@ -7,13 +7,11 @@ from pathlib import Path
 
 from heru import get_engine
 from heru.quota import (
-    UsageStatus,
     check_claude_quota,
     check_codex_quota,
     check_copilot_quota,
     check_zai_quota,
     preferred_reset_at,
-    usage_limit_block_reason,
 )
 from litehive.config.model import LitehiveConfig
 from litehive.config.runtime_settings import clear_engine_freeze, set_engine_freeze
@@ -179,6 +177,29 @@ def _quota_checker(engine_name: str):
     return None
 
 
+def _quota_status_uses_unified_shape(status: object) -> bool:
+    return getattr(status, "short_term", None) is not None and getattr(status, "long_term", None) is not None
+
+
+def _preferred_quota_reset_at(status: object) -> str | None:
+    try:
+        return preferred_reset_at(status, include_short_term_fallback=True)
+    except AttributeError:
+        return None
+
+
+def _quota_block_reason(engine_name: str, status: object) -> tuple[str | None, str | None]:
+    if getattr(status, "error", None) is not None:
+        return None, None
+    if not _quota_status_uses_unified_shape(status):
+        return None, None
+    if not bool(getattr(status, "limit_reached", False)):
+        return None, None
+    reset_at = _preferred_quota_reset_at(status)
+    reset_suffix = f", resets {reset_at}" if reset_at else ""
+    return f"{engine_name} usage limit reached{reset_suffix}", reset_at
+
+
 def engine_quota_block(
     root: Path,
     engine_name: str,
@@ -189,9 +210,8 @@ def engine_quota_block(
     status = checker()
     if engine_name == "codex":
         _record_codex_quota_monitoring(root, status)
-    if not isinstance(status, UsageStatus):
-        return None, None
-    return usage_limit_block_reason(engine_name, status), _parse_datetime_utc(preferred_reset_at(status))
+    reason, reset_at = _quota_block_reason(engine_name, status)
+    return reason, _parse_datetime_utc(reset_at)
 
 
 def select_engine(
@@ -204,6 +224,7 @@ def select_engine(
     engine_names: list[str] | None = None,
     excluded_engine_names: Collection[str] = (),
     require_available: bool = False,
+    check_quota: bool = True,
 ) -> EngineSelection:
     excluded = set(excluded_engine_names)
     if engine_names is not None:
@@ -241,7 +262,7 @@ def select_engine(
         expired_freeze = (
             engine_name not in frozen_engines and _parse_datetime_utc(config.engine_freeze.get(engine_name)) is not None
         )
-        quota_reason, freeze_until = engine_quota_block(root, engine_name)
+        quota_reason, freeze_until = engine_quota_block(root, engine_name) if check_quota else (None, None)
         if quota_reason is not None:
             if freeze_until is not None:
                 _persist_engine_freeze(root, config, engine_name=engine_name, freeze_until=freeze_until)

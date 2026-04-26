@@ -245,39 +245,18 @@ def _render_monitoring_line(record: EngineUsageRecord | None) -> str:
     return " ".join(parts)
 
 
-def _render_quota_line(engine_name: str, status: object) -> str:
+def _render_quota_line(_engine_name: str, status: object) -> str:
     quota_error = _quota_status_error(status)
     if quota_error is not None:
         return quota_error
-    if engine_name == "claude":
-        return (
-            "quota: "
-            f"5h utilization={status.five_hour.used_percent:.1f}% reset={status.five_hour.reset_at or '-'} | "
-            f"7d utilization={status.seven_day.used_percent:.1f}% reset={status.seven_day.reset_at or '-'}"
-        )
-    if engine_name == "codex":
-        return (
-            "quota: "
-            f"5h used={status.primary_window.used_percent:.1f}% reset={status.primary_window.reset_at or '-'} | "
-            f"weekly used={status.secondary_window.used_percent:.1f}% reset={status.secondary_window.reset_at or '-'}"
-        )
-    if engine_name == "copilot":
-        remaining = status.premium_remaining if status.premium_remaining is not None else "-"
-        entitlement = status.premium_entitlement if status.premium_entitlement is not None else "-"
-        return (
-            "quota: "
-            f"premium remaining={remaining}/{entitlement} "
-            f"used={status.used_percent:.1f}% "
-            f"reset={status.quota_reset_date or '-'}"
-        )
+    short_term = getattr(status, "short_term", None)
+    long_term = getattr(status, "long_term", None)
+    if short_term is None or long_term is None:
+        return "quota: unavailable (unsupported usage shape)"
     return (
         "quota: "
-        f"api calls used={status.api_calls.used_percent:.1f}% "
-        f"remaining={_remaining_label(status.api_calls.remaining, status.api_calls.limit)} "
-        f"window={_window_hours_label(status.api_calls.window_hours)} | "
-        f"tokens used={status.tokens.used_percent:.1f}% "
-        f"remaining={_remaining_label(status.tokens.remaining, status.tokens.limit)} "
-        f"window={_window_hours_label(status.tokens.window_hours)}"
+        f"{_usage_window_label('hours', short_term)} | "
+        f"{_usage_window_label('weeks', long_term)}"
     )
 
 
@@ -290,13 +269,11 @@ def _quota_status_error(status: object) -> str | None:
     return None
 
 
-def _remaining_label(remaining: int | None, limit: int | None) -> str:
-    remaining_label = remaining if remaining is not None else "-"
-    limit_label = limit if limit is not None else "-"
-    return f"{remaining_label}/{limit_label}"
-
-
-def _window_hours_label(window_hours: int | None) -> str:
-    if window_hours is None:
-        return "-"
-    return f"{window_hours}h"
+def _usage_window_label(name: str, window: object) -> str:
+    percent_remaining = getattr(window, "percent_remaining", None)
+    reset_at = getattr(window, "reset_at", None)
+    if percent_remaining is None:
+        remaining_label = "-"
+    else:
+        remaining_label = f"{float(percent_remaining):.1f}%"
+    return f"{name} remaining={remaining_label} reset={reset_at or '-'}"

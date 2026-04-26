@@ -59,12 +59,14 @@ class ConfigBackedEngineSelector:
         workspace_root: Path | None = None,
         engine_override: str | None = None,
         model_override: str | None = None,
+        check_quota: bool = True,
     ) -> None:
         self.config = config
         self.engine_factory = engine_factory
         self.workspace_root = workspace_root.resolve() if workspace_root is not None else None
         self.engine_override = engine_override
         self.model_override = model_override
+        self.check_quota = check_quota
 
     def _selection_task(self, state: TaskState, node_name: NodeName) -> TaskRecord | None:
         if self.workspace_root is None:
@@ -92,14 +94,14 @@ class ConfigBackedEngineSelector:
         if task is None:
             return None
 
-        selection = select_engine(
-            self.workspace_root,
-            task,
-            self.config,
-            engine_override=self.engine_override,
-            model_override=self.model_override,
-            excluded_engine_names=excluded,
-        )
+        selection_kwargs = {
+            "engine_override": self.engine_override,
+            "model_override": self.model_override,
+            "excluded_engine_names": excluded,
+        }
+        if not self.check_quota:
+            selection_kwargs["check_quota"] = False
+        selection = select_engine(self.workspace_root, task, self.config, **selection_kwargs)
         if selection.engine_name is None:
             return None
 

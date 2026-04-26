@@ -11,6 +11,7 @@ from heru.quota import (
     check_codex_quota,
     check_copilot_quota,
     check_zai_quota,
+    preferred_reset_at,
 )
 from litehive.cli.engine import engine_command
 from litehive.cli.display import format_retry_on
@@ -237,17 +238,9 @@ def collect_quota_health() -> list[_QuotaHealth]:
     copilot_status = check_copilot_quota()
     zai_status = check_zai_quota()
     snapshots = {
-        "claude": quota_health(
-            "claude",
-            claude_status,
-            reset_at=_preferred_reset_at(claude_status, include_short_term_fallback=True),
-        ),
-        "codex": quota_health("codex", codex_status, reset_at=_preferred_reset_at(codex_status)),
-        "copilot": quota_health(
-            "copilot",
-            copilot_status,
-            reset_at=_preferred_reset_at(copilot_status),
-        ),
+        "claude": quota_health("claude", claude_status),
+        "codex": quota_health("codex", codex_status),
+        "copilot": quota_health("copilot", copilot_status),
         "gemini": _unsupported_quota_health("gemini"),
         "goz": quota_health("goz", zai_status),
         "opencode": quota_health("opencode", zai_status),
@@ -259,32 +252,27 @@ def _unsupported_quota_health(engine: str) -> _QuotaHealth:
     return _QuotaHealth(engine=engine, status="unsupported", summary="no proactive quota check")
 
 
-def _preferred_reset_at(
-    status: UsageStatus,
-    *,
-    include_short_term_fallback: bool = False,
-) -> str | None:
-    if status.long_term.reset_at:
-        return status.long_term.reset_at
-    if include_short_term_fallback:
-        return status.short_term.reset_at
-    return None
-
-
 def quota_health(
     engine: str,
-    status: UsageStatus,
-    *,
-    reset_at: str | None = None,
+    status: UsageStatus | object,
 ) -> _QuotaHealth:
-    if status.error is not None:
-        return _QuotaHealth(engine, "unavailable", status.error)
-    short_term = status.short_term
-    long_term = status.long_term
-    summary = f"hours remaining={short_term.percent_remaining:.1f}% weeks remaining={long_term.percent_remaining:.1f}%"
+    error = getattr(status, "error", None)
+    if error is not None:
+        return _QuotaHealth(engine, "unavailable", error)
+    short_term = getattr(status, "short_term", None)
+    long_term = getattr(status, "long_term", None)
+    if short_term is None or long_term is None:
+        return _QuotaHealth(engine, "unavailable", "unsupported usage shape", problem=True)
+    short_remaining = getattr(short_term, "percent_remaining", None)
+    long_remaining = getattr(long_term, "percent_remaining", None)
+    if short_remaining is None or long_remaining is None:
+        return _QuotaHealth(engine, "unavailable", "unsupported usage shape", problem=True)
+    reset_at = preferred_reset_at(status, include_short_term_fallback=True)
+    summary = f"hours remaining={float(short_remaining):.1f}% weeks remaining={float(long_remaining):.1f}%"
     if reset_at is not None:
         summary += f" reset={reset_at}"
-    return _QuotaHealth(engine, "warning" if status.limit_reached else "ok", summary, status.limit_reached)
+    limit_reached = bool(getattr(status, "limit_reached", False))
+    return _QuotaHealth(engine, "warning" if limit_reached else "ok", summary, limit_reached)
 
 
 cmd_status = status_command

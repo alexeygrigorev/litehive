@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 from heru import ENGINE_CHOICES
-from heru.quota import UsageStatus
+from heru.quota import UsageStatus, UsageWindow
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
@@ -256,34 +256,32 @@ def test_engine_status_prints_monitoring_and_live_quota(tmp_path: Path, monkeypa
         "litehive.cli.engine.check_claude_quota",
         lambda: SimpleNamespace(
             error=None,
-            five_hour=SimpleNamespace(used_percent=12.5, reset_at="2026-04-14T12:00:00Z"),
-            seven_day=SimpleNamespace(used_percent=45.0, reset_at="2026-04-15T00:00:00Z"),
+            short_term=UsageWindow(percent_remaining=87.5, reset_at="2026-04-14T12:00:00Z"),
+            long_term=UsageWindow(percent_remaining=55.0, reset_at="2026-04-15T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
         "litehive.cli.engine.check_codex_quota",
         lambda: SimpleNamespace(
             error=None,
-            primary_window=SimpleNamespace(used_percent=30.0, reset_at="2026-04-14T17:00:00Z"),
-            secondary_window=SimpleNamespace(used_percent=65.0, reset_at="2026-04-21T00:00:00Z"),
+            short_term=UsageWindow(percent_remaining=70.0, reset_at="2026-04-14T17:00:00Z"),
+            long_term=UsageWindow(percent_remaining=35.0, reset_at="2026-04-21T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
         "litehive.cli.engine.check_copilot_quota",
         lambda: SimpleNamespace(
             error=None,
-            premium_remaining=120,
-            premium_entitlement=300,
-            used_percent=60.0,
-            quota_reset_date="2026-04-30T00:00:00Z",
+            short_term=UsageWindow(percent_remaining=100.0),
+            long_term=UsageWindow(percent_remaining=40.0, reset_at="2026-04-30T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
         "litehive.cli.engine.check_zai_quota",
         lambda: SimpleNamespace(
             error=None,
-            api_calls=SimpleNamespace(used_percent=15.0, remaining=85, limit=100, window_hours=24),
-            tokens=SimpleNamespace(used_percent=45.0, remaining=5500, limit=10000, window_hours=24),
+            short_term=UsageWindow(percent_remaining=55.0),
+            long_term=UsageWindow(percent_remaining=100.0),
         ),
     )
 
@@ -304,14 +302,17 @@ def test_engine_status_prints_monitoring_and_live_quota(tmp_path: Path, monkeypa
         "observed_at=2026-04-20T00:00:00Z"
     ) in output
     assert (
-        "quota: 5h utilization=12.5% reset=2026-04-14T12:00:00Z | 7d utilization=45.0% reset=2026-04-15T00:00:00Z"
+        "quota: hours remaining=87.5% reset=2026-04-14T12:00:00Z | "
+        "weeks remaining=55.0% reset=2026-04-15T00:00:00Z"
     ) in output
-    assert "quota: 5h used=30.0% reset=2026-04-14T17:00:00Z | weekly used=65.0% reset=2026-04-21T00:00:00Z" in output
-    assert "quota: premium remaining=120/300 used=60.0% reset=2026-04-30T00:00:00Z" in output
+    assert (
+        "quota: hours remaining=70.0% reset=2026-04-14T17:00:00Z | "
+        "weeks remaining=35.0% reset=2026-04-21T00:00:00Z"
+    ) in output
+    assert "quota: hours remaining=100.0% reset=- | weeks remaining=40.0% reset=2026-04-30T00:00:00Z" in output
     assert (
         output.count(
-            "quota: api calls used=15.0% remaining=85/100 window=24h | "
-            "tokens used=45.0% remaining=5500/10000 window=24h"
+            "quota: hours remaining=55.0% reset=- | weeks remaining=100.0% reset=-"
         )
         == 2
     )
@@ -519,6 +520,62 @@ def test_select_engine_records_quota_freeze_and_falls_back(
     assert selection.engine_name == "gemini"
     reloaded = load_config(tmp_path)
     assert reloaded.engine_freeze["codex"] == freeze_iso
+
+
+def test_engine_quota_block_consumes_current_heru_normalized_windows(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import importlib
+
+    from heru.quota.codex_quota import CodexQuotaStatus, CodexQuotaWindow
+    import litehive.config.engine_models as engine_models
+
+    engine_models = importlib.reload(engine_models)
+    status = CodexQuotaStatus(
+        secondary_window=CodexQuotaWindow(used_percent=95.0, reset_at="2026-04-27T00:00:00Z"),
+        limit_reached=True,
+    )
+    monkeypatch.setattr(engine_models, "check_codex_quota", lambda: status)
+    monkeypatch.setattr(engine_models, "_record_codex_quota_monitoring", lambda root, status: None)
+
+    reason, freeze_until = engine_models.engine_quota_block(tmp_path, "codex")
+
+    assert reason == "codex usage limit reached, resets 2026-04-27T00:00:00Z"
+    assert freeze_until == datetime(2026, 4, 27, tzinfo=timezone.utc)
+
+
+def test_select_engine_skips_current_heru_quota_status_shape(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import importlib
+
+    from heru.quota.codex_quota import CodexQuotaStatus, CodexQuotaWindow
+    import litehive.config.engine_models as engine_models
+
+    engine_models = importlib.reload(engine_models)
+    status = CodexQuotaStatus(
+        secondary_window=CodexQuotaWindow(used_percent=95.0, reset_at="2026-04-27T00:00:00Z"),
+        limit_reached=True,
+    )
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(default_engine="codex", recovery_engine="claude"),
+    )
+    task = create_task(tmp_path, title="quota selection repro")
+    config = load_config(tmp_path)
+    monkeypatch.setattr(engine_models, "check_codex_quota", lambda: status)
+    monkeypatch.setattr(engine_models, "check_claude_quota", lambda: UsageStatus())
+    monkeypatch.setattr(engine_models, "_record_codex_quota_monitoring", lambda root, status: None)
+
+    selection = engine_models.select_engine(tmp_path, task, config, engine_names=["codex", "claude"])
+
+    assert selection.engine_name == "claude"
+    assert [(item.engine_name, item.reason) for item in selection.skipped] == [
+        ("codex", "codex usage limit reached, resets 2026-04-27T00:00:00Z")
+    ]
+    assert load_config(tmp_path).engine_freeze["codex"] == "2026-04-27T00:00:00Z"
 
 
 def test_select_engine_skips_active_freeze_without_quota_call(
