@@ -55,7 +55,6 @@ def register_root_commands(app: typer.Typer) -> None:
     app.command("health", help="Show workspace health diagnostics")(health_command)
     app.command("engine", help="Manage engine freezes and status")(engine_command)
     app.command("repair", help="Repair stale active tasks, interrupted runs, and queue inconsistencies")(repair_command)
-    app.command("doctor", help="Alias for repair")(repair_command)
 
 
 def print_status_issues(issues) -> int:

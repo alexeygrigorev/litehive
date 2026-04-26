@@ -84,6 +84,18 @@ def test_repair_summary_lines_include_empty_fields_for_repair_mode() -> None:
     ]
 
 
+def test_doctor_command_is_not_registered(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    result = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
+
+    assert result.exit_code != 0
+    assert result.return_value is None
+    assert result.exception is not None
+    assert "No such command 'doctor'." in str(result.exception)
+    assert "repaired:" not in result.output
+
+
 def test_quota_health_formats_status_and_reset() -> None:
     status = UsageStatus(
         limit_reached=True,
@@ -150,7 +162,7 @@ def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tm
     state.queue = []
     save_state(tmp_path, state)
 
-    result = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
+    result = _RUNNER.invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
 
     assert result.return_value == 0
     assert "repaired: yes" in result.output
@@ -232,7 +244,7 @@ def test_repair_removes_stale_unmerged_worktrees_and_reports_count(tmp_path: Pat
     refreshed = load_state(tmp_path)
     assert refreshed.unmerged_worktrees == []
 
-    rerun = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
+    rerun = _RUNNER.invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
 
     assert rerun.return_value == 0
     assert "repaired: no" in rerun.output
