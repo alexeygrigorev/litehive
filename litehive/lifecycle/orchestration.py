@@ -308,7 +308,11 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
         state,
     )
     if state.stage in {PipelineState.DONE, PipelineState.FAILED}:
-        task_record.runtime.pipeline.execution_status = "idle"
+        # Set appropriate terminal execution status
+        if state.stage == PipelineState.DONE:
+            task_record.runtime.pipeline.execution_status = "done"
+        else:  # PipelineState.FAILED
+            task_record.runtime.pipeline.execution_status = "failed"
         task_record.runtime.pipeline.current_stage = task_record.runtime.pipeline.current_stage.model_copy(
             update={
                 "stage": None,

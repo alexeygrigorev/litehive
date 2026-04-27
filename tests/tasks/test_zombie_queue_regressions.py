@@ -1,4 +1,5 @@
 import subprocess
+from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -237,3 +238,114 @@ def test_run_drain_skips_zombie_queue_entries_and_leaves_main_clean(
     assert refreshed_state.active_task_id is None
     assert refreshed_state.queue == []
     assert has_non_litehive_changes(workspace) is False
+
+
+def test_task_with_hook_rejection_and_recovery_has_terminal_execution_status(tmp_path: Path) -> None:
+    """Regression test for T-0455: task that experiences hook rejection and later passes should have execution_status="done"."""
+    import pytest
+    pytest.importorskip("litehive.lifecycle.orchestration")  # Skip if import fails
+
+    from litehive.config.model import LitehiveConfig
+    from litehive.config.workspace_files import config_path
+    from litehive.lifecycle.nodes.agent import AgentVerdict
+    from litehive.lifecycle.orchestration import run_task as run_pipeline_task
+    from litehive.state.records import get_task
+    import yaml
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _git_ok(workspace, "init", "-b", "main")
+    _configure_repo(workspace)
+    ensure_workspace(workspace)
+
+    # Create initial commit
+    (workspace / "tracked.txt").write_text("initial\n", encoding="utf-8")
+    _git_ok(workspace, "add", "tracked.txt")
+    _git_ok(workspace, "commit", "-m", "initial commit")
+
+    task = create_task(workspace, title="Hook rejection and recovery test", pipeline_mode="single")
+
+    # Configure hook that fails twice then passes (based on successful pattern in test_hook_reject_circuit_breaker.py)
+    def _fail_twice_then_pass_command(task_id: str) -> str:
+        return (
+            f'if [ "$LITEHIVE_TASK_ID" != "{task_id}" ]; then exit 0; fi; '
+            "count=$(cat .hook_reject_count 2>/dev/null || echo 0); "
+            "count=$((count + 1)); "
+            'printf "%s" "$count" > .hook_reject_count; '
+            'if [ "$count" -le 2 ]; then '
+            'echo "Hook reject attempt $count" >&2; '
+            "exit 1; "
+            "fi; "
+            "exit 0"
+        )
+
+    config = LitehiveConfig(
+        runner_hooks={
+            "after_implementing": [
+                {
+                    "command": _fail_twice_then_pass_command(task.id),
+                    "description": "Test hook that fails twice then passes",
+                }
+            ]
+        }
+    )
+
+    config_file = config_path(workspace)
+    config_file.write_text(yaml.dump(asdict(config)), encoding="utf-8")
+
+    # Mock engine that passes on all attempts
+    class MockEngine:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def run_turn(self, session, prompt, state) -> AgentVerdict:
+            del session  # unused
+            role = prompt.get("role", "unknown")
+
+            if role == "swe":
+                # SWE agent implementation - create some change and pass
+                test_file = workspace / "test_implementation.txt"
+                test_file.write_text("Implementation completed\n", encoding="utf-8")
+                return AgentVerdict(outcome="pass")
+            else:
+                # All other roles (including recovery) pass
+                return AgentVerdict(outcome="pass")
+
+    # Run the task through the pipeline
+    result = run_pipeline_task(
+        workspace,
+        task,
+        engine_factory=lambda engine_name: MockEngine(engine_name),
+    )
+
+    # Verify the task completed successfully
+    assert result.final_stage == "done"
+
+    # Verify the task has the correct terminal state - this is the key regression test
+    completed_task = get_task(workspace, task.id)
+    assert completed_task is not None
+    assert completed_task.status == "done"
+    assert completed_task.pipeline_status == "done"
+    assert completed_task.runtime.pipeline.execution_status == "done"  # This is the key fix
+
+    # Verify that the completed task is not eligible for execution
+    from litehive.tasks.queue import _has_terminal_execution_status, is_task_eligible_for_execution
+
+    assert _has_terminal_execution_status(completed_task) is True
+    assert is_task_eligible_for_execution(completed_task) is False
+
+    # Additional verification: create a simple queue test to confirm it would be skipped
+    # Create a fresh runnable task for comparison
+    runnable_task = create_task(workspace, title="Runnable task")
+
+    # Manually set up a scenario to test queue selection
+    _queue_task(workspace, completed_task.id, status="done", pipeline_status="done", execution_status="done")
+
+    state = load_state(workspace)
+    state.queue = [completed_task.id, runnable_task.id]
+    save_state(workspace, state)
+
+    # Verify queue selection correctly skips the completed task
+    selection = dequeue_next_task_selection(workspace)
+    assert selection.task is not None
+    assert selection.task.id == runnable_task.id
