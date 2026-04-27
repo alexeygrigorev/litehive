@@ -17,11 +17,13 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.engine import WorkspaceEngineMonitoring
+from litehive.domain.reports import StageReport
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import WorkspaceState
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
+from litehive.tasks.reports import record_stage_report
 
 _RUNNER = CliRunner()
 
@@ -78,6 +80,7 @@ def test_repair_summary_lines_include_empty_fields_for_repair_mode() -> None:
         "cleared_active_task_id: -",
         "requeued_tasks: -",
         "stale_process_tasks: -",
+        "normalized_terminal_tasks: -",
     ]
 
 
@@ -206,6 +209,46 @@ def test_repair_skips_legacy_disk_only_tasks_missing_runtime_state(tmp_path: Pat
     assert load_state(tmp_path).queue == [task.id]
     refreshed = require_task(tmp_path, task.id)
     assert refreshed.status == "queued"
+
+
+def test_repair_normalizes_stale_queued_terminal_task(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Already accepted task")
+    task.status = "queued"
+    task.pipeline_status = "backlog"
+    task.runtime.execution_status = "interrupted"
+    task.runtime.current_stage.stage = "backlog"
+    task.runtime.current_stage.status = "idle"
+    save_task(tmp_path, task)
+    record_stage_report(
+        tmp_path,
+        task,
+        StageReport(
+            task_id=task.id,
+            pipeline_state="accepting",
+            verdict="pass",
+            summary="Acceptance passed before stale state recovery.",
+        ),
+    )
+
+    state = load_state(tmp_path)
+    state.active_task_id = None
+    state.queue = []
+    save_state(tmp_path, state)
+
+    result = _RUNNER.invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
+
+    assert result.return_value == 0
+    assert "repaired: yes" in result.output
+    assert f"normalized_terminal_tasks: {task.id}" in result.output
+    assert "queue_length: 0" in result.output
+
+    refreshed = require_task(tmp_path, task.id)
+    assert refreshed.status == "done"
+    assert refreshed.pipeline_status == "done"
+    assert refreshed.close_reason == "done"
+    assert refreshed.runtime.execution_status == "done"
+    assert refreshed.runtime.current_stage.stage == "done"
 
 
 def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatch, capsys) -> None:

@@ -43,8 +43,12 @@ EffectFn = Callable[[TaskState, Event], "StateDelta"]
 class StateDelta:
     """Typed patch applied by the Runner after a transition fires.
 
-    Every field is optional; only the ones set are applied. No strings to
-    parse, no silent drops on typos.
+    Represents atomic state changes to TaskState that result from pipeline
+    events and transitions. Used by the state machine to apply effects
+    without risk of incomplete updates or field name typos.
+
+    Created by effect factories based on events, applied by Runner.
+    Every field is optional; only the ones set are applied.
     """
 
     inc_stage_retry: PipelineState | None = None

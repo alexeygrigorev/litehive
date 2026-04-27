@@ -86,6 +86,7 @@ def repair_summary_lines(
     items = [
         ("requeued_tasks", summary.requeued_task_ids),
         ("stale_process_tasks", summary.stale_process_task_ids),
+        ("normalized_terminal_tasks", summary.terminal_task_ids),
     ]
     for label, values in items:
         if values or include_empty:

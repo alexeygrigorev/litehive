@@ -14,6 +14,7 @@ from litehive.domain.common import RunnerStatus, utcnow
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.lock_manager import WorkspaceLockManager
+from litehive.state.process_lock import ProcessLockManager
 
 from litehive.tasks.constants import (
     HEARTBEAT_LATE_THRESHOLD_SECONDS,
@@ -43,9 +44,10 @@ def _runner_lock_manager(
     root: Path,
     *,
     held_in_process: Callable[[], bool] | None = None,
-) -> WorkspaceLockManager:
-    return WorkspaceLockManager(
-        runner_lock_path(root),
+) -> ProcessLockManager:
+    return ProcessLockManager(
+        lock_path=runner_lock_path(root),
+        process_name="runner",
         pid_is_alive=runner_pid_is_alive,
         held_in_process=held_in_process,
     )
@@ -65,7 +67,11 @@ def workspace_lock(root: Path):
 
 
 def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> None:
-    WorkspaceLockManager(Path(handle.name), pid_is_alive=runner_pid_is_alive).write_locked_metadata(
+    ProcessLockManager(
+        lock_path=Path(handle.name),
+        process_name="runner",
+        pid_is_alive=runner_pid_is_alive,
+    ).write_locked_metadata(
         handle,
         status.model_dump(mode="json"),
     )
@@ -124,8 +130,9 @@ def runner_status_needs_reconciliation(root: Path) -> bool:
 
 def clear_runner_lock_metadata(root: Path) -> None:
     root = root.resolve()
-    _runner_lock_manager(root, held_in_process=lambda: root in RUNNER_LOCKS).clear_metadata_if_unlocked()
-    _clear_runner_process_state(root)
+    manager = _runner_lock_manager(root, held_in_process=lambda: root in RUNNER_LOCKS)
+    if manager.clear_metadata_if_unlocked():
+        _clear_runner_process_state(root)
 
 
 def heartbeat_is_late(heartbeat_at: str | None) -> bool:
@@ -332,13 +339,13 @@ def workspace_runner_guard(root: Path):
                     lock_state.depth -= 1
                     should_close = False
             if should_close:
-                manager.release(lock_state.handle, clear_metadata=True)
+                manager.lock_manager.release(lock_state.handle, clear_metadata=True)
                 _clear_runner_process_state(root)
         return
 
     try:
         try:
-            handle = manager.acquire(nonblocking=True)
+            handle = manager.lock_manager.acquire(nonblocking=True)
         except BlockingIOError as exc:
             raise WorkspaceConflictError(runner_conflict_message(root)) from exc
         # Auto-repair stale state left by a crashed runner.  We hold the
@@ -368,7 +375,7 @@ def workspace_runner_guard(root: Path):
     finally:
         with RUNNER_LOCKS_MUTEX:
             RUNNER_LOCKS.pop(root, None)
-        manager.release(handle, clear_metadata=True)
+        manager.lock_manager.release(handle, clear_metadata=True)
         _clear_runner_process_state(root)
 
 
