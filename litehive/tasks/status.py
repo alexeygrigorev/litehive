@@ -31,6 +31,7 @@ from litehive.tasks.normalization import (
     implementation_entry_stage,
 )
 from litehive.tasks.paths import latest_subagent_base, task_dir
+from litehive.tasks.queue import drop_task_from_workspace_state
 from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
 
 
@@ -645,7 +646,7 @@ def abandon_task(
             None if task.runtime.execution.active_subagent is None else task.runtime.execution.active_subagent.pid,
         )
         _apply_cancelled_task_state(task, reason=reason)
-        _drop_task_from_workspace_state(state, task.id)
+        drop_task_from_workspace_state(state, task.id)
         persist_task_and_state_without_runner_guard(
             root,
             task=task,
@@ -680,10 +681,6 @@ _CLOSE_REASON_CODE_LABELS: dict[str, str] = {
 }
 
 
-def _drop_task_from_workspace_state(state: WorkspaceState, task_id: str) -> None:
-    if state.active_task_id == task_id:
-        state.active_task_id = None
-    state.queue = [item for item in state.queue if item != task_id]
 
 
 def _queue_task(state: WorkspaceState, task_id: str, *, front: bool = False) -> None:
@@ -813,7 +810,7 @@ def close_task(
             reason=reason,
             follow_up_task_id=follow_up_task_id,
         )
-        _drop_task_from_workspace_state(state, task.id)
+        drop_task_from_workspace_state(state, task.id)
         persist_task_and_state_without_runner_guard(
             root,
             task=task,
@@ -867,7 +864,7 @@ def park_task(
         if task.status == "done":
             raise ValueError(f"Task {task.id} is already done and cannot be parked")
         _apply_parked_task_state(task)
-        _drop_task_from_workspace_state(state, task.id)
+        drop_task_from_workspace_state(state, task.id)
         persist_task_and_state_without_runner_guard(
             root,
             task=task,

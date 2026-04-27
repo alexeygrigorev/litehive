@@ -17,6 +17,7 @@ from litehive.state.locking import workspace_lock
 from litehive.state.persist import load_state, save_state_without_runner_guard
 from litehive.state.store import runtime_store
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
+from litehive.tasks.queue import drop_task_from_workspace_state
 from litehive.tasks.archive_index import (
     archive_index_path,
     archive_root as archive_index_root,
@@ -106,17 +107,6 @@ def _archived_at_for_tombstone(task: TaskRecord) -> str:
     return task.updated_at or utcnow()
 
 
-def _drop_task_from_workspace_state(state, task_id: str) -> bool:
-    changed = False
-    if state.active_task_id == task_id:
-        state.active_task_id = None
-        changed = True
-    if task_id in state.queue:
-        state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
-        changed = True
-    original_unmerged = len(state.unmerged_worktrees)
-    state.unmerged_worktrees = [item for item in state.unmerged_worktrees if item.task_id != task_id]
-    return changed or len(state.unmerged_worktrees) != original_unmerged
 
 
 def _hard_delete_archived_task(
@@ -130,7 +120,7 @@ def _hard_delete_archived_task(
     extra_context: dict[str, Any] | None = None,
 ) -> TaskRecord:
     queue_before = list(state.queue)
-    _drop_task_from_workspace_state(state, task.id)
+    drop_task_from_workspace_state(state, task.id)
     archive_dir = _archive_task_path(root, task.id)
     deleted_at = utcnow()
     if archive_dir is not None:

@@ -183,6 +183,23 @@ def enqueue_recovered_task(state: WorkspaceState, task_id: str) -> None:
     state.queue.append(task_id)
 
 
+def drop_task_from_workspace_state(state: WorkspaceState, task_id: str) -> bool:
+    """Remove a task from workspace state (queue, active_task_id, unmerged_worktrees).
+
+    Returns True if any state was modified, False otherwise.
+    """
+    changed = False
+    if state.active_task_id == task_id:
+        state.active_task_id = None
+        changed = True
+    if task_id in state.queue:
+        state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
+        changed = True
+    original_unmerged = len(state.unmerged_worktrees)
+    state.unmerged_worktrees = [item for item in state.unmerged_worktrees if item.task_id != task_id]
+    return changed or len(state.unmerged_worktrees) != original_unmerged
+
+
 def prepare_completed_task_for_recovery(task: TaskRecord, *, recovery_stage: str) -> None:
     reset_task_for_recovery(
         task,

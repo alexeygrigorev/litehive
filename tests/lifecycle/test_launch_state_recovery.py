@@ -102,3 +102,85 @@ def test_run_task_restarts_recovered_completed_task_from_ready(tmp_path: Path, m
     assert result.final_stage == "done"
     assert calls == ["implementing", "testing", "accepting"]
     assert routes[:2] == ["worktree_sync", "before_implementing"]
+
+
+def test_completed_task_recovery_then_close_reconciles_all_state_layers(tmp_path: Path) -> None:
+    """Test that recovery+close operations maintain consistency across all persistence layers."""
+    from litehive.state.records import get_task_record
+    from litehive.state.store import runtime_store
+    from litehive.tasks.status import close_task
+
+    _init_workspace_git_repo(tmp_path)
+
+    # Create a completed task
+    task = create_task(tmp_path, title="Task for recovery-close test")
+    task.status = "done"
+    task.pipeline_status = "done"
+    save_task(tmp_path, task)
+    _seed_terminal_pipeline_state(tmp_path, task.id, entry_stage="implementing", stage="done")
+
+    # Remove from queue to simulate completed task state (completed tasks are not queued)
+    state_before_recovery = load_state(tmp_path)
+    from litehive.tasks.queue import drop_task_from_workspace_state
+    drop_task_from_workspace_state(state_before_recovery, task.id)
+    save_state(tmp_path, state_before_recovery)
+
+    # Verify initial completed state
+    state_before_recovery = load_state(tmp_path)
+    assert task.id not in state_before_recovery.queue
+    assert state_before_recovery.active_task_id != task.id
+
+    # Recover the completed task
+    recovered_task = recover_completed_task(tmp_path, task.id)
+
+    # Verify recovery placed task in queue with correct status
+    state_after_recovery = load_state(tmp_path)
+    assert recovered_task.status == "queued"
+    assert recovered_task.pipeline_status == "implementing"
+    assert task.id in state_after_recovery.queue
+    assert state_after_recovery.active_task_id is None
+
+    # Verify SQLite task_state reflects queued status
+    store = runtime_store(tmp_path)
+    task_state_after_recovery = store.load_task_state(task.id)
+    assert task_state_after_recovery is not None
+    assert task_state_after_recovery.status == "queued"
+    assert task_state_after_recovery.pipeline_status == "implementing"
+
+    # Close the recovered task as done
+    closed_task = close_task(tmp_path, task.id, outcome="done", reason="Task completed successfully")
+
+    # Verify task status is properly closed with outcome "done"
+    assert closed_task.status == "done"
+    assert closed_task.pipeline_status == "done"
+    assert closed_task.close_reason == "done"
+
+    # Verify WorkspaceState.queue no longer contains the task
+    state_after_close = load_state(tmp_path)
+    assert task.id not in state_after_close.queue
+    assert state_after_close.active_task_id != task.id
+
+    # Verify SQLite task_state reflects done status
+    task_state_after_close = store.load_task_state(task.id)
+    assert task_state_after_close is not None
+    assert task_state_after_close.status == "done"
+    assert task_state_after_close.pipeline_status == "done"
+
+    # Verify task record in storage matches in-memory object
+    stored_task = get_task_record(tmp_path, task.id)
+    assert stored_task is not None
+    assert stored_task.status == "done"
+    assert stored_task.pipeline_status == "done"
+    assert stored_task.close_reason == "done"
+
+    # Ensure task is never reported as queued/backlog in any persistence layer
+    final_state = load_state(tmp_path)
+    final_task_state = store.load_task_state(task.id)
+    final_task_record = get_task_record(tmp_path, task.id)
+
+    # Task should be in done/done state, never queued/backlog
+    assert final_task_record.status == "done"
+    assert final_task_record.pipeline_status == "done"
+    assert final_task_state.status == "done"
+    assert final_task_state.pipeline_status == "done"
+    assert task.id not in final_state.queue

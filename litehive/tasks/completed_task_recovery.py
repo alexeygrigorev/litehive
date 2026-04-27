@@ -22,6 +22,7 @@ def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
     with workspace_mutation_guard(root), workspace_lock(root):
         from litehive.state.records import get_task
         from litehive.tasks.archive import get_archived_task
+        from litehive.tasks.queue import drop_task_from_workspace_state
 
         task = get_task(root, task_id)
         if task is None:
@@ -36,8 +37,7 @@ def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
         prepare_completed_task_for_recovery(task, recovery_stage=recovery_stage)
         state = load_state(root)
         queue_before = list(state.queue)
-        state.active_task_id = None
-        state.queue = [item for item in state.queue if item != task.id]
+        drop_task_from_workspace_state(state, task.id)
         state.queue.append(task.id)
         persist_task_and_state(
             root,
