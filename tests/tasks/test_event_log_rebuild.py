@@ -13,7 +13,12 @@ from litehive.state.records import create_task, discard_created_task, get_task, 
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.archive import archive_task, delete_archived_task
 from litehive.tasks.audit import load_task_audit_entries
-from litehive.tasks.event_log import read_task_events, rebuild_sqlite_from_task_event_log, task_event_log_path
+from litehive.tasks.event_log import (
+    read_task_events,
+    rebuild_sqlite_from_task_event_log,
+    task_event_log_has_events,
+    task_event_log_path,
+)
 from litehive.tasks.reports import load_stage_reports, record_stage_report
 from litehive.tasks.status import close_task, requeue_task, update_task_metadata
 
@@ -96,6 +101,31 @@ def test_task_event_log_records_lifecycle_transition_types_outside_sqlite(tmp_pa
         "task_deleted",
     } <= event_types
     assert all("timestamp" in event and "task_id" in event and "payload" in event for event in events)
+
+
+def test_task_event_log_has_events_short_circuits_without_full_decode(tmp_path: Path) -> None:
+    path = task_event_log_path(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(
+            [
+                "{",
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "timestamp": "2026-04-27T00:00:00+00:00",
+                        "task_id": "T-0001",
+                        "event_type": "task_created",
+                        "payload": {},
+                    }
+                ),
+                "{",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert task_event_log_has_events(tmp_path) is True
 
 
 def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_path: Path, monkeypatch) -> None:

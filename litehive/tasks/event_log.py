@@ -193,8 +193,21 @@ def read_task_events(root: Path) -> tuple[list[dict[str, Any]], int]:
 
 
 def task_event_log_has_events(root: Path) -> bool:
-    events, _invalid = read_task_events(root)
-    return bool(events)
+    path = task_event_log_path(root)
+    if not path.exists():
+        return False
+    with path.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(event, dict) and isinstance(event.get("payload"), dict):
+                return True
+    return False
 
 
 def rebuild_sqlite_from_task_event_log(root: Path, *, clear_existing: bool = True) -> TaskEventLogReplaySummary:
