@@ -20,7 +20,7 @@ from litehive.tasks.constants import (
     RUNNER_LOCKS,
     RUNNER_LOCKS_MUTEX,
 )
-from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
+from litehive.tasks.audit import TaskAuditState, build_task_audit_entry, snapshot_task_audit_state
 from litehive.state.locking import workspace_lock
 from litehive.domain.task_ops import StopTaskSummary, SwitchTaskSummary, WorkspaceConflictError
 from litehive.tasks.normalization import (
@@ -33,6 +33,132 @@ from litehive.tasks.normalization import (
 from litehive.tasks.paths import latest_subagent_base, task_dir
 from litehive.tasks.queue import drop_task_from_workspace_state
 from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
+
+
+class TaskTransitionService:
+    """Application service that owns task lifecycle transitions."""
+
+    def __init__(self, root: Path):
+        self.root = root
+
+    def close(
+        self,
+        task_id: str,
+        *,
+        outcome: str,
+        reason: str | None = None,
+        follow_up_task_id: str | None = None,
+        audit_actor: str = "operator",
+        audit_source: str = "cli",
+    ) -> TaskRecord:
+        return _close_task_transition(
+            self.root,
+            task_id,
+            outcome=outcome,
+            reason=reason,
+            follow_up_task_id=follow_up_task_id,
+            audit_actor=audit_actor,
+            audit_source=audit_source,
+        )
+
+    def park(
+        self,
+        task_id: str,
+        *,
+        reason: str = "Task parked via CLI.",
+        audit_actor: str = "operator",
+        audit_source: str = "cli",
+    ) -> TaskRecord:
+        return _park_task_transition(
+            self.root,
+            task_id,
+            reason=reason,
+            audit_actor=audit_actor,
+            audit_source=audit_source,
+        )
+
+    def abandon(
+        self,
+        task_id: str,
+        *,
+        reason: str = "Task abandoned via CLI.",
+        audit_actor: str = "operator",
+        audit_source: str = "cli",
+    ) -> TaskRecord:
+        return _abandon_task_transition(
+            self.root,
+            task_id,
+            reason=reason,
+            audit_actor=audit_actor,
+            audit_source=audit_source,
+        )
+
+    def requeue(
+        self,
+        task_id: str,
+        *,
+        front: bool = False,
+        force: bool = False,
+        audit_actor: str = "operator",
+        audit_source: str = "cli",
+    ) -> TaskRecord:
+        return _requeue_task_transition(
+            self.root,
+            task_id,
+            front=front,
+            force=force,
+            audit_actor=audit_actor,
+            audit_source=audit_source,
+        )
+
+    def resume(self, task_id: str, *, front: bool = False) -> TaskRecord:
+        return _resume_task_transition(self.root, task_id, front=front)
+
+    def update(
+        self,
+        task_id: str,
+        *,
+        title: str | object = ...,
+        depends_on: list[str] | object = ...,
+        task_type: str | None | object = ...,
+        model: str | None | object = ...,
+        retry_limit: int | None | object = ...,
+        priority: str | object = ...,
+        goal: str | object = ...,
+        acceptance_criteria: list[str] | object = ...,
+        constraints: list[str] | object = ...,
+        plan: list[str] | object = ...,
+        auto_commit: bool | object = ...,
+        outcome: str | None | object = ...,
+        outcome_reason: str | None | object = ...,
+        action: str | None | object = ...,
+        allow_active_agent_task_mutation: bool = False,
+        journal_message: str | None = None,
+        audit_actor: str = "operator",
+        audit_source: str = "cli",
+    ) -> TaskRecord:
+        return _update_task_transition(
+            self.root,
+            task_id,
+            title=title,
+            depends_on=depends_on,
+            task_type=task_type,
+            model=model,
+            retry_limit=retry_limit,
+            priority=priority,
+            goal=goal,
+            acceptance_criteria=acceptance_criteria,
+            constraints=constraints,
+            plan=plan,
+            auto_commit=auto_commit,
+            outcome=outcome,
+            outcome_reason=outcome_reason,
+            action=action,
+            allow_active_agent_task_mutation=allow_active_agent_task_mutation,
+            journal_message=journal_message,
+            audit_actor=audit_actor,
+            audit_source=audit_source,
+        )
 
 
 def _reset_pipeline_state(root: Path, task_id: str) -> None:
@@ -426,7 +552,43 @@ def switch_task_engine(
     )
 
 
-def requeue_task(
+def _persist_transition(
+    root: Path,
+    *,
+    task: TaskRecord,
+    state: WorkspaceState,
+    journal_message: str,
+    action: str,
+    actor: str,
+    source: str,
+    before_task: TaskRecord | TaskAuditState | None,
+    before_queue: list[str],
+    context: dict[str, object] | None = None,
+) -> None:
+    from litehive.state.persist import persist_task_and_state_without_runner_guard
+
+    persist_task_and_state_without_runner_guard(
+        root,
+        task=task,
+        state=state,
+        journal_message=journal_message,
+        audit_entries=[
+            build_task_audit_entry(
+                task_id=task.id,
+                action=action,
+                actor=actor,
+                source=source,
+                before_task=before_task,
+                after_task=task,
+                before_queue=before_queue,
+                after_queue=state.queue,
+                context=context,
+            )
+        ],
+    )
+
+
+def _requeue_task_transition(
     root: Path,
     task_id: str,
     *,
@@ -452,7 +614,6 @@ def requeue_task(
         retract_activity_entry,
     )
     from litehive.worktree import resolve_recorded_worktree_path
-    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     def _task_checkout_path(task: TaskRecord) -> Path:
         worktree_path = resolve_recorded_worktree_path(
@@ -519,40 +680,32 @@ def requeue_task(
         )
         _reset_pipeline_state(root, task.id)
         _queue_task(state, task.id, front=front)
-        persist_task_and_state_without_runner_guard(
+        _persist_transition(
             root,
             task=task,
             state=state,
             journal_message="Task requeued for another implementation pass.",
-            audit_entries=[
-                build_task_audit_entry(
-                    task_id=task.id,
-                    action="requeued",
-                    actor=audit_actor,
-                    source=audit_source,
-                    before_task=before_task,
-                    after_task=task,
-                    before_queue=queue_before,
-                    after_queue=state.queue,
-                    context={
-                        "front": front,
-                        "force": force,
-                        "flag_count_before": flag_count_before,
-                        "stage_retry_exhaustion_overrides": failed_run_overrides,
-                    },
-                )
-            ],
+            action="requeued",
+            actor=audit_actor,
+            source=audit_source,
+            before_task=before_task,
+            before_queue=queue_before,
+            context={
+                "front": front,
+                "force": force,
+                "flag_count_before": flag_count_before,
+                "stage_retry_exhaustion_overrides": failed_run_overrides,
+            },
         )
         return task
 
 
-def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
+def _resume_task_transition(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
     from litehive.state.records import require_task
     from litehive.tasks.archive import get_archived_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.state.persist import load_state
     from litehive.tasks.queue import reset_task_for_recovery, resumable_queue_stage
-    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):
         if get_archived_task(root, task_id) is not None:
@@ -594,33 +747,26 @@ def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
         )
         _reset_pipeline_state(root, task.id)
         _queue_task(state, task.id, front=front)
-        persist_task_and_state_without_runner_guard(
+        _persist_transition(
             root,
             task=task,
             state=state,
             journal_message=f"Task resumed from `{resumed_stage}`.",
-            audit_entries=[
-                build_task_audit_entry(
-                    task_id=task.id,
-                    action="resumed",
-                    actor="operator",
-                    source="cli",
-                    before_task=before_task,
-                    after_task=task,
-                    before_queue=queue_before,
-                    after_queue=state.queue,
-                    context={
-                        "front": front,
-                        "resumed_stage": resumed_stage,
-                        "stranded_in_progress": stranded_in_progress,
-                    },
-                )
-            ],
+            action="resumed",
+            actor="operator",
+            source="cli",
+            before_task=before_task,
+            before_queue=queue_before,
+            context={
+                "front": front,
+                "resumed_stage": resumed_stage,
+                "stranded_in_progress": stranded_in_progress,
+            },
         )
         return task
 
 
-def abandon_task(
+def _abandon_task_transition(
     root: Path,
     task_id: str,
     *,
@@ -631,7 +777,6 @@ def abandon_task(
     from litehive.state.records import require_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.state.persist import load_state
-    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):
         task = require_task(root, task_id)
@@ -647,24 +792,17 @@ def abandon_task(
         )
         _apply_cancelled_task_state(task, reason=reason)
         drop_task_from_workspace_state(state, task.id)
-        persist_task_and_state_without_runner_guard(
+        _persist_transition(
             root,
             task=task,
             state=state,
             journal_message=f"{reason.rstrip('.')} at stage `{task.pipeline_status}`.",
-            audit_entries=[
-                build_task_audit_entry(
-                    task_id=task.id,
-                    action="abandoned",
-                    actor=audit_actor,
-                    source=audit_source,
-                    before_task=before_task,
-                    after_task=task,
-                    before_queue=queue_before,
-                    after_queue=state.queue,
-                    context={"reason": reason},
-                )
-            ],
+            action="abandoned",
+            actor=audit_actor,
+            source=audit_source,
+            before_task=before_task,
+            before_queue=queue_before,
+            context={"reason": reason},
         )
         _reset_pipeline_state(root, task.id)
         return task
@@ -742,7 +880,7 @@ def _apply_parked_task_state(task: TaskRecord) -> None:
     task.status = "parked"
 
 
-def close_task(
+def _close_task_transition(
     root: Path,
     task_id: str,
     *,
@@ -760,7 +898,6 @@ def close_task(
         workspace_lock,
     )
     from litehive.state.persist import load_state
-    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     """Mark a task as explicitly closed with a terminal outcome.
 
@@ -809,34 +946,27 @@ def close_task(
             follow_up_task_id=follow_up_task_id,
         )
         drop_task_from_workspace_state(state, task.id)
-        persist_task_and_state_without_runner_guard(
+        _persist_transition(
             root,
             task=task,
             state=state,
             journal_message=journal_message,
-            audit_entries=[
-                build_task_audit_entry(
-                    task_id=task.id,
-                    action="closed",
-                    actor=audit_actor,
-                    source=audit_source,
-                    before_task=before_task,
-                    after_task=task,
-                    before_queue=queue_before,
-                    after_queue=state.queue,
-                    context={
-                        "outcome": outcome,
-                        "reason": reason,
-                        "follow_up_task_id": follow_up_task_id,
-                    },
-                )
-            ],
+            action="closed",
+            actor=audit_actor,
+            source=audit_source,
+            before_task=before_task,
+            before_queue=queue_before,
+            context={
+                "outcome": outcome,
+                "reason": reason,
+                "follow_up_task_id": follow_up_task_id,
+            },
         )
         _reset_pipeline_state(root, task.id)
         return task
 
 
-def park_task(
+def _park_task_transition(
     root: Path,
     task_id: str,
     *,
@@ -847,7 +977,6 @@ def park_task(
     from litehive.state.records import require_task
     from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
     from litehive.state.persist import load_state
-    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     """Mark a task as parked.
 
@@ -863,29 +992,22 @@ def park_task(
             raise ValueError(f"Task {task.id} is already done and cannot be parked")
         _apply_parked_task_state(task)
         drop_task_from_workspace_state(state, task.id)
-        persist_task_and_state_without_runner_guard(
+        _persist_transition(
             root,
             task=task,
             state=state,
             journal_message=f"{reason.rstrip('.')} at stage `{task.pipeline_status}`.",
-            audit_entries=[
-                build_task_audit_entry(
-                    task_id=task.id,
-                    action="parked",
-                    actor=audit_actor,
-                    source=audit_source,
-                    before_task=before_task,
-                    after_task=task,
-                    before_queue=queue_before,
-                    after_queue=state.queue,
-                    context={"reason": reason},
-                )
-            ],
+            action="parked",
+            actor=audit_actor,
+            source=audit_source,
+            before_task=before_task,
+            before_queue=queue_before,
+            context={"reason": reason},
         )
         return task
 
 
-def update_task(
+def _update_task_transition(
     root: Path,
     task_id: str,
     *,
@@ -1050,4 +1172,125 @@ def update_task(
         return task
 
 
-update_task_metadata = update_task
+def task_transition_service(root: Path) -> TaskTransitionService:
+    return TaskTransitionService(root)
+
+
+def requeue_task(
+    root: Path,
+    task_id: str,
+    *,
+    front: bool = False,
+    force: bool = False,
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> TaskRecord:
+    return task_transition_service(root).requeue(
+        task_id,
+        front=front,
+        force=force,
+        audit_actor=audit_actor,
+        audit_source=audit_source,
+    )
+
+
+def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
+    return task_transition_service(root).resume(task_id, front=front)
+
+
+def abandon_task(
+    root: Path,
+    task_id: str,
+    *,
+    reason: str = "Task abandoned via CLI.",
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> TaskRecord:
+    return task_transition_service(root).abandon(
+        task_id,
+        reason=reason,
+        audit_actor=audit_actor,
+        audit_source=audit_source,
+    )
+
+
+def close_task(
+    root: Path,
+    task_id: str,
+    *,
+    outcome: str,
+    reason: str | None = None,
+    follow_up_task_id: str | None = None,
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> TaskRecord:
+    return task_transition_service(root).close(
+        task_id,
+        outcome=outcome,
+        reason=reason,
+        follow_up_task_id=follow_up_task_id,
+        audit_actor=audit_actor,
+        audit_source=audit_source,
+    )
+
+
+def park_task(
+    root: Path,
+    task_id: str,
+    *,
+    reason: str = "Task parked via CLI.",
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> TaskRecord:
+    return task_transition_service(root).park(
+        task_id,
+        reason=reason,
+        audit_actor=audit_actor,
+        audit_source=audit_source,
+    )
+
+
+def update_task(
+    root: Path,
+    task_id: str,
+    *,
+    title: str | object = ...,
+    depends_on: list[str] | object = ...,
+    task_type: str | None | object = ...,
+    model: str | None | object = ...,
+    retry_limit: int | None | object = ...,
+    priority: str | object = ...,
+    goal: str | object = ...,
+    acceptance_criteria: list[str] | object = ...,
+    constraints: list[str] | object = ...,
+    plan: list[str] | object = ...,
+    auto_commit: bool | object = ...,
+    outcome: str | None | object = ...,
+    outcome_reason: str | None | object = ...,
+    action: str | None | object = ...,
+    allow_active_agent_task_mutation: bool = False,
+    journal_message: str | None = None,
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> TaskRecord:
+    return task_transition_service(root).update(
+        task_id,
+        title=title,
+        depends_on=depends_on,
+        task_type=task_type,
+        model=model,
+        retry_limit=retry_limit,
+        priority=priority,
+        goal=goal,
+        acceptance_criteria=acceptance_criteria,
+        constraints=constraints,
+        plan=plan,
+        auto_commit=auto_commit,
+        outcome=outcome,
+        outcome_reason=outcome_reason,
+        action=action,
+        allow_active_agent_task_mutation=allow_active_agent_task_mutation,
+        journal_message=journal_message,
+        audit_actor=audit_actor,
+        audit_source=audit_source,
+    )

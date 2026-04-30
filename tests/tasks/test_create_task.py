@@ -16,7 +16,7 @@ from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_follow_up_tasks, create_task, get_task, list_tasks, save_task
 from litehive.tasks.archive import archive_task
 from litehive.tasks.duplicates import rebuild_duplicate_task_index, search_tasks_by_text
-from litehive.tasks.status import update_task_metadata
+from litehive.tasks.status import update_task
 
 
 def _task_intent_payload(root: Path, task_id: str) -> dict:
@@ -453,7 +453,7 @@ def test_create_task_rejects_dependency_cycle(tmp_path: Path) -> None:
     save_task(tmp_path, first)
 
     with pytest.raises(ValueError, match=rf"Task {second.id} dependency cycle detected via {first.id}"):
-        update_task_metadata(tmp_path, second.id, depends_on=[first.id])
+        update_task(tmp_path, second.id, depends_on=[first.id])
 
 
 def test_create_follow_up_tasks_persists_queue_and_creation_source(tmp_path: Path) -> None:
@@ -560,7 +560,7 @@ def test_search_tasks_by_text_tracks_duplicate_index_maintenance(tmp_path: Path)
     assert "duplicate web dashboard cards" in created_match.snippet
     assert created_match.status == "queued"
 
-    update_task_metadata(
+    update_task(
         tmp_path,
         task.id,
         title="Dashboard duplicate cleanup",

@@ -20,7 +20,7 @@ from litehive.tasks.event_log import (
     task_event_log_path,
 )
 from litehive.tasks.reports import load_stage_reports, record_stage_report
-from litehive.tasks.status import close_task, requeue_task, update_task_metadata
+from litehive.tasks.status import close_task, requeue_task, update_task
 
 
 def _delete_workspace_db(root: Path) -> None:
@@ -53,7 +53,7 @@ def test_task_event_log_records_lifecycle_transition_types_outside_sqlite(tmp_pa
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Eventful task")
 
-    update_task_metadata(tmp_path, task.id, title="Updated eventful task")
+    update_task(tmp_path, task.id, title="Updated eventful task")
     report = CliRunner().invoke(
         app,
         [
@@ -133,7 +133,7 @@ def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_
     ensure_workspace(tmp_path)
     done = create_task(tmp_path, title="Replay done", goal="old goal")
     queued = create_task(tmp_path, title="Replay queued")
-    update_task_metadata(tmp_path, done.id, title="Replay updated", priority="high", goal="new goal")
+    update_task(tmp_path, done.id, title="Replay updated", priority="high", goal="new goal")
 
     report = CliRunner().invoke(
         app,

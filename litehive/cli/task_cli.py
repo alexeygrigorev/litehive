@@ -28,7 +28,7 @@ from litehive.tasks.duplicates import (
     find_potential_duplicate_tasks,
     search_tasks_by_text,
 )
-from litehive.tasks.status import abandon_task, close_task, update_task_metadata
+from litehive.tasks.status import abandon_task, close_task, update_task
 
 app = make_typer(invoke_without_command=True)
 
@@ -542,7 +542,7 @@ def update(
         constraints = parse_text_list_option(constraints, option_name="constraints", allow_clear=True)
         plan = parse_text_list_option(plan, option_name="plan", allow_clear=True)
 
-        task = update_task_metadata(
+        task = update_task(
             workspace,
             task_id,
             title=title if title is not None else ...,
