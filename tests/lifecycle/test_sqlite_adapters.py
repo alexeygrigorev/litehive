@@ -1,4 +1,4 @@
-"""Round-trip tests for v2 pipeline sqlite adapters.
+"""Round-trip tests for pipeline sqlite adapters.
 
 Covers ``SqlitePersistence`` (TaskState round-trip) and ``SqliteSessionStore``
 (Session round-trip keyed by task/node/engine), plus isolation invariants —
@@ -20,13 +20,16 @@ from litehive.domain.recovery import (
     RecoveryTrigger,
     TriggerEventKind,
 )
+from litehive.domain.lifecycle_deltas import StateDelta
+from litehive.lifecycle.events import CleanState
+from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.persistence import (
+    CommitResult,
     FailedRunRecord,
     HookRejectFingerprint,
     LastRejection,
     LastReport,
     MergeContext,
-    CommitResult,
     Limits,
     RejectionLoop,
     SqlitePersistence,
@@ -253,6 +256,48 @@ def test_persistence_failed_reason_and_message_roundtrip(workspace: Path) -> Non
     loaded = store.load("T-0200")
     assert loaded.failed_reason == "recovery_exhausted"
     assert loaded.failed_message == "recovery agent gave up after one attempt"
+
+
+def test_reset_current_lifecycle_state_preserves_journal_history(workspace: Path) -> None:
+    store = SqlitePersistence(workspace)
+    task_id = "T-0300"
+    state = store.initialize(task_id, pipeline_mode=PipelineMode.FULL)
+    state.stage = "implementing"
+    state.stage_retry["implementing"] = 1
+    store.save(state)
+
+    journal = SqliteJournal(workspace)
+    journal.task_started(task_id, "ready")
+    journal.transition(
+        task_id=task_id,
+        from_stage="ready",
+        event=CleanState(),
+        to_stage="before_grooming",
+        rule_description="ready -> before_grooming",
+        delta=StateDelta(),
+    )
+
+    store.reset_current_lifecycle_state(task_id)
+
+    with pytest.raises(TaskNotFound):
+        store.load(task_id)
+    with connect_workspace_db(workspace) as connection:
+        current_state_count = connection.execute(
+            "SELECT COUNT(*) AS count FROM pipeline_task_state WHERE task_id = ?",
+            (task_id,),
+        ).fetchone()["count"]
+        transition_count = connection.execute(
+            "SELECT COUNT(*) AS count FROM pipeline_transitions WHERE task_id = ?",
+            (task_id,),
+        ).fetchone()["count"]
+        journal_count = connection.execute(
+            "SELECT COUNT(*) AS count FROM pipeline_journal WHERE task_id = ?",
+            (task_id,),
+        ).fetchone()["count"]
+
+    assert current_state_count == 0
+    assert transition_count == 1
+    assert journal_count == 1
 
 
 # ── SqliteSessionStore ────────────────────────────────────────────────────

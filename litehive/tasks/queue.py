@@ -494,12 +494,13 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                     pipeline_status=recovery_stage,
                     clear_last_outcome=False,
                 )
-                # Drop the v2 pipeline_task_state row so the runner starts
-                # from `ready` instead of re-emitting the sticky `failed`
-                # terminal and looping forever.
+                # Reset the current lifecycle cursor so the runner starts from
+                # `ready` instead of re-emitting the sticky `failed` terminal
+                # and looping forever. Transition/journal history remains the
+                # source for prior-attempt metrics.
                 from litehive.lifecycle.persistence import SqlitePersistence
 
-                SqlitePersistence(root).reset(next_task.id, preserve_run_memory=True)
+                SqlitePersistence(root).reset_current_lifecycle_state(next_task.id, preserve_run_memory=True)
             if next_task.status in {"queued", "interrupted"}:
                 next_task.status = "in_progress"
             queue_additions = [task_id for task_id in state.queue if task_id not in original_queue]

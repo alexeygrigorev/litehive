@@ -467,12 +467,20 @@ class TaskNotFound(LookupError):
 
 
 class SqlitePersistence:
-    """Persists ``TaskState`` to the ``pipeline_task_state`` sqlite table.
+    """Persists the current lifecycle cursor to ``pipeline_task_state``.
 
     The scalar fields (stage, pipeline_mode) are stored as columns so the
     daemon can query them directly without parsing JSON. Everything else
     (counters, recovery/merge details, last_rejection_by_stage, last_report, failed_*)
     lives in the free-form ``payload`` column.
+
+    Boundary for metrics and history:
+    - main-stage attempt counts come from append-only ``pipeline_transitions``;
+    - operator/status/recovery mutations come from task audit/events;
+    - engine continuation data comes from ``pipeline_sessions``.
+
+    ``pipeline_task_state`` is only the mutable current-state cursor that the
+    runner resumes from. It is not a transition history or audit source.
 
     ``limits`` is runtime config and is re-injected from the ``limits``
     constructor argument on every load — it never hits the db.
@@ -537,13 +545,18 @@ class SqlitePersistence:
             limits=self.limits,
         )
 
-    def reset(self, task_id: str, *, preserve_run_memory: bool = False) -> None:
-        """Reset lifecycle state for a task.
+    def reset_current_lifecycle_state(self, task_id: str, *, preserve_run_memory: bool = False) -> None:
+        """Reset the current lifecycle cursor for a task.
 
-        Called when the task-level layer resets a flagged task back to
-        queued (dequeue auto-recovery path), or closes/cancels a task. Requeue
-        callers can preserve lifecycle-owned failed-run/recovery memory so the
-        next runner launch does not need to copy it back from runtime.
+        This deletes or rewrites only the mutable ``pipeline_task_state`` row
+        that the runner resumes from. Append-only ``pipeline_transitions`` and
+        ``pipeline_journal`` history are preserved; ``pipeline_sessions`` rows
+        are also left intact because they store engine continuation data.
+
+        Called when the task-level layer resets a flagged task back to queued
+        (dequeue auto-recovery path), or closes/cancels a task. Requeue callers
+        can preserve lifecycle-owned failed-run/recovery memory so the next
+        runner launch does not need to copy it back from runtime.
         """
         try:
             previous = self.load(task_id)

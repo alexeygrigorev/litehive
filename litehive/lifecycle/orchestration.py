@@ -124,7 +124,7 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
             preserved_failed_runs = {}
             preserved_recovery_history = []
             recovery_budget_history_start = 0
-        persistence.reset(task_id, preserve_run_memory=True)
+        persistence.reset_current_lifecycle_state(task_id, preserve_run_memory=True)
         return _fresh_state(
             failed_run_history=preserved_failed_runs,
             recovery_history=preserved_recovery_history,

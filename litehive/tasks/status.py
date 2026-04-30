@@ -164,7 +164,7 @@ class TaskTransitionService:
 def _reset_pipeline_state(root: Path, task_id: str, *, preserve_run_memory: bool = False) -> None:
     from litehive.lifecycle.persistence import SqlitePersistence
 
-    SqlitePersistence(root).reset(task_id, preserve_run_memory=preserve_run_memory)
+    SqlitePersistence(root).reset_current_lifecycle_state(task_id, preserve_run_memory=preserve_run_memory)
 
 
 def _terminate_subagent_pid(
