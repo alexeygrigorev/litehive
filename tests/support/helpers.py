@@ -101,13 +101,6 @@ def _cmd_recover(args) -> int:
     return _invoke_cli(["queue", "recover", args.task_id, "--workspace", args.workspace])
 
 
-def _cmd_search(args) -> int:
-    argv = ["task", "search", args.query, "--workspace", args.workspace]
-    if getattr(args, "limit", None) is not None:
-        argv.extend(["--limit", args.limit])
-    return _invoke_cli(argv)
-
-
 def _cmd_show(args) -> int:
     return _invoke_cli(["task", "show", args.task_id, "--workspace", args.workspace])
 

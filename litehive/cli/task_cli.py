@@ -22,12 +22,6 @@ from litehive.state.records import create_task, get_task, list_tasks as load_tas
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
-from litehive.tasks.duplicates import (
-    DuplicateTaskMatch,
-    TaskSearchMatch,
-    find_potential_duplicate_tasks,
-    search_tasks_by_text,
-)
 from litehive.tasks.status import abandon_task, close_task, update_task
 
 app = make_typer(invoke_without_command=True)
@@ -110,22 +104,6 @@ def _print_creation_provenance(task) -> None:
     print(f"  rationale: {created_from.rationale or '-'}")
 
 
-def _print_duplicate_task_warning(matches: list[DuplicateTaskMatch]) -> None:
-    if not matches:
-        return
-    print("warning: potential duplicate tasks found:")
-    for match in matches:
-        print(f"  - {match.task_id} [{match.status}] {match.title}")
-
-
-def _print_task_search_results(matches: list[TaskSearchMatch]) -> None:
-    for index, match in enumerate(matches):
-        if index:
-            print()
-        print(f"{match.task_id} [{match.status}] {match.title}")
-        print(f"  goal: {match.snippet or '-'}")
-
-
 def _print_recent_task_table(summaries) -> None:
     columns = [
         ("task_id", "TASK_ID"),
@@ -195,7 +173,6 @@ def add(
     try:
         depends_on = parse_dependency_ids(depends_on)
         acceptance_criteria = parse_acceptance_criteria(acceptance_criteria)
-        _print_duplicate_task_warning(find_potential_duplicate_tasks(workspace, title=title, goal=goal))
         task = create_task(
             workspace,
             title=title,
@@ -218,21 +195,6 @@ def add(
     missing_criteria_reason = missing_acceptance_criteria_cli_warning(task)
     if missing_criteria_reason is not None:
         print(f"warning: {missing_criteria_reason}")
-    return 0
-
-
-@app.command("search", help="Search tasks using the maintained sqlitesearch index")
-def search(
-    query: Annotated[str, typer.Argument(help="Free-text search query")],
-    workspace: WorkspaceOption = Path.cwd(),
-    limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum matches to show")] = 5,
-) -> int:
-    ensure_workspace(workspace)
-    matches = search_tasks_by_text(workspace, query=query, limit=limit)
-    if not matches:
-        print(f"No matching tasks found for: {query}")
-        return 0
-    _print_task_search_results(matches)
     return 0
 
 

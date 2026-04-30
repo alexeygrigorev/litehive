@@ -50,9 +50,9 @@ def test_root_help_hides_legacy_shortcuts_and_internal_aliases() -> None:
     result = CliRunner().invoke(modern_cli.app, ["--help"])
 
     assert result.exit_code == 0, result.output
-    for command in ["add", "recover", "prioritize", "switch", "agent", "daemon"]:
+    for command in ["add", "recover", "prioritize", "switch", "agent", "daemon", "import"]:
         assert command not in result.output
-    for command in ["start", "stop", "restart", "task", "queue", "import", "engine"]:
+    for command in ["start", "stop", "restart", "task", "queue", "engine"]:
         assert command in result.output
 
 
@@ -72,6 +72,7 @@ def test_removed_root_aliases_are_no_longer_available() -> None:
         "resume",
         "issue",
         "intake",
+        "import",
         "import-issue",
         "import-issues",
         "cleanup",

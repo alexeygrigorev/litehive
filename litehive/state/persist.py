@@ -254,7 +254,6 @@ def persist_tasks_and_state(
 ) -> None:
     from litehive.state.locking import workspace_mutation_guard
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
-    from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
 
     for task in tasks:
         task.updated_at = utcnow()
@@ -272,7 +271,6 @@ def persist_tasks_and_state(
             audit_entries=audit_entries,
         )
         ensure_runtime_ignored(root)
-        refresh_duplicate_task_index_if_initialized(root)
 
 
 def persist_tasks_and_state_without_runner_guard(
@@ -285,7 +283,6 @@ def persist_tasks_and_state_without_runner_guard(
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
-    from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
 
     for task in tasks:
         task.updated_at = utcnow()
@@ -302,7 +299,6 @@ def persist_tasks_and_state_without_runner_guard(
         audit_entries=audit_entries,
     )
     ensure_runtime_ignored(root)
-    refresh_duplicate_task_index_if_initialized(root)
 
 
 def persist_task_and_state_without_runner_guard(

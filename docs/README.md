@@ -80,6 +80,9 @@ litehive task add "Document API auth flow" \
  
 ```
 
+Litehive does not import GitHub issues or specs directly. Normalize external
+inputs with your own preprocessing, then create tasks through `litehive task add`.
+
 Inspect the workspace:
 
 ```bash

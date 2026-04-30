@@ -8,7 +8,6 @@ Ownership inside this package is intentionally split by task concern:
 - ``report_storage``, ``recovery_reports``, ``recovery_evidence``, and
   ``activity_rendering`` own report persistence, recovery context, and display.
 - ``archive`` and ``archive_index`` own archived task access.
-- ``duplicates`` owns duplicate detection.
 - ``paths`` owns task-local filesystem and artifact path lookup.
 
 Keep cross-cutting orchestration in callers or explicit services; this package

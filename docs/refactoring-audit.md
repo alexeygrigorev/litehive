@@ -208,9 +208,8 @@ contract. The only LiteHive-owned workspace YAML file should be
   record repositories, event-log persistence, rebuild safety, backups, and
   locking.
 - [x] Split `tasks/` into task application logic, activity, queueing, archive,
-  duplicate detection, and task paths. `litehive/tasks/__init__.py` now maps
-  owners for lifecycle mutation, queueing, activity, reporting, archive,
-  duplicate detection, and path/artifact lookup.
+  and task paths. `litehive/tasks/__init__.py` now maps owners for lifecycle
+  mutation, queueing, activity, reporting, archive, and path/artifact lookup.
 - [x] Move report storage out of `tasks/reports.py` or rename the module to
   reflect its real scope: recovery evidence, activity rendering, report
   storage, artifact lookup, and report normalization. `tasks/reports.py` is now

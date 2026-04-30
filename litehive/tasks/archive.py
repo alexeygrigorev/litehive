@@ -181,8 +181,6 @@ def _archive_validated_task(
     audit_actor: str,
     audit_source: str,
 ) -> TaskRecord:
-    from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
-
     before_task = snapshot_task_audit_state(task)
     src = task_dir(root, task)
     dst = archive_root(root) / src.name
@@ -217,7 +215,6 @@ def _archive_validated_task(
     else:
         dst.mkdir(parents=True, exist_ok=True)
     _update_archive_index(root, [task])
-    refresh_duplicate_task_index_if_initialized(root)
     return task
 
 
@@ -330,8 +327,6 @@ def delete_archived_task(
     audit_actor: str = "operator",
     audit_source: str = "archive_delete",
 ) -> TaskRecord:
-    from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
-
     reason = reason.strip()
     if not reason:
         raise ValueError("Delete reason must not be empty")
@@ -354,14 +349,11 @@ def delete_archived_task(
         )
         save_state_without_runner_guard(root, state)
         _write_archive_index(root, list_archived_tasks(root))
-        refresh_duplicate_task_index_if_initialized(root)
         return task
 
 
 def cleanup_archived_tasks(root: Path, older_than: str) -> list[TaskRecord]:
     """Delete archived tasks older than the given duration."""
-    from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
-
     max_age_seconds = _parse_duration(older_than)
     now = datetime.now(timezone.utc)
     deleted: list[TaskRecord] = []
@@ -389,6 +381,4 @@ def cleanup_archived_tasks(root: Path, older_than: str) -> list[TaskRecord]:
         if deleted:
             save_state_without_runner_guard(root, state)
             _write_archive_index(root, list_archived_tasks(root))
-    if deleted:
-        refresh_duplicate_task_index_if_initialized(root)
     return deleted

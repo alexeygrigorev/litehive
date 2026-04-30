@@ -10,7 +10,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.archive import archive_task
 
-from tests.support.helpers import _cmd_list, _cmd_recover, _cmd_search, _cmd_show, _cmd_update
+from tests.support.helpers import _cmd_list, _cmd_recover, _cmd_show, _cmd_update
 
 
 def test_list_excludes_done_tasks_by_default(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -293,26 +293,6 @@ def test_show_prints_archived_history(tmp_path: Path, capsys: pytest.CaptureFixt
     assert "close_reason: done" in output
     assert "pipeline_stage: done" in output
     assert "goal: Keep archived history directly inspectable" in output
-
-
-def test_search_exact_archived_task_id_returns_archived_history(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Archived search task", auto_commit=False)
-    task.status = "done"
-    task.pipeline_status = "done"
-    task.goal = "Find archived task history by exact task ID"
-    save_task(tmp_path, task)
-    archive_task(tmp_path, task.id)
-
-    exit_code = _cmd_search(argparse.Namespace(workspace=tmp_path, query=task.id, limit=5))
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert f"{task.id} [archived] Archived search task" in output
-    assert "Find archived task history by exact task ID" in output
 
 
 def test_recover_archived_task_directs_operator_to_create_new_task(

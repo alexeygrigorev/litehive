@@ -439,7 +439,6 @@ def persist_future_task_update(
 ) -> None:
     from litehive.state.store import runtime_store
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
-    from litehive.tasks.duplicates import refresh_duplicate_task_index_if_initialized
 
     task.updated_at = utcnow()
     runtime_store(root).save_runtime_transaction(
@@ -449,4 +448,3 @@ def persist_future_task_update(
         audit_entries=audit_entries,
     )
     ensure_runtime_ignored(root)
-    refresh_duplicate_task_index_if_initialized(root)

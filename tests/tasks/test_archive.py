@@ -25,7 +25,6 @@ from litehive.tasks.archive import (
     list_archived_tasks,
 )
 from litehive.tasks.audit import load_task_audit_entries
-from litehive.tasks.duplicates import rebuild_duplicate_task_index, search_tasks_by_text
 from litehive.tasks.paths import task_dir
 from litehive.tasks.queue import set_active_task
 from litehive.tasks.status import close_task, requeue_task, resume_task
@@ -367,11 +366,6 @@ def test_delete_archived_task_removes_live_records_and_preserves_tombstone(tmp_p
     archive_dir = archive_root(tmp_path) / f"{task.id}-{task.slug}"
     archived_at = _archived_at(tmp_path, task.id)
 
-    rebuild_duplicate_task_index(tmp_path)
-    archived_matches = search_tasks_by_text(tmp_path, query="remove archived tasks from live records", limit=10)
-    archived_match = next(match for match in archived_matches if match.task_id == task.id)
-    assert archived_match.status == "archived"
-
     state = load_state(tmp_path)
     state.active_task_id = task.id
     state.queue = [task.id]
@@ -388,11 +382,6 @@ def test_delete_archived_task_removes_live_records_and_preserves_tombstone(tmp_p
     assert refreshed_state.active_task_id is None
     assert task.id not in refreshed_state.queue
     assert all(task.id != archived_task.id for archived_task in list_archived_tasks(tmp_path))
-    assert all(match.task_id != task.id for match in search_tasks_by_text(tmp_path, query=task.id, limit=10))
-    assert all(
-        match.task_id != task.id
-        for match in search_tasks_by_text(tmp_path, query="remove archived tasks from live records", limit=10)
-    )
 
     with pytest.raises(ValueError, match=f"Task {task.id} not found"):
         requeue_task(tmp_path, task.id)

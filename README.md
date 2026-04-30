@@ -39,6 +39,9 @@ litehive task add "Add user authentication" --goal "Users can sign up and log in
 litehive task add "Fix the search bug" --goal "Search returns results for partial matches"
 litehive task add "Write API documentation" --goal "Capture the public API surface and auth flow"
 
+# Prepare GitHub issues, specs, or other external inputs outside Litehive, then
+# create explicit tasks with task add.
+
 # Start the background runner
 litehive start
 
