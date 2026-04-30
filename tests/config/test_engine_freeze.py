@@ -23,7 +23,6 @@ from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.runtime_settings import load_runtime_setting_audit_entries
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.engine import EngineUsageRecord, EngineUsageWindow, WorkspaceEngineMonitoring
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import GitError
 from litehive.lifecycle.engines import ConfigBackedEngineSelector
@@ -222,34 +221,13 @@ def test_unfreeze_not_frozen_engine_returns_error(tmp_path: Path, capsys) -> Non
     assert "not frozen" in output
 
 
-def test_engine_status_prints_monitoring_and_live_quota(tmp_path: Path, monkeypatch) -> None:
+def test_engine_status_prints_routing_availability_and_live_quota(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(
         tmp_path,
-        LitehiveConfig(default_engine="codex", engine_freeze={"gemini": "2099-06-15T00:00:00Z"}),
-    )
-
-    monkeypatch.setattr(
-        "litehive.cli.engine.load_engine_monitoring",
-        lambda root: WorkspaceEngineMonitoring(
-            engines={
-                "codex": EngineUsageRecord(
-                    engine="codex",
-                    source="provider",
-                    provider="openai",
-                    observed_at="2026-04-20T00:00:00Z",
-                    invocation_count=4,
-                    success_count=3,
-                    failure_count=1,
-                    limit_event_count=1,
-                    usage=EngineUsageWindow(
-                        used=60,
-                        limit=100,
-                        remaining=40,
-                        unit="percent",
-                        reset_at="2026-04-21T00:00:00Z",
-                    ),
-                )
-            }
+        LitehiveConfig(
+            default_engine="codex",
+            engine_preference=["codex", "gemini"],
+            engine_freeze={"gemini": "2099-06-15T00:00:00Z"},
         ),
     )
     monkeypatch.setattr(
@@ -264,6 +242,7 @@ def test_engine_status_prints_monitoring_and_live_quota(tmp_path: Path, monkeypa
         "litehive.cli.engine.check_codex_quota",
         lambda: SimpleNamespace(
             error=None,
+            limit_reached=True,
             short_term=UsageWindow(percent_remaining=70.0, reset_at="2026-04-14T17:00:00Z"),
             long_term=UsageWindow(percent_remaining=35.0, reset_at="2026-04-21T00:00:00Z"),
         ),
@@ -293,32 +272,21 @@ def test_engine_status_prints_monitoring_and_live_quota(tmp_path: Path, monkeypa
     )
     assert exit_code == 0
     assert "default_engine: codex" in output
+    assert "engine_preference: codex,gemini" in output
     assert "engine_freeze: gemini=2099-06-15T00:00:00Z" in output
     for engine_name in ENGINE_CHOICES:
         assert f"engine: {engine_name} " in output
-    assert (
-        "monitoring: source=provider invocations=4 success=3 failure=1 limits=1 "
-        "provider=openai usage=used=60,limit=100,remaining=40,unit=percent,reset_at=2026-04-21T00:00:00Z "
-        "observed_at=2026-04-20T00:00:00Z"
-    ) in output
-    assert (
-        "quota: hours remaining=87.5% reset=2026-04-14T12:00:00Z | weeks remaining=55.0% reset=2026-04-15T00:00:00Z"
-    ) in output
-    assert (
-        "quota: hours remaining=70.0% reset=2026-04-14T17:00:00Z | weeks remaining=35.0% reset=2026-04-21T00:00:00Z"
-    ) in output
-    assert "quota: hours remaining=100.0% reset=- | weeks remaining=40.0% reset=2026-04-30T00:00:00Z" in output
-    assert output.count("quota: hours remaining=55.0% reset=- | weeks remaining=100.0% reset=-") == 2
+    assert "engine: gemini available=" in output
+    assert "frozen=yes frozen_until=2099-06-15T00:00:00Z" in output
+    assert "monitoring:" not in output
+    assert "quota: limited" in output
+    assert output.count("quota: ok") == 4
     assert "quota: unsupported" in output
 
 
 def test_engine_status_handles_quota_errors_gracefully(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
-    monkeypatch.setattr(
-        "litehive.cli.engine.load_engine_monitoring",
-        lambda root: WorkspaceEngineMonitoring(),
-    )
     monkeypatch.setattr(
         "litehive.cli.engine.check_claude_quota",
         lambda: UsageStatus(error="no-credentials"),
@@ -530,7 +498,6 @@ def test_engine_quota_block_consumes_current_heru_normalized_windows(
         limit_reached=True,
     )
     monkeypatch.setattr(engine_models, "check_codex_quota", lambda: status)
-    monkeypatch.setattr(engine_models, "_record_codex_quota_monitoring", lambda root, status: None)
 
     reason, freeze_until = engine_models.engine_quota_block(tmp_path, "codex")
 
@@ -560,7 +527,6 @@ def test_select_engine_skips_current_heru_quota_status_shape(
     config = load_config(tmp_path)
     monkeypatch.setattr(engine_models, "check_codex_quota", lambda: status)
     monkeypatch.setattr(engine_models, "check_claude_quota", lambda: UsageStatus())
-    monkeypatch.setattr(engine_models, "_record_codex_quota_monitoring", lambda root, status: None)
 
     selection = engine_models.select_engine(tmp_path, task, config, engine_names=["codex", "claude"])
 

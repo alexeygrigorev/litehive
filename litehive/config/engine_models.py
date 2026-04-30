@@ -3,9 +3,7 @@
 from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import logging
 from pathlib import Path
-import sqlite3
 
 from heru import get_engine
 from heru.quota import (
@@ -18,9 +16,6 @@ from heru.quota import (
 from litehive.config.model import LitehiveConfig
 from litehive.config.runtime_settings import clear_engine_freeze, set_engine_freeze
 from litehive.domain.task import TaskRecord
-
-log = logging.getLogger(__name__)
-
 
 def _engine_attempt_order(initial_engine_names: list[str], engine_preference: list[str]) -> list[str]:
     seen: set[str] = set()
@@ -160,15 +155,6 @@ def _clear_engine_freeze(root: Path, config: LitehiveConfig, *, engine_name: str
     config.engine_freeze.pop(engine_name, None)
 
 
-def _record_codex_quota_monitoring(root: Path, status: object) -> None:
-    try:
-        from litehive.observability.engine_monitoring import record_codex_quota_check
-
-        record_codex_quota_check(root, status=status)
-    except (OSError, sqlite3.DatabaseError, ValueError) as exc:
-        log.warning("failed to record codex quota monitoring for %s: %s", root, exc)
-
-
 def _quota_checker(engine_name: str):
     if engine_name == "codex":
         return check_codex_quota
@@ -212,8 +198,6 @@ def engine_quota_block(
     if checker is None:
         return None, None
     status = checker()
-    if engine_name == "codex":
-        _record_codex_quota_monitoring(root, status)
     reason, reset_at = _quota_block_reason(engine_name, status)
     return reason, _parse_datetime_utc(reset_at)
 

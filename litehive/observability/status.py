@@ -83,8 +83,6 @@ def render_task_pipeline_status_lines(
     mode: StatusRenderMode,
     retry_on_label: str | None = None,
 ) -> list[str]:
-    from litehive.observability.engine_monitoring import render_engine_monitoring_lines
-
     if mode == "full":
         lines = render_full_status_header_lines(workspace, status.config, status.state, status.runner)
     else:
@@ -111,10 +109,7 @@ def render_task_pipeline_status_lines(
             lines.append(f"runner_heartbeat_at: {status.runner.heartbeat_at}")
 
     lines.extend(render_active_task_detail_lines(status.active_task, status.config.default_engine))
-    if mode == "full":
-        lines.extend(render_engine_monitoring_lines(status.monitoring))
-    else:
-        lines.extend(render_engine_availability_lines(status.config, status.monitoring))
+    lines.extend(render_engine_availability_lines(status.config, status.monitoring))
 
     if mode == "full":
         if retry_on_label is None:
@@ -675,31 +670,6 @@ def render_queue_section(queue: list[str], tasks: list[TaskRecord]) -> list[str]
     return lines
 
 
-def render_engine_health_section(monitoring: WorkspaceEngineMonitoring) -> list[str]:
-    """Render the Engine Health dashboard section."""
-    lines: list[str] = ["=== Engine Health ==="]
-    if not monitoring.engines:
-        lines.append("  (no engine data)")
-        return lines
-
-    for engine_name in sorted(monitoring.engines):
-        record = monitoring.engines[engine_name]
-        if record.last_limit_kind in ("quota", "rate", "budget"):
-            reset_label = ""
-            if record.usage is not None and record.usage.reset_at:
-                reset_label = f" resets {record.usage.reset_at}"
-            lines.append(f"  {engine_name}: {record.last_limit_kind}{reset_label}")
-        else:
-            usage_label = ""
-            if record.usage is not None and record.usage.used is not None:
-                if record.usage.limit is not None:
-                    usage_label = f" ({record.usage.used}/{record.usage.limit} {record.usage.unit or 'used'})"
-                else:
-                    usage_label = f" ({record.usage.used} {record.usage.unit or 'used'})"
-            lines.append(f"  {engine_name}: ok{usage_label}")
-    return lines
-
-
 def render_engine_availability_lines(
     config: LitehiveConfig,
     monitoring: WorkspaceEngineMonitoring,
@@ -717,11 +687,9 @@ def render_engine_availability_lines(
         detail = ""
         if engine_name in frozen:
             status = "frozen"
-            detail = f" until={frozen[engine_name].astimezone().strftime('%Y-%m-%d %H:%M %Z')}"
+            detail = f" until={config.engine_freeze.get(engine_name, '-')}"
         elif record is not None and record.last_limit_kind in {"quota", "rate", "budget"}:
             status = str(record.last_limit_kind)
-            if record.usage is not None and record.usage.reset_at:
-                detail = f" reset_at={record.usage.reset_at}"
         default_marker = " default=yes" if engine_name == config.default_engine else ""
         lines.append(f"engine_available: {engine_name} status={status}{default_marker}{detail}")
     return lines

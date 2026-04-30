@@ -313,7 +313,7 @@ def test_render_engine_availability_lines_are_minimal_routing_signal() -> None:
 
     assert lines == [
         "engine_available: claude status=available",
-        "engine_available: codex status=quota default=yes reset_at=2026-04-30T18:00:00Z",
+        "engine_available: codex status=quota default=yes",
     ]
 
 

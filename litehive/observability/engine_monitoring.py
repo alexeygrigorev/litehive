@@ -7,7 +7,6 @@ import sqlite3
 from litehive.config.paths import workspace_path
 from litehive.db.schema import connect_workspace_db
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
-from heru.quota import preferred_reset_at
 from litehive.domain.common import utcnow
 from litehive.domain.engine import (
     EngineUsageObservation,
@@ -188,98 +187,6 @@ def _apply_engine_observation(
     return monitoring
 
 
-def record_codex_quota_check(
-    root: Path,
-    *,
-    status: object,
-) -> None:
-    """Record proactive codex quota status into engine monitoring."""
-    if getattr(status, "error", None) is not None:
-        return  # Don't overwrite good data with error state
-    short_term = getattr(status, "short_term", None)
-    long_term = getattr(status, "long_term", None)
-    if short_term is None or long_term is None:
-        return
-
-    monitoring = load_engine_monitoring(root)
-    record = monitoring.engines.get("codex")
-    if record is None:
-        record = EngineUsageRecord(engine="codex")
-
-    record.source = "provider"
-    record.provider = "openai"
-    record.observed_at = utcnow()
-
-    used_pct = int(_used_percent(long_term))
-    reset_at = preferred_reset_at(status)
-    record.usage = EngineUsageWindow(
-        used=used_pct,
-        limit=100,
-        remaining=max(0, 100 - used_pct),
-        unit="percent",
-        reset_at=reset_at,
-    )
-    limit_reached = bool(getattr(status, "limit_reached", False))
-    if limit_reached:
-        record.last_limit_reason = "codex usage limit reached"
-        record.last_limit_kind = "quota"
-    record.metadata = {
-        **record.metadata,
-        "hours_percent_remaining": int(_percent_remaining(short_term)),
-        "weeks_percent_remaining": int(_percent_remaining(long_term)),
-        "quota_limit_reached": limit_reached,
-    }
-    short_reset_at = getattr(short_term, "reset_at", None)
-    long_reset_at = getattr(long_term, "reset_at", None)
-    if short_reset_at:
-        record.metadata["hours_reset_at"] = short_reset_at
-    if long_reset_at:
-        record.metadata["weeks_reset_at"] = long_reset_at
-
-    monitoring.engines["codex"] = record
-    save_engine_monitoring(root, monitoring)
-
-
-def render_engine_monitoring_lines(monitoring: WorkspaceEngineMonitoring) -> list[str]:
-    lines: list[str] = []
-    for engine_name in sorted(monitoring.engines):
-        record = monitoring.engines[engine_name]
-        parts = [
-            f"engine_monitoring: {engine_name}",
-            f"source={record.source}",
-            f"invocations={record.invocation_count}",
-            f"success={record.success_count}",
-            f"failure={record.failure_count}",
-            f"limits={record.limit_event_count}",
-        ]
-        if record.provider:
-            parts.append(f"provider={record.provider}")
-        if record.last_limit_kind:
-            parts.append(f"last_limit_kind={record.last_limit_kind}")
-        if record.last_limit_reason:
-            parts.append(f"last_limit_reason={record.last_limit_reason}")
-        if record.usage is not None:
-            usage_parts: list[str] = []
-            if record.usage.used is not None:
-                usage_parts.append(f"used={record.usage.used}")
-            if record.usage.limit is not None:
-                usage_parts.append(f"limit={record.usage.limit}")
-            if record.usage.remaining is not None:
-                usage_parts.append(f"remaining={record.usage.remaining}")
-            if record.usage.unit:
-                usage_parts.append(f"unit={record.usage.unit}")
-            if record.usage.reset_at:
-                usage_parts.append(f"reset_at={record.usage.reset_at}")
-            if usage_parts:
-                parts.append("usage=" + ",".join(usage_parts))
-        if record.last_task_id:
-            parts.append(f"last_task={record.last_task_id}")
-        if record.observed_at:
-            parts.append(f"observed_at={record.observed_at}")
-        lines.append(" ".join(parts))
-    return lines
-
-
 def _limit_kind(reason: str | None) -> str | None:
     if not reason:
         return None
@@ -293,17 +200,3 @@ def _limit_kind(reason: str | None) -> str | None:
     if any(marker in normalized for marker in ("quota", "usage limit")):
         return "quota"
     return None
-
-
-def _percent_remaining(window: object) -> float:
-    value = getattr(window, "percent_remaining", None)
-    if value is None:
-        return 100.0
-    return float(value)
-
-
-def _used_percent(window: object) -> float:
-    value = getattr(window, "used_percent", None)
-    if value is not None:
-        return float(value)
-    return max(0.0, 100.0 - _percent_remaining(window))

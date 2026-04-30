@@ -19,13 +19,12 @@ from litehive.cli.display import format_retry_on
 from litehive.cli.common import WorkspaceOption
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.registry import daemon_metadata
-from litehive.observability.engine_monitoring import render_engine_monitoring_lines
 from litehive.observability.status import (
     collect_task_pipeline_status,
     collect_recent_activity,
     find_last_completed_task,
     render_active_task_section,
-    render_engine_health_section,
+    render_engine_availability_lines,
     render_health_active_task_lines,
     render_health_daemon_lines,
     render_health_flagged_task_lines,
@@ -134,10 +133,13 @@ def status_command(
         print(line)
 
     print()
-    for line in render_engine_health_section(status.monitoring):
-        print(line)
-    for line_text in render_engine_monitoring_lines(status.monitoring):
-        print(line_text)
+    print("=== Engine Availability ===")
+    availability_lines = render_engine_availability_lines(status.config, status.monitoring)
+    if availability_lines:
+        for line in availability_lines:
+            print(line)
+    else:
+        print("  (no configured engines)")
 
     print()
     events = collect_recent_activity(root)

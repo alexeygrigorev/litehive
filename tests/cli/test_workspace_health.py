@@ -292,8 +292,6 @@ def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatc
     monkeypatch.setattr("litehive.cli.workspace.list_tasks_state_first", lambda workspace, state=None: [])
     monkeypatch.setattr("litehive.cli.workspace.find_last_completed_task", lambda tasks: None)
     monkeypatch.setattr("litehive.cli.workspace.collect_recent_activity", lambda root: [])
-    monkeypatch.setattr("litehive.cli.workspace.render_engine_health_section", lambda monitoring: [])
-    monkeypatch.setattr("litehive.cli.workspace.render_engine_monitoring_lines", lambda monitoring: [])
     monkeypatch.setattr("litehive.cli.workspace.render_recent_activity_section", lambda events: [])
     monkeypatch.setattr("litehive.cli.workspace.print_status_issues", lambda issues: 0)
 
