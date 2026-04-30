@@ -5,9 +5,11 @@ import warnings
 import pytest
 from pydantic import ValidationError
 
+from litehive.agents.session_store import save_subagent_artifacts
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import OutcomeKind, OutcomeReasonCode
+from litehive.domain.reports import StageReport
 from litehive.domain.runtime import RuntimeInterruptionState, RuntimeSubagentState, TaskRuntime
 from litehive.domain.task import TaskRecord, TaskStateRecord
 from litehive.state.records import (
@@ -19,6 +21,7 @@ from litehive.state.records import (
     save_task_runtime,
 )
 from litehive.state.store import runtime_store
+from litehive.tasks.report_storage import record_stage_report
 
 
 def _task_intent_payload(root: Path, task_id: str) -> dict:
@@ -170,6 +173,64 @@ def test_task_runtime_persists_pipeline_and_execution_slices(tmp_path: Path) -> 
     assert loaded.runtime.execution.active_subagent.id == "sa-1"
     assert loaded.runtime.execution.interruption is not None
     assert loaded.runtime.execution.interruption.resume_stage == "implementing"
+
+
+def test_current_storage_contract_uses_sqlite_without_workspace_yaml(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="SQLite contract")
+    task.runtime.pipeline.execution_status = "running"
+    task.runtime.pipeline.current_stage.stage = "implementing"
+    save_task_runtime(tmp_path, task)
+    save_subagent_artifacts(
+        tmp_path,
+        task.id,
+        "SA-0001",
+        session={"id": "SA-0001", "role": "swe", "status": "completed"},
+        report={"verdict": "pass", "summary": "stored in sqlite"},
+        event_stream={"events": [{"type": "message", "text": "ok"}]},
+    )
+    report_ref = record_stage_report(
+        tmp_path,
+        task,
+        StageReport(
+            task_id=task.id,
+            pipeline_state="implementing",
+            verdict="pass",
+            summary="stored in sqlite",
+            submitted_via_cli=True,
+        ),
+    )
+
+    with connect_workspace_db(tmp_path) as connection:
+        rows = {
+            "task_intent": connection.execute(
+                "SELECT COUNT(*) FROM task_intent WHERE task_id = ?",
+                (task.id,),
+            ).fetchone()[0],
+            "task_state": connection.execute(
+                "SELECT COUNT(*) FROM task_state WHERE task_id = ?",
+                (task.id,),
+            ).fetchone()[0],
+            "subagent_sessions": connection.execute(
+                "SELECT COUNT(*) FROM subagent_sessions WHERE task_id = ? AND subagent_id = ?",
+                (task.id, "SA-0001"),
+            ).fetchone()[0],
+            "stage_reports": connection.execute(
+                "SELECT COUNT(*) FROM stage_reports WHERE task_id = ?",
+                (task.id,),
+            ).fetchone()[0],
+        }
+
+    assert rows == {
+        "task_intent": 1,
+        "task_state": 1,
+        "subagent_sessions": 1,
+        "stage_reports": 1,
+    }
+    assert report_ref.display().startswith("sqlite:stage_reports/")
+    assert sorted(path.relative_to(tmp_path / ".litehive") for path in (tmp_path / ".litehive").rglob("*.yaml")) == [
+        Path("config.yaml")
+    ]
 
 
 @pytest.mark.parametrize(

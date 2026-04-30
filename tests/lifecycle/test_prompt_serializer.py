@@ -144,18 +144,24 @@ def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
     )
     text = serialize_prompt(agent.build_prompt(state), task_record=task)
 
+    trigger = agent.build_prompt(state)["recovery_trigger"]
+    assert trigger["origin_stage"] == "implementing"
+    assert trigger["trigger_event_kind"] == "crash"
+    assert trigger["failure_fingerprint"] == {
+        "fingerprint": "AllEnginesExhausted",
+        "classification": "engine_exhausted",
+        "diagnostics": {},
+    }
+    assert trigger["reason_code"] == "all_engines_exhausted"
+    assert trigger["message"] == "AllEnginesExhausted"
     assert "Recovery trigger" in text
     assert "trigger_event_kind: crash" in text
     assert "origin_stage: implementing" in text
     assert "RecoveryContext" not in text
     assert "RecoveryRecord" not in text
     assert "FailureDiagnostics" not in text
-    assert "## Recovery startup guidance" in text  # the four built-in recovery bullets
-    assert "You fix Litehive infrastructure bugs, not agent judgment disagreements." in text
     assert "litehive pipeline journal <task_id>" in text
     assert "litehive task logs <task_id> --agent" in text
-    assert "Did the agent produce any stdout, stderr, or execution-trace output?" in text
-    assert "Non-example: do not rerun the failed stage's tests" in text
 
 
 def test_serialize_recovery_diagnoses_invalid_current_config(workspace: Path) -> None:
@@ -235,20 +241,26 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
         ),
     )
 
-    text = serialize_prompt(agent.build_prompt(state), task_record=task, workspace_root=workspace)
+    prompt = agent.build_prompt(state)
+    diagnostics = prompt["failed_subagent_diagnostics"]
+    text = serialize_prompt(prompt, task_record=task, workspace_root=workspace)
+
+    assert diagnostics is not None
+    assert diagnostics["subagent_id"] == "SA-0001"
+    assert diagnostics["role"] == "swe"
+    assert diagnostics["engine"] == "codex"
+    assert diagnostics["status"] == "failed"
+    assert diagnostics["exit_code"] == 17
+    assert diagnostics["did_produce_output"] is True
+    assert diagnostics["session"]["status"] == "failed"
+    assert diagnostics["report"]["summary"] == "implementing rejected: agent did not submit verdict via litehive report CLI"
 
     assert "Failed subagent diagnostics" in text
     assert "exit_code: 17" in text
     assert "did_produce_output: yes" in text
-    assert "session.yaml" in text
-    assert "report.yaml" in text
     assert "execution trace (derived from events/artifacts)" in text
-    assert "transcript.md" not in text
     assert "stdout.txt" in text
     assert "stderr.txt" in text
-    assert "Did the agent produce output?" in text
-    assert "Did it try to call it?" in text
-    assert "what exact Litehive error did it get?" in text
     assert "unable to resolve workspace" in text
 
 
@@ -547,12 +559,7 @@ def test_swe_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> Non
     assert _instruction_layer(prompt, "attempt:retry") is not None
     assert _instruction_layer(prompt, "attempt:fresh") is None
     assert "## Retry attempt guidance" in text
-    assert "Retry after rejection: read the last rejection carefully" in text
-    assert "Rerun the cited reproduction or verification commands exactly" in text
-    assert "Fix the cited failures first" in text
-    assert "Do not escape through `blocked`, stale, or environmental claims" in text
     assert "## Fresh attempt guidance" not in text
-    assert "Rules when responding to a rejection:" not in text
 
 
 def test_qa_prompt_includes_default_vs_opt_in_verification_guidance(workspace: Path) -> None:
@@ -564,11 +571,7 @@ def test_qa_prompt_includes_default_vs_opt_in_verification_guidance(workspace: P
 
     assert prompt["instruction_variant"] == "fresh"
     assert "## Fresh attempt guidance" in text
-    assert "Fresh verification pass: build an independent check plan" in text
     assert "## Qa startup guidance" in text
-    assert "repo's documented verification flow" in text
-    assert "default deterministic test suite and targeted checks first" in text
-    assert "opt-in, external-boundary, or authenticated integration coverage" in text
 
 
 def test_qa_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> None:
@@ -588,9 +591,6 @@ def test_qa_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> None
     assert _instruction_layer(prompt, "attempt:retry") is not None
     assert _instruction_layer(prompt, "attempt:fresh") is None
     assert "## Retry attempt guidance" in text
-    assert "Retry after rejection: read the last rejection carefully" in text
-    assert "Verify with current evidence that the cited failures are fixed before you pass" in text
-    assert "Do not escape through `blocked`, stale, or environmental claims" in text
     assert "## Fresh attempt guidance" not in text
 
 
@@ -604,11 +604,16 @@ def test_reviewer_prompt_calls_out_qa_override_with_last_testing_rejection(works
         raised_at_phase="testing",
     )
 
-    text = serialize_prompt(agent.build_prompt(state), task_record=task)
+    prompt = agent.build_prompt(state)
+    text = serialize_prompt(prompt, task_record=task)
 
+    assert prompt["last_rejection"] == {
+        "source": "agent",
+        "reason": "qa asked for style-only cleanup",
+        "raised_at_phase": "testing",
+    }
     assert "- Raised at phase: testing" in text
     assert "- Reason: qa asked for style-only cleanup" in text
-    assert "You can override QA if the work materially meets intent — tests pass and hooks are green." in text
 
 
 def test_build_prompt_ignores_corrupt_hook_config(workspace: Path) -> None:

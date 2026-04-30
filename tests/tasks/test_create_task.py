@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +25,10 @@ def _task_intent_payload(root: Path, task_id: str) -> dict:
         row = connection.execute("SELECT payload FROM task_intent WHERE task_id = ?", (task_id,)).fetchone()
     assert row is not None
     return json.loads(row["payload"])
+
+
+def _help_option_names(output: str) -> set[str]:
+    return set(re.findall(r"(?<![\w-])--[\w-]+", output))
 
 
 def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
@@ -149,13 +154,14 @@ def test_task_add_help_matches_trimmed_option_surface() -> None:
     result = CliRunner().invoke(task_app, ["add", "--help"], standalone_mode=False)
 
     assert result.exit_code == 0, result.output
+    option_names = _help_option_names(result.output)
     for option in [
         "--goal",
         "--acceptance-criteria",
         "--depends-on",
         "--priority",
     ]:
-        assert option in result.output
+        assert option in option_names
     for option in [
         "--engine",
         "--model",
@@ -169,7 +175,7 @@ def test_task_add_help_matches_trimmed_option_surface() -> None:
         "--auto-commit",
         "--human-checkpoints",
     ]:
-        assert option not in result.output
+        assert option not in option_names
 
 
 def test_task_add_cli_defaults_to_full_pipeline_mode(tmp_path: Path) -> None:
@@ -275,6 +281,7 @@ def test_task_update_help_matches_trimmed_option_surface() -> None:
     result = CliRunner().invoke(task_app, ["update", "--help"], standalone_mode=False)
 
     assert result.exit_code == 0, result.output
+    option_names = _help_option_names(result.output)
     for option in [
         "--title",
         "--priority",
@@ -284,7 +291,7 @@ def test_task_update_help_matches_trimmed_option_surface() -> None:
         "--constraint",
         "--plan-step",
     ]:
-        assert option in result.output
+        assert option in option_names
     for option in [
         "--engine",
         "--model",
@@ -297,7 +304,7 @@ def test_task_update_help_matches_trimmed_option_surface() -> None:
         "--from-file",
         "--edit",
     ]:
-        assert option not in result.output
+        assert option not in option_names
 
 
 def test_task_update_cli_persists_surviving_flags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
