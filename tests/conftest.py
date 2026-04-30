@@ -14,7 +14,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 def _bootstrap_heru_import_path() -> None:
     candidates = [
         *sorted((_REPO_ROOT / ".venv" / "lib").glob("python*/site-packages")),
-        *sorted((_REPO_ROOT / "packages").glob("heru-*.whl")),
     ]
     for candidate in reversed(candidates):
         entry = str(candidate)

@@ -63,7 +63,4 @@ dev = [
 [tool.uv.sources]
 heru = { path = "../heru", editable = true }
 
-[tool.uv.pip]
-find-links = ["./packages"]
-
 [tool.ruff.format]

@@ -47,7 +47,7 @@ litehive status
 litehive status
 ```
 
-Litehive resolves `heru` from the vendored wheel in `packages/` during `uv sync`. If you update the standalone `heru` package, rebuild that wheel before syncing this repo again.
+Litehive resolves `heru>=2.0.1` from the sibling `../heru` checkout during `uv sync`. Clone or update that checkout next to this repository before syncing; `pyproject.toml` pins it through `[tool.uv.sources]` as an editable path dependency. The sibling checkout's `pyproject.toml` version must satisfy Litehive's `heru>=2.0.1` dependency before refreshing `uv.lock`.
 
 ## Engines
 
