@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.11"
 
 [options]
-exclude-newer = "2026-04-17T04:42:08.071396762Z"
+exclude-newer = "2026-04-23T11:49:15.845681195Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -56,7 +56,7 @@ wheels = [
 
 [[package]]
 name = "heru"
-version = "2.0.0"
+version = "2.0.1"
 source = { editable = "../heru" }
 dependencies = [
     { name = "pydantic" },
