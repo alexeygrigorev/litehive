@@ -8,7 +8,6 @@ from enum import Enum
 import os
 from pathlib import Path, PurePosixPath
 import shutil
-import sys
 from typing import Mapping
 
 from litehive.agents.sandbox_support import (
@@ -266,16 +265,7 @@ class SandboxLauncher:
             allowed_env["PATH"] = "/usr/local/bin:/usr/bin:/bin"
             allowed_env["LITEHIVE_REAL_GIT_PATH"] = "/litehive/bin/git.real"
             allowed_env["LITEHIVE_WORKSPACE_ROOT"] = str(workspace_mount)
-            allowed_env["LITEHIVE_SOURCE_ROOT"] = str(source_root)
-            allowed_env["LITEHIVE_PYTHON_PATH"] = sys.executable
-            # Mount Python executable
-            python_path = Path(sys.executable).resolve()
-            argv.extend(
-                [
-                    "--mount",
-                    self._bind_mount_spec(python_path, PurePosixPath(sys.executable), read_only=True),
-                ]
-            )
+            allowed_env["PYTHONPATH"] = str(source_root)
 
         for env_name, value in sorted(allowed_env.items()):
             argv.extend(["--env", f"{env_name}={value}"])
@@ -285,30 +275,10 @@ class SandboxLauncher:
         return CLIInvocation(argv=tuple(argv), cwd=invocation.cwd, env=invocation.env)
 
     def ensure_docker_git_wrappers(self) -> dict[str, Path]:
-        """Create git wrapper scripts for Docker sandbox."""
-        runtime_dir = self.root / ".litehive" / "runtime" / "sandbox"
-        runtime_dir.mkdir(parents=True, exist_ok=True)
-
-        merge_git = runtime_dir / "merge-git"
-        no_git = runtime_dir / "no-git"
-
-        merge_git.write_text(
-            """#!/bin/sh
-export PYTHONPATH="${LITEHIVE_SOURCE_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
-exec "${LITEHIVE_PYTHON_PATH}" -c 'from litehive.sandbox.git_wrapper import main; import os, sys; raise SystemExit(main(sys.argv[1:], real_git_path=os.environ["LITEHIVE_REAL_GIT_PATH"], workspace_root=os.environ["LITEHIVE_WORKSPACE_ROOT"]))' "$@"
-""",
-            encoding="utf-8",
-        )
-        no_git.write_text(
-            """#!/bin/sh
-echo "git: not found" >&2
-exit 127
-""",
-            encoding="utf-8",
-        )
-
-        for path in (merge_git, no_git):
-            path.chmod(0o755)
+        """Return checked-in git wrapper commands for Docker sandbox."""
+        sandbox_dir = Path(__file__).resolve().parents[1] / "sandbox"
+        merge_git = sandbox_dir / "git_wrapper.py"
+        no_git = sandbox_dir / "no_git.sh"
 
         return {
             "merge_git": merge_git,

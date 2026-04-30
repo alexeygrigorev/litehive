@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Git wrapper used by the merge-resolver sandbox profile."""
 
 import os
@@ -117,3 +118,13 @@ def _resolve_git_dir(cwd: Path) -> Path | None:
 
 def _format_cmd(argv: list[str]) -> str:
     return "git" if not argv else "git " + " ".join(argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(
+        main(
+            sys.argv[1:],
+            real_git_path=os.environ["LITEHIVE_REAL_GIT_PATH"],
+            workspace_root=os.environ["LITEHIVE_WORKSPACE_ROOT"],
+        )
+    )

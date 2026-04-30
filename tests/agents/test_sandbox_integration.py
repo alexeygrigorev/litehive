@@ -121,7 +121,7 @@ def test_docker_sandbox_git_wrapper_no_git_role(mock_which, temp_workspace, dock
     mount_specs = [arg for i, arg in enumerate(wrapped.argv) if wrapped.argv[i - 1] == "--mount"]
     git_mounts = [spec for spec in mount_specs if "/usr/local/bin/git" in spec]
     assert len(git_mounts) == 1
-    assert "no-git" in git_mounts[0]
+    assert "litehive/sandbox/no_git.sh" in git_mounts[0]
 
 
 @patch("shutil.which")
@@ -147,14 +147,14 @@ def test_docker_sandbox_git_wrapper_merge_resolver_role(mock_which, temp_workspa
     mount_specs = [arg for i, arg in enumerate(wrapped.argv) if wrapped.argv[i - 1] == "--mount"]
     git_mounts = [spec for spec in mount_specs if "/usr/local/bin/git" in spec]
     assert len(git_mounts) == 1
-    assert "merge-git" in git_mounts[0]
+    assert "litehive/sandbox/git_wrapper.py" in git_mounts[0]
 
     # Should have environment variables for git wrapper
     env_specs = [arg for i, arg in enumerate(wrapped.argv) if wrapped.argv[i - 1] == "--env"]
     env_dict = {spec.split("=", 1)[0]: spec.split("=", 1)[1] for spec in env_specs if "=" in spec}
     assert "LITEHIVE_REAL_GIT_PATH" in env_dict
     assert "LITEHIVE_WORKSPACE_ROOT" in env_dict
-    assert "LITEHIVE_SOURCE_ROOT" in env_dict
+    assert "PYTHONPATH" in env_dict
 
 
 def test_docker_sandbox_unsupported_backend_raises_error():
@@ -172,7 +172,7 @@ def test_docker_sandbox_unsupported_backend_raises_error():
 
 @patch("shutil.which")
 def test_docker_sandbox_creates_git_wrappers(mock_which, temp_workspace, docker_sandbox_config):
-    """Test that git wrapper scripts are created."""
+    """Test that git wrapper commands are checked-in files."""
     mock_which.side_effect = lambda name: {
         "docker": "/usr/bin/docker",
         "codex": "/usr/local/bin/codex",
@@ -181,13 +181,11 @@ def test_docker_sandbox_creates_git_wrappers(mock_which, temp_workspace, docker_
 
     launcher = SandboxLauncher(temp_workspace, docker_sandbox_config)
 
-    # Trigger wrapper creation
     wrappers = launcher.ensure_docker_git_wrappers()
 
     assert "merge_git" in wrappers
     assert "no_git" in wrappers
 
-    # Check that files were created and are executable
     merge_git = wrappers["merge_git"]
     no_git = wrappers["no_git"]
 
@@ -196,9 +194,5 @@ def test_docker_sandbox_creates_git_wrappers(mock_which, temp_workspace, docker_
     assert oct(merge_git.stat().st_mode)[-3:] == "755"
     assert oct(no_git.stat().st_mode)[-3:] == "755"
 
-    # Check content
-    merge_content = merge_git.read_text()
-    no_git_content = no_git.read_text()
-
-    assert "litehive.sandbox.git_wrapper" in merge_content
-    assert "git: not found" in no_git_content
+    assert merge_git.name == "git_wrapper.py"
+    assert no_git.name == "no_git.sh"
