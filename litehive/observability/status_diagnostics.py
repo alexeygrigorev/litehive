@@ -102,6 +102,30 @@ def collect_status_snapshot(root: Path) -> StatusSnapshot:
     )
 
 
+def collect_operational_status_snapshot(root: Path) -> StatusSnapshot:
+    """Collect the small read-only status view used by default status output."""
+    root = root.resolve()
+    config, config_issues = _load_config_for_status(root)
+    state, state_issues = _load_state_for_status(root)
+    runner, runner_issue = _load_runner_status_for_status(root)
+    monitoring, monitoring_issues = _load_engine_monitoring_for_status(root)
+    issues = [
+        *config_issues,
+        *state_issues,
+        *([runner_issue] if runner_issue is not None else []),
+        *monitoring_issues,
+        *_probe_runner_state(root, state, runner),
+        *_probe_pool_stop_reason(state),
+    ]
+    return StatusSnapshot(
+        config=config,
+        state=state,
+        runner=runner,
+        monitoring=monitoring,
+        issues=issues,
+    )
+
+
 def status_has_problems(issues: list[StatusIssue]) -> bool:
     return any(issue.severity in {"WARN", "ERROR"} for issue in issues)
 
@@ -116,6 +140,19 @@ def render_issue_lines(issues: list[StatusIssue]) -> list[str]:
     if not status_has_problems(issues):
         return []
     return [*(issue.render() for issue in issues), render_health_summary(issues)]
+
+
+def render_operational_issue_lines(issues: list[StatusIssue]) -> list[str]:
+    if not status_has_problems(issues):
+        return []
+    return [
+        *(f"{issue.key}: {_operational_issue_message(issue.message)}" for issue in issues),
+        render_health_summary(issues),
+    ]
+
+
+def _operational_issue_message(message: str) -> str:
+    return message.split(" — ", 1)[0]
 
 
 def probe_registry_files() -> list[StatusIssue]:

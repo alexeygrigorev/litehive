@@ -14,7 +14,7 @@ from litehive.db.schema import connect_workspace_db
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.reports import ExecutionEstimate
 from litehive.domain.runtime import RunnerStatusState
-from litehive.domain.task import TaskRecord, WorkspaceState
+from litehive.domain.task import TaskIntentRecord, TaskRecord, TaskStateRecord, WorkspaceState
 
 if TYPE_CHECKING:
     from litehive.observability.status_diagnostics import StatusIssue
@@ -44,15 +44,23 @@ def collect_task_pipeline_status(
     root: Path,
     *,
     read_only: bool = False,
+    diagnostics: bool = False,
 ) -> TaskPipelineStatusData:
     from litehive.attention import waiting_for_you_lines
-    from litehive.observability.status_diagnostics import collect_status_snapshot
+    from litehive.observability.status_diagnostics import collect_operational_status_snapshot, collect_status_snapshot
     from litehive.state.records import get_task
 
     resolved_root = root.resolve()
-    snapshot = collect_status_snapshot(resolved_root)
+    snapshot = collect_status_snapshot(resolved_root) if diagnostics else collect_operational_status_snapshot(resolved_root)
     active_task_id = snapshot.runner.active_task_id or snapshot.state.active_task_id
-    active_task = None if read_only or not active_task_id else get_task(resolved_root, active_task_id)
+    if read_only:
+        active_task = _load_task_read_only(resolved_root, active_task_id) if active_task_id else None
+        waiting_lines = waiting_for_you_lines(resolved_root, reconcile=False)
+    else:
+        active_task = get_task(resolved_root, active_task_id) if active_task_id else None
+        waiting_lines = waiting_for_you_lines(resolved_root)
+    if not diagnostics:
+        waiting_lines = _operational_attention_lines(waiting_lines)
     return TaskPipelineStatusData(
         root=resolved_root,
         config=snapshot.config,
@@ -63,7 +71,7 @@ def collect_task_pipeline_status(
         active_task_id=active_task_id,
         active_task=active_task,
         queue_head=snapshot.state.queue[0] if snapshot.state.queue else None,
-        waiting_lines=["attention_items: unavailable"] if read_only else waiting_for_you_lines(resolved_root),
+        waiting_lines=waiting_lines,
         fast_runner_status=_fast_runner_state_label(resolved_root, snapshot.runner),
     )
 
@@ -103,7 +111,10 @@ def render_task_pipeline_status_lines(
             lines.append(f"runner_heartbeat_at: {status.runner.heartbeat_at}")
 
     lines.extend(render_active_task_detail_lines(status.active_task, status.config.default_engine))
-    lines.extend(render_engine_monitoring_lines(status.monitoring))
+    if mode == "full":
+        lines.extend(render_engine_monitoring_lines(status.monitoring))
+    else:
+        lines.extend(render_engine_availability_lines(status.config, status.monitoring))
 
     if mode == "full":
         if retry_on_label is None:
@@ -121,6 +132,39 @@ def _fast_runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
     if runner.pid is None:
         return "stopped"
     return "dead"
+
+
+def _load_task_read_only(root: Path, task_id: str) -> TaskRecord | None:
+    db_path = workspace_path(root, "data.db")
+    if not db_path.exists():
+        return None
+    try:
+        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
+            connection.row_factory = sqlite3.Row
+            intent_row = connection.execute(
+                "SELECT payload FROM task_intent WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+            state_row = connection.execute(
+                "SELECT payload FROM task_state WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+        if intent_row is None:
+            return None
+        intent = TaskIntentRecord.model_validate(json.loads(intent_row["payload"]))
+        state = None if state_row is None else TaskStateRecord(**json.loads(state_row["payload"]))
+        task = TaskRecord.from_intent_and_state(intent, state)
+    except (OSError, sqlite3.DatabaseError, ValueError):
+        return None
+    if task.status == "archived":
+        return None
+    return task
+
+
+def _operational_attention_lines(lines: list[str]) -> list[str]:
+    if not lines:
+        return []
+    return [line for line in lines if line.startswith("attention_items:")]
 
 
 def estimate_task_execution(root: Path, task: TaskRecord) -> ExecutionEstimate:
@@ -653,6 +697,33 @@ def render_engine_health_section(monitoring: WorkspaceEngineMonitoring) -> list[
                 else:
                     usage_label = f" ({record.usage.used} {record.usage.unit or 'used'})"
             lines.append(f"  {engine_name}: ok{usage_label}")
+    return lines
+
+
+def render_engine_availability_lines(
+    config: LitehiveConfig,
+    monitoring: WorkspaceEngineMonitoring,
+) -> list[str]:
+    engine_names = {config.default_engine, *config.engine_preference, *config.engine_freeze}
+    engine_names.update(monitoring.engines)
+    if not engine_names:
+        return []
+
+    frozen = active_engine_freezes(config)
+    lines: list[str] = []
+    for engine_name in sorted(engine_names):
+        record = monitoring.engines.get(engine_name)
+        status = "available"
+        detail = ""
+        if engine_name in frozen:
+            status = "frozen"
+            detail = f" until={frozen[engine_name].astimezone().strftime('%Y-%m-%d %H:%M %Z')}"
+        elif record is not None and record.last_limit_kind in {"quota", "rate", "budget"}:
+            status = str(record.last_limit_kind)
+            if record.usage is not None and record.usage.reset_at:
+                detail = f" reset_at={record.usage.reset_at}"
+        default_marker = " default=yes" if engine_name == config.default_engine else ""
+        lines.append(f"engine_available: {engine_name} status={status}{default_marker}{detail}")
     return lines
 
 

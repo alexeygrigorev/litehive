@@ -83,7 +83,7 @@ def test_attention_list_and_resolve_persist_items(tmp_path: Path, capsys) -> Non
     assert resolved_payload["resolved_at"] is not None
 
 
-def test_status_shows_attention_count_and_waiting_actions(tmp_path: Path, capsys) -> None:
+def test_status_shows_attention_count_without_waiting_actions(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     record_attention(
         tmp_path,
@@ -99,8 +99,9 @@ def test_status_shows_attention_count_and_waiting_actions(tmp_path: Path, capsys
 
     assert exit_code == 0
     assert "attention_items: 1" in output
-    assert "waiting for you:" in output
-    assert "Destructive git command was blocked" in output
+    assert "waiting for you:" not in output
+    assert "Destructive git command was blocked" not in output
+    assert "litehive attention resolve" not in output
 
 
 def test_waiting_for_you_lines_reports_database_unavailable(tmp_path: Path, monkeypatch) -> None:
@@ -138,21 +139,26 @@ def test_corrupt_attention_row_reports_unavailable_instead_of_empty_queue(tmp_pa
     assert "row 1" in lines[0]
 
 
-def test_status_reconciles_detectable_attention_items_without_prior_listing(tmp_path: Path, capsys) -> None:
+def test_status_does_not_reconcile_detectable_attention_items(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     primary = create_task(tmp_path, title="Primary task")
     duplicate_dir = tmp_path / ".litehive" / "tasks" / f"{primary.id}-duplicate-copy"
     duplicate_dir.mkdir(parents=True)
+    db_path = workspace_path(tmp_path, "data.db")
+    before_mtime = db_path.stat().st_mtime_ns
+    before_payloads = _attention_payloads(tmp_path)
 
     exit_code = fast_status(["--workspace", str(tmp_path)])
     output = capsys.readouterr().out
+    after_mtime = db_path.stat().st_mtime_ns
 
     assert exit_code == 0
-    assert "attention_items: 1" in output
-    assert "waiting for you:" in output
-    assert f"Duplicate task id detected for {primary.id}" in output
+    assert "attention_items: 0" in output
+    assert "waiting for you:" not in output
+    assert f"Duplicate task id detected for {primary.id}" not in output
     assert _attention_item_paths(tmp_path) == []
-    assert len(_attention_payloads(tmp_path)) == 1
+    assert _attention_payloads(tmp_path) == before_payloads
+    assert after_mtime == before_mtime
 
 
 def test_git_wrapper_block_records_attention_db_item(tmp_path: Path, capsys) -> None:

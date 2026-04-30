@@ -345,7 +345,7 @@ def test_main_status_fast_option_is_removed(
     assert "No such option: --fast" in output.err
 
 
-def test_main_status_reports_corrupt_registry_from_workspace_cwd(
+def test_main_status_ignores_corrupt_registry_from_workspace_cwd(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -363,14 +363,13 @@ def test_main_status_reports_corrupt_registry_from_workspace_cwd(
     exit_code = main_module.main()
     output = capsys.readouterr().out
 
-    assert exit_code == 1
-    assert f"registry: BROKEN at {registry_path}" in output
-    assert "global workspace registry database" in output
-    assert "health:" in output
-    assert registry_path.exists()
+    assert exit_code == 0
+    assert f"registry: BROKEN at {registry_path}" not in output
+    assert "global workspace registry database" not in output
+    assert "health:" not in output
 
 
-def test_main_status_reports_corrupt_registry_from_workspace_env(
+def test_main_status_ignores_corrupt_registry_from_workspace_env(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -388,8 +387,7 @@ def test_main_status_reports_corrupt_registry_from_workspace_env(
     exit_code = main_module.main()
     output = capsys.readouterr().out
 
-    assert exit_code == 1
-    assert f"registry: BROKEN at {registry_path}" in output
-    assert "global workspace registry database" in output
-    assert "health:" in output
-    assert registry_path.exists()
+    assert exit_code == 0
+    assert f"registry: BROKEN at {registry_path}" not in output
+    assert "global workspace registry database" not in output
+    assert "health:" not in output

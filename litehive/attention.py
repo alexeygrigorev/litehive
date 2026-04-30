@@ -382,9 +382,9 @@ def reconcile_attention(root: Path, *, auto_resolve: bool = True) -> list[Attent
     return sorted(unresolved, key=attention_priority)
 
 
-def waiting_for_you_lines(root: Path, *, limit: int = 5) -> list[str]:
+def waiting_for_you_lines(root: Path, *, limit: int = 5, reconcile: bool = True) -> list[str]:
     try:
-        items = list_attention(root, auto_resolve=False)
+        items = list_attention(root, reconcile=reconcile, auto_resolve=False)
     except (OSError, sqlite3.DatabaseError, ValueError, AttentionStoreError) as exc:
         return [f"attention_items: unavailable ({type(exc).__name__}: {exc})"]
     lines = [f"attention_items: {len(items)}"]

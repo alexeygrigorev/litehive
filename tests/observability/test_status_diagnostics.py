@@ -21,7 +21,11 @@ from litehive.lifecycle.persistence import SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
 from litehive.main import fast_status
 from litehive.observability.engine_monitoring import record_engine_execution
-from litehive.observability.status_diagnostics import _load_runner_status_for_status, collect_status_snapshot
+from litehive.observability.status_diagnostics import (
+    _load_runner_status_for_status,
+    collect_operational_status_snapshot,
+    collect_status_snapshot,
+)
 from litehive.state.records import create_task, save_task
 from litehive.state.persist import save_state
 
@@ -49,6 +53,30 @@ def test_status_snapshot_does_not_bootstrap_missing_database(tmp_path: Path) -> 
     assert not state_db.exists()
 
 
+def test_operational_status_snapshot_does_not_run_doctor_style_probes(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    monkeypatch.setattr(
+        "litehive.observability.status_diagnostics._probe_daemon_status",
+        lambda root: (_ for _ in ()).throw(AssertionError("daemon probe should not run")),
+    )
+    monkeypatch.setattr(
+        "litehive.observability.status_diagnostics._probe_last_cycle",
+        lambda root: (_ for _ in ()).throw(AssertionError("last-cycle probe should not run")),
+    )
+    monkeypatch.setattr(
+        "litehive.observability.status_diagnostics._probe_heru_link",
+        lambda root: (_ for _ in ()).throw(AssertionError("source checkout probe should not run")),
+    )
+    monkeypatch.setattr(
+        "litehive.observability.status_diagnostics._probe_task_index_references",
+        lambda root, state, state_issues: (_ for _ in ()).throw(AssertionError("task index probe should not run")),
+    )
+
+    snapshot = collect_operational_status_snapshot(tmp_path)
+
+    assert snapshot.state.queue == []
+
+
 def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     config_file = workspace_dir(tmp_path) / "config.yaml"
@@ -62,7 +90,7 @@ def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path:
     assert exit_code == 1
     assert f"config: CORRUPT at {config_file} (line 1)" in output
     assert f"state: BROKEN at {state_db}" in output
-    assert "restore the workspace database from backup" in output
+    assert "restore the workspace database from backup" not in output
     assert "health:" in output
 
 
@@ -74,11 +102,11 @@ def test_status_reports_corrupt_workspace_registry_without_raising(tmp_path: Pat
 
     exit_code, output = _run_fast_status(tmp_path, capsys)
 
-    assert exit_code == 1
-    assert f"registry: BROKEN at {registry_path}" in output
-    assert "global workspace registry database" in output
+    assert exit_code == 0
+    assert f"registry: BROKEN at {registry_path}" not in output
+    assert "global workspace registry database" not in output
     assert "runner_status:" in output
-    assert "health:" in output
+    assert "health:" not in output
 
 
 def test_status_reports_invalid_merged_config_without_silent_defaulting(tmp_path: Path, capsys) -> None:
@@ -91,7 +119,7 @@ def test_status_reports_invalid_merged_config_without_silent_defaulting(tmp_path
     assert exit_code == 1
     assert "config: INVALID merged config (" in output
     assert "poll_interval_seconds" in output
-    assert "status is rendering with valid config fields only" in output
+    assert "status is rendering with valid config fields only" not in output
     assert "health:" in output
 
 
@@ -104,7 +132,7 @@ def test_status_reports_non_mapping_config_without_silent_defaulting(tmp_path: P
 
     assert exit_code == 1
     assert f"config: INVALID at {config_file} (expected YAML mapping)" in output
-    assert "Fix the YAML syntax or remove the file" in output
+    assert "Fix the YAML syntax or remove the file" not in output
     assert "health:" in output
 
 
@@ -172,7 +200,8 @@ def test_status_ignores_legacy_engine_monitoring_yaml_and_renders_db_data(tmp_pa
 
     assert exit_code == 0
     assert f"CORRUPT at {monitoring_file}" not in output
-    assert "engine_monitoring: codex source=local invocations=1 success=1 failure=0" in output
+    assert "engine_available: codex status=available default=yes" in output
+    assert "engine_monitoring:" not in output
 
 
 def test_status_reports_never_started_runner_without_lock(tmp_path: Path, capsys) -> None:
@@ -206,7 +235,7 @@ def test_status_reports_stale_runner_lock(tmp_path: Path, capsys, monkeypatch) -
     assert exit_code == 1
     assert "runner_status: dead" in output
     assert "runner_state: STALE (no live pid for active_task_id=T-0001)" in output
-    assert "litehive repair" in output
+    assert "litehive repair" not in output
     assert "health:" in output
 
 
@@ -275,10 +304,12 @@ def test_status_reports_queued_task_missing_from_sqlite_index(tmp_path: Path, ca
 
     exit_code, output = _run_fast_status(tmp_path, capsys)
 
-    assert exit_code == 1
-    assert f"task_index: SQLite task index is missing 1 queued/active task reference(s): {task.id}" in output
-    assert "restore/reconcile the workspace database" in output
-    assert "health:" in output
+    assert exit_code == 0
+    assert "queued_tasks: 1" in output
+    assert f"queue_head: {task.id}" in output
+    assert "task_index:" not in output
+    assert "restore/reconcile the workspace database" not in output
+    assert "health:" not in output
 
 
 def test_runner_status_diagnostic_copies_serialize_without_pydantic_warnings(
@@ -335,7 +366,7 @@ def test_status_reports_wedged_runner_heartbeat(tmp_path: Path, capsys) -> None:
 
     assert exit_code == 1
     assert "runner_state: WEDGED (heartbeat 11 min stale)" in output
-    assert "restart the runner or daemon" in output
+    assert "restart the runner or daemon" not in output
 
 
 def test_status_reports_dead_daemon_pid(tmp_path: Path, capsys, monkeypatch) -> None:
@@ -357,9 +388,9 @@ def test_status_reports_dead_daemon_pid(tmp_path: Path, capsys, monkeypatch) -> 
 
     exit_code, output = _run_fast_status(tmp_path, capsys)
 
-    assert exit_code == 1
-    assert "daemon_status: STOPPED (pid 424242 not alive)" in output
-    assert "litehive start" in output
+    assert exit_code == 0
+    assert "daemon_status:" not in output
+    assert "litehive start" not in output
 
 
 def test_status_reports_failed_last_cycle(tmp_path: Path, capsys) -> None:
@@ -371,9 +402,10 @@ def test_status_reports_failed_last_cycle(tmp_path: Path, capsys) -> None:
 
     exit_code, output = _run_fast_status(tmp_path, capsys)
 
-    assert exit_code == 1
-    assert f"last_cycle: FAILED at 20260412T010203Z, check {repair_log}" in output
-    assert "inspect the traceback" in output
+    assert exit_code == 0
+    assert "last_cycle:" not in output
+    assert str(repair_log) not in output
+    assert "inspect the traceback" not in output
 
 
 def test_status_reports_broken_heru_link(tmp_path: Path, capsys) -> None:
@@ -393,9 +425,9 @@ heru = { path = "../heru", editable = true }
 
     exit_code, output = _run_fast_status(tmp_path, capsys)
 
-    assert exit_code == 1
-    assert "heru_link: BROKEN (worktrees cannot resolve heru)" in output
-    assert "uv sync" in output
+    assert exit_code == 0
+    assert "heru_link:" not in output
+    assert "uv sync" not in output
 
 
 def test_status_reports_origin_divergence_as_attention_required(tmp_path: Path, capsys, monkeypatch) -> None:
@@ -413,14 +445,11 @@ def test_status_reports_origin_divergence_as_attention_required(tmp_path: Path, 
 
     exit_code, output = _run_fast_status(tmp_path, capsys)
 
-    assert exit_code == 1
+    assert exit_code == 0
     assert "pool_stop_reason: diverged_from_origin" in output
-    assert (
-        "origin_divergence: !!! ATTENTION REQUIRED !!! local main (12345678) and origin/main (abcdef12) have diverged."
-        in output
-    )
-    assert "git fetch origin main" in output
-    assert "git log --oneline --left-right main...origin/main" in output
+    assert "origin_divergence:" not in output
+    assert "git fetch origin main" not in output
+    assert "git log --oneline --left-right main...origin/main" not in output
 
 
 def test_full_status_reports_consecutive_task_failures_as_critical(tmp_path: Path, capsys) -> None:
@@ -441,7 +470,7 @@ def test_full_status_reports_consecutive_task_failures_as_critical(tmp_path: Pat
     assert "health: 1 broken, 0 warning" in output
 
 
-def test_status_reports_recovery_failed_tasks_as_operator_health_issue(tmp_path: Path, capsys) -> None:
+def test_status_omits_recovery_failure_repair_guidance_from_default_path(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery failed task")
     task.status = "flagged"
@@ -453,14 +482,14 @@ def test_status_reports_recovery_failed_tasks_as_operator_health_issue(tmp_path:
 
     exit_code, output = _run_fast_status(tmp_path, capsys)
 
-    assert exit_code == 1
-    assert "recovery_failure: Task T-0001 has recovery failure (recovery_failed) at `implementing`" in output
-    assert "recovery crashed while repairing the task" in output
-    assert "litehive task debug T-0001 --worktree" in output
-    assert "health: 1 broken, 0 warning" in output
+    assert exit_code == 0
+    assert "recovery_failure:" not in output
+    assert "recovery crashed while repairing the task" not in output
+    assert "litehive task debug T-0001 --worktree" not in output
+    assert "health:" not in output
 
 
-def test_status_reports_terminal_recovery_failure_from_lifecycle_state(tmp_path: Path, capsys) -> None:
+def test_full_status_reports_terminal_recovery_failure_from_lifecycle_state(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Terminal lifecycle recovery failure")
     task.status = "flagged"
@@ -487,7 +516,7 @@ def test_status_reports_terminal_recovery_failure_from_lifecycle_state(tmp_path:
         )
     )
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_full_status(tmp_path, capsys)
 
     assert exit_code == 1
     assert (
@@ -516,7 +545,7 @@ def test_status_reports_queued_backlog_task_with_resumable_runtime_stage(tmp_pat
     assert "health: 1 broken, 0 warning" in output
 
 
-def test_status_reports_backlog_runtime_stage_when_task_is_missing_from_queue(tmp_path: Path, capsys) -> None:
+def test_status_omits_backlog_runtime_stage_repair_guidance_from_default_path(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Backlog damaged task missing from queue")
     task.status = "queued"
@@ -528,15 +557,15 @@ def test_status_reports_backlog_runtime_stage_when_task_is_missing_from_queue(tm
 
     exit_code, output = _run_fast_status(tmp_path, capsys)
 
-    assert exit_code == 1
+    assert exit_code == 0
     assert "queued_tasks: 0" in output
-    assert "backlog_damage: Task T-0001 is queued/backlog but runtime says resume from `testing`" in output
-    assert "missing from WorkspaceState.queue" in output
-    assert "litehive queue resume T-0001" in output
-    assert "health: 1 broken, 0 warning" in output
+    assert "backlog_damage:" not in output
+    assert "missing from WorkspaceState.queue" not in output
+    assert "litehive queue resume T-0001" not in output
+    assert "health:" not in output
 
 
-def test_status_warns_when_queued_stage_will_be_normalized_to_backlog(tmp_path: Path, capsys) -> None:
+def test_status_omits_queued_stage_normalization_warning_from_default_path(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Stale queued stage")
     task.status = "queued"
@@ -547,10 +576,10 @@ def test_status_warns_when_queued_stage_will_be_normalized_to_backlog(tmp_path: 
 
     exit_code, output = _run_fast_status(tmp_path, capsys)
 
-    assert exit_code == 1
-    assert "backlog_damage: Task T-0001 is queued at stale pipeline_status=`implementing`" in output
-    assert "the queue will normalize it back to backlog" in output
-    assert "health: 0 broken, 1 warning" in output
+    assert exit_code == 0
+    assert "backlog_damage:" not in output
+    assert "the queue will normalize it back to backlog" not in output
+    assert "health:" not in output
 
 
 def test_full_status_tolerates_missing_active_task_record(tmp_path: Path, capsys) -> None:

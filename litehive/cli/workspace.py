@@ -99,7 +99,7 @@ def status_command(
     full: Annotated[bool, typer.Option(help="Include the full per-task status dump.")] = False,
 ) -> int:
     root = workspace.resolve()
-    status = collect_task_pipeline_status(root)
+    status = collect_task_pipeline_status(root, diagnostics=full)
     if full:
         for line in render_task_pipeline_status_lines(
             status,

@@ -19,6 +19,7 @@ from litehive.observability.status import (
     render_health_recent_completion_lines,
     render_health_worktree_finding_lines,
     render_health_worktree_lines,
+    render_engine_availability_lines,
     render_recent_activity_section,
     render_runner_status_line,
     render_runtime_policy_lines,
@@ -119,7 +120,10 @@ def test_collect_task_pipeline_status_prefers_runner_active_task_id(tmp_path: Pa
     )
     active_task = SimpleNamespace(id="T-0381", title="Move stage and recovery reports off YAML storage")
 
-    monkeypatch.setattr("litehive.observability.status_diagnostics.collect_status_snapshot", lambda root: snapshot)
+    monkeypatch.setattr(
+        "litehive.observability.status_diagnostics.collect_operational_status_snapshot",
+        lambda root: snapshot,
+    )
     monkeypatch.setattr("litehive.attention.waiting_for_you_lines", lambda root: ["attention_items: unavailable"])
     monkeypatch.setattr("litehive.state.records.get_task", lambda root, task_id: active_task if task_id else None)
 
@@ -290,6 +294,26 @@ def test_render_health_worktree_and_quota_sections() -> None:
     assert quota_lines == [
         "=== Engine Quotas ===",
         "quota: codex status=ok summary=90% remaining",
+    ]
+
+
+def test_render_engine_availability_lines_are_minimal_routing_signal() -> None:
+    config = LitehiveConfig(default_engine="codex", engine_preference=["claude"])
+    monitoring = WorkspaceEngineMonitoring(
+        engines={
+            "codex": {
+                "engine": "codex",
+                "last_limit_kind": "quota",
+                "usage": {"reset_at": "2026-04-30T18:00:00Z"},
+            }
+        }
+    )
+
+    lines = render_engine_availability_lines(config, monitoring)
+
+    assert lines == [
+        "engine_available: claude status=available",
+        "engine_available: codex status=quota default=yes reset_at=2026-04-30T18:00:00Z",
     ]
 
 
