@@ -16,6 +16,10 @@ from .common import (
 from .recovery import TriggerEventKind
 
 
+# Stage reports intentionally store a report projection rather than the full
+# internal PipelineState. Agent-authored reports belong to executable role
+# stages; hook/system states are represented by their owning role stage, except
+# merge and recovery reports which need their own explicit labels.
 ReportPipelineState: TypeAlias = TaskStage | Literal["merge_resolving", "recovering"]
 StageReportVerdict: TypeAlias = Literal["pass", "reject", "blocked"]
 TaskActivityVerdict: TypeAlias = Literal[
@@ -52,7 +56,7 @@ def classify_task_activity_verdict(role: str, verdict: str) -> str | None:
 
 
 def canonical_stage_report_verdict(verdict: str) -> StageReportVerdict | None:
-    """Map submitted activity verdicts into the narrow StageReport verdict set."""
+    """Map submitted activity verdicts into the canonical StageReport verdict set."""
     return _STAGE_REPORT_VERDICT_ALIASES.get(verdict.strip().lower())
 
 
@@ -80,8 +84,8 @@ class StageReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task_id: str  # Task this report belongs to
-    pipeline_state: ReportPipelineState  # Pipeline state that was executed
-    verdict: StageReportVerdict  # Final pipeline-state verdict
+    pipeline_state: ReportPipelineState  # Report projection for the executed pipeline state
+    verdict: StageReportVerdict  # Final report verdict: pass, reject, or blocked
     source: Literal["agent", "hook"] = "agent"  # What generated this report
     summary: str  # Brief description of pipeline-state results
     feedback: str = ""  # Detailed feedback or explanation

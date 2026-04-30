@@ -156,16 +156,16 @@ contract. The only LiteHive-owned workspace YAML file should be
 
 ## Priority 2 - Domain Vocabulary And Model Shape
 
-- [ ] Finish verdict vocabulary alignment. `StageReportVerdict` uses
-  `pass/reject/blocked`, while planning docs selected `accept/reject/blocked`
-  and `Verdict` still includes broader task-activity values.
-- [ ] Decide whether `StageReport.pipeline_state` should be the full canonical
-  `PipelineState` or the current coarse `ReportPipelineState` alias. The field
-  name is aligned, but the type is not fully canonical.
-- [ ] Rename or retire `PipelineStatus` where it is only a UI projection. Make
-  call sites visibly distinguish internal `PipelineState` from operator-facing
-  status.
-- [ ] Remove stale `PipelineState` and `TaskStatus` references from role prompt
+- [x] Finish verdict vocabulary alignment. `StageReportVerdict` uses the
+  documented canonical `pass/reject/blocked` report vocabulary. Broader
+  submitted activity values are normalized at the report boundary.
+- [x] Decide whether `StageReport.pipeline_state` should be the full canonical
+  `PipelineState` or a report projection. It intentionally uses the explicitly
+  named `ReportPipelineState` projection documented in `litehive/domain/reports.py`.
+- [x] Rename or retire `PipelineStatus` where it is only a UI projection. The
+  model and docs now describe it as an operator-facing projection, distinct
+  from internal `PipelineState`.
+- [x] Remove stale `PipelineState` and `TaskStatus` references from role prompt
   copy that imply old terminal statuses such as `duplicate`, `wont_do`, and
   `deferred` are task statuses instead of close reasons.
 - [ ] Rename `lifecycle/` or update docs to stop disagreeing. Some plans say

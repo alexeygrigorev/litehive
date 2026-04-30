@@ -174,7 +174,7 @@ class TaskStateRecord(BaseModel):
     close_reason: str | None = None  # Reason if task was explicitly closed
     flag_reason: str | None = None  # Reason if task is flagged
     flag_count: int = 0  # Number of times flagged
-    pipeline_status: PipelineStatus = PipelineStatus.BACKLOG  # Current pipeline position
+    pipeline_status: PipelineStatus = PipelineStatus.BACKLOG  # Operator-facing pipeline progress projection
     updated_at: str = Field(default_factory=utcnow)  # Last state change timestamp
     subagents: list[SubagentRef] = Field(default_factory=list)  # Active/recent subagent references
     git: TaskStateGitSettings = Field(default_factory=TaskStateGitSettings)  # Git execution state
@@ -238,7 +238,7 @@ class TaskRecord(BaseModel):
     close_reason: str | None = None  # Reason when status is closed or done
     flag_reason: str | None = None  # Reason if task requires operator attention
     flag_count: int = 0  # Number of times task has been flagged
-    pipeline_status: PipelineStatus = PipelineStatus.BACKLOG  # Current position in pipeline
+    pipeline_status: PipelineStatus = PipelineStatus.BACKLOG  # Operator-facing pipeline progress projection
     priority: str = "medium"  # Scheduling priority
     created_at: str = Field(default_factory=utcnow)  # Task creation timestamp
     updated_at: str = Field(default_factory=utcnow)  # Last modification timestamp

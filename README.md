@@ -415,7 +415,7 @@ monkeypatch.setattr("litehive.pipeline.SubagentManager.run", fake_run)
 ```python
 def executor(task, step):
     return StageReport(
-        task_id=task.id, step=step, verdict="pass", summary=f"{step} ok",
+        task_id=task.id, pipeline_state=step, verdict="pass", summary=f"{step} ok",
         files_changed=["app.txt"], tests={"added": 1, "passing": 1},
     )
 runner = TaskExecutionRunner(tmp_path, executor)
@@ -427,7 +427,7 @@ The runner has an empty SWE guard: if implementing reports "pass" with zero file
 
 **Wrong** — causes infinite retry loop:
 ```python
-StageReport(task_id=task.id, step=step, verdict="pass", summary="ok")
+StageReport(task_id=task.id, pipeline_state=step, verdict="pass", summary="ok")
 # files_changed defaults to [], tests defaults to {"added": 0, "passing": 0}
 ```
 
@@ -437,7 +437,7 @@ stdout = "VERDICT: PASS\nSUMMARY: ok\nFILES_CHANGED:\nTESTS_ADDED: 0\nTESTS_PASS
 
 **Right** — includes at least one file:
 ```python
-StageReport(task_id=task.id, step=step, verdict="pass", summary="ok",
+StageReport(task_id=task.id, pipeline_state=step, verdict="pass", summary="ok",
     files_changed=["app.txt"], tests={"added": 1, "passing": 1})
 ```
 
@@ -445,7 +445,7 @@ StageReport(task_id=task.id, step=step, verdict="pass", summary="ok",
 stdout = "VERDICT: PASS\nSUMMARY: ok\nFILES_CHANGED:\n- app.txt\nTESTS_ADDED: 1\nTESTS_PASSING: 1\nWARNINGS:\n"
 ```
 
-This only matters for implementing stage passes. FAIL/REJECT verdicts and non-implementing stages (grooming, testing, accepting) don't need files.
+This only matters for implementing stage passes. Reject verdicts and non-implementing stages (grooming, testing, accepting) don't need files.
 
 ### Match current function signatures in fakes
 

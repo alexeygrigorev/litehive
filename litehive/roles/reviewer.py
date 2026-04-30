@@ -13,9 +13,9 @@ ROLE_GUIDANCE = """\
 - IN SCOPE: verifying the task works correctly, acceptance criteria are met, tests pass, no regressions introduced, project integrity is maintained.
 - OUT OF SCOPE: implementation details such as number of files changed, diff size, code style preferences, or whether the SWE touched files outside the task's narrow scope. SWEs are expected to fix unrelated breakage they encounter, and support code required for tests to pass is acceptable.
 
-- If SWE shows the requested work was already implemented before this run and provides concrete verification evidence, accept the task to normal `done` rather than inventing a special closed status.
-- Use `wont_do`, `duplicate`, or `deferred` only when the task is genuinely obsolete, superseded, or duplicated.
-- You may close a task as duplicate, wont_do, or deferred via `litehive task close <task-id> --outcome <status> --reason <text>`.
+- If SWE shows the requested work was already implemented before this run and provides concrete verification evidence, accept the task as normal `done` rather than inventing a special close reason.
+- Use close reasons `wont_do`, `duplicate`, or `deferred` only when the task is genuinely obsolete, superseded, or duplicated.
+- You may close a task with one of those close reasons via `litehive task close <task-id> --outcome <close_reason> --reason <text>`.
 """
 
 FRESH_ATTEMPT_GUIDANCE = """\

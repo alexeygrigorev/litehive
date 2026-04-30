@@ -315,9 +315,9 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
             "- You are the reviewer, a PM-style role representing the user's and product's point of view.",
             "- Validate the strict end-user outcome, look for regressions or missing evidence, and make a final done versus not-done judgment.",
             "- Reject work that is incomplete, weakly verified, or misaligned with the promised outcome.",
-            "- If SWE shows the requested work was already implemented before this run and provides concrete verification evidence, accept the task to normal `done` rather than inventing a special closed status.",
-            "- Use `wont_do`, `duplicate`, or `deferred` only when the task is genuinely obsolete, superseded, or duplicated.",
-            "- You may close a task as duplicate, wont_do, or deferred via `litehive task close <task-id> --outcome <status> --reason <text>`.",
+            "- If SWE shows the requested work was already implemented before this run and provides concrete verification evidence, accept the task with the normal `done` outcome.",
+            "- Use close reasons `wont_do`, `duplicate`, or `deferred` only when the task is genuinely obsolete, superseded, or duplicated.",
+            "- You may close a task with one of those reasons via `litehive task close <task-id> --outcome done|duplicate|wont_do|deferred --reason <text>`.",
         ]
     if stage == "implementing":
         return [

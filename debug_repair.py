@@ -97,7 +97,7 @@ def debug_repair():
             print(f"  - Pipeline state: {latest_report.pipeline_state}")
 
         # Check repair conditions manually
-        print(f"\nDebugging repair conditions...")
+        print("\nDebugging repair conditions...")
 
         # Load state to check queue
         state = load_state(workspace, bootstrap=False)
@@ -111,7 +111,7 @@ def debug_repair():
         print(f"Report pipeline_state in terminal stages: {latest_report.pipeline_state in _TERMINAL_REPAIR_STAGES}")
 
         # Try repair
-        print(f"\nAttempting repair...")
+        print("\nAttempting repair...")
         result = _normalize_stale_terminal_tasks(workspace)
         print(f"Repair result: {result}")
 

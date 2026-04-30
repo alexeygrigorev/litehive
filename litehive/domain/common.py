@@ -172,10 +172,12 @@ class TaskStatus(StringEnum):
 
 
 class PipelineStatus(StringEnum):
-    """Simplified pipeline state view for external reporting and displays.
+    """Operator-facing projection of internal pipeline progress.
 
-    Provides a coarser-grained view for operator interfaces and reporting.
-    Used by CLI views and task persistence.
+    This is not the pipeline state machine. It collapses detailed
+    ``PipelineState`` nodes, including hook and system nodes, into the coarse
+    progress buckets shown in CLI/operator views and persisted on task runtime
+    records for filtering and display.
     """
 
     BACKLOG = "backlog"  # Not yet started
@@ -246,7 +248,7 @@ def task_stage_for_pipeline_state(value: str | PipelineState) -> TaskStage | Non
 
 
 def pipeline_status_for_pipeline_state(value: str | PipelineState) -> PipelineStatus:
-    """Return the operator-facing task pipeline status for a machine state."""
+    """Return the operator-facing ``PipelineStatus`` projection for a machine state."""
     return _PIPELINE_STATUS_BY_PIPELINE_STATE[canonical_pipeline_state(value)]
 
 
@@ -269,8 +271,9 @@ class Verdict(StringEnum):
     Created by subagents and hook execution paths when they submit the result
     of a pipeline state. Used by PipelineRunner to decide whether to advance,
     retry, block, or enter recovery. Also used by ActivityEntry and
-    TaskOutcome as the canonical submitted decision value. StageReport maps
-    submitted decisions into its narrower pass/reject/blocked verdict set.
+    TaskOutcome as the canonical submitted decision value. ``StageReport`` maps
+    submitted decisions into its narrower canonical ``pass/reject/blocked``
+    verdict set.
     """
 
     PASS = "pass"  # General positive outcome

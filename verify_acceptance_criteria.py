@@ -56,7 +56,7 @@ def verify_all_criteria():
         # if the fast path optimization is working correctly
         print("   Fast path optimization already tested and working")
         criterion3_met = True  # Already verified by existing tests
-        print(f"   Result: ✅ PASS - DB state used before file scanning")
+        print("   Result: ✅ PASS - DB state used before file scanning")
         print()
 
         # CRITERION 4: Daemon/repair output records explicit clean-run message with timing

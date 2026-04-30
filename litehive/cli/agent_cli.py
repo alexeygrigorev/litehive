@@ -295,7 +295,7 @@ def agent_update_command(
 @agent_app.command("close", help="Close a task (planner/reviewer only)")
 def agent_close_command(
     task_id: Annotated[str | None, typer.Option("--task-id")] = None,
-    outcome: Annotated[str, typer.Option("--outcome", help="done, duplicate, deferred, or wont_do")] = "duplicate",
+    outcome: Annotated[str, typer.Option("--outcome", help="Close reason: done, duplicate, deferred, or wont_do")] = "duplicate",
     reason: Annotated[str, typer.Option("--reason")] = "",
 ) -> None:
     _require_role({"planner", "reviewer"})

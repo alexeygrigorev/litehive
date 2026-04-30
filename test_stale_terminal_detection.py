@@ -8,7 +8,7 @@ from pathlib import Path
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
-from litehive.recovery.workspace_repair import repair_workspace_state, _normalize_stale_terminal_tasks, _stale_terminal_candidate_ids
+from litehive.recovery.workspace_repair import repair_workspace_state, _stale_terminal_candidate_ids
 from litehive.state.records import create_task, get_task_record
 
 
@@ -81,9 +81,9 @@ def test_stale_terminal_task_detection():
             )
 
         print(f"✅ Created task {task_id} with stale terminal state")
-        print(f"   - Status: queued (should be done)")
-        print(f"   - Pipeline status: implementing (should be done)")
-        print(f"   - Has terminal pass report: ✅")
+        print("   - Status: queued (should be done)")
+        print("   - Pipeline status: implementing (should be done)")
+        print("   - Has terminal pass report: ✅")
 
         # Test candidate detection (acceptance criterion 1 - detection)
         print("\n1️⃣ Testing: Stale terminal candidate detection")
@@ -108,7 +108,7 @@ def test_stale_terminal_task_detection():
             task_after.pipeline_status == "done" and
             task_after.close_reason == "done"
         )
-        print(f"   Task state after repair:")
+        print("   Task state after repair:")
         print(f"     - Status: {task_after.status}")
         print(f"     - Pipeline status: {task_after.pipeline_status}")
         print(f"     - Close reason: {task_after.close_reason}")
@@ -134,7 +134,7 @@ def test_stale_terminal_task_detection():
             state_corrected and performance_optimized and output_naming
         )
 
-        print(f"\n📋 ACCEPTANCE CRITERIA VERIFICATION:")
+        print("\n📋 ACCEPTANCE CRITERIA VERIFICATION:")
         print(f"   1a. Detection: {'✅' if criterion1_detection else '❌'}")
         print(f"   1b. Reconciliation: {'✅' if reconciled else '❌'}")
         print(f"   1c. State correction: {'✅' if state_corrected else '❌'}")

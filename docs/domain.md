@@ -102,6 +102,14 @@ Each domain module contains comprehensive docstrings for all models, including:
 **Core Entities**: `TaskRecord`, subagent session/runtime records - objects with stable identity
 **Value Objects**: `TaskRetryPolicy`, `FailureFingerprint`, `RecoveryTrigger`, `RecoveryOutcome` - descriptive data structures
 **Enums**: `TaskStatus`, `PipelineState`, `PipelineStatus`, `Verdict` - normalized classification
+
+`PipelineState` is the internal runner state machine. `PipelineStatus` is only
+the operator-facing progress projection persisted on task records for display
+and filtering. `StageReport.pipeline_state` uses the named
+`ReportPipelineState` projection documented in `litehive/domain/reports.py`.
+Stage report verdicts are canonically `pass`, `reject`, or `blocked`; broader
+activity verdicts are normalized into that set at the report boundary.
+
 **Services**: task transition operations, `StateMachineRunner`, recovery coordination - domain behavior coordination
 **Runtime State**: `TaskRuntime`, `PipelineRuntime`, `ExecutionRuntime` - mutable execution tracking
 

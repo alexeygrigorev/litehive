@@ -279,6 +279,8 @@ class SandboxLauncher:
         sandbox_dir = Path(__file__).resolve().parents[1] / "sandbox"
         merge_git = sandbox_dir / "git_wrapper.py"
         no_git = sandbox_dir / "no_git.sh"
+        merge_git.chmod(0o755)
+        no_git.chmod(0o755)
 
         return {
             "merge_git": merge_git,

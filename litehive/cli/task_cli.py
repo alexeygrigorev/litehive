@@ -301,7 +301,7 @@ def list_tasks(
     show_all: Annotated[bool, typer.Option("--all", help="Include done and archived tasks")] = False,
     filter_status: Annotated[str | None, typer.Option("--status", help="Filter by task status")] = None,
     filter_pipeline_status: Annotated[
-        str | None, typer.Option("--pipeline-status", help="Filter by pipeline stage")
+        str | None, typer.Option("--pipeline-status", help="Filter by operator-facing pipeline progress")
     ] = None,
     filter_engine: Annotated[str | None, typer.Option("--engine", help="Filter by engine")] = None,
 ) -> int:
@@ -460,7 +460,7 @@ def abandon(task_id: Annotated[str, typer.Argument(help="Task id")], workspace: 
     return 0
 
 
-@app.command("close", help="Close a task with an explicit terminal outcome")
+@app.command("close", help="Close a task with an explicit close reason")
 def close(
     task_id: Annotated[str, typer.Argument(help="Task id")],
     workspace: WorkspaceOption = Path.cwd(),

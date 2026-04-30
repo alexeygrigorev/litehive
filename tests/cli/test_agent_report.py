@@ -160,6 +160,19 @@ def test_agent_report_help_does_not_advertise_role_flag() -> None:
     assert "--role" not in result.output
 
 
+def test_agent_and_task_close_help_describe_outcome_as_close_reason() -> None:
+    agent_result = CliRunner().invoke(root_app, ["agent", "close", "--help"], standalone_mode=False)
+    task_result = CliRunner().invoke(root_app, ["task", "close", "--help"], standalone_mode=False)
+
+    assert agent_result.exit_code == 0
+    assert task_result.exit_code == 0
+    combined = f"{agent_result.output}\n{task_result.output}"
+    stale_outcome_placeholder = "--outcome <" + "status>"
+    assert "Close reason" in combined
+    assert "explicit close reason" in task_result.output
+    assert stale_outcome_placeholder not in combined
+
+
 def test_agent_report_uses_intent_record_when_runtime_row_is_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

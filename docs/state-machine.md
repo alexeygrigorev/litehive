@@ -47,6 +47,14 @@ coarse progress reporting. It collapses detailed `PipelineState` values into
 broader phases such as `grooming`, `implementing`, `testing`, `accepting`,
 `commit_to_git`, `done`, and `flagged`.
 
+`StageReport.pipeline_state` stores the explicitly named `ReportPipelineState`
+projection used by reports. It is narrower than `PipelineState`: agent reports
+use executable role stages, while merge and recovery reports keep explicit
+`merge_resolving` and `recovering` labels. Stage report verdicts use the
+canonical `pass`, `reject`, or `blocked` vocabulary; submitted aliases such as
+`accept`, `fail`, `resume`, and `budget_hit` are normalized at the report
+boundary.
+
 ## Normal Flow
 
 Typical queued execution:
