@@ -15,7 +15,6 @@ from litehive.daemon.registry import (
     daemon_lock_path,
     daemon_metadata,
     get_workspace_daemon,
-    list_daemon_instances,
     register_daemon,
     unregister_daemon,
 )
@@ -93,14 +92,12 @@ def test_register_and_unregister_daemon_uses_shared_lock_manager(tmp_path: Path,
     assert entry["log_dir"] == str(log_dir)
     assert daemon_lock_is_active(workspace) is True
     assert get_workspace_daemon(workspace) == entry
-    assert [item["workspace"] for item in list_daemon_instances()] == [str(workspace.resolve())]
 
     unregister_daemon(workspace, pid=os.getpid())
 
     assert daemon_metadata(workspace) is None
     assert daemon_lock_is_active(workspace) is False
     assert get_workspace_daemon(workspace) is None
-    assert list_daemon_instances() == []
     assert daemon_lock_path(workspace).read_text(encoding="utf-8") == ""
 
 

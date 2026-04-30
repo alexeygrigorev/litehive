@@ -3,91 +3,9 @@ from litehive.state.records import list_tasks
 from litehive.tasks.report_storage import load_stage_reports_for_task_id
 
 
-def _fmt_seconds(seconds: float) -> str:
-    s = int(seconds)
-    if s < 60:
-        return f"{s}s"
-    m, rem = divmod(s, 60)
-    if m < 60:
-        return f"{m}m{rem:02d}s"
-    h, m = divmod(m, 60)
-    return f"{h}h{m:02d}m"
-
-
 def task_stage_outcomes(root, task_id, slug):
     del slug
     return [f"{report.pipeline_state}={report.verdict}" for report in load_stage_reports_for_task_id(root, task_id)]
-
-
-def collect_task_stage_stats(root, task_id):
-    """Collect stage/verdict/duration_seconds from all reports for a task."""
-    stats = []
-    for report in load_stage_reports_for_task_id(root, task_id):
-        duration = float(report.duration_seconds) if report.duration_seconds > 0 else 0.0
-        stats.append(
-            {
-                "stage": report.pipeline_state,
-                "verdict": report.verdict,
-                "duration_seconds": duration,
-            }
-        )
-    return stats
-
-
-def compute_pool_flow_statistics(root, task_entries):
-    """Compute aggregate flow statistics from all task stage reports.
-
-    Returns a dict with stages_executed, per-stage duration metrics (avg_seconds,
-    min_seconds, max_seconds), pass/fail counts, bottleneck_stage, and
-    bottleneck_avg_seconds, or None when no duration data is available.
-    """
-    stage_durations: dict[str, list[float]] = {}
-    stage_pass_counts: dict[str, int] = {}
-    stage_fail_counts: dict[str, int] = {}
-    total_stages = 0
-
-    for entry in task_entries:
-        task_id = entry.get("task_id")
-        if not task_id:
-            continue
-        for stat in collect_task_stage_stats(root, task_id):
-            stage = stat["stage"]
-            verdict = stat["verdict"]
-            duration = stat["duration_seconds"]
-            total_stages += 1
-            if duration > 0:
-                stage_durations.setdefault(stage, []).append(duration)
-            if verdict in ("pass", "accept"):
-                stage_pass_counts[stage] = stage_pass_counts.get(stage, 0) + 1
-            else:
-                stage_fail_counts[stage] = stage_fail_counts.get(stage, 0) + 1
-
-    if not stage_durations:
-        return None
-
-    stage_metrics: dict[str, dict[str, float]] = {}
-    for stage, durs in stage_durations.items():
-        stage_metrics[stage] = {
-            "avg_seconds": sum(durs) / len(durs),
-            "min_seconds": min(durs),
-            "max_seconds": max(durs),
-        }
-
-    # Tie-break by retry (fail) count descending so the stage with more retries wins.
-    bottleneck_stage = max(
-        stage_metrics,
-        key=lambda s: (stage_metrics[s]["avg_seconds"], stage_fail_counts.get(s, 0)),
-    )
-    bottleneck_avg_seconds = stage_metrics[bottleneck_stage]["avg_seconds"]
-
-    return {
-        "stages_executed": total_stages,
-        "stage_metrics": stage_metrics,
-        "stage_pass_counts": stage_pass_counts,
-        "stage_fail_counts": stage_fail_counts,
-        "bottleneck_stage": bottleneck_stage,
-        "bottleneck_avg_seconds": bottleneck_avg_seconds,
-    }
 
 
 def _pool_task_report_entry(
@@ -281,7 +199,6 @@ def _pool_summary_report_data(
     resumable = _resumable_pool_tasks(root)
     closed = _closed_pool_tasks(root)
     progress_status, summary = _pool_no_useful_progress_report(stop_reason)
-    flow_statistics = compute_pool_flow_statistics(root, list(completed) + list(flagged))
     return {
         "created_at": utcnow(),
         "summary": summary,
@@ -301,7 +218,6 @@ def _pool_summary_report_data(
         "skipped": remaining,
         "remaining_count": len(remaining),
         "remaining": remaining,
-        "flow_statistics": flow_statistics,
     }
 
 
@@ -369,29 +285,6 @@ def _pool_summary_report_lines(
         lines.append(f"progress_status: {report['progress_status']}")
     if report.get("summary") is not None:
         lines.append(f"summary: {report['summary']}")
-    flow_statistics = report.get("flow_statistics")
-    if flow_statistics is not None:
-        bottleneck = flow_statistics.get("bottleneck_stage")
-        bottleneck_avg = flow_statistics.get("bottleneck_avg_seconds")
-        bottleneck_label = (
-            f"{bottleneck} (avg={_fmt_seconds(bottleneck_avg)})"
-            if bottleneck and bottleneck_avg is not None
-            else bottleneck or "-"
-        )
-        lines.append(
-            f"flow_statistics: stages_executed={flow_statistics['stages_executed']} bottleneck={bottleneck_label}"
-        )
-        stage_metrics = flow_statistics.get("stage_metrics") or {}
-        if stage_metrics:
-            duration_parts = [
-                f"{stage}=avg:{_fmt_seconds(m['avg_seconds'])},min:{_fmt_seconds(m['min_seconds'])},max:{_fmt_seconds(m['max_seconds'])}"
-                for stage, m in stage_metrics.items()
-            ]
-            lines.append(f"stage_durations: {' '.join(duration_parts)}")
-        stage_fail_counts = flow_statistics.get("stage_fail_counts") or {}
-        if stage_fail_counts:
-            fail_parts = [f"{stage}={count}" for stage, count in stage_fail_counts.items()]
-            lines.append(f"stage_failures: {' '.join(fail_parts)}")
     lines.append(f"stop_condition: {report['stop_condition']}")
     lines.append(f"stop_reason: {report['stop_reason']}")
     return lines

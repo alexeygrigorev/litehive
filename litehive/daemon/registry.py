@@ -7,7 +7,6 @@ import threading
 from typing import TextIO
 
 from litehive.config.paths import workspace_path
-from litehive.config.registry import list_registered_workspace_paths
 from litehive.state.process_lock import ProcessLockManager
 from litehive.state.locking import runner_pid_is_alive as pid_is_alive
 
@@ -137,16 +136,6 @@ def touch_daemon(workspace: Path, *, pid: int | None = None) -> bool:
         metadata = manager.read_locked_metadata(handle)
         manager.save_process_state(workspace, metadata)
     return True
-
-
-def list_daemon_instances() -> list[dict[str, object]]:
-    instances: list[dict[str, object]] = []
-    for workspace in list_registered_workspace_paths():
-        metadata = daemon_metadata(workspace.resolve())
-        if metadata is None or metadata.get("status") != "running":
-            continue
-        instances.append(metadata)
-    return sorted(instances, key=lambda item: str(item.get("workspace", "")))
 
 
 @contextmanager

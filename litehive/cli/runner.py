@@ -21,7 +21,7 @@ from litehive.daemon.execution import (
     start_background_daemon,
     stop_workspace_daemon,
 )
-from litehive.daemon.registry import get_workspace_daemon, list_daemon_instances
+from litehive.daemon.registry import get_workspace_daemon
 from litehive.db.schema import MigrationApplyError, apply_pending_migrations, migration_status
 from litehive.git.ops import has_non_litehive_changes, is_git_repo
 from litehive.domain.reports import TaskActivityEntry
@@ -112,16 +112,6 @@ def restart(workspace: WorkspaceOption = Path.cwd()) -> int:
     print(f"previous_pid: {previous.get('pid') if previous is not None else '-'}")
     print(f"pid: {pid}")
     print("daemon_status: running")
-    return 0
-
-
-def daemon_instances():
-    instances = list_daemon_instances()
-    print(f"instances: {len(instances)}")
-    for index, entry in enumerate(instances, start=1):
-        print(
-            f"{index}. workspace={entry.get('workspace')} pid={entry.get('pid')} started_at={entry.get('started_at')} log_dir={entry.get('log_dir')}"
-        )
     return 0
 
 

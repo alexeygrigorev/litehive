@@ -13,8 +13,6 @@ import threading
 import time
 from typing import TextIO
 
-from litehive.attention import list_attention
-from litehive.config.loading import load_config
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import apply_pending_migrations
@@ -46,20 +44,7 @@ DAEMON_STOP_GRACE_PERIOD_SECONDS = 5.0
 DAEMON_FORCE_KILL_TIMEOUT_SECONDS = 4.0
 DAEMON_EXIT_POLL_INTERVAL_SECONDS = 0.1
 
-_EXPLICIT_POOL_STOP_REASONS = {
-    "attention_required",
-    "dirty_git_state",
-    "diverged_from_origin",
-    "consecutive_task_failures",
-    "max_tasks_reached",
-    "failure_detected",
-    "stop_condition_reached",
-    "human_checkpoint_before_acceptance",
-    "human_checkpoint_before_commit",
-    "human_checkpoint_reached",
-    "continue_or_rollback_required",
-    "task_interrupted",
-}
+_CONTINUE_STOP_REASONS = {None, "None", "queue_exhausted", "task_requeued"}
 
 
 def _git(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -164,10 +149,6 @@ def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
     return state, "\n".join(lines) + "\n"
 
 
-def _is_explicit_pool_stop_reason(reason: str | None) -> bool:
-    return bool(reason and reason in _EXPLICIT_POOL_STOP_REASONS)
-
-
 def default_command_prefix() -> list[str]:
     override = os.environ.get("LITEHIVE_DAEMON_EXECUTABLE")
     if override:
@@ -255,8 +236,29 @@ def _terminate_recorded_daemon(workspace: Path, *, pid: int) -> None:
     _force_kill_recorded_daemon(workspace, pid=pid)
 
 
+def _terminate_child_process(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    except OSError:
+        process.terminate()
+
+
 def _runner_is_live(status) -> bool:
     return getattr(status, "status", None) in {"running", "late"}
+
+
+def _has_work(state: dict[str, object]) -> bool:
+    return state.get("active_task_id") is not None or bool(state.get("queue", []) or [])
+
+
+def _should_continue_for_stop_reason(reason: object) -> bool:
+    if reason is None:
+        return True
+    return str(reason) in _CONTINUE_STOP_REASONS
 
 
 def _emit_runner_wait(status, *, stream: TextIO | None) -> None:
@@ -307,6 +309,7 @@ def run_logged_subprocess(
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
+            start_new_session=True,
         )
         current_child["process"] = process
         assert process.stdout is not None
@@ -337,17 +340,6 @@ def run_daemon_loop(
     log_root.mkdir(parents=True, exist_ok=True)
     prune_run_all_log_dirs(log_base)
     register_daemon(workspace, pid=os.getpid(), log_dir=log_root)
-    # Clear the soft "daemon_iteration_failures" marker left behind by a
-    # previous worker. This is a self-recoverable state (a fresh daemon worker
-    # is starting now); the explicit pool-stop reasons listed in
-    # _EXPLICIT_POOL_STOP_REASONS are what an operator must clear by hand.
-    try:
-        existing_state = load_state(workspace)
-        if existing_state.pool_stop_reason == "daemon_iteration_failures":
-            set_pool_stop_reason(workspace, None)
-    except (OSError, RuntimeError, ValueError):
-        logger.exception("failed to clear stale daemon_iteration_failures marker")
-
     stop_requested = False
     current_child: dict[str, subprocess.Popen[str] | None] = {"process": None}
     heartbeat_stop = threading.Event()
@@ -363,8 +355,8 @@ def run_daemon_loop(
         nonlocal stop_requested
         stop_requested = True
         child = current_child["process"]
-        if child is not None and child.poll() is None:
-            child.terminate()
+        if child is not None:
+            _terminate_child_process(child)
 
     previous_term = signal.signal(signal.SIGTERM, _handle_signal)
     previous_int = signal.signal(signal.SIGINT, _handle_signal)
@@ -372,23 +364,14 @@ def run_daemon_loop(
         _emit(f"workspace: {workspace}", stream=output_stream)
         _emit(f"logs: {log_root}", stream=output_stream)
         iteration = 0
-        consecutive_iteration_failures = 0
-        # Daemon-level resilience: an individual iteration crashing (e.g. a
-        # corrupt user-global registry DB, a stuck lock, a transient subprocess
-        # failure) must not kill the whole daemon. Bounded retry with backoff
-        # so we don't spin forever on a permanent failure.
-        MAX_CONSECUTIVE_FAILURES = 5
         while True:
             if stop_requested:
-                _emit("Daemon stop requested. Stopping.", stream=output_stream)
+                _emit("Runner stop requested. Stopping.", stream=output_stream)
                 return 0
 
             iteration += 1
             prefix = f"{iteration:04d}"
-            repair_file = log_root / f"{prefix}-repair.log"
-            pre_status_file = log_root / f"{prefix}-pre-status.log"
             run_file = log_root / f"{prefix}-run.log"
-            post_status_file = log_root / f"{prefix}-post-status.log"
 
             _emit("", stream=output_stream)
             _emit(f"== iteration {iteration} ==", stream=output_stream)
@@ -399,6 +382,9 @@ def run_daemon_loop(
                 sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
                 continue
 
+            if _halt_for_origin_divergence(workspace, output_stream=output_stream):
+                return 0
+
             try:
                 maybe_run_workspace_backup(workspace, stream=output_stream)
             except (OSError, RuntimeError) as exc:
@@ -406,120 +392,21 @@ def run_daemon_loop(
                 _append_attention_log(workspace, f"scheduled backup failed: {exc}")
                 _emit(f"backup_failed: {exc}", stream=output_stream)
 
-            iteration_failed = False
-            iteration_failure_reason: str | None = None
-
-            if _halt_for_origin_divergence(workspace, output_stream=output_stream):
-                return 0
-
-            repair_started = time.perf_counter()
             try:
-                repair_rc = run_logged_subprocess(
-                    [*command_prefix, "repair", "--workspace", str(workspace)],
-                    cwd=workspace,
-                    log_path=repair_file,
-                    output_stream=None,
-                    current_child=current_child,
-                )
-            except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
-                logger.exception("repair subprocess raised")
-                _emit(f"repair raised: {exc}", stream=output_stream)
-                iteration_failed = True
-                iteration_failure_reason = f"repair raised: {exc}"
-                repair_rc = -1
-            repair_elapsed_ms = int((time.perf_counter() - repair_started) * 1000)
-            if repair_rc != 0 and not iteration_failed:
-                _emit(f"litehive repair failed (rc={repair_rc}); see {repair_file}", stream=output_stream)
-                iteration_failed = True
-                iteration_failure_reason = f"repair exited {repair_rc}"
-            elif repair_rc == 0:
-                repair_status = "completed"
-                try:
-                    repair_text = repair_file.read_text(encoding="utf-8", errors="replace")
-                except OSError:
-                    repair_text = ""
-                if "repaired: no" in repair_text:
-                    repair_status = "clean"
-                elif "repaired: yes" in repair_text:
-                    repair_status = "changed"
-                _emit(f"repair: {repair_status} ({repair_elapsed_ms}ms)", stream=output_stream)
-
-            if not iteration_failed:
-                try:
-                    pre_state, pre_snapshot = _daemon_status_snapshot(workspace)
-                except (OSError, RuntimeError, ValueError) as exc:
-                    logger.exception("pre-status snapshot raised")
-                    _emit(f"pre-status raised: {exc}", stream=output_stream)
-                    iteration_failed = True
-                    iteration_failure_reason = f"pre-status raised: {exc}"
-                    pre_state, pre_snapshot = {}, ""
-            else:
-                pre_state, pre_snapshot = {}, ""
-
-            if iteration_failed:
-                consecutive_iteration_failures += 1
-                _append_attention_log(
-                    workspace,
-                    f"daemon iteration {iteration} failed: {iteration_failure_reason}",
-                )
-                _emit(
-                    f"!!! ATTENTION !!! iteration {iteration} failed "
-                    f"({consecutive_iteration_failures}/{MAX_CONSECUTIVE_FAILURES}): "
-                    f"{iteration_failure_reason}",
-                    stream=output_stream,
-                )
-                if consecutive_iteration_failures >= MAX_CONSECUTIVE_FAILURES:
-                    _emit(
-                        f"Too many consecutive iteration failures "
-                        f"({consecutive_iteration_failures}). Backing off 5min and retrying.",
-                        stream=output_stream,
-                    )
-                    _write_pool_stop_reason(workspace, "daemon_iteration_failures")
-                    sleep_with_stop(300, stop_requested_fn=lambda: stop_requested)
-                    set_pool_stop_reason(workspace, None)
-                    consecutive_iteration_failures = 0
-                    continue
-                # Short backoff before the next attempt
-                time.sleep(min(5 * consecutive_iteration_failures, 30))
-                continue
-
-            pre_status_file.write_text(pre_snapshot, encoding="utf-8")
+                pre_state, pre_snapshot = _daemon_status_snapshot(workspace)
+            except (OSError, RuntimeError, ValueError) as exc:
+                logger.exception("status snapshot raised")
+                _emit(f"status raised: {exc}", stream=output_stream)
+                return 1
             _emit(pre_snapshot, stream=output_stream)
 
-            active_task_id = pre_state.get("active_task_id")
-            queue = pre_state.get("queue", []) or []
-            stop_reason_before = pre_state.get("pool_stop_reason")
-
-            has_active_work = active_task_id is not None
-            has_pending_work = bool(queue)
-
-            if not has_active_work and not has_pending_work:
+            if not _has_work(pre_state):
                 _emit("No active or queued tasks remain. Stopping.", stream=output_stream)
                 return 0
-            if stop_reason_before == "blocked_tasks_remaining":
-                _emit("Blocked tasks remain and nothing is runnable. Stopping.", stream=output_stream)
+            stop_reason_before = pre_state.get("pool_stop_reason")
+            if not _should_continue_for_stop_reason(stop_reason_before):
+                _emit(f"Runner stopped: {stop_reason_before}", stream=output_stream)
                 return 0
-            if stop_reason_before == "attention_required":
-                unresolved_attention = list_attention(workspace)
-                if unresolved_attention:
-                    _emit(
-                        f"Pool stopped: attention_required ({len(unresolved_attention)} unresolved item(s))",
-                        stream=output_stream,
-                    )
-                    return 0
-                stop_reason_before = None
-            if _is_explicit_pool_stop_reason(str(stop_reason_before) if stop_reason_before is not None else None):
-                _emit(f"Pool already stopped: {stop_reason_before}", stream=output_stream)
-                return 0
-            if load_config(workspace).pool_stop_on_attention:
-                unresolved_attention = list_attention(workspace)
-                if unresolved_attention:
-                    _write_pool_stop_reason(workspace, "attention_required")
-                    _emit(
-                        f"Pool stopped: attention_required ({len(unresolved_attention)} unresolved item(s))",
-                        stream=output_stream,
-                    )
-                    return 0
 
             try:
                 run_rc = run_logged_subprocess(
@@ -532,75 +419,25 @@ def run_daemon_loop(
             except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
                 logger.exception("run subprocess raised")
                 _emit(f"run raised: {exc}", stream=output_stream)
-                iteration_failed = True
-                iteration_failure_reason = f"run raised: {exc}"
-                run_rc = -1
-            if run_rc != 0 and not iteration_failed:
+                return 1
+            if run_rc != 0:
                 _emit(f"litehive run failed (rc={run_rc}); see {run_file}", stream=output_stream)
-                iteration_failed = True
-                iteration_failure_reason = f"run exited {run_rc}"
-
-            if iteration_failed:
-                consecutive_iteration_failures += 1
-                _append_attention_log(
-                    workspace,
-                    f"daemon iteration {iteration} failed: {iteration_failure_reason}",
-                )
-                _emit(
-                    f"!!! ATTENTION !!! iteration {iteration} failed "
-                    f"({consecutive_iteration_failures}/{MAX_CONSECUTIVE_FAILURES}): "
-                    f"{iteration_failure_reason}",
-                    stream=output_stream,
-                )
-                if consecutive_iteration_failures >= MAX_CONSECUTIVE_FAILURES:
-                    _emit(
-                        f"Too many consecutive iteration failures "
-                        f"({consecutive_iteration_failures}). Backing off 5min and retrying.",
-                        stream=output_stream,
-                    )
-                    _write_pool_stop_reason(workspace, "daemon_iteration_failures")
-                    sleep_with_stop(300, stop_requested_fn=lambda: stop_requested)
-                    set_pool_stop_reason(workspace, None)
-                    consecutive_iteration_failures = 0
-                    continue
-                time.sleep(min(5 * consecutive_iteration_failures, 30))
-                continue
-
-            # Reset the failure counter after a successful iteration
-            consecutive_iteration_failures = 0
+                return run_rc
 
             try:
                 post_state, post_snapshot = _daemon_status_snapshot(workspace)
             except (OSError, RuntimeError, ValueError) as exc:
                 logger.exception("post-status snapshot raised")
                 _emit(f"post-status raised: {exc}", stream=output_stream)
-                continue
-            post_status_file.write_text(post_snapshot, encoding="utf-8")
+                return 1
             _emit(post_snapshot, stream=output_stream)
 
-            active_after = post_state.get("active_task_id")
-            queue_after = post_state.get("queue", []) or []
             stop_reason = post_state.get("pool_stop_reason")
-
-            has_active_work_after = active_after is not None
-            has_pending_work_after = bool(queue_after)
-
-            if not has_active_work_after and not has_pending_work_after:
+            if not _has_work(post_state):
                 _emit("No active or queued tasks remain. Stopping.", stream=output_stream)
                 return 0
-            if stop_reason == "blocked_tasks_remaining":
-                _emit("Blocked tasks remain and nothing is runnable. Stopping.", stream=output_stream)
-                return 0
-            if _is_explicit_pool_stop_reason(str(stop_reason) if stop_reason is not None else None):
-                _emit(f"Pool stopped: {stop_reason}", stream=output_stream)
-                return 0
-            if stop_reason == "task_requeued":
-                continue
-            if stop_reason not in {None, "None", "queue_exhausted"}:
-                _emit(
-                    f"Stopping after litehive reported stop_reason: {stop_reason}",
-                    stream=output_stream,
-                )
+            if not _should_continue_for_stop_reason(stop_reason):
+                _emit(f"Runner stopped: {stop_reason}", stream=output_stream)
                 return 0
     finally:
         signal.signal(signal.SIGTERM, previous_term)
@@ -692,8 +529,6 @@ def daemon_status_lines(workspace: Path) -> list[str]:
     lines.append(render_runner_status_line(runner, state))
     latest_dir = latest_run_all_log_dir(workspace)
     lines.append(f"latest_run_all_dir: {latest_dir if latest_dir is not None else '-'}")
-    latest_post = latest_matching(latest_dir, "*-post-status.log")
-    lines.append(f"latest_post_status: {latest_post if latest_post is not None else '-'}")
     latest_run = latest_matching(latest_dir, "*-run.log")
     lines.append(f"latest_run_log: {latest_run if latest_run is not None else '-'}")
     return lines

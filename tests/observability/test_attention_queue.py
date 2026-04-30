@@ -14,7 +14,6 @@ from litehive.attention import (
     waiting_for_you_lines,
 )
 from litehive.cli.attention import cmd_attention_list, cmd_attention_resolve
-from litehive.config.model import LitehiveConfig
 from litehive.config.paths import workspace_path
 from litehive.config.registry import workspace_registry_path
 from litehive.config.workspace import ensure_workspace
@@ -451,9 +450,8 @@ def test_operator_resolve_suppresses_detectable_attention_until_condition_clears
     assert second.id != first.id
 
 
-def test_pool_stops_before_running_tasks_when_attention_gate_enabled(tmp_path: Path, monkeypatch) -> None:
-    config = LitehiveConfig(pool_stop_on_attention=True)
-    ensure_workspace(tmp_path, config)
+def test_runner_stops_before_running_tasks_when_pool_stop_reason_is_set(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
     create_task(tmp_path, title="Queued work")
     record_attention(
         tmp_path,
@@ -463,6 +461,7 @@ def test_pool_stops_before_running_tasks_when_attention_gate_enabled(tmp_path: P
         suggested_action="Use a safe git command and then run `litehive attention resolve <id>`.",
         dedupe_key="destructive_git_denied:pool",
     )
+    set_pool_stop_reason(tmp_path, "attention_required")
 
     calls: list[tuple[str, ...]] = []
 
@@ -472,7 +471,6 @@ def test_pool_stops_before_running_tasks_when_attention_gate_enabled(tmp_path: P
             raise AssertionError("pool should not start a task while attention is pending")
         return 0
 
-    monkeypatch.setattr("litehive.daemon.execution.load_config", lambda workspace: config)
     monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
@@ -483,13 +481,12 @@ def test_pool_stops_before_running_tasks_when_attention_gate_enabled(tmp_path: P
     output = stream.getvalue()
 
     assert exit_code == 0
-    assert any("repair" in command for command in calls)
-    assert "Pool stopped: attention_required" in output
+    assert calls == []
+    assert "Runner stopped: attention_required" in output
 
 
-def test_pool_resumes_after_attention_items_are_resolved(tmp_path: Path, monkeypatch) -> None:
-    config = LitehiveConfig(pool_stop_on_attention=True)
-    ensure_workspace(tmp_path, config)
+def test_runner_resumes_after_attention_stop_reason_is_cleared(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
     create_task(tmp_path, title="Queued work")
     item = record_attention(
         tmp_path,
@@ -499,6 +496,7 @@ def test_pool_resumes_after_attention_items_are_resolved(tmp_path: Path, monkeyp
         suggested_action="Use a safe git command and then run `litehive attention resolve <id>`.",
         dedupe_key="destructive_git_denied:resume",
     )
+    set_pool_stop_reason(tmp_path, "attention_required")
 
     calls: list[tuple[str, ...]] = []
 
@@ -507,10 +505,10 @@ def test_pool_resumes_after_attention_items_are_resolved(tmp_path: Path, monkeyp
         if any(arg == "run" for arg in command[2:]):
             state = load_state(tmp_path)
             state.queue = []
+            state.pool_stop_reason = None
             save_state(tmp_path, state)
         return 0
 
-    monkeypatch.setattr("litehive.daemon.execution.load_config", lambda workspace: config)
     monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
     monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
@@ -520,14 +518,14 @@ def test_pool_resumes_after_attention_items_are_resolved(tmp_path: Path, monkeyp
     first_exit_code = run_daemon_loop(tmp_path, output_stream=first_stream, session_dir=tmp_path / "logs-first")
 
     resolved = resolve_attention(tmp_path, item.id or 0)
+    set_pool_stop_reason(tmp_path, None)
     second_stream = io.StringIO()
     second_exit_code = run_daemon_loop(tmp_path, output_stream=second_stream, session_dir=tmp_path / "logs-second")
 
     assert first_exit_code == 0
-    assert "Pool stopped: attention_required" in first_stream.getvalue()
+    assert "Runner stopped: attention_required" in first_stream.getvalue()
     assert resolved is not None
     assert second_exit_code == 0
-    assert "Pool already stopped: attention_required" not in second_stream.getvalue()
     assert any("run" in command for command in calls)
 
 
@@ -605,7 +603,6 @@ def test_daemon_loop_rebuilds_corrupt_or_missing_global_registry_without_exiting
         output = stream.getvalue()
 
         assert exit_code == 0
-        assert any("repair" in command for command in calls)
         assert any("run" in command for command in calls)
         assert "== iteration 1 ==" in output
 

@@ -5,7 +5,6 @@ import typer
 
 from litehive.cli.common import WorkspaceOption, make_typer, require_subcommand
 from litehive.cli.runner import (
-    daemon_instances as runner_daemon_instances,
     daemon_status as runner_daemon_status,
     daemon_worker as runner_daemon_worker,
     restart as runner_restart,
@@ -56,11 +55,6 @@ def daemon_stop(workspace: WorkspaceOption) -> int:
 @app.command("restart", help="Restart the workspace daemon")
 def daemon_restart(workspace: WorkspaceOption) -> int:
     return runner_restart(workspace)
-
-
-@app.command("instances", help="List all live Litehive daemons")
-def daemon_instances() -> int:
-    return runner_daemon_instances()
 
 
 @app.command("worker", hidden=True)
