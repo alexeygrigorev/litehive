@@ -505,7 +505,11 @@ def _task_recorded_worktree(root: Path, task_id: str) -> tuple[TaskRecord | None
 
 def build_commit_node(root: Path) -> CommitNode:
     """Return the production ``GitCommitNode`` bound to this workspace."""
-    return GitCommitNode(root, worktree_resolver=lambda state: _resolve_worktree(root, state))
+    return GitCommitNode(
+        root,
+        worktree_resolver=lambda state: _resolve_worktree(root, state),
+        task_resolver=lambda state: _task_recorded_worktree(root, state.task_id)[0],
+    )
 
 
 def _build_worktree_sync_node(root: Path) -> GitWorktreeSyncNode:

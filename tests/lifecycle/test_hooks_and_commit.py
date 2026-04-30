@@ -12,6 +12,7 @@ import pytest
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
+from litehive.domain.task import TaskRecord
 from litehive.git.ops import has_non_litehive_changes
 from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass, Reject
 from litehive.lifecycle.nodes.agent import AgentVerdict
@@ -229,17 +230,38 @@ def test_commit_node_autocommits_uncommitted_worktree_edits(tmp_path: Path) -> N
     subprocess.run(["git", "config", "user.name", "t"], cwd=worktree, check=True)
 
     (worktree / "new.txt").write_text("agent wrote this\n")
+    task = TaskRecord(
+        id="T-0001",
+        slug="document-commit-messages",
+        title="Document commit messages",
+        goal="Make completion commits explain the task outcome.",
+        acceptance_criteria=["Commit body includes task context"],
+    )
 
     node = GitCommitNode(
         repo,
         worktree_resolver=lambda state: worktree,
+        task_resolver=lambda state: task,
     )
 
     state = make_state(stage="commit")
     event = node.run(state)
+    message = subprocess.run(
+        ["git", "log", "-1", "--pretty=%B"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
     assert isinstance(event, Pass), event
     assert (repo / "new.txt").read_text() == "agent wrote this\n"
+    assert message.stdout.startswith("litehive T-0001: Document commit messages\n\n")
+    assert "Task: T-0001" in message.stdout
+    assert "Title: Document commit messages" in message.stdout
+    assert "Goal:\nMake completion commits explain the task outcome." in message.stdout
+    assert "Acceptance criteria:\n- Commit body includes task context" in message.stdout
+    assert "Commit detail: auto-commit worktree changes" in message.stdout
 
 
 def test_commit_node_autocommits_staged_worktree_deletions(tmp_path: Path) -> None:

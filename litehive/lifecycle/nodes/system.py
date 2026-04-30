@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Callable
 
 from litehive.domain.common import PipelineState
+from litehive.domain.task import TaskRecord
+from litehive.git.ops import generated_completion_commit_message
 
 from ..events import (
     CleanState,
@@ -262,6 +264,7 @@ class StubCommitNode(CommitNode):
 
 
 WorktreeResolver = Callable[[TaskState], Path]
+TaskResolver = Callable[[TaskState], TaskRecord | None]
 
 
 def _is_runner_owned_metadata(relpath: str, task_id: str) -> bool:
@@ -366,10 +369,12 @@ class GitCommitNode(CommitNode):
         main_repo_root: Path,
         *,
         worktree_resolver: WorktreeResolver,
+        task_resolver: TaskResolver | None = None,
     ) -> None:
         super().__init__()
         self.main_repo_root = Path(main_repo_root)
         self.worktree_resolver = worktree_resolver
+        self.task_resolver = task_resolver
 
     def _merge_worktree(self, state: TaskState) -> dict[str, object] | None:
         worktree = self.worktree_resolver(state)
@@ -500,10 +505,11 @@ class GitCommitNode(CommitNode):
             )
             if add.returncode != 0:
                 raise GitError(f"git add failed in {worktree}: {add.stderr.strip()}")
-        message = f"litehive {state.task_id}: auto-commit worktree changes"
+        message = self._generated_commit_message(state, detail="auto-commit worktree changes")
         commit = subprocess.run(
-            ["git", "commit", "-m", message],
+            ["git", "commit", "-F", "-"],
             cwd=str(worktree),
+            input=message,
             capture_output=True,
             text=True,
         )
@@ -534,10 +540,11 @@ class GitCommitNode(CommitNode):
             )
             if add.returncode != 0:
                 raise GitError(f"git add failed in {self.main_repo_root}: {add.stderr.strip() or add.stdout.strip()}")
-        message = f"litehive {state.task_id}: auto-commit dirty main checkout"
+        message = self._generated_commit_message(state, detail="auto-commit dirty main checkout")
         commit = subprocess.run(
-            ["git", "commit", "-m", message],
+            ["git", "commit", "-F", "-"],
             cwd=str(self.main_repo_root),
+            input=message,
             capture_output=True,
             text=True,
         )
@@ -549,6 +556,13 @@ class GitCommitNode(CommitNode):
         if head is None:
             raise GitError("main cleanup commit completed but main HEAD could not be resolved")
         return head
+
+    def _generated_commit_message(self, state: TaskState, *, detail: str) -> str:
+        if self.task_resolver is not None:
+            task = self.task_resolver(state)
+            if task is not None:
+                return generated_completion_commit_message(task, detail=detail)
+        return f"litehive {state.task_id}: {detail}"
 
     def git_status_entries(self, repo_root: Path) -> list[tuple[str, str]]:
         return self._git_status_entries_with_options(repo_root)

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_CHECKPOINT_SUBJECT_TEMPLATE = "litehive: complete {task_id} {slug}"
 CHECKPOINT_ATTEMPT_SUFFIX_TEMPLATE = "{base} (attempt {attempt})"
 ROLLBACK_SUBJECT_TEMPLATE = "litehive: rollback {task_id} {slug} (attempt {attempt})"
+COMPLETION_SUBJECT_TEMPLATE = "litehive {task_id}: {title}"
 
 
 class GitError(RuntimeError):
@@ -171,6 +172,44 @@ def default_commit_message(task_id: str, slug: str) -> str:
     return DEFAULT_CHECKPOINT_SUBJECT_TEMPLATE.format(task_id=task_id, slug=slug)
 
 
+def _clean_commit_text(value: str) -> str:
+    lines = [line.rstrip() for line in value.strip().splitlines()]
+    return "\n".join(lines).strip()
+
+
+def _metadata_body(task: TaskRecord) -> list[str]:
+    lines = [
+        f"Task: {task.id}",
+        f"Title: {task.title}",
+    ]
+    goal = _clean_commit_text(task.goal)
+    if goal:
+        lines.extend(["", "Goal:", goal])
+    if task.acceptance_criteria:
+        lines.extend(["", "Acceptance criteria:"])
+        lines.extend(f"- {_clean_commit_text(item)}" for item in task.acceptance_criteria if _clean_commit_text(item))
+    return lines
+
+
+def generated_completion_commit_message(task: TaskRecord, *, detail: str | None = None) -> str:
+    """Return LiteHive's generated completion commit message for a task.
+
+    The subject stays compact for ``git log --oneline`` while the body carries
+    the persisted task metadata that explains what the completion represents.
+    """
+    subject = COMPLETION_SUBJECT_TEMPLATE.format(task_id=task.id, title=task.title)
+    lines = [subject, "", *_metadata_body(task)]
+    if detail:
+        lines.extend(["", f"Commit detail: {detail}"])
+    return "\n".join(lines)
+
+
+def _with_attempt_suffix(message: str, attempt: int) -> str:
+    subject, separator, body = message.partition("\n")
+    subject = CHECKPOINT_ATTEMPT_SUFFIX_TEMPLATE.format(base=subject, attempt=attempt)
+    return subject + separator + body
+
+
 def _uses_generated_commit_message(task: TaskRecord) -> bool:
     message = task.git.commit_message
     if message is None:
@@ -180,10 +219,13 @@ def _uses_generated_commit_message(task: TaskRecord) -> bool:
 
 def checkpoint_message(task: TaskRecord, attempt: int | None = None) -> str:
     """Return the deterministic checkpoint subject for the next or requested attempt."""
-    base = task.git.commit_message or default_commit_message(task.id, task.slug)
+    if _uses_generated_commit_message(task):
+        base = generated_completion_commit_message(task)
+    else:
+        base = task.git.commit_message or default_commit_message(task.id, task.slug)
     attempt = attempt or (task.git.checkpoint_attempts + 1)
     if attempt > 1 and _uses_generated_commit_message(task):
-        return CHECKPOINT_ATTEMPT_SUFFIX_TEMPLATE.format(base=base, attempt=attempt)
+        return _with_attempt_suffix(base, attempt)
     return base
 
 
