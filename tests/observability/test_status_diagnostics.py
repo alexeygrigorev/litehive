@@ -84,6 +84,19 @@ def test_status_reports_invalid_merged_config_without_silent_defaulting(tmp_path
     assert "health:" in output
 
 
+def test_status_reports_non_mapping_config_without_silent_defaulting(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+    config_file = workspace_dir(tmp_path) / "config.yaml"
+    config_file.write_text("- not\n- a\n- mapping\n", encoding="utf-8")
+
+    exit_code, output = _run_fast_status(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert f"config: INVALID at {config_file} (expected YAML mapping)" in output
+    assert "Fix the YAML syntax or remove the file" in output
+    assert "health:" in output
+
+
 def test_status_preserves_valid_config_fields_when_reporting_invalid_config(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     config_file = workspace_dir(tmp_path) / "config.yaml"
@@ -211,6 +224,20 @@ def test_full_status_reports_invalid_runner_lock_schema(tmp_path: Path, capsys) 
     assert exit_code == 1
     assert f"runner_state: INVALID at {lock_path} (pid:" in output
     assert "restart the runner or daemon" in output
+    assert "health:" in output
+
+
+def test_full_status_reports_non_mapping_runner_lock_without_empty_default(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+    lock_path = workspace_path(tmp_path, "runtime", ".runner.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.write_text("[]", encoding="utf-8")
+
+    exit_code, output = _run_full_status(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert f"runner_state: INVALID at {lock_path} (expected JSON object)" in output
+    assert "Remove or rewrite the runner lock file" in output
     assert "health:" in output
 
 

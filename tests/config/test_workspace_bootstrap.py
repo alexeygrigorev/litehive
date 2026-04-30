@@ -309,6 +309,28 @@ def test_workspace_registry_ignores_deprecated_yaml_registries(tmp_path: Path, m
     assert yaml.safe_load(stale_data_home_path.read_text(encoding="utf-8")) == [str(workspace_two)]
 
 
+def test_workspace_registry_read_failure_raises_diagnostic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
+
+    from litehive.config.registry import (
+        WorkspaceRegistryError,
+        list_registered_workspace_paths,
+        workspace_registry_path,
+    )
+
+    registry_path = workspace_registry_path()
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text("", encoding="utf-8")
+
+    def fail_open(path: Path):
+        raise OSError(f"cannot open {path}")
+
+    monkeypatch.setattr("litehive.config.registry._open_registry_connection", fail_open)
+
+    with pytest.raises(WorkspaceRegistryError, match="failed to read workspace registry"):
+        list_registered_workspace_paths()
+
+
 def test_workspace_registry_is_available_from_other_threads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))

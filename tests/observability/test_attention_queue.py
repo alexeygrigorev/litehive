@@ -4,7 +4,15 @@ from pathlib import Path
 import shutil
 import sqlite3
 
-from litehive.attention import list_attention, record_attention, resolve_attention, waiting_for_you_lines
+import pytest
+
+from litehive.attention import (
+    AttentionStoreError,
+    list_attention,
+    record_attention,
+    resolve_attention,
+    waiting_for_you_lines,
+)
 from litehive.cli.attention import cmd_attention_list, cmd_attention_resolve
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import workspace_path
@@ -102,7 +110,32 @@ def test_waiting_for_you_lines_reports_database_unavailable(tmp_path: Path, monk
         lambda root, reconcile=True, auto_resolve=True: (_ for _ in ()).throw(sqlite3.DatabaseError("boom")),
     )
 
-    assert waiting_for_you_lines(tmp_path) == ["attention_items: unavailable"]
+    lines = waiting_for_you_lines(tmp_path)
+
+    assert len(lines) == 1
+    assert lines[0].startswith("attention_items: unavailable (DatabaseError: boom)")
+
+
+def test_corrupt_attention_row_reports_unavailable_instead_of_empty_queue(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    with connect_workspace_db(tmp_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO attention (task_id, created_at, kind, payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            (None, "2026-04-30T00:00:00Z", "destructive_git_denied", "{not-json"),
+        )
+        connection.commit()
+
+    with pytest.raises(AttentionStoreError, match="corrupt attention state"):
+        list_attention(tmp_path, reconcile=False)
+
+    lines = waiting_for_you_lines(tmp_path)
+
+    assert len(lines) == 1
+    assert lines[0].startswith("attention_items: unavailable (AttentionStoreError: corrupt attention state")
+    assert "row 1" in lines[0]
 
 
 def test_status_reconciles_detectable_attention_items_without_prior_listing(tmp_path: Path, capsys) -> None:

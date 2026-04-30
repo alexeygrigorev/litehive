@@ -5,6 +5,10 @@ from pathlib import Path
 from typing import Any
 
 
+class ScopeAnalysisError(RuntimeError):
+    """Raised when scope analysis cannot inspect the current worktree."""
+
+
 def analyze_scope_changes(workspace_root: Path, task_id: str) -> dict[str, Any]:
     """Analyze worktree changes to distinguish operator cleanup from SWE scope creep.
 
@@ -21,24 +25,18 @@ def analyze_scope_changes(workspace_root: Path, task_id: str) -> dict[str, Any]:
         - healthy_on_main: list of files that are healthy/passing on main
     """
     try:
-        # Get the list of deleted files by comparing worktree to main
         deleted_files = _get_deleted_files(workspace_root)
-
         if not deleted_files:
             return {
-                "is_operator_cleanup": True,  # No deletions = no scope creep risk
+                "is_operator_cleanup": True,
                 "reasoning": "No files deleted",
                 "deleted_files": [],
                 "broken_on_main": [],
                 "healthy_on_main": [],
             }
 
-        # Check which deleted files are broken vs healthy on main
         broken_on_main, healthy_on_main = _classify_deleted_files(workspace_root, deleted_files)
-
-        # Determine if this is operator cleanup vs scope creep
         is_operator_cleanup, reasoning = _classify_changes(deleted_files, broken_on_main, healthy_on_main)
-
         return {
             "is_operator_cleanup": is_operator_cleanup,
             "reasoning": reasoning,
@@ -46,22 +44,20 @@ def analyze_scope_changes(workspace_root: Path, task_id: str) -> dict[str, Any]:
             "broken_on_main": broken_on_main,
             "healthy_on_main": healthy_on_main,
         }
-
-    except Exception as e:
-        # Fallback on error - treat as potential scope creep for safety
+    except ScopeAnalysisError as exc:
         return {
             "is_operator_cleanup": False,
-            "reasoning": f"Error during scope analysis: {e}",
+            "reasoning": f"Scope analysis unavailable: {exc}",
             "deleted_files": [],
             "broken_on_main": [],
             "healthy_on_main": [],
+            "diagnostic": {"kind": type(exc).__name__, "message": str(exc)},
         }
 
 
 def _get_deleted_files(workspace_root: Path) -> list[str]:
     """Get list of files deleted in the worktree compared to main."""
     try:
-        # Get git diff to find deleted files
         result = subprocess.run(
             ["git", "diff", "main...HEAD", "--name-status"],
             cwd=workspace_root,
@@ -69,19 +65,14 @@ def _get_deleted_files(workspace_root: Path) -> list[str]:
             text=True,
             check=True,
         )
+    except (subprocess.CalledProcessError, OSError) as exc:
+        raise ScopeAnalysisError(f"git diff failed for {workspace_root}: {exc}") from exc
 
-        deleted_files = []
-        for line in result.stdout.strip().split("\n"):
-            if line.strip() and line.startswith("D\t"):
-                # D indicates deleted file
-                deleted_file = line[2:]  # Remove "D\t" prefix
-                deleted_files.append(deleted_file)
-
-        return deleted_files
-
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        # Git command failed, return empty list
-        return []
+    deleted_files = []
+    for line in result.stdout.strip().split("\n"):
+        if line.strip() and line.startswith("D\t"):
+            deleted_files.append(line[2:])
+    return deleted_files
 
 
 def _classify_deleted_files(workspace_root: Path, deleted_files: list[str]) -> tuple[list[str], list[str]]:
@@ -111,25 +102,17 @@ def _is_file_broken_on_main(workspace_root: Path, file_path: str) -> bool:
     3. It has syntax errors or import errors on main
     """
     try:
-        # Check if file exists on main
         result = subprocess.run(
             ["git", "cat-file", "-e", f"main:{file_path}"], cwd=workspace_root, capture_output=True, check=False
         )
+    except OSError as exc:
+        raise ScopeAnalysisError(f"git cat-file failed for {file_path}: {exc}") from exc
 
-        if result.returncode != 0:
-            # File doesn't exist on main = broken
-            return True
-
-        # Check if it's a test file
-        if _is_test_file(file_path):
-            return _is_test_broken_on_main(workspace_root, file_path)
-
-        # For non-test files, check for syntax/import errors
-        return _has_syntax_errors_on_main(workspace_root, file_path)
-
-    except Exception:
-        # On error, assume it's broken (conservative approach)
+    if result.returncode != 0:
         return True
+    if _is_test_file(file_path):
+        return _is_test_broken_on_main(workspace_root, file_path)
+    return _has_syntax_errors_on_main(workspace_root, file_path)
 
 
 def _is_test_file(file_path: str) -> bool:
@@ -149,7 +132,6 @@ def _is_test_file(file_path: str) -> bool:
 def _is_test_broken_on_main(workspace_root: Path, test_file: str) -> bool:
     """Check if a test file is broken (failing) on main branch."""
     try:
-        # Switch to main branch temporarily to test the file
         subprocess.run(
             ["git", "stash", "push", "-m", "temp-stash-for-scope-analysis"],
             cwd=workspace_root,
@@ -181,15 +163,13 @@ def _is_test_broken_on_main(workspace_root: Path, test_file: str) -> bool:
 
         return is_broken
 
-    except Exception:
-        # If we can't test it, assume it's broken
-        return True
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+        raise ScopeAnalysisError(f"could not test {test_file} on main: {exc}") from exc
 
 
 def _has_syntax_errors_on_main(workspace_root: Path, file_path: str) -> bool:
     """Check if a file has syntax errors on main branch."""
     try:
-        # Get the file content from main branch
         result = subprocess.run(
             ["git", "show", f"main:{file_path}"], cwd=workspace_root, capture_output=True, text=True, check=True
         )
@@ -205,9 +185,8 @@ def _has_syntax_errors_on_main(workspace_root: Path, file_path: str) -> bool:
         # For non-Python files, assume they're not broken
         return False
 
-    except Exception:
-        # If we can't check it, assume it's broken
-        return True
+    except (subprocess.CalledProcessError, OSError) as exc:
+        raise ScopeAnalysisError(f"could not inspect {file_path} on main: {exc}") from exc
 
 
 def _classify_changes(

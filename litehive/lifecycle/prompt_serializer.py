@@ -255,6 +255,13 @@ def _recovery_execution_root_section(prompt: dict[str, Any]) -> str:
     source_path = str(prompt.get("litehive_source_path") or "").strip()
     if source_path:
         lines.append(f"- configured_litehive_source_path: {source_path}")
+    config_diagnostic = prompt.get("recovery_config_diagnostic")
+    if isinstance(config_diagnostic, dict):
+        lines.append("- config_diagnostic:")
+        for key in ("kind", "config_root", "exception_type", "message"):
+            value = config_diagnostic.get(key)
+            if value:
+                lines.append(f"  - {key}: {value}")
     lines.append(
         "- Recovery is for Litehive infrastructure bugs. Do not use the task worktree as the primary edit target."
     )

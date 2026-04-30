@@ -3,7 +3,9 @@
 from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
+import sqlite3
 
 from heru import get_engine
 from heru.quota import (
@@ -16,6 +18,8 @@ from heru.quota import (
 from litehive.config.model import LitehiveConfig
 from litehive.config.runtime_settings import clear_engine_freeze, set_engine_freeze
 from litehive.domain.task import TaskRecord
+
+log = logging.getLogger(__name__)
 
 
 def _engine_attempt_order(initial_engine_names: list[str], engine_preference: list[str]) -> list[str]:
@@ -161,8 +165,8 @@ def _record_codex_quota_monitoring(root: Path, status: object) -> None:
         from litehive.observability.engine_monitoring import record_codex_quota_check
 
         record_codex_quota_check(root, status=status)
-    except Exception:  # noqa: BLE001
-        pass
+    except (OSError, sqlite3.DatabaseError, ValueError) as exc:
+        log.warning("failed to record codex quota monitoring for %s: %s", root, exc)
 
 
 def _quota_checker(engine_name: str):
@@ -257,8 +261,14 @@ def select_engine(
                 if not get_engine(engine_name).is_available():
                     skipped.append(EngineSkip(engine_name=engine_name, reason=f"{engine_name} unavailable"))
                     continue
-            except Exception:  # noqa: BLE001
-                pass
+            except (OSError, RuntimeError, ValueError) as exc:
+                skipped.append(
+                    EngineSkip(
+                        engine_name=engine_name,
+                        reason=f"{engine_name} availability check failed ({type(exc).__name__}: {exc})",
+                    )
+                )
+                continue
         expired_freeze = (
             engine_name not in frozen_engines and _parse_datetime_utc(config.engine_freeze.get(engine_name)) is not None
         )

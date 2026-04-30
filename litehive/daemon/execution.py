@@ -345,7 +345,7 @@ def run_daemon_loop(
         existing_state = load_state(workspace)
         if existing_state.pool_stop_reason == "daemon_iteration_failures":
             set_pool_stop_reason(workspace, None)
-    except Exception:
+    except (OSError, RuntimeError, ValueError):
         logger.exception("failed to clear stale daemon_iteration_failures marker")
 
     stop_requested = False
@@ -401,7 +401,7 @@ def run_daemon_loop(
 
             try:
                 maybe_run_workspace_backup(workspace, stream=output_stream)
-            except Exception as exc:
+            except (OSError, RuntimeError) as exc:
                 logger.exception("scheduled workspace backup failed")
                 _append_attention_log(workspace, f"scheduled backup failed: {exc}")
                 _emit(f"backup_failed: {exc}", stream=output_stream)
@@ -421,7 +421,7 @@ def run_daemon_loop(
                     output_stream=None,
                     current_child=current_child,
                 )
-            except Exception as exc:
+            except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
                 logger.exception("repair subprocess raised")
                 _emit(f"repair raised: {exc}", stream=output_stream)
                 iteration_failed = True
@@ -447,7 +447,7 @@ def run_daemon_loop(
             if not iteration_failed:
                 try:
                     pre_state, pre_snapshot = _daemon_status_snapshot(workspace)
-                except Exception as exc:
+                except (OSError, RuntimeError, ValueError) as exc:
                     logger.exception("pre-status snapshot raised")
                     _emit(f"pre-status raised: {exc}", stream=output_stream)
                     iteration_failed = True
@@ -529,7 +529,7 @@ def run_daemon_loop(
                     output_stream=output_stream,
                     current_child=current_child,
                 )
-            except Exception as exc:
+            except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
                 logger.exception("run subprocess raised")
                 _emit(f"run raised: {exc}", stream=output_stream)
                 iteration_failed = True
@@ -571,7 +571,7 @@ def run_daemon_loop(
 
             try:
                 post_state, post_snapshot = _daemon_status_snapshot(workspace)
-            except Exception as exc:
+            except (OSError, RuntimeError, ValueError) as exc:
                 logger.exception("post-status snapshot raised")
                 _emit(f"post-status raised: {exc}", stream=output_stream)
                 continue

@@ -22,6 +22,10 @@ _DEFAULT_LOCK_RETRY_DELAY_MS = 100
 _REGISTRY_TABLE = "workspace_registry"
 
 
+class WorkspaceRegistryError(RuntimeError):
+    """Raised when the global workspace registry cannot be read or written."""
+
+
 def workspace_registry_path() -> Path:
     return litehive_root() / "workspaces.db"
 
@@ -176,17 +180,14 @@ def list_registered_workspace_paths() -> list[Path]:
                     path=path,
                 )
             except TimeoutError as exc:
-                log.warning("%s", exc)
-                return []
+                raise WorkspaceRegistryError(str(exc)) from exc
             except sqlite3.DatabaseError as exc:
                 if attempt == 0 and quarantine_corrupt_workspace_registry(str(exc)) is not None:
                     continue
-                log.warning("failed to read workspace registry %s (%s)", path, exc)
-                return []
+                raise WorkspaceRegistryError(f"failed to read workspace registry {path}: {exc}") from exc
             except OSError as exc:
-                log.warning("failed to read workspace registry %s (%s)", path, exc)
-                return []
-    return []
+                raise WorkspaceRegistryError(f"failed to read workspace registry {path}: {exc}") from exc
+    raise WorkspaceRegistryError(f"failed to read workspace registry {path}")
 
 
 def _list_registered_workspace_paths(path: Path) -> list[Path]:
@@ -209,16 +210,13 @@ def register_workspace_path(root: Path) -> None:
                 )
                 return
             except TimeoutError as exc:
-                log.warning("%s", exc)
-                return
+                raise WorkspaceRegistryError(str(exc)) from exc
             except sqlite3.DatabaseError as exc:
                 if attempt == 0 and quarantine_corrupt_workspace_registry(str(exc)) is not None:
                     continue
-                log.warning("failed to update workspace registry %s (%s)", path, exc)
-                return
+                raise WorkspaceRegistryError(f"failed to update workspace registry {path}: {exc}") from exc
             except OSError as exc:
-                log.warning("failed to update workspace registry %s (%s)", path, exc)
-                return
+                raise WorkspaceRegistryError(f"failed to update workspace registry {path}: {exc}") from exc
 
 
 def _register_workspace_path(path: Path, root: Path) -> None:
@@ -235,6 +233,6 @@ def _register_workspace_path(path: Path, root: Path) -> None:
                 (str(root), datetime.now(UTC).isoformat().replace("+00:00", "Z")),
             )
             connection.commit()
-        except Exception:
+        except sqlite3.DatabaseError:
             connection.rollback()
             raise

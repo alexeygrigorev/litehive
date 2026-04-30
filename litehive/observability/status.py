@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+import sqlite3
 from typing import TYPE_CHECKING, Any, Literal
 
 from litehive.config.paths import workspace_path
@@ -175,7 +176,7 @@ def _latest_stage_report_for_task(root: Path | None, task: TaskRecord) -> Any | 
         from litehive.tasks.report_storage import latest_stage_report
 
         return latest_stage_report(root, task)
-    except Exception:
+    except (OSError, sqlite3.DatabaseError, ValueError):
         return None
 
 
@@ -202,7 +203,7 @@ def _latest_stage_failure_classification(root: Path | None, task: TaskRecord) ->
         from litehive.tasks.report_storage import latest_stage_report
 
         report = latest_stage_report(root, task)
-    except Exception:
+    except (OSError, sqlite3.DatabaseError, ValueError):
         return None
     if report is None:
         return None

@@ -87,13 +87,19 @@ class RecoveryAgent(RoleAgent):
         repeated_recovery_fingerprint = None
         recovery_execution_root = None
         litehive_source_path = None
+        recovery_config_diagnostic = None
         failed_subagent_diagnostics = None
         scope_analysis = None
 
         if task_record is None and self.prompt_context and self.prompt_context.workspace_root:
             task_record = get_task_record(self.prompt_context.workspace_root, state.task_id)
         root = None if self.prompt_context is None else self.prompt_context.workspace_root
-        litehive_source_path, recovery_execution_root = _recovery_source_checkout(root)
+        if root is not None:
+            try:
+                litehive_source_path, recovery_execution_root = _recovery_source_checkout(root)
+            except (OSError, ValueError) as exc:
+                recovery_execution_root = str(root)
+                recovery_config_diagnostic = _recovery_source_checkout_diagnostic(root, exc)
         failed_subagent_diagnostics = _failed_subagent_diagnostics_payload(root, task_record)
         recovery_history = _merged_recovery_history_payload(state, task_record)
         repeated_recovery_fingerprint = _repeated_recovery_fingerprint_payload(trigger, recovery_history)
@@ -106,6 +112,7 @@ class RecoveryAgent(RoleAgent):
             {
                 "litehive_source_path": litehive_source_path,
                 "recovery_execution_root": recovery_execution_root,
+                "recovery_config_diagnostic": recovery_config_diagnostic,
                 "recovery_trigger": trigger.to_payload() if trigger is not None else None,
                 "recovery_history": recovery_history,
                 "repeated_recovery_fingerprint": repeated_recovery_fingerprint,
@@ -234,10 +241,7 @@ def _repeated_recovery_fingerprint_payload(
 def _recovery_source_checkout(root: Path | None) -> tuple[str | None, str | None]:
     if root is None:
         return None, None
-    try:
-        config = load_config(root)
-    except Exception:
-        return None, str(root)
+    config = load_config(root)
     raw_source = str(config.litehive_source_path or "").strip() or None
     if raw_source is None:
         return None, str(root)
@@ -250,6 +254,15 @@ def _recovery_source_checkout(root: Path | None) -> tuple[str | None, str | None
         resolved = candidate
     execution_root = resolved if resolved.is_dir() else root
     return raw_source, str(execution_root)
+
+
+def _recovery_source_checkout_diagnostic(root: Path, exc: OSError | ValueError) -> dict[str, str]:
+    return {
+        "kind": "workspace_config_load_failed",
+        "config_root": str(root),
+        "exception_type": type(exc).__name__,
+        "message": str(exc),
+    }
 
 
 def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) -> dict[str, Any] | None:
@@ -346,5 +359,5 @@ def _read_subagent_artifact(subagent_base: Path, artifact_name: str) -> str:
         return ""
     try:
         return read_text_artifact(artifact_path)
-    except Exception:
+    except (OSError, UnicodeError):
         return ""

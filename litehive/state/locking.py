@@ -2,6 +2,7 @@
 
 import logging
 import os
+import sqlite3
 import sys
 import threading
 from contextlib import contextmanager
@@ -311,8 +312,8 @@ def _auto_repair_stale_state(root: Path) -> None:
                 f"requeued={', '.join(result.requeued_task_ids) or '-'})",
                 file=sys.stderr,
             )
-    except Exception:
-        pass  # best-effort — don't block the runner from starting
+    except (OSError, sqlite3.DatabaseError, RuntimeError, ValueError):
+        logger.exception("auto-repair of stale runner state failed")
 
 
 @contextmanager
@@ -365,7 +366,7 @@ def workspace_runner_guard(root: Path):
         _save_runner_process_state(root, status)
         with RUNNER_LOCKS_MUTEX:
             RUNNER_LOCKS[root] = RunnerLockState(handle=handle, depth=1, status=status, owner_thread_id=owner_thread_id)
-    except Exception:
+    except (OSError, RuntimeError, ValueError):
         if "handle" in locals() and not handle.closed:
             handle.close()
         raise

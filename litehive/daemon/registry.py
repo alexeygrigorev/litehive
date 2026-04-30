@@ -97,7 +97,7 @@ def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
                 raise RuntimeError(f"daemon already registered in-process for {workspace}")
             _DAEMON_LOCKS[workspace] = handle
         manager.save_process_state(workspace, payload)
-    except Exception:
+    except (OSError, RuntimeError):
         try:
             manager.lock_manager.unlock(handle)
         except OSError:

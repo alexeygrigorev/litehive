@@ -224,7 +224,7 @@ def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue
             return WorkspaceState(), issues
     try:
         store_state = runtime_store(root).load_workspace_state()
-    except Exception as exc:
+    except (OSError, sqlite3.DatabaseError, ValueError, ValidationError) as exc:
         detail = str(exc).strip() or type(exc).__name__
         issues.append(
             StatusIssue(
@@ -248,7 +248,7 @@ def _load_engine_monitoring_for_status(
 
     try:
         return load_engine_monitoring(root), []
-    except Exception as exc:
+    except (OSError, sqlite3.DatabaseError, ValueError, ValidationError) as exc:
         issue = StatusIssue(
             key="engine_monitoring",
             severity="WARN",
@@ -298,7 +298,19 @@ def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusS
 
 
 def _probe_daemon_status(root: Path) -> list[StatusIssue]:
-    entry = daemon_metadata(root)
+    try:
+        entry = daemon_metadata(root)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        return [
+            StatusIssue(
+                key="daemon_status",
+                severity="ERROR",
+                message=(
+                    f"BROKEN daemon metadata ({type(exc).__name__}: {exc})"
+                    " — remove or rewrite the daemon lock metadata, then restart the daemon."
+                ),
+            )
+        ]
     if entry is None or entry.get("status") != "stale":
         return []
     pid = entry.get("pid")
@@ -421,8 +433,17 @@ def _probe_task_index_references(
         from litehive.state.rebuild_safety import sqlite_task_ids
 
         db_ids = sqlite_task_ids(workspace_path(root, "data.db"))
-    except Exception:
-        return []
+    except (OSError, sqlite3.DatabaseError, ValueError) as exc:
+        return [
+            StatusIssue(
+                key="task_index",
+                severity="ERROR",
+                message=(
+                    f"UNAVAILABLE ({type(exc).__name__}: {exc})"
+                    " — restore/reconcile the workspace database before trusting queue references."
+                ),
+            )
+        ]
     referenced_ids = set(state.queue)
     if state.active_task_id is not None:
         referenced_ids.add(state.active_task_id)
@@ -455,8 +476,17 @@ def _probe_task_status_damage(
         from litehive.state.records import list_tasks
 
         tasks = list_tasks(root, strict=False)
-    except Exception:
-        return []
+    except (OSError, sqlite3.DatabaseError, ValueError) as exc:
+        return [
+            StatusIssue(
+                key="task_status",
+                severity="ERROR",
+                message=(
+                    f"UNAVAILABLE ({type(exc).__name__}: {exc})"
+                    " — restore/reconcile task records before trusting task status diagnostics."
+                ),
+            )
+        ]
 
     issues: list[StatusIssue] = []
     active_task_id = runner.active_task_id or state.active_task_id
@@ -517,10 +547,14 @@ def _recovery_failure_issue(root: Path, task: TaskRecord) -> StatusIssue | None:
 def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureContext:
     context = _RecoveryFailureContext()
     try:
-        from litehive.lifecycle.persistence import SqlitePersistence
+        from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 
         state = SqlitePersistence(root).load(task.id)
-    except Exception:
+    except TaskNotFound:
+        return context
+    except (OSError, sqlite3.DatabaseError, ValueError, ValidationError) as exc:
+        context.failed_reason = "recovery_state_unavailable"
+        context.explanation = f"Recovery state unavailable ({type(exc).__name__}: {exc})"
         return context
 
     failed_reason = None
@@ -631,7 +665,11 @@ def _safe_yaml_mapping(
     if data is None:
         return {}, None
     if not isinstance(data, Mapping):
-        return {}, None
+        return None, StatusIssue(
+            key=key,
+            severity="ERROR",
+            message=f"INVALID at {path} (expected YAML mapping) — {remediation}",
+        )
     return dict(data), None
 
 
@@ -718,7 +756,11 @@ def _safe_json_mapping(
     if data is None:
         return {}, None
     if not isinstance(data, Mapping):
-        return {}, None
+        return None, StatusIssue(
+            key=key,
+            severity="ERROR",
+            message=f"INVALID at {path} (expected JSON object) — {remediation}",
+        )
     return dict(data), None
 
 

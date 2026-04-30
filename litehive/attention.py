@@ -58,6 +58,10 @@ class AttentionItem(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class AttentionStoreError(RuntimeError):
+    """Raised when persisted attention state cannot be read safely."""
+
+
 def append_attention_log(workspace: Path, message: str) -> None:
     root = normalize_workspace_root(workspace, source="append_attention_log")
     path = workspace_dir(root) / "runtime" / "attention.log"
@@ -213,14 +217,17 @@ class AttentionStore:
                 rows = connection.execute(
                     "SELECT id, task_id, created_at, kind, payload FROM attention ORDER BY id ASC"
                 ).fetchall()
-        except sqlite3.Error:
-            return []
+        except sqlite3.Error as exc:
+            raise AttentionStoreError(f"failed to read attention state for {self.root}: {exc}") from exc
         items: list[AttentionItem] = []
         for row in rows:
             try:
                 items.append(self._row_to_item(row))
-            except (TypeError, ValueError, json.JSONDecodeError):
-                continue
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                row_id = _attention_row_id(row)
+                raise AttentionStoreError(
+                    f"corrupt attention state for {self.root} at row {row_id}: {type(exc).__name__}: {exc}"
+                ) from exc
         return items
 
     def _read_item_locked(self, item_id: int) -> AttentionItem | None:
@@ -230,11 +237,17 @@ class AttentionStore:
                     "SELECT id, task_id, created_at, kind, payload FROM attention WHERE id = ?",
                     (item_id,),
                 ).fetchone()
-        except sqlite3.Error:
-            return None
+        except sqlite3.Error as exc:
+            raise AttentionStoreError(f"failed to read attention state for {self.root}: {exc}") from exc
         if row is None:
             return None
-        return self._row_to_item(row)
+        try:
+            return self._row_to_item(row)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            row_id = _attention_row_id(row)
+            raise AttentionStoreError(
+                f"corrupt attention state for {self.root} at row {row_id}: {type(exc).__name__}: {exc}"
+            ) from exc
 
     def _write_item_locked(self, item: AttentionItem) -> None:
         if item.id is None:
@@ -293,6 +306,13 @@ class AttentionStore:
 
 def attention_store(root: Path) -> AttentionStore:
     return AttentionStore(root)
+
+
+def _attention_row_id(row: sqlite3.Row) -> str:
+    try:
+        return str(row["id"])
+    except (IndexError, KeyError, TypeError):
+        return "unknown"
 
 
 def _existing_workspace_root(root: Path, *, source: str) -> Path:
@@ -363,8 +383,8 @@ def reconcile_attention(root: Path, *, auto_resolve: bool = True) -> list[Attent
 def waiting_for_you_lines(root: Path, *, limit: int = 5) -> list[str]:
     try:
         items = list_attention(root, auto_resolve=False)
-    except Exception:
-        return ["attention_items: unavailable"]
+    except (OSError, sqlite3.DatabaseError, ValueError, AttentionStoreError) as exc:
+        return [f"attention_items: unavailable ({type(exc).__name__}: {exc})"]
     lines = [f"attention_items: {len(items)}"]
     if not items:
         return lines
@@ -497,8 +517,10 @@ def _flagged_and_merge_failed_items(root: Path, tasks: list[TaskRecord]) -> list
                 if origin_stage != "merge_resolving" and failed_reason == "recovery_crashed":
                     title = f"Task {task.id} needs recovery follow-up"
                     reason = "Recovery crashed while handling commit-stage failure; operator follow-up is required."
-            except Exception:
+            except LookupError:
                 pass
+            except (OSError, sqlite3.DatabaseError, ValueError) as exc:
+                metadata["recovery_state_diagnostic"] = f"{type(exc).__name__}: {exc}"
             items.append(
                 AttentionItem(
                     task_id=task.id,
@@ -631,7 +653,7 @@ def _stale_worktree_metadata_items(root: Path, tasks: list[TaskRecord]) -> list[
 def _auto_resolve_stale_worktree_metadata_items(root: Path) -> None:
     from litehive.domain.task_ops import WorkspaceConflictError
     from litehive.state.locking import runner_lock_is_active
-    from litehive.state.records import clear_task_worktree_path, get_task, save_task
+    from litehive.state.records import TaskStateMissingError, clear_task_worktree_path, get_task, save_task
 
     if runner_lock_is_active(root):
         return
@@ -660,8 +682,8 @@ def _auto_resolve_stale_worktree_metadata_items(root: Path) -> None:
                 store.resolve(item.id or 0, resolution="auto-resolved: worktree metadata cleared")
         except WorkspaceConflictError:
             continue
-        except Exception:
-            store.resolve(item.id or 0, resolution="auto-resolved: task no longer exists or clearing not needed")
+        except TaskStateMissingError:
+            store.resolve(item.id or 0, resolution="auto-resolved: task runtime state no longer exists")
 
 
 def _default_dedupe_key(kind: str, *, task_id: str | None, title: str, reason: str) -> str:

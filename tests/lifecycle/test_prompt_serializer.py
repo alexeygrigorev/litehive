@@ -158,6 +158,42 @@ def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
     assert "Non-example: do not rerun the failed stage's tests" in text
 
 
+def test_serialize_recovery_diagnoses_invalid_current_config(workspace: Path) -> None:
+    task = create_task(workspace, title="t", goal="g")
+    config_path(workspace).write_text("- not\n- mapping\n", encoding="utf-8")
+    agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
+    state = make_state(
+        task.id,
+        stage="recovering",
+        active_recovery_trigger=RecoveryTrigger(
+            origin_stage="implementing",
+            trigger_event_kind=TriggerEventKind.CRASH,
+            failure_fingerprint=FailureFingerprint(
+                fingerprint="boom",
+                classification="runtime_error",
+            ),
+            reason_code="runtime_error",
+            message="boom",
+        ),
+    )
+
+    prompt = agent.build_prompt(state)
+    text = serialize_prompt(prompt, task_record=task, workspace_root=workspace)
+
+    assert prompt["litehive_source_path"] is None
+    assert prompt["recovery_execution_root"] == str(workspace)
+    assert prompt["recovery_config_diagnostic"] == {
+        "kind": "workspace_config_load_failed",
+        "config_root": str(workspace),
+        "exception_type": "ValueError",
+        "message": f"Config file must contain a mapping: {config_path(workspace)}",
+    }
+    assert "config_diagnostic:" in text
+    assert "kind: workspace_config_load_failed" in text
+    assert "exception_type: ValueError" in text
+    assert f"Config file must contain a mapping: {config_path(workspace)}" in text
+
+
 def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     task.subagents.append(
