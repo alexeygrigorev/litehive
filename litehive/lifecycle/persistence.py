@@ -343,17 +343,6 @@ class Persistence(Protocol):
     def load(self, task_id: str) -> TaskState: ...
 
 
-class InMemoryPersistence:
-    def __init__(self) -> None:
-        self._states: dict[str, TaskState] = {}
-
-    def save(self, state: TaskState) -> None:
-        self._states[state.task_id] = state
-
-    def load(self, task_id: str) -> TaskState:
-        return self._states[task_id]
-
-
 def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []

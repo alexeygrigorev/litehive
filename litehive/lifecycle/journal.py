@@ -306,32 +306,6 @@ class SqliteJournal(PipelineJournal):
         ]
 
 
-class InMemoryJournal(PipelineJournal):
-    """Reference implementation for tests; keeps records in a list."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.records: list[dict[str, Any]] = []
-
-    def _store(
-        self,
-        task_id: str,
-        seq: int,
-        created_at: str,
-        kind: str,
-        payload: dict[str, Any],
-    ) -> None:
-        self.records.append(
-            {
-                "task_id": task_id,
-                "seq": seq,
-                "created_at": created_at,
-                "kind": kind,
-                "payload": payload,
-            }
-        )
-
-
 class NullJournal(PipelineJournal):
     """Drops every record; use when the runner should not journal at all."""
 

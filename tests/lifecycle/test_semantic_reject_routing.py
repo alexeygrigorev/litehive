@@ -3,11 +3,11 @@ import pytest
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION
 from litehive.domain.recovery import TriggerEventKind
 from litehive.lifecycle.events import Crash, Event, Pass, Reject, Timeout
-from litehive.lifecycle.journal import InMemoryJournal
 from litehive.lifecycle.nodes.base import Node, NodeRegistry
-from litehive.lifecycle.persistence import InMemoryPersistence, Limits, TaskState
+from litehive.lifecycle.persistence import Limits, TaskState
 from litehive.lifecycle.runner import StateMachineRunner
 from litehive.lifecycle.types import NodeType, PipelineMode
+from tests.support.lifecycle_fakes import InMemoryJournal, InMemoryPersistence
 
 
 class _FixedEventNode(Node):

@@ -32,11 +32,11 @@ from litehive.lifecycle.nodes.system import CommitNode, StubCommitNode
 from litehive.lifecycle.nodes.agent import AgentVerdict, Engine, TransientError
 from litehive.lifecycle.nodes.system import MergeConflict
 from litehive.lifecycle.persistence import Limits, SqlitePersistence
-from litehive.lifecycle.sessions import InMemorySessionStore
 from litehive.lifecycle.types import PipelineMode
 from litehive.domain.recovery import RecoveryTrigger
 from litehive.state.records import get_task, get_task_worktree_path
 from litehive.worktree import resolve_recorded_worktree_path
+from tests.support.lifecycle_fakes import InMemorySessionStore
 
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace

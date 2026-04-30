@@ -11,8 +11,8 @@ from litehive.lifecycle.events import HookOk, Pass, Reject
 from litehive.lifecycle.nodes.agent import AgentNode, AgentVerdict
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.runner import StateMachineRunner
-from litehive.lifecycle.sessions import InMemorySessionStore
 from litehive.lifecycle.types import PipelineMode
+from tests.support.lifecycle_fakes import InMemorySessionStore
 
 
 class _FixedSelector:

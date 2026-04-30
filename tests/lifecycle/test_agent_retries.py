@@ -21,9 +21,9 @@ from litehive.lifecycle.nodes.agent import (
     UnrecoverableError,
 )
 from litehive.lifecycle.persistence import TaskState
-from litehive.lifecycle.sessions import InMemorySessionStore
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task
+from tests.support.lifecycle_fakes import InMemorySessionStore
 
 
 class _ScriptedEngine:

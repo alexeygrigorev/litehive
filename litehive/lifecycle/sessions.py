@@ -42,23 +42,6 @@ class SessionStore(Protocol):
     def clear_node_sessions(self, task_id: str, node_name: PipelineState) -> None: ...
 
 
-class InMemorySessionStore:
-    """Reference implementation for tests; keeps everything in a dict."""
-
-    def __init__(self) -> None:
-        self._sessions: dict[tuple[str, PipelineState, str], Session] = {}
-
-    def get_or_create(self, task_id: str, node_name: PipelineState, engine_name: str) -> Session:
-        return self._sessions.setdefault((task_id, node_name, engine_name), Session())
-
-    def persist(self, task_id: str, node_name: PipelineState, engine_name: str, session: Session) -> None:
-        self._sessions[(task_id, node_name, engine_name)] = session
-
-    def clear_node_sessions(self, task_id: str, node_name: PipelineState) -> None:
-        for key in [k for k in self._sessions if k[:2] == (task_id, node_name)]:
-            del self._sessions[key]
-
-
 class SqliteSessionStore:
     """Persists ``Session`` rows to the ``pipeline_sessions`` sqlite table.
 
