@@ -250,7 +250,8 @@ def test_workspace_registry_retries_lock_contention_without_rebuilding(
     )
     holder.start()
     try:
-        for _ in range(100):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
             if ready_path.exists():
                 break
             time.sleep(0.01)
