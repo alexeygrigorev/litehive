@@ -10,7 +10,7 @@ from litehive.cli.common import make_typer
 app = make_typer(invoke_without_command=True)
 
 
-@app.command("rules", help="List the v2 transition rules as readable rows")
+@app.command("rules", help="List pipeline transition rules as readable rows")
 def pipeline_rules_command() -> int:
     from litehive.lifecycle.transitions import list_transitions
 
@@ -27,7 +27,7 @@ def pipeline_rules_command() -> int:
     return 0
 
 
-@app.command("set-state", help="Override a task's v2 pipeline stage")
+@app.command("set-state", help="Override a task's pipeline stage")
 def pipeline_set_state_command(
     task_id: Annotated[str, typer.Argument(help="Task id")],
     stage: Annotated[str, typer.Argument(help="Target stage")],
@@ -40,7 +40,7 @@ def pipeline_set_state_command(
     try:
         state = store.load(task_id)
     except TaskNotFound:
-        print(f"no v2 state row for {task_id}; use 'litehive pipeline add-task' first")
+        print(f"no pipeline state row for {task_id}; create task pipeline state first")
         raise typer.Exit(1)
     old_stage = state.stage
     state.stage = canonical_pipeline_state(stage)
@@ -49,7 +49,7 @@ def pipeline_set_state_command(
     print(f"stage: {old_stage} → {stage}")
 
 
-@app.command("reset", help="Clear all v2 pipeline state for a task so it starts fresh")
+@app.command("reset", help="Clear all pipeline state for a task so it starts fresh")
 def pipeline_reset_command(
     task_id: Annotated[str, typer.Argument(help="Task id")],
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
@@ -64,7 +64,7 @@ def pipeline_reset_command(
     print("reset: ok")
 
 
-@app.command("journal", help="Dump the v2 pipeline journal + transitions for one task")
+@app.command("journal", help="Dump the pipeline journal and transitions for one task")
 def pipeline_journal_command(
     task_id: Annotated[str, typer.Argument(help="Task id (e.g. T-0001)")],
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
@@ -80,7 +80,7 @@ def pipeline_journal_command(
     try:
         state = store.load(task_id)
     except TaskNotFound:
-        print(f"no v2 state row for task {task_id}")
+        print(f"no pipeline state row for task {task_id}")
         raise typer.Exit(1)
 
     print(f"task: {task_id}")

@@ -55,8 +55,8 @@ app.add_typer(backup_app, name="backup", help="Create, list, and restore workspa
 app.add_typer(db_app, name="db", help="Inspect and migrate the workspace database schema")
 app.add_typer(worktree_app, name="worktree", help="Inspect and clean Litehive-managed task worktrees")
 app.add_typer(daemon_app, name="daemon", help="Manage the Litehive pool daemon", hidden=True)
-app.add_typer(pipeline_app, name="pipeline", help="Inspect the v2 pipeline state machine")
-app.add_typer(agent_app, name="agent", help="Agent-restricted compatibility aliases", hidden=True)
+app.add_typer(pipeline_app, name="pipeline", help="Inspect the pipeline state machine")
+app.add_typer(agent_app, name="agent", help="Agent-restricted internal commands", hidden=True)
 
 
 def main() -> int:

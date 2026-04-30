@@ -101,4 +101,4 @@ def test_pipeline_journal_prints_state_and_transitions(workspace: Path) -> None:
 def test_pipeline_journal_unknown_task_returns_error(workspace: Path) -> None:
     result = CliRunner().invoke(app, ["pipeline", "journal", "T-9999", "--workspace", str(workspace)])
     assert result.exit_code == 1
-    assert "no v2 state row for task T-9999" in result.output
+    assert "no pipeline state row for task T-9999" in result.output
