@@ -1,9 +1,0 @@
-step: accepting
-hook_point: before_pm_acceptance
-command: if git grep -nE 'noqa:.*F401|noqa:.*F403|ruff:\s*noqa:\s*F401|ruff:\s*noqa:\s*F403'
-  -- litehive tests; then echo 'Forbidden noqa F401/F403 suppression found.'; exit
-  1; fi
-blocking: true
-exit_code: 0
-stdout: ''
-stderr: ''
