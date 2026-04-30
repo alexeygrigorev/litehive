@@ -1,13 +1,10 @@
 """Process profile loader."""
 
 from copy import deepcopy
-from functools import lru_cache
-from pathlib import Path
 from typing import Any
 
-import yaml
+from litehive.config.profiles.defaults import PROCESS_PROFILE_OVERLAYS, SHARED_PROCESS_PROFILE
 
-_PROFILE_DIR = Path(__file__).resolve().parent
 _LIST_KEYS = {
     "development_rules",
     "tool_usage",
@@ -18,18 +15,7 @@ _LIST_KEYS = {
 }
 
 
-@lru_cache(maxsize=1)
-def _load_profiles() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
-    shared = yaml.safe_load((_PROFILE_DIR / "_shared.yaml").read_text(encoding="utf-8")) or {}
-    overlays = {
-        path.stem: yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        for path in sorted(_PROFILE_DIR.glob("*.yaml"))
-        if path.name != "_shared.yaml"
-    }
-    return shared, overlays
-
-
-PROCESS_PROFILES = _load_profiles()[1]
+PROCESS_PROFILES = PROCESS_PROFILE_OVERLAYS
 
 
 def available_process_profiles() -> list[str]:
@@ -37,15 +23,14 @@ def available_process_profiles() -> list[str]:
 
 
 def resolve_process_profile(name: str | None) -> dict[str, Any]:
-    shared, profiles = _load_profiles()
-    profile = deepcopy(shared)
+    profile = deepcopy(SHARED_PROCESS_PROFILE)
     if name is None:
         overlay: dict[str, Any] = {}
     else:
-        if name not in profiles:
-            available_profiles = ", ".join(sorted(profiles.keys()))
+        if name not in PROCESS_PROFILES:
+            available_profiles = ", ".join(sorted(PROCESS_PROFILES.keys()))
             raise ValueError(f"unknown process profile {name!r}; must be one of: {available_profiles}")
-        overlay = profiles[name]
+        overlay = PROCESS_PROFILES[name]
     for key, value in overlay.items():
         if key in _LIST_KEYS:
             profile[key].extend(deepcopy(value))

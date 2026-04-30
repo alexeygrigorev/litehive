@@ -37,8 +37,6 @@ Still outstanding:
   paths still exist
 - many old YAML files remain under `.litehive/tasks`, `.litehive/logs`, and
   stale artifact directories from earlier implementations
-- source-level process profiles still live as YAML files; decide whether those
-  are acceptable package data or should move into Python/SQLite-backed defaults
 - lifecycle `TaskState` and `TaskRecord.runtime` both represent execution state
   and are bridged in orchestration code
 - task transitions, status handling, queue mutation, audit construction, and
@@ -125,9 +123,9 @@ Scope:
 - migrate any remaining active data to SQLite or append-only JSONL/text logs
 - update `.litehive/.gitignore`, bootstrap behavior, archive cleanup, and repair
   tooling so new YAML files are not created
-- review packaged YAML defaults under `litehive/config/profiles` and
-  `litehive/cli/templates`; either document them as source package data outside
-  the workspace policy or replace them with Python/SQLite-backed defaults
+- review remaining packaged YAML templates under `litehive/cli/templates` and
+  either document them as bootstrap templates or replace them with Python-backed
+  defaults
 
 Acceptance criteria:
 

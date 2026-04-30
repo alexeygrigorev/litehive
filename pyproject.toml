@@ -30,7 +30,7 @@ litehive = "litehive.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["litehive"]
-include = ["litehive/config/profiles/*.yaml", "litehive/db/migrations/*.sql"]
+include = ["litehive/db/migrations/*.sql"]
 
 [tool.hatch.version]
 path = "litehive/__version__.py"

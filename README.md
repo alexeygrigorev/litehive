@@ -220,7 +220,7 @@ litehive status
 ```
 
 Litehive bootstraps `.litehive/config.yaml` and `.litehive/context.md` on first run. Edit them by hand after bootstrap. Available profiles: generic, python, django, rust.
-The built-in profile defaults are packaged source data under `litehive/config/profiles/*.yaml`; they are not workspace state and are outside the workspace YAML policy.
+Built-in profile defaults are typed Python package data; workspace YAML remains limited to `.litehive/config.yaml`.
 
 ## Workspace layout
 

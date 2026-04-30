@@ -18,6 +18,7 @@ from litehive.config.model import (
     LitehiveConfig,
     SandboxCredentialInput,
 )
+from litehive.config.profiles.defaults import PROCESS_PROFILE_OVERLAYS, SHARED_PROCESS_PROFILE
 from litehive.config.profiles.loader import resolve_process_profile
 from litehive.config.workspace import ensure_workspace
 
@@ -586,6 +587,18 @@ def test_resolve_process_profile_merges_shared_process_with_overlay() -> None:
     assert profile["role_model"]
     assert profile["prompt_scaffold"]
     assert profile["stage_overlay"]["accepting"]
+
+
+def test_process_profiles_are_loaded_from_typed_defaults() -> None:
+    assert set(PROCESS_PROFILE_OVERLAYS) == {"codehive", "cpp", "django", "generic", "python", "rust"}
+    assert PROCESS_PROFILE_OVERLAYS["generic"] == {}
+    assert SHARED_PROCESS_PROFILE["label"] == "Generic"
+
+    profile = resolve_process_profile("python")
+
+    assert profile["label"] == "Python"
+    assert profile["prompt_scaffold"][0] == SHARED_PROCESS_PROFILE["prompt_scaffold"][0]
+    assert profile["workspace_overlay"][-1] == "- Keep dependency and packaging changes explicit and minimal."
 
 
 def test_resolve_process_profile_rejects_unknown_profile() -> None:

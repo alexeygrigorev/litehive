@@ -20,7 +20,7 @@ class PromptContext:
     - ``startup_guidance``: extra bullets per role, merged on top of the
       built-in ``DEFAULT_STARTUP_GUIDANCE``. Usually comes from workspace
       config.
-    - ``profile_overlay``: optional process-profile YAML (generic, codehive,
+    - ``profile_overlay``: optional process-profile data (generic, codehive,
       django, …) that can add per-stage instruction blocks.
     """
 

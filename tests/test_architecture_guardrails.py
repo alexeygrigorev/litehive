@@ -1,6 +1,7 @@
 """Static architecture guardrails for ownership boundaries."""
 
 import ast
+import tomllib
 from pathlib import Path
 
 
@@ -181,6 +182,18 @@ def test_domain_models_do_not_perform_file_io_or_persistence_migration() -> None
             violations.append(f"{rel}: imports={imported_forbidden} calls={called_forbidden}")
 
     assert violations == []
+
+
+def test_process_profiles_do_not_use_packaged_yaml() -> None:
+    profiles_root = PACKAGE_ROOT / "config" / "profiles"
+    yaml_files = sorted(path.name for path in profiles_root.glob("*.yaml"))
+    loader_tree = _tree(profiles_root / "loader.py")
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    wheel_include = pyproject["tool"]["hatch"]["build"]["targets"]["wheel"].get("include", [])
+
+    assert yaml_files == []
+    assert "yaml" not in _imported_modules(loader_tree)
+    assert "litehive/config/profiles/*.yaml" not in wheel_include
 
 
 def test_core_boundary_dependency_graph_does_not_gain_new_edges() -> None:
