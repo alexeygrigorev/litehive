@@ -302,20 +302,13 @@ def test_engine_status_prints_monitoring_and_live_quota(tmp_path: Path, monkeypa
         "observed_at=2026-04-20T00:00:00Z"
     ) in output
     assert (
-        "quota: hours remaining=87.5% reset=2026-04-14T12:00:00Z | "
-        "weeks remaining=55.0% reset=2026-04-15T00:00:00Z"
+        "quota: hours remaining=87.5% reset=2026-04-14T12:00:00Z | weeks remaining=55.0% reset=2026-04-15T00:00:00Z"
     ) in output
     assert (
-        "quota: hours remaining=70.0% reset=2026-04-14T17:00:00Z | "
-        "weeks remaining=35.0% reset=2026-04-21T00:00:00Z"
+        "quota: hours remaining=70.0% reset=2026-04-14T17:00:00Z | weeks remaining=35.0% reset=2026-04-21T00:00:00Z"
     ) in output
     assert "quota: hours remaining=100.0% reset=- | weeks remaining=40.0% reset=2026-04-30T00:00:00Z" in output
-    assert (
-        output.count(
-            "quota: hours remaining=55.0% reset=- | weeks remaining=100.0% reset=-"
-        )
-        == 2
-    )
+    assert output.count("quota: hours remaining=55.0% reset=- | weeks remaining=100.0% reset=-") == 2
     assert "quota: unsupported" in output
 
 

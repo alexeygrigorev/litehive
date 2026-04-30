@@ -118,7 +118,7 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
     assert config.pool_max_tasks == 2
 
 
-def test_load_config_migrates_legacy_global_config_from_config_home(
+def test_load_config_ignores_deprecated_config_home_global_config(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -136,10 +136,10 @@ def test_load_config_migrates_legacy_global_config_from_config_home(
 
     config = load_config(workspace)
 
-    assert config.default_engine == "gemini"
-    assert not legacy_path.exists()
-    assert (litehive_root() / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
-    assert "migrated deprecated global state" in capsys.readouterr().err
+    assert config.default_engine != "gemini"
+    assert legacy_path.read_text(encoding="utf-8") == "default_engine: gemini\n"
+    assert not (litehive_root() / "config.yaml").exists()
+    assert capsys.readouterr().err == ""
 
 
 def test_load_config_deep_merges_global_and_workspace_mappings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -30,7 +30,7 @@ def analyze_scope_changes(workspace_root: Path, task_id: str) -> dict[str, Any]:
                 "reasoning": "No files deleted",
                 "deleted_files": [],
                 "broken_on_main": [],
-                "healthy_on_main": []
+                "healthy_on_main": [],
             }
 
         # Check which deleted files are broken vs healthy on main
@@ -44,7 +44,7 @@ def analyze_scope_changes(workspace_root: Path, task_id: str) -> dict[str, Any]:
             "reasoning": reasoning,
             "deleted_files": deleted_files,
             "broken_on_main": broken_on_main,
-            "healthy_on_main": healthy_on_main
+            "healthy_on_main": healthy_on_main,
         }
 
     except Exception as e:
@@ -54,7 +54,7 @@ def analyze_scope_changes(workspace_root: Path, task_id: str) -> dict[str, Any]:
             "reasoning": f"Error during scope analysis: {e}",
             "deleted_files": [],
             "broken_on_main": [],
-            "healthy_on_main": []
+            "healthy_on_main": [],
         }
 
 
@@ -67,12 +67,12 @@ def _get_deleted_files(workspace_root: Path) -> list[str]:
             cwd=workspace_root,
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
 
         deleted_files = []
-        for line in result.stdout.strip().split('\n'):
-            if line.strip() and line.startswith('D\t'):
+        for line in result.stdout.strip().split("\n"):
+            if line.strip() and line.startswith("D\t"):
                 # D indicates deleted file
                 deleted_file = line[2:]  # Remove "D\t" prefix
                 deleted_files.append(deleted_file)
@@ -113,10 +113,7 @@ def _is_file_broken_on_main(workspace_root: Path, file_path: str) -> bool:
     try:
         # Check if file exists on main
         result = subprocess.run(
-            ["git", "cat-file", "-e", f"main:{file_path}"],
-            cwd=workspace_root,
-            capture_output=True,
-            check=False
+            ["git", "cat-file", "-e", f"main:{file_path}"], cwd=workspace_root, capture_output=True, check=False
         )
 
         if result.returncode != 0:
@@ -137,15 +134,15 @@ def _is_file_broken_on_main(workspace_root: Path, file_path: str) -> bool:
 
 def _is_test_file(file_path: str) -> bool:
     """Check if a file is a test file based on its path and name."""
-    path_parts = file_path.lower().split('/')
+    path_parts = file_path.lower().split("/")
     filename = Path(file_path).name.lower()
 
     return (
-        'test' in path_parts or
-        'tests' in path_parts or
-        filename.startswith('test_') or
-        filename.endswith('_test.py') or
-        filename.startswith('conftest')
+        "test" in path_parts
+        or "tests" in path_parts
+        or filename.startswith("test_")
+        or filename.endswith("_test.py")
+        or filename.startswith("conftest")
     )
 
 
@@ -157,16 +154,11 @@ def _is_test_broken_on_main(workspace_root: Path, test_file: str) -> bool:
             ["git", "stash", "push", "-m", "temp-stash-for-scope-analysis"],
             cwd=workspace_root,
             capture_output=True,
-            check=False
+            check=False,
         )
 
         try:
-            subprocess.run(
-                ["git", "checkout", "main"],
-                cwd=workspace_root,
-                capture_output=True,
-                check=True
-            )
+            subprocess.run(["git", "checkout", "main"], cwd=workspace_root, capture_output=True, check=True)
 
             # Try to run the specific test file
             test_result = subprocess.run(
@@ -174,7 +166,7 @@ def _is_test_broken_on_main(workspace_root: Path, test_file: str) -> bool:
                 cwd=workspace_root,
                 capture_output=True,
                 timeout=30,  # 30 second timeout
-                check=False
+                check=False,
             )
 
             # Test is broken if pytest fails
@@ -182,20 +174,10 @@ def _is_test_broken_on_main(workspace_root: Path, test_file: str) -> bool:
 
         finally:
             # Return to original branch
-            subprocess.run(
-                ["git", "checkout", "-"],
-                cwd=workspace_root,
-                capture_output=True,
-                check=False
-            )
+            subprocess.run(["git", "checkout", "-"], cwd=workspace_root, capture_output=True, check=False)
 
             # Restore stashed changes
-            subprocess.run(
-                ["git", "stash", "pop"],
-                cwd=workspace_root,
-                capture_output=True,
-                check=False
-            )
+            subprocess.run(["git", "stash", "pop"], cwd=workspace_root, capture_output=True, check=False)
 
         return is_broken
 
@@ -209,17 +191,13 @@ def _has_syntax_errors_on_main(workspace_root: Path, file_path: str) -> bool:
     try:
         # Get the file content from main branch
         result = subprocess.run(
-            ["git", "show", f"main:{file_path}"],
-            cwd=workspace_root,
-            capture_output=True,
-            text=True,
-            check=True
+            ["git", "show", f"main:{file_path}"], cwd=workspace_root, capture_output=True, text=True, check=True
         )
 
         # Try to compile the Python file to check for syntax errors
-        if file_path.endswith('.py'):
+        if file_path.endswith(".py"):
             try:
-                compile(result.stdout, file_path, 'exec')
+                compile(result.stdout, file_path, "exec")
                 return False  # No syntax error
             except SyntaxError:
                 return True  # Has syntax error
@@ -232,7 +210,9 @@ def _has_syntax_errors_on_main(workspace_root: Path, file_path: str) -> bool:
         return True
 
 
-def _classify_changes(deleted_files: list[str], broken_on_main: list[str], healthy_on_main: list[str]) -> tuple[bool, str]:
+def _classify_changes(
+    deleted_files: list[str], broken_on_main: list[str], healthy_on_main: list[str]
+) -> tuple[bool, str]:
     """Classify the changes as operator cleanup vs SWE scope creep.
 
     Returns:

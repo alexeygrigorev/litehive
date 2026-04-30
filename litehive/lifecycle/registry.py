@@ -36,6 +36,7 @@ from .nodes.system import (
 )
 from .nodes.terminal import TerminalNode
 from .nodes.agent import EngineSelector, SessionProvider
+
 HOOK_PHASES: tuple[PipelineState, ...] = (
     PipelineState.BEFORE_GROOMING,
     PipelineState.AFTER_GROOMING,

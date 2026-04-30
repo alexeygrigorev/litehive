@@ -49,8 +49,6 @@ def _daemon_lock_manager(workspace: Path) -> ProcessLockManager:
     )
 
 
-
-
 @contextmanager
 def _locked_daemon_registry() -> TextIO:
     lock_path = _daemon_registry_lock_path()
@@ -80,8 +78,6 @@ def _write_daemon_registry(entries: list[dict[str, object]]) -> None:
     path = _daemon_registry_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(entries, sort_keys=False), encoding="utf-8")
-
-
 
 
 def _upsert_daemon_registry_entry(workspace: Path, payload: dict[str, object]) -> None:
@@ -146,10 +142,13 @@ def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
             if isinstance(existing_pid, int) and pid_is_alive(existing_pid):
                 raise RuntimeError(f"daemon already running for {workspace}: pid={existing_pid}") from None
             raise RuntimeError(f"daemon already running for {workspace}: pid={existing_pid}") from None
-        payload = manager.create_base_metadata(pid, {
-            "workspace": str(workspace),
-            "log_dir": str(log_dir),
-        })
+        payload = manager.create_base_metadata(
+            pid,
+            {
+                "workspace": str(workspace),
+                "log_dir": str(log_dir),
+            },
+        )
         manager.write_locked_metadata(handle, payload)
         with _DAEMON_LOCKS_MUTEX:
             existing_handle = _DAEMON_LOCKS.get(workspace)

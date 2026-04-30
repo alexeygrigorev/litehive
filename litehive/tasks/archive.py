@@ -105,8 +105,6 @@ def _archived_at_for_tombstone(task: TaskRecord) -> str:
     return task.updated_at or utcnow()
 
 
-
-
 def _hard_delete_archived_task(
     root: Path,
     task: TaskRecord,

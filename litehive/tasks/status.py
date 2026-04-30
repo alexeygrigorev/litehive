@@ -681,8 +681,6 @@ _CLOSE_REASON_CODE_LABELS: dict[str, str] = {
 }
 
 
-
-
 def _queue_task(state: WorkspaceState, task_id: str, *, front: bool = False) -> None:
     state.queue = [item for item in state.queue if item != task_id]
     if front:

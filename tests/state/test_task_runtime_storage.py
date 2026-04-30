@@ -334,8 +334,6 @@ def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Pat
     assert [task.id for task in tasks] == [present.id, "T-0002"]
 
 
-
-
 def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Roundtrip")

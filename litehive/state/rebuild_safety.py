@@ -26,7 +26,6 @@ class RebuildSafetyError(RuntimeError):
 class RebuildSafetyReport:
     sqlite_task_ids: frozenset[str]
     task_dir_ids: frozenset[str]
-    legacy_task_yaml_ids: frozenset[str]
     replay_task_ids: frozenset[str]
     missing_task_ids: tuple[str, ...]
 
@@ -74,19 +73,6 @@ def task_artifact_dir_ids(root: Path) -> set[str]:
     return task_ids
 
 
-def legacy_task_yaml_ids(root: Path) -> set[str]:
-    tasks_dir = root / ".litehive" / "tasks"
-    if not tasks_dir.exists():
-        return set()
-
-    task_ids: set[str] = set()
-    for task_file in tasks_dir.glob("**/task.yaml"):
-        match = _TASK_DIR_RE.match(task_file.parent.name)
-        if match is not None:
-            task_ids.add(match.group(1))
-    return task_ids
-
-
 def event_log_replay_task_ids(root: Path) -> set[str]:
     path = workspace_path(root, TASK_EVENT_LOG_NAME)
     if not path.exists():
@@ -125,19 +111,16 @@ def assert_database_rebuild_safe(
 ) -> RebuildSafetyReport:
     sqlite_ids = sqlite_task_ids(db_path)
     artifact_ids = task_artifact_dir_ids(root)
-    yaml_ids = legacy_task_yaml_ids(root)
     replay_ids = set(event_log_replay_task_ids(root) if replay_task_ids is None else replay_task_ids)
-    replay_ids.update(yaml_ids)
 
-    # Protect rows the active DB still knows about, plus legacy task.yaml files
-    # that are themselves rebuild sources. Generic task artifact directories are
-    # not enough to infer active work; old terminal tasks keep artifacts too.
-    expected_ids = set(sqlite_ids) | set(yaml_ids)
+    # Protect rows the active DB still knows about. Generic task artifact
+    # directories are not enough to infer active work; old terminal tasks keep
+    # artifacts too.
+    expected_ids = set(sqlite_ids)
     missing_ids = tuple(sorted(expected_ids - replay_ids))
     report = RebuildSafetyReport(
         sqlite_task_ids=frozenset(sqlite_ids),
         task_dir_ids=frozenset(artifact_ids),
-        legacy_task_yaml_ids=frozenset(yaml_ids),
         replay_task_ids=frozenset(replay_ids),
         missing_task_ids=missing_ids,
     )
@@ -146,7 +129,7 @@ def assert_database_rebuild_safe(
         suffix = "" if len(missing_ids) <= 10 else f", ... ({len(missing_ids)} total)"
         raise RebuildSafetyError(
             f"refusing {operation}: replay source covers {len(replay_ids)} task(s), "
-            f"but existing DB/legacy task sources reference {len(expected_ids)} task(s); "
+            f"but existing DB task rows reference {len(expected_ids)} task(s); "
             f"missing from replay: {sample}{suffix}"
         )
     return report

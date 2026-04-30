@@ -270,9 +270,7 @@ def test_workspace_registry_retries_lock_contention_without_rebuilding(
     }
 
 
-def test_workspace_registry_migrates_only_from_legacy_config_home_yaml(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_workspace_registry_ignores_deprecated_yaml_registries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_home = tmp_path / "xdg-config"
     data_home = tmp_path / "xdg-data"
     state_home = tmp_path / "xdg-state"
@@ -302,14 +300,11 @@ def test_workspace_registry_migrates_only_from_legacy_config_home_yaml(
         encoding="utf-8",
     )
 
-    assert list_registered_workspace_paths() == [workspace_one.resolve()]
+    assert list_registered_workspace_paths() == []
     ensure_workspace(workspace_three)
 
-    assert not canonical_path.exists()
-    assert set(_registered_paths(registry_path)) == {
-        str(workspace_one.resolve()),
-        str(workspace_three.resolve()),
-    }
+    assert yaml.safe_load(canonical_path.read_text(encoding="utf-8")) == [str(workspace_one)]
+    assert set(_registered_paths(registry_path)) == {str(workspace_three.resolve())}
     assert yaml.safe_load(stale_data_home_path.read_text(encoding="utf-8")) == [str(workspace_two)]
 
 
@@ -334,7 +329,7 @@ def test_workspace_registry_is_available_from_other_threads(tmp_path: Path, monk
     assert results == [[tmp_path.resolve()]]
 
 
-def test_legacy_global_state_in_config_home_is_migrated_to_unified_root(
+def test_deprecated_global_state_in_config_home_is_ignored(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -366,20 +361,15 @@ def test_legacy_global_state_in_config_home_is_migrated_to_unified_root(
     ensure_workspace(tmp_path)
     err = capsys.readouterr().err
 
-    assert "migrated deprecated global state" in err
-    assert str(legacy_root) in err
-    assert str(canonical_root) in err
-    assert not (legacy_root / "config.yaml").exists()
-    assert not (legacy_root / "workspaces.yaml").exists()
-    assert not (legacy_root / "daemons.yaml").exists()
-    assert (canonical_root / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
-    assert (canonical_root / "daemons.yaml").read_text(encoding="utf-8") == "- workspace: /tmp/legacy-workspace\n"
-    assert set(_registered_paths(canonical_root / "workspaces.db")) == {
-        "/tmp/legacy-workspace",
-        str(tmp_path.resolve()),
-    }
+    assert err == ""
+    assert (legacy_root / "config.yaml").read_text(encoding="utf-8") == "default_engine: gemini\n"
+    assert (legacy_root / "workspaces.yaml").exists()
+    assert (legacy_root / "daemons.yaml").read_text(encoding="utf-8") == "- workspace: /tmp/legacy-workspace\n"
+    assert not (canonical_root / "config.yaml").exists()
+    assert not (canonical_root / "daemons.yaml").exists()
+    assert set(_registered_paths(canonical_root / "workspaces.db")) == {str(tmp_path.resolve())}
     (tmp_path / ".litehive" / "config.yaml").write_text("{}", encoding="utf-8")
-    assert load_config(tmp_path).default_engine == "gemini"
+    assert load_config(tmp_path).default_engine != "gemini"
 
     ensure_workspace(tmp_path)
     assert capsys.readouterr().err == ""
@@ -471,17 +461,12 @@ def test_litehive_home_overrides_default_root(tmp_path: Path, monkeypatch: pytes
     wid = workspace_data_dir(tmp_path).name
     assert litehive_root() == custom_home
     assert litehive_root() / "config.yaml" == custom_home / "config.yaml"
-    assert yaml.safe_load((custom_home / "daemons.yaml").read_text(encoding="utf-8")) == [
-        {"workspace": "/tmp/legacy-workspace"}
-    ]
+    assert not (custom_home / "daemons.yaml").exists()
     assert workspace_path(tmp_path, "data.db") == custom_home / wid / "data.db"
-    assert set(_registered_paths(custom_home / "workspaces.db")) == {
-        "/tmp/legacy-workspace",
-        str(tmp_path.resolve()),
-    }
-    assert not (legacy_root / "config.yaml").exists()
-    assert not (legacy_root / "workspaces.yaml").exists()
-    assert not (legacy_root / "daemons.yaml").exists()
+    assert set(_registered_paths(custom_home / "workspaces.db")) == {str(tmp_path.resolve())}
+    assert (legacy_root / "config.yaml").exists()
+    assert (legacy_root / "workspaces.yaml").exists()
+    assert (legacy_root / "daemons.yaml").exists()
 
 
 def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None:

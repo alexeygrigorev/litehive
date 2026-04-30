@@ -253,11 +253,7 @@ def _render_quota_line(_engine_name: str, status: object) -> str:
     long_term = getattr(status, "long_term", None)
     if short_term is None or long_term is None:
         return "quota: unavailable (unsupported usage shape)"
-    return (
-        "quota: "
-        f"{_usage_window_label('hours', short_term)} | "
-        f"{_usage_window_label('weeks', long_term)}"
-    )
+    return f"quota: {_usage_window_label('hours', short_term)} | {_usage_window_label('weeks', long_term)}"
 
 
 def _quota_status_error(status: object) -> str | None:

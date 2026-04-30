@@ -13,11 +13,10 @@ from contextlib import contextmanager
 from collections.abc import Iterator
 from typing import TypeAlias
 
-import yaml
 from pydantic import ValidationError
 
 from litehive.config.paths import workspace_path
-from litehive.domain.task import TaskIntentRecord, TaskRecord, TaskStateRecord
+from litehive.domain.task import TaskIntentRecord, TaskStateRecord
 from litehive.state.rebuild_safety import assert_database_rebuild_safe, backup_database_before_rebuild
 
 MIGRATIONS_PACKAGE = "litehive.db.migrations"
@@ -84,46 +83,6 @@ def _utcnow() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-_TASK_DIR_RE = re.compile(r"^T-\d{4}-")
-
-
-def _sql_literal(value: str) -> str:
-    return "'" + value.replace("'", "''") + "'"
-
-
-def _legacy_task_yaml_paths(root: Path) -> list[Path]:
-    tasks_dir = root / ".litehive" / "tasks"
-    if not tasks_dir.exists():
-        return []
-    paths: list[Path] = []
-    scan_roots = [tasks_dir]
-    archive_dir = tasks_dir / "archive"
-    if archive_dir.exists():
-        scan_roots.append(archive_dir)
-    for scan_root in scan_roots:
-        for child in sorted(scan_root.iterdir()):
-            if not child.is_dir() or _TASK_DIR_RE.match(child.name) is None:
-                continue
-            task_file = child / "task.yaml"
-            if task_file.exists():
-                paths.append(task_file)
-    return paths
-
-
-def _legacy_task_record(path: Path) -> TaskRecord:
-    loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(loaded, dict):
-        raise ValueError("task file must contain a mapping")
-    try:
-        intent = TaskIntentRecord.model_validate(loaded)
-        task = TaskRecord.from_intent_and_state(intent)
-    except ValidationError:
-        task = TaskRecord.model_validate(loaded)
-    if path.parent.parent.name == "archive":
-        task.status = "archived"
-    return task
-
-
 def _task_intent_column_values(
     intent: TaskIntentRecord,
     state: TaskStateRecord | None = None,
@@ -145,43 +104,6 @@ def _task_intent_column_values(
         "lifecycle_status": "queued" if state is None else str(state.status),
         "pipeline_status": "backlog" if state is None else str(state.pipeline_status),
     }
-
-
-def _task_intent_backfill_sql(root: Path, *, updated_at: str) -> tuple[str, tuple[Path, ...]]:
-    statements: list[str] = []
-    migrated_paths: list[Path] = []
-    for path in _legacy_task_yaml_paths(root):
-        try:
-            task = _legacy_task_record(path)
-        except Exception as exc:
-            logger.warning("Skipping invalid legacy task intent %s during migration 0005: %s", path, exc)
-            continue
-        intent = task.to_intent_record()
-        state = task.to_storage_state_record()
-        state_payload = json.dumps(state.model_dump(mode="json"), sort_keys=True)
-        payload = json.dumps(intent.model_dump(mode="json"), sort_keys=True)
-        statements.append(
-            "\n".join(
-                [
-                    "INSERT INTO task_intent (task_id, payload, updated_at)",
-                    f"VALUES ({_sql_literal(intent.id)}, {_sql_literal(payload)}, {_sql_literal(updated_at)})",
-                    "ON CONFLICT(task_id) DO NOTHING;",
-                    "INSERT INTO task_state (task_id, payload, updated_at)",
-                    f"VALUES ({_sql_literal(intent.id)}, {_sql_literal(state_payload)}, {_sql_literal(updated_at)})",
-                    "ON CONFLICT(task_id) DO NOTHING;",
-                ]
-            )
-        )
-        migrated_paths.append(path)
-    return "\n".join(statements), tuple(migrated_paths)
-
-
-def _remove_migrated_task_yaml_files(paths: tuple[Path, ...]) -> None:
-    for path in paths:
-        try:
-            path.unlink(missing_ok=True)
-        except OSError as exc:
-            logger.warning("Failed to remove migrated legacy task.yaml %s: %s", path, exc)
 
 
 def _sync_task_intent_columns(connection: sqlite3.Connection) -> None:
@@ -431,14 +353,6 @@ def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationP
         for migration in pending:
             applied_at = _utcnow()
             migration_sql = migration.sql.strip()
-            migrated_task_yaml_paths: tuple[Path, ...] = ()
-            if migration.version == 5:
-                task_intent_backfill_sql, migrated_task_yaml_paths = _task_intent_backfill_sql(
-                    root,
-                    updated_at=applied_at,
-                )
-                if task_intent_backfill_sql:
-                    migration_sql = "\n".join([migration_sql, task_intent_backfill_sql])
             script = "\n".join(
                 [
                     "BEGIN;",
@@ -455,8 +369,6 @@ def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationP
             except sqlite3.DatabaseError as exc:
                 connection.rollback()
                 raise MigrationApplyError(migration, exc) from exc
-            if migration.version == 5:
-                _remove_migrated_task_yaml_files(migrated_task_yaml_paths)
             if migration.version == 7:
                 _mark_legacy_archived_tasks(connection, root)
                 _sync_task_intent_columns(connection)

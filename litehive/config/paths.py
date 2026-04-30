@@ -14,9 +14,6 @@ def litehive_root() -> Path:
         base = Path(data_home).expanduser() if data_home else Path.home() / ".local" / "share"
         root = base / "litehive"
     root.mkdir(parents=True, exist_ok=True)
-    from litehive.config.global_state import migrate_legacy_global_state
-
-    migrate_legacy_global_state(root)
     return root
 
 

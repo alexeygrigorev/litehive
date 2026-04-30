@@ -48,8 +48,6 @@ class TaskStateMissingError(RuntimeError):
     """Raised when a task has no SQLite runtime state row."""
 
 
-
-
 def _highest_task_number_in_store(root: Path) -> int:
     return runtime_store(root).highest_task_number()
 
@@ -243,8 +241,6 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
     _normalize_task_commit_sha_state(task)
     _normalize_task_worktree_state(task)
     return task
-
-
 
 
 def create_task(

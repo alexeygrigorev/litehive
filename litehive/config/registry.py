@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 import logging
 import os
 from pathlib import Path
 import sqlite3
 import threading
 import time
-
-import yaml
 
 from litehive.config.paths import litehive_root
 
@@ -24,18 +22,8 @@ _DEFAULT_LOCK_RETRY_DELAY_MS = 100
 _REGISTRY_TABLE = "workspace_registry"
 
 
-class _LegacyRegistryCorruptError(RuntimeError):
-    """Raised when the legacy YAML registry cannot be migrated safely."""
-
-
 def workspace_registry_path() -> Path:
     return litehive_root() / "workspaces.db"
-
-
-def _legacy_workspace_registry_path() -> Path:
-    from litehive.config.global_state import legacy_litehive_root
-
-    return legacy_litehive_root() / "workspaces.yaml"
 
 
 def _int_env(name: str, default: int) -> int:
@@ -135,104 +123,11 @@ def _backup_corrupt_registry_file(path: Path, *, reason: str, label: str) -> Pat
     return backup
 
 
-def _legacy_registry_entries(path: Path) -> list[Path]:
-    try:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or []
-    except yaml.YAMLError as exc:
-        raise _LegacyRegistryCorruptError(str(exc)) from exc
-    except OSError as exc:
-        raise OSError(f"failed to read legacy workspace registry {path}: {exc}") from exc
-    if not isinstance(payload, list):
-        raise _LegacyRegistryCorruptError("legacy workspace registry must contain a list of workspace paths")
-    if any(not isinstance(entry, str) for entry in payload):
-        raise _LegacyRegistryCorruptError("legacy workspace registry must contain only string workspace paths")
-
-    roots: list[Path] = []
-    seen: set[Path] = set()
-    for entry in payload:
-        resolved = _canonical_workspace_root(entry)
-        if resolved is None or resolved in seen:
-            continue
-        seen.add(resolved)
-        roots.append(resolved)
-    return roots
-
-
 def _canonical_workspace_root(root: Path | str) -> Path | None:
     try:
         return Path(root).expanduser().resolve()
     except OSError:
         return None
-
-
-def _migration_timestamps(count: int) -> list[str]:
-    if count <= 0:
-        return []
-    now = datetime.now(UTC)
-    return [(now - timedelta(microseconds=index)).isoformat().replace("+00:00", "Z") for index in range(count)]
-
-
-def _migrate_legacy_registry_if_needed(
-    connection: sqlite3.Connection,
-    *,
-    legacy_path: Path | None = None,
-) -> bool:
-    legacy_path = legacy_path or _legacy_workspace_registry_path()
-    if not legacy_path.exists():
-        return False
-    try:
-        roots = _legacy_registry_entries(legacy_path)
-    except _LegacyRegistryCorruptError as exc:
-        _backup_corrupt_registry_file(
-            legacy_path,
-            reason=str(exc),
-            label="legacy workspace registry",
-        )
-        return False
-    except OSError as exc:
-        log.warning("%s", exc)
-        return False
-
-    connection.execute("BEGIN IMMEDIATE")
-    try:
-        _ensure_registry_schema(connection)
-        for timestamp, root in zip(_migration_timestamps(len(roots)), roots, strict=False):
-            connection.execute(
-                f"""
-                INSERT INTO {_REGISTRY_TABLE} (root, registered_at)
-                VALUES (?, ?)
-                ON CONFLICT(root) DO UPDATE SET
-                    registered_at = CASE
-                        WHEN excluded.registered_at > {_REGISTRY_TABLE}.registered_at
-                        THEN excluded.registered_at
-                        ELSE {_REGISTRY_TABLE}.registered_at
-                    END
-                """,
-                (str(root), timestamp),
-            )
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-
-    try:
-        legacy_path.unlink(missing_ok=True)
-    except OSError as exc:
-        log.warning("failed to remove legacy workspace registry %s after migration (%s)", legacy_path, exc)
-        return False
-    return True
-
-
-def migrate_legacy_registry_file(path: Path, legacy_path: Path) -> bool:
-    if not legacy_path.exists():
-        return False
-    try:
-        with _open_registry_connection(path) as connection:
-            _ensure_registry_schema(connection)
-            return _migrate_legacy_registry_if_needed(connection, legacy_path=legacy_path)
-    except (OSError, sqlite3.DatabaseError) as exc:
-        log.warning("failed to migrate legacy workspace registry %s into %s (%s)", legacy_path, path, exc)
-        return False
 
 
 def _locked_registry_operation(operation, *, path: Path):
@@ -297,7 +192,6 @@ def list_registered_workspace_paths() -> list[Path]:
 def _list_registered_workspace_paths(path: Path) -> list[Path]:
     with _open_registry_connection(path) as connection:
         _ensure_registry_schema(connection)
-        _migrate_legacy_registry_if_needed(connection)
         return _read_registered_workspace_paths(connection)
 
 
@@ -330,7 +224,6 @@ def register_workspace_path(root: Path) -> None:
 def _register_workspace_path(path: Path, root: Path) -> None:
     with _open_registry_connection(path) as connection:
         _ensure_registry_schema(connection)
-        _migrate_legacy_registry_if_needed(connection)
         connection.execute("BEGIN IMMEDIATE")
         try:
             connection.execute(

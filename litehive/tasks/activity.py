@@ -13,7 +13,6 @@ from litehive.domain.task import TaskRecord
 from litehive.tasks.event_log import append_task_event
 
 
-
 def load_task_activity(root: Path, task: TaskRecord) -> list[TaskActivityEntry]:
     with connect_workspace_db(root) as connection:
         rows = connection.execute(

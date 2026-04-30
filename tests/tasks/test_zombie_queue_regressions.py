@@ -243,6 +243,7 @@ def test_run_drain_skips_zombie_queue_entries_and_leaves_main_clean(
 def test_task_with_hook_rejection_and_recovery_has_terminal_execution_status(tmp_path: Path) -> None:
     """Regression test for T-0455: task that experiences hook rejection and later passes should have execution_status="done"."""
     import pytest
+
     pytest.importorskip("litehive.lifecycle.orchestration")  # Skip if import fails
 
     from litehive.config.model import LitehiveConfig

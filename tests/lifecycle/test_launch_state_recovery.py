@@ -122,6 +122,7 @@ def test_completed_task_recovery_then_close_reconciles_all_state_layers(tmp_path
     # Remove from queue to simulate completed task state (completed tasks are not queued)
     state_before_recovery = load_state(tmp_path)
     from litehive.tasks.queue import drop_task_from_workspace_state
+
     drop_task_from_workspace_state(state_before_recovery, task.id)
     save_state(tmp_path, state_before_recovery)
 

@@ -3,14 +3,14 @@ from pathlib import Path
 import sqlite3
 
 import pytest
-import yaml
 from typer.testing import CliRunner
 
 from litehive.agents.session_store import load_subagent_report, save_subagent_artifacts
 from litehive.cli.app import app
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.task import TaskRecord, TaskStateRecord, WorkspaceState
+from litehive.domain.task import TaskStateRecord, WorkspaceState
+from litehive.recovery.detection import TaskLaunchFailure
 from litehive.state.records import create_task, get_task, list_tasks
 from litehive.state.store import RuntimeStore
 from litehive.tasks.queue import peek_next_task
@@ -155,28 +155,14 @@ def test_apply_pending_migrations_rolls_back_failed_migration(tmp_path: Path, mo
     assert broken_marker is None
 
 
-def test_migration_0005_backfills_existing_task_intent_from_legacy_task_yaml(tmp_path: Path) -> None:
+def test_migration_0005_does_not_import_deprecated_task_yaml(tmp_path: Path) -> None:
     litehive_dir = tmp_path / ".litehive"
     task_dir = litehive_dir / "tasks" / "T-0001-existing-task"
     task_dir.mkdir(parents=True)
     (litehive_dir / "config.yaml").write_text("default_engine: codex\n", encoding="utf-8")
 
-    task = TaskRecord(
-        id="T-0001",
-        slug="existing-task",
-        title="Existing task",
-        goal="Keep existing incomplete task intent",
-        acceptance_criteria=["Existing task can still launch"],
-        git={
-            "auto_commit": True,
-            "commit_message": "T-0001 existing-task",
-        },
-    )
-    legacy_task_yaml = task_dir / "task.yaml"
-    legacy_task_yaml.write_text(
-        yaml.safe_dump(task.to_intent_record().model_dump(mode="json"), sort_keys=False),
-        encoding="utf-8",
-    )
+    task_yaml = task_dir / "task.yaml"
+    task_yaml.write_text("id: T-0001\ntitle: Existing task\n", encoding="utf-8")
 
     _install_workspace_db_schema(tmp_path, through_version=4)
     updated_at = "2026-04-15T00:00:10Z"
@@ -211,20 +197,16 @@ def test_migration_0005_backfills_existing_task_intent_from_legacy_task_yaml(tmp
 
     loaded = get_task(tmp_path, "T-0001")
     listed = list_tasks(tmp_path, strict=False)
-    selected = peek_next_task(tmp_path)
+    with pytest.raises(TaskLaunchFailure, match="missing from SQLite task_intent"):
+        peek_next_task(tmp_path)
 
     assert applied_versions == [1, 2, 3, 4, 5, 6, 7]
-    assert len(intent_rows) == 1
-    assert intent_rows[0]["task_id"] == "T-0001"
-    assert json.loads(intent_rows[0]["payload"])["goal"] == "Keep existing incomplete task intent"
+    assert intent_rows == []
     assert queue_row is not None
     assert json.loads(queue_row["payload"]) == ["T-0001"]
-    assert loaded is not None
-    assert loaded.title == "Existing task"
-    assert [task.id for task in listed] == ["T-0001"]
-    assert selected is not None
-    assert selected.id == "T-0001"
-    assert not legacy_task_yaml.exists()
+    assert loaded is None
+    assert listed == []
+    assert task_yaml.read_text(encoding="utf-8") == "id: T-0001\ntitle: Existing task\n"
 
 
 def test_daemon_run_applies_pending_migrations_before_start(
