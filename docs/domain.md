@@ -123,7 +123,7 @@ intentionally logs.
 
 Built-in profile defaults are typed Python package data, not YAML files or
 workspace-owned runtime files. When old workspace YAML is found under
-`.litehive`, Litehive first creates a compressed database backup, archives the
+`.litehive`, Litehive first creates a compressed database backup, moves the
 YAML outside `.litehive`, and then removes the workspace copies.
 
 For implementation details, usage patterns, and field-level documentation, consult the docstrings in the corresponding domain module.

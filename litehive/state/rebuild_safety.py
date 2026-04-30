@@ -54,22 +54,16 @@ def task_artifact_dir_ids(root: Path) -> set[str]:
         return set()
 
     task_ids: set[str] = set()
-    scan_roots = [tasks_dir]
-    archive_dir = tasks_dir / "archive"
-    if archive_dir.exists():
-        scan_roots.append(archive_dir)
-
-    for scan_root in scan_roots:
-        try:
-            children = list(scan_root.iterdir())
-        except OSError:
+    try:
+        children = list(tasks_dir.iterdir())
+    except OSError:
+        return task_ids
+    for child in children:
+        if not child.is_dir():
             continue
-        for child in children:
-            if not child.is_dir():
-                continue
-            match = _TASK_DIR_RE.match(child.name)
-            if match is not None:
-                task_ids.add(match.group(1))
+        match = _TASK_DIR_RE.match(child.name)
+        if match is not None:
+            task_ids.add(match.group(1))
     return task_ids
 
 

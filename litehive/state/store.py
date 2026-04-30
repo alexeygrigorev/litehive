@@ -32,8 +32,6 @@ _TASK_SCOPED_TABLES = (
     "pipeline_journal",
     "pipeline_task_state",
     "pipeline_sessions",
-    # task_audit_log is intentionally excluded: hard deletes must keep
-    # durable lifecycle history and tombstones queryable after the task rows go away.
 )
 
 
@@ -188,7 +186,7 @@ class RuntimeStore:
             )
             connection.commit()
 
-    def delete_task_records_preserving_audit(
+    def delete_task_records(
         self,
         task_id: str,
         *,

@@ -11,7 +11,6 @@ from litehive.domain.reports import StageReport
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, discard_created_task, get_task, require_task, save_task
 from litehive.tasks.activity import load_task_activity
-from litehive.tasks.archive import archive_task, delete_archived_task
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.tasks.event_log import (
     read_task_events,
@@ -82,8 +81,6 @@ def test_task_event_log_records_lifecycle_transition_types_outside_sqlite(tmp_pa
     state = load_state(tmp_path)
     state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
     save_state(tmp_path, state)
-    archive_task(tmp_path, task.id)
-    delete_archived_task(tmp_path, task.id, reason="test cleanup")
 
     events, invalid = read_task_events(tmp_path)
     event_types = {str(event["event_type"]) for event in events if event.get("task_id") == task.id}
@@ -97,8 +94,6 @@ def test_task_event_log_records_lifecycle_transition_types_outside_sqlite(tmp_pa
         "task_reported",
         "task_closed",
         "task_requeued",
-        "task_archived",
-        "task_deleted",
     } <= event_types
     assert all("timestamp" in event and "task_id" in event and "payload" in event for event in events)
 

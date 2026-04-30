@@ -33,8 +33,6 @@ Current compatibility or previous-layout support still present in code:
   `litehive/tasks/activity.py`
 - legacy `task.yaml` import/migration and rebuild safety:
   `litehive/db/schema.py`, `litehive/state/rebuild_safety.py`
-- legacy runtime YAML archive cleanup:
-  `litehive/tasks/archive.py`
 - hidden/deprecated CLI compatibility surfaces:
   `litehive/cli/app.py`, `litehive/cli/agent_cli.py`
 - domain compatibility normalization:
@@ -207,9 +205,9 @@ contract. The only LiteHive-owned workspace YAML file should be
   documents `state` as the workspace persistence boundary for store access,
   record repositories, event-log persistence, rebuild safety, backups, and
   locking.
-- [x] Split `tasks/` into task application logic, activity, queueing, archive,
+- [x] Split `tasks/` into task application logic, activity, queueing,
   and task paths. `litehive/tasks/__init__.py` now maps owners for lifecycle
-  mutation, queueing, activity, reporting, archive, and path/artifact lookup.
+  mutation, queueing, activity, reporting, and path/artifact lookup.
 - [x] Move report storage out of `tasks/reports.py` or rename the module to
   reflect its real scope: recovery evidence, activity rendering, report
   storage, artifact lookup, and report normalization. `tasks/reports.py` is now

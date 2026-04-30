@@ -121,7 +121,7 @@ Scope:
   - operator-needed diagnostic logs
   - daemon/workspace registry YAML
 - migrate any remaining active data to SQLite or append-only JSONL/text logs
-- update `.litehive/.gitignore`, bootstrap behavior, archive cleanup, and repair
+- update `.litehive/.gitignore`, bootstrap behavior, cleanup, and repair
   tooling so new YAML files are not created
 - review remaining packaged YAML templates under `litehive/cli/templates` and
   either document them as bootstrap templates or replace them with Python-backed

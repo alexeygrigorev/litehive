@@ -35,7 +35,6 @@ _ACTION_EVENT_TYPES = {
     "parked": "task_parked",
     "stopped": "task_stopped",
     "removed": "task_removed",
-    "archived": "task_archived",
     "deleted": "task_deleted",
     "engine_switched": "task_engine_switched",
     "queue_enqueued": "task_queued",

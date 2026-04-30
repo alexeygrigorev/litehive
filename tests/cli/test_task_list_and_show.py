@@ -9,7 +9,6 @@ from typer.testing import CliRunner
 from litehive.cli.task_cli import app as task_app
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task, get_task, save_task
-from litehive.tasks.archive import archive_task
 
 from tests.support.helpers import _cmd_list, _cmd_recover, _cmd_show, _cmd_update
 
@@ -59,11 +58,6 @@ def test_list_all_includes_done_tasks(tmp_path: Path, capsys: pytest.CaptureFixt
     done.status = "done"
     done.pipeline_status = "done"
     save_task(tmp_path, done)
-    archived = create_task(tmp_path, title="Archived task", auto_commit=False)
-    archived.status = "done"
-    archived.pipeline_status = "done"
-    save_task(tmp_path, archived)
-    archive_task(tmp_path, archived.id)
 
     exit_code = _cmd_list(
         argparse.Namespace(
@@ -77,7 +71,6 @@ def test_list_all_includes_done_tasks(tmp_path: Path, capsys: pytest.CaptureFixt
     assert active.id in output
     assert done.id in output
     assert "Done task" in output
-    assert f"{archived.id} [archived/done] Archived task close_reason=done" in output
 
 
 def test_list_compact_format(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -165,44 +158,43 @@ def test_show_prints_agent_creation_provenance(
     assert f"  rationale: Created by Litehive agent role planner while working on {parent.id}." in output
 
 
-def test_show_prints_archived_history(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_show_prints_done_history(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Archived history task", auto_commit=False)
+    task = create_task(tmp_path, title="Done history task", auto_commit=False)
     task.status = "done"
     task.pipeline_status = "done"
-    task.goal = "Keep archived history directly inspectable"
+    task.goal = "Keep completed history directly inspectable"
     save_task(tmp_path, task)
-    archive_task(tmp_path, task.id)
 
     exit_code = _cmd_show(argparse.Namespace(workspace=tmp_path, task_id=task.id))
     output = capsys.readouterr().out
 
     assert exit_code == 0
     assert f"id: {task.id}" in output
-    assert "title: Archived history task" in output
-    assert "status: archived" in output
+    assert "title: Done history task" in output
+    assert "status: done" in output
     assert "close_reason: done" in output
     assert "pipeline_stage: done" in output
-    assert "goal: Keep archived history directly inspectable" in output
+    assert "goal: Keep completed history directly inspectable" in output
 
 
-def test_recover_archived_task_directs_operator_to_create_new_task(
+def test_recover_done_task_requeues_follow_up_work(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Archived recover task", auto_commit=False)
+    task = create_task(tmp_path, title="Done recover task", auto_commit=False)
     task.status = "done"
     task.pipeline_status = "done"
     save_task(tmp_path, task)
-    archive_task(tmp_path, task.id)
 
     exit_code = _cmd_recover(argparse.Namespace(workspace=tmp_path, task_id=task.id))
     output = capsys.readouterr().out
 
-    assert exit_code == 1
-    assert f"recover failed: Task {task.id} is archived and cannot be recovered." in output
-    assert "Create a new task for follow-up work instead." in output
+    assert exit_code == 0
+    assert f"task: {task.id} Done recover task" in output
+    assert "status: queued" in output
+    assert "pipeline_stage: implementing" in output
 
 
 def test_task_update_renames_title_in_place(
@@ -251,21 +243,20 @@ def test_show_displays_dependency_statuses(tmp_path: Path, capsys: pytest.Captur
     live.status = "flagged"
     save_task(tmp_path, live)
 
-    archived = create_task(tmp_path, title="Archived dependency", auto_commit=False)
-    archived.status = "done"
-    archived.pipeline_status = "done"
-    save_task(tmp_path, archived)
-    archive_task(tmp_path, archived.id)
+    done = create_task(tmp_path, title="Done dependency", auto_commit=False)
+    done.status = "done"
+    done.pipeline_status = "done"
+    save_task(tmp_path, done)
 
     task = create_task(tmp_path, title="Depends on multiple states", auto_commit=False)
-    task.depends_on = [live.id, archived.id, "T-9999"]
+    task.depends_on = [live.id, done.id, "T-9999"]
     save_task(tmp_path, task)
 
     exit_code = _cmd_show(argparse.Namespace(workspace=tmp_path, task_id=task.id))
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert f"depends_on: {live.id} (flagged), {archived.id} (archived), T-9999 (missing)" in output
+    assert f"depends_on: {live.id} (flagged), {done.id} (done), T-9999 (missing)" in output
 
 
 def test_show_nonexistent_task_exits_nonzero(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

@@ -254,7 +254,10 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
     assert diagnostics["exit_code"] == 17
     assert diagnostics["did_produce_output"] is True
     assert diagnostics["session"]["status"] == "failed"
-    assert diagnostics["report"]["summary"] == "implementing rejected: agent did not submit verdict via litehive agent report CLI"
+    assert (
+        diagnostics["report"]["summary"]
+        == "implementing rejected: agent did not submit verdict via litehive agent report CLI"
+    )
 
     assert "Failed subagent evidence" in text
     assert "exit_code: 17" in text

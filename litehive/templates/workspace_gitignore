@@ -7,7 +7,6 @@ pool-summary.txt
 
 # Task runtime artifacts (not durable project state)
 tasks/*/journal.md
-tasks/archive/*/journal.md
 tasks/*/brief.md
 tasks/*/events.jsonl
 tasks/*/reports/

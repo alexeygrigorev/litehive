@@ -167,7 +167,9 @@ PROCESS_PROFILE_OVERLAYS: dict[str, ProfileData] = {
             "- Favor narrow changes that keep compile and linker failures easy to localize.",
             "- Treat toolchain warnings, generated artifacts, and native resource usage as first-class signals.",
         ],
-        "init_scaffold": ["- Seed C/C++ workspaces with target boundaries, build commands, and toolchain expectations."],
+        "init_scaffold": [
+            "- Seed C/C++ workspaces with target boundaries, build commands, and toolchain expectations."
+        ],
         "stage_overlay": {
             "implementing": ["- Keep native build-system, header, and source changes coordinated and reviewable."],
             "testing": ["- Prefer target-scoped compile and test commands before broader native builds."],
@@ -201,7 +203,9 @@ PROCESS_PROFILE_OVERLAYS: dict[str, ProfileData] = {
             "- Treat migrations, settings, and database state as first-class review items.",
             "- Prefer narrow regression tests around the affected Django app and request path.",
         ],
-        "init_scaffold": ["- Seed Django workspaces with app boundaries, settings entrypoints, and migration review notes."],
+        "init_scaffold": [
+            "- Seed Django workspaces with app boundaries, settings entrypoints, and migration review notes."
+        ],
         "stage_overlay": {
             "implementing": [
                 "- Keep model, migration, view, form, and template changes coordinated.",
@@ -242,7 +246,9 @@ PROCESS_PROFILE_OVERLAYS: dict[str, ProfileData] = {
             "- Prefer focused `pytest` coverage for the changed modules.",
             "- Keep dependency and packaging changes explicit and minimal.",
         ],
-        "init_scaffold": ["- Seed Python workspaces with package layout, test entrypoints, and `uv` or virtualenv expectations."],
+        "init_scaffold": [
+            "- Seed Python workspaces with package layout, test entrypoints, and `uv` or virtualenv expectations."
+        ],
         "stage_overlay": {
             "implementing": [
                 "- Write or update focused tests alongside the code change when feasible.",
@@ -286,10 +292,14 @@ PROCESS_PROFILE_OVERLAYS: dict[str, ProfileData] = {
             "- Favor small, compile-safe changes with clear module ownership.",
             "- Treat compiler errors, warnings, and feature flags as part of verification evidence.",
         ],
-        "init_scaffold": ["- Seed Rust workspaces with crate boundaries, toolchain expectations, and `cargo` verification commands."],
+        "init_scaffold": [
+            "- Seed Rust workspaces with crate boundaries, toolchain expectations, and `cargo` verification commands."
+        ],
         "stage_overlay": {
             "implementing": ["- Add or adjust focused Rust tests close to the changed crate or module."],
-            "testing": ["- Prefer targeted `cargo test`, `cargo check`, or package-scoped verification before workspace-wide runs."],
+            "testing": [
+                "- Prefer targeted `cargo test`, `cargo check`, or package-scoped verification before workspace-wide runs."
+            ],
         },
     },
 }

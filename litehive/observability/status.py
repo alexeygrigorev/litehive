@@ -51,7 +51,9 @@ def collect_task_pipeline_status(
     from litehive.state.records import get_task
 
     resolved_root = root.resolve()
-    snapshot = collect_status_snapshot(resolved_root) if diagnostics else collect_operational_status_snapshot(resolved_root)
+    snapshot = (
+        collect_status_snapshot(resolved_root) if diagnostics else collect_operational_status_snapshot(resolved_root)
+    )
     active_task_id = snapshot.runner.active_task_id or snapshot.state.active_task_id
     if read_only:
         active_task = _load_task_read_only(resolved_root, active_task_id) if active_task_id else None
@@ -150,8 +152,6 @@ def _load_task_read_only(root: Path, task_id: str) -> TaskRecord | None:
         state = None if state_row is None else TaskStateRecord(**json.loads(state_row["payload"]))
         task = TaskRecord.from_intent_and_state(intent, state)
     except (OSError, sqlite3.DatabaseError, ValueError):
-        return None
-    if task.status == "archived":
         return None
     return task
 

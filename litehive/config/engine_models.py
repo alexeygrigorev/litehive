@@ -17,6 +17,7 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.runtime_settings import clear_engine_freeze, set_engine_freeze
 from litehive.domain.task import TaskRecord
 
+
 def _engine_attempt_order(initial_engine_names: list[str], engine_preference: list[str]) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []

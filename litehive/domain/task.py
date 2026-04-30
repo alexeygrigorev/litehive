@@ -22,17 +22,10 @@ def canonicalize_task_terminal_state(task: "TaskRecord") -> None:
         )
     elif status == "done":
         task.close_reason = task.close_reason or "done"
-    elif status == "archived":
-        outcome_reason_code = task.runtime.pipeline.last_outcome.reason_code
-        task.close_reason = (
-            task.close_reason
-            or (None if outcome_reason_code is None else str(outcome_reason_code))
-            or ("done" if str(task.pipeline_status) == "done" else "archived")
-        )
     else:
         task.close_reason = None
 
-    if str(task.status) in {"closed", "done", "archived"}:
+    if str(task.status) in {"closed", "done"}:
         task.flag_reason = None
 
 

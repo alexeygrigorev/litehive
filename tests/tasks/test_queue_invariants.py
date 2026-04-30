@@ -5,7 +5,6 @@ import pytest
 from litehive.config.workspace import ensure_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
-from litehive.tasks.archive import archive_task
 from litehive.tasks.queue import dequeue_next_task_selection, peek_next_task_selection
 
 
@@ -255,14 +254,13 @@ def test_peek_canonicalizes_nonrunning_resumable_tasks_on_restart(tmp_path: Path
     assert refreshed_resumed.runtime.pipeline.current_stage.status == "idle"
 
 
-def test_archived_done_dependency_satisfies_queued_task(tmp_path: Path) -> None:
+def test_done_dependency_satisfies_queued_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     dependency = create_task(tmp_path, title="Completed dependency")
     dependency.status = "done"
     dependency.pipeline_status = "done"
     save_task(tmp_path, dependency)
-    archive_task(tmp_path, dependency.id)
-    dependent = create_task(tmp_path, title="Depends on archived completion", depends_on=[dependency.id])
+    dependent = create_task(tmp_path, title="Depends on completed task", depends_on=[dependency.id])
 
     selection = peek_next_task_selection(tmp_path)
 

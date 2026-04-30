@@ -266,7 +266,9 @@ class AgentNode(Node):
                 if nudges_used >= self.nudge_budget:
                     return Crash(
                         exc_type="NudgeBudgetExhausted",
-                        message=(f"agent did not submit a verdict via `litehive agent report` after being nudged: {exc}"),
+                        message=(
+                            f"agent did not submit a verdict via `litehive agent report` after being nudged: {exc}"
+                        ),
                     )
                 nudges_used += 1
                 current_prompt = self.build_nudge_prompt(state, current_prompt)

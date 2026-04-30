@@ -733,10 +733,7 @@ def _remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[st
 
                     append_attention_log(
                         root,
-                        (
-                            f"deferred worktree metadata clearing for {item.task_id}: "
-                            "workspace locked by active runner"
-                        ),
+                        (f"deferred worktree metadata clearing for {item.task_id}: workspace locked by active runner"),
                     )
                     deferred.append(item)
                     continue
@@ -1229,8 +1226,7 @@ def _worktree_patch_already_on_main(root: Path, wt_head: str, main_head: str) ->
 def _is_task_metadata_path(path: str, task_id: str) -> bool:
     """Check if path is task metadata."""
     metadata_prefix = f".litehive/tasks/{task_id}-"
-    archive_prefix = f".litehive/tasks/archive/{task_id}-"
-    return path.startswith(metadata_prefix) or path.startswith(archive_prefix)
+    return path.startswith(metadata_prefix)
 
 
 def _resolve_metadata_conflicts(root: Path, paths: list[str]) -> None:

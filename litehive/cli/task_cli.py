@@ -11,7 +11,6 @@ from litehive.cli.parse import (
     parse_text_list_option,
 )
 from litehive.config.workspace import ensure_workspace
-from litehive.tasks.archive import archive_tasks, get_archived_task, list_archived_tasks
 from litehive.state.records import create_task, get_task, list_tasks as load_tasks, require_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
@@ -28,7 +27,7 @@ def _display_flag_reason(task) -> str:
 
 
 def _display_close_reason(task) -> str:
-    if task.status not in {"closed", "done", "archived"}:
+    if task.status not in {"closed", "done"}:
         return "-"
     return task.close_reason or task.runtime.pipeline.last_outcome.reason_code or "unknown"
 
@@ -37,10 +36,7 @@ def _show_dependency_label(root, task) -> str:
     if not task.depends_on:
         return "-"
 
-    active_statuses = {
-        record.id: record.status
-        for record in load_tasks(root, include_runtime=True, strict=False, include_archived=True)
-    }
+    active_statuses = {record.id: record.status for record in load_tasks(root, include_runtime=True, strict=False)}
     labels: list[str] = []
     for dependency_id in task.depends_on:
         if dependency_id in active_statuses:
@@ -48,40 +44,6 @@ def _show_dependency_label(root, task) -> str:
         else:
             labels.append(f"{dependency_id} (missing)")
     return ", ".join(labels)
-
-
-def _load_task_with_archive_history(root: Path, task_id: str):
-    task = get_task(root, task_id)
-    if task is not None:
-        return task
-    return get_archived_task(root, task_id)
-
-
-def _load_task_list_with_archive_history(root: Path, *, include_archived: bool) -> list:
-    tasks = load_tasks(root, strict=False)
-    if not include_archived:
-        return tasks
-    seen = {task.id for task in tasks}
-    tasks.extend(task for task in list_archived_tasks(root) if task.id not in seen)
-    return tasks
-
-
-def _terminal_status_label(task) -> str:
-    if task.status == "archived":
-        reason = task.close_reason or task.runtime.pipeline.last_outcome.reason_code
-        if reason:
-            if str(reason) == "execution_cancelled":
-                return "cancelled"
-            return str(reason)
-        if str(task.pipeline_status) == "done":
-            return "done"
-        return "archived"
-    if task.status != "closed":
-        return str(task.status)
-    close_reason = task.close_reason or task.runtime.pipeline.last_outcome.reason_code or "closed"
-    if str(close_reason) == "execution_cancelled":
-        return "cancelled"
-    return str(close_reason)
 
 
 def _print_creation_provenance(task) -> None:
@@ -220,13 +182,10 @@ def logs(
 @app.command("list", help="Compact task listing")
 def list_tasks(
     workspace: WorkspaceOption = Path.cwd(),
-    show_all: Annotated[bool, typer.Option("--all", help="Include done and archived tasks")] = False,
+    show_all: Annotated[bool, typer.Option("--all", help="Include done tasks")] = False,
 ) -> int:
     ensure_workspace(workspace)
-    tasks = _load_task_list_with_archive_history(
-        workspace,
-        include_archived=show_all,
-    )
+    tasks = load_tasks(workspace, strict=False)
     filtered = []
     for task in tasks:
         if not show_all and task.status == "done":
@@ -234,35 +193,15 @@ def list_tasks(
         filtered.append(task)
     for task in filtered:
         flag_reason = f" flag_reason={_display_flag_reason(task)}" if task.status == "flagged" else ""
-        close_reason = (
-            f" close_reason={_display_close_reason(task)}" if task.status in {"closed", "done", "archived"} else ""
-        )
+        close_reason = f" close_reason={_display_close_reason(task)}" if task.status in {"closed", "done"} else ""
         print(f"{task.id} [{task.status}/{task.pipeline_status}] {task.title}{flag_reason}{close_reason}")
-    return 0
-
-
-@app.command("archive", help="Archive explicit done or closed terminal task IDs")
-def archive(
-    task_ids: Annotated[list[str], typer.Argument(help="Task IDs to archive")],
-    workspace: WorkspaceOption = Path.cwd(),
-) -> int:
-    ensure_workspace(workspace)
-    try:
-        tasks = archive_tasks(workspace, task_ids)
-    except ValueError as exc:
-        print(f"archive failed: {exc}")
-        return 1
-    for task in tasks:
-        print(f"archived: {task.id} {task.title}")
-        print(f"status: {_terminal_status_label(task)}")
-    print(f"archived_count: {len(tasks)}")
     return 0
 
 
 @app.command("show", help="Print full details for a single task")
 def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: WorkspaceOption = Path.cwd()) -> int:
     ensure_workspace(workspace)
-    task = _load_task_with_archive_history(workspace, task_id)
+    task = get_task(workspace, task_id)
     if task is None:
         print(f"task not found: {task_id}")
         return 1

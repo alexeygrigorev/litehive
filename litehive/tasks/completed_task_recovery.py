@@ -21,15 +21,10 @@ def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
     root = root.resolve()
     with workspace_mutation_guard(root), workspace_lock(root):
         from litehive.state.records import get_task
-        from litehive.tasks.archive import get_archived_task
         from litehive.tasks.queue import drop_task_from_workspace_state
 
         task = get_task(root, task_id)
         if task is None:
-            if get_archived_task(root, task_id) is not None:
-                raise GitError(
-                    f"Task {task_id} is archived and cannot be recovered. Create a new task for follow-up work instead."
-                )
             raise GitError(f"Task {task_id} not found")
         before_task = snapshot_task_audit_state(task)
         require_completed_task(task, action="recover")

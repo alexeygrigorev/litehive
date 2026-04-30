@@ -167,7 +167,6 @@ class TaskStatus(StringEnum):
     PARKED = "parked"  # Intentionally paused by Litehive or operator
     DONE = "done"  # Completed successfully
     CLOSED = "closed"  # Explicitly closed with a close_reason
-    ARCHIVED = "archived"  # Completed and moved to history-only archive
     FLAGGED = "flagged"  # Requires explicit operator attention
 
 

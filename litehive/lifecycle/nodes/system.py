@@ -282,7 +282,7 @@ def _is_runner_owned_metadata(relpath: str, task_id: str) -> bool:
     (or a post-merge ``uv sync``) regenerates a consistent lockfile.
     """
     prefix = f".litehive/tasks/{task_id}-"
-    if relpath.startswith(prefix) or relpath.startswith(".litehive/tasks/archive/"):
+    if relpath.startswith(prefix):
         return True
     return relpath == "uv.lock"
 

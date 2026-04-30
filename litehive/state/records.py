@@ -424,7 +424,7 @@ def discard_created_task(root: Path, task_id: str) -> None:
             td = task_dir(root, task)
             if td.exists():
                 remove_tree_logged(td, logger=logger, target_label="task directory")
-        runtime_store(root).delete_task_records_preserving_audit(
+        runtime_store(root).delete_task_records(
             task_id,
             audit_entries=[
                 build_task_audit_entry(
@@ -447,7 +447,6 @@ def _load_tasks_from_store(
     *,
     include_runtime: bool,
     strict: bool,
-    include_archived: bool = False,
 ) -> list[TaskRecord]:
     store = runtime_store(root)
     records: list[TaskRecord] = []
@@ -455,8 +454,6 @@ def _load_tasks_from_store(
         try:
             state_record = store.load_task_state(intent.id)
             stateful_task = TaskRecord.from_intent_and_state(intent, state_record)
-            if not include_archived and stateful_task.status == "archived":
-                continue
             if include_runtime:
                 if state_record is None:
                     raise TaskStateMissingError(f"Task {intent.id} is missing its SQLite runtime state row")
@@ -476,13 +473,11 @@ def list_tasks(
     *,
     include_runtime: bool = True,
     strict: bool = True,
-    include_archived: bool = False,
 ) -> list[TaskRecord]:
     return _load_tasks_from_store(
         root,
         include_runtime=include_runtime,
         strict=strict,
-        include_archived=include_archived,
     )
 
 
@@ -518,12 +513,10 @@ def get_task(root: Path, task_id: str) -> TaskRecord | None:
     if intent is None:
         return None
     task = _load_task_runtime(root, TaskRecord.from_intent_and_state(intent))
-    if task.status == "archived":
-        return None
     return task
 
 
-def get_task_record(root: Path, task_id: str, *, include_archived: bool = False) -> TaskRecord | None:
+def get_task_record(root: Path, task_id: str) -> TaskRecord | None:
     """Return the task record, tolerating missing runtime rows."""
     intent = runtime_store(root).load_task_intent(task_id)
     if intent is None:
@@ -533,8 +526,6 @@ def get_task_record(root: Path, task_id: str, *, include_archived: bool = False)
         task = _load_task_runtime(root, task)
     except TaskStateMissingError:
         pass
-    if not include_archived and task.status == "archived":
-        return None
     return task
 
 

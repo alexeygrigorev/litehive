@@ -216,4 +216,3 @@ def _compact_paths(paths: list[str], *, limit: int = 6) -> str:
     shown = paths[:limit]
     suffix = "" if len(paths) <= limit else f", ... (+{len(paths) - limit})"
     return ", ".join(shown) + suffix
-

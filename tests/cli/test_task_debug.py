@@ -160,7 +160,9 @@ def test_debug_all_subagents_remains_compact(tmp_path: Path, capsys: pytest.Capt
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Multi SA task", auto_commit=False)
     task.subagents = [
-        SubagentRef(id="SA-grooming", role="planner", engine="gemini", status="completed", path="subagents/SA-grooming"),
+        SubagentRef(
+            id="SA-grooming", role="planner", engine="gemini", status="completed", path="subagents/SA-grooming"
+        ),
         SubagentRef(id="SA-testing", role="qa", engine="claude", status="failed", path="subagents/SA-testing"),
     ]
     save_task(tmp_path, task)

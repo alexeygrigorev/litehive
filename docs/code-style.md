@@ -47,7 +47,7 @@ from tests.support.helpers import make_workspace, run_cli
 - Do not keep one-off tests whose only purpose is to assert that a removed legacy shape is silently ignored.
 - Once old compatibility code is deleted, prefer covering the current contract rather than freezing a dedicated rejection test for the dead format.
 - Do not add tests for removed CLI flags, removed config keys, or removed task fields when the only thing being asserted is “this old shape is still rejected”.
-- Once a feature is removed, delete its compatibility path and move on instead of keeping dedicated tombstone tests for it.
+- Once a feature is removed, delete its compatibility path and move on instead of keeping dedicated compatibility tests for it.
 - Do not silently rewrite invalid current-shape config to a default.
 - Do not keep loaders “helpful” by swallowing bad current config and returning an empty/default config object.
 - Do not fall back to a generic/default mode when the caller already provided a current required key and it is invalid.

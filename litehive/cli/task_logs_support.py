@@ -198,9 +198,9 @@ def _artifact_for_kind(base: Path, kind: str, *, active: bool) -> Path | None:
             live = resolve_artifact_path(base, "stdout.log")
             if live is not None:
                 return live
-        archived = resolve_artifact_path(base, "stdout.txt")
-        if archived is not None:
-            return archived
+        legacy = resolve_artifact_path(base, "stdout.txt")
+        if legacy is not None:
+            return legacy
         return resolve_artifact_path(base, "stdout.log")
     raise ValueError(f"Unsupported artifact kind: {kind}")
 

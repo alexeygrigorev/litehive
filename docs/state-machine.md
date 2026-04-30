@@ -27,7 +27,6 @@ Terminal or non-runnable statuses:
 
 - `done`: completed successfully
 - `closed`: explicitly closed with `close_reason`
-- `archived`: moved to history-only archive
 - `flagged`: requires operator attention with `flag_reason`
 
 Removed terminal names are not task statuses. `cancelled`, `wont_do`,
@@ -148,7 +147,7 @@ status allowlist:
 - `parked` tasks require explicit resume or requeue
 - `flagged` tasks require operator or recovery-policy handling before they can
   run again
-- `done`, `closed`, and `archived` tasks are not normal queue candidates
+- `done` and `closed` tasks are not normal queue candidates
 
 The concrete eligibility rules live in `litehive/tasks/queue.py` and status
 transition helpers live in `litehive/tasks/status.py`.
