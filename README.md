@@ -190,13 +190,11 @@ inactivity_timeout_seconds: null
 
 # Hooks that run before/after stages
 runner_hooks:
-  before_pm_acceptance:
+  before_accepting:
     - command: "uv run ruff check ."
-      blocking: true
       description: "ensures lint passes before acceptance"
-  after_swe_implementation:
+  after_implementing:
     - command: "uv run pytest -x -q"
-      blocking: false
       description: "runs the focused post-implementation regression slice"
 
 # Agent-specific startup guidance

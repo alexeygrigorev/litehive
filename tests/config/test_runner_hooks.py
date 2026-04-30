@@ -16,10 +16,9 @@ def test_load_config_normalizes_runner_hooks(tmp_path: Path) -> None:
                 "runner_hooks": {
                     "before_implementing": ["echo pre"],
                     "after_implementing": [
-                        {"command": "echo post", "reject_on_failure": True},
                         {"command": "uv run pytest -q", "timeout_seconds": 300, "description": "full suite"},
                     ],
-                    "after_commit": [{"command": "echo verify", "blocking": True}],
+                    "after_commit": [{"command": "echo verify"}],
                 }
             },
             sort_keys=False,
@@ -32,23 +31,21 @@ def test_load_config_normalizes_runner_hooks(tmp_path: Path) -> None:
     assert config.runner_hooks == {
         "before_implementing": [{"command": "echo pre"}],
         "after_implementing": [
-            {"command": "echo post"},
             {"command": "uv run pytest -q", "timeout_seconds": 300.0, "description": "full suite"},
         ],
         "after_commit": [{"command": "echo verify"}],
     }
 
 
-def test_load_config_rejects_unknown_runner_hook_entry_keys(tmp_path: Path) -> None:
+@pytest.mark.parametrize("unsupported_key", ["blocking", "reject_on_failure", "unsupported_key"])
+def test_load_config_rejects_unsupported_runner_hook_entry_keys(tmp_path: Path, unsupported_key: str) -> None:
     ensure_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
             {
                 "runner_hooks": {
                     "after_implementing": [
-                        {"command": "echo post", "reject_on_failure": True},
-                        {"command": "echo verify", "blocking": True},
-                        {"command": "echo nope", "unsupported_key": True},
+                        {"command": "echo post", unsupported_key: True},
                     ],
                 }
             },
@@ -57,7 +54,7 @@ def test_load_config_rejects_unknown_runner_hook_entry_keys(tmp_path: Path) -> N
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="contains unsupported keys: unsupported_key"):
+    with pytest.raises(ValueError, match=f"contains unsupported keys: {unsupported_key}"):
         load_config(tmp_path)
 
 
