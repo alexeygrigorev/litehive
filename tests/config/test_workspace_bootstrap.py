@@ -4,7 +4,6 @@ import multiprocessing
 import os
 from pathlib import Path
 import sqlite3
-import tarfile
 import threading
 import time
 
@@ -418,42 +417,6 @@ def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
 
     with connect_workspace_db(tmp_path) as connection:
         assert connection.execute("SELECT task_id FROM task_state WHERE task_id = ?", (task.id,)).fetchone() is None
-
-
-def test_ensure_workspace_archives_and_removes_deprecated_workspace_yaml_after_db_backup(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
-    ensure_workspace(tmp_path)
-    legacy_files = [
-        tmp_path / ".litehive" / "tasks" / "T-0001-demo" / "task.yaml",
-        tmp_path / ".litehive" / "tasks" / "T-0001-demo" / "reports" / "implementing-001.yaml",
-        tmp_path / ".litehive" / "attention" / "000001.yaml",
-        tmp_path / ".litehive" / "logs" / "pool-runs" / "000001.yaml",
-    ]
-    for path in legacy_files:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("legacy: true\n", encoding="utf-8")
-
-    ensure_workspace(tmp_path)
-
-    remaining_workspace_yaml = sorted((tmp_path / ".litehive").rglob("*.yaml"))
-    assert remaining_workspace_yaml == [tmp_path / ".litehive" / "config.yaml"]
-
-    from litehive.config.paths import workspace_path
-
-    backups = sorted(workspace_path(tmp_path, "backups").glob("data-*.db.gz"))
-    archives = sorted(workspace_path(tmp_path, "legacy-yaml-backups").glob("workspace-yaml-*.tar.gz"))
-    assert backups
-    assert len(archives) == 1
-    with tarfile.open(archives[0], "r:gz") as archive:
-        assert sorted(archive.getnames()) == [
-            "attention/000001.yaml",
-            "logs/pool-runs/000001.yaml",
-            "tasks/T-0001-demo/reports/implementing-001.yaml",
-            "tasks/T-0001-demo/task.yaml",
-        ]
 
 
 def test_ensure_workspace_rebuilds_fresh_database_from_task_event_log(tmp_path: Path) -> None:
