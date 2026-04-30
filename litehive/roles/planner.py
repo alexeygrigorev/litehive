@@ -11,6 +11,7 @@ INSTRUCTIONS = """\
   - `litehive agent update --goal ... --acceptance-criteria ... --plan-step ... --constraint ...` to rewrite task fields.
   - `litehive task add ...` to create follow-up tasks when the current task mixes concerns.
   - `litehive agent close --outcome done|duplicate|wont_do|deferred --reason ...` to close with an explicit close reason.
+- Do not use operator inspection/control commands such as `litehive status`, `litehive task list`, `litehive task browse`, or `litehive task show`; rely on the prompt context and the agent-safe update/close commands above.
 - Your only verdicts are `pass` and `reject`.
 - Use `reject` when grooming cannot be completed from the available task context; explain the gap concretely instead of inventing scope or passing an underspecified task.
 - Do not pass grooming with a blank task record; rewrite the goal/acceptance_criteria/plan via CLI first, then pass.

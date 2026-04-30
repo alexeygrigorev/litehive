@@ -307,6 +307,7 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
             "  - `litehive agent update --goal ... --acceptance-criteria ... --plan-step ... --constraint ...` to rewrite task fields.",
             "  - `litehive task add ...` to create follow-up tasks when the current task mixes concerns.",
             "  - `litehive agent close --outcome done|duplicate|wont_do|deferred --reason ...` to close.",
+            "- Do not use operator inspection/control commands such as `litehive status`, `litehive task list`, `litehive task browse`, or `litehive task show`; rely on the prompt context and the agent-safe update/close commands above.",
             "- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or reject it with a clear explanation of what is missing.",
             "- Do not implement code in this stage.",
         ]
@@ -318,6 +319,7 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
             "- If SWE shows the requested work was already implemented before this run and provides concrete verification evidence, accept the task with the normal `done` outcome.",
             "- Use close reasons `wont_do`, `duplicate`, or `deferred` only when the task is genuinely obsolete, superseded, or duplicated.",
             "- You may close the active task with one of those reasons via `litehive agent close --outcome done|duplicate|wont_do|deferred --reason <text>`.",
+            "- Do not use operator inspection/control commands such as `litehive status`, `litehive task list`, `litehive task browse`, or `litehive task show`; rely on the prompt context and the agent-safe close path when the task outcome needs to change.",
         ]
     if stage == "implementing":
         return [

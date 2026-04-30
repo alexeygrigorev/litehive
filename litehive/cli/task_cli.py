@@ -470,18 +470,22 @@ def close(
     reason: Annotated[str | None, typer.Option(help="Optional rationale")] = None,
     follow_up_task: Annotated[str | None, typer.Option(help="Optional follow-up task id")] = None,
 ) -> int:
-    from litehive.cli.agent_cli import current_agent_role, require_agent_role
+    from litehive.cli.agent_cli import current_agent_role, resolve_active_agent_task_mutation_target
 
     agent_role = current_agent_role()
     close_kwargs: dict[str, str] = {}
+    mutation_workspace = workspace
+    mutation_task_id = task_id
     if agent_role is not None:
-        require_agent_role({"planner", "reviewer"})
+        target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
+        mutation_workspace = target.root
+        mutation_task_id = target.task_id
         close_kwargs = {"audit_actor": "agent", "audit_source": "agent"}
-    ensure_workspace(workspace)
+    ensure_workspace(mutation_workspace)
     try:
         task = close_task(
-            workspace,
-            task_id,
+            mutation_workspace,
+            mutation_task_id,
             outcome=outcome,
             reason=reason,
             follow_up_task_id=follow_up_task,
@@ -513,18 +517,22 @@ def update(
     constraints: Annotated[list[str] | None, typer.Option("--constraint", help="Replace task constraints")] = None,
     plan: Annotated[list[str] | None, typer.Option("--plan-step", help="Replace task plan steps")] = None,
 ) -> int:
-    from litehive.cli.agent_cli import current_agent_role, require_agent_role
+    from litehive.cli.agent_cli import current_agent_role, resolve_active_agent_task_mutation_target
 
     agent_role = current_agent_role()
     update_kwargs: dict[str, object] = {}
+    mutation_workspace = workspace
+    mutation_task_id = task_id
     if agent_role is not None:
-        require_agent_role({"planner", "reviewer"})
+        target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
+        mutation_workspace = target.root
+        mutation_task_id = target.task_id
         update_kwargs = {
             "allow_active_agent_task_mutation": True,
             "audit_actor": "agent",
             "audit_source": "agent",
         }
-    ensure_workspace(workspace)
+    ensure_workspace(mutation_workspace)
     if (
         title is None
         and depends_on is None
@@ -537,14 +545,14 @@ def update(
         print("update failed: no changes requested")
         return 1
     try:
-        depends_on = parse_dependency_ids(depends_on, task_id=task_id, allow_clear=True)
+        depends_on = parse_dependency_ids(depends_on, task_id=mutation_task_id, allow_clear=True)
         acceptance_criteria = parse_acceptance_criteria(acceptance_criteria, allow_clear=True)
         constraints = parse_text_list_option(constraints, option_name="constraints", allow_clear=True)
         plan = parse_text_list_option(plan, option_name="plan", allow_clear=True)
 
         task = update_task(
-            workspace,
-            task_id,
+            mutation_workspace,
+            mutation_task_id,
             title=title if title is not None else ...,
             depends_on=depends_on,
             priority=priority if priority is not None else ...,

@@ -24,7 +24,7 @@ def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
     """
     if not argv:
         return False
-    if tuple(argv[:2]) in _AGENT_ALLOWED_TASK_ROOT_COMMANDS:
+    if tuple(argv[:2]) in _AGENT_ALLOWED_TASK_ROOT_COMMANDS and role in {"planner", "reviewer"}:
         return True
     if role != "recovery":
         return False
@@ -33,6 +33,15 @@ def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
         ("pipeline", "rules"),
         ("task", "logs"),
     }
+
+
+def _agent_blocked_command_message() -> str:
+    return (
+        "You are not authorized to perform this command. "
+        "PM agents may shape only the active task via "
+        "`litehive agent update ...` or `litehive agent close ...`; "
+        "operator inspection commands such as status/list/browse/show are not available to agents."
+    )
 
 
 def _workspace_override_from_argv(argv: list[str]) -> Path | None:
@@ -115,7 +124,7 @@ def main() -> int:
             route_via_root_cli = True
         elif cmd != "agent" and not route_via_root_cli:
             if not _agent_command_is_allowed(agent_role, argv):
-                print("You are not authorized to perform this command.")
+                print(_agent_blocked_command_message())
                 return 1
             route_via_root_cli = True
         if route_via_root_cli:

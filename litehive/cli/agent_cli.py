@@ -120,8 +120,17 @@ def _resolve_report_identity(root: Path, task) -> AgentReportIdentity:
 def block_if_agent() -> None:
     """Call at the top of any command agents should not use."""
     if _current_role() is not None:
-        print("You are not authorized to perform this command.")
+        print(_agent_unauthorized_message())
         raise SystemExit(1)
+
+
+def _agent_unauthorized_message() -> str:
+    return (
+        "You are not authorized to perform this command. "
+        "PM agents may shape only the active task via "
+        "`litehive agent update ...` or `litehive agent close ...`; "
+        "operator inspection commands such as status/list/browse/show are not available to agents."
+    )
 
 
 @agent_app.command("report", help="Submit your stage verdict")
@@ -234,13 +243,58 @@ def _require_role(allowed: set[str]) -> str:
     """Exit if the current role is not in ``allowed``."""
     role = _current_role()
     if role is None or role not in allowed:
-        print("You are not authorized to perform this command.")
+        print(_agent_unauthorized_message())
         raise SystemExit(1)
     return role
 
 
 def require_agent_role(allowed: set[str]) -> str:
     return _require_role(allowed)
+
+
+@dataclass(frozen=True)
+class AgentTaskMutationTarget:
+    role: str
+    root: Path
+    task_id: str
+
+
+def resolve_active_agent_task_mutation_target(
+    requested_task_id: str | None,
+    *,
+    allowed_roles: set[str],
+) -> AgentTaskMutationTarget:
+    """Authorize and resolve a PM mutation target through the source workspace."""
+    role = _require_role(allowed_roles)
+    env_task_id = os.environ.get("LITEHIVE_TASK_ID")
+    env_task_id = env_task_id.strip() if env_task_id and env_task_id.strip() else None
+    tid = requested_task_id or env_task_id
+    if not tid:
+        print("agent task mutation failed: LITEHIVE_TASK_ID is not set")
+        raise SystemExit(1)
+    try:
+        env_workspace = os.environ.get("LITEHIVE_WORKSPACE_ROOT")
+        if env_workspace and env_workspace.strip():
+            root = normalize_workspace_root(Path(env_workspace), source="LITEHIVE_WORKSPACE_ROOT")
+        else:
+            root = resolve_workspace(tid)
+    except ValueError as exc:
+        print(f"agent task mutation failed: {exc}")
+        raise SystemExit(1)
+    state = load_state(root)
+    if (
+        env_task_id is not None
+        and state.active_task_id == env_task_id
+        and requested_task_id is not None
+        and requested_task_id != env_task_id
+    ):
+        print(f"agent task mutation failed: agents may only mutate active task {env_task_id}, not {requested_task_id}")
+        raise SystemExit(1)
+    if state.active_task_id != tid:
+        active = state.active_task_id or "-"
+        print(f"agent task mutation failed: agents may only mutate active task {active}, not {tid}")
+        raise SystemExit(1)
+    return AgentTaskMutationTarget(role=role, root=root, task_id=tid)
 
 
 @agent_app.command("update", help="Update task fields (planner/reviewer only)")
@@ -252,22 +306,14 @@ def agent_update_command(
     constraints: Annotated[list[str] | None, typer.Option("--constraint")] = None,
     priority: Annotated[str | None, typer.Option("--priority")] = None,
 ) -> None:
-    _require_role({"planner", "reviewer"})
-
     from litehive.tasks.status import update_task
 
-    tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
-    if not tid:
-        raise SystemExit(1)
-    try:
-        root = resolve_workspace(tid)
-    except ValueError:
-        raise SystemExit(1)
+    target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
 
     sentinel = ...
     update_task(
-        root,
-        tid,
+        target.root,
+        target.task_id,
         goal=goal if goal is not None else sentinel,
         acceptance_criteria=acceptance_criteria if acceptance_criteria is not None else sentinel,
         plan=plan if plan is not None else sentinel,
@@ -277,7 +323,7 @@ def agent_update_command(
         audit_actor="agent",
         audit_source="agent",
     )
-    print(f"task: {tid}")
+    print(f"task: {target.task_id}")
     print("updated: ok")
 
 
@@ -289,19 +335,18 @@ def agent_close_command(
     ] = "duplicate",
     reason: Annotated[str, typer.Option("--reason")] = "",
 ) -> None:
-    _require_role({"planner", "reviewer"})
-
     from litehive.tasks.status import close_task
 
-    tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
-    if not tid:
-        raise SystemExit(1)
-    try:
-        root = resolve_workspace(tid)
-    except ValueError:
-        raise SystemExit(1)
+    target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
 
-    task = close_task(root, tid, outcome=outcome, reason=reason, audit_actor="agent", audit_source="agent")
-    print(f"task: {tid}")
+    task = close_task(
+        target.root,
+        target.task_id,
+        outcome=outcome,
+        reason=reason,
+        audit_actor="agent",
+        audit_source="agent",
+    )
+    print(f"task: {target.task_id}")
     print(f"status: {task.status}")
     print(f"close_reason: {task.close_reason or outcome}")

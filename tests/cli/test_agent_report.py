@@ -505,6 +505,94 @@ def test_agent_update_allows_planner_to_shape_active_task(tmp_path: Path, monkey
     assert updated.plan == ["route prompt reads through activity service"]
 
 
+def test_agent_update_resolves_source_workspace_from_managed_worktree(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Managed worktree update", goal="old goal")
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    save_state(tmp_path, state)
+    managed_worktree = tmp_path / ".litehive" / "worktrees" / f"{task.id}-managed"
+    managed_worktree.mkdir(parents=True)
+    monkeypatch.chdir(managed_worktree)
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
+    monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
+    monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(tmp_path))
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "update",
+            "--goal",
+            "new goal from worktree",
+            "--acceptance-criteria",
+            "mutates source workspace",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    assert updated.goal == "new goal from worktree"
+    assert updated.acceptance_criteria == ["mutates source workspace"]
+
+
+def test_agent_close_resolves_source_workspace_from_managed_worktree(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Managed worktree close")
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    save_state(tmp_path, state)
+    managed_worktree = tmp_path / ".litehive" / "worktrees" / f"{task.id}-managed"
+    managed_worktree.mkdir(parents=True)
+    monkeypatch.chdir(managed_worktree)
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "reviewer")
+    monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
+    monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(tmp_path))
+
+    result = CliRunner().invoke(
+        agent_app,
+        [
+            "close",
+            "--outcome",
+            "duplicate",
+            "--reason",
+            "covered by another task",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    assert updated.status == "closed"
+    assert updated.close_reason == "duplicate"
+
+
+def test_agent_update_rejects_wrong_task_id(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    active = create_task(tmp_path, title="Active task", goal="old")
+    other = create_task(tmp_path, title="Other task", goal="old")
+    state = load_state(tmp_path)
+    state.active_task_id = active.id
+    save_state(tmp_path, state)
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
+    monkeypatch.setenv("LITEHIVE_TASK_ID", active.id)
+    monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(tmp_path))
+
+    result = CliRunner().invoke(
+        agent_app,
+        ["update", "--task-id", other.id, "--goal", "wrong task"],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 1
+    assert f"agents may only mutate active task {active.id}, not {other.id}" in result.output
+    unchanged = get_task_record(tmp_path, other.id)
+    assert unchanged is not None
+    assert unchanged.goal == "old"
+
+
 def test_root_task_update_allows_planner_agent_api(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Shape via task update", goal="old goal")
@@ -543,6 +631,37 @@ def test_root_task_update_allows_planner_agent_api(tmp_path: Path, monkeypatch) 
     assert updated.constraints == ["keep the CLI surface stable"]
 
 
+def test_root_task_update_delegates_agent_resolution_from_managed_worktree(tmp_path: Path, monkeypatch) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Root update from worktree", goal="old goal")
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    save_state(tmp_path, state)
+    managed_worktree = tmp_path / ".litehive" / "worktrees" / f"{task.id}-managed"
+    managed_worktree.mkdir(parents=True)
+    monkeypatch.chdir(managed_worktree)
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
+    monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
+    monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(tmp_path))
+
+    result = CliRunner().invoke(
+        root_app,
+        [
+            "task",
+            "update",
+            task.id,
+            "--goal",
+            "new goal via root task update",
+        ],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    updated = get_task_record(tmp_path, task.id)
+    assert updated is not None
+    assert updated.goal == "new goal via root task update"
+
+
 def test_root_task_update_rejects_non_planner_reviewer_agent(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Blocked agent task update", goal="old goal")
@@ -562,6 +681,9 @@ def test_root_task_update_rejects_non_planner_reviewer_agent(tmp_path: Path, mon
 def test_root_task_close_allows_reviewer_agent_api(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Close via task group")
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    save_state(tmp_path, state)
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "reviewer")
     monkeypatch.chdir(tmp_path)
 
@@ -593,6 +715,9 @@ def test_root_task_close_allows_reviewer_agent_api(tmp_path: Path, monkeypatch) 
 def test_root_task_close_allows_planner_to_mark_done_from_grooming(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Already satisfied on main")
+    state = load_state(tmp_path)
+    state.active_task_id = task.id
+    save_state(tmp_path, state)
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
     monkeypatch.setenv("LITEHIVE_STAGE", "grooming")
     monkeypatch.chdir(tmp_path)

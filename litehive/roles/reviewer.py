@@ -16,6 +16,7 @@ ROLE_GUIDANCE = """\
 - If SWE shows the requested work was already implemented before this run and provides concrete verification evidence, accept the task as normal `done` rather than inventing a special close reason.
 - Use close reasons `wont_do`, `duplicate`, or `deferred` only when the task is genuinely obsolete, superseded, or duplicated.
 - You may close the active task with one of those close reasons via `litehive agent close --outcome <close_reason> --reason <text>`.
+- Do not use operator inspection/control commands such as `litehive status`, `litehive task list`, `litehive task browse`, or `litehive task show`; use the prompt context and the agent-safe close path when the task outcome needs to change.
 """
 
 FRESH_ATTEMPT_GUIDANCE = """\

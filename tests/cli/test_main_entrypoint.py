@@ -83,17 +83,11 @@ def test_main_blocks_non_recovery_diagnostic_commands(
     assert "You are not authorized to perform this command." in capsys.readouterr().out
 
 
-def test_main_allows_task_update_for_agent_roles(
+def test_main_blocks_task_update_for_non_pm_agent_roles(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    captured: dict[str, object] = {}
-
-    def fake_cli_main() -> int:
-        captured["argv"] = list(sys.argv)
-        return 10
-
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
-    monkeypatch.setattr(cli_app_module, "main", fake_cli_main)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -102,15 +96,10 @@ def test_main_allows_task_update_for_agent_roles(
 
     exit_code = main_module.main()
 
-    assert exit_code == 10
-    assert captured["argv"] == [
-        "litehive",
-        "task",
-        "update",
-        "T-0001",
-        "--goal",
-        "Tighten scope",
-    ]
+    assert exit_code == 1
+    output = capsys.readouterr().out
+    assert "not authorized" in output
+    assert "litehive agent update" in output
 
 
 def test_main_allows_task_add_for_agent_roles(
@@ -175,17 +164,30 @@ def test_main_allows_task_close_for_agent_roles(
     ]
 
 
-def test_main_blocks_task_browse_for_agent_roles(
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["litehive", "status"],
+        ["litehive", "task", "list"],
+        ["litehive", "task", "browse", "--since", "24h"],
+        ["litehive", "task", "show", "T-0001"],
+    ],
+)
+def test_main_blocks_broad_operator_inspection_for_agent_roles(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    argv: list[str],
 ) -> None:
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "qa")
-    monkeypatch.setattr(sys, "argv", ["litehive", "task", "browse", "--since", "24h"])
+    monkeypatch.setattr(sys, "argv", argv)
 
     exit_code = main_module.main()
 
     assert exit_code == 1
-    assert "You are not authorized to perform this command." in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "You are not authorized to perform this command." in output
+    assert "litehive agent update" in output
+    assert "operator inspection commands" in output
 
 
 def test_main_routes_root_help_for_agent_roles(

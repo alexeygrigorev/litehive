@@ -29,6 +29,9 @@ def test_grooming_prompt_requires_current_main_preflight_before_planning(tmp_pat
     assert preflight_idx < planning_idx
     assert "`litehive agent close --outcome done --reason ...`" in text
     assert "`litehive agent close --outcome duplicate --reason ...`" in text
+    assert "Do not use operator inspection/control commands" in text
+    assert "`litehive status`" in text
+    assert "`litehive task list`" in text
     assert "`litehive task close <task-id>" not in text
 
 

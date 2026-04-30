@@ -472,6 +472,7 @@ def test_planner_prompt_requires_current_main_preflight_before_scoping(workspace
     assert preflight_idx < planning_idx
     assert "`litehive agent close --outcome done --reason ...`" in text
     assert "`litehive agent close --outcome duplicate --reason ...`" in text
+    assert "Do not use operator inspection/control commands" in text
     assert "`litehive task close <task-id>" not in text
 
 
