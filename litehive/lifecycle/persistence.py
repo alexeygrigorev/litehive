@@ -591,6 +591,19 @@ class SqlitePersistence:
             )
             connection.commit()
 
+    def reset_all(self, task_id: str) -> None:
+        """Remove all lifecycle-owned runtime rows for a task."""
+        with connect_workspace_db(self.workspace_root) as connection:
+            for table_name in ("pipeline_task_state", "pipeline_sessions", "pipeline_transitions", "pipeline_journal"):
+                connection.execute(f"DELETE FROM {table_name} WHERE task_id = ?", (task_id,))
+            append_task_event(
+                self.workspace_root,
+                event_type="pipeline_task_state_reset",
+                task_id=task_id,
+                payload={},
+            )
+            connection.commit()
+
     def initialize(
         self,
         task_id: str,

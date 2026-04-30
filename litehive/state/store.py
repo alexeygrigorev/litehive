@@ -6,6 +6,7 @@ import re
 import sqlite3
 from pathlib import Path
 
+from litehive.config.paths import workspace_path
 from litehive.db.schema import connect_workspace_db, consume_rebuilt_database_marker
 from litehive.domain.common import utcnow
 from litehive.domain.runtime import TaskRuntime
@@ -63,6 +64,26 @@ class RuntimeStore:
     def load_workspace_state(self) -> WorkspaceState | None:
         with connect_workspace_db(self.root) as connection:
             self.ensure_workspace_state_rows(connection)
+            state_row = connection.execute(
+                "SELECT payload FROM pool_state WHERE workspace_key = ?",
+                ("workspace",),
+            ).fetchone()
+            queue_row = connection.execute(
+                "SELECT payload FROM queue WHERE workspace_key = ?",
+                ("workspace",),
+            ).fetchone()
+        if state_row is None or queue_row is None:
+            return None
+        payload = json.loads(state_row["payload"])
+        payload["queue"] = json.loads(queue_row["payload"])
+        return WorkspaceState(**payload)
+
+    def load_workspace_state_read_only(self) -> WorkspaceState | None:
+        db_path = workspace_path(self.root, "data.db")
+        if not db_path.exists():
+            return None
+        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
+            connection.row_factory = sqlite3.Row
             state_row = connection.execute(
                 "SELECT payload FROM pool_state WHERE workspace_key = ?",
                 ("workspace",),

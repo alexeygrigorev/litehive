@@ -223,7 +223,7 @@ def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue
             )
             return WorkspaceState(), issues
     try:
-        store_state = runtime_store(root).load_workspace_state()
+        store_state = runtime_store(root).load_workspace_state_read_only()
     except (OSError, sqlite3.DatabaseError, ValueError, ValidationError) as exc:
         detail = str(exc).strip() or type(exc).__name__
         issues.append(
@@ -429,10 +429,13 @@ def _probe_task_index_references(
 ) -> list[StatusIssue]:
     if any(issue.key in _TASKS_UNAVAILABLE_KEYS for issue in state_issues):
         return []
+    db_path = workspace_path(root, "data.db")
+    if not db_path.exists():
+        return []
     try:
         from litehive.state.rebuild_safety import sqlite_task_ids
 
-        db_ids = sqlite_task_ids(workspace_path(root, "data.db"))
+        db_ids = sqlite_task_ids(db_path)
     except (OSError, sqlite3.DatabaseError, ValueError) as exc:
         return [
             StatusIssue(
@@ -471,6 +474,8 @@ def _probe_task_status_damage(
     state_issues: list[StatusIssue],
 ) -> list[StatusIssue]:
     if any(issue.key in _TASKS_UNAVAILABLE_KEYS for issue in state_issues):
+        return []
+    if not workspace_path(root, "data.db").exists():
         return []
     try:
         from litehive.state.records import list_tasks

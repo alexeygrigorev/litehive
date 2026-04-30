@@ -54,12 +54,9 @@ def pipeline_reset_command(
     task_id: Annotated[str, typer.Argument(help="Task id")],
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
 ) -> None:
-    from litehive.db.schema import connect_workspace_db
+    from litehive.lifecycle.persistence import SqlitePersistence
 
-    with connect_workspace_db(workspace) as conn:
-        for table in ["pipeline_task_state", "pipeline_sessions", "pipeline_transitions", "pipeline_journal"]:
-            conn.execute(f"DELETE FROM {table} WHERE task_id = ?", (task_id,))
-        conn.commit()
+    SqlitePersistence(workspace).reset_all(task_id)
     print(f"task: {task_id}")
     print("reset: ok")
 

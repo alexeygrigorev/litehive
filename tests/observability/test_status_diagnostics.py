@@ -21,7 +21,7 @@ from litehive.lifecycle.persistence import SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
 from litehive.main import fast_status
 from litehive.observability.engine_monitoring import record_engine_execution
-from litehive.observability.status_diagnostics import _load_runner_status_for_status
+from litehive.observability.status_diagnostics import _load_runner_status_for_status, collect_status_snapshot
 from litehive.state.records import create_task, save_task
 from litehive.state.persist import save_state
 
@@ -36,6 +36,17 @@ def _run_fast_status(workspace: Path, capsys) -> tuple[int, str]:
 def _run_full_status(workspace: Path, capsys) -> tuple[int, str]:
     exit_code = _cmd_status(argparse.Namespace(workspace=workspace, fast=False, full=True))
     return exit_code, capsys.readouterr().out
+
+
+def test_status_snapshot_does_not_bootstrap_missing_database(tmp_path: Path) -> None:
+    workspace_dir(tmp_path).mkdir(parents=True)
+    (workspace_dir(tmp_path) / "config.yaml").write_text("{}", encoding="utf-8")
+    state_db = workspace_path(tmp_path, "data.db")
+
+    snapshot = collect_status_snapshot(tmp_path)
+
+    assert snapshot.state.queue == []
+    assert not state_db.exists()
 
 
 def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path: Path, capsys) -> None:

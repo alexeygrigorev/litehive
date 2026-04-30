@@ -2,7 +2,9 @@
 
 import json
 from pathlib import Path
+import sqlite3
 
+from litehive.config.paths import workspace_path
 from litehive.db.schema import connect_workspace_db
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from heru.quota import preferred_reset_at
@@ -26,7 +28,16 @@ def save_engine_monitoring(root: Path, monitoring: WorkspaceEngineMonitoring) ->
 
 
 def _load_engine_monitoring_from_db(root: Path) -> WorkspaceEngineMonitoring:
-    with connect_workspace_db(root) as connection:
+    db_path = workspace_path(root, "data.db")
+    if not db_path.exists():
+        return WorkspaceEngineMonitoring()
+    with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
+        connection.row_factory = sqlite3.Row
+        table = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'engine_monitoring'",
+        ).fetchone()
+        if table is None:
+            return WorkspaceEngineMonitoring()
         rows = connection.execute(
             "SELECT engine_name, payload FROM engine_monitoring ORDER BY engine_name ASC",
         ).fetchall()
