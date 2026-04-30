@@ -23,11 +23,10 @@ caller can render.
 
 from dataclasses import dataclass, replace
 from pathlib import Path
-import subprocess
 
 from litehive.config.loading import load_config
 from litehive.config.engine_models import resolve_task_rejection_loop_limit, resolve_task_retry_policy
-from litehive.git.ops import GitError, current_head, remove_worktree
+from litehive.git.ops import GitError, current_head
 from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.domain.runtime import RuntimeFailedRunRecord, RuntimeHookRejectFingerprint, RuntimeRecoveryOutcome
@@ -40,13 +39,12 @@ from litehive.domain.common import (
     utcnow,
 )
 from litehive.state.records import (
-    clear_task_worktree_path,
     get_task,
     get_task_worktree_path,
     save_task,
     set_task_commit_sha,
 )
-from litehive.worktree import resolve_recorded_worktree_path, task_worktree_branch
+from litehive.worktree import WorktreeService, cleanup_terminal_task_worktree, resolve_recorded_worktree_path
 from litehive.tasks.activity import append_task_activity, latest_task_activity_entry
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.journal import append_journal
@@ -518,27 +516,22 @@ def _build_worktree_sync_node(root: Path) -> GitWorktreeSyncNode:
     )
 
 
-def _missing_worktree_probe(root: Path):
-    """Return a probe callable that flags tasks whose worktree_path is gone."""
+def _worktree_missing_probe(root: Path):
+    """Return a probe callable backed by the worktree service."""
+    service = WorktreeService(root)
 
     def _probe(state) -> bool:
-        task, path = _task_recorded_worktree(root, state.task_id)
-        if task is None or path is None:
-            return False
-        return not path.exists()
+        return service.task_has_missing_recorded_worktree(state.task_id)
 
     return _probe
 
 
-def _clear_stale_worktree_repair(root: Path):
-    """Return a repair callable that clears a stale worktree_path on the task."""
+def _worktree_metadata_repair(root: Path):
+    """Return a stale worktree metadata repair backed by the worktree service."""
+    service = WorktreeService(root)
 
     def _repair(state) -> None:
-        task, path = _task_recorded_worktree(root, state.task_id)
-        if task is None or (path is not None and path.exists()):
-            return
-        clear_task_worktree_path(task)
-        save_task(root, task)
+        service.clear_missing_recorded_worktree(state.task_id)
 
     return _repair
 
@@ -575,22 +568,7 @@ def _cleanup_terminal_worktree(root: Path, task: TaskRecord | None) -> None:
         task = fresh
     if task.status == "flagged" and task.flag_reason in _MANUAL_REVIEW_FLAG_REASONS:
         return
-    worktree_rel = get_task_worktree_path(task)
-    if not worktree_rel:
-        return
-    worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
-    if worktree_path is not None and worktree_path.exists():
-        remove_worktree(root, worktree_path, force=True)
-    clear_task_worktree_path(task)
-    save_task(root, task)
-    branch = task_worktree_branch(task)
-    subprocess.run(
-        ["git", "branch", "-D", branch],
-        cwd=str(root),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    cleanup_terminal_task_worktree(root, task)
 
 
 def reconcile_terminal_commit_sha(
@@ -805,9 +783,9 @@ def run_task(
         )
         commit_node = build_commit_node(root)
         worktree_sync_node = _build_worktree_sync_node(root)
-        ready_node = ReadyNode(probes=[_missing_worktree_probe(root)])
+        ready_node = ReadyNode(probes=[_worktree_missing_probe(root)])
         pre_exec_recovery_node = PreExecRecoveryNode(
-            repairs=[_clear_stale_worktree_repair(root)],
+            repairs=[_worktree_metadata_repair(root)],
         )
         prompt_context = PromptContext(workspace_root=root)
         hook_specs = hook_specs_from_config(config)

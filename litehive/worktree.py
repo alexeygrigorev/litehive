@@ -8,6 +8,7 @@ import logging
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Callable
 
 from litehive.agents.manager import SubagentManager
 from litehive.config.loading import load_config
@@ -83,6 +84,359 @@ class RescueResult:
     commit_shas: list[str]
     head_sha: str | None = None
     message: str | None = None
+
+
+class WorktreeMergeConflict(Exception):
+    """Raised when worktree sync leaves unresolved files behind."""
+
+    def __init__(self, conflict_files: list[str]) -> None:
+        super().__init__(f"{len(conflict_files)} unresolved file(s)")
+        self.conflict_files = conflict_files
+
+
+@dataclass(slots=True)
+class WorktreeSyncResult:
+    """Outcome of pre-exec lifecycle worktree synchronization."""
+
+    changed: bool
+    worktree_path: Path | None = None
+
+
+@dataclass(slots=True)
+class TaskWorktreeInspection:
+    """Inspectable status for a task's recorded worktree."""
+
+    task_id: str
+    worktree_rel: str | None
+    worktree_path: Path | None
+    exists: bool
+    uncommitted: list[str]
+    committed_ahead_of_main: list[str]
+
+
+class WorktreeService:
+    """Owns git/worktree decisions shared by lifecycle, recovery, and CLI."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = Path(root)
+
+    def sync_task_worktree(
+        self,
+        task_id: str,
+        *,
+        entry_stage: str | None,
+        worktree_resolver: "Callable[[object], Path] | None" = None,
+        resolver_state: object | None = None,
+        main_ref: str = "origin/main",
+    ) -> WorktreeSyncResult:
+        """Create/reuse/sync a task worktree for lifecycle pre-exec."""
+        if not is_git_repo(self.root):
+            return WorktreeSyncResult(changed=False)
+
+        task = get_task(self.root, task_id)
+        if task is None:
+            raise GitError(f"task {task_id} not found while creating worktree")
+
+        recorded = resolve_recorded_worktree_path(self.root, get_task_worktree_path(task))
+        if recorded is None or not recorded.exists():
+            branch = task_worktree_branch(task)
+            existing = self.registered_worktree_for_branch(branch)
+            if existing is not None:
+                set_task_worktree_path(task, serialize_worktree_path(existing))
+                save_task(self.root, task)
+                recorded = existing
+            else:
+                worktree = task_worktree_path(self.root, task)
+                worktree.parent.mkdir(parents=True, exist_ok=True)
+                self.prune_stale_worktrees()
+                created = subprocess.run(
+                    ["git", "worktree", "add", "--force", "-B", branch, str(worktree), "HEAD"],
+                    cwd=str(self.root),
+                    capture_output=True,
+                    text=True,
+                )
+                if created.returncode != 0:
+                    raise GitError(f"git worktree add failed: {created.stderr.strip() or created.stdout.strip()}")
+                ensure_worktree_venv_link(self.root, worktree)
+                set_task_worktree_path(task, serialize_worktree_path(worktree))
+                save_task(self.root, task)
+                return WorktreeSyncResult(changed=True, worktree_path=worktree)
+
+        worktree = self._resolved_lifecycle_worktree(recorded, worktree_resolver, resolver_state)
+        if not worktree.exists():
+            return WorktreeSyncResult(changed=False, worktree_path=worktree)
+
+        main_changed = False
+        if entry_stage is not None:
+            main_changed = self._rebase_existing_worktree_onto_local_main(worktree)
+
+        if self._is_dirty(worktree):
+            return WorktreeSyncResult(changed=main_changed, worktree_path=worktree)
+
+        if not self._has_origin(worktree):
+            return WorktreeSyncResult(changed=main_changed, worktree_path=worktree)
+
+        changed = self._merge_origin_main(worktree, main_ref)
+        return WorktreeSyncResult(changed=main_changed or changed, worktree_path=worktree)
+
+    def collect_managed_worktrees(self) -> list[ManagedWorktree]:
+        return _collect_managed_worktrees(self.root)
+
+    def remove_cleanable_worktrees(self, *, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
+        return _remove_cleanable_worktrees(self.root, dry_run=dry_run)
+
+    def collect_rescue_candidates(self) -> list[RescueCandidate]:
+        return _collect_rescue_candidates(self.root)
+
+    def apply_rescue_candidate(self, candidate: RescueCandidate) -> RescueResult:
+        return _apply_rescue_candidate(self.root, candidate)
+
+    def inspect_task_worktree(self, task: TaskRecord) -> TaskWorktreeInspection:
+        worktree_rel = get_task_worktree_path(task)
+        worktree_path = resolve_recorded_worktree_path(self.root, worktree_rel)
+        if worktree_rel is None or worktree_path is None or not worktree_path.exists():
+            return TaskWorktreeInspection(
+                task_id=task.id,
+                worktree_rel=worktree_rel,
+                worktree_path=worktree_path,
+                exists=False,
+                uncommitted=[],
+                committed_ahead_of_main=[],
+            )
+        return TaskWorktreeInspection(
+            task_id=task.id,
+            worktree_rel=worktree_rel,
+            worktree_path=worktree_path,
+            exists=True,
+            uncommitted=_worktree_uncommitted_changes(worktree_path),
+            committed_ahead_of_main=_worktree_committed_changes(self.root, worktree_path),
+        )
+
+    def task_has_missing_recorded_worktree(self, task_id: str) -> bool:
+        task = get_task(self.root, task_id)
+        if task is None:
+            return False
+        inspection = self.inspect_task_worktree(task)
+        return inspection.worktree_rel is not None and not inspection.exists
+
+    def clear_missing_recorded_worktree(self, task_id: str) -> None:
+        task = get_task(self.root, task_id)
+        if task is None or not self.task_has_missing_recorded_worktree(task_id):
+            return
+        clear_task_worktree_path(task)
+        save_task(self.root, task)
+
+    def cleanup_terminal_task_worktree(self, task: TaskRecord) -> None:
+        _cleanup_terminal_task_worktree(self.root, task)
+
+    def require_clean_main_checkout(self) -> None:
+        _require_clean_main_checkout(self.root)
+
+    def prune_stale_worktrees(self) -> None:
+        proc = subprocess.run(
+            ["git", "worktree", "prune", "--expire", "now"],
+            cwd=str(self.root),
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            raise GitError(f"git worktree prune failed: {proc.stderr.strip() or proc.stdout.strip()}")
+
+    def registered_worktree_for_branch(self, branch: str) -> Path | None:
+        proc = subprocess.run(
+            ["git", "worktree", "list", "--porcelain"],
+            cwd=str(self.root),
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            raise GitError(f"git worktree list failed: {proc.stderr.strip() or proc.stdout.strip()}")
+
+        current_path: Path | None = None
+        current_branch: str | None = None
+        for raw_line in proc.stdout.splitlines():
+            line = raw_line.strip()
+            if not line:
+                if current_branch == branch and current_path is not None and current_path.exists():
+                    return current_path.resolve()
+                current_path = None
+                current_branch = None
+                continue
+            if line.startswith("worktree "):
+                current_path = Path(line.removeprefix("worktree ").strip()).expanduser()
+                continue
+            if line.startswith("branch refs/heads/"):
+                current_branch = line.removeprefix("branch refs/heads/").strip()
+
+        if current_branch == branch and current_path is not None and current_path.exists():
+            return current_path.resolve()
+        return None
+
+    def _resolved_lifecycle_worktree(
+        self,
+        recorded: Path,
+        worktree_resolver: "Callable[[object], Path] | None",
+        resolver_state: object | None,
+    ) -> Path:
+        if worktree_resolver is None:
+            return recorded
+        return Path(worktree_resolver(resolver_state))
+
+    def _rebase_existing_worktree_onto_local_main(self, worktree: Path) -> bool:
+        if worktree.resolve() == self.root.resolve():
+            return False
+        main_head = current_head(self.root)
+        if main_head is None:
+            return False
+        before = self._head(worktree)
+        rebased = rebase_worktree_onto(worktree, main_head)
+        if rebased:
+            after = self._head(worktree)
+            return after is not None and after != before
+
+        unresolved = self._unresolved(worktree)
+        if unresolved:
+            raise WorktreeMergeConflict(unresolved)
+        raise GitError(f"worktree_sync rebase onto local main {main_head[:8]} failed")
+
+    def _merge_origin_main(self, worktree: Path, main_ref: str) -> bool:
+        stash_ref = self._stash_local_changes(worktree)
+        restored_stash = False
+        try:
+            fetch = subprocess.run(
+                ["git", "fetch", "origin"],
+                cwd=str(worktree),
+                capture_output=True,
+                text=True,
+            )
+            if fetch.returncode != 0:
+                raise GitError(f"git fetch failed: {fetch.stderr.strip() or fetch.stdout.strip()}")
+
+            merge = subprocess.run(
+                ["git", "merge", main_ref, "--no-edit"],
+                cwd=str(worktree),
+                capture_output=True,
+                text=True,
+            )
+            if merge.returncode == 0:
+                changed = "Already up to date" not in merge.stdout
+                self._restore_local_changes(worktree, stash_ref)
+                restored_stash = True
+                return changed
+
+            unresolved = self._unresolved(worktree)
+            if unresolved:
+                raise WorktreeMergeConflict(unresolved)
+
+            subprocess.run(
+                ["git", "merge", "--abort"],
+                cwd=str(worktree),
+                capture_output=True,
+                text=True,
+            )
+            self._restore_local_changes(worktree, stash_ref)
+            restored_stash = True
+            raise GitError(f"worktree_sync merge failed: {merge.stderr.strip() or merge.stdout.strip()}")
+        except Exception:
+            if stash_ref and not restored_stash and not self._unresolved(worktree):
+                self._restore_local_changes(worktree, stash_ref)
+            raise
+
+    @staticmethod
+    def _head(worktree: Path) -> str | None:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            return None
+        return proc.stdout.strip() or None
+
+    @staticmethod
+    def _is_dirty(worktree: Path) -> bool:
+        proc = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        return proc.returncode == 0 and bool(proc.stdout.strip())
+
+    @staticmethod
+    def _has_origin(worktree: Path) -> bool:
+        proc = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        return proc.returncode == 0 and bool(proc.stdout.strip())
+
+    @staticmethod
+    def _unresolved(worktree: Path) -> list[str]:
+        proc = subprocess.run(
+            ["git", "diff", "--name-only", "--diff-filter=U"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            return []
+        return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+    @staticmethod
+    def _stash_local_changes(worktree: Path) -> str | None:
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if status.returncode != 0 or not status.stdout.strip():
+            return None
+        before = subprocess.run(
+            ["git", "rev-parse", "-q", "--verify", "refs/stash"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        stash = subprocess.run(
+            ["git", "stash", "push", "-u", "-m", "litehive-worktree-sync"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if stash.returncode != 0:
+            raise GitError(f"git stash push failed: {stash.stderr.strip() or stash.stdout.strip()}")
+        after = subprocess.run(
+            ["git", "rev-parse", "-q", "--verify", "refs/stash"],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        before_ref = before.stdout.strip()
+        after_ref = after.stdout.strip()
+        if not after_ref or after_ref == before_ref:
+            return None
+        return after_ref
+
+    def _restore_local_changes(self, worktree: Path, stash_ref: str | None) -> None:
+        if not stash_ref:
+            return
+        restored = subprocess.run(
+            ["git", "stash", "pop", "--index", stash_ref],
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+        )
+        if restored.returncode == 0:
+            return
+        unresolved = self._unresolved(worktree)
+        if unresolved:
+            raise WorktreeMergeConflict(unresolved)
+        raise GitError(f"git stash pop failed: {restored.stderr.strip() or restored.stdout.strip()}")
 
 
 # === Path Utilities ===
@@ -275,10 +629,40 @@ def resolve_task_execution_root(
     return worktree_path
 
 
+def cleanup_terminal_task_worktree(root: Path, task: TaskRecord) -> None:
+    """Remove a terminal task's worktree and clear its metadata."""
+    WorktreeService(root).cleanup_terminal_task_worktree(task)
+
+
+def _cleanup_terminal_task_worktree(root: Path, task: TaskRecord) -> None:
+    """Remove a terminal task's worktree and branch, then clear task metadata."""
+    worktree_rel = get_task_worktree_path(task)
+    if not worktree_rel:
+        return
+    worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
+    if worktree_path is not None and worktree_path.exists():
+        remove_worktree(root, worktree_path, force=True)
+    clear_task_worktree_path(task)
+    save_task(root, task)
+    branch = task_worktree_branch(task)
+    subprocess.run(
+        ["git", "branch", "-D", branch],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
 # === Worktree Discovery and Listing ===
 
 
 def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
+    """Collect all Litehive-managed worktrees with their metadata."""
+    return WorktreeService(root).collect_managed_worktrees()
+
+
+def _collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
     """Collect all Litehive-managed worktrees with their metadata."""
     state = load_state(root)
     active_task = get_task(root, state.active_task_id) if state.active_task_id else None
@@ -314,7 +698,12 @@ def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
 
 def remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
     """Remove cleanable worktrees and return categorized results."""
-    worktrees = collect_managed_worktrees(root)
+    return WorktreeService(root).remove_cleanable_worktrees(dry_run=dry_run)
+
+
+def _remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
+    """Remove cleanable worktrees and return categorized results."""
+    worktrees = _collect_managed_worktrees(root)
     candidates = [item for item in worktrees if item.cleanable]
     skipped_active = [item for item in worktrees if item.active]
 
@@ -372,6 +761,11 @@ def remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[str
 
 def collect_rescue_candidates(root: Path) -> list[RescueCandidate]:
     """Collect worktrees that need rescue (cherry-pick to main)."""
+    return WorktreeService(root).collect_rescue_candidates()
+
+
+def _collect_rescue_candidates(root: Path) -> list[RescueCandidate]:
+    """Collect worktrees that need rescue (cherry-pick to main)."""
     candidates: list[RescueCandidate] = []
     for task in list_tasks(root, strict=False):
         if task.status != "flagged" or task.flag_reason != "merge_failed":
@@ -396,6 +790,11 @@ def collect_rescue_candidates(root: Path) -> list[RescueCandidate]:
 
 def require_clean_main_checkout(root: Path) -> None:
     """Ensure main checkout is clean for rescue operations."""
+    WorktreeService(root).require_clean_main_checkout()
+
+
+def _require_clean_main_checkout(root: Path) -> None:
+    """Ensure main checkout is clean for rescue operations."""
     branch = _git_stdout(root, "branch", "--show-current")
     if branch not in {"main", "master"}:
         raise GitError("worktree rescue --apply requires a clean checkout on branch 'main'")
@@ -404,6 +803,11 @@ def require_clean_main_checkout(root: Path) -> None:
 
 
 def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResult:
+    """Apply rescue for a single candidate by cherry-picking commits to main."""
+    return WorktreeService(root).apply_rescue_candidate(candidate)
+
+
+def _apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResult:
     """Apply rescue for a single candidate by cherry-picking commits to main."""
     task = get_task(root, candidate.task_id)
     if task is None:
@@ -648,9 +1052,26 @@ def _dirty_entry_paths(dirty_entries: list[str]) -> list[str]:
         raw = entry[3:].strip()
         if raw.startswith('"') and raw.endswith('"'):
             raw = raw[1:-1].replace('\\"', '"')
+        if " -> " in raw:
+            raw = raw.split(" -> ", 1)[1].strip()
         if raw:
             paths.append(raw)
     return paths
+
+
+def _worktree_uncommitted_changes(worktree_path: Path) -> list[str]:
+    try:
+        return sorted(set(_dirty_entry_paths(status_porcelain(worktree_path))))
+    except GitError:
+        return []
+
+
+def _worktree_committed_changes(root: Path, worktree_path: Path) -> list[str]:
+    main_head = current_head(root) or "HEAD"
+    fork_point = _git_stdout(worktree_path, "merge-base", main_head, "HEAD")
+    if not fork_point:
+        return []
+    return sorted(set(_git_lines(worktree_path, "diff", "--name-only", fork_point, "HEAD")))
 
 
 def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:

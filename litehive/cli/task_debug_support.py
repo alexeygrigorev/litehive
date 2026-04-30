@@ -1,12 +1,9 @@
 """Debug command — inspect subagent artifacts for a task."""
 
 from pathlib import Path
-import subprocess
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_report, load_subagent_session
-from litehive.git.ops import current_head
-from litehive.state.records import get_task_worktree_path
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,
@@ -14,7 +11,7 @@ from litehive.tasks.paths import (
 )
 from litehive.tasks.activity import latest_task_activity_entry
 from litehive.tasks.reports import latest_stage_report
-from litehive.worktree import resolve_recorded_worktree_path
+from litehive.worktree import WorktreeService
 
 
 def debug_all(root: Path, task):
@@ -103,26 +100,23 @@ def debug_latest(root: Path, task):
 
 def debug_worktree(root: Path, task):
     """Show whether the task worktree exists and what changed inside it."""
-    worktree_rel = get_task_worktree_path(task)
+    inspection = WorktreeService(root).inspect_task_worktree(task)
     print(f"task: {task.id}")
-    if not worktree_rel:
+    if not inspection.worktree_rel:
         print("worktree: no worktree")
         return 0
 
-    worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
-    if worktree_path is None or not worktree_path.exists():
-        print(f"worktree: {worktree_rel}")
+    if not inspection.exists:
+        print(f"worktree: {inspection.worktree_rel}")
         print("exists: no")
         print("no worktree")
         return 0
 
-    print(f"worktree: {worktree_rel}")
+    print(f"worktree: {inspection.worktree_rel}")
     print("exists: yes")
 
-    uncommitted = _worktree_uncommitted_changes(worktree_path)
-    committed = _worktree_committed_changes(root, worktree_path)
-    _print_path_list("uncommitted", uncommitted)
-    _print_path_list("committed_ahead_of_main", committed)
+    _print_path_list("uncommitted", inspection.uncommitted)
+    _print_path_list("committed_ahead_of_main", inspection.committed_ahead_of_main)
     return 0
 
 
@@ -208,70 +202,3 @@ def _print_path_list(label: str, paths: list[str]) -> None:
         return
     for path in paths:
         print(f"  - {path}")
-
-
-def _worktree_uncommitted_changes(worktree_path: Path) -> list[str]:
-    try:
-        status_result = subprocess.run(
-            ["git", "status", "--porcelain", "--untracked-files=all"],
-            cwd=worktree_path,
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-    except (subprocess.TimeoutExpired, OSError):
-        return []
-    if status_result.returncode != 0:
-        return []
-    return _status_lines_to_paths(status_result.stdout.splitlines())
-
-
-def _worktree_committed_changes(root: Path, worktree_path: Path) -> list[str]:
-    main_head = current_head(root) or "HEAD"
-    try:
-        merge_base_result = subprocess.run(
-            ["git", "merge-base", main_head, "HEAD"],
-            cwd=worktree_path,
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-    except (subprocess.TimeoutExpired, OSError):
-        return []
-    if merge_base_result.returncode != 0:
-        return []
-
-    fork_point = merge_base_result.stdout.strip()
-    if not fork_point:
-        return []
-
-    try:
-        committed = subprocess.run(
-            ["git", "diff", "--name-only", fork_point, "HEAD"],
-            cwd=worktree_path,
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-    except (subprocess.TimeoutExpired, OSError):
-        return []
-    if committed.returncode != 0:
-        return []
-    return sorted({line.strip() for line in committed.stdout.splitlines() if line.strip()})
-
-
-def _status_lines_to_paths(lines: list[str]) -> list[str]:
-    paths: set[str] = set()
-    for line in lines:
-        if not line.strip():
-            continue
-        path = line[3:].strip() if len(line) > 3 else ""
-        if not path:
-            continue
-        if " -> " in path:
-            path = path.split(" -> ", 1)[1].strip()
-        paths.add(path)
-    return sorted(paths)

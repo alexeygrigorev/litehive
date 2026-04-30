@@ -93,6 +93,19 @@ def _create_merge_failed_worktree_task(workspace: Path):
     return task, worktree_path
 
 
+def _flag_for_rescue(workspace: Path, task, worktree_path: Path) -> None:
+    task.status = "flagged"
+    task.pipeline_status = "flagged"
+    task.flag_reason = "merge_failed"
+    task.runtime.pipeline.git.worktree_path = serialize_worktree_path(worktree_path)
+    task.git.worktree_path = None
+    save_task(workspace, task)
+
+    state = load_state(workspace)
+    state.unmerged_worktrees = [UnmergedWorktree(task_id=task.id, worktree_path=str(worktree_path))]
+    save_state(workspace, state)
+
+
 def _spawn_fake_runner(workspace: Path, *, active_task_id: str, ready_file: Path) -> subprocess.Popen[str]:
     env = os.environ.copy()
     pythonpath_parts = [str(_REPO_ROOT), str(_HERU_ROOT)]
@@ -179,6 +192,102 @@ def test_worktree_rescue_apply_completes_while_another_runner_holds_the_lock(tmp
         assert all(entry.task_id != rescue_task.id for entry in refreshed_state.unmerged_worktrees)
     finally:
         _stop_runner(proc, workspace)
+
+
+def test_worktree_rescue_apply_reports_missing_worktree(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _bootstrap_git_workspace(workspace)
+
+    task = create_task(workspace, title="Missing rescue", auto_commit=False)
+    missing_worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
+    _flag_for_rescue(workspace, task, missing_worktree)
+
+    result = _RUNNER.invoke(
+        app,
+        ["worktree", "rescue", "--apply", "--workspace", str(workspace)],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0
+    assert result.return_value == 1
+    assert "status: missing_worktree" in result.output
+    assert "message: recorded worktree is missing" in result.output
+    assert "missing_worktree_count: 1" in result.output
+
+
+def test_worktree_rescue_apply_reconciles_already_landed_patch(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _bootstrap_git_workspace(workspace)
+
+    task = create_task(workspace, title="Already landed", auto_commit=False)
+    worktree_path = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _git_ok(workspace, "worktree", "add", "-b", task_worktree_branch(task), str(worktree_path), "HEAD")
+    (worktree_path / "feature.txt").write_text("same patch\n", encoding="utf-8")
+    _git_ok(worktree_path, "add", "feature.txt")
+    _git_ok(worktree_path, "commit", "-m", "feature commit")
+
+    (workspace / "feature.txt").write_text("same patch\n", encoding="utf-8")
+    _git_ok(workspace, "add", "feature.txt")
+    _git_ok(workspace, "commit", "-m", "land equivalent patch")
+    main_head = _git_ok(workspace, "rev-parse", "HEAD")
+    _flag_for_rescue(workspace, task, worktree_path)
+
+    result = _RUNNER.invoke(
+        app,
+        ["worktree", "rescue", "--apply", "--workspace", str(workspace)],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0
+    assert result.return_value == 0
+    assert "status: already_landed" in result.output
+    assert "message: worktree patch already landed on main" in result.output
+    assert "already_landed_count: 1" in result.output
+
+    refreshed = get_task(workspace, task.id)
+    assert refreshed is not None
+    assert refreshed.status == "done"
+    assert refreshed.runtime.pipeline.git.worktree_path is None
+    assert refreshed.runtime.pipeline.git.commit_sha == main_head
+
+
+def test_worktree_rescue_apply_keeps_manual_conflict_pending(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _bootstrap_git_workspace(workspace)
+
+    task = create_task(workspace, title="Manual conflict", auto_commit=False)
+    worktree_path = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+    _git_ok(workspace, "worktree", "add", "-b", task_worktree_branch(task), str(worktree_path), "HEAD")
+    (worktree_path / "app.txt").write_text("base\nworktree change\n", encoding="utf-8")
+    _git_ok(worktree_path, "add", "app.txt")
+    _git_ok(worktree_path, "commit", "-m", "worktree conflicting change")
+
+    (workspace / "app.txt").write_text("base\nmain change\n", encoding="utf-8")
+    _git_ok(workspace, "add", "app.txt")
+    _git_ok(workspace, "commit", "-m", "main conflicting change")
+    _flag_for_rescue(workspace, task, worktree_path)
+
+    result = _RUNNER.invoke(
+        app,
+        ["worktree", "rescue", "--apply", "--workspace", str(workspace)],
+        standalone_mode=False,
+    )
+
+    assert result.exit_code == 0
+    assert result.return_value == 1
+    assert "status: manual_conflict" in result.output
+    assert "manual_conflict_count: 1" in result.output
+    assert not (workspace / ".git" / "CHERRY_PICK_HEAD").exists()
+
+    refreshed = get_task(workspace, task.id)
+    assert refreshed is not None
+    assert refreshed.status == "flagged"
+    assert refreshed.runtime.pipeline.git.worktree_path == serialize_worktree_path(worktree_path)
 
 
 def test_worktree_rescue_apply_refuses_to_race_the_active_task(tmp_path: Path) -> None:

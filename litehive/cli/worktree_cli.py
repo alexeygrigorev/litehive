@@ -6,13 +6,7 @@ import typer
 from litehive.cli.common import WorkspaceOption, make_typer, require_subcommand
 from litehive.config.workspace import ensure_workspace
 from litehive.git.ops import GitError
-from litehive.worktree import (
-    apply_rescue_candidate,
-    collect_managed_worktrees,
-    collect_rescue_candidates,
-    remove_cleanable_worktrees,
-    require_clean_main_checkout,
-)
+from litehive.worktree import WorktreeService
 
 app = make_typer(invoke_without_command=True)
 
@@ -25,7 +19,8 @@ def worktree_group(ctx: typer.Context) -> None:
 @app.command("ls", help="List Litehive-managed task worktrees")
 def ls(workspace: WorkspaceOption = Path.cwd()) -> int:
     ensure_workspace(workspace)
-    worktrees = collect_managed_worktrees(workspace)
+    service = WorktreeService(workspace)
+    worktrees = service.collect_managed_worktrees()
     print(f"workspace: {workspace}")
     print(f"worktree_count: {len(worktrees)}")
     if not worktrees:
@@ -47,7 +42,8 @@ def clean(
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show planned removals only")] = False,
 ) -> int:
     ensure_workspace(workspace)
-    results = remove_cleanable_worktrees(workspace, dry_run=dry_run)
+    service = WorktreeService(workspace)
+    results = service.remove_cleanable_worktrees(dry_run=dry_run)
 
     candidates = results["candidates"]
     skipped_active = results["skipped_active"]
@@ -85,7 +81,8 @@ def rescue(
     apply: Annotated[bool, typer.Option(help="Cherry-pick eligible commits onto main")] = False,
 ) -> int:
     ensure_workspace(workspace)
-    candidates = collect_rescue_candidates(workspace)
+    service = WorktreeService(workspace)
+    candidates = service.collect_rescue_candidates()
 
     print(f"workspace: {workspace}")
     print(f"candidate_count: {len(candidates)}")
@@ -109,12 +106,12 @@ def rescue(
         return 0
 
     try:
-        require_clean_main_checkout(workspace)
+        service.require_clean_main_checkout()
     except GitError as exc:
         print(f"apply_error: {exc}")
         return 1
 
-    results = [apply_rescue_candidate(workspace, candidate) for candidate in candidates]
+    results = [service.apply_rescue_candidate(candidate) for candidate in candidates]
     clean_count = sum(1 for item in results if item.status == "clean")
     already_landed_count = sum(1 for item in results if item.status == "already_landed")
     manual_conflict_count = sum(1 for item in results if item.status == "manual_conflict")

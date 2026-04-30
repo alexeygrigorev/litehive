@@ -44,7 +44,10 @@ def test_worktree_clean_defers_metadata_clear_when_runner_active(tmp_path: Path,
                 "failures": [],
             }
 
-    monkeypatch.setattr("litehive.cli.worktree_cli.remove_cleanable_worktrees", mock_remove_cleanable_worktrees)
+    monkeypatch.setattr(
+        "litehive.worktree.WorktreeService.remove_cleanable_worktrees",
+        lambda self, *, dry_run=False: mock_remove_cleanable_worktrees(tmp_path, dry_run=dry_run),
+    )
 
     # Capture stdout
     import io
@@ -103,7 +106,10 @@ def test_worktree_clean_succeeds_when_no_runner_conflict(tmp_path: Path, monkeyp
                 "failures": [],
             }
 
-    monkeypatch.setattr("litehive.cli.worktree_cli.remove_cleanable_worktrees", mock_remove_cleanable_worktrees)
+    monkeypatch.setattr(
+        "litehive.worktree.WorktreeService.remove_cleanable_worktrees",
+        lambda self, *, dry_run=False: mock_remove_cleanable_worktrees(tmp_path, dry_run=dry_run),
+    )
 
     # Capture stdout
     import io
