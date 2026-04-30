@@ -121,7 +121,7 @@ contract. The only LiteHive-owned workspace YAML file should be
 - [ ] Enforce one workspace YAML file: `.litehive/config.yaml`. All other
   LiteHive-owned workspace state should move to SQLite, JSONL, or plain text
   logs/artifacts. Current historical workspace data still includes runtime,
-  report, session, recovery, attention, daemon registry, and pool-run YAML.
+  report, session, recovery, operator-needed diagnostics, daemon registry, and pool-run YAML.
 - [ ] Remove `update_task_metadata = update_task` from
   `litehive/tasks/status.py` and update importers to use one public name.
 - [ ] Remove duplicate close/outcome vocabulary across `OutcomeKind`,
@@ -179,7 +179,7 @@ contract. The only LiteHive-owned workspace YAML file should be
 - [ ] Delete `comments.yaml` and `thread.yaml` readers after any required
   migration. Activity writes SQLite today, but `litehive/tasks/activity.py`
   still reads and migrates both files.
-- [ ] Delete all remaining runtime/report/session/recovery/pool-run/attention
+- [ ] Delete all remaining runtime/report/session/recovery/pool-run/operator-needed
   YAML producers and cleanup historical workspace YAML artifacts.
 - [ ] Remove legacy `task.yaml` migration and rebuild-safety code when the
   supported migration window is over (`litehive/db/schema.py`,
@@ -193,7 +193,7 @@ contract. The only LiteHive-owned workspace YAML file should be
 - [ ] Audit broad `except Exception` handlers and convert them to typed
   exceptions or explicit diagnostic results. Hotspots include status
   diagnostics, config registry, lifecycle orchestration, daemon execution,
-  attention scanning, and scope analysis.
+  operator-needed scanning, and scope analysis.
 - [ ] Stop silently returning empty lists or dictionaries for broken current
   state. Use typed empty values only when empty is genuinely valid.
 - [ ] Remove hidden CLI compatibility paths once public replacements are stable.

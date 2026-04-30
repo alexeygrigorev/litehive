@@ -168,7 +168,7 @@ def _pool_no_useful_progress_report(stop_reason):
         ),
         "attention_required": (
             "operator_action_required",
-            "Pool stopped because unresolved attention items require operator action before more work starts.",
+            "Pool stopped because operator intervention is required before more work starts.",
         ),
         "consecutive_task_failures": (
             "operator_action_required",

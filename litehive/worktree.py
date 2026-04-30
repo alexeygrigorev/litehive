@@ -729,17 +729,14 @@ def _remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[st
                 try:
                     save_task(root, task)
                 except WorkspaceConflictError:
-                    # Defer metadata clearing when workspace is locked by active runner
-                    from litehive.attention import record_attention
+                    from litehive.attention import append_attention_log
 
-                    record_attention(
+                    append_attention_log(
                         root,
-                        kind="stale_worktree_metadata",
-                        title=f"Deferred worktree metadata clearing for {item.task_id}",
-                        reason="Worktree removed but task metadata clearing deferred due to active runner lock",
-                        suggested_action="Wait for runner to finish, then run attention reconciliation",
-                        task_id=item.task_id,
-                        metadata={"worktree_path": item.worktree_rel, "deferred_operation": "clear_worktree_path"},
+                        (
+                            f"deferred worktree metadata clearing for {item.task_id}: "
+                            "workspace locked by active runner"
+                        ),
                     )
                     deferred.append(item)
                     continue

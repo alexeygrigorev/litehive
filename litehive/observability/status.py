@@ -159,7 +159,11 @@ def _load_task_read_only(root: Path, task_id: str) -> TaskRecord | None:
 def _operational_attention_lines(lines: list[str]) -> list[str]:
     if not lines:
         return []
-    return [line for line in lines if line.startswith("attention_items:")]
+    return [
+        line
+        for line in lines
+        if line.startswith(("operator_needed:", "operator_needed_pool_stop_reason:", "operator_needed_tasks:"))
+    ]
 
 
 def estimate_task_execution(root: Path, task: TaskRecord) -> ExecutionEstimate:

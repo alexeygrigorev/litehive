@@ -124,7 +124,7 @@ def test_collect_task_pipeline_status_prefers_runner_active_task_id(tmp_path: Pa
         "litehive.observability.status_diagnostics.collect_operational_status_snapshot",
         lambda root: snapshot,
     )
-    monkeypatch.setattr("litehive.attention.waiting_for_you_lines", lambda root: ["attention_items: unavailable"])
+    monkeypatch.setattr("litehive.attention.waiting_for_you_lines", lambda root: ["operator_needed: unavailable"])
     monkeypatch.setattr("litehive.state.records.get_task", lambda root, task_id: active_task if task_id else None)
 
     status = collect_task_pipeline_status(tmp_path)
@@ -132,7 +132,7 @@ def test_collect_task_pipeline_status_prefers_runner_active_task_id(tmp_path: Pa
     assert status.active_task_id == "T-0381"
     assert status.active_task is active_task
     assert status.queue_head == "T-0382"
-    assert status.waiting_lines == ["attention_items: unavailable"]
+    assert status.waiting_lines == ["operator_needed: unavailable"]
     assert status.fast_runner_status == "running"
 
 

@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import sys
 
-from litehive.attention import record_attention
+from litehive.attention import append_attention_log
 
 _PROTECTED_REFS = {"main", "master", "origin/main", "origin/master"}
 
@@ -13,18 +13,9 @@ _PROTECTED_REFS = {"main", "master", "origin/main", "origin/master"}
 def main(argv: list[str], *, real_git_path: str, workspace_root: str) -> int:
     reason = rejection_reason(argv)
     if reason is not None:
-        record_attention(
+        append_attention_log(
             Path(workspace_root),
-            kind="destructive_git_denied",
-            title="Destructive git command was blocked",
-            reason=f"`{_format_cmd(argv)}` was rejected: {reason}",
-            suggested_action=(
-                "Use a non-destructive git recovery path instead. Once reviewed,"
-                " clear the queue item with `litehive attention resolve <id>`."
-            ),
-            dedupe_key=f"destructive_git_denied:{_format_cmd(argv)}:{reason}",
-            metadata={"command": _format_cmd(argv), "rejection_reason": reason},
-            log_message=f"merge-resolver git wrapper rejected `{_format_cmd(argv)}`: {reason}",
+            f"merge-resolver git wrapper rejected `{_format_cmd(argv)}`: {reason}",
         )
         print(f"litehive git wrapper: blocked destructive git command: {reason}", file=sys.stderr)
         return 2

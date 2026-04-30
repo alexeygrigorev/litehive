@@ -97,7 +97,7 @@ def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
     assert (tmp_path / ".litehive" / "config.yaml").exists()
     assert (tmp_path / ".litehive" / ".gitignore").exists()
     assert (tmp_path / ".litehive" / "tasks").exists()
-    assert (tmp_path / ".litehive" / "attention").exists()
+    assert not (tmp_path / ".litehive" / "attention").exists()
     assert "engine-monitoring" not in (tmp_path / ".litehive" / ".gitignore").read_text(encoding="utf-8")
 
 
@@ -111,7 +111,7 @@ def test_ensure_workspace_bootstraps_rich_commented_config_once(tmp_path: Path) 
         "# Static defaults can be edited by hand. Runtime engine routing values below",
         "# Bootstrap default engine; use `litehive engine default <engine>` after init.",
         '# `pool_max_tasks: null` means "no cap"; set an integer to stop after N tasks.',
-        "# `pool_stop_on_attention` blocks the pool whenever pending operator",
+        "# `pool_stop_on_attention` is retained for config compatibility.",
         "#   credential_inputs[{env_var, mount_path}], extra_ro_binds,",
         "#   extra_rw_binds, setenv",
         "# `auto_commit: false` leaves commit creation to the operator/agent.",
@@ -171,7 +171,6 @@ def test_ensure_workspace_bootstraps_runtime_db_and_registry(tmp_path: Path, mon
         "subagent_sessions",
         "events",
         "engine_monitoring",
-        "attention",
         "worktrees",
         "pipeline_transitions",
         "pipeline_journal",

@@ -48,8 +48,8 @@ pool_max_tasks: null
 # `pool_stop_on_dirty_git` blocks the pool when tracked repo changes exist
 # outside Litehive-managed files.
 pool_stop_on_dirty_git: false
-# `pool_stop_on_attention` blocks the pool whenever pending operator
-# attention items exist in `.litehive/attention/`.
+# `pool_stop_on_attention` is retained for config compatibility. Operator
+# intervention is now surfaced from flagged tasks and pool stop state.
 pool_stop_on_attention: false
 
 # Lifecycle hooks keyed by hook point.

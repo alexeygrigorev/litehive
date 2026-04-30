@@ -118,7 +118,7 @@ Scope:
   - `session.yaml`
   - stage/recovery report YAML
   - pool-run YAML
-  - attention item YAML
+  - operator-needed diagnostic logs
   - daemon/workspace registry YAML
 - migrate any remaining active data to SQLite or append-only JSONL/text logs
 - update `.litehive/.gitignore`, bootstrap behavior, archive cleanup, and repair
@@ -133,7 +133,7 @@ Acceptance criteria:
   `.litehive/config.yaml` for a clean current workspace
 - active code does not create any workspace YAML file other than
   `.litehive/config.yaml`
-- tests cover that pool runs, attention items, reports, runtime state, and
+- tests cover that pool runs, operator-needed state, reports, runtime state, and
   daemon/workspace registries do not use YAML
 
 Suggested validation:

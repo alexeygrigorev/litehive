@@ -27,7 +27,6 @@ _TASK_SCOPED_TABLES = (
     "hook_artifacts",
     "subagent_sessions",
     "events",
-    "attention",
     "worktrees",
     "pipeline_transitions",
     "pipeline_journal",

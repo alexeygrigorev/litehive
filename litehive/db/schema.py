@@ -32,7 +32,6 @@ _BASELINE_REQUIRED_TABLES = {
     "subagent_sessions",
     "events",
     "engine_monitoring",
-    "attention",
     "worktrees",
     "pipeline_transitions",
     "pipeline_journal",

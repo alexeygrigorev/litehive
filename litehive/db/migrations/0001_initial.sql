@@ -72,14 +72,6 @@ CREATE TABLE IF NOT EXISTS engine_monitoring (
     payload TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS attention (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id TEXT,
-    created_at TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    payload TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS worktrees (
     task_id TEXT PRIMARY KEY,
     worktree_path TEXT,
