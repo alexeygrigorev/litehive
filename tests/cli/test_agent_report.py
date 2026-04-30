@@ -730,16 +730,15 @@ def test_agent_report_rejects_removed_step_alias(
 def test_root_report_rejects_removed_step_alias(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Legacy step alias for root report")
-    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
+    monkeypatch.setenv("LITEHIVE_STAGE", "recovering")
 
     result = CliRunner().invoke(
-        root_app,
+        agent_app,
         [
             "report",
             "--task-id",
             task.id,
-            "--role",
-            "recovery",
             "--verdict",
             "pass",
             "--step",
@@ -761,7 +760,8 @@ def test_root_report_rejects_removed_step_alias(tmp_path: Path, monkeypatch) -> 
 def test_root_report_rejects_removed_fail_verdict_alias(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Legacy root fail verdict")
-    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
+    monkeypatch.setenv("LITEHIVE_STAGE", "implementing")
 
     result = CliRunner().invoke(
         root_app,
@@ -769,8 +769,6 @@ def test_root_report_rejects_removed_fail_verdict_alias(tmp_path: Path, monkeypa
             "report",
             "--task-id",
             task.id,
-            "--role",
-            "swe",
             "--verdict",
             "fail",
             "--stage",
@@ -792,15 +790,14 @@ def test_root_report_rejects_removed_fail_verdict_alias(tmp_path: Path, monkeypa
 def test_root_report_defaults_to_litehive_task_id_env(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Root report task env")
-    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
     monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
+    monkeypatch.setenv("LITEHIVE_STAGE", "implementing")
 
     result = CliRunner().invoke(
-        root_app,
+        agent_app,
         [
             "report",
-            "--role",
-            "swe",
             "--verdict",
             "pass",
             "--message",
@@ -820,24 +817,23 @@ def test_root_report_defaults_to_litehive_task_id_env(tmp_path: Path, monkeypatc
 def test_root_report_accepts_workspace_override(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Root report workspace override")
-    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+    _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
+    monkeypatch.setenv("LITEHIVE_STAGE", "implementing")
 
     outside = tmp_path / "outside"
     outside.mkdir()
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=str(outside)):
         result = runner.invoke(
-            root_app,
+            agent_app,
             [
                 "report",
                 "--workspace",
                 str(tmp_path),
                 "--task-id",
                 task.id,
-                "--role",
-                "swe",
                 "--verdict",
                 "pass",
                 "--message",
@@ -857,17 +853,16 @@ def test_root_report_accepts_workspace_override(tmp_path: Path, monkeypatch) -> 
 def test_root_report_fails_clearly_when_workspace_cannot_be_resolved(tmp_path: Path, monkeypatch) -> None:
     outside = tmp_path / "outside"
     outside.mkdir()
-    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
+    monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
+    monkeypatch.setenv("LITEHIVE_STAGE", "implementing")
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=str(outside)):
         result = runner.invoke(
-            root_app,
+            agent_app,
             [
                 "report",
-                "--role",
-                "swe",
                 "--verdict",
                 "reject",
                 "--message",
@@ -876,8 +871,7 @@ def test_root_report_fails_clearly_when_workspace_cannot_be_resolved(tmp_path: P
             standalone_mode=False,
         )
 
-    assert result.exit_code == 0
-    assert result.return_value == 1
+    assert result.exit_code == 1
     assert "report failed: unable to resolve workspace" in result.output
 
 
