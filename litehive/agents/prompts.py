@@ -203,7 +203,7 @@ def stage_prompt(
         )
 
     # Include the task activity log so agents see the full history.
-    from litehive.tasks.reports import render_task_activity
+    from litehive.tasks.activity_rendering import render_task_activity
 
     activity_text = render_task_activity(root, task, for_prompt=True) if root is not None else ""
     if activity_text:

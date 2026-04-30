@@ -15,6 +15,14 @@ translating to/from the v2 contract:
     whether a fresh ``litehive report`` submission landed in the
     workspace journal during this turn
   - heru exceptions → error taxonomy
+
+Boundary:
+
+  - ``litehive.roles`` owns prompt policy and role guidance.
+  - ``litehive.agents`` owns process execution, sandboxing, sessions, and
+    artifacts.
+  - this module owns lifecycle engine construction and the adapter that turns a
+    Heru-backed subagent run into lifecycle ``Engine`` outcomes.
 """
 
 from dataclasses import replace
@@ -37,7 +45,8 @@ from litehive.roles.recovery import RecoveryAgent
 from litehive.state.records import get_task, get_task_worktree_path
 from litehive.tasks.activity import latest_task_activity_entry, load_task_activity, save_task_activity
 from litehive.tasks.journal import append_journal
-from litehive.tasks.reports import normalized_files_changed, rewrite_latest_stage_report
+from litehive.tasks.activity_rendering import normalized_files_changed
+from litehive.tasks.report_storage import rewrite_latest_stage_report
 from litehive.worktree import resolve_recorded_worktree_path
 
 from .events import Crash

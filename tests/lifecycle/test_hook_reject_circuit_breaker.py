@@ -254,7 +254,9 @@ def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_p
     assert pipeline_state.failed_reason == "hook_reject_loop"
     assert broken_refreshed.runtime.pipeline.consecutive_same_hook_rejects == 3
     assert broken_refreshed.runtime.pipeline.last_hook_reject_fingerprint is not None
-    assert broken_refreshed.runtime.pipeline.last_hook_reject_fingerprint.command == _always_fail_until_fixed_command(broken.id)
+    assert broken_refreshed.runtime.pipeline.last_hook_reject_fingerprint.command == _always_fail_until_fixed_command(
+        broken.id
+    )
     assert broken_refreshed.runtime.pipeline.hook_reject_recovery_invoked is False
     assert _task_execution_root(tmp_path, broken.id).exists()
     assert broken.id not in state_after_first.queue

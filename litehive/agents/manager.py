@@ -46,7 +46,8 @@ from litehive.tasks.runtime import (
     mark_subagent_started,
 )
 from litehive.tasks.activity import latest_task_activity_entry
-from litehive.tasks.reports import normalized_files_changed, record_stage_report
+from litehive.tasks.activity_rendering import normalized_files_changed
+from litehive.tasks.report_storage import record_stage_report
 
 _REPORTABLE_STAGES = {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
 _REPORT_FILE_VERDICTS = {"pass", "reject", "blocked", "resume", "advance", "done", "budget_hit"}

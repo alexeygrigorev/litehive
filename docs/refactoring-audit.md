@@ -202,21 +202,27 @@ contract. The only LiteHive-owned workspace YAML file should be
 
 ## Priority 2 - Package And Module Boundaries
 
-- [ ] Replace the `state/` umbrella with clearer storage/repository ownership or
-  document it as the persistence layer. Current `state` contains locks, records,
-  backup, process locks, store, and rebuild safety.
-- [ ] Split `tasks/` into task application logic, activity, queueing, archive,
-  duplicate detection, and task paths. The package currently mixes domain
-  behavior, persistence helpers, archive support, and reporting.
-- [ ] Move report storage out of `tasks/reports.py` or rename the module to
+- [x] Replace the `state/` umbrella with clearer storage/repository ownership or
+  document it as the persistence layer. `litehive/state/__init__.py` now
+  documents `state` as the workspace persistence boundary for store access,
+  record repositories, event-log persistence, rebuild safety, backups, and
+  locking.
+- [x] Split `tasks/` into task application logic, activity, queueing, archive,
+  duplicate detection, and task paths. `litehive/tasks/__init__.py` now maps
+  owners for lifecycle mutation, queueing, activity, reporting, archive,
+  duplicate detection, and path/artifact lookup.
+- [x] Move report storage out of `tasks/reports.py` or rename the module to
   reflect its real scope: recovery evidence, activity rendering, report
-  storage, artifact lookup, and report normalization.
-- [ ] Clarify the Heru boundary. `litehive/agents`, `litehive/roles`, and
-  `litehive/lifecycle/heru_factory.py` mix role prompts, engine construction,
-  event capture, sandbox policy, and session storage.
-- [ ] Decide whether `observability/` is one bounded context or multiple
-  features. It currently contains engine monitoring, status rendering, status
-  diagnostics, events, venv health, and log pruning.
+  storage, artifact lookup, and report normalization. `tasks/reports.py` is now
+  a compatibility facade over `report_storage`, `recovery_reports`,
+  `recovery_evidence`, and `activity_rendering`.
+- [x] Clarify the Heru boundary. `litehive/agents`, `litehive/roles`, and
+  `litehive/lifecycle/heru_factory.py` now document separate ownership for
+  role prompt policy, agent process/artifact mechanics, and lifecycle engine
+  construction.
+- [x] Decide whether `observability/` is one bounded context or multiple
+  features. `litehive/observability/__init__.py` now documents observability as
+  one read-only operational-signal context.
 - [ ] Move worktree-specific git code out of lifecycle nodes into a worktree
   service that can be shared by CLI rescue, runtime recovery, and pre-exec sync.
 

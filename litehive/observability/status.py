@@ -148,7 +148,7 @@ def estimate_task_execution(root: Path, task: TaskRecord) -> ExecutionEstimate:
 
 def _collect_report_durations(root: Path) -> list[float]:
     """Collect positive stage report durations from workspace runtime storage."""
-    from litehive.tasks.reports import load_workspace_stage_reports
+    from litehive.tasks.report_storage import load_workspace_stage_reports
 
     return [
         float(report.duration_seconds) for report in load_workspace_stage_reports(root) if report.duration_seconds > 0
@@ -172,7 +172,7 @@ def _latest_stage_report_for_task(root: Path | None, task: TaskRecord) -> Any | 
     if root is None:
         return None
     try:
-        from litehive.tasks.reports import latest_stage_report
+        from litehive.tasks.report_storage import latest_stage_report
 
         return latest_stage_report(root, task)
     except Exception:
@@ -199,7 +199,7 @@ def _latest_stage_failure_classification(root: Path | None, task: TaskRecord) ->
     if root is None:
         return None
     try:
-        from litehive.tasks.reports import latest_stage_report
+        from litehive.tasks.report_storage import latest_stage_report
 
         report = latest_stage_report(root, task)
     except Exception:

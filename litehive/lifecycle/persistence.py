@@ -552,7 +552,11 @@ class SqlitePersistence:
         with connect_workspace_db(self.workspace_root) as connection:
             preserved_failed_runs = {} if previous is None else previous.failed_run_history
             preserved_recovery_history = [] if previous is None else previous.recovery_history
-            if previous is None or not preserve_run_memory or (not preserved_failed_runs and not preserved_recovery_history):
+            if (
+                previous is None
+                or not preserve_run_memory
+                or (not preserved_failed_runs and not preserved_recovery_history)
+            ):
                 connection.execute("DELETE FROM pipeline_task_state WHERE task_id = ?", (task_id,))
             else:
                 reset_state = TaskState(

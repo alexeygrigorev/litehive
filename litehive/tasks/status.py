@@ -608,7 +608,7 @@ def _requeue_task_transition(
         failed_run_block_message,
         mark_failed_run_operator_override,
     )
-    from litehive.tasks.reports import (
+    from litehive.tasks.activity_rendering import (
         normalized_files_changed,
         is_retractable_pass_entry,
         retract_activity_entry,

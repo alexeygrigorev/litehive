@@ -1,6 +1,6 @@
 from litehive.domain.common import utcnow
 from litehive.state.records import list_tasks
-from litehive.tasks.reports import load_stage_reports_for_task_id
+from litehive.tasks.report_storage import load_stage_reports_for_task_id
 
 
 def _fmt_seconds(seconds: float) -> str:

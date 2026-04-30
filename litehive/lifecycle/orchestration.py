@@ -48,7 +48,7 @@ from litehive.worktree import WorktreeService, cleanup_terminal_task_worktree, r
 from litehive.tasks.activity import append_task_activity, latest_task_activity_entry
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.journal import append_journal
-from litehive.tasks.reports import record_stage_report
+from litehive.tasks.report_storage import record_stage_report
 from litehive.tasks.runtime import apply_task_outcome
 from litehive.state.locking import persist_future_task_update
 from litehive.state.locking import runner_heartbeat, workspace_runner_guard

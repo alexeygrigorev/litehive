@@ -40,7 +40,7 @@ from litehive.state.records import (
 from litehive.state.persist import load_state, save_state
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.journal import append_journal
-from litehive.tasks.reports import normalized_files_changed
+from litehive.tasks.activity_rendering import normalized_files_changed
 
 logger = logging.getLogger(__name__)
 

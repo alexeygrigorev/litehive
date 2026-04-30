@@ -10,7 +10,7 @@ from litehive.tasks.paths import (
     task_dir,
 )
 from litehive.tasks.activity import latest_task_activity_entry
-from litehive.tasks.reports import latest_stage_report
+from litehive.tasks.report_storage import latest_stage_report
 from litehive.worktree import WorktreeService
 
 

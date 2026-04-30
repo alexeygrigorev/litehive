@@ -73,7 +73,7 @@ def pipeline_journal_command(
     from litehive.lifecycle.journal import SqliteJournal
     from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
     from litehive.state.records import get_task_record
-    from litehive.tasks.reports import latest_recovery_report, latest_stage_report
+    from litehive.tasks.report_storage import latest_recovery_report, latest_stage_report
 
     journal = SqliteJournal(workspace)
     store = SqlitePersistence(workspace)

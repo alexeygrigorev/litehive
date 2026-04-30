@@ -23,7 +23,7 @@ from litehive.domain.runtime import (
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.observability.events import last_event_timestamp
-from litehive.tasks.reports import record_recovery_report
+from litehive.tasks.recovery_reports import record_recovery_report
 from litehive.tasks.runtime import (
     apply_task_outcome,
     duration_seconds,

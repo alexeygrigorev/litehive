@@ -12,7 +12,7 @@ from litehive.state.persist import load_state, persist_task_and_state_without_ru
 from litehive.state.records import get_task_record
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.queue import idle_stage_state
-from litehive.tasks.reports import latest_stage_report
+from litehive.tasks.report_storage import latest_stage_report
 from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
 
 from .execution_recovery import recover_stale_runner_state

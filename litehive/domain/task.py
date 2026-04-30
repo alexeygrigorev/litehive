@@ -12,6 +12,7 @@ from .common import (
 )
 from .runtime import SubagentRef, TaskRuntime
 
+
 def canonicalize_task_terminal_state(task: "TaskRecord") -> None:
     status = str(task.status)
     if status == "closed":
