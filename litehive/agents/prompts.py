@@ -301,12 +301,12 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
         return [
             "- You are the planner, a PM-style role representing the user's and product's point of view.",
             "- Before changing scope, acceptance criteria, or plan, run a grooming preflight against current `main` and recent landed work. Inspect the relevant code/tests and recent commits so you do not plan work that is already present.",
-            "- If current `main` already satisfies the request, do not create an implementation plan. Mark it directly from grooming with concrete evidence: `litehive task close <task-id> --outcome done --reason ...` for already-satisfied work, or `litehive task close <task-id> --outcome duplicate --reason ...` when another task/landed change covers it.",
+            "- If current `main` already satisfies the request, do not create an implementation plan. Mark it directly from grooming with concrete evidence: `litehive agent close --outcome done --reason ...` for already-satisfied work, or `litehive agent close --outcome duplicate --reason ...` when another task/landed change covers it.",
             "- Frame the real user problem, clarify scope, sharpen acceptance criteria, decompose the work, identify follow-up tasks.",
-            "- Treat the Litehive CLI as the source of truth for task shaping. Use explicit CLI commands to mutate task state:",
-            "  - `litehive task update <task-id> --goal ... --acceptance-criteria ... --plan-step ... --constraint ...` to rewrite task fields.",
+            "- Treat the Litehive task record as the source of truth for task shaping. Use the agent-safe CLI surface to mutate the active task:",
+            "  - `litehive agent update --goal ... --acceptance-criteria ... --plan-step ... --constraint ...` to rewrite task fields.",
             "  - `litehive task add ...` to create follow-up tasks when the current task mixes concerns.",
-            "  - `litehive task close <task-id> --outcome done|duplicate|wont_do|deferred --reason ...` to close.",
+            "  - `litehive agent close --outcome done|duplicate|wont_do|deferred --reason ...` to close.",
             "- Do not pass grooming with a blank task record; make sure the task has a clear goal and explicit acceptance criteria, or reject it with a clear explanation of what is missing.",
             "- Do not implement code in this stage.",
         ]
@@ -317,7 +317,7 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
             "- Reject work that is incomplete, weakly verified, or misaligned with the promised outcome.",
             "- If SWE shows the requested work was already implemented before this run and provides concrete verification evidence, accept the task with the normal `done` outcome.",
             "- Use close reasons `wont_do`, `duplicate`, or `deferred` only when the task is genuinely obsolete, superseded, or duplicated.",
-            "- You may close a task with one of those reasons via `litehive task close <task-id> --outcome done|duplicate|wont_do|deferred --reason <text>`.",
+            "- You may close the active task with one of those reasons via `litehive agent close --outcome done|duplicate|wont_do|deferred --reason <text>`.",
         ]
     if stage == "implementing":
         return [
@@ -328,8 +328,8 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
             "- If there are no changes, implement from scratch regardless of what prior stage reports claim.",
             '- Only skip implementation and submit `litehive report --verdict pass --message "already implemented and verified"` if `git diff main...HEAD` shows the expected changes and the acceptance criteria are met.',
             "- Never exit the stage without calling `litehive report`.",
-            "- If the task needs scope correction rather than code changes, use `litehive task update` to narrow scope or adjust the acceptance criteria so the task re-enters the pipeline with the corrected contract.",
-            "- If the task is genuinely obsolete or duplicated, use `litehive task close --outcome wont_do` or `litehive task close --outcome duplicate` with a concrete reason instead of exiting silently.",
+            "- If the task needs scope correction rather than code changes, submit `litehive report --verdict reject` with the specific correction needed so a PM stage can reshape the task.",
+            "- If the task is genuinely obsolete or duplicated, submit `litehive report --verdict reject` with the concrete close reason needed instead of exiting silently.",
         ]
     if stage == "testing":
         return ["- You are the QA verifier responsible for focused independent validation."]

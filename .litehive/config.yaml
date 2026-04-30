@@ -138,7 +138,7 @@ engine_preference:
 - goz
 agent_startup_guidance:
   planner:
-  - Rewrite scope with `litehive task update ...` before passing grooming.
+  - Rewrite scope with `litehive agent update ...` before passing grooming.
   swe:
   - Finish the stage with `litehive report ...` after verification.
 auto_commit: true

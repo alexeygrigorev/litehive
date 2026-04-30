@@ -205,7 +205,7 @@ agent_startup_guidance:
   all:
     - Start from the latest task artifacts before broad repo exploration.
   planner:
-    - Rewrite scope with `litehive task update ...` before passing grooming.
+    - Rewrite scope with `litehive agent update ...` before passing grooming.
   swe:
     - Prefer targeted file reads over full repo scans and finish with `litehive report ...`.
   qa:

@@ -122,7 +122,7 @@ engine_preference:
 # Example:
 # agent_startup_guidance:
 #   planner:
-#     - Rewrite scope with `litehive task update ...` before passing grooming.
+#     - Rewrite scope with `litehive agent update ...` before passing grooming.
 #   swe:
 #     - Run focused tests before `litehive report --verdict pass ...`.
 agent_startup_guidance: {}

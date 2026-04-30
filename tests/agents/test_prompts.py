@@ -27,8 +27,9 @@ def test_grooming_prompt_requires_current_main_preflight_before_planning(tmp_pat
     preflight_idx = text.index("run a grooming preflight against current `main` and recent landed work")
     planning_idx = text.index("Frame the real user problem")
     assert preflight_idx < planning_idx
-    assert "`litehive task close <task-id> --outcome done --reason ...`" in text
-    assert "`litehive task close <task-id> --outcome duplicate --reason ...`" in text
+    assert "`litehive agent close --outcome done --reason ...`" in text
+    assert "`litehive agent close --outcome duplicate --reason ...`" in text
+    assert "`litehive task close <task-id>" not in text
 
 
 def test_pipeline_monitor_prompt_does_not_advertise_blocked_for_swe() -> None:
