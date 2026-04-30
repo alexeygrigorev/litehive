@@ -115,7 +115,7 @@ def test_remove_cleanable_worktrees_includes_closed_tasks(tmp_path: Path) -> Non
     worktree.mkdir(parents=True)
     task.status = "closed"
     task.close_reason = "deferred"
-    task.runtime.git.worktree_path = str(worktree)
+    task.runtime.pipeline.git.worktree_path = str(worktree)
     save_task(workspace, task)
 
     result = remove_cleanable_worktrees(workspace, dry_run=True)

@@ -113,7 +113,7 @@ def test_resolve_engine_name_honors_stage_matched_engine_switch(tmp_path: Path) 
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Switch engine for retry")
     task.pipeline_status = "implementing"
-    task.runtime.last_engine_switch = RuntimeEngineSwitch(
+    task.runtime.execution.last_engine_switch = RuntimeEngineSwitch(
         stage="implementing",
         from_engine="codex",
         to_engine="opencode",
@@ -130,7 +130,7 @@ def test_resolve_engine_name_run_override_beats_stage_matched_engine_switch(tmp_
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Switch engine for retry")
     task.pipeline_status = "implementing"
-    task.runtime.last_engine_switch = RuntimeEngineSwitch(
+    task.runtime.execution.last_engine_switch = RuntimeEngineSwitch(
         stage="implementing",
         from_engine="codex",
         to_engine="opencode",
@@ -147,7 +147,7 @@ def test_resolve_engine_name_ignores_stage_mismatched_engine_switch(tmp_path: Pa
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Switch engine for retry")
     task.pipeline_status = "implementing"
-    task.runtime.last_engine_switch = RuntimeEngineSwitch(
+    task.runtime.execution.last_engine_switch = RuntimeEngineSwitch(
         stage="testing",
         from_engine="codex",
         to_engine="opencode",

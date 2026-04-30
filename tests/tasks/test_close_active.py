@@ -130,11 +130,11 @@ with workspace_runner_guard(root):
         refreshed = require_task(tmp_path, task.id)
         assert refreshed.status == "closed"
         assert refreshed.close_reason == "wont_do"
-        assert refreshed.runtime.execution_status == "cancelled"
-        assert refreshed.runtime.active_subagent is None
-        assert refreshed.runtime.last_outcome.reason_code == "wont_do"
-        assert refreshed.runtime.last_outcome.kind == "closed"
-        assert refreshed.runtime.last_outcome.reason == "bad direction"
+        assert refreshed.runtime.pipeline.execution_status == "cancelled"
+        assert refreshed.runtime.execution.active_subagent is None
+        assert refreshed.runtime.pipeline.last_outcome.reason_code == "wont_do"
+        assert refreshed.runtime.pipeline.last_outcome.kind == "closed"
+        assert refreshed.runtime.pipeline.last_outcome.reason == "bad direction"
 
         state = load_state(tmp_path)
         assert state.active_task_id is None
@@ -184,7 +184,7 @@ def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch
             ),
         )
         task = require_task(tmp_path, task.id)
-        task.runtime.execution_status = "running"
+        task.runtime.pipeline.execution_status = "running"
         save_task(tmp_path, task)
         task = require_task(tmp_path, task.id)
         mark_subagent_pid(tmp_path, task, sleeper.pid)
@@ -213,8 +213,8 @@ def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch
         refreshed = require_task(tmp_path, task.id)
         assert refreshed.status == "closed"
         assert refreshed.close_reason == "duplicate"
-        assert refreshed.runtime.execution_status == "cancelled"
-        assert refreshed.runtime.active_subagent is None
+        assert refreshed.runtime.pipeline.execution_status == "cancelled"
+        assert refreshed.runtime.execution.active_subagent is None
     finally:
         if sleeper.poll() is None:
             sleeper.kill()

@@ -152,9 +152,9 @@ def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tm
     task = create_task(tmp_path, title="Repair stale resumable task")
     task.status = "in_progress"
     task.pipeline_status = "testing"
-    task.runtime.execution_status = "idle"
-    task.runtime.current_stage.stage = "testing"
-    task.runtime.current_stage.status = "idle"
+    task.runtime.pipeline.execution_status = "idle"
+    task.runtime.pipeline.current_stage.stage = "testing"
+    task.runtime.pipeline.current_stage.status = "idle"
     save_task(tmp_path, task)
 
     state = load_state(tmp_path)
@@ -175,9 +175,9 @@ def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tm
     refreshed = require_task(tmp_path, task.id)
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "testing"
-    assert refreshed.runtime.execution_status == "idle"
-    assert refreshed.runtime.current_stage.stage == "testing"
-    assert refreshed.runtime.current_stage.status == "idle"
+    assert refreshed.runtime.pipeline.execution_status == "idle"
+    assert refreshed.runtime.pipeline.current_stage.stage == "testing"
+    assert refreshed.runtime.pipeline.current_stage.status == "idle"
     assert load_state(tmp_path).queue == [task.id]
 
 
@@ -191,9 +191,9 @@ def test_repair_skips_legacy_disk_only_tasks_missing_runtime_state(tmp_path: Pat
 
     task.status = "in_progress"
     task.pipeline_status = "testing"
-    task.runtime.execution_status = "idle"
-    task.runtime.current_stage.stage = "testing"
-    task.runtime.current_stage.status = "idle"
+    task.runtime.pipeline.execution_status = "idle"
+    task.runtime.pipeline.current_stage.stage = "testing"
+    task.runtime.pipeline.current_stage.status = "idle"
     save_task(tmp_path, task)
 
     state = load_state(tmp_path)
@@ -216,9 +216,9 @@ def test_repair_normalizes_stale_queued_terminal_task(tmp_path: Path) -> None:
     task = create_task(tmp_path, title="Already accepted task")
     task.status = "queued"
     task.pipeline_status = "backlog"
-    task.runtime.execution_status = "interrupted"
-    task.runtime.current_stage.stage = "backlog"
-    task.runtime.current_stage.status = "idle"
+    task.runtime.pipeline.execution_status = "interrupted"
+    task.runtime.pipeline.current_stage.stage = "backlog"
+    task.runtime.pipeline.current_stage.status = "idle"
     save_task(tmp_path, task)
     record_stage_report(
         tmp_path,
@@ -247,8 +247,8 @@ def test_repair_normalizes_stale_queued_terminal_task(tmp_path: Path) -> None:
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
     assert refreshed.close_reason == "done"
-    assert refreshed.runtime.execution_status == "done"
-    assert refreshed.runtime.current_stage.stage == "done"
+    assert refreshed.runtime.pipeline.execution_status == "done"
+    assert refreshed.runtime.pipeline.current_stage.stage == "done"
 
 
 def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatch, capsys) -> None:

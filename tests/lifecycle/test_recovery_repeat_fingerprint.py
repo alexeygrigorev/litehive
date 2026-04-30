@@ -89,7 +89,7 @@ def test_recovery_repeat_fingerprint_escalates_after_requeue(tmp_path: Path) -> 
     assert first.final_stage == "failed"
     assert first_refreshed is not None
     assert first_refreshed.flag_reason == "crash_budget_exhausted"
-    assert len(first_refreshed.runtime.recovery_history) == 2
+    assert len(first_refreshed.runtime.pipeline.recovery_history) == 2
     assert follow_up_ids == []
 
     second = _run_with_repeat_engine(tmp_path, requeue_task(tmp_path, task.id), follow_up_ids)
@@ -97,9 +97,9 @@ def test_recovery_repeat_fingerprint_escalates_after_requeue(tmp_path: Path) -> 
     assert second.final_stage == "failed"
     assert second_refreshed is not None
     assert second_refreshed.flag_reason == "recovery_failed"
-    assert len(second_refreshed.runtime.recovery_history) == 3
+    assert len(second_refreshed.runtime.pipeline.recovery_history) == 3
     assert len(follow_up_ids) == 1
-    assert second_refreshed.runtime.last_outcome.follow_up_task_id == follow_up_ids[0]
+    assert second_refreshed.runtime.pipeline.last_outcome.follow_up_task_id == follow_up_ids[0]
 
     follow_up = get_task(tmp_path, follow_up_ids[0])
     assert follow_up is not None

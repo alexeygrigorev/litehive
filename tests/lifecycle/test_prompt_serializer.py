@@ -218,7 +218,7 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
 
 def test_serialize_recovery_includes_repeated_fingerprint_escalation(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
-    task.runtime.recovery_history = [
+    task.runtime.pipeline.recovery_history = [
         RuntimeRecoveryOutcome(
             origin_stage="implementing",
             trigger_event_kind="crash",
@@ -263,7 +263,7 @@ def test_serialize_recovery_includes_repeated_fingerprint_escalation(workspace: 
 
 def test_serialize_recovery_ignores_same_budget_key_with_different_fingerprint(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
-    task.runtime.recovery_history = [
+    task.runtime.pipeline.recovery_history = [
         RuntimeRecoveryOutcome(
             origin_stage="implementing",
             trigger_event_kind="crash",

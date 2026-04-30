@@ -72,10 +72,10 @@ def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None
     assert refreshed.status == "closed"
     assert refreshed.close_reason == "wont_do"
     assert refreshed.pipeline_status == "backlog"
-    assert refreshed.runtime.execution_status == "cancelled"
-    assert refreshed.runtime.last_outcome.reason_code == "wont_do"
-    assert refreshed.runtime.last_outcome.kind == "closed"
-    assert refreshed.runtime.last_outcome.reason == "not worth it"
+    assert refreshed.runtime.pipeline.execution_status == "cancelled"
+    assert refreshed.runtime.pipeline.last_outcome.reason_code == "wont_do"
+    assert refreshed.runtime.pipeline.last_outcome.kind == "closed"
+    assert refreshed.runtime.pipeline.last_outcome.reason == "not worth it"
     assert state.active_task_id is None
     assert task.id not in state.queue
     raw_state = _raw_task_state_payload(tmp_path, task.id)
@@ -97,8 +97,8 @@ def test_update_task_parks_task_with_structured_action(tmp_path: Path) -> None:
     state = load_state(tmp_path)
 
     assert refreshed.status == "parked"
-    assert refreshed.runtime.execution_status == "paused"
-    assert refreshed.runtime.active_subagent is None
+    assert refreshed.runtime.pipeline.execution_status == "paused"
+    assert refreshed.runtime.execution.active_subagent is None
     assert state.active_task_id is None
     assert task.id not in state.queue
 
@@ -145,10 +145,10 @@ def test_update_task_abandons_task_with_structured_action(tmp_path: Path) -> Non
 
     assert refreshed.status == "closed"
     assert refreshed.close_reason == "execution_cancelled"
-    assert refreshed.runtime.execution_status == "cancelled"
-    assert refreshed.runtime.last_outcome.reason_code == "execution_cancelled"
-    assert refreshed.runtime.last_outcome.kind == "closed"
-    assert refreshed.runtime.last_outcome.reason == "Task abandoned via structured report."
+    assert refreshed.runtime.pipeline.execution_status == "cancelled"
+    assert refreshed.runtime.pipeline.last_outcome.reason_code == "execution_cancelled"
+    assert refreshed.runtime.pipeline.last_outcome.kind == "closed"
+    assert refreshed.runtime.pipeline.last_outcome.reason == "Task abandoned via structured report."
     assert state.active_task_id is None
     assert task.id not in state.queue
     with pytest.raises(TaskNotFound):
@@ -186,7 +186,7 @@ def test_close_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path)
     refreshed = require_task(tmp_path, "T-0001")
     assert refreshed.status == "closed"
     assert refreshed.close_reason == "duplicate"
-    assert refreshed.runtime.last_outcome.reason == "duplicate umbrella"
+    assert refreshed.runtime.pipeline.last_outcome.reason == "duplicate umbrella"
     raw_state = _raw_task_state_payload(tmp_path, "T-0001")
     assert raw_state["status"] == "closed"
     assert raw_state["close_reason"] == "duplicate"
@@ -207,6 +207,6 @@ def test_close_task_resets_pipeline_state_row(tmp_path: Path) -> None:
     refreshed = require_task(tmp_path, task.id)
     assert refreshed.status == "closed"
     assert refreshed.close_reason == "duplicate"
-    assert refreshed.runtime.last_outcome.reason == "duplicate umbrella"
+    assert refreshed.runtime.pipeline.last_outcome.reason == "duplicate umbrella"
     with pytest.raises(TaskNotFound):
         persistence.load(task.id)

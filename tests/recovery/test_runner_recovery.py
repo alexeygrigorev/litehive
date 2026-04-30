@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from litehive.agents.session_store import load_subagent_report, load_subagent_session, save_subagent_artifacts
 from litehive.config.workspace import ensure_workspace
@@ -17,11 +18,11 @@ def _seed_running_task(tmp_path: Path, *, stage: str, active: bool) -> tuple[str
     task = create_task(tmp_path, title=f"{stage} recovery")
     task.status = "in_progress"
     task.pipeline_status = stage
-    task.runtime.execution_status = "running"
-    task.runtime.run_started_at = "2026-04-12T10:00:00Z"
-    task.runtime.current_stage.stage = stage
-    task.runtime.current_stage.status = "running"
-    task.runtime.current_stage.started_at = "2026-04-12T10:00:00Z"
+    task.runtime.pipeline.execution_status = "running"
+    task.runtime.pipeline.run_started_at = "2026-04-12T10:00:00Z"
+    task.runtime.pipeline.current_stage.stage = stage
+    task.runtime.pipeline.current_stage.status = "running"
+    task.runtime.pipeline.current_stage.started_at = "2026-04-12T10:00:00Z"
     save_task(tmp_path, task)
 
     state = load_state(tmp_path)
@@ -76,46 +77,34 @@ def test_recover_stale_runner_state_requeues_running_task(tmp_path: Path, stage:
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == expected_stage
-    assert refreshed.runtime.execution_status == "idle"
-    assert refreshed.runtime.current_stage.stage == expected_stage
-    assert refreshed.runtime.current_stage.status == "idle"
-    assert refreshed.runtime.interruption is not None
-    assert refreshed.runtime.interruption.stage == expected_stage
-    assert refreshed.runtime.interruption.resume_stage == expected_stage
-    _assert_runtime_stage_has_no_removed_fields(refreshed.runtime.current_stage)
+    assert refreshed.runtime.pipeline.execution_status == "idle"
+    assert refreshed.runtime.pipeline.current_stage.stage == expected_stage
+    assert refreshed.runtime.pipeline.current_stage.status == "idle"
+    assert refreshed.runtime.execution.interruption is not None
+    assert refreshed.runtime.execution.interruption.stage == expected_stage
+    assert refreshed.runtime.execution.interruption.resume_stage == expected_stage
+    _assert_runtime_stage_has_no_removed_fields(refreshed.runtime.pipeline.current_stage)
 
     refreshed_state = load_state(tmp_path)
     assert refreshed_state.active_task_id is None
     assert refreshed_state.queue[0] == task_id
 
 
-def test_recover_stale_runner_state_requeues_legacy_flat_running_runtime(tmp_path: Path) -> None:
-    task_id, expected_stage = _seed_running_task(tmp_path, stage="implementing", active=True)
+def test_recover_stale_runner_state_does_not_normalize_legacy_flat_running_runtime(tmp_path: Path) -> None:
+    task_id, _ = _seed_running_task(tmp_path, stage="implementing", active=True)
     _rewrite_runtime_payload_as_legacy_flat(tmp_path, task_id)
 
     assert recover_stale_runner_state(tmp_path) is True
 
-    refreshed = get_task(tmp_path, task_id)
-    assert refreshed is not None
-    assert refreshed.status == "queued"
-    assert refreshed.pipeline_status == expected_stage
-    assert refreshed.runtime.execution_status == "idle"
-    assert refreshed.runtime.current_stage.stage == expected_stage
-    assert refreshed.runtime.current_stage.status == "idle"
-    assert refreshed.runtime.interruption is not None
-    assert refreshed.runtime.interruption.stage == expected_stage
-    assert refreshed.runtime.interruption.resume_stage == expected_stage
-    assert refreshed.runtime.last_outcome.reason_code == "execution_interrupted"
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        get_task(tmp_path, task_id)
 
     raw_payload = _task_state_runtime_payload(tmp_path, task_id)
-    assert set(raw_payload) == {"pipeline", "execution"}
-    assert "execution_status" not in raw_payload
-    assert raw_payload["pipeline"]["execution_status"] == "idle"
-    assert raw_payload["execution"]["interruption"]["resume_stage"] == expected_stage
+    assert "execution_status" in raw_payload
+    assert "pipeline" not in raw_payload
 
     refreshed_state = load_state(tmp_path)
     assert refreshed_state.active_task_id is None
-    assert refreshed_state.queue[0] == task_id
 
 
 def test_recover_stale_runner_state_preserves_runtime_stage_when_pipeline_status_degraded(
@@ -133,11 +122,11 @@ def test_recover_stale_runner_state_preserves_runtime_stage_when_pipeline_status
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "testing"
-    assert refreshed.runtime.execution_status == "idle"
-    assert refreshed.runtime.current_stage.stage == "testing"
-    assert refreshed.runtime.current_stage.status == "idle"
-    assert refreshed.runtime.interruption is not None
-    assert refreshed.runtime.interruption.resume_stage == "testing"
+    assert refreshed.runtime.pipeline.execution_status == "idle"
+    assert refreshed.runtime.pipeline.current_stage.stage == "testing"
+    assert refreshed.runtime.pipeline.current_stage.status == "idle"
+    assert refreshed.runtime.execution.interruption is not None
+    assert refreshed.runtime.execution.interruption.resume_stage == "testing"
 
     refreshed_state = load_state(tmp_path)
     assert refreshed_state.active_task_id is None
@@ -155,9 +144,9 @@ def test_recover_stale_runner_state_canonicalizes_nonrunning_stranded_task(
     )
     task.status = "in_progress"
     task.pipeline_status = "backlog"
-    task.runtime.execution_status = "idle"
-    task.runtime.current_stage.stage = "testing"
-    task.runtime.current_stage.status = "idle"
+    task.runtime.pipeline.execution_status = "idle"
+    task.runtime.pipeline.current_stage.stage = "testing"
+    task.runtime.pipeline.current_stage.status = "idle"
     save_task(tmp_path, task)
 
     state = load_state(tmp_path)
@@ -171,9 +160,9 @@ def test_recover_stale_runner_state_canonicalizes_nonrunning_stranded_task(
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "testing"
-    assert refreshed.runtime.execution_status == "idle"
-    assert refreshed.runtime.current_stage.stage == "testing"
-    assert refreshed.runtime.current_stage.status == "idle"
+    assert refreshed.runtime.pipeline.execution_status == "idle"
+    assert refreshed.runtime.pipeline.current_stage.stage == "testing"
+    assert refreshed.runtime.pipeline.current_stage.status == "idle"
 
     refreshed_state = load_state(tmp_path)
     assert refreshed_state.active_task_id is None
@@ -191,9 +180,9 @@ def test_recover_stale_runner_state_canonicalizes_queued_interrupted_marker(
     )
     task.status = "queued"
     task.pipeline_status = "grooming"
-    task.runtime.execution_status = "interrupted"
-    task.runtime.current_stage.stage = "grooming"
-    task.runtime.current_stage.status = "running"
+    task.runtime.pipeline.execution_status = "interrupted"
+    task.runtime.pipeline.current_stage.stage = "grooming"
+    task.runtime.pipeline.current_stage.status = "running"
     save_task(tmp_path, task)
 
     state = load_state(tmp_path)
@@ -207,9 +196,9 @@ def test_recover_stale_runner_state_canonicalizes_queued_interrupted_marker(
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "grooming"
-    assert refreshed.runtime.execution_status == "idle"
-    assert refreshed.runtime.current_stage.stage == "grooming"
-    assert refreshed.runtime.current_stage.status == "idle"
+    assert refreshed.runtime.pipeline.execution_status == "idle"
+    assert refreshed.runtime.pipeline.current_stage.stage == "grooming"
+    assert refreshed.runtime.pipeline.current_stage.status == "idle"
 
     refreshed_state = load_state(tmp_path)
     assert refreshed_state.active_task_id is None
@@ -221,7 +210,7 @@ def test_recover_stale_runner_state_clears_non_running_active_task_id(tmp_path: 
     task = create_task(tmp_path, title="Flagged but not running")
     task.status = "flagged"
     task.pipeline_status = "flagged"
-    task.runtime.execution_status = "idle"
+    task.runtime.pipeline.execution_status = "idle"
     save_task(tmp_path, task)
 
     state = load_state(tmp_path)
@@ -229,7 +218,7 @@ def test_recover_stale_runner_state_clears_non_running_active_task_id(tmp_path: 
     save_state(tmp_path, state)
 
     assert recover_stale_runner_state(tmp_path) is True
-    assert get_task(tmp_path, task.id).runtime.execution_status == "idle"  # type: ignore[union-attr]
+    assert get_task(tmp_path, task.id).runtime.pipeline.execution_status == "idle"  # type: ignore[union-attr]
     assert load_state(tmp_path).active_task_id is None
 
 
@@ -248,12 +237,12 @@ def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> N
 
     task.status = "in_progress"
     task.pipeline_status = "implementing"
-    task.runtime.execution_status = "running"
-    task.runtime.run_started_at = "2026-04-12T10:00:00Z"
-    task.runtime.current_stage.stage = "implementing"
-    task.runtime.current_stage.status = "running"
-    task.runtime.current_stage.started_at = "2026-04-12T10:00:00Z"
-    task.runtime.active_subagent = RuntimeSubagentState(
+    task.runtime.pipeline.execution_status = "running"
+    task.runtime.pipeline.run_started_at = "2026-04-12T10:00:00Z"
+    task.runtime.pipeline.current_stage.stage = "implementing"
+    task.runtime.pipeline.current_stage.status = "running"
+    task.runtime.pipeline.current_stage.started_at = "2026-04-12T10:00:00Z"
+    task.runtime.execution.active_subagent = RuntimeSubagentState(
         id="SA-1234",
         role="swe",
         engine="codex",
@@ -273,13 +262,13 @@ def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> N
         reason="received ctrl-c",
     )
 
-    assert task.runtime.interruption is not None
-    assert task.runtime.interruption.reason == "received ctrl-c"
-    assert task.runtime.interruption.resume_stage == "implementing"
-    assert task.runtime.active_subagent is None
-    assert task.runtime.interruption.subagent is not None
-    assert task.runtime.interruption.subagent.status == "interrupted"
-    _assert_runtime_stage_has_no_removed_fields(task.runtime.current_stage)
+    assert task.runtime.execution.interruption is not None
+    assert task.runtime.execution.interruption.reason == "received ctrl-c"
+    assert task.runtime.execution.interruption.resume_stage == "implementing"
+    assert task.runtime.execution.active_subagent is None
+    assert task.runtime.execution.interruption.subagent is not None
+    assert task.runtime.execution.interruption.subagent.status == "interrupted"
+    _assert_runtime_stage_has_no_removed_fields(task.runtime.pipeline.current_stage)
 
     session = load_subagent_session(tmp_path, task.id, "SA-1234")
     report = load_subagent_report(tmp_path, task.id, "SA-1234")

@@ -49,7 +49,7 @@ def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
     )
     task.subagents.append(ref)
     if active:
-        task.runtime.active_subagent = RuntimeSubagentState(
+        task.runtime.execution.active_subagent = RuntimeSubagentState(
             id="SA-0001",
             role="swe",
             engine="codex",
@@ -290,7 +290,7 @@ def test_logs_follow_streams_active_stdout_until_subagent_finishes(
             stdout_path.write_text("chunk one\n", encoding="utf-8")
             return task
         stdout_path.write_text("chunk one\nchunk two\n", encoding="utf-8")
-        task.runtime.active_subagent = None
+        task.runtime.execution.active_subagent = None
         return task
 
     monkeypatch.setattr("litehive.cli.task_logs_support.resolve_follow_task", fake_resolve_follow_task)

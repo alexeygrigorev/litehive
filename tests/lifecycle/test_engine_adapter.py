@@ -821,7 +821,7 @@ def test_heru_engine_adapter_runs_subagent_in_task_worktree(tmp_path, monkeypatc
     task = create_task(tmp_path, title="worktree", goal="use execution root")
     worktree = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
     worktree.mkdir(parents=True)
-    task.runtime.git.worktree_path = str(worktree)
+    task.runtime.pipeline.git.worktree_path = str(worktree)
     save_task(tmp_path, task)
 
     session = Session()

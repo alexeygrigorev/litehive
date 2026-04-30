@@ -49,8 +49,8 @@ def _queue_task(
     task = require_task(root, task_id)
     task.status = status
     task.pipeline_status = pipeline_status
-    task.runtime.execution_status = execution_status
-    task.runtime.last_outcome.kind = outcome_kind
+    task.runtime.pipeline.execution_status = execution_status
+    task.runtime.pipeline.last_outcome.kind = outcome_kind
     save_task(root, task)
 
 
@@ -174,8 +174,8 @@ def test_selector_resets_stale_queued_pipeline_status_to_backlog(tmp_path: Path)
 
     refreshed = require_task(tmp_path, task.id)
     assert refreshed.pipeline_status == "backlog"
-    assert refreshed.runtime.current_stage.stage == "backlog"
-    assert refreshed.runtime.current_stage.status == "idle"
+    assert refreshed.runtime.pipeline.current_stage.stage == "backlog"
+    assert refreshed.runtime.pipeline.current_stage.status == "idle"
 
 
 def test_run_drain_skips_zombie_queue_entries_and_leaves_main_clean(

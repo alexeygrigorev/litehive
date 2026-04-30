@@ -82,8 +82,8 @@ def test_render_active_task_detail_lines_prefers_active_subagent_engine(tmp_path
     task = create_task(tmp_path, title="Active detail task")
     task.status = "in_progress"
     task.pipeline_status = "implementing"
-    task.runtime.current_stage.stage = "testing"
-    task.runtime.active_subagent = RuntimeSubagentState(
+    task.runtime.pipeline.current_stage.stage = "testing"
+    task.runtime.execution.active_subagent = RuntimeSubagentState(
         id="sa-1",
         role="implementer",
         engine="codex",
@@ -211,7 +211,7 @@ def test_render_health_task_sections(tmp_path: Path) -> None:
     active = create_task(tmp_path, title="Active health task")
     active.status = "in_progress"
     active.pipeline_status = "implementing"
-    active.runtime.current_stage.stage = "testing"
+    active.runtime.pipeline.current_stage.stage = "testing"
 
     flagged = create_task(tmp_path, title="Flagged health task")
     flagged.status = "flagged"

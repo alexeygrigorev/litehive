@@ -19,7 +19,7 @@ def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
     task = create_task(tmp_path, title="Atomic save", auto_commit=False)
     task.status = "flagged"
     task.pipeline_status = "testing"
-    task.runtime.execution_status = "flagged"
+    task.runtime.pipeline.execution_status = "flagged"
 
     def fail_runtime_transaction(self, *, task_intents=None, task_states=None, workspace_state=None):
         del task_intents, task_states, workspace_state
@@ -34,7 +34,7 @@ def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "backlog"
-    assert refreshed.runtime.execution_status == "idle"
+    assert refreshed.runtime.pipeline.execution_status == "idle"
 
 
 def test_workspace_transition_writes_preserve_task_added_after_state_snapshot(

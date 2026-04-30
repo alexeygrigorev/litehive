@@ -89,8 +89,8 @@ def test_worktree_sync_persists_runtime_worktree_path(tmp_path: Path) -> None:
     stored = runtime_store(workspace).load_task_runtime(task.id)
     assert changed is True
     assert stored is not None
-    assert stored.git.worktree_path is not None
-    resolved = resolve_recorded_worktree_path(workspace, stored.git.worktree_path)
+    assert stored.pipeline.git.worktree_path is not None
+    resolved = resolve_recorded_worktree_path(workspace, stored.pipeline.git.worktree_path)
     assert resolved is not None
     assert resolved.exists()
 

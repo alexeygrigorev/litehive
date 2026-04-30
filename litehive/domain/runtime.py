@@ -7,7 +7,7 @@ and keeps the litehive-only runtime state models authoritative here.
 from enum import Enum
 from typing import Any, Literal, Mapping, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from heru.types import (
     RuntimeEngineContinuation,
@@ -255,18 +255,6 @@ class ExecutionRuntime(BaseModel):
     last_engine_switch: RuntimeEngineSwitch | None = None
 
 
-_PIPELINE_RUNTIME_FIELDS = frozenset(PipelineRuntime.model_fields)
-_EXECUTION_RUNTIME_FIELDS = frozenset(ExecutionRuntime.model_fields)
-
-
-def _model_or_mapping_payload(value: object) -> dict:
-    if isinstance(value, BaseModel):
-        return value.model_dump(mode="python")
-    if isinstance(value, dict):
-        return dict(value)
-    return {}
-
-
 class TaskRuntime(BaseModel):
     """Task-scoped runtime container split by ownership boundary.
 
@@ -274,52 +262,12 @@ class TaskRuntime(BaseModel):
     runtime state into:
     - pipeline: run status, stage progress, retries, outcomes, and recovery
     - execution: active subagent, interruption, and engine-switch state
-
-    Legacy flat runtime payloads are accepted during validation and normalized
-    into these slices before storage.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     pipeline: PipelineRuntime = Field(default_factory=PipelineRuntime)
     execution: ExecutionRuntime = Field(default_factory=ExecutionRuntime)
-
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_legacy_flat_payload(cls, data):
-        if isinstance(data, TaskRuntime):
-            return data
-        if not isinstance(data, dict):
-            return data
-
-        payload = dict(data)
-        pipeline_payload = _model_or_mapping_payload(payload.get("pipeline"))
-        execution_payload = _model_or_mapping_payload(payload.get("execution"))
-
-        for field_name in _PIPELINE_RUNTIME_FIELDS:
-            if field_name in payload:
-                pipeline_payload[field_name] = payload.pop(field_name)
-        for field_name in _EXECUTION_RUNTIME_FIELDS:
-            if field_name in payload:
-                execution_payload[field_name] = payload.pop(field_name)
-
-        payload["pipeline"] = pipeline_payload
-        payload["execution"] = execution_payload
-        return payload
-
-    def __getattr__(self, name: str):
-        if name in _PIPELINE_RUNTIME_FIELDS:
-            return getattr(self.pipeline, name)
-        if name in _EXECUTION_RUNTIME_FIELDS:
-            return getattr(self.execution, name)
-        return super().__getattr__(name)
-
-    def __setattr__(self, name: str, value: object) -> None:
-        if name in _PIPELINE_RUNTIME_FIELDS and name not in type(self).model_fields:
-            setattr(self.pipeline, name, value)
-            return
-        if name in _EXECUTION_RUNTIME_FIELDS and name not in type(self).model_fields:
-            setattr(self.execution, name, value)
-            return
-        super().__setattr__(name, value)
 
     def for_storage(
         self,

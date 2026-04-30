@@ -67,11 +67,11 @@ def test_run_task_restarts_recovered_stale_runner_task_from_ready(tmp_path: Path
     task = create_task(tmp_path, title="Recover stale runner task")
     task.status = "in_progress"
     task.pipeline_status = "implementing"
-    task.runtime.execution_status = "running"
-    task.runtime.run_started_at = "2026-04-12T10:00:00Z"
-    task.runtime.current_stage.stage = "implementing"
-    task.runtime.current_stage.status = "running"
-    task.runtime.current_stage.started_at = "2026-04-12T10:00:00Z"
+    task.runtime.pipeline.execution_status = "running"
+    task.runtime.pipeline.run_started_at = "2026-04-12T10:00:00Z"
+    task.runtime.pipeline.current_stage.stage = "implementing"
+    task.runtime.pipeline.current_stage.status = "running"
+    task.runtime.pipeline.current_stage.started_at = "2026-04-12T10:00:00Z"
     save_task(tmp_path, task)
     _seed_terminal_pipeline_state(tmp_path, task.id, entry_stage="implementing")
     state = load_state(tmp_path)
@@ -83,7 +83,7 @@ def test_run_task_restarts_recovered_stale_runner_task_from_ready(tmp_path: Path
 
     assert result.final_stage == "done"
     assert result.task is not None
-    _assert_runtime_stage_has_no_removed_fields(result.task.runtime.current_stage)
+    _assert_runtime_stage_has_no_removed_fields(result.task.runtime.pipeline.current_stage)
     assert calls == ["implementing", "testing", "accepting"]
     assert routes[:2] == ["worktree_sync", "before_implementing"]
 

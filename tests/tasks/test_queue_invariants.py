@@ -14,7 +14,7 @@ def _persist_task_status(root: Path, task_id: str, *, status: str, pipeline_stat
     task.status = status
     task.pipeline_status = pipeline_status
     if status == "interrupted":
-        task.runtime.execution_status = "interrupted"
+        task.runtime.pipeline.execution_status = "interrupted"
     save_task(root, task)
 
 
@@ -22,13 +22,13 @@ def _persist_resumable_task(root: Path, task_id: str, *, status: str, pipeline_s
     task = require_task(root, task_id)
     task.status = status
     task.pipeline_status = pipeline_status
-    task.runtime.current_stage.stage = pipeline_status
+    task.runtime.pipeline.current_stage.stage = pipeline_status
     if status == "interrupted":
-        task.runtime.execution_status = "interrupted"
-        task.runtime.current_stage.status = "interrupted"
+        task.runtime.pipeline.execution_status = "interrupted"
+        task.runtime.pipeline.current_stage.status = "interrupted"
     else:
-        task.runtime.execution_status = "idle"
-        task.runtime.current_stage.status = "idle"
+        task.runtime.pipeline.execution_status = "idle"
+        task.runtime.pipeline.current_stage.status = "idle"
     save_task(root, task)
 
 
@@ -215,9 +215,9 @@ def test_peek_canonicalizes_nonrunning_resumable_tasks_on_restart(tmp_path: Path
         pipeline_status="testing",
     )
     stranded_task = require_task(tmp_path, stranded.id)
-    stranded_task.runtime.execution_status = "idle"
-    stranded_task.runtime.current_stage.stage = "testing"
-    stranded_task.runtime.current_stage.status = "idle"
+    stranded_task.runtime.pipeline.execution_status = "idle"
+    stranded_task.runtime.pipeline.current_stage.stage = "testing"
+    stranded_task.runtime.pipeline.current_stage.status = "idle"
     save_task(tmp_path, stranded_task)
 
     _persist_task_status(
@@ -243,16 +243,16 @@ def test_peek_canonicalizes_nonrunning_resumable_tasks_on_restart(tmp_path: Path
     refreshed_stranded = require_task(tmp_path, stranded.id)
     assert refreshed_stranded.status == "queued"
     assert refreshed_stranded.pipeline_status == "testing"
-    assert refreshed_stranded.runtime.execution_status == "idle"
-    assert refreshed_stranded.runtime.current_stage.stage == "testing"
-    assert refreshed_stranded.runtime.current_stage.status == "idle"
+    assert refreshed_stranded.runtime.pipeline.execution_status == "idle"
+    assert refreshed_stranded.runtime.pipeline.current_stage.stage == "testing"
+    assert refreshed_stranded.runtime.pipeline.current_stage.status == "idle"
 
     refreshed_resumed = require_task(tmp_path, resumed.id)
     assert refreshed_resumed.status == "queued"
     assert refreshed_resumed.pipeline_status == "implementing"
-    assert refreshed_resumed.runtime.execution_status == "idle"
-    assert refreshed_resumed.runtime.current_stage.stage == "implementing"
-    assert refreshed_resumed.runtime.current_stage.status == "idle"
+    assert refreshed_resumed.runtime.pipeline.execution_status == "idle"
+    assert refreshed_resumed.runtime.pipeline.current_stage.stage == "implementing"
+    assert refreshed_resumed.runtime.pipeline.current_stage.status == "idle"
 
 
 def test_archived_done_dependency_satisfies_queued_task(tmp_path: Path) -> None:

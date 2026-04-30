@@ -370,8 +370,8 @@ def test_queue_switch_cli_queues_task_for_new_engine(tmp_path: Path) -> None:
     assert "engine: codex -> gemini" in output
     refreshed = get_task_record(tmp_path, task.id)
     assert refreshed is not None
-    assert refreshed.runtime.last_engine_switch is not None
-    assert refreshed.runtime.last_engine_switch.to_engine == "gemini"
+    assert refreshed.runtime.execution.last_engine_switch is not None
+    assert refreshed.runtime.execution.last_engine_switch.to_engine == "gemini"
     entries = load_task_audit_entries(tmp_path, task_id=task.id, action="engine_switched", limit=5)
     assert len(entries) == 1
     assert entries[0].actor == "operator"
@@ -400,8 +400,8 @@ def test_queue_switch_subcommand_still_works(tmp_path: Path) -> None:
     assert "engine: codex -> gemini" in output
     refreshed = get_task_record(tmp_path, task.id)
     assert refreshed is not None
-    assert refreshed.runtime.last_engine_switch is not None
-    assert refreshed.runtime.last_engine_switch.to_engine == "gemini"
+    assert refreshed.runtime.execution.last_engine_switch is not None
+    assert refreshed.runtime.execution.last_engine_switch.to_engine == "gemini"
 
 
 def test_engine_freeze_helpers_persist_and_clear_workspace_config(tmp_path: Path) -> None:

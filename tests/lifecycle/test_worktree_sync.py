@@ -142,7 +142,7 @@ def test_worktree_sync_rebases_existing_task_worktree_onto_local_main(tmp_path: 
         str(worktree),
         "HEAD",
     )
-    task.runtime.git.worktree_path = str(worktree.resolve())
+    task.runtime.pipeline.git.worktree_path = str(worktree.resolve())
     save_task(workspace, task)
 
     (worktree / "feature.txt").write_text("feature\n", encoding="utf-8")
@@ -193,7 +193,7 @@ def test_worktree_sync_rebases_dirty_resumed_worktree_and_preserves_wip(tmp_path
         str(worktree),
         "HEAD",
     )
-    task.runtime.git.worktree_path = str(worktree.resolve())
+    task.runtime.pipeline.git.worktree_path = str(worktree.resolve())
     save_task(workspace, task)
 
     (worktree / "app.txt").write_text("base\nlocal draft\n", encoding="utf-8")
@@ -251,7 +251,7 @@ def test_worktree_sync_skips_dirty_worktrees(tmp_path: Path) -> None:
         str(worktree),
         "HEAD",
     )
-    task.runtime.git.worktree_path = str(worktree.resolve())
+    task.runtime.pipeline.git.worktree_path = str(worktree.resolve())
     save_task(workspace, task)
 
     _git_ok(tmp_path, "clone", str(origin), str(upstream))
@@ -298,7 +298,7 @@ def test_worktree_sync_prunes_stale_git_worktree_metadata_before_recreate(tmp_pa
         str(worktree),
         "HEAD",
     )
-    task.runtime.git.worktree_path = None
+    task.runtime.pipeline.git.worktree_path = None
     save_task(workspace, task)
 
     shutil.rmtree(worktree)
@@ -338,7 +338,7 @@ def test_worktree_sync_reuses_existing_branch_worktree_when_runtime_path_missing
         str(worktree),
         "HEAD",
     )
-    task.runtime.git.worktree_path = None
+    task.runtime.pipeline.git.worktree_path = None
     save_task(workspace, task)
 
     node = GitWorktreeSyncNode(
@@ -350,6 +350,6 @@ def test_worktree_sync_reuses_existing_branch_worktree_when_runtime_path_missing
     refreshed = get_task(workspace, task.id)
     assert refreshed is not None
     assert changed is False
-    assert refreshed.runtime.git.worktree_path == str(worktree.resolve())
+    assert refreshed.runtime.pipeline.git.worktree_path == str(worktree.resolve())
     assert worktree.exists()
     assert _git_ok(worktree, "branch", "--show-current") == task_worktree_branch(task)

@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from .common import (
     PipelineMode,
@@ -12,96 +12,9 @@ from .common import (
 )
 from .runtime import SubagentRef, TaskRuntime
 
-LEGACY_CLOSED_STATUS_CLOSE_REASONS = {
-    "cancelled": "execution_cancelled",
-    "wont_do": "wont_do",
-    "deferred": "deferred",
-    "duplicate": "duplicate",
-}
-
-
-def _last_outcome_reason_code(data: dict) -> str | None:
-    runtime = data.get("runtime")
-    if not isinstance(runtime, dict):
-        return None
-    pipeline = runtime.get("pipeline")
-    runtime_payload = pipeline if isinstance(pipeline, dict) else runtime
-    last_outcome = runtime_payload.get("last_outcome")
-    if not isinstance(last_outcome, dict):
-        return None
-    reason_code = last_outcome.get("reason_code")
-    return None if reason_code is None else str(reason_code)
-
-
-def _canonicalized_task_state_payload(data):
-    if not isinstance(data, dict):
-        return data
-    payload = dict(data)
-    status = str(payload.get("status") or "")
-    pipeline_status = str(payload.get("pipeline_status") or "")
-    flag_reason = payload.get("flag_reason")
-    flag_count = int(payload.get("flag_count") or 0)
-
-    if pipeline_status == "merge_failed":
-        payload["pipeline_status"] = "flagged"
-
-    if status == "merge_failed":
-        payload["status"] = "flagged"
-        payload["pipeline_status"] = "flagged"
-        payload["flag_reason"] = flag_reason or "merge_failed"
-        payload["close_reason"] = None
-        return payload
-
-    if status == "deferred" and flag_count >= 3 and flag_reason:
-        payload["status"] = "flagged"
-        payload["flag_reason"] = str(flag_reason)
-        payload["close_reason"] = None
-        return payload
-
-    close_reason = payload.get("close_reason")
-    if status in LEGACY_CLOSED_STATUS_CLOSE_REASONS:
-        close_reason = LEGACY_CLOSED_STATUS_CLOSE_REASONS[status]
-        payload["status"] = "closed"
-    elif status == "closed":
-        close_reason = close_reason or _last_outcome_reason_code(payload) or "unknown"
-    elif status == "done":
-        close_reason = close_reason or "done"
-    elif status == "archived":
-        close_reason = close_reason or _last_outcome_reason_code(payload)
-        if close_reason is None and pipeline_status == "done":
-            close_reason = "done"
-    else:
-        close_reason = None
-
-    payload["close_reason"] = close_reason
-    if payload.get("status") in {"closed", "done", "archived"}:
-        payload["flag_reason"] = None
-    return payload
-
-
 def canonicalize_task_terminal_state(task: "TaskRecord") -> None:
     status = str(task.status)
-    pipeline_status = str(task.pipeline_status)
-
-    if pipeline_status == "merge_failed":
-        task.pipeline_status = "flagged"
-
-    if status == "merge_failed":
-        task.status = "flagged"
-        task.pipeline_status = "flagged"
-        task.flag_reason = task.flag_reason or "merge_failed"
-        task.close_reason = None
-        return
-
-    if status == "deferred" and task.flag_count >= 3 and task.flag_reason:
-        task.status = "flagged"
-        task.close_reason = None
-        return
-
-    if status in LEGACY_CLOSED_STATUS_CLOSE_REASONS:
-        task.status = "closed"
-        task.close_reason = LEGACY_CLOSED_STATUS_CLOSE_REASONS[status]
-    elif status == "closed":
+    if status == "closed":
         outcome_reason_code = task.runtime.pipeline.last_outcome.reason_code
         task.close_reason = (
             task.close_reason or (None if outcome_reason_code is None else str(outcome_reason_code)) or "unknown"
@@ -268,11 +181,6 @@ class TaskStateRecord(BaseModel):
     retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)  # Retry configuration
     runtime: TaskRuntime = Field(default_factory=TaskRuntime)  # Detailed execution state
 
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_terminal_state(cls, data):
-        return _canonicalized_task_state_payload(data)
-
     def apply_to_task(self, record: "TaskRecord") -> "TaskRecord":
         record.model = self.model
         record.status = self.status
@@ -345,11 +253,6 @@ class TaskRecord(BaseModel):
     runtime: TaskRuntime = Field(
         default_factory=TaskRuntime, exclude=True
     )  # Mutable execution state, excluded from serialization
-
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_terminal_state(cls, data):
-        return _canonicalized_task_state_payload(data)
 
     def to_intent_record(self) -> TaskIntentRecord:
         return TaskIntentRecord(

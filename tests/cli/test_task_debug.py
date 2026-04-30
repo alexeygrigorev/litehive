@@ -394,7 +394,7 @@ def test_debug_worktree_shows_uncommitted_changes(tmp_path: Path, capsys: pytest
 
     assert exit_code == 0
     assert f"task: {task.id}" in output
-    assert f"worktree: {task.runtime.git.worktree_path}" in output
+    assert f"worktree: {task.runtime.pipeline.git.worktree_path}" in output
     assert "exists: yes" in output
     assert "uncommitted:" in output
     assert "  - dirty.py" in output

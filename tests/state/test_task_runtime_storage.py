@@ -3,12 +3,13 @@ from pathlib import Path
 import warnings
 
 import pytest
+from pydantic import ValidationError
 
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import OutcomeKind, OutcomeReasonCode
 from litehive.domain.runtime import RuntimeInterruptionState, RuntimeSubagentState, TaskRuntime
-from litehive.domain.task import TaskRecord
+from litehive.domain.task import TaskRecord, TaskStateRecord
 from litehive.state.records import (
     TaskStateMissingError,
     create_task,
@@ -60,56 +61,65 @@ def _task_intent_columns(root: Path, task_id: str) -> dict:
     return dict(row)
 
 
-def test_task_runtime_normalizes_legacy_flat_payload() -> None:
-    runtime = TaskRuntime.model_validate(
-        {
-            "execution_status": "running",
-            "retry_count": 2,
-            "active_subagent": {
-                "id": "sa-1",
-                "role": "swe",
-                "engine": "codex",
-                "status": "running",
-                "path": "subagents/sa-1",
-                "started_at": "2026-04-20T10:00:00+00:00",
-                "updated_at": "2026-04-20T10:00:01+00:00",
-            },
-            "interruption": {
-                "source": "runner",
-                "reason": "stale state",
-                "resume_stage": "implementing",
-            },
-            "last_outcome": {
-                "kind": "interrupted",
-                "stage": "implementing",
-                "reason_code": "execution_interrupted",
-                "reason": "runner stopped",
-            },
-        }
-    )
+def test_task_runtime_rejects_legacy_flat_payload() -> None:
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        TaskRuntime.model_validate(
+            {
+                "execution_status": "running",
+                "retry_count": 2,
+                "active_subagent": {
+                    "id": "sa-1",
+                    "role": "swe",
+                    "engine": "codex",
+                    "status": "running",
+                    "path": "subagents/sa-1",
+                    "started_at": "2026-04-20T10:00:00+00:00",
+                    "updated_at": "2026-04-20T10:00:01+00:00",
+                },
+                "interruption": {
+                    "source": "runner",
+                    "reason": "stale state",
+                    "resume_stage": "implementing",
+                },
+                "last_outcome": {
+                    "kind": "interrupted",
+                    "stage": "implementing",
+                    "reason_code": "execution_interrupted",
+                    "reason": "runner stopped",
+                },
+            }
+        )
 
-    assert runtime.pipeline.execution_status == "running"
-    assert runtime.pipeline.retry_count == 2
-    assert runtime.pipeline.last_outcome.reason_code == "execution_interrupted"
-    assert runtime.execution.active_subagent is not None
-    assert runtime.execution.active_subagent.id == "sa-1"
-    assert runtime.execution.interruption is not None
-    assert runtime.execution.interruption.resume_stage == "implementing"
-    assert set(runtime.model_dump(mode="json")) == {"pipeline", "execution"}
+
+@pytest.mark.parametrize("status", ["cancelled", "wont_do", "deferred", "duplicate", "merge_failed"])
+def test_task_record_rejects_removed_terminal_statuses(status: str) -> None:
+    with pytest.raises(ValidationError):
+        TaskRecord(id="T-0001", slug="legacy", title="Legacy", status=status)
+
+
+@pytest.mark.parametrize("status", ["cancelled", "wont_do", "deferred", "duplicate", "merge_failed"])
+def test_task_state_record_rejects_removed_terminal_statuses(status: str) -> None:
+    with pytest.raises(ValidationError):
+        TaskStateRecord(status=status)
+
+
+def test_task_state_record_rejects_removed_pipeline_status() -> None:
+    with pytest.raises(ValidationError):
+        TaskStateRecord(pipeline_status="merge_failed")
 
 
 def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="DB runtime")
-    task.runtime.execution_status = "running"
-    task.runtime.current_stage.stage = "implementing"
+    task.runtime.pipeline.execution_status = "running"
+    task.runtime.pipeline.current_stage.stage = "implementing"
     save_task_runtime(tmp_path, task)
 
     loaded = get_task(tmp_path, task.id)
 
     assert loaded is not None
-    assert loaded.runtime.execution_status == "running"
-    assert loaded.runtime.current_stage.stage == "implementing"
+    assert loaded.runtime.pipeline.execution_status == "running"
+    assert loaded.runtime.pipeline.current_stage.stage == "implementing"
 
 
 def test_task_runtime_persists_pipeline_and_execution_slices(tmp_path: Path) -> None:
@@ -197,14 +207,14 @@ def test_get_task_preserves_commit_sha_when_runtime_copy_is_missing(tmp_path: Pa
     task = create_task(tmp_path, title="Commit SHA fallback")
     state = task.to_state_record()
     state.git.commit_sha = "abc123"
-    state.runtime.git.commit_sha = None
+    state.runtime.pipeline.git.commit_sha = None
     runtime_store(tmp_path).save_task_state(task.id, state)
 
     loaded = get_task(tmp_path, task.id)
 
     assert loaded is not None
     assert loaded.git.commit_sha == "abc123"
-    assert loaded.runtime.git.commit_sha == "abc123"
+    assert loaded.runtime.pipeline.git.commit_sha == "abc123"
 
 
 def test_task_intent_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path: Path) -> None:
@@ -215,8 +225,8 @@ def test_task_intent_persists_only_intent_fields_and_runtime_moves_to_db(tmp_pat
     task.flag_reason = "needs-review"
     task.flag_count = 2
     task.pipeline_status = "implementing"
-    task.runtime.execution_status = "running"
-    task.runtime.current_stage.stage = "implementing"
+    task.runtime.pipeline.execution_status = "running"
+    task.runtime.pipeline.current_stage.stage = "implementing"
     task.git.commit_sha = "abc123"
     task.git.checkpoint_attempts = 3
     save_task(tmp_path, task)
@@ -252,8 +262,8 @@ def test_task_intent_persists_only_intent_fields_and_runtime_moves_to_db(tmp_pat
     assert loaded.pipeline_status == "implementing"
     assert loaded.git.commit_sha == "abc123"
     assert loaded.git.checkpoint_attempts == 3
-    assert loaded.runtime.execution_status == "running"
-    assert loaded.runtime.current_stage.stage == "implementing"
+    assert loaded.runtime.pipeline.execution_status == "running"
+    assert loaded.runtime.pipeline.current_stage.stage == "implementing"
 
 
 def test_task_intent_canonical_columns_preserve_existing_runtime_status(tmp_path: Path) -> None:
@@ -344,8 +354,8 @@ def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -
     task.pipeline_status = "implementing"
     task.git.commit_sha = "abc123"
     task.git.checkpoint_attempts = 3
-    task.runtime.execution_status = "running"
-    task.runtime.current_stage.stage = "implementing"
+    task.runtime.pipeline.execution_status = "running"
+    task.runtime.pipeline.current_stage.stage = "implementing"
 
     intent = task.to_intent_record()
     state = task.to_state_record()
@@ -358,5 +368,5 @@ def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -
     assert restored.pipeline_status == "implementing"
     assert restored.git.commit_sha == "abc123"
     assert restored.git.checkpoint_attempts == 3
-    assert restored.runtime.execution_status == "running"
-    assert restored.runtime.current_stage.stage == "implementing"
+    assert restored.runtime.pipeline.execution_status == "running"
+    assert restored.runtime.pipeline.current_stage.stage == "implementing"

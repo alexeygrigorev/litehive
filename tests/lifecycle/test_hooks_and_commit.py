@@ -895,7 +895,7 @@ def test_run_task_reconciles_noop_commit_stage_and_records_main_head(tmp_path: P
     assert result.final_stage == "done"
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
-    assert refreshed.runtime.git.commit_sha == final_head
+    assert refreshed.runtime.pipeline.git.commit_sha == final_head
     assert pipeline_state.commit_result is not None
     assert pipeline_state.commit_result.head_sha == final_head
     assert pipeline_state.commit_result.reason == "no_op"
@@ -937,9 +937,9 @@ def test_reconcile_terminal_commit_sha_recovers_missing_sha_from_persisted_commi
     reloaded = get_task(tmp_path, task.id)
 
     assert reconciled is not None
-    assert reconciled.runtime.git.commit_sha == head_sha
+    assert reconciled.runtime.pipeline.git.commit_sha == head_sha
     assert reloaded is not None
-    assert reloaded.runtime.git.commit_sha == head_sha
+    assert reloaded.runtime.pipeline.git.commit_sha == head_sha
 
 
 def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path) -> None:
@@ -1033,7 +1033,7 @@ def test_run_task_merge_conflict_failure_journal_stays_distinct_from_noop_reconc
     assert raw_state["status"] == "flagged"
     assert raw_state["pipeline_status"] == "flagged"
     assert raw_state["flag_reason"] == "merge_failed"
-    assert refreshed.runtime.git.commit_sha is None
+    assert refreshed.runtime.pipeline.git.commit_sha is None
     assert "reconciled as a no-op" not in journal
     assert ("commit_to_git failed during merge reconciliation: merge conflict remained after manual attempt") in journal
 

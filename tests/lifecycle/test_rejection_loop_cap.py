@@ -66,9 +66,9 @@ def test_rejection_loop_flags_task_preserves_worktree_and_branch(tmp_path: Path)
     assert pipeline_state.rejection_loop is not None
     assert pipeline_state.rejection_loop.rejection_stage == "testing"
     assert pipeline_state.rejection_loop.count == 3
-    assert refreshed.runtime.git.worktree_path is not None
+    assert refreshed.runtime.pipeline.git.worktree_path is not None
 
-    worktree = resolve_recorded_worktree_path(tmp_path, refreshed.runtime.git.worktree_path)
+    worktree = resolve_recorded_worktree_path(tmp_path, refreshed.runtime.pipeline.git.worktree_path)
     assert worktree is not None
     assert worktree.exists()
 
@@ -141,7 +141,7 @@ def test_repeated_stage_retry_exhaustion_survives_requeue_and_blocks_blind_reque
     first_record = next(iter(first_state.failed_run_history.values()))
     assert first_record.stage == "implementing"
     assert first_record.count == 1
-    assert first_refreshed.runtime.failed_run_history[first_record.key].count == 1
+    assert first_refreshed.runtime.pipeline.failed_run_history[first_record.key].count == 1
 
     requeued = requeue_task(tmp_path, task.id)
     second_engine = _StageScriptEngine({"implementing": ["reject", "reject", "reject", "reject"]})
@@ -155,13 +155,13 @@ def test_repeated_stage_retry_exhaustion_survives_requeue_and_blocks_blind_reque
     second_record = next(iter(second_state.failed_run_history.values()))
     assert second_record.stage == "implementing"
     assert second_record.count == 2
-    assert second_refreshed.runtime.failed_run_history[second_record.key].count == 2
+    assert second_refreshed.runtime.pipeline.failed_run_history[second_record.key].count == 2
 
     with pytest.raises(ValueError, match="repeatedly exhausted the same stage retry budget"):
         requeue_task(tmp_path, task.id)
 
     forced = requeue_task(tmp_path, task.id, force=True)
-    forced_record = next(iter(forced.runtime.failed_run_history.values()))
+    forced_record = next(iter(forced.runtime.pipeline.failed_run_history.values()))
     assert forced.status == "queued"
     assert forced_record.count == 2
     assert forced_record.operator_override_count == 2

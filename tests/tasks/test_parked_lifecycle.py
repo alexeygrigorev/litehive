@@ -22,11 +22,11 @@ from litehive.worktree import inspect_dirty_worktree_gate
 def _set_running_task(task, *, stage: str = "implementing") -> None:
     task.status = "in_progress"
     task.pipeline_status = stage
-    task.runtime.execution_status = "running"
-    task.runtime.run_started_at = "2026-04-12T10:00:00Z"
-    task.runtime.current_stage.stage = stage
-    task.runtime.current_stage.status = "running"
-    task.runtime.current_stage.started_at = "2026-04-12T10:00:00Z"
+    task.runtime.pipeline.execution_status = "running"
+    task.runtime.pipeline.run_started_at = "2026-04-12T10:00:00Z"
+    task.runtime.pipeline.current_stage.stage = stage
+    task.runtime.pipeline.current_stage.status = "running"
+    task.runtime.pipeline.current_stage.started_at = "2026-04-12T10:00:00Z"
 
 
 class _PassEngine:
@@ -56,14 +56,14 @@ def test_stop_current_task_marks_active_work_as_parked(tmp_path: Path) -> None:
 
     assert summary.task.status == "parked"
     assert summary.task.pipeline_status == "implementing"
-    assert summary.task.runtime.execution_status == "idle"
-    assert summary.task.runtime.run_started_at is None
-    assert summary.task.runtime.active_subagent is None
+    assert summary.task.runtime.pipeline.execution_status == "idle"
+    assert summary.task.runtime.pipeline.run_started_at is None
+    assert summary.task.runtime.execution.active_subagent is None
 
     # Parked tasks have minimal interruption metadata for resume functionality
-    assert summary.task.runtime.interruption is not None
-    assert summary.task.runtime.interruption.resume_stage == "implementing"
-    assert summary.task.runtime.interruption.reason == "Task parked via CLI command from implementing stage"
+    assert summary.task.runtime.execution.interruption is not None
+    assert summary.task.runtime.execution.interruption.resume_stage == "implementing"
+    assert summary.task.runtime.execution.interruption.reason == "Task parked via CLI command from implementing stage"
     # No longer using the magic string "Task stopped via CLI"
 
     refreshed = get_task(tmp_path, task.id)
@@ -123,9 +123,9 @@ def test_resume_task_allows_stranded_in_progress_task(tmp_path: Path, execution_
     task = create_task(tmp_path, title="Resume stranded task")
     task.status = "in_progress"
     task.pipeline_status = "grooming"
-    task.runtime.execution_status = execution_status
-    task.runtime.current_stage.stage = "grooming"
-    task.runtime.current_stage.status = execution_status
+    task.runtime.pipeline.execution_status = execution_status
+    task.runtime.pipeline.current_stage.stage = "grooming"
+    task.runtime.pipeline.current_stage.status = execution_status
     save_task(tmp_path, task)
 
     state = load_state(tmp_path)
@@ -137,9 +137,9 @@ def test_resume_task_allows_stranded_in_progress_task(tmp_path: Path, execution_
 
     assert resumed.status == "queued"
     assert resumed.pipeline_status == "grooming"
-    assert resumed.runtime.execution_status == "idle"
-    assert resumed.runtime.current_stage.stage == "grooming"
-    assert resumed.runtime.current_stage.status == "idle"
+    assert resumed.runtime.pipeline.execution_status == "idle"
+    assert resumed.runtime.pipeline.current_stage.stage == "grooming"
+    assert resumed.runtime.pipeline.current_stage.status == "idle"
     assert load_state(tmp_path).queue[0] == task.id
 
 
@@ -193,14 +193,14 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
     )
     task.status = "parked"
     task.pipeline_status = "testing"
-    task.runtime.execution_status = "paused"
-    task.runtime.current_stage.stage = "testing"
-    task.runtime.current_stage.status = "paused"
+    task.runtime.pipeline.execution_status = "paused"
+    task.runtime.pipeline.current_stage.stage = "testing"
+    task.runtime.pipeline.current_stage.status = "paused"
     save_task(tmp_path, task)
 
     resumed = resume_task(tmp_path, task.id, front=True)
-    assert resumed.runtime.current_stage.stage == "testing"
-    assert resumed.runtime.current_stage.status == "idle"
+    assert resumed.runtime.pipeline.current_stage.stage == "testing"
+    assert resumed.runtime.pipeline.current_stage.status == "idle"
 
     monkeypatch.setattr(
         "litehive.lifecycle.orchestration.build_commit_node",
@@ -232,10 +232,10 @@ def test_resume_task_recovers_preserved_stage_when_pipeline_status_degraded(tmp_
     )
     task.status = "parked"
     task.pipeline_status = "backlog"
-    task.runtime.execution_status = "paused"
-    task.runtime.current_stage.stage = "testing"
-    task.runtime.current_stage.status = "paused"
-    task.runtime.interruption = RuntimeInterruptionState(
+    task.runtime.pipeline.execution_status = "paused"
+    task.runtime.pipeline.current_stage.stage = "testing"
+    task.runtime.pipeline.current_stage.status = "paused"
+    task.runtime.execution.interruption = RuntimeInterruptionState(
         source="runner",
         stage="testing",
         pipeline_status="testing",
@@ -249,9 +249,9 @@ def test_resume_task_recovers_preserved_stage_when_pipeline_status_degraded(tmp_
 
     assert resumed.status == "queued"
     assert resumed.pipeline_status == "testing"
-    assert resumed.runtime.execution_status == "idle"
-    assert resumed.runtime.current_stage.stage == "testing"
-    assert resumed.runtime.current_stage.status == "idle"
+    assert resumed.runtime.pipeline.execution_status == "idle"
+    assert resumed.runtime.pipeline.current_stage.stage == "testing"
+    assert resumed.runtime.pipeline.current_stage.status == "idle"
     assert load_state(tmp_path).queue[0] == task.id
 
 
@@ -266,9 +266,9 @@ def test_resume_task_canonicalizes_stranded_in_progress_with_degraded_pipeline_s
     )
     task.status = "in_progress"
     task.pipeline_status = "backlog"
-    task.runtime.execution_status = "idle"
-    task.runtime.current_stage.stage = "testing"
-    task.runtime.current_stage.status = "idle"
+    task.runtime.pipeline.execution_status = "idle"
+    task.runtime.pipeline.current_stage.stage = "testing"
+    task.runtime.pipeline.current_stage.status = "idle"
     save_task(tmp_path, task)
 
     state = load_state(tmp_path)
@@ -280,9 +280,9 @@ def test_resume_task_canonicalizes_stranded_in_progress_with_degraded_pipeline_s
 
     assert resumed.status == "queued"
     assert resumed.pipeline_status == "testing"
-    assert resumed.runtime.execution_status == "idle"
-    assert resumed.runtime.current_stage.stage == "testing"
-    assert resumed.runtime.current_stage.status == "idle"
+    assert resumed.runtime.pipeline.execution_status == "idle"
+    assert resumed.runtime.pipeline.current_stage.stage == "testing"
+    assert resumed.runtime.pipeline.current_stage.status == "idle"
 
     refreshed_state = load_state(tmp_path)
     assert refreshed_state.active_task_id is None

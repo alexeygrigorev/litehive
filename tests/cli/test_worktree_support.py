@@ -12,7 +12,7 @@ def test_collect_managed_worktrees_marks_active_task_without_crashing(tmp_path: 
     task = create_task(tmp_path, title="Tracked worktree")
     managed_worktree = workspace_path(tmp_path, "worktrees") / f"{task.id}-{task.slug}"
     managed_worktree.mkdir(parents=True)
-    task.runtime.git.worktree_path = str(managed_worktree.resolve())
+    task.runtime.pipeline.git.worktree_path = str(managed_worktree.resolve())
     save_task(tmp_path, task)
 
     state = load_state(tmp_path)

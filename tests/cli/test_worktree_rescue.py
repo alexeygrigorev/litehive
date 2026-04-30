@@ -83,7 +83,7 @@ def _create_merge_failed_worktree_task(workspace: Path):
     task.status = "flagged"
     task.pipeline_status = "flagged"
     task.flag_reason = "merge_failed"
-    task.runtime.git.worktree_path = serialize_worktree_path(worktree_path)
+    task.runtime.pipeline.git.worktree_path = serialize_worktree_path(worktree_path)
     task.git.worktree_path = None
     save_task(workspace, task)
 
@@ -171,8 +171,8 @@ def test_worktree_rescue_apply_completes_while_another_runner_holds_the_lock(tmp
         assert refreshed is not None
         assert refreshed.status == "done"
         assert refreshed.pipeline_status == "done"
-        assert refreshed.runtime.git.worktree_path is None
-        assert refreshed.runtime.git.commit_sha == _git_ok(workspace, "rev-parse", "HEAD")
+        assert refreshed.runtime.pipeline.git.worktree_path is None
+        assert refreshed.runtime.pipeline.git.commit_sha == _git_ok(workspace, "rev-parse", "HEAD")
 
         refreshed_state = load_state(workspace)
         assert refreshed_state.active_task_id == busy_task.id
@@ -216,7 +216,7 @@ def test_worktree_rescue_apply_refuses_to_race_the_active_task(tmp_path: Path) -
         assert refreshed.status == "flagged"
         assert refreshed.pipeline_status == "flagged"
         assert refreshed.flag_reason == "merge_failed"
-        assert refreshed.runtime.git.worktree_path == serialize_worktree_path(worktree_path)
-        assert refreshed.runtime.git.commit_sha is None
+        assert refreshed.runtime.pipeline.git.worktree_path == serialize_worktree_path(worktree_path)
+        assert refreshed.runtime.pipeline.git.commit_sha is None
     finally:
         _stop_runner(proc, workspace)

@@ -92,7 +92,7 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Use runtime stage for reports")
-    task.runtime.current_stage.stage = "grooming"
+    task.runtime.pipeline.current_stage.stage = "grooming"
     save_task(tmp_path, task)
     manager = SubagentManager(tmp_path)
 
@@ -156,7 +156,7 @@ def test_subagent_manager_uses_recovering_stage_for_recovery_cli_verdict(
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Use recovery stage for reports")
-    task.runtime.current_stage.stage = "recovering"
+    task.runtime.pipeline.current_stage.stage = "recovering"
     save_task(tmp_path, task)
     manager = SubagentManager(tmp_path)
 
@@ -688,7 +688,7 @@ def test_subagent_manager_survives_nonfatal_start_callback_failure_for_planner(
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Planner start callback failure")
-    task.runtime.current_stage.stage = "grooming"
+    task.runtime.pipeline.current_stage.stage = "grooming"
     save_task(tmp_path, task)
     manager = SubagentManager(tmp_path)
 
@@ -762,7 +762,7 @@ def test_subagent_manager_survives_nonfatal_progress_callback_failure_for_planne
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Planner progress callback failure")
-    task.runtime.current_stage.stage = "grooming"
+    task.runtime.pipeline.current_stage.stage = "grooming"
     save_task(tmp_path, task)
     manager = SubagentManager(tmp_path)
 

@@ -195,7 +195,7 @@ def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, mon
     stale.status = "done"
     stale.pipeline_status = "done"
     missing_worktree = workspace_path(tmp_path, "worktrees") / "stale-task"
-    stale.runtime.git.worktree_path = str(missing_worktree)
+    stale.runtime.pipeline.git.worktree_path = str(missing_worktree)
     save_task(tmp_path, stale)
     missing_worktree.mkdir(parents=True)
 
@@ -253,7 +253,7 @@ def test_stale_worktree_metadata_auto_resolves_when_path_already_clear(tmp_path:
     task = create_task(tmp_path, title="Already cleared worktree metadata")
     task.status = "done"
     task.pipeline_status = "done"
-    task.runtime.git.worktree_path = None
+    task.runtime.pipeline.git.worktree_path = None
     save_task(tmp_path, task)
 
     record_attention(
