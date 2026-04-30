@@ -52,9 +52,11 @@ class _PassEngine:
 
     name = "stub"
 
+    def __init__(self) -> None:
+        self.calls = 0
+
     def run_turn(self, session: Any, prompt: Any, state: Any) -> AgentVerdict:
-        # Record how many turns so the test can assert at least one run
-        session.turn_count += 1
+        self.calls += 1
         session.engine_session_id = f"stub-{state.task_id}-{state.stage}"
         return AgentVerdict(outcome="pass")
 
@@ -83,10 +85,11 @@ class _RecoveringEngine(_PassEngine):
     """Emits verdicts driven by the target node name so the test can script per-stage outcomes."""
 
     def __init__(self, plan: dict[str, str]) -> None:
+        super().__init__()
         self.plan = plan
 
     def run_turn(self, session: Any, prompt: Any, state: Any) -> AgentVerdict:
-        session.turn_count += 1
+        self.calls += 1
         session.engine_session_id = f"stub-{state.task_id}-{state.stage}"
         outcome = self.plan.get(state.stage, "pass")
         if outcome == "resume":
@@ -274,7 +277,6 @@ class _WorktreeCommitEngine:
         self.observed_worktree: Path | None = None
 
     def run_turn(self, session: Any, prompt: Any, state: Any) -> AgentVerdict:
-        session.turn_count += 1
         session.engine_session_id = f"stub-{state.task_id}-{state.stage}"
         if state.stage == "implementing":
             task = get_task(self.root, state.task_id)

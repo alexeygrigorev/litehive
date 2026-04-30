@@ -63,7 +63,6 @@ class _NamedEngine:
 def _auto_pass_behavior(shared_calls: list) -> Any:
     def _run(engine, session, prompt, state) -> AgentVerdict:
         shared_calls.append((engine.name, state.stage))
-        session.turn_count = (session.turn_count or 0) + 1
         session.engine_session_id = f"stub-{state.task_id}-{state.stage}-{len(shared_calls)}"
         return AgentVerdict(outcome="pass", reason="stub-auto-pass")
 

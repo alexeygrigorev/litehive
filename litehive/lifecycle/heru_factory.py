@@ -384,8 +384,6 @@ class HeruEngineAdapter:
         if result.failure is not None:
             self._reraise_failure(result.failure)
 
-        session.turn_count = (session.turn_count or 0) + 1
-
         # Did the agent submit a verdict during this turn?
         verdict = latest_verdict_after(
             self.workspace_root,

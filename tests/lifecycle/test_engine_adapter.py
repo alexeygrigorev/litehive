@@ -74,7 +74,6 @@ def test_heru_engine_adapter_updates_session_from_subagent_result_continuation(t
 
     assert verdict.outcome == "pass"
     assert session.engine_session_id == "codex-thread-123"
-    assert session.turn_count == 1
 
 
 def test_heru_engine_adapter_passes_resume_session_id_to_subagent_manager(tmp_path, monkeypatch) -> None:
@@ -163,7 +162,6 @@ def test_heru_engine_adapter_launches_all_supported_engines(
     assert _StubManager.last_kwargs is not None
     assert _StubManager.last_kwargs["engine_name"] == engine_name
     assert session.engine_session_id == continuation.resume_id
-    assert session.turn_count == 1
 
 
 class _TimeoutThenResumeManager(_StubManager):
@@ -629,7 +627,6 @@ def test_heru_engine_adapter_reuses_failed_turn_continuation_on_retry(tmp_path, 
         )
 
     assert session.engine_session_id == "codex-thread-123"
-    assert session.turn_count == 0
 
     verdict = adapter.run_turn(
         session,
@@ -646,7 +643,6 @@ def test_heru_engine_adapter_reuses_failed_turn_continuation_on_retry(tmp_path, 
     assert verdict.outcome == "pass"
     assert _StubManager.last_kwargs is not None
     assert _StubManager.last_kwargs["resume_session_id"] == "codex-thread-123"
-    assert session.turn_count == 1
 
 
 @pytest.mark.parametrize(
@@ -706,7 +702,6 @@ def test_heru_engine_adapter_retries_crash_once_with_resume_id(
     assert isinstance(_ScriptedManager.last_kwargs[1]["prompt"], str)
     assert _ScriptedManager.last_kwargs[1]["prompt"].startswith(HeruEngineAdapter.CRASH_RESUME_PROMPT_PREFIX)
     assert session.engine_session_id == continuation.resume_id
-    assert session.turn_count == 1
 
 
 @pytest.mark.parametrize("engine_name", ["copilot", "goz"])

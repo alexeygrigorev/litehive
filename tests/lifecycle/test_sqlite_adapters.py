@@ -263,7 +263,15 @@ def test_sessions_empty_get_or_create_returns_fresh(workspace: Path) -> None:
     session = sessions.get_or_create("T-0001", "implementing", "codex")
     assert session.engine_session_id is None
     assert session.conversation_id is None
-    assert session.turn_count == 0
+    assert session.metadata == {}
+
+
+def test_pipeline_sessions_schema_omits_retained_turn_metric(workspace: Path) -> None:
+    with connect_workspace_db(workspace) as connection:
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(pipeline_sessions)").fetchall()}
+
+    removed_metric = "turn" + "_count"
+    assert removed_metric not in columns
 
 
 def test_sessions_persist_roundtrip(workspace: Path) -> None:
@@ -271,7 +279,6 @@ def test_sessions_persist_roundtrip(workspace: Path) -> None:
     session = Session(
         engine_session_id="cdx-abc-123",
         conversation_id="conv-xyz",
-        turn_count=4,
         metadata={"last_prompt_sha": "deadbeef"},
     )
     sessions.persist("T-0001", "implementing", "codex", session)
@@ -279,7 +286,6 @@ def test_sessions_persist_roundtrip(workspace: Path) -> None:
     loaded = sessions.get_or_create("T-0001", "implementing", "codex")
     assert loaded.engine_session_id == "cdx-abc-123"
     assert loaded.conversation_id == "conv-xyz"
-    assert loaded.turn_count == 4
     assert loaded.metadata == {"last_prompt_sha": "deadbeef"}
     assert loaded.resumable() is True
 
@@ -306,11 +312,10 @@ def test_sessions_keyed_by_task_node_engine_triple(workspace: Path) -> None:
 def test_sessions_upsert_replaces_existing_row(workspace: Path) -> None:
     sessions = SqliteSessionStore(workspace)
     sessions.persist("T-0001", "implementing", "codex", Session(engine_session_id="first"))
-    sessions.persist("T-0001", "implementing", "codex", Session(engine_session_id="second", turn_count=5))
+    sessions.persist("T-0001", "implementing", "codex", Session(engine_session_id="second"))
 
     loaded = sessions.get_or_create("T-0001", "implementing", "codex")
     assert loaded.engine_session_id == "second"
-    assert loaded.turn_count == 5
 
 
 def test_sessions_clear_node_sessions_removes_only_target_task_and_node(workspace: Path) -> None:

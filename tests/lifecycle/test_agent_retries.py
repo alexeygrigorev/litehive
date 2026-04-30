@@ -452,7 +452,6 @@ def test_agent_node_retries_timeout_via_existing_retry_flow(
 
     session = store.get_or_create(task.id, "implementing", engine_name)
     assert session.engine_session_id == resume_id
-    assert session.turn_count == 1
 
 
 def test_agent_node_nudges_timeout_retry_with_existing_codex_thread_id(tmp_path, monkeypatch) -> None:
@@ -500,7 +499,6 @@ def test_agent_node_nudges_timeout_retry_with_existing_codex_thread_id(tmp_path,
 
     session = store.get_or_create(task.id, "implementing", "codex")
     assert session.engine_session_id == "codex-thread-123"
-    assert session.turn_count == 2
 
 
 def test_nudge_budget_exhausted_returns_crash() -> None:

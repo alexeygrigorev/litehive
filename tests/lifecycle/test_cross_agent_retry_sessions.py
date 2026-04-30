@@ -7,6 +7,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.hook import HookRunner, HookSpec
 from litehive.lifecycle.nodes.system import StubCommitNode
+from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.lifecycle.registry import build_registry
 from litehive.lifecycle.runner import StateMachineRunner
@@ -36,11 +37,11 @@ class _CrossAgentRetryEngine:
     name = "stub"
 
     def __init__(self) -> None:
-        self.calls: list[tuple[str, str | None, int]] = []
+        self.calls: list[tuple[str, str | None]] = []
         self._per_stage_calls: dict[str, int] = {}
 
     def run_turn(self, session: Any, prompt: Any, state: Any) -> AgentVerdict:
-        self.calls.append((state.stage, session.engine_session_id, session.turn_count))
+        self.calls.append((state.stage, session.engine_session_id))
         call = self._per_stage_calls.get(state.stage, 0) + 1
         self._per_stage_calls[state.stage] = call
 
@@ -56,11 +57,11 @@ class _SameAgentRetryEngine:
     name = "stub"
 
     def __init__(self) -> None:
-        self.calls: list[tuple[str, str | None, int]] = []
+        self.calls: list[tuple[str, str | None]] = []
         self._implementing_calls = 0
 
     def run_turn(self, session: Any, prompt: Any, state: Any) -> AgentVerdict:
-        self.calls.append((state.stage, session.engine_session_id, session.turn_count))
+        self.calls.append((state.stage, session.engine_session_id))
         if state.stage == "implementing":
             self._implementing_calls += 1
             session.engine_session_id = f"implementing-{self._implementing_calls}"
@@ -92,7 +93,7 @@ def _build_runner(
         prompt_context=PromptContext(workspace_root=workspace),
     )
     return (
-        StateMachineRunner(registry, persistence, session_store=sessions),
+        StateMachineRunner(registry, persistence, journal=SqliteJournal(workspace), session_store=sessions),
         sessions,
     )
 
@@ -112,11 +113,18 @@ def test_cross_agent_reject_clears_target_stage_sessions(workspace: Path) -> Non
     assert final_state.stage == "done"
     implementing_calls = [call for call in engine.calls if call[0] == "implementing"]
     assert implementing_calls == [
-        ("implementing", None, 0),
-        ("implementing", None, 0),
+        ("implementing", None),
+        ("implementing", None),
     ]
     persisted = sessions.get_or_create(task.id, "implementing", engine.name)
     assert persisted.engine_session_id == "implementing-2"
+    transitions = SqliteJournal(workspace).load_transitions(task.id)
+    implementing_attempts = [
+        transition
+        for transition in transitions
+        if transition["from_stage"] == "implementing" and transition["event_type"] == "Pass"
+    ]
+    assert len(implementing_attempts) == 2
 
 
 def test_same_agent_reject_keeps_stage_session_continuity(workspace: Path) -> None:
@@ -134,8 +142,8 @@ def test_same_agent_reject_keeps_stage_session_continuity(workspace: Path) -> No
     assert final_state.stage == "done"
     implementing_calls = [call for call in engine.calls if call[0] == "implementing"]
     assert implementing_calls == [
-        ("implementing", None, 0),
-        ("implementing", "implementing-1", 0),
+        ("implementing", None),
+        ("implementing", "implementing-1"),
     ]
     persisted = sessions.get_or_create(task.id, "implementing", engine.name)
     assert persisted.engine_session_id == "implementing-2"

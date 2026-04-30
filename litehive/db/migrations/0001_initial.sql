@@ -138,7 +138,6 @@ CREATE TABLE IF NOT EXISTS pipeline_sessions (
     engine_name        TEXT NOT NULL,
     engine_session_id  TEXT,
     conversation_id    TEXT,
-    turn_count         INTEGER NOT NULL DEFAULT 0,
     metadata           TEXT NOT NULL DEFAULT '{}',
     updated_at         TEXT NOT NULL,
     PRIMARY KEY (task_id, node_name, engine_name)

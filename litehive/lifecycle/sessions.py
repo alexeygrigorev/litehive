@@ -22,7 +22,6 @@ class Session:
 
     engine_session_id: str | None = None
     conversation_id: str | None = None
-    turn_count: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def resumable(self) -> bool:
@@ -78,7 +77,7 @@ class SqliteSessionStore:
         with connect_workspace_db(self.workspace_root) as connection:
             row = connection.execute(
                 """
-                SELECT engine_session_id, conversation_id, turn_count, metadata
+                SELECT engine_session_id, conversation_id, metadata
                 FROM pipeline_sessions
                 WHERE task_id = ? AND node_name = ? AND engine_name = ?
                 """,
@@ -89,7 +88,6 @@ class SqliteSessionStore:
         return Session(
             engine_session_id=row["engine_session_id"],
             conversation_id=row["conversation_id"],
-            turn_count=row["turn_count"],
             metadata=json.loads(row["metadata"] or "{}"),
         )
 
@@ -100,12 +98,11 @@ class SqliteSessionStore:
                 """
                 INSERT INTO pipeline_sessions (
                     task_id, node_name, engine_name,
-                    engine_session_id, conversation_id, turn_count, metadata, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    engine_session_id, conversation_id, metadata, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(task_id, node_name, engine_name) DO UPDATE SET
                     engine_session_id = excluded.engine_session_id,
                     conversation_id = excluded.conversation_id,
-                    turn_count = excluded.turn_count,
                     metadata = excluded.metadata,
                     updated_at = excluded.updated_at
                 """,
@@ -115,7 +112,6 @@ class SqliteSessionStore:
                     engine_name,
                     session.engine_session_id,
                     session.conversation_id,
-                    session.turn_count,
                     metadata_json,
                     utcnow(),
                 ),
