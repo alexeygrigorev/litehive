@@ -9,6 +9,7 @@ import yaml
 
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import workspace_path
+from litehive.config.workspace_cleanup import cleanup_deprecated_workspace_yaml
 from litehive.config.workspace_files import config_path, context_path, workspace_dir, workspace_gitignore_path
 from litehive.config.profiles.rendering import render_context_template
 from litehive.config.registry import (
@@ -209,6 +210,7 @@ def _register_workspace(root: Path) -> None:
 
 
 def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
+    requested_root = Path(root).expanduser().resolve()
     root = normalize_workspace_root(root, source="ensure_workspace")
     _reject_nested_workspace_bootstrap(root, source="ensure_workspace")
     base = workspace_dir(root)
@@ -245,5 +247,8 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
     from litehive.state.store import RuntimeStore
 
     RuntimeStore(root).bootstrap()
+    cleanup_deprecated_workspace_yaml(root)
+    if requested_root != root and workspace_dir(requested_root).is_dir():
+        cleanup_deprecated_workspace_yaml(requested_root)
 
     return base

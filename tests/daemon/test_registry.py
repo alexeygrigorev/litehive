@@ -6,10 +6,8 @@ import subprocess
 import sys
 import time
 
-import yaml
 import pytest
 
-from litehive.config.paths import litehive_root
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.execution import start_background_daemon, stop_workspace_daemon
 from litehive.daemon.registry import (
@@ -106,34 +104,19 @@ def test_register_and_unregister_daemon_uses_shared_lock_manager(tmp_path: Path,
     assert daemon_lock_path(workspace).read_text(encoding="utf-8") == ""
 
 
-def test_unregister_daemon_clears_stale_metadata_and_registry_entry(tmp_path: Path, monkeypatch) -> None:
+def test_unregister_daemon_clears_stale_metadata_without_daemon_registry_yaml(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     workspace = tmp_path / "workspace"
     ensure_workspace(workspace)
     lock_path = daemon_lock_path(workspace)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text(
-        yaml.safe_dump(
+        json.dumps(
             {
                 "workspace": str(workspace.resolve()),
                 "pid": 424242,
                 "started_at": "2026-04-12T00:00:00Z",
             },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
-    registry_path = litehive_root() / "daemons.yaml"
-    registry_path.write_text(
-        yaml.safe_dump(
-            [
-                {
-                    "workspace": str(workspace.resolve()),
-                    "pid": 424242,
-                    "started_at": "2026-04-12T00:00:00Z",
-                }
-            ],
-            sort_keys=False,
         ),
         encoding="utf-8",
     )
@@ -142,7 +125,7 @@ def test_unregister_daemon_clears_stale_metadata_and_registry_entry(tmp_path: Pa
     unregister_daemon(workspace, pid=424242)
 
     assert lock_path.read_text(encoding="utf-8") == ""
-    assert yaml.safe_load(registry_path.read_text(encoding="utf-8")) == []
+    assert not list((tmp_path / "data-home" / "litehive").glob("daemons.y*ml"))
 
 
 def test_start_background_daemon_strips_agent_env(tmp_path: Path, monkeypatch) -> None:
@@ -282,14 +265,13 @@ def test_start_background_daemon_does_not_kill_live_pid_from_stale_metadata(tmp_
     try:
         time.sleep(0.1)
         lock_path.write_text(
-            yaml.safe_dump(
+            json.dumps(
                 {
                     "workspace": str(workspace.resolve()),
                     "pid": sleeper.pid,
                     "started_at": "2026-04-12T00:00:00+00:00",
                     "heartbeat_at": "2026-04-12T00:00:00+00:00",
                 },
-                sort_keys=False,
             ),
             encoding="utf-8",
         )

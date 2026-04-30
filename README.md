@@ -178,7 +178,7 @@ recovery_engine: claude
 
 Workspace config lives in `.litehive/config.yaml`. Global defaults live in `${LITEHIVE_HOME:-$XDG_DATA_HOME/litehive}/config.yaml` (default `~/.local/share/litehive/config.yaml`). Workspace settings take precedence.
 
-On first run after upgrade, Litehive migrates legacy `~/.config/litehive/config.yaml` and `daemons.yaml` into the unified root, imports `~/.config/litehive/workspaces.yaml` into the unified registry database, and prints a deprecation notice.
+Legacy `~/.config/litehive/*.yaml` files are deprecated. Runtime registries now use SQLite under the unified root.
 
 ```yaml
 default_engine: codex
@@ -221,6 +221,7 @@ litehive status
 ```
 
 Litehive bootstraps `.litehive/config.yaml` and `.litehive/context.md` on first run. Edit them by hand after bootstrap. Available profiles: generic, python, django, rust.
+The built-in profile defaults are packaged source data under `litehive/config/profiles/*.yaml`; they are not workspace state and are outside the workspace YAML policy.
 
 ## Workspace layout
 
@@ -231,11 +232,6 @@ Repo-local control files stay in the repository:
   config.yaml          # workspace configuration
   context.md           # project description for agents
   .gitignore           # keeps runtime artifacts out of git
-  tasks/
-    T-0001-example/
-      reports/         # stage verdict artifacts
-      subagents/       # execution artifacts
-      artifacts/        # supporting files captured for repair/debugging
 ```
 
 Global Litehive state lives under one XDG root:
@@ -244,10 +240,10 @@ Global Litehive state lives under one XDG root:
 ~/.local/share/litehive/
   config.yaml          # global defaults
   workspaces.db        # registered workspaces
-  daemons.yaml         # running daemon index
   <workspace-id>/
     data.db            # workspace runtime database
     backups/           # compressed database backups
+    legacy-yaml-backups/ # one-time archives of removed workspace YAML
     logs/
       run-all/         # daemon/run iterations
     runtime/           # lock files and live coordination state
@@ -257,7 +253,7 @@ Global Litehive state lives under one XDG root:
 
 Set `LITEHIVE_HOME=/custom/path` to override that root for tests or alternate installs.
 
-Task intent, queue state, runtime status, activity, and pipeline history are stored in the per-workspace `data.db` under this root. Litehive no longer uses `.litehive/state.yaml` or `~/.config/litehive` as active state locations; old files in `~/.config/litehive` are imported into the unified root on first run.
+Task intent, queue state, runtime status, activity, and pipeline history are stored in the per-workspace `data.db` under this root. Litehive no longer uses `.litehive/state.yaml`, task/report/session YAML, daemon registry YAML, or `~/.config/litehive` as active state locations; old files in `~/.config/litehive` are left in place and ignored on first run.
 
 Each task runs in its own git worktree. When it passes all stages, the worktree is merged into main and cleaned up.
 
@@ -308,13 +304,11 @@ litehive task recent --since 72h # widen the reporting window
 
 ## Artifact retention
 
-Litehive keeps task intent, queue state, runtime status, activity, and pipeline history in SQLite. Stage reports, `events.jsonl`, `session.yaml`, `report.yaml`, and raw execution artifacts remain as the file-backed evidence surface for repair, recovery, and handoff.
-
-During migration, Litehive imports legacy per-task activity YAML files into SQLite and removes them after a successful import.
+Litehive keeps task intent, queue state, runtime status, activity, reports, subagent sessions, and pipeline history in SQLite. Append-only logs and raw execution artifacts remain as file-backed evidence for repair, recovery, and handoff.
 
 High-volume raw execution artifacts are treated as disposable support data:
 
-- Only the latest subagent attempt keeps raw `prompt`, execution trace, stdout/stderr, and event stream artifacts; older subagent folders keep their `session.yaml` and `report.yaml` but have raw files pruned.
+- Only the latest subagent attempt keeps raw `prompt`, execution trace, stdout/stderr, and event stream artifacts; older subagent folders keep database-backed session/report summaries while raw files are pruned.
 - Final subagent execution trace, stdout/stderr, event stream, and large runner hook artifacts may be stored as gzip snapshots when they are large; readers are expected to handle both plain and `.gz` files.
 - Background-run `logs/run-all/` sessions are bounded to the most recent 8 directories so repeated pool runs do not accumulate unbounded wrapper logs.
 

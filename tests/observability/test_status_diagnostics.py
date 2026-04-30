@@ -2,6 +2,7 @@
 
 import argparse
 from datetime import UTC, datetime, timedelta
+import json
 import os
 from pathlib import Path
 import warnings
@@ -65,22 +66,6 @@ def test_status_reports_corrupt_workspace_registry_without_raising(tmp_path: Pat
     assert exit_code == 1
     assert f"registry: BROKEN at {registry_path}" in output
     assert "global workspace registry database" in output
-    assert "runner_status:" in output
-    assert "health:" in output
-
-
-def test_status_reports_corrupt_daemon_registry_without_raising(tmp_path: Path, capsys, monkeypatch) -> None:
-    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
-    ensure_workspace(tmp_path)
-    registry_path = litehive_root() / "daemons.yaml"
-    registry_path.parent.mkdir(parents=True, exist_ok=True)
-    registry_path.write_text("[", encoding="utf-8")
-
-    exit_code, output = _run_fast_status(tmp_path, capsys)
-
-    assert exit_code == 1
-    assert f"registry: CORRUPT at {registry_path} (line 1)" in output
-    assert "Fix or remove the daemon registry YAML" in output
     assert "runner_status:" in output
     assert "health:" in output
 
@@ -164,14 +149,13 @@ def test_status_reports_stale_runner_lock(tmp_path: Path, capsys, monkeypatch) -
     save_state(tmp_path, WorkspaceState(active_task_id="T-0001"))
     workspace_path(tmp_path, "runtime", ".runner.lock").parent.mkdir(parents=True, exist_ok=True)
     workspace_path(tmp_path, "runtime", ".runner.lock").write_text(
-        yaml.safe_dump(
+        json.dumps(
             {
                 "pid": 999999,
                 "active_task_id": "T-0001",
                 "started_at": "2026-04-12T00:00:00Z",
                 "heartbeat_at": "2026-04-12T00:00:00Z",
             },
-            sort_keys=False,
         ),
         encoding="utf-8",
     )
@@ -204,7 +188,7 @@ def test_full_status_reports_invalid_runner_lock_schema(tmp_path: Path, capsys) 
     ensure_workspace(tmp_path)
     lock_path = workspace_path(tmp_path, "runtime", ".runner.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    lock_path.write_text("pid: nope\n", encoding="utf-8")
+    lock_path.write_text(json.dumps({"pid": "nope"}), encoding="utf-8")
 
     exit_code, output = _run_full_status(tmp_path, capsys)
 
@@ -253,14 +237,13 @@ def test_runner_status_diagnostic_copies_serialize_without_pydantic_warnings(
 
     for pid_is_alive, expected_status in ((True, "running"), (False, "stale")):
         lock_path.write_text(
-            yaml.safe_dump(
+            json.dumps(
                 {
                     "pid": 4242,
                     "active_task_id": "T-0002",
                     "started_at": "2026-04-12T00:00:00Z",
                     "heartbeat_at": "2026-04-12T00:00:00Z",
                 },
-                sort_keys=False,
             ),
             encoding="utf-8",
         )
@@ -283,14 +266,13 @@ def test_status_reports_wedged_runner_heartbeat(tmp_path: Path, capsys) -> None:
     stale_heartbeat = (datetime.now(UTC) - timedelta(minutes=11)).isoformat().replace("+00:00", "Z")
     workspace_path(tmp_path, "runtime", ".runner.lock").parent.mkdir(parents=True, exist_ok=True)
     workspace_path(tmp_path, "runtime", ".runner.lock").write_text(
-        yaml.safe_dump(
+        json.dumps(
             {
                 "pid": os.getpid(),
                 "active_task_id": "T-0002",
                 "started_at": stale_heartbeat,
                 "heartbeat_at": stale_heartbeat,
             },
-            sort_keys=False,
         ),
         encoding="utf-8",
     )
@@ -307,13 +289,12 @@ def test_status_reports_dead_daemon_pid(tmp_path: Path, capsys, monkeypatch) -> 
     daemon_lock = workspace_path(tmp_path, "runtime", ".daemon.lock")
     daemon_lock.parent.mkdir(parents=True, exist_ok=True)
     daemon_lock.write_text(
-        yaml.safe_dump(
+        json.dumps(
             {
                 "workspace": str(tmp_path.resolve()),
                 "pid": 424242,
                 "started_at": "2026-04-12T00:00:00Z",
             },
-            sort_keys=False,
         ),
         encoding="utf-8",
     )

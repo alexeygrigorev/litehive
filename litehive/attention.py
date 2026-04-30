@@ -7,7 +7,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
 
-import yaml
 from pydantic import BaseModel, Field
 
 from litehive.config.workspace import ensure_workspace, normalize_workspace_root
@@ -41,8 +40,6 @@ ATTENTION_PRIORITIES = {
     "flagged_task": 6,
 }
 
-_ATTENTION_ID_WIDTH = 6
-_MIGRATION_MARKER = ".migration-complete"
 _TASK_WORKTREE_NAME_RE = re.compile(r"^T-\d{4}-")
 
 
@@ -239,19 +236,6 @@ class AttentionStore:
             return None
         return self._row_to_item(row)
 
-    def _read_item_path_locked(self, path: Path) -> AttentionItem | None:
-        if not path.exists():
-            return None
-        try:
-            payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except OSError:
-            return None
-        if not isinstance(payload, dict):
-            raise ValueError(f"attention item at {path} is not a YAML mapping")
-        item_id = int(path.stem)
-        payload["id"] = item_id
-        return AttentionItem(**payload)
-
     def _write_item_locked(self, item: AttentionItem) -> None:
         if item.id is None:
             raise ValueError("attention item id is required before writing")
@@ -278,25 +262,7 @@ class AttentionStore:
             connection.commit()
 
     def _ensure_store_ready_locked(self) -> None:
-        items_dir = self._items_dir()
-        items_dir.mkdir(parents=True, exist_ok=True)
-        marker_path = items_dir / _MIGRATION_MARKER
-        legacy_paths = self._item_paths_locked()
-        if marker_path.exists() and not legacy_paths:
-            return
-        for legacy_item in self._legacy_file_items():
-            self._write_item_locked(legacy_item)
-        for path in legacy_paths:
-            path.unlink(missing_ok=True)
-        marker_path.write_text(f"completed_at={utcnow()}\n", encoding="utf-8")
-
-    def _legacy_file_items(self) -> list[AttentionItem]:
-        items: list[AttentionItem] = []
-        for path in self._item_paths_locked():
-            item = self._read_item_path_locked(path)
-            if item is not None:
-                items.append(item)
-        return items
+        self._items_dir().mkdir(parents=True, exist_ok=True)
 
     @staticmethod
     def _row_to_item(row: sqlite3.Row) -> AttentionItem:
@@ -307,23 +273,11 @@ class AttentionStore:
         payload["id"] = int(row["id"])
         return AttentionItem(**payload)
 
-    def _item_paths_locked(self) -> list[Path]:
-        items_dir = self._items_dir()
-        if not items_dir.exists():
-            return []
-        candidates = [
-            path for path in items_dir.iterdir() if path.is_file() and path.suffix == ".yaml" and path.stem.isdigit()
-        ]
-        return sorted(candidates, key=lambda path: int(path.stem))
-
     def _next_id(self, all_items: list[AttentionItem]) -> int:
         return max((item.id or 0 for item in all_items), default=0) + 1
 
     def _items_dir(self) -> Path:
         return workspace_dir(self.root) / "attention"
-
-    def _item_path(self, item_id: int) -> Path:
-        return self._items_dir() / f"{item_id:0{_ATTENTION_ID_WIDTH}d}.yaml"
 
     @contextmanager
     def _store_lock(self):

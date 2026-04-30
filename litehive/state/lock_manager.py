@@ -1,13 +1,12 @@
-"""Shared flock/YAML helpers for workspace-local process lock files."""
+"""Shared flock helpers for workspace-local process lock files."""
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 import fcntl
+import json
 import os
 from pathlib import Path
 from typing import TextIO
-
-import yaml
 
 
 @dataclass(slots=True)
@@ -22,9 +21,11 @@ class WorkspaceLockManager:
         return False if self.held_in_process is None else self.held_in_process()
 
     def _parse_metadata_text(self, text: str, *, strict: bool) -> dict[str, object] | None:
+        if not text.strip():
+            return {}
         try:
-            document = yaml.safe_load(text)
-        except yaml.YAMLError:
+            document = json.loads(text)
+        except json.JSONDecodeError:
             if strict:
                 raise
             return None
@@ -53,7 +54,8 @@ class WorkspaceLockManager:
     def write_locked_metadata(self, handle: TextIO, payload: Mapping[str, object]) -> None:
         handle.seek(0)
         handle.truncate()
-        yaml.safe_dump(dict(payload), handle, sort_keys=False)
+        json.dump(dict(payload), handle, sort_keys=True)
+        handle.write("\n")
         handle.flush()
         if self.fsync_writes:
             os.fsync(handle.fileno())

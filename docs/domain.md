@@ -113,4 +113,9 @@ in a workspace is `.litehive/config.yaml`; all other structured workspace state
 should use the database or append-only text/JSONL artifacts when they are
 intentionally logs.
 
+Packaged profile defaults under `litehive/config/profiles/*.yaml` are source
+package data, not workspace-owned runtime files. When old workspace YAML is
+found under `.litehive`, Litehive first creates a compressed database backup,
+archives the YAML outside `.litehive`, and then removes the workspace copies.
+
 For implementation details, usage patterns, and field-level documentation, consult the docstrings in the corresponding domain module.

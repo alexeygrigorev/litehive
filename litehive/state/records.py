@@ -4,8 +4,6 @@ import logging
 import os
 from pathlib import Path
 
-import yaml
-
 from litehive.config.workspace_files import workspace_gitignore_path
 from litehive.config.workspace import ensure_workspace, render_workspace_gitignore
 from litehive.git.ops import default_commit_message
@@ -105,14 +103,6 @@ def ensure_runtime_ignored(root: Path) -> None:
     expected = render_workspace_gitignore()
     if not ignore_path.exists() or ignore_path.read_text(encoding="utf-8") != expected:
         ignore_path.write_text(expected, encoding="utf-8")
-
-
-def serialize_task_record(task: TaskRecord) -> str:
-    _normalize_task_commit_sha_state(task)
-    _normalize_task_worktree_state(task)
-    _normalize_task_flag_reason(task)
-    payload = task.to_intent_record().model_dump(mode="json")
-    return yaml.safe_dump(payload, sort_keys=False)
 
 
 def task_state_for_storage(task: TaskRecord) -> TaskStateRecord:

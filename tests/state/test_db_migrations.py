@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import sqlite3
+import tarfile
 
 import pytest
 from typer.testing import CliRunner
@@ -206,7 +207,14 @@ def test_migration_0005_does_not_import_deprecated_task_yaml(tmp_path: Path) -> 
     assert json.loads(queue_row["payload"]) == ["T-0001"]
     assert loaded is None
     assert listed == []
-    assert task_yaml.read_text(encoding="utf-8") == "id: T-0001\ntitle: Existing task\n"
+    assert not task_yaml.exists()
+    assert sorted(litehive_dir.rglob("*.yaml")) == [litehive_dir / "config.yaml"]
+    backups = sorted(workspace_path(tmp_path, "backups").glob("data-*.db.gz"))
+    archives = sorted(workspace_path(tmp_path, "legacy-yaml-backups").glob("workspace-yaml-*.tar.gz"))
+    assert backups
+    assert len(archives) == 1
+    with tarfile.open(archives[0], "r:gz") as archive:
+        assert archive.getnames() == ["tasks/T-0001-existing-task/task.yaml"]
 
 
 def test_daemon_run_applies_pending_migrations_before_start(

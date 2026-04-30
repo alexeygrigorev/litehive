@@ -2,6 +2,7 @@
 
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+import json
 from pathlib import Path
 import sqlite3
 import tomllib
@@ -131,13 +132,6 @@ def probe_registry_files() -> list[StatusIssue]:
                 ),
             )
         )
-    _, issue = _safe_yaml_document(
-        litehive_root() / "daemons.yaml",
-        key="registry",
-        remediation="Fix or remove the daemon registry YAML, then restart the daemon if daemon tracking is needed.",
-    )
-    if issue is not None:
-        issues.append(issue)
     return issues
 
 
@@ -632,10 +626,10 @@ def _safe_yaml_document(
 
 def _load_runner_status_for_status(root: Path) -> tuple[RunnerStatusState, StatusIssue | None]:
     path = workspace_path(root, "runtime", ".runner.lock")
-    mapping, issue = _safe_yaml_mapping(
+    mapping, issue = _safe_json_mapping(
         path,
         key="runner_state",
-        remediation="Remove or rewrite the runner lock file, then restart the runner or daemon.",
+        remediation="Remove or rewrite the runner lock file as JSON, then restart the runner or daemon.",
     )
     if issue is not None:
         return RunnerStatusState(), issue
@@ -657,6 +651,39 @@ def _load_runner_status_for_status(root: Path) -> tuple[RunnerStatusState, Statu
     if runner_metadata_present(status):
         return status.model_copy(update={"status": RunnerStatus.STALE}), None
     return RunnerStatusState(), None
+
+
+def _safe_json_mapping(
+    path: Path,
+    *,
+    key: str,
+    remediation: str,
+) -> tuple[dict[str, Any] | None, StatusIssue | None]:
+    if not path.exists():
+        return None, None
+    try:
+        text = path.read_text(encoding="utf-8")
+        if not text.strip():
+            return {}, None
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        return None, StatusIssue(
+            key=key,
+            severity="ERROR",
+            message=f"CORRUPT at {path} (line {exc.lineno}) — {remediation}",
+        )
+    except OSError as exc:
+        detail = exc.strerror or str(exc)
+        return None, StatusIssue(
+            key=key,
+            severity="ERROR",
+            message=f"UNREADABLE at {path} ({detail}) — {remediation}",
+        )
+    if data is None:
+        return {}, None
+    if not isinstance(data, Mapping):
+        return {}, None
+    return dict(data), None
 
 
 def _heartbeat_age_seconds(heartbeat_at: str | None) -> int | None:
