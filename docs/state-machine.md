@@ -1,141 +1,154 @@
 # Task State Machine
 
-This document describes the Litehive task lifecycle state machine, including status transitions, recovery behavior, and operator commands.
+This document describes the current LiteHive task lifecycle state machine.
 
-## Core Task States
+The authoritative code is split between:
 
-Litehive tasks follow an explicit state machine with well-defined transitions. The main states are:
+- `litehive/domain/common.py` for `TaskStatus`, `PipelineState`, and
+  `PipelineStatus`
+- `litehive/domain/task.py` for task records and terminal-state normalization
+- `litehive/lifecycle/transitions.py` and `litehive/domain/lifecycle_deltas.py`
+  for pipeline transitions
+- `litehive/tasks/status.py` and `litehive/tasks/queue.py` for operator task
+  transitions and queue eligibility
 
-### Execution States
-- **`queued`** - Waiting in the execution queue for an available runner
-- **`in_progress`** - Currently executing in a pipeline stage  
-- **`interrupted`** - Execution stopped unexpectedly, eligible for automatic recovery
-- **`parked`** - Intentionally paused by operator, requires explicit action to resume
+## Task Statuses
 
-### Terminal States
-- **`done`** - Successfully completed all pipeline stages
-- **`flagged`** - Requires manual operator attention before continuing
-- **`merge_failed`** - Failed during git merge operation
-- **`cancelled`** - Operator intentionally stopped and closed the task
+`TaskStatus` is the high-level operator-visible lifecycle category.
 
-### Closure States
-- **`wont_do`** - Task is not worth implementing
-- **`deferred`** - Task should wait for later implementation  
-- **`duplicate`** - Another task already covers the same work
+Execution statuses:
 
-## Parked vs Interrupted: Key Distinction
+- `queued`: waiting in the execution queue
+- `in_progress`: currently owned by a runner
+- `interrupted`: execution stopped unexpectedly and may be recoverable
+- `parked`: intentionally paused by an operator or system action
 
-The most important distinction in the task lifecycle is between **parked** and **interrupted** tasks:
+Terminal or non-runnable statuses:
 
-### Interrupted Tasks
-- **Cause**: System failures, crashes, timeouts, or other unexpected stops
-- **Recovery**: Automatically restored to queue by workspace recovery
-- **Reason**: Set by system with technical failure details
-- **Intent**: Should resume execution without operator intervention
+- `done`: completed successfully
+- `closed`: explicitly closed with `close_reason`
+- `archived`: moved to history-only archive
+- `flagged`: requires operator attention with `flag_reason`
 
-### Parked Tasks  
-- **Cause**: Intentional operator action via `litehive queue stop`
-- **Recovery**: Stay out of automatic recovery; require explicit operator action
-- **Reason**: Set to "Task parked via CLI command from {stage} stage"
-- **Intent**: Should remain paused until operator decides to resume
+Removed terminal names are not task statuses. `cancelled`, `wont_do`,
+`deferred`, and `duplicate` are represented as `close_reason` values when the
+task status is `closed`. `merge_failed` is represented as `flag_reason` when
+the task status is `flagged`.
 
-## State Transitions
+## Pipeline State
 
-### Normal Execution Flow
-```
-queued → in_progress → done
-```
+`PipelineState` is the internal state-machine position. It is more detailed
+than `TaskStatus` and includes system and hook states such as `ready`,
+`worktree_sync`, `before_implementing`, `after_testing`, `commit`,
+`merge_resolving`, `recovering`, `done`, and `failed`.
 
-### Interruption Handling
-```
-in_progress → interrupted → (auto-recovery) → queued → in_progress
-```
+`PipelineStatus` is an operator-facing projection used for task display and
+coarse progress reporting. It collapses detailed `PipelineState` values into
+broader phases such as `grooming`, `implementing`, `testing`, `accepting`,
+`commit_to_git`, `done`, and `flagged`.
 
-### Explicit Parking
-```
-in_progress → parked → (manual resume) → queued → in_progress
-```
+## Normal Flow
 
-### Failure Handling
-```
-in_progress → flagged → (manual intervention) → queued/cancelled
-in_progress → merge_failed → (manual merge fix) → queued/cancelled
+Typical queued execution:
+
+```text
+queued -> in_progress -> done
 ```
 
-## CLI Command Semantics
+The internal pipeline advances through the configured `PipelineState` sequence
+for the task mode. The task status remains `in_progress` while the runner owns
+the task, then becomes `done`, `flagged`, `interrupted`, or `closed` depending
+on the terminal event or operator action.
 
-### Stop Commands
-- **`litehive queue stop`** - Parks the currently running task (status = "parked")
+## Interrupted vs Parked
 
-### Resume Commands  
-- **`litehive queue resume {task-id}`** - Returns task to queue at current pipeline stage
-- **`litehive queue requeue {task-id}`** - Restarts task from implementation entry stage
+Interrupted tasks:
 
-### Key Differences
-- **Resume**: Continues from where it left off (current `pipeline_status`)
-- **Requeue**: Full restart from implementation entry point
+- caused by crashes, stale runners, timeouts, or other unexpected stops
+- may be restored by repair or recovery flows
+- carry interruption metadata under `runtime.execution.interruption`
+- should not require the operator to recreate the task
 
-## Recovery Behavior
+Parked tasks:
 
-### Automatic Recovery
-The workspace recovery system (`recover_stale_runner_state()`) automatically handles:
+- caused by intentional operator or system pause
+- stay out of normal automatic queue selection until resumed or requeued
+- also carry interruption/resume metadata when a resume stage is known
 
-- **Interrupted tasks**: Restored to queue for continued execution
-- **Stale processes**: Detected and marked as interrupted, then restored
-- **Crashed runners**: Marked as interrupted with failure context
+## Operator Transitions
 
-### Manual Recovery
-Requires explicit operator action:
+Resume:
 
-- **Parked tasks**: Must use `litehive queue resume` or `litehive queue requeue`  
-- **Flagged tasks**: Need diagnosis and manual intervention
-- **Merge conflicts**: Require manual git conflict resolution
-
-## Task Eligibility Rules
-
-The `is_task_eligible_for_execution()` function determines which tasks can be automatically restored:
-
-**Eligible for automatic execution:**
-- `queued` - Normal queue processing
-- `in_progress` - Already running
-- `flagged` - Can be retried after manual review
-- `interrupted` - System failures eligible for recovery
-
-**Not eligible (require manual action):**
-- `parked` - Intentionally paused by operator
-- `done` - Already completed  
-- `cancelled` - Explicitly closed
-- `wont_do`, `deferred`, `duplicate` - Permanent closure states
-
-## Implementation Details
-
-### Status Field
-The `task.status` field (TaskStatus enum) is the primary state indicator and drives all recovery logic.
-
-### Interruption Metadata
-Both interrupted and parked tasks have `runtime.interruption` metadata for resume functionality:
-
-**Interrupted tasks:**
-```python
-RuntimeInterruptionState(
-    source="runner",
-    reason="System failure details...",  
-    resume_stage="implementing",
-    # ... system failure context
-)
+```text
+interrupted|parked|flagged|closed -> queued
 ```
 
-**Parked tasks:**
-```python  
-RuntimeInterruptionState(
-    source="runner",
-    reason="Task parked via CLI command from {stage} stage",
-    resume_stage="{current_stage}",
-    # ... minimal metadata for resume
-)
+Resume continues from the stored resumable stage when possible.
+
+Requeue:
+
+```text
+flagged|parked|closed -> queued
 ```
 
-### Queue Restoration
-The `restore_missing_queued_tasks()` function only restores tasks that are `eligible_for_execution()`, ensuring parked tasks stay out of automatic recovery while interrupted tasks get restored.
+Requeue resets the task for another implementation pass and may clear selected
+runtime outcome state.
 
-This explicit state-based approach replaces the previous magic string detection and provides clear, deterministic behavior for task lifecycle management.
+Park:
+
+```text
+queued|in_progress|interrupted|flagged -> parked
+```
+
+Park removes the task from active queue ownership and records that it should not
+be restored automatically.
+
+Close:
+
+```text
+queued|in_progress|interrupted|parked|flagged -> closed
+```
+
+Close records a `close_reason` such as `wont_do`, `deferred`, `duplicate`, or
+`execution_cancelled`. A task closed as already satisfied may become `done`
+instead.
+
+## Failure And Recovery
+
+Recoverable pipeline failures generally route through `recovering` and may
+return to the failed origin stage, requeue the task, or flag it for operator
+attention.
+
+Merge failures are modeled as flagged tasks:
+
+```text
+in_progress -> flagged
+flag_reason = "merge_failed"
+```
+
+Manual worktree rescue or requeue can then move the task back into a runnable
+state.
+
+## Queue Eligibility
+
+Queue selection and repair logic are intentionally stricter than a simple
+status allowlist:
+
+- `queued` tasks are normal candidates when dependencies and future-task guards
+  allow them
+- `interrupted` tasks may be recoverable through repair/requeue paths
+- `parked` tasks require explicit resume or requeue
+- `flagged` tasks require operator or recovery-policy handling before they can
+  run again
+- `done`, `closed`, and `archived` tasks are not normal queue candidates
+
+The concrete eligibility rules live in `litehive/tasks/queue.py` and status
+transition helpers live in `litehive/tasks/status.py`.
+
+## Storage Notes
+
+Task intent, task state, runtime state, stage reports, recovery reports, engine
+monitoring, queue state, and audit data should live in SQLite.
+
+The only LiteHive-owned YAML file that should remain in a workspace is
+`.litehive/config.yaml`. Other structured workspace state should not use YAML.

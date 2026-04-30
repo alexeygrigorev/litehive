@@ -1,355 +1,322 @@
 # Refactoring Tasks
 
-This file is the stable refactoring queue for the `docs/domain.md` alignment
-work. It exists separately from the main refactor plan so the task list does
-not get lost if the larger plan is rewritten during implementation.
+Date: 2026-04-30
 
-Source documents:
+This is the active refactoring queue for aligning the codebase with
+`docs/domain.md`, removing old compatibility code, and reducing DRY/SOLID
+violations. Older planning material has been removed from `docs/plans/` because
+it described package moves and storage migrations that have already landed or
+no longer match the code.
 
-- `docs/domain.md`
-- `docs/plans/code-fixes-plan.md`
+Use `docs/refactoring-audit.md` for the broader audit notes. This file is the
+actionable queue that should be decomposed into LiteHive tasks.
 
-Queue policy:
+## Current Inventory
 
-- all refactoring tasks created from this file should stay at the front of the
-  queue until the domain/storage cleanup is complete
-- tasks should be shipped in small, verifiable slices
-- avoid mixing vocabulary changes, storage migration, and behavior changes in
-  the same task unless the boundary is too coupled to split safely
+Already implemented:
 
-## Current inventory summary
+- task intent and task runtime state are SQLite-backed
+- `PipelineState` is a real enum in `litehive/domain/common.py`
+- `TaskRuntime` is split into `pipeline` and `execution` slices
+- stage and recovery reports are SQLite-backed
+- engine monitoring is SQLite-backed
+- structured subagent `session.yaml` and `report.yaml` artifacts are no longer
+  the active model
+- recovery naming mostly follows `FailureFingerprint`, `RecoveryTrigger`,
+  `RecoveryOutcome`, and `recovery_history`
+- active code uses `TaskActivityEntry`, `load_task_activity`, and
+  `append_task_activity`; old thread/comment domain type names are gone
+- `docs/domain.md` and `docs/state-machine.md` have been refreshed to describe
+  the implemented status and storage model
 
-Already done:
+Still outstanding:
 
-- no active structured subagent `session.yaml` / `report.yaml` /
-  event-stream YAML artifacts
-- recovery/state compatibility cleanup already landed
-- schema reset to one baseline migration already landed
+- user-facing `v2` wording remains in CLI help
+- activity still reads and migrates `comments.yaml` and `thread.yaml`
+- legacy global-state, workspace-registry, task-yaml, and runtime compatibility
+  paths still exist
+- many old YAML files remain under `.litehive/tasks`, `.litehive/logs`, and
+  stale artifact directories from earlier implementations
+- source-level process profiles still live as YAML files; decide whether those
+  are acceptable package data or should move into Python/SQLite-backed defaults
+- lifecycle `TaskState` and `TaskRecord.runtime` both represent execution state
+  and are bridged in orchestration code
+- task transitions, status handling, queue mutation, audit construction, and
+  runner/subagent termination are too concentrated in `litehive/tasks/status.py`
+- runner and daemon process-lock handling are similar but separate
+- status rendering and diagnostics have multiple paths
+- worktree recovery, inspection, cleanup, and rescue logic have multiple owners
 
-Still active:
+## Active Queue
 
-- `task.yaml` is still active structured task storage
-- activity uses mixed old/new implementation:
-  - SQLite table exists
-  - code still uses `TaskThreadComment` and thread/comment naming
-- recovery reports still persist as YAML
-- `engine-monitoring.yaml` still exists
-- task status semantics still use legacy closed/merge statuses
-- pipeline/runtime/recovery naming still diverges from `docs/domain.md`
-
-## Refactoring queue
-
-### 1. Introduce an activity service boundary
-
-Litehive task id: `T-0377`
-
-Goal:
-
-- create one activity-oriented read/write boundary that callers can use before
-  the deeper rename and storage cleanup
-
-Scope:
-
-- centralize task activity access behind service/store functions
-- keep behavior the same for now
-- do not rename the domain types yet
-
-Acceptance criteria:
-
-- prompt serialization reads task history through the activity boundary
-- report submission writes through the activity boundary
-- debug/report helpers no longer reach into ad hoc thread storage directly
-
-Suggested validation:
-
-- `tests/lifecycle/test_prompt_serializer.py`
-- `tests/cli/test_agent_report.py`
-- `tests/cli/test_task_debug.py`
-
-### 2. Rename thread/comment vocabulary to activity vocabulary
-
-Litehive task id: `T-0378`
+### 1. Remove user-facing compatibility and `v2` CLI wording
 
 Goal:
 
-- replace the old “thread/comments” naming with the selected activity names
+- stop exposing historical implementation names to operators
 
 Scope:
 
-- `TaskThreadComment` -> `ActivityEntry`
-- `load_task_thread` -> `load_task_activity`
-- `save_task_thread` -> `save_task_activity`
-- `append_thread_comment` -> `append_activity_entry`
-- replace user-facing “discussion thread” text where it means task activity
+- update `litehive/cli/app.py` pipeline help text
+- update `litehive/cli/pipeline_cli.py` command help and messages
+- review hidden `agent` command help and deprecated report role option
+- decide whether the hidden `agent` compatibility app can be removed now or
+  should become an explicit current API
 
 Acceptance criteria:
 
-- no active code references `TaskThreadComment`
-- no active code uses thread/comment helper names
-- prompt/CLI output uses activity terminology
+- no operator-facing help text says `v2`
+- hidden compatibility command surfaces are either removed or documented as
+  current supported API
 
 Suggested validation:
 
-- `tests/tasks/test_comments.py`
-- `tests/lifecycle/test_prompt_serializer.py`
-- `tests/cli/test_agent_report.py`
+- `uv run litehive --help`
+- `uv run litehive pipeline --help`
+- `uv run litehive pipeline rules --help`
+- `rg -n "v2|compatibility|Deprecated|deprecated" litehive/cli litehive/main.py`
 
-### 3. Delete `comments.yaml` and finish SQLite-backed task activity
-
-Litehive task id: `T-0379`
+### 2. Delete filesystem-era task activity compatibility
 
 Goal:
 
-- make task activity fully SQLite-backed and remove the filesystem fallback
+- make SQLite task activity the only supported activity store
 
 Scope:
 
-- finish moving task activity persistence to `task_activity`
-- remove `comments.yaml` readers/writers
-- remove corrupt-YAML recovery paths for task activity
+- remove `comments.yaml` and `thread.yaml` readers from
+  `litehive/tasks/activity.py`
+- remove `migrate_legacy_task_activity_files`
+- remove store bootstrap calls that migrate activity files
+- remove corrupt-YAML activity fallback behavior
+- update tests that still create or assert activity YAML files
 
 Acceptance criteria:
 
-- no active code reads or writes `comments.yaml`
-- recent task activity still appears in prompts, logs, and CLI views
+- active code never reads or writes `comments.yaml` or `thread.yaml`
+- task activity in prompts, reports, logs, and debug views still comes from
+  SQLite
 
 Suggested validation:
 
-- `tests/tasks/test_comments.py`
-- `tests/lifecycle/test_prompt_serializer.py`
-- `tests/cli/test_agent_report.py`
-- `tests/cli/test_task_debug.py`
+- `rg -n "comments\\.yaml|thread\\.yaml|migrate_legacy_task_activity" litehive tests`
+- `uv run pytest tests/tasks tests/lifecycle/test_prompt_serializer.py tests/cli/test_agent_report.py tests/cli/test_task_debug.py`
 
-### 4. Align `StageReport` with the canonical report model
-
-Litehive task id: `T-0380`
+### 3. Enforce the workspace YAML policy
 
 Goal:
 
-- make `StageReport` match the chosen `docs/domain.md` shape
+- ensure the only LiteHive-owned YAML file in a workspace is
+  `.litehive/config.yaml`
 
 Scope:
 
-- `stage` -> `pipeline_state`
-- narrow verdict semantics so comments are not treated as stage verdicts
-- remove `files_changed` from the canonical report structure
+- remove stale runtime YAML artifacts from active workspace paths:
+  - `runtime.yaml`
+  - `task.yaml`
+  - `comments.yaml`
+  - `thread.yaml`
+  - `report.yaml`
+  - `session.yaml`
+  - stage/recovery report YAML
+  - pool-run YAML
+  - attention item YAML
+  - daemon/workspace registry YAML
+- migrate any remaining active data to SQLite or append-only JSONL/text logs
+- update `.litehive/.gitignore`, bootstrap behavior, archive cleanup, and repair
+  tooling so new YAML files are not created
+- review packaged YAML defaults under `litehive/config/profiles` and
+  `litehive/cli/templates`; either document them as source package data outside
+  the workspace policy or replace them with Python/SQLite-backed defaults
 
 Acceptance criteria:
 
-- `StageReport` uses canonical names
-- routing/reporting still works with the updated report shape
+- `find .litehive -type f \( -name '*.yaml' -o -name '*.yml' \)` returns only
+  `.litehive/config.yaml` for a clean current workspace
+- active code does not create any workspace YAML file other than
+  `.litehive/config.yaml`
+- tests cover that pool runs, attention items, reports, runtime state, and
+  daemon/workspace registries do not use YAML
 
 Suggested validation:
 
-- `tests/tasks/test_runtime_updates.py`
-- `tests/lifecycle/test_engine_adapter.py`
-- `tests/cli/test_agent_report.py`
+- `find .litehive -type f \( -name '*.yaml' -o -name '*.yml' \)`
+- `rg -n "yaml|YAML|\\.ya?ml|safe_load|safe_dump" litehive tests`
 
-### 5. Move stage and recovery reports off YAML
-
-Litehive task id: `T-0381`
+### 4. Delete legacy global/task storage migration shims
 
 Goal:
 
-- remove structured report YAML from the active system
+- remove previous-layout compatibility because LiteHive does not maintain
+  backwards compatibility for removed storage shapes
 
 Scope:
 
-- move stage reports to SQLite-backed storage
-- move recovery reports to SQLite-backed storage
-- remove `reports/*.yaml` and `recovery-*.yaml` as active structured storage
+- remove legacy global-state migration from `litehive/config/global_state.py`
+  and its invocation from `litehive/config/paths.py`
+- remove legacy workspace-registry YAML migration from
+  `litehive/config/registry.py`
+- remove legacy `task.yaml` import/migration paths from `litehive/db/schema.py`
+  after confirming current tests no longer depend on them
+- remove `legacy_task_yaml_ids` rebuild-safety support from
+  `litehive/state/rebuild_safety.py`
+- remove tests that only preserve old layout behavior
 
 Acceptance criteria:
 
-- no active code writes structured stage/recovery YAML
-- debug and recovery commands still show the latest report context
+- no active code migrates from old global YAML, workspace YAML, or task YAML
+- current-shape bootstrap, registry, DB migration, and rebuild-safety tests pass
 
 Suggested validation:
 
-- `tests/recovery/test_runner_recovery.py`
-- `tests/cli/test_task_debug.py`
-- `tests/cli/test_logs.py`
+- `rg -n "legacy|deprecated|backward|compat|task\\.yaml|state\\.yaml|runtime\\.yaml|workspaces\\.yaml" litehive tests`
+- `uv run pytest tests/config tests/state tests/tasks/test_create_task.py`
 
-### 6. Remove active `task.yaml` usage
-
-Litehive task id: `T-0382`
+### 5. Remove domain-layer legacy normalization and proxy behavior
 
 Goal:
 
-- move incomplete-task durability fully into SQLite
+- keep domain models focused on current state instead of silently accepting old
+  shapes
 
 Scope:
 
-- stop reading incomplete tasks from filesystem task files
-- stop writing incomplete-task state to `task.yaml`
-- keep filesystem task directories only for unstructured artifacts if needed
+- remove `TaskRuntime` flat-payload normalization and compatibility attribute
+  proxying
+- remove terminal-status canonicalization that accepts removed task statuses as
+  current input
+- replace call sites that rely on raw strings or legacy values with current
+  enums and explicit conversions at input boundaries
 
 Acceptance criteria:
 
-- active queue/load/bootstrap paths do not depend on `task.yaml`
-- `.litehive/config.yaml` is the only remaining Litehive-owned YAML file
+- domain validators reject old shapes through normal validation
+- no domain model silently rewrites removed storage values
 
 Suggested validation:
 
-- `tests/state/test_task_runtime_storage.py`
-- `tests/config/test_workspace_bootstrap.py`
-- `tests/tasks/test_create_task.py`
+- `rg -n "legacy|_normalize_legacy|canonicalized|__getattr__|__setattr__" litehive/domain tests`
+- `uv run pytest tests/domain tests/state tests/tasks/test_status_updates.py`
 
-### 7. Collapse terminal task statuses to `done` / `flagged` / `closed`
-
-Litehive task id: `T-0383`
+### 6. Consolidate task transition ownership
 
 Goal:
 
-- make task closing semantics match `docs/domain.md`
+- make task state changes easy to reason about and hard to duplicate
 
 Scope:
 
-- add `close_reason`
-- keep merge/operator-attention cases under `flagged` with `flag_reason`
-- remove ad hoc terminal statuses:
-  - `merge_failed`
-  - `cancelled`
-  - `wont_do`
-  - `deferred`
-  - `duplicate`
+- extract a task application service or transition module from
+  `litehive/tasks/status.py`
+- keep one implementation for close, abandon, park, resume, requeue, switch
+  engine, and metadata update
+- emit structured transition results or domain events that audit/journal code
+  can persist
+- make CLI and report handlers thin wrappers around the same service
 
 Acceptance criteria:
 
-- task state persists canonical terminal statuses only
-- CLI/reporting surfaces use `close_reason` and `flag_reason`
+- task transition logic has one owner
+- audit and journal generation no longer obscure state mutations
+- `update_task_metadata = update_task` is removed
 
 Suggested validation:
 
-- `tests/tasks/test_status_updates.py`
-- `tests/tasks/test_close_active.py`
-- `tests/observability/test_attention_queue.py`
+- `uv run pytest tests/tasks/test_status_updates.py tests/tasks/test_close_active.py tests/cli/test_task_list_and_show.py tests/cli/test_agent_report.py`
 
-### 8. Introduce the real canonical `PipelineState`
-
-Litehive task id: `T-0384`
+### 7. Collapse to one authoritative execution state or explicit projection
 
 Goal:
 
-- stop aliasing `PipelineState` to the coarse pipeline-status enum
+- remove the largest state-consistency risk in the codebase
 
 Scope:
 
-- define the real machine-state enum in the domain layer
-- separate it from user-facing stage/status views
-- move current lifecycle holders onto the canonical type
+- decide whether lifecycle `TaskState` or `TaskRecord.runtime` is authoritative
+- if both remain, make one a named projection with one-way update semantics
+- remove bridge code that keeps two mutable models synchronized implicitly
+- update lifecycle orchestration, persistence, status, prompt serialization, and
+  recovery to use the chosen boundary
 
 Acceptance criteria:
 
-- prompts, persistence, and transition logic agree on one `PipelineState`
-- no `PipelineState`-to-`PipelineStatus` alias remains
+- one object owns execution state
+- synchronization code in `litehive/lifecycle/orchestration.py` is either gone
+  or reduced to explicit projection code
+- stale state cannot survive in a second model after a lifecycle transition
 
 Suggested validation:
 
-- `tests/lifecycle/test_transitions.py`
-- `tests/lifecycle/test_journal_cli.py`
-- `tests/lifecycle/test_sqlite_adapters.py`
+- `uv run pytest tests/lifecycle tests/state/test_task_runtime_storage.py tests/recovery/test_runner_recovery.py`
 
-### 9. Split `TaskRuntime` into pipeline and execution slices
-
-Litehive task id: `T-0385`
+### 8. Consolidate process-lock and status snapshot paths
 
 Goal:
 
-- match the target `TaskRuntime.pipeline` / `TaskRuntime.execution` design
+- remove duplicated runner/daemon/status logic
 
 Scope:
 
-- introduce `PipelineRuntime`
-- introduce `ExecutionRuntime`
-- move flat runtime fields into the owning slice
+- introduce one process-lock metadata utility for runner and daemon locks
+- share PID liveness, heartbeat, stale clearing, metadata read/write, and
+  process-state persistence
+- build one status snapshot path used by fast status, full status, diagnostics,
+  and workspace CLI output
+- remove fallback-to-default config behavior in status diagnostics
 
 Acceptance criteria:
 
-- no mixed-concern flat `TaskRuntime` bucket remains
-- subagent execution and retry state still persist correctly
+- runner and daemon lock code use the same helper
+- `litehive status` and full diagnostics share the same snapshot builder
+- invalid current config is reported clearly and not replaced with defaults
 
 Suggested validation:
 
-- `tests/state/test_task_runtime_storage.py`
-- `tests/tasks/test_runtime_updates.py`
-- `tests/recovery/test_runner_recovery.py`
+- `uv run pytest tests/daemon tests/observability tests/cli/test_workspace_health.py`
 
-### 10. Reconcile recovery naming with the chosen domain model
-
-Litehive task id: `T-0386`
+### 9. Consolidate worktree ownership
 
 Goal:
 
-- align recovery terms and models across code and docs
+- make worktree behavior a single service used by lifecycle, recovery, and CLI
 
 Scope:
 
-- use the implemented recovery vocabulary consistently:
-  - `FailureFingerprint` for recovery identity and budget tracking
-  - report `failure_diagnostics` for report/outcome evidence only
-  - `RecoveryTrigger` / `recovery_trigger` for active recovery context
-  - `RecoveryOutcome` / `recovery_history` for completed recovery attempts
-  - `RuntimeRecoveryOutcome` for the compact runtime projection
-- document that the retired names `FailureDiagnostics`, `RecoveryRecord`, and
-  `RecoveryContext` are not domain models
-- update prompts, persistence, and transition logic consistently
+- move worktree sync/rescue/cleanup/inspection decisions into one owner
+- make lifecycle nodes delegate to that owner instead of running git workflow
+  details directly
+- make CLI code presentation-only
+- unify concepts such as missing worktree, patch already landed, merge conflict,
+  deferred metadata clear, and manual rescue
 
 Acceptance criteria:
 
-- one recovery vocabulary is used across domain models, persistence, prompts,
-  and recovery logic
+- worktree status and recovery decisions live in one module/service
+- CLI rescue and lifecycle pre-exec sync agree on the same outcomes
 
 Suggested validation:
 
-- `tests/lifecycle/test_prompt_serializer.py`
-- `tests/lifecycle/test_transitions.py`
-- `tests/recovery/test_runner_recovery.py`
+- `uv run pytest tests/lifecycle/test_worktree_sync.py tests/cli/test_worktree_rescue.py tests/tasks/test_worktrees.py`
 
-### 11. Remove workspace-level structured YAML outside config
-
-Litehive task id: `T-0387`
+### 10. Replace generated sandbox git-wrapper duplication
 
 Goal:
 
-- finish the workspace-level YAML cleanup
+- keep one implementation of sandbox git policy
 
 Scope:
 
-- remove `engine-monitoring.yaml`
-- remove pool summary YAML
-- migrate commands to the new persistence source or delete redundant state
+- stop generating a second policy script in `litehive/agents/sandbox.py`
+- reuse `litehive/sandbox/git_wrapper.py` directly or via a checked-in script
+  template
+- remove duplicate policy strings and tests that only preserve generated script
+  text
 
 Acceptance criteria:
 
-- no active code writes workspace-level structured YAML outside config
-- status/diagnostic commands still render the same operator-facing data
+- destructive git policy is implemented once
+- sandbox setup mounts or invokes the shared implementation
 
 Suggested validation:
 
-- `tests/observability/test_status_diagnostics.py`
-- `tests/observability/test_task_summary.py`
-- `tests/cli/test_workspace_health.py`
-
-### 12. Final artifact terminology cleanup
-
-Litehive task id: `T-0388`
-
-Goal:
-
-- align remaining artifact terms with the chosen vocabulary
-
-Scope:
-
-- use `event stream` for structured subagent event data
-- use `execution trace` for rendered structured subagent output where appropriate
-- keep `journal` distinct from task activity
-
-Acceptance criteria:
-
-- code and docs use one artifact vocabulary
-- plain-text artifacts remain only where they are intentionally unstructured
-
-Suggested validation:
-
-- targeted prompt/debug/log tests covering the renamed artifacts
+- `uv run pytest tests/agents/test_sandbox_integration.py`

@@ -13,8 +13,9 @@ linked pages as reference once your workspace is running.
 
 - Keeps a queue of tasks in your repository.
 - Runs each task through `grooming -> implementing -> testing -> accepting -> commit_to_git`.
-- Persists repo-local task definitions in `.litehive/` and keeps cross-workspace
-  runtime state in the unified Litehive data root.
+- Persists task intent, queue state, runtime state, reports, monitoring, and
+  audit data in SQLite. Repo-local `.litehive/` holds the workspace config and
+  unstructured artifacts.
 - Can recover interrupted or failed work and continue without losing context.
 - Can run one task at a time or drain the whole queue through the background runner.
 
@@ -35,7 +36,7 @@ linked pages as reference once your workspace is running.
   what is tracked versus ignored.
 - [domain.md](domain.md): the target Litehive domain model and canonical terms
   for states, reports, recovery, and runtime artifacts.
-- [domain.spec.md](domain.spec.md): the general template and review
+- [domain-spec.md](domain-spec.md): the general template and review
   rules for writing domain documents.
 - [state-machine.md](state-machine.md): the exhaustive transition reference used
   by the codebase.
@@ -103,9 +104,10 @@ litehive status
 
 - The workspace root is your project root. Litehive keeps its own state in
   `.litehive/`.
-- Task intent, queue state, runtime status, and pipeline history live in the
-  per-workspace SQLite database under `${LITEHIVE_HOME:-$XDG_DATA_HOME/litehive}`.
-  Repo-local `.litehive/` task directories hold supporting evidence and artifacts.
+- Task intent, queue state, runtime status, and pipeline history live in SQLite.
+  The only LiteHive-owned workspace YAML file should be `.litehive/config.yaml`.
+  Repo-local `.litehive/` task directories hold supporting evidence and
+  artifacts.
 - `litehive run` executes one selection cycle. `litehive run --drain` keeps
   going until Litehive reaches an explicit stop condition.
 - `litehive repair` is the manual recovery entrypoint for stale active tasks,

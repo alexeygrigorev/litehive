@@ -2,7 +2,7 @@
 
 This document defines the high-level domain model and canonical terminology for Litehive.
 
-It follows the general format defined in [domain.spec.md](domain.spec.md).
+It follows the general format defined in [domain-spec.md](domain-spec.md).
 
 **NOTE**: Detailed rationale, usage patterns, and field explanations for domain models have been moved into code docstrings and field annotations. See the domain classes in `litehive/domain/` for comprehensive documentation of when/how/why each model is used.
 
@@ -33,9 +33,11 @@ For detailed domain model documentation including creation context, usage patter
 Litehive uses lightweight Domain-Driven Design terminology. Key concepts include:
 
 - **Domain**: A coherent area of the model (workspace, task, pipeline, etc.)
-- **Entity**: Objects with stable identity that persist over time (`Task`, `SubagentRun`)  
+- **Entity**: Objects with stable identity that persist over time (`TaskRecord`,
+  subagent runtime/session records)
 - **Value Object**: Descriptive objects defined by their fields (`FailureFingerprint`, `RecoveryTrigger`)
-- **Service**: Behavior that coordinates multiple entities (`TaskService`, `PipelineRunner`)
+- **Service**: Behavior that coordinates multiple entities (task transition
+  operations, state-machine runner, recovery coordination)
 - **Store**: Persistence boundaries (`WorkspaceStore`, `ArtifactStore`)
 - **Actor**: People or components that do work (`Operator`, `Runner`, `Subagent`)
 - **Event**: Typed facts about what happened (`AcceptEvent`, `RejectEvent`)
@@ -97,10 +99,18 @@ Each domain module contains comprehensive docstrings for all models, including:
 
 ### Key Model Categories
 
-**Core Entities**: `Task`, `SubagentRun`, `Session` - objects with stable identity  
+**Core Entities**: `TaskRecord`, subagent session/runtime records - objects with stable identity
 **Value Objects**: `TaskRetryPolicy`, `FailureFingerprint`, `RecoveryTrigger`, `RecoveryOutcome` - descriptive data structures
-**Enums**: `TaskStatus`, `PipelineState`, `StageVerdict` - normalized classification  
-**Services**: `TaskService`, `PipelineRunner` - domain behavior coordination  
+**Enums**: `TaskStatus`, `PipelineState`, `PipelineStatus`, `Verdict` - normalized classification
+**Services**: task transition operations, `StateMachineRunner`, recovery coordination - domain behavior coordination
 **Runtime State**: `TaskRuntime`, `PipelineRuntime`, `ExecutionRuntime` - mutable execution tracking
+
+## Storage Rule
+
+Task intent, queue state, runtime state, reports, events, monitoring, and audit
+records belong in SQLite. The only LiteHive-owned YAML file that should remain
+in a workspace is `.litehive/config.yaml`; all other structured workspace state
+should use the database or append-only text/JSONL artifacts when they are
+intentionally logs.
 
 For implementation details, usage patterns, and field-level documentation, consult the docstrings in the corresponding domain module.
