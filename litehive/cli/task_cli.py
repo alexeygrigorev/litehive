@@ -10,14 +10,8 @@ from litehive.cli.parse import (
     parse_dependency_ids,
     parse_text_list_option,
 )
-from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
 from litehive.tasks.archive import archive_tasks, get_archived_task, list_archived_tasks
-from litehive.tasks.browse import list_recently_created_tasks
-from litehive.tasks.recent import (
-    format_elapsed_duration,
-    list_recent_task_summaries,
-)
 from litehive.state.records import create_task, get_task, list_tasks as load_tasks, require_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
@@ -102,56 +96,6 @@ def _print_creation_provenance(task) -> None:
     print(f"  role: {created_from.role or '-'}")
     print(f"  blocking: {'yes' if created_from.blocking else 'no'}")
     print(f"  rationale: {created_from.rationale or '-'}")
-
-
-def _print_recent_task_table(summaries) -> None:
-    columns = [
-        ("task_id", "TASK_ID"),
-        ("title", "TITLE"),
-        ("transition_count", "TRANSITIONS"),
-        ("elapsed", "ELAPSED"),
-        ("final_stage", "FINAL_STAGE"),
-        ("status", "STATUS"),
-    ]
-    rows = [
-        {
-            "task_id": summary.task_id,
-            "title": summary.title,
-            "transition_count": str(summary.transition_count),
-            "elapsed": format_elapsed_duration(summary.elapsed_seconds),
-            "final_stage": summary.final_stage,
-            "status": summary.status,
-        }
-        for summary in summaries
-    ]
-    widths = {key: max(len(header), *(len(row[key]) for row in rows)) for key, header in columns}
-    print("  ".join(header.ljust(widths[key]) for key, header in columns))
-    for row in rows:
-        print("  ".join(row[key].ljust(widths[key]) for key, _ in columns))
-
-
-def _print_created_task_table(rows) -> None:
-    columns = [
-        ("task_id", "TASK_ID"),
-        ("title", "TITLE"),
-        ("created_at", "CREATED_AT"),
-        ("source", "SOURCE"),
-        ("context", "CONTEXT"),
-    ]
-    rendered = [
-        {
-            "task_id": row.task_id,
-            "title": row.title,
-            "created_at": row.created_at,
-            "source": row.source,
-            "context": row.context,
-        }
-        for row in rows
-    ]
-    widths = {key: max(len(header), *(len(row[key]) for row in rendered)) for key, header in columns}
-    print("  ".join(header.ljust(widths[key]) for key, header in columns))
-    for row in rendered:
-        print("  ".join(row[key].ljust(widths[key]) for key, _ in columns))
 
 
 @app.command("add", help="Create a queued task")
@@ -273,35 +217,19 @@ def logs(
     return show_latest_daemon_log(workspace)
 
 
-@app.command("list", help="Compact task listing with optional filters")
+@app.command("list", help="Compact task listing")
 def list_tasks(
     workspace: WorkspaceOption = Path.cwd(),
     show_all: Annotated[bool, typer.Option("--all", help="Include done and archived tasks")] = False,
-    filter_status: Annotated[str | None, typer.Option("--status", help="Filter by task status")] = None,
-    filter_pipeline_status: Annotated[
-        str | None, typer.Option("--pipeline-status", help="Filter by operator-facing pipeline progress")
-    ] = None,
-    filter_engine: Annotated[str | None, typer.Option("--engine", help="Filter by engine")] = None,
 ) -> int:
     ensure_workspace(workspace)
-    config = load_config(workspace)
     tasks = _load_task_list_with_archive_history(
         workspace,
-        include_archived=show_all or filter_status == "archived",
+        include_archived=show_all,
     )
     filtered = []
     for task in tasks:
-        archived = task.status == "archived"
-        if not show_all and filter_status != "archived" and task.status == "done":
-            continue
-        if filter_status == "archived":
-            if not archived:
-                continue
-        elif filter_status and task.status != filter_status:
-            continue
-        if filter_pipeline_status and task.pipeline_status != filter_pipeline_status:
-            continue
-        if filter_engine and config.default_engine != filter_engine:
+        if not show_all and task.status == "done":
             continue
         filtered.append(task)
     for task in filtered:
@@ -378,48 +306,6 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
     print(f"current_stage: {current_stage.stage if current_stage and current_stage.stage else '-'}")
     print(f"retry_count: {pipeline_runtime.retry_count}")
     print(f"last_outcome: {pipeline_runtime.last_outcome or '-'}")
-    return 0
-
-
-@app.command("recent", help="Summarize tasks touched in a recent time window")
-def recent(
-    workspace: WorkspaceOption = Path.cwd(),
-    since: Annotated[
-        str,
-        typer.Option("--since", help="Compact duration window (e.g. 24h, 90m, 7d)"),
-    ] = "24h",
-) -> int:
-    ensure_workspace(workspace)
-    try:
-        summaries = list_recent_task_summaries(workspace, since=since)
-    except ValueError as exc:
-        print(f"recent failed: {exc}")
-        return 1
-    if not summaries:
-        print(f"No tasks touched in the last {since}.")
-        return 0
-    _print_recent_task_table(summaries)
-    return 0
-
-
-@app.command("browse", help="List tasks created in a recent time window with provenance context")
-def browse(
-    workspace: WorkspaceOption = Path.cwd(),
-    since: Annotated[
-        str,
-        typer.Option("--since", help="Compact duration window (e.g. 24h, 90m, 7d)"),
-    ] = "24h",
-) -> int:
-    ensure_workspace(workspace)
-    try:
-        rows = list_recently_created_tasks(workspace, since=since)
-    except ValueError as exc:
-        print(f"browse failed: {exc}")
-        return 1
-    if not rows:
-        print(f"No tasks created in the last {since}.")
-        return 0
-    _print_created_task_table(rows)
     return 0
 
 

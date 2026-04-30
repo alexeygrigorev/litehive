@@ -50,12 +50,6 @@ def _cmd_list(args) -> int:
     argv = ["task", "list", "--workspace", args.workspace]
     if getattr(args, "show_all", False):
         argv.append("--all")
-    if getattr(args, "filter_status", None) is not None:
-        argv.extend(["--status", args.filter_status])
-    if getattr(args, "filter_pipeline_status", None) is not None:
-        argv.extend(["--pipeline-status", args.filter_pipeline_status])
-    if getattr(args, "filter_engine", None) is not None:
-        argv.extend(["--engine", args.filter_engine])
     return _invoke_cli(argv)
 
 
@@ -71,20 +65,6 @@ def _cmd_logs(args) -> int:
         argv.append("--all")
     if getattr(args, "follow", False):
         argv.append("--follow")
-    return _invoke_cli(argv)
-
-
-def _cmd_recent(args) -> int:
-    argv = ["task", "recent", "--workspace", args.workspace]
-    if getattr(args, "since", None) is not None:
-        argv.extend(["--since", args.since])
-    return _invoke_cli(argv)
-
-
-def _cmd_browse(args) -> int:
-    argv = ["task", "browse", "--workspace", args.workspace]
-    if getattr(args, "since", None) is not None:
-        argv.extend(["--since", args.since])
     return _invoke_cli(argv)
 
 

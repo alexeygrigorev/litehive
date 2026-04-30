@@ -4,13 +4,30 @@ import argparse
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
-from litehive.config.model import LitehiveConfig
+from litehive.cli.task_cli import app as task_app
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.archive import archive_task
 
 from tests.support.helpers import _cmd_list, _cmd_recover, _cmd_show, _cmd_update
+
+
+def _help_option_names(output: str) -> set[str]:
+    import re
+
+    return set(re.findall(r"(?<![\w-])--[\w-]+", output))
+
+
+def test_list_help_matches_trimmed_option_surface() -> None:
+    result = CliRunner().invoke(task_app, ["list", "--help"], standalone_mode=False)
+
+    assert result.exit_code == 0, result.output
+    option_names = _help_option_names(result.output)
+    assert "--all" in option_names
+    for option in ["--status", "--pipeline-status", "--engine"]:
+        assert option not in option_names
 
 
 def test_list_excludes_done_tasks_by_default(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -25,9 +42,6 @@ def test_list_excludes_done_tasks_by_default(tmp_path: Path, capsys: pytest.Capt
         argparse.Namespace(
             workspace=tmp_path,
             show_all=False,
-            filter_status=None,
-            filter_pipeline_status=None,
-            filter_engine=None,
         )
     )
     output = capsys.readouterr().out
@@ -45,51 +59,6 @@ def test_list_all_includes_done_tasks(tmp_path: Path, capsys: pytest.CaptureFixt
     done.status = "done"
     done.pipeline_status = "done"
     save_task(tmp_path, done)
-
-    exit_code = _cmd_list(
-        argparse.Namespace(
-            workspace=tmp_path,
-            show_all=True,
-            filter_status=None,
-            filter_pipeline_status=None,
-            filter_engine=None,
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert active.id in output
-    assert done.id in output
-    assert "Done task" in output
-
-
-def test_list_filter_by_status(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
-    queued = create_task(tmp_path, title="Queued task", auto_commit=False)
-    interrupted = create_task(tmp_path, title="Interrupted task", auto_commit=False)
-    interrupted.status = "interrupted"
-    save_task(tmp_path, interrupted)
-
-    exit_code = _cmd_list(
-        argparse.Namespace(
-            workspace=tmp_path,
-            show_all=False,
-            filter_status="interrupted",
-            filter_pipeline_status=None,
-            filter_engine=None,
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert interrupted.id in output
-    assert "Interrupted task" in output
-    assert queued.id not in output
-
-
-def test_list_filter_by_archived_status(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
-    live = create_task(tmp_path, title="Live task", auto_commit=False)
     archived = create_task(tmp_path, title="Archived task", auto_commit=False)
     archived.status = "done"
     archived.pipeline_status = "done"
@@ -99,91 +68,16 @@ def test_list_filter_by_archived_status(tmp_path: Path, capsys: pytest.CaptureFi
     exit_code = _cmd_list(
         argparse.Namespace(
             workspace=tmp_path,
-            show_all=False,
-            filter_status="archived",
-            filter_pipeline_status=None,
-            filter_engine=None,
+            show_all=True,
         )
     )
     output = capsys.readouterr().out
 
     assert exit_code == 0
+    assert active.id in output
+    assert done.id in output
+    assert "Done task" in output
     assert f"{archived.id} [archived/done] Archived task close_reason=done" in output
-    assert live.id not in output
-
-
-def test_list_filter_by_pipeline_status(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
-    backlog = create_task(tmp_path, title="Backlog task", auto_commit=False)
-    implementing = create_task(tmp_path, title="Implementing task", auto_commit=False)
-    implementing.pipeline_status = "implementing"
-    save_task(tmp_path, implementing)
-
-    exit_code = _cmd_list(
-        argparse.Namespace(
-            workspace=tmp_path,
-            show_all=False,
-            filter_status=None,
-            filter_pipeline_status="implementing",
-            filter_engine=None,
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert implementing.id in output
-    assert "Implementing task" in output
-    assert backlog.id not in output
-
-
-def test_list_filter_by_engine(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="gemini"))
-    default_engine = create_task(tmp_path, title="Default engine task", auto_commit=False)
-    gemini = create_task(tmp_path, title="Gemini task", auto_commit=False)
-
-    exit_code = _cmd_list(
-        argparse.Namespace(
-            workspace=tmp_path,
-            show_all=False,
-            filter_status=None,
-            filter_pipeline_status=None,
-            filter_engine="gemini",
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert default_engine.id in output
-    assert "Default engine task" in output
-    assert gemini.id in output
-    assert "Gemini task" in output
-
-
-def test_list_composed_filters_use_workspace_default_engine(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    match = create_task(tmp_path, title="Match task", auto_commit=False)
-    same_engine = create_task(tmp_path, title="Same engine", auto_commit=False)
-    no_match_status = create_task(tmp_path, title="Wrong status", auto_commit=False)
-    no_match_status.status = "interrupted"
-    save_task(tmp_path, no_match_status)
-
-    exit_code = _cmd_list(
-        argparse.Namespace(
-            workspace=tmp_path,
-            show_all=False,
-            filter_status="queued",
-            filter_pipeline_status=None,
-            filter_engine="codex",
-        )
-    )
-    output = capsys.readouterr().out
-
-    assert exit_code == 0
-    assert match.id in output
-    assert "Match task" in output
-    assert same_engine.id in output
-    assert "Same engine" in output
-    assert no_match_status.id not in output
 
 
 def test_list_compact_format(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -195,9 +89,6 @@ def test_list_compact_format(tmp_path: Path, capsys: pytest.CaptureFixture[str])
         argparse.Namespace(
             workspace=tmp_path,
             show_all=False,
-            filter_status=None,
-            filter_pipeline_status=None,
-            filter_engine=None,
         )
     )
     output = capsys.readouterr().out
@@ -214,7 +105,7 @@ def test_show_prints_task_details(
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
     monkeypatch.delenv("LITEHIVE_STAGE", raising=False)
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="gemini"))
+    ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Detail task", auto_commit=False)
     task.goal = "Test the show command"
     task.acceptance_criteria = ["criterion one", "criterion two"]

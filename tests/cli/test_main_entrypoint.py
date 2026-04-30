@@ -155,7 +155,6 @@ def test_main_allows_task_close_for_agent_roles(
     [
         ["litehive", "status"],
         ["litehive", "task", "list"],
-        ["litehive", "task", "browse", "--since", "24h"],
         ["litehive", "task", "show", "T-0001"],
     ],
 )

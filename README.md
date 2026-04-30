@@ -295,11 +295,12 @@ SQL
 
 Prefer direct SQL over iterating `litehive task show` per task — the CLI per-task approach is ~100× slower on any non-trivial report.
 
-CLI equivalent for the same recent-task summary:
+Supported CLI inspection paths:
 
 ```bash
-litehive task recent             # tasks touched in the last 24h
-litehive task recent --since 72h # widen the reporting window
+litehive status                  # active task and queue overview
+litehive task list               # compact task list
+litehive task show T-0001        # full details for a specific task
 ```
 
 ## Artifact retention

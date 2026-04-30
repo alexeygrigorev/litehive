@@ -39,7 +39,7 @@ def _agent_blocked_command_message() -> str:
         "You are not authorized to perform this command. "
         "PM agents may shape only the active task via "
         "`litehive agent update ...` or `litehive agent close ...`; "
-        "operator inspection commands such as status/list/browse/show are not available to agents."
+        "operator inspection commands such as status/list/show are not available to agents."
     )
 
 

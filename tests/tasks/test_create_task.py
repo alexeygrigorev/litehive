@@ -198,12 +198,13 @@ def test_task_add_cli_defaults_to_full_pipeline_mode(tmp_path: Path) -> None:
     assert persisted.pipeline_mode == "full"
 
 
-def test_task_search_cli_is_removed() -> None:
-    result = CliRunner().invoke(task_app, ["search", "dashboard"], standalone_mode=False)
+@pytest.mark.parametrize("command", ["browse", "recent", "search"])
+def test_task_discovery_convenience_cli_is_removed(command: str) -> None:
+    result = CliRunner().invoke(task_app, [command, "dashboard"], standalone_mode=False)
 
     assert result.exit_code != 0
     diagnostic = result.output or str(result.exception)
-    assert "No such command 'search'" in diagnostic
+    assert f"No such command '{command}'" in diagnostic
 
 
 def test_task_update_help_matches_trimmed_option_surface() -> None:
