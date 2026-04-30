@@ -14,7 +14,7 @@ from litehive.domain.common import FEEDBACK_CAP
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport, TaskActivityEntry
 from litehive.state.records import create_task
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
-from litehive.tasks.reports import append_activity_entry
+from litehive.tasks.activity_rendering import append_activity_entry
 
 
 def _subagent_result(

@@ -1,4 +1,4 @@
-"""Invariant + happy-path tests for the pipeline v2 state machine.
+"""Invariant + happy-path tests for the pipeline state machine.
 
 These only exercise the pure rule layer via ``evaluate`` — no engines, no
 runner, no persistence.

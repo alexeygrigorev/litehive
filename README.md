@@ -150,8 +150,8 @@ Use `litehive queue move` or `litehive queue promote` when operator ordering mat
 Agent interaction:
 
 ```bash
-litehive report --verdict pass --stage testing --message "All tests pass"
-litehive report --verdict reject --stage testing --message "Expected: login returns 200. Observed: returns 500."
+litehive agent report --verdict pass --stage testing --message "All tests pass"
+litehive agent report --verdict reject --stage testing --message "Expected: login returns 200. Observed: returns 500."
 ```
 
 ## Self-healing
@@ -204,7 +204,7 @@ agent_startup_guidance:
   planner:
     - Rewrite scope with `litehive agent update ...` before passing grooming.
   swe:
-    - Prefer targeted file reads over full repo scans and finish with `litehive report ...`.
+    - Prefer targeted file reads over full repo scans and finish with `litehive agent report ...`.
   qa:
     - Read the latest implementing report before running tests.
 ```

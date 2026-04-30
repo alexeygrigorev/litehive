@@ -477,7 +477,7 @@ class GitCommitNode(CommitNode):
         the main repo as the pipeline advances, and capturing them in the
         checkpoint commit causes ``git merge`` to abort with "Your local
         changes would be overwritten" on any task that updates its own
-        task.yaml (see T-0320).
+        task metadata files (see T-0320).
         """
         if worktree == self.main_repo_root:
             return

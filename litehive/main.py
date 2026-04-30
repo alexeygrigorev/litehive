@@ -19,7 +19,7 @@ def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
     """Return whether an agent role may invoke a non-`agent` command.
 
     The public agent-facing CLI is intentionally tiny:
-    `litehive report` plus `litehive task add|update|close`.
+    `litehive agent report` plus `litehive task add|update|close`.
     Recovery keeps its small diagnostic allowlist; other commands stay blocked.
     """
     if not argv:
@@ -112,17 +112,15 @@ def main() -> int:
         route_via_root_cli = False
         cmd = argv[0] if argv else None
         if cmd is None:
-            print("Usage: litehive report | litehive task [add|update|close]")
+            print("Usage: litehive agent report | litehive task [add|update|close]")
             print("\nRun 'litehive --help' for details.")
             return 0
+        if cmd == "report":
+            print(_agent_blocked_command_message())
+            return 1
         if _requests_help(argv):
             route_via_root_cli = True
-        if cmd == "report":
-            argv = ["agent", "report", *argv[1:]]
-            sys.argv = [sys.argv[0], *argv]
-            cmd = "agent"
-            route_via_root_cli = True
-        elif cmd != "agent" and not route_via_root_cli:
+        if cmd != "agent" and not route_via_root_cli:
             if not _agent_command_is_allowed(agent_role, argv):
                 print(_agent_blocked_command_message())
                 return 1

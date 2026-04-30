@@ -7,7 +7,7 @@ from litehive.cli.pool import (
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.reports import StageReport
 from litehive.state.records import create_task
-from litehive.tasks.reports import record_stage_report
+from litehive.tasks.report_storage import record_stage_report
 
 
 def test_pool_reads_canonical_stage_reports(tmp_path) -> None:

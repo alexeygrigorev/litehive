@@ -13,7 +13,7 @@ from litehive.lifecycle.nodes.system import StubCommitNode
 from litehive.lifecycle.orchestration import run_task
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, list_tasks, save_task
-from litehive.tasks.reports import append_activity_entry
+from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.tasks.queue import dequeue_next_task, restore_missing_queued_tasks
 from litehive.tasks.status import resume_task, stop_current_task
 from litehive.worktree import inspect_dirty_worktree_gate

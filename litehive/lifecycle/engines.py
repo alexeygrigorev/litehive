@@ -1,11 +1,11 @@
-"""Concrete engine selector + heru-backed engine adapter for v2.
+"""Concrete engine selector + heru-backed engine adapter.
 
 Two things live here:
 
 1. ``ConfigBackedEngineSelector`` — reads the shared engine/model selection
    policy and returns the first eligible engine that isn't frozen and isn't
    in the caller's ``excluded`` set.
-2. ``HeruEngineAdapter`` — wraps a heru engine adapter so it matches the v2
+2. ``HeruEngineAdapter`` — wraps a heru engine adapter so it matches the
    ``Engine`` protocol (``run_turn(session, prompt, state) → AgentVerdict``)
    and translates heru exceptions into the error taxonomy.
 

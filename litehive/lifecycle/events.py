@@ -32,7 +32,7 @@ class Pass(Event):
 
     Fired by:
       - agent nodes (grooming / implementing / testing / accepting) when
-        the agent submits a ``pass`` verdict via ``litehive report``.
+        the agent submits a ``pass`` verdict via ``litehive agent report``.
       - the ``commit`` system node when ``git merge`` lands cleanly.
       - ``merge_resolving`` (``MergeAgent``) when it resolves all the
         conflict files and commits the resolution.
@@ -41,7 +41,7 @@ class Pass(Event):
     can distinguish an agent pass from a hook phase completing.
 
     ``metadata`` carries the verdict's ``files_changed`` / ``tests_added``
-    details from the submitted ``litehive report`` activity entry. The Runner
+    details from the submitted ``litehive agent report`` activity entry. The Runner
     reads it after each transition and updates ``state.last_report`` so
     downstream guards (``zero_change_shortcut``, etc.) see real numbers
     instead of defaults.
@@ -254,7 +254,7 @@ class RecoveryBudgetHit(Event):
 
     Fired by ``RecoveryAgent.verdict_to_event`` when the agent returns
     outcome ``budget_hit``. Routes ``recovering → failed`` with
-    ``failed_reason=recovery_budget_hit``. Since v2 enforces "one
+    ``failed_reason=recovery_budget_hit``. Since the pipeline enforces "one
     recovery per stage" by construction, this is currently a belt-and-
     suspenders signal — the rule table already prevents a second entry.
     """

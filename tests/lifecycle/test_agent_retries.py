@@ -178,7 +178,7 @@ def test_nudge_required_reissues_turn_with_nudge_prompt() -> None:
     engine = _ScriptedEngine(
         "codex",
         [
-            NudgeRequired("no litehive report call"),
+            NudgeRequired("no litehive agent report call"),
             AgentVerdict(outcome="pass"),
         ],
     )
@@ -214,7 +214,7 @@ def test_nudge_keeps_existing_session_continuation() -> None:
             seen_session_ids.append(session.engine_session_id)
             if self.calls == 1:
                 session.engine_session_id = "resume-123"
-                raise NudgeRequired("no litehive report call")
+                raise NudgeRequired("no litehive agent report call")
             return AgentVerdict(outcome="pass")
 
     engine = _NudgingEngine()
@@ -514,7 +514,7 @@ def test_nudge_budget_exhausted_returns_crash() -> None:
     event = node.run(make_state())
     assert isinstance(event, Crash)
     assert event.exc_type == "NudgeBudgetExhausted"
-    assert "litehive report" in event.message
+    assert "litehive agent report" in event.message
     # After first nudge the engine gets called a second time. If it nudges
     # again, budget is exhausted → crash. So we expect exactly 2 calls.
     assert engine.calls == 2

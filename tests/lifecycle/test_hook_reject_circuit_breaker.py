@@ -89,7 +89,7 @@ class _CrashUntilLitehiveFixEngine:
         if state.stage == "implementing":
             if not fix_marker.exists():
                 self.implementing_attempts.append("crash")
-                raise UnrecoverableError("litehive report wiring bug")
+                raise UnrecoverableError("litehive agent report wiring bug")
             self.implementing_attempts.append("pass")
         return AgentVerdict(outcome="pass")
 

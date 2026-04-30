@@ -280,10 +280,12 @@ class AttentionStore:
     @staticmethod
     def _row_to_item(row: sqlite3.Row) -> AttentionItem:
         payload = json.loads(row["payload"])
-        payload.setdefault("created_at", row["created_at"])
-        payload.setdefault("kind", row["kind"])
-        payload.setdefault("task_id", row["task_id"])
-        payload["id"] = int(row["id"])
+        if not isinstance(payload, dict):
+            raise TypeError("attention payload must be a JSON object")
+        payload_id = payload.get("id")
+        row_id = int(row["id"])
+        if payload_id != row_id:
+            raise ValueError(f"attention payload id {payload_id!r} does not match row id {row_id}")
         return AttentionItem(**payload)
 
     def _next_id(self, all_items: list[AttentionItem]) -> int:

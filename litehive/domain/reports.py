@@ -70,7 +70,7 @@ class StageReport(BaseModel):
 
     Historically heru parsed a `STAGE_RESULT: <yaml>` block out of agent
     stdout to build one of these. That path is gone — agents now submit
-    verdicts via the `litehive report` CLI and `stage_report_from_subagent`
+    verdicts via the `litehive agent report` CLI and `stage_report_from_subagent`
     constructs this record directly.
 
     Primary consumers: PipelineRunner for routing decisions, recovery logic

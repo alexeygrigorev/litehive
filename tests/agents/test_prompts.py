@@ -13,7 +13,7 @@ def test_stage_prompt_only_advertises_pass_and_reject_for_non_recovery_agents(tm
 
     text = stage_prompt(task, "grooming", root=tmp_path)
 
-    assert 'litehive report --verdict pass --message "your report text"' in text
+    assert 'litehive agent report --verdict pass --message "your report text"' in text
     assert "Your allowed verdicts are <pass|reject>." in text
     assert "--verdict blocked" not in text
 

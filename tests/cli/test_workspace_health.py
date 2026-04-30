@@ -23,7 +23,7 @@ from litehive.domain.task import WorkspaceState
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
-from litehive.tasks.reports import record_stage_report
+from litehive.tasks.report_storage import record_stage_report
 
 _RUNNER = CliRunner()
 

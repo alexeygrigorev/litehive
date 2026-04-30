@@ -17,7 +17,7 @@ def stage_report_from_subagent(
     *,
     root: Path | None = None,
 ) -> StageReport:
-    # Step 1: Check if agent submitted a verdict via `litehive report` CLI.
+    # Step 1: Check if agent submitted a verdict via `litehive agent report` CLI.
     if root is not None:
         latest = latest_task_activity_entry(
             root,
@@ -49,7 +49,7 @@ def stage_report_from_subagent(
         task_id=task.id,
         pipeline_state=stage,  # type: ignore[arg-type]
         verdict="reject",
-        summary=f"{stage} rejected: agent did not submit verdict via litehive report CLI",
+        summary=f"{stage} rejected: agent did not submit verdict via litehive agent report CLI",
         feedback=cap_feedback(result.execution_trace),
-        warnings=["Agent did not submit verdict via litehive report CLI."],
+        warnings=["Agent did not submit verdict via litehive agent report CLI."],
     )

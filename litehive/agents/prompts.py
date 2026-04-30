@@ -132,9 +132,9 @@ def stage_prompt(
             lines.extend(
                 [
                     "- Structured acceptance criteria are still missing on the task record, but the current task context is sufficient to infer them.",
-                    '- As the planner for grooming, either provide explicit `ACCEPTANCE_CRITERIA:` bullets or let the runner persist the inferred version after you submit `litehive report --verdict pass --message "criteria confirmed"`.',
+                    '- As the planner for grooming, either provide explicit `ACCEPTANCE_CRITERIA:` bullets or let the runner persist the inferred version after you submit `litehive agent report --verdict pass --message "criteria confirmed"`.',
                     "- You may submit that pass verdict without restating the inferred criteria; the runner will persist them after grooming.",
-                    '- If the current task context is not sufficient after all, submit `litehive report --verdict reject --message "missing context"` instead of passing grooming without criteria.',
+                    '- If the current task context is not sufficient after all, submit `litehive agent report --verdict reject --message "missing context"` instead of passing grooming without criteria.',
                     "- To override the inferred version, you may add an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets that can be persisted directly.",
                     "- If the inferred criteria are incomplete or incorrect and the task still needs more information, do not pass grooming; explain the gap clearly in your report.",
                     "",
@@ -153,7 +153,7 @@ def stage_prompt(
                 lines.extend(
                     [
                         "- As the planner for grooming, provide an `ACCEPTANCE_CRITERIA:` section with concrete `- ` bullets before passing grooming.",
-                        '- If the context is still insufficient, explain the missing information in your report and submit `litehive report --verdict reject --message "missing context"`.',
+                        '- If the context is still insufficient, explain the missing information in your report and submit `litehive agent report --verdict reject --message "missing context"`.',
                     ]
                 )
 
@@ -216,7 +216,7 @@ def stage_prompt(
         [
             "",
             "IMPORTANT: When you are done, you MUST submit your verdict by running:",
-            f'  litehive report --verdict {example_verdict} --message "your report text"',
+            f'  litehive agent report --verdict {example_verdict} --message "your report text"',
             f"Your allowed verdicts are {verdicts}.",
             f"The environment variable LITEHIVE_TASK_ID is set to {task.id} for this session. Workspace and task resolution should use the injected environment automatically.",
             "",
@@ -288,7 +288,7 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
             "- You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path.",
             "- Your job is to diagnose why the previous agent failed and restore a runnable path by fixing Litehive infrastructure bugs.",
             "- You fix Litehive infrastructure bugs, not agent judgment disagreements. Semantic QA/reviewer rejects are not your job.",
-            "- Start from the failed subagent evidence first: stdout, stderr, execution trace, session metadata, exit code, and any `litehive report` attempt or error.",
+            "- Start from the failed subagent evidence first: stdout, stderr, execution trace, session metadata, exit code, and any `litehive agent report` attempt or error.",
             "- Your job is not to redo the failed stage's work, not to re-run the task's implementation or verification, and not to submit the failed stage verdict on the previous agent's behalf.",
             "- Make the smallest effective fix needed so the task can resume the current stage and finish cleanly.",
             "- If this workspace is not already the Litehive repo, switch into the repo at `litehive_source_path` and repair Litehive there.",
@@ -328,10 +328,10 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
             "- Treat the task goal, acceptance criteria, and plan as the execution contract; if they are missing or contradictory, route the issue back through grooming or recovery instead of guessing.",
             "- Before assuming the work is already implemented, run `git diff main...HEAD` in your worktree.",
             "- If there are no changes, implement from scratch regardless of what prior stage reports claim.",
-            '- Only skip implementation and submit `litehive report --verdict pass --message "already implemented and verified"` if `git diff main...HEAD` shows the expected changes and the acceptance criteria are met.',
-            "- Never exit the stage without calling `litehive report`.",
-            "- If the task needs scope correction rather than code changes, submit `litehive report --verdict reject` with the specific correction needed so a PM stage can reshape the task.",
-            "- If the task is genuinely obsolete or duplicated, submit `litehive report --verdict reject` with the concrete close reason needed instead of exiting silently.",
+            '- Only skip implementation and submit `litehive agent report --verdict pass --message "already implemented and verified"` if `git diff main...HEAD` shows the expected changes and the acceptance criteria are met.',
+            "- Never exit the stage without calling `litehive agent report`.",
+            "- If the task needs scope correction rather than code changes, submit `litehive agent report --verdict reject` with the specific correction needed so a PM stage can reshape the task.",
+            "- If the task is genuinely obsolete or duplicated, submit `litehive agent report --verdict reject` with the concrete close reason needed instead of exiting silently.",
         ]
     if stage == "testing":
         return ["- You are the QA verifier responsible for focused independent validation."]

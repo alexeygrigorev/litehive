@@ -1,10 +1,10 @@
 """Restricted CLI helpers for agents running inside the pipeline.
 
-When ``LITEHIVE_AGENT_ROLE`` is set, top-level ``litehive report`` is routed
-through this restricted implementation. Report submissions resolve the role
+``litehive agent report`` is the restricted reporting entrypoint for pipeline
+agents. Report submissions resolve the role
 from the orchestrator-created subagent session instead of trusting a CLI flag.
-The hidden ``litehive agent ...`` command remains as the internal entrypoint
-for agent-scoped commands.
+The hidden ``litehive agent ...`` command is the internal entrypoint for
+agent-scoped commands.
 
 This module also exposes small helpers that other CLI commands can use to
 distinguish operator-only surfaces from the limited agent-facing API.

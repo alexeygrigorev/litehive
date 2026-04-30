@@ -90,11 +90,11 @@ def test_recover_stale_runner_state_requeues_running_task(tmp_path: Path, stage:
     assert refreshed_state.queue[0] == task_id
 
 
-def test_recover_stale_runner_state_does_not_normalize_legacy_flat_running_runtime(tmp_path: Path) -> None:
+def test_recover_stale_runner_state_does_not_use_flat_runtime_payload(tmp_path: Path) -> None:
     task_id, _ = _seed_running_task(tmp_path, stage="implementing", active=True)
     _rewrite_runtime_payload_as_legacy_flat(tmp_path, task_id)
 
-    assert recover_stale_runner_state(tmp_path) is True
+    assert recover_stale_runner_state(tmp_path) is False
 
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         get_task(tmp_path, task_id)
@@ -104,7 +104,7 @@ def test_recover_stale_runner_state_does_not_normalize_legacy_flat_running_runti
     assert "pipeline" not in raw_payload
 
     refreshed_state = load_state(tmp_path)
-    assert refreshed_state.active_task_id is None
+    assert refreshed_state.active_task_id == task_id
 
 
 def test_recover_stale_runner_state_preserves_runtime_stage_when_pipeline_status_degraded(

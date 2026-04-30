@@ -18,7 +18,8 @@ from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.heru_factory import HeruEngineAdapter
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.paths import task_dir
-from litehive.tasks.reports import append_activity_entry, load_stage_reports
+from litehive.tasks.activity_rendering import append_activity_entry
+from litehive.tasks.report_storage import load_stage_reports
 
 
 def _fresh_codex_engine(

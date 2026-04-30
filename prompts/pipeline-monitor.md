@@ -19,6 +19,6 @@ Key context:
 - Agent CLI enforces role-based verdicts (non-recovery agents use pass/reject only)
 - The after_implementing hook runs ruff + pytest on the full codebase
 - `litehive pipeline journal <task_id>` shows the full state machine trace
-- `litehive pipeline reset <task_id>` clears v2 state for a fresh start
+- `litehive pipeline reset <task_id>` clears lifecycle state for a fresh start
 
 Start by running `litehive status` to see what's active.

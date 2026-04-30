@@ -177,20 +177,36 @@ def test_git_wrapper_block_records_attention_db_item(tmp_path: Path, capsys) -> 
     assert payload["metadata"]["command"] == "git push --force origin main"
 
 
-def test_attention_store_reads_legacy_database_rows(tmp_path: Path) -> None:
+def test_attention_store_reads_current_database_rows(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     with connect_workspace_db(tmp_path) as connection:
         connection.execute(
             """
-            INSERT INTO attention (task_id, created_at, kind, payload)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO attention (id, task_id, created_at, kind, payload)
+            VALUES (?, ?, ?, ?, ?)
             """,
             (
+                1,
                 None,
                 "2026-04-23T10:00:00Z",
                 "destructive_git_denied",
-                '{"kind": "destructive_git_denied", "title": "Legacy item", "reason": "legacy reason", '
-                '"suggested_action": "legacy action", "dedupe_key": "legacy-key", "status": "pending"}',
+                json.dumps(
+                    {
+                        "id": 1,
+                        "task_id": None,
+                        "created_at": "2026-04-23T10:00:00Z",
+                        "kind": "destructive_git_denied",
+                        "title": "Current item",
+                        "reason": "current reason",
+                        "suggested_action": "current action",
+                        "dedupe_key": "current-key",
+                        "status": "pending",
+                        "resolved_at": None,
+                        "resolution": None,
+                        "metadata": {},
+                    },
+                    sort_keys=True,
+                ),
             ),
         )
         connection.commit()
@@ -198,11 +214,43 @@ def test_attention_store_reads_legacy_database_rows(tmp_path: Path) -> None:
     items = list_attention(tmp_path, reconcile=False)
 
     assert len(items) == 1
-    assert items[0].title == "Legacy item"
+    assert items[0].title == "Current item"
     assert _attention_item_paths(tmp_path) == []
-    migrated = _attention_payloads(tmp_path)[0]
-    assert migrated["title"] == "Legacy item"
-    assert migrated["dedupe_key"] == "legacy-key"
+    persisted = _attention_payloads(tmp_path)[0]
+    assert persisted["title"] == "Current item"
+    assert persisted["dedupe_key"] == "current-key"
+
+
+def test_attention_store_rejects_stale_rows_missing_payload_fields(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    with connect_workspace_db(tmp_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO attention (id, task_id, created_at, kind, payload)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                1,
+                None,
+                "2026-04-23T10:00:00Z",
+                "destructive_git_denied",
+                json.dumps(
+                    {
+                        "kind": "destructive_git_denied",
+                        "title": "Stale item",
+                        "reason": "stale reason",
+                        "suggested_action": "stale action",
+                        "dedupe_key": "stale-key",
+                        "status": "pending",
+                    },
+                    sort_keys=True,
+                ),
+            ),
+        )
+        connection.commit()
+
+    with pytest.raises(AttentionStoreError, match="corrupt attention state"):
+        list_attention(tmp_path, reconcile=False)
 
 
 def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, monkeypatch) -> None:

@@ -7,7 +7,7 @@ from litehive.domain.reports import TaskActivityEntry
 from litehive.state.records import create_task
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.paths import task_dir
-from litehive.tasks.reports import append_activity_entry
+from litehive.tasks.activity_rendering import append_activity_entry
 
 
 def _activity_rows(root: Path, task_id: str) -> list[dict]:

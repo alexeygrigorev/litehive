@@ -23,29 +23,29 @@ ROLE_GUIDANCE = """\
   - `litehive pipeline journal <task_id>` — start here. One command, no sqlite incantations: dumps the task state (stage, active recovery trigger, recovery history, failed reason, last rejection by stage), the lifecycle events, and the recent pipeline transitions in one readable block.
   - `litehive task logs <task_id> --agent` — execution trace / stdout / stderr of the failing subagent process. This is usually where the root cause is.
   - `litehive task logs <task_id> --agent --all` — lists every subagent run on this task so you can diff the recent ones.
-  - `litehive task logs <task_id>` — task journal (v1 style) with stage entries, verdict submissions, and operator notes.
+  - `litehive task logs <task_id>` — task journal with stage entries, verdict submissions, and operator notes.
   - `litehive task logs --daemon` — daemon-level events if you suspect an orchestrator/runner bug rather than an agent bug.
-  - `litehive pipeline rules` — the full v2 transition table, if you need to understand what routing decisions the state machine made.
+  - `litehive pipeline rules` — the full transition table, if you need to understand what routing decisions the state machine made.
   - `litehive task debug <task_id>` — latest stage report context, verdict history, and operator activity.
   - The `recovery_trigger` field in your prompt already contains the most recent trigger event, source, and reason — use it to narrow your log search.
   - If you need to go deeper than the CLI commands, the underlying tables are `stage_reports`, `recovery_reports`, `pipeline_transitions` (columns: `seq, created_at, from_stage, event_type, event_payload, to_stage, rule_description, delta`) and `pipeline_journal` (columns: `seq, created_at, kind, payload`). Don't invent column names.
 - Diagnose the failing agent before you touch code:
   - Did the agent produce any stdout, stderr, or execution-trace output?
-  - Did it try to call `litehive report`?
+  - Did it try to call `litehive agent report`?
   - If it tried, what exact Litehive error did it get?
   - What Litehive code path caused that failure, and what is the smallest safe fix?
 - Your job is not to redo the failed stage's work, not to re-run the task's implementation or verification, and not to submit the failed stage verdict on the previous agent's behalf.
 - Make the smallest effective fix needed so the task can resume the current stage and finish cleanly.
 - If this workspace is not already the Litehive repo, switch into the repo at `litehive_source_path` and repair Litehive there.
 - Work in the Litehive source repo so you can fix the orchestrator, adapters, prompts, report wiring, resume logic, or other infrastructure bugs with the smallest safe change.
-- Example: if the failed agent tried `litehive report` and got a Litehive traceback, fix Litehive's report path or resume wiring here, verify the Litehive fix, then submit a recovery verdict.
+- Example: if the failed agent tried `litehive agent report` and got a Litehive traceback, fix Litehive's report path or resume wiring here, verify the Litehive fix, then submit a recovery verdict.
 - Non-example: do not rerun the failed stage's tests, do not finish the task's feature work, and do not submit a verdict on the failed agent's behalf.
 - run `uv run pytest` in the Litehive repo before reporting success when you changed Litehive code; keep verification targeted.
 - If the evidence points to a project/task bug rather than a Litehive bug, do not implement the task; report that no Litehive infrastructure fix was found and leave the task for the normal stage owner.
 - Submit your own recovery verdict describing the root cause, the Litehive fix you made, and why the failed stage should be retried.
 - If you submit `resume` or `advance`, include a concrete `--target-stage <stage>`; do not leave the destination implicit.
 - If the prompt shows a repeated recovery fingerprint for the same origin stage, do not `resume` or `advance` again.
-- On a repeated recovery fingerprint, create a follow-up bug task for the unfixable failure, then submit `litehive report --verdict reject --follow-up-task <task-id> --message "<fingerprint + follow-up reference>"` so Litehive flags the current task with the reference instead of re-routing it.
+- On a repeated recovery fingerprint, create a follow-up bug task for the unfixable failure, then submit `litehive agent report --verdict reject --follow-up-task <task-id> --message "<fingerprint + follow-up reference>"` so Litehive flags the current task with the reference instead of re-routing it.
 """
 
 FRESH_ATTEMPT_GUIDANCE = """\

@@ -8,11 +8,11 @@ the requested engine name.
 The adapter delegates the actual subagent invocation to ``SubagentManager``
 (``litehive.agents.SubagentManager``) so we don't reimplement heru's CLI
 shelling, execution-trace handling, or session management. We sit on top of it,
-translating to/from the v2 contract:
+translating to/from the pipeline contract:
 
   - prompt dict → serialized string via ``serialize_prompt``
   - SubagentResult → ``AgentVerdict`` via the verdict reader, which checks
-    whether a fresh ``litehive report`` submission landed in the
+    whether a fresh ``litehive agent report`` submission landed in the
     workspace journal during this turn
   - heru exceptions → error taxonomy
 
@@ -393,7 +393,7 @@ class HeruEngineAdapter:
             source_subagent_id=result.ref.id,
         )
         if verdict is None:
-            raise NudgeRequired(f"{self.name} finished {stage} without a litehive report submission")
+            raise NudgeRequired(f"{self.name} finished {stage} without a litehive agent report submission")
 
         return verdict
 

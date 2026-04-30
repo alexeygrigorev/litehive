@@ -63,7 +63,7 @@ class NudgeRequired(Exception):
     """Agent finished its turn without submitting a verdict — nudge it.
 
     The adapter raises this when the agent exited cleanly but never called
-    ``litehive report``. The AgentNode reissues the turn on the same
+    ``litehive agent report``. The AgentNode reissues the turn on the same
     session (so the engine can resume via --continue) with a prompt that
     reminds the agent to submit a verdict. A separate ``nudge_budget``
     applies; nudges do not consume the retry budget. If nudges run out the
@@ -192,7 +192,7 @@ class AgentNode(Node):
             nudged["nudge"] = True
             nudged["nudge_message"] = (
                 "You finished your last turn without submitting a verdict via "
-                "`litehive report --verdict <pass|reject>`. Please "
+                "`litehive agent report --verdict <pass|reject>`. Please "
                 "review your work and submit your verdict now."
             )
             return nudged
@@ -266,7 +266,7 @@ class AgentNode(Node):
                 if nudges_used >= self.nudge_budget:
                     return Crash(
                         exc_type="NudgeBudgetExhausted",
-                        message=(f"agent did not submit a verdict via `litehive report` after being nudged: {exc}"),
+                        message=(f"agent did not submit a verdict via `litehive agent report` after being nudged: {exc}"),
                     )
                 nudges_used += 1
                 current_prompt = self.build_nudge_prompt(state, current_prompt)

@@ -1,4 +1,4 @@
-"""v2 task orchestration entry point.
+"""Task orchestration entry point.
 
 One function — ``run_task(root, task)`` — that wires up the pipeline
 end-to-end and drives one task through the state machine. It is the
@@ -14,7 +14,7 @@ What it does, in order:
    journal / hook runner / commit node.
 4. Builds the full ``NodeRegistry``.
 5. Runs ``StateMachineRunner.run_task(task_id)``.
-6. Syncs the v2 terminal state back to the v1 ``TaskRecord`` so
+6. Syncs the terminal state back to the ``TaskRecord`` so
    ``litehive status`` and the queue stay coherent.
 
 Returns a small ``ExecutionResult`` named-tuple-ish dataclass the
@@ -835,7 +835,7 @@ def run_task(
                 _mark_task_interrupted_on_crash(root, task, persistence)
                 raise
 
-        # 4. Mirror terminal state back to the v1 TaskRecord.
+        # 4. Mirror terminal state back to the TaskRecord.
         updated_task = _sync_back(final_state, root) or task
         if final_state.stage in {PipelineState.DONE, PipelineState.FAILED}:
             updated_task = reconcile_terminal_commit_sha(

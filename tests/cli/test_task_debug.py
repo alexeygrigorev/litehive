@@ -13,7 +13,8 @@ from litehive.config.workspace import ensure_workspace
 from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.state.records import create_task, save_task
 from litehive.tasks.paths import task_dir
-from litehive.tasks.reports import append_activity_entry, record_stage_report
+from litehive.tasks.activity_rendering import append_activity_entry
+from litehive.tasks.report_storage import record_stage_report
 
 from tests.support.helpers import _cmd_debug, _run, _task_worktree_path
 

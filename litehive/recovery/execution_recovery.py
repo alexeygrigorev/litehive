@@ -189,6 +189,7 @@ def recover_stale_runner_state(
             journal_messages.update(normalized["journal_messages"])
 
         if _update_active_task_after_recovery(
+            root,
             state,
             tasks_by_id=tasks_by_id,
             prioritized_ids=prioritized_ids,
@@ -217,10 +218,7 @@ def _running_task_ids(root: Path) -> list[str]:
                 """
                 SELECT task_id
                 FROM task_state
-                WHERE COALESCE(
-                    json_extract(payload, '$.runtime.pipeline.execution_status'),
-                    json_extract(payload, '$.runtime.execution_status')
-                ) = 'running'
+                WHERE json_extract(payload, '$.runtime.pipeline.execution_status') = 'running'
                 ORDER BY task_id
                 """
             ).fetchall()
@@ -625,25 +623,15 @@ def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
                 FROM task_state
                 WHERE (
                     json_extract(payload, '$.status') = 'in_progress'
-                    AND COALESCE(
-                        json_extract(payload, '$.runtime.pipeline.execution_status'),
-                        json_extract(payload, '$.runtime.execution_status'),
-                        'idle'
-                    ) != 'running'
+                    AND COALESCE(json_extract(payload, '$.runtime.pipeline.execution_status'), 'idle') != 'running'
                     AND (
                         json_extract(payload, '$.pipeline_status')
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
                         OR json_extract(payload, '$.runtime.pipeline.current_stage.stage')
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
-                        OR json_extract(payload, '$.runtime.current_stage.stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
                         OR json_extract(payload, '$.runtime.execution.interruption.resume_stage')
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
                         OR json_extract(payload, '$.runtime.execution.interruption.pipeline_status')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
-                        OR json_extract(payload, '$.runtime.interruption.resume_stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
-                        OR json_extract(payload, '$.runtime.interruption.pipeline_status')
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
                     )
                 ) OR (
@@ -655,33 +643,19 @@ def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
                         OR json_extract(payload, '$.runtime.execution.interruption.pipeline_status')
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
-                        OR json_extract(payload, '$.runtime.interruption.resume_stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
-                        OR json_extract(payload, '$.runtime.interruption.pipeline_status')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
                     )
                 ) OR (
                     json_extract(payload, '$.status') = 'queued'
                     AND (
                         (
-                            COALESCE(
-                                json_extract(payload, '$.runtime.pipeline.current_stage.stage'),
-                                json_extract(payload, '$.runtime.current_stage.stage')
-                            )
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
-                            AND COALESCE(
-                                json_extract(payload, '$.runtime.pipeline.current_stage.status'),
-                                json_extract(payload, '$.runtime.current_stage.status')
-                            ) IN ('idle', 'paused', 'interrupted', 'running'
-                            )
+                            json_extract(payload, '$.runtime.pipeline.current_stage.stage')
+                                IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
+                            AND json_extract(payload, '$.runtime.pipeline.current_stage.status')
+                                IN ('idle', 'paused', 'interrupted', 'running')
                         )
                         OR json_extract(payload, '$.runtime.execution.interruption.resume_stage')
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
                         OR json_extract(payload, '$.runtime.execution.interruption.pipeline_status')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
-                        OR json_extract(payload, '$.runtime.interruption.resume_stage')
-                            IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'failed')
-                        OR json_extract(payload, '$.runtime.interruption.pipeline_status')
                             IN ('grooming', 'implementing', 'testing', 'accepting', 'commit_to_git', 'flagged')
                     )
                 )
@@ -694,6 +668,7 @@ def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
 
 
 def _update_active_task_after_recovery(
+    root: Path,
     state,
     *,
     tasks_by_id: dict[str, TaskRecord],
@@ -709,8 +684,11 @@ def _update_active_task_after_recovery(
     if state.active_task_id is None:
         return mutated
     active_task = tasks_by_id.get(state.active_task_id)
+    active_task_missing = state.active_task_id not in tasks_by_id and not _task_state_row_exists(
+        root, state.active_task_id
+    )
     should_clear_active_task_id = (
-        state.active_task_id not in tasks_by_id
+        active_task_missing
         or state.active_task_id in prioritized_ids
         or (
             active_task is not None
@@ -729,3 +707,17 @@ def _update_active_task_after_recovery(
         state.active_task_id = None
         mutated = True
     return mutated
+
+
+def _task_state_row_exists(root: Path, task_id: str) -> bool:
+    from litehive.db.schema import connect_workspace_db
+
+    with connect_workspace_db(root) as connection:
+        try:
+            row = connection.execute(
+                "SELECT 1 FROM task_state WHERE task_id = ? LIMIT 1",
+                (task_id,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return False
+    return row is not None

@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 import importlib
+import pytest
 
 from typer.testing import CliRunner
 
@@ -15,11 +16,9 @@ def _normalized(text: str) -> str:
     return " ".join(text.split())
 
 
-def test_cli_main_module_remains_importable() -> None:
-    compat_module = importlib.import_module("litehive.cli.main")
-
-    assert compat_module.app is modern_cli.app
-    assert compat_module.main is modern_cli.main
+def test_removed_cli_main_compat_module_is_unavailable() -> None:
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("litehive.cli.main")
 
 
 def test_bare_litehive_prints_status_when_idle(tmp_path, monkeypatch) -> None:

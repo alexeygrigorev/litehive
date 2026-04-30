@@ -12,17 +12,11 @@ from litehive.config.workspace import ensure_workspace
 cli_app_module = importlib.import_module("litehive.cli.app")
 
 
-def test_main_rewrites_agent_report_compat_command(
+def test_main_blocks_removed_agent_report_root_command(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    captured: dict[str, object] = {}
-
-    def fake_cli_main() -> int:
-        captured["argv"] = list(sys.argv)
-        return 7
-
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
-    monkeypatch.setattr(cli_app_module, "main", fake_cli_main)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -31,16 +25,8 @@ def test_main_rewrites_agent_report_compat_command(
 
     exit_code = main_module.main()
 
-    assert exit_code == 7
-    assert captured["argv"] == [
-        "litehive",
-        "agent",
-        "report",
-        "--verdict",
-        "pass",
-        "--message",
-        "ok",
-    ]
+    assert exit_code == 1
+    assert "not authorized" in capsys.readouterr().out
 
 
 def test_main_allows_recovery_diagnostic_commands(

@@ -1,4 +1,4 @@
-"""Tests for the v2 prompt serializer."""
+"""Tests for the prompt serializer."""
 
 import json
 from pathlib import Path
@@ -85,11 +85,11 @@ def _instruction_layer(prompt: dict[str, object], label: str) -> str | None:
 def test_serialize_includes_header_goal_acceptance_plan(workspace: Path) -> None:
     task = create_task(
         workspace,
-        title="Add v2 prompt serializer",
+        title="Add prompt serializer",
         goal="Build the serializer",
         acceptance_criteria=["Serializer exists", "Tests pass"],
     )
-    task.plan = ["Read v1 prompt", "Write v2 module", "Cover with tests"]
+    task.plan = ["Read current prompt", "Write serializer module", "Cover with tests"]
     save_task(workspace, task)
 
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
@@ -99,12 +99,12 @@ def test_serialize_includes_header_goal_acceptance_plan(workspace: Path) -> None
 
     assert prompt["stage"] is PipelineState.IMPLEMENTING
     assert f"Task: {task.id}" in text
-    assert "Add v2 prompt serializer" in text
+    assert "Add prompt serializer" in text
     assert "Stage: implementing" in text
     assert "Role: swe" in text
     assert "Goal:\nBuild the serializer" in text
     assert "- Serializer exists" in text
-    assert "- Read v1 prompt" in text
+    assert "- Read current prompt" in text
     assert "Constraints:\n- Keep changes scoped to the task." in text
 
 
@@ -120,9 +120,9 @@ def test_serialize_includes_role_instructions(workspace: Path) -> None:
     assert "## Fresh attempt guidance" in text
     assert "You are the SWE" in text  # from the swe.py INSTRUCTIONS
     assert "Fresh attempt: implement from the task contract" in text
-    assert 'litehive report --verdict pass --message "your report text"' in text
-    assert "litehive agent report" not in text
-    assert "Never exit without calling `litehive report`." in text
+    assert 'litehive agent report --verdict pass --message "your report text"' in text
+    assert "litehive report --verdict" not in text
+    assert "Never exit without calling `litehive agent report`." in text
 
 
 def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
@@ -210,7 +210,7 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
     subagent_base = task_dir(workspace, task) / "subagents" / "SA-0001-swe"
     subagent_base.mkdir(parents=True)
     (subagent_base / "stdout.txt").write_text(
-        "litehive report --verdict pass failed\nattempting litehive report\n",
+        "litehive agent report --verdict pass failed\nattempting litehive agent report\n",
         encoding="utf-8",
     )
     (subagent_base / "stderr.txt").write_text("report failed: unable to resolve workspace\n", encoding="utf-8")
@@ -221,7 +221,7 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
         session={"id": "SA-0001", "status": "failed", "exit_code": 17},
         report={
             "status": "failed",
-            "summary": "implementing rejected: agent did not submit verdict via litehive report CLI",
+            "summary": "implementing rejected: agent did not submit verdict via litehive agent report CLI",
         },
     )
 
@@ -253,7 +253,7 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
     assert diagnostics["exit_code"] == 17
     assert diagnostics["did_produce_output"] is True
     assert diagnostics["session"]["status"] == "failed"
-    assert diagnostics["report"]["summary"] == "implementing rejected: agent did not submit verdict via litehive report CLI"
+    assert diagnostics["report"]["summary"] == "implementing rejected: agent did not submit verdict via litehive agent report CLI"
 
     assert "Failed subagent diagnostics" in text
     assert "exit_code: 17" in text
@@ -632,24 +632,6 @@ def test_build_prompt_ignores_corrupt_hook_config(workspace: Path) -> None:
     assert "rejecting_hooks" not in prompt
 
 
-def test_serialize_prompt_ignores_removed_rejecting_hooks_alias(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
-    agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext())
-    prompt = agent.build_prompt(make_state(task.id))
-    prompt.pop("runner_hooks", None)
-    prompt["rejecting_hooks"] = [
-        {
-            "command": "uv run pytest -q tests/legacy.py",
-            "description": "legacy alias should be ignored",
-        }
-    ]
-
-    text = serialize_prompt(prompt, task_record=task)
-
-    assert "legacy alias should be ignored" not in text
-    assert "uv run pytest -q tests/legacy.py" not in text
-
-
 def test_swe_prompt_lists_after_stage_hooks_with_descriptions(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     config_path(workspace).write_text(
@@ -698,8 +680,8 @@ def test_serialize_works_without_task_record() -> None:
     assert "Task: T-XYZ" in text
     assert "Goal:\n(task record not loaded)" in text
     assert "Acceptance criteria:\n- (none defined)" in text
-    assert 'litehive report --verdict pass --message "your report text"' in text
-    assert "litehive agent report" not in text
+    assert 'litehive agent report --verdict pass --message "your report text"' in text
+    assert "litehive report --verdict" not in text
 
 
 def test_serialize_verdict_instructions_match_role_and_stage(workspace: Path) -> None:
@@ -743,7 +725,7 @@ def test_serialize_includes_nudge_message_when_present(workspace: Path) -> None:
     assert "this is a nudge" in text
     assert "without a verdict submission" in text
     assert "Please review your work and submit your verdict now." in text
-    assert "litehive report --verdict <pass|reject>" in text
+    assert "litehive agent report --verdict <pass|reject>" in text
 
 
 def test_implementing_retry_activity_keeps_only_grooming_and_dedups_last_rejection_by_source_and_reason(

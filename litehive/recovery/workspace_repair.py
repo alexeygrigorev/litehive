@@ -121,11 +121,7 @@ def _stale_terminal_candidate_ids(root: Path) -> list[str]:
                 ON latest_stage_report.task_id = task_state.task_id
             WHERE json_extract(task_state.payload, '$.status') IN ('queued', 'in_progress', 'interrupted')
               AND json_extract(task_state.payload, '$.pipeline_status') != 'done'
-              AND COALESCE(
-                    json_extract(task_state.payload, '$.runtime.pipeline.execution_status'),
-                    json_extract(task_state.payload, '$.runtime.execution_status'),
-                    'idle'
-                  ) != 'running'
+              AND COALESCE(json_extract(task_state.payload, '$.runtime.pipeline.execution_status'), 'idle') != 'running'
               AND json_extract(latest_stage_report.payload, '$.verdict') = 'pass'
               AND json_extract(latest_stage_report.payload, '$.pipeline_state') IN ('accepting', 'commit_to_git')
             ORDER BY task_state.task_id

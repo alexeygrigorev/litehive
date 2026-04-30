@@ -25,7 +25,7 @@ from litehive.observability.status import (
     render_task_summary,
 )
 from litehive.state.records import create_task
-from litehive.tasks.reports import record_stage_report
+from litehive.tasks.report_storage import record_stage_report
 
 
 def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) -> None:

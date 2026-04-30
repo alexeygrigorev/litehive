@@ -15,7 +15,8 @@ from litehive.lifecycle.sessions import Session
 from litehive.lifecycle.types import PipelineMode
 from litehive.tasks.journal import render_task_journal
 from litehive.tasks.activity import load_task_activity
-from litehive.tasks.reports import append_activity_entry, load_stage_reports
+from litehive.tasks.activity_rendering import append_activity_entry
+from litehive.tasks.report_storage import load_stage_reports
 from heru.types import RuntimeEngineContinuation, SubagentRef
 
 
@@ -732,7 +733,7 @@ def test_heru_engine_adapter_skips_crash_resume_without_resume_id(
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _ScriptedManager)
     monkeypatch.setattr("litehive.lifecycle.heru_factory.latest_verdict_after", lambda *args, **kwargs: None)
 
-    with pytest.raises(NudgeRequired, match="without a litehive report submission"):
+    with pytest.raises(NudgeRequired, match="without a litehive agent report submission"):
         adapter.run_turn(session, _heru_prompt(task.id), state)
 
     assert _ScriptedManager.calls == 1
@@ -764,7 +765,7 @@ def test_heru_engine_adapter_crash_resume_requires_fresh_resume_id(tmp_path, mon
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _ScriptedManager)
     monkeypatch.setattr("litehive.lifecycle.heru_factory.latest_verdict_after", lambda *args, **kwargs: None)
 
-    with pytest.raises(NudgeRequired, match="without a litehive report submission"):
+    with pytest.raises(NudgeRequired, match="without a litehive agent report submission"):
         adapter.run_turn(session, _heru_prompt(task.id), state)
 
     assert _ScriptedManager.calls == 1
@@ -802,7 +803,7 @@ def test_heru_engine_adapter_only_attempts_crash_resume_once(tmp_path, monkeypat
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _ScriptedManager)
     monkeypatch.setattr("litehive.lifecycle.heru_factory.latest_verdict_after", lambda *args, **kwargs: None)
 
-    with pytest.raises(NudgeRequired, match="without a litehive report submission"):
+    with pytest.raises(NudgeRequired, match="without a litehive agent report submission"):
         adapter.run_turn(session, _heru_prompt(task.id), state)
 
     assert _ScriptedManager.calls == 2
@@ -933,7 +934,7 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
         feedback="implemented foo.py",
         submitted_via_cli=True,
     )
-    from litehive.tasks.reports import record_stage_report
+    from litehive.tasks.report_storage import record_stage_report
 
     record_stage_report(tmp_path, task, record)
     monkeypatch.setattr(

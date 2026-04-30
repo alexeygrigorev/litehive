@@ -440,7 +440,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
     from litehive.state.locking import workspace_mutation_guard
     from litehive.state.persist import persist_tasks_and_state, save_state
     from litehive.recovery.execution_recovery import recover_stale_runner_state
-    from .reports import record_recovery_report
+    from litehive.tasks.recovery_reports import record_recovery_report
     from litehive.state.persist import persist_task_and_state
 
     recover_stale_runner_state(root)

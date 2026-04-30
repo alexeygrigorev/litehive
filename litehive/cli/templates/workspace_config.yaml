@@ -124,7 +124,7 @@ engine_preference:
 #   planner:
 #     - Rewrite scope with `litehive agent update ...` before passing grooming.
 #   swe:
-#     - Run focused tests before `litehive report --verdict pass ...`.
+#     - Run focused tests before `litehive agent report --verdict pass ...`.
 agent_startup_guidance: {}
 
 # Workspace defaults for automatic commits and display labels.

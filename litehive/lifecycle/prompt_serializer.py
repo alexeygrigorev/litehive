@@ -1,6 +1,6 @@
-"""Serialize a v2 ``RoleAgent.build_prompt()`` dict into a string for engines.
+"""Serialize a ``RoleAgent.build_prompt()`` dict into a string for engines.
 
-The v2 ``RoleAgent`` returns a structured dict so the test layer can inspect
+``RoleAgent`` returns a structured dict so the test layer can inspect
 it and the engine adapter layer can format it however its CLI expects.
 ``serialize_prompt()`` produces the canonical text representation: a
 section-based document an engine adapter can pipe to ``codex run`` or
@@ -12,7 +12,7 @@ The serializer:
   - composes the selected instruction layers from the dict
   - surfaces ``last_rejection`` as context for retry prompts
   - surfaces ``recovery_trigger`` for recovery agents
-  - finishes with the ``litehive report`` verdict instructions
+  - finishes with the ``litehive agent report`` verdict instructions
 
 """
 
@@ -286,8 +286,8 @@ def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
             [
                 "Diagnosis checklist:",
                 "- Did the agent produce output?",
-                "- Search the execution trace/stdout/stderr for `litehive report`. Did it try to call it?",
-                "- If it called `litehive report`, what exact Litehive error did it get?",
+                "- Search the execution trace/stdout/stderr for `litehive agent report`. Did it try to call it?",
+                "- If it called `litehive agent report`, what exact Litehive error did it get?",
                 "- What Litehive code path caused that failure, and what is the smallest safe fix?",
                 "- Do not rerun the failed stage's task work or submit that stage's verdict yourself.",
             ]
@@ -295,10 +295,10 @@ def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
     )
     session_payload = diagnostics.get("session")
     if isinstance(session_payload, dict) and session_payload:
-        blocks.append(_yaml_block("session.yaml (materialized from the subagent session store)", session_payload))
+        blocks.append(_yaml_block("subagent session store", session_payload))
     report_payload = diagnostics.get("report")
     if isinstance(report_payload, dict) and report_payload:
-        blocks.append(_yaml_block("report.yaml (materialized from the subagent report store)", report_payload))
+        blocks.append(_yaml_block("subagent report store", report_payload))
     execution_trace = str(diagnostics.get("transcript") or "")
     if execution_trace:
         blocks.append(
@@ -454,7 +454,7 @@ def _nudge_section(prompt: dict[str, Any]) -> str:
     if message:
         lines.append(message)
     lines.append(
-        "Do not continue exploratory work until you have submitted `litehive report` with the correct verdict."
+        "Do not continue exploratory work until you have submitted `litehive agent report` with the correct verdict."
     )
     return "\n".join(lines)
 
@@ -698,7 +698,7 @@ def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
     example_verdict = "resume" if prompt.get("role") == "recovery" else "pass"
     return (
         "IMPORTANT: when you are done, submit your verdict by running:\n"
-        f'  litehive report --verdict {example_verdict} --message "your report text"\n'
+        f'  litehive agent report --verdict {example_verdict} --message "your report text"\n'
         f"Allowed verdicts for your role: {verdicts}.\n\n"
         "If the message is multiline or contains shell-sensitive characters, write it to /tmp/verdict_msg.txt and pass --message-file /tmp/verdict_msg.txt instead.\n"
         "Your message is the primary signal the next agent receives — write it as if it's the only thing they read.\n"

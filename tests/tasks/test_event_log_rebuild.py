@@ -19,7 +19,7 @@ from litehive.tasks.event_log import (
     task_event_log_has_events,
     task_event_log_path,
 )
-from litehive.tasks.reports import load_stage_reports, record_stage_report
+from litehive.tasks.report_storage import load_stage_reports, record_stage_report
 from litehive.tasks.status import close_task, requeue_task, update_task
 
 

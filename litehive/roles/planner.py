@@ -16,7 +16,7 @@ INSTRUCTIONS = """\
 - Use `reject` when grooming cannot be completed from the available task context; explain the gap concretely instead of inventing scope or passing an underspecified task.
 - Do not pass grooming with a blank task record; rewrite the goal/acceptance_criteria/plan via CLI first, then pass.
 - Do not implement code in this stage.
-- **Submit your verdict early.** You have a limited turn budget. Run `litehive report --verdict pass --message "<summary>"` as soon as you've updated the task metadata — do not spend remaining turns on optional exploration after the task is shaped. If you run out of turns before submitting, the stage restarts from scratch.
+- **Submit your verdict early.** You have a limited turn budget. Run `litehive agent report --verdict pass --message "<summary>"` as soon as you've updated the task metadata — do not spend remaining turns on optional exploration after the task is shaped. If you run out of turns before submitting, the stage restarts from scratch.
 """
 
 
