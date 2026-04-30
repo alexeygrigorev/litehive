@@ -80,8 +80,24 @@ def test_status_reports_invalid_merged_config_without_silent_defaulting(tmp_path
     assert exit_code == 1
     assert "config: INVALID merged config (" in output
     assert "poll_interval_seconds" in output
-    assert "status is falling back to defaults" in output
+    assert "status is rendering with valid config fields only" in output
     assert "health:" in output
+
+
+def test_status_preserves_valid_config_fields_when_reporting_invalid_config(tmp_path: Path, capsys) -> None:
+    ensure_workspace(tmp_path)
+    config_file = workspace_dir(tmp_path) / "config.yaml"
+    config_file.write_text(
+        "default_engine: claude\npoll_interval_seconds: not-a-number\n",
+        encoding="utf-8",
+    )
+
+    exit_code, output = _run_fast_status(tmp_path, capsys)
+
+    assert exit_code == 1
+    assert "default_engine: claude" in output
+    assert "config: INVALID merged config (" in output
+    assert "poll_interval_seconds" in output
 
 
 def test_status_reports_legacy_engine_fallbacks_config_error(tmp_path: Path, capsys) -> None:
@@ -104,7 +120,7 @@ def test_status_reports_legacy_engine_fallbacks_config_error(tmp_path: Path, cap
 
     assert exit_code == 1
     assert "config: INVALID merged config (" in output
-    assert "unexpected keyword argument 'engine_fallbacks'" in output
+    assert "unknown config key 'engine_fallbacks'" in output
 
 
 def test_status_ignores_legacy_engine_monitoring_yaml_and_renders_db_data(tmp_path: Path, capsys) -> None:

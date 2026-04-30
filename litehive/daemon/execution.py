@@ -18,7 +18,11 @@ from litehive.config.loading import load_config
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import apply_pending_migrations
-from litehive.observability.status import render_runner_status_line
+from litehive.observability.status import (
+    collect_task_pipeline_status,
+    render_runner_status_line,
+    render_task_pipeline_status_lines,
+)
 from litehive.observability.venv_health import daemon_broken_venv_message, probe_broken_venv_executables
 from litehive.state.backup import create_scheduled_workspace_backup
 from litehive.state.persist import load_state, set_pool_stop_reason
@@ -153,21 +157,10 @@ def _append_attention_log(workspace: Path, message: str) -> None:
         handle.write(f"{timestamp}\t{message}\n")
 
 
-def _state_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
-    state = load_state(workspace).model_dump(mode="python")
-    active_task_id = state.get("active_task_id")
-    queue = state.get("queue", []) or []
-    stop_reason = state.get("pool_stop_reason")
-
-    lines = [
-        f"active_task_id: {active_task_id if active_task_id is not None else 'None'}",
-        f"queued_tasks: {len(queue)}",
-        f"pool_stop_reason: {stop_reason if stop_reason is not None else 'None'}",
-    ]
-
-    if queue:
-        lines.append(f"queue_head: {queue[0]}")
-
+def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
+    status = collect_task_pipeline_status(workspace, read_only=True)
+    state = status.state.model_dump(mode="python")
+    lines = render_task_pipeline_status_lines(status, workspace=workspace, mode="fast")
     return state, "\n".join(lines) + "\n"
 
 
@@ -453,7 +446,7 @@ def run_daemon_loop(
 
             if not iteration_failed:
                 try:
-                    pre_state, pre_snapshot = _state_snapshot(workspace)
+                    pre_state, pre_snapshot = _daemon_status_snapshot(workspace)
                 except Exception as exc:
                     logger.exception("pre-status snapshot raised")
                     _emit(f"pre-status raised: {exc}", stream=output_stream)
@@ -577,7 +570,7 @@ def run_daemon_loop(
             consecutive_iteration_failures = 0
 
             try:
-                post_state, post_snapshot = _state_snapshot(workspace)
+                post_state, post_snapshot = _daemon_status_snapshot(workspace)
             except Exception as exc:
                 logger.exception("post-status snapshot raised")
                 _emit(f"post-status raised: {exc}", stream=output_stream)

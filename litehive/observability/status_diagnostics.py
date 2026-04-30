@@ -1,6 +1,6 @@
 """Read-only diagnostics for `litehive status`."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from datetime import UTC, datetime
 import json
 from pathlib import Path
@@ -150,20 +150,56 @@ def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssu
         if mapping is not None:
             data = merge_config_layers(data, mapping)
     try:
-        config = LitehiveConfig(**data)
-    except (TypeError, ValidationError) as exc:
+        config = LitehiveConfig(**_validate_status_config_data(data))
+    except (TypeError, ValueError, ValidationError) as exc:
         issues.append(
             StatusIssue(
                 key="config",
                 severity="ERROR",
                 message=(
                     f"INVALID merged config ({_validation_error_label(exc)})"
-                    " — fix invalid config values; status is falling back to defaults."
+                    " — fix invalid config values; status is rendering with valid config fields only."
                 ),
             )
         )
-        config = LitehiveConfig()
+        config = _best_effort_status_config(data)
     return config, issues
+
+
+def _validate_status_config_data(data: Mapping[str, Any]) -> dict[str, Any]:
+    from litehive.config.model import validate_config_data
+
+    return validate_config_data(data)
+
+
+def _best_effort_status_config(data: Mapping[str, Any]) -> LitehiveConfig:
+    """Build a status-only config without letting one bad field hide valid values."""
+    valid_keys = {field.name for field in fields(LitehiveConfig)}
+    defaults = asdict(LitehiveConfig())
+    remaining = {key: value for key, value in data.items() if key in valid_keys}
+    while remaining:
+        try:
+            return LitehiveConfig(**remaining)
+        except (TypeError, ValueError, ValidationError) as exc:
+            bad_key = _config_error_key(exc)
+            if bad_key is None or bad_key not in remaining:
+                break
+            remaining.pop(bad_key, None)
+    return LitehiveConfig(**{key: value for key, value in remaining.items() if defaults.get(key) == value})
+
+
+def _config_error_key(exc: Exception) -> str | None:
+    if isinstance(exc, ValidationError):
+        error = exc.errors()[0] if exc.errors() else {}
+        location = error.get("loc", ())
+        return str(location[0]) if location else None
+    message = str(exc)
+    for field in fields(LitehiveConfig):
+        if field.name in message:
+            return field.name
+    if "unexpected keyword argument" in message:
+        return message.rsplit("'", 2)[1] if "'" in message else None
+    return None
 
 
 def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue]]:
