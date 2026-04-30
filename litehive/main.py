@@ -123,7 +123,7 @@ def main() -> int:
 
             return cli_main()
 
-    if argv and argv[0] == "status" and "--full" not in argv:
+    if argv and argv[0] == "status" and "--full" not in argv and "--fast" not in argv:
         return fast_status(argv[1:])
 
     if argv and argv[0] == "agent":

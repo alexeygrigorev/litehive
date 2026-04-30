@@ -87,7 +87,7 @@ class AgentReportIdentity:
     subagent_id: str
 
 
-def _resolve_report_identity(root: Path, task, legacy_role: str | None) -> AgentReportIdentity:
+def _resolve_report_identity(root: Path, task) -> AgentReportIdentity:
     subagent_id = _current_subagent_id()
     if subagent_id is None:
         print("report failed: LITEHIVE_SUBAGENT_ID not set")
@@ -113,9 +113,6 @@ def _resolve_report_identity(root: Path, task, legacy_role: str | None) -> Agent
     if env_role and env_role != role:
         print("report failed: LITEHIVE_AGENT_ROLE does not match subagent session identity")
         raise SystemExit(1)
-    if legacy_role and legacy_role != role:
-        print("report failed: --role cannot override subagent session identity")
-        raise SystemExit(1)
 
     return AgentReportIdentity(role=role, subagent_id=subagent_id)
 
@@ -132,14 +129,6 @@ def agent_report_command(
     verdict: Annotated[str, typer.Option("--verdict", help="Stage verdict")],
     message: Annotated[str, typer.Option("--message", help="Your report text (use - for stdin)")] = "",
     message_file: Annotated[Path | None, typer.Option("--message-file", help="Read message from file")] = None,
-    legacy_role: Annotated[
-        str | None,
-        typer.Option(
-            "--role",
-            help="Legacy option; role is resolved from the subagent session",
-            hidden=True,
-        ),
-    ] = None,
     stage: Annotated[str | None, typer.Option("--stage", help="Override stage (default: from task)")] = None,
     target_stage: Annotated[
         str | None,
@@ -180,7 +169,7 @@ def agent_report_command(
     if task is None:
         print(f"report failed: task {tid} not found")
         raise SystemExit(1)
-    identity = _resolve_report_identity(root, task, legacy_role)
+    identity = _resolve_report_identity(root, task)
     agent_role = identity.role
 
     allowed = _allowed_verdicts_for_role(agent_role)

@@ -29,10 +29,6 @@ logger = logging.getLogger(__name__)
 
 _ARCHIVABLE_TASK_STATUSES = {"done", "closed"}
 _CLOSE_REASON_INDEX_STATUS = {"execution_cancelled": "cancelled"}
-_LEGACY_RUNTIME_YAML_FILES = (
-    "report.yaml",
-    "task.yaml",
-)
 
 
 def archive_root(root: Path) -> Path:
@@ -94,11 +90,6 @@ def _archive_task_path(root: Path, task_id: str) -> Path | None:
         return None
     matches = sorted(path for path in archive.glob(f"{task_id}-*") if path.is_dir())
     return matches[0] if matches else None
-
-
-def _remove_legacy_runtime_yaml_files(path: Path) -> None:
-    for name in _LEGACY_RUNTIME_YAML_FILES:
-        (path / name).unlink(missing_ok=True)
 
 
 def _archived_at_for_tombstone(task: TaskRecord) -> str:
@@ -225,7 +216,6 @@ def _archive_validated_task(
         shutil.move(str(src), str(dst))
     else:
         dst.mkdir(parents=True, exist_ok=True)
-    _remove_legacy_runtime_yaml_files(dst)
     _update_archive_index(root, [task])
     refresh_duplicate_task_index_if_initialized(root)
     return task

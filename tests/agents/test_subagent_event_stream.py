@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ from litehive.agents.manager import SubagentManager
 from litehive.agents.session_store import load_subagent_report, load_subagent_event_stream
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
+from litehive.db.schema import connect_workspace_db
 from litehive.recovery.execution_recovery import mark_interrupted_subagent
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.paths import task_dir
@@ -180,5 +182,31 @@ def test_subagent_skips_event_stream_when_no_events(tmp_path: Path, monkeypatch:
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="no events")
     assert result.ref.status == "completed"
+
+    assert load_subagent_event_stream(tmp_path, task.id, "SA-0001") == {}
+
+
+def test_subagent_event_stream_ignores_removed_timeline_payload_key(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Current event stream key")
+    with connect_workspace_db(tmp_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO subagent_sessions (
+                task_id,
+                subagent_id,
+                created_at,
+                updated_at,
+                payload
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                task.id,
+                "SA-0001",
+                "2026-04-30T00:00:00+00:00",
+                "2026-04-30T00:00:00+00:00",
+                json.dumps({"timeline": {"events": [{"kind": "message", "content": "old"}]}}),
+            ),
+        )
 
     assert load_subagent_event_stream(tmp_path, task.id, "SA-0001") == {}

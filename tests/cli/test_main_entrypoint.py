@@ -340,6 +340,23 @@ def test_fast_status_prefers_runner_active_task_id(
     assert "active_task_status: in_progress/implementing" in output
 
 
+def test_main_status_fast_option_is_removed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
+    ensure_workspace(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["litehive", "status", "--fast"])
+
+    exit_code = main_module.main()
+    output = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "No such option: --fast" in output.err
+
+
 def test_main_status_reports_corrupt_registry_from_workspace_cwd(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

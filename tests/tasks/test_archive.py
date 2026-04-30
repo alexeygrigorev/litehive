@@ -99,21 +99,6 @@ def test_archive_single_done_task(tmp_path: Path) -> None:
     assert archived.updated_at
 
 
-def test_archive_drops_legacy_runtime_yaml_artifacts(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    task = _make_done_task(tmp_path, "Archive legacy runtime files")
-    source_dir = task_dir(tmp_path, task)
-    for name in ("report.yaml", "task.yaml"):
-        (source_dir / name).write_text("stale: true\n", encoding="utf-8")
-
-    archive_task(tmp_path, task.id)
-
-    archive_dir = archive_root(tmp_path) / f"{task.id}-{task.slug}"
-    assert archive_dir.exists()
-    for name in ("report.yaml", "task.yaml"):
-        assert not (archive_dir / name).exists()
-
-
 def test_archive_rejects_non_done_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Still queued")

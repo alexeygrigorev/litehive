@@ -10,7 +10,6 @@ from litehive.domain.common import utcnow
 
 _UNSET = object()
 _EVENT_STREAM_KEY = "event_stream"
-_LEGACY_EVENT_STREAM_KEY = "timeline"
 
 
 def _load_subagent_payload(root: Path, task_id: str, subagent_id: str) -> tuple[dict[str, Any], str | None]:
@@ -51,10 +50,8 @@ def save_subagent_artifacts(
     if event_stream is not _UNSET:
         if event_stream is None:
             payload.pop(_EVENT_STREAM_KEY, None)
-            payload.pop(_LEGACY_EVENT_STREAM_KEY, None)
         else:
             payload[_EVENT_STREAM_KEY] = event_stream
-            payload.pop(_LEGACY_EVENT_STREAM_KEY, None)
     now = utcnow()
     created_at = created_at or now
     with connect_workspace_db(root) as connection:
@@ -96,13 +93,4 @@ def load_subagent_report(root: Path, task_id: str, subagent_id: str) -> dict[str
 def load_subagent_event_stream(root: Path, task_id: str, subagent_id: str) -> dict[str, Any]:
     payload = load_subagent_artifacts(root, task_id, subagent_id)
     event_stream = payload.get(_EVENT_STREAM_KEY)
-    if isinstance(event_stream, dict):
-        return event_stream
-    legacy_event_stream = payload.get(_LEGACY_EVENT_STREAM_KEY)
-    return legacy_event_stream if isinstance(legacy_event_stream, dict) else {}
-
-
-# Deprecated: use load_subagent_event_stream directly
-def load_subagent_timeline(root: Path, task_id: str, subagent_id: str) -> dict[str, Any]:
-    """Legacy alias for load_subagent_event_stream. Use load_subagent_event_stream instead."""
-    return load_subagent_event_stream(root, task_id, subagent_id)
+    return event_stream if isinstance(event_stream, dict) else {}

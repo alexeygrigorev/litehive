@@ -6,7 +6,6 @@ import importlib.resources
 import json
 import logging
 import os
-import re
 import sqlite3
 from pathlib import Path
 from contextlib import contextmanager
@@ -159,52 +158,6 @@ def _sync_task_intent_columns(connection: sqlite3.Connection) -> None:
                 values["pipeline_status"],
                 row["task_id"],
             ),
-        )
-
-
-def _legacy_archived_task_ids(root: Path) -> set[str]:
-    archive_dir = root / ".litehive" / "tasks" / "archive"
-    if not archive_dir.exists():
-        return set()
-    archived: set[str] = set()
-    for child in archive_dir.iterdir():
-        if not child.is_dir():
-            continue
-        match = re.match(r"^(T-\d{4})-", child.name)
-        if match is not None:
-            archived.add(match.group(1))
-    index_path = archive_dir / "INDEX.csv"
-    if index_path.exists():
-        try:
-            import csv
-
-            with index_path.open(newline="", encoding="utf-8") as handle:
-                archived.update(row["id"] for row in csv.DictReader(handle) if row.get("id"))
-        except OSError:
-            pass
-    return archived
-
-
-def _mark_legacy_archived_tasks(connection: sqlite3.Connection, root: Path) -> None:
-    for task_id in sorted(_legacy_archived_task_ids(root)):
-        row = connection.execute("SELECT payload FROM task_state WHERE task_id = ?", (task_id,)).fetchone()
-        if row is None:
-            continue
-        try:
-            payload = json.loads(str(row["payload"]))
-            state = TaskStateRecord.model_validate(payload)
-        except (json.JSONDecodeError, ValidationError, TypeError, ValueError):
-            continue
-        state.status = "archived"  # type: ignore[assignment]
-        state.updated_at = state.updated_at or _utcnow()
-        state_payload = state.model_dump(mode="json")
-        connection.execute(
-            """
-            UPDATE task_state
-            SET payload = ?, updated_at = ?
-            WHERE task_id = ?
-            """,
-            (json.dumps(state_payload, sort_keys=True), state.updated_at, task_id),
         )
 
 
@@ -370,7 +323,6 @@ def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationP
                 connection.rollback()
                 raise MigrationApplyError(migration, exc) from exc
             if migration.version == 7:
-                _mark_legacy_archived_tasks(connection, root)
                 _sync_task_intent_columns(connection)
                 connection.commit()
         applied = tuple(migrations)

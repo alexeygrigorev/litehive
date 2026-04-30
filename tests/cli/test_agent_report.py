@@ -122,7 +122,7 @@ def test_agent_report_derives_role_from_subagent_session_and_records_source(
     )
 
 
-def test_agent_report_rejects_legacy_role_override_mismatch(
+def test_agent_report_rejects_removed_role_override(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -147,7 +147,8 @@ def test_agent_report_rejects_legacy_role_override_mismatch(
     )
 
     assert result.exit_code == 1
-    assert "--role cannot override subagent session identity" in result.output
+    assert result.exception is not None
+    assert "No such option: --role" in str(result.exception)
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
     assert load_task_activity(tmp_path, updated) == []

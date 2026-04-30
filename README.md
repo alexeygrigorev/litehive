@@ -110,7 +110,6 @@ Monitoring:
 
 ```bash
 litehive status                           # quick workspace overview
-litehive status --fast                    # legacy alias for the default quick read
 litehive status --full                    # verbose per-task status dump
 litehive queue                            # show queue order
 litehive task logs                        # tail the latest background-run log

@@ -1,4 +1,9 @@
-"""Cleanup helpers for deprecated workspace-owned YAML artifacts."""
+"""Cleanup helpers for deprecated workspace-owned YAML artifacts.
+
+Retained intentionally: `ensure_workspace` still removes stale workspace YAML
+after taking a database backup so current workspaces do not keep shadow runtime
+state beside SQLite.
+"""
 
 from __future__ import annotations
 
