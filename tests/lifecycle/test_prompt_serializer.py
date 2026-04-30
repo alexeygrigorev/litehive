@@ -43,7 +43,7 @@ class _NullSelector:
 
 class _NullSessions:
     def get_or_create(self, task_id, node_name, engine_name):
-        return type("S", (), {"engine_session_id": None, "metadata": {}})()
+        return type("S", (), {"engine_session_id": None})()
 
     def persist(self, task_id, node_name, engine_name, session):
         pass

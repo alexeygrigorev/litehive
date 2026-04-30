@@ -1,7 +1,6 @@
-import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import PipelineState, utcnow
@@ -22,7 +21,6 @@ class Session:
 
     engine_session_id: str | None = None
     conversation_id: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
 
     def resumable(self) -> bool:
         return self.engine_session_id is not None or self.conversation_id is not None
@@ -64,10 +62,10 @@ class InMemorySessionStore:
 class SqliteSessionStore:
     """Persists ``Session`` rows to the ``pipeline_sessions`` sqlite table.
 
-    Each row is one ``(task_id, node_name, engine_name)`` tuple. ``metadata``
-    is stored as a JSON blob. ``get_or_create`` returns a fresh ``Session``
-    when the row doesn't exist yet, without writing; the adapter writes on
-    ``persist`` after the first turn fills in ``engine_session_id``.
+    Each row is one ``(task_id, node_name, engine_name)`` tuple.
+    ``get_or_create`` returns a fresh ``Session`` when the row doesn't exist
+    yet, without writing; the adapter writes on ``persist`` after the first
+    turn fills in engine continuation state.
     """
 
     def __init__(self, workspace_root: Path) -> None:
@@ -77,7 +75,7 @@ class SqliteSessionStore:
         with connect_workspace_db(self.workspace_root) as connection:
             row = connection.execute(
                 """
-                SELECT engine_session_id, conversation_id, metadata
+                SELECT engine_session_id, conversation_id
                 FROM pipeline_sessions
                 WHERE task_id = ? AND node_name = ? AND engine_name = ?
                 """,
@@ -88,22 +86,19 @@ class SqliteSessionStore:
         return Session(
             engine_session_id=row["engine_session_id"],
             conversation_id=row["conversation_id"],
-            metadata=json.loads(row["metadata"] or "{}"),
         )
 
     def persist(self, task_id: str, node_name: PipelineState, engine_name: str, session: Session) -> None:
-        metadata_json = json.dumps(session.metadata, sort_keys=True)
         with connect_workspace_db(self.workspace_root) as connection:
             connection.execute(
                 """
                 INSERT INTO pipeline_sessions (
                     task_id, node_name, engine_name,
-                    engine_session_id, conversation_id, metadata, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    engine_session_id, conversation_id, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(task_id, node_name, engine_name) DO UPDATE SET
                     engine_session_id = excluded.engine_session_id,
                     conversation_id = excluded.conversation_id,
-                    metadata = excluded.metadata,
                     updated_at = excluded.updated_at
                 """,
                 (
@@ -112,7 +107,6 @@ class SqliteSessionStore:
                     engine_name,
                     session.engine_session_id,
                     session.conversation_id,
-                    metadata_json,
                     utcnow(),
                 ),
             )

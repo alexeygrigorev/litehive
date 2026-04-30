@@ -308,7 +308,6 @@ def test_sessions_empty_get_or_create_returns_fresh(workspace: Path) -> None:
     session = sessions.get_or_create("T-0001", "implementing", "codex")
     assert session.engine_session_id is None
     assert session.conversation_id is None
-    assert session.metadata == {}
 
 
 def test_pipeline_sessions_schema_omits_retained_turn_metric(workspace: Path) -> None:
@@ -317,6 +316,7 @@ def test_pipeline_sessions_schema_omits_retained_turn_metric(workspace: Path) ->
 
     removed_metric = "turn" + "_count"
     assert removed_metric not in columns
+    assert "metadata" not in columns
 
 
 def test_sessions_persist_roundtrip(workspace: Path) -> None:
@@ -324,14 +324,12 @@ def test_sessions_persist_roundtrip(workspace: Path) -> None:
     session = Session(
         engine_session_id="cdx-abc-123",
         conversation_id="conv-xyz",
-        metadata={"last_prompt_sha": "deadbeef"},
     )
     sessions.persist("T-0001", "implementing", "codex", session)
 
     loaded = sessions.get_or_create("T-0001", "implementing", "codex")
     assert loaded.engine_session_id == "cdx-abc-123"
     assert loaded.conversation_id == "conv-xyz"
-    assert loaded.metadata == {"last_prompt_sha": "deadbeef"}
     assert loaded.resumable() is True
 
 

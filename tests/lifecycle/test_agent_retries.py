@@ -33,11 +33,14 @@ class _ScriptedEngine:
         self.name = name
         self.script = list(script)
         self.calls = 0
+        self.prompts_seen: list[Any] = []
+        self.session_ids: list[int] = []
 
     def run_turn(self, session: Any, prompt: Any, state: TaskState) -> AgentVerdict:
         self.calls += 1
         # Track per-call what prompt was given so tests can inspect nudges
-        session.metadata.setdefault("prompts_seen", []).append(prompt)
+        self.prompts_seen.append(prompt)
+        self.session_ids.append(id(session))
         step = self.script.pop(0)
         if isinstance(step, Exception):
             raise step
@@ -190,8 +193,7 @@ def test_nudge_required_reissues_turn_with_nudge_prompt() -> None:
     assert isinstance(event, Pass)
     assert engine.calls == 2
     # Verify the second call received a nudged prompt
-    session = store.get_or_create("T-0001", "implementing", "codex")
-    prompts = session.metadata["prompts_seen"]
+    prompts = engine.prompts_seen
     assert len(prompts) == 2
     assert "nudge" not in prompts[0] or not prompts[0].get("nudge")
     assert prompts[1]["nudge"] is True
@@ -551,8 +553,8 @@ def test_engine_switch_uses_fresh_session_per_engine() -> None:
     )
     node.run(make_state())
 
-    # codex session got 3 entries; claude session got 1
-    codex_session = store.get_or_create("T-0001", "implementing", "codex")
-    claude_session = store.get_or_create("T-0001", "implementing", "claude")
-    assert len(codex_session.metadata.get("prompts_seen", [])) == 3
-    assert len(claude_session.metadata.get("prompts_seen", [])) == 1
+    # codex retries reuse one session; switching to claude uses a different one.
+    assert len(codex.session_ids) == 3
+    assert len(set(codex.session_ids)) == 1
+    assert len(claude.session_ids) == 1
+    assert claude.session_ids[0] != codex.session_ids[0]
