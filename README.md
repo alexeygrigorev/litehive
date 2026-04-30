@@ -118,7 +118,7 @@ litehive queue                            # show queue order
 litehive task logs                        # tail the latest background-run log
 litehive task logs --daemon               # list recent background-run sessions with outcomes
 litehive task logs T-0002                      # print the task journal
-litehive task logs T-0002 --agent              # show the latest subagent execution trace/stdout tail
+litehive task logs T-0002 --agent              # show compact DB-backed task evidence
 litehive task logs T-0002 --agent --all        # list all subagent runs for a task
 litehive task logs --follow                    # follow the active subagent stdout live
 litehive task debug T-0002 --worktree         # inspect recorded worktree existence and changes
@@ -203,7 +203,7 @@ runner_hooks:
 # Agent-specific startup guidance
 agent_startup_guidance:
   all:
-    - Start from the latest task artifacts before broad repo exploration.
+    - Start from `litehive task evidence <task_id>` before broad repo exploration.
   planner:
     - Rewrite scope with `litehive agent update ...` before passing grooming.
   swe:
@@ -304,7 +304,7 @@ litehive task recent --since 72h # widen the reporting window
 
 ## Artifact retention
 
-Litehive keeps task intent, queue state, runtime status, activity, reports, subagent sessions, and pipeline history in SQLite. Append-only logs and raw execution artifacts remain as file-backed evidence for repair, recovery, and handoff.
+Litehive keeps task intent, queue state, runtime status, activity, reports, subagent sessions, and pipeline history in SQLite. `litehive task evidence <task_id>` is the compact operator and agent view for recovery and handoff.
 
 High-volume raw execution artifacts are treated as disposable support data:
 

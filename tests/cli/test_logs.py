@@ -171,10 +171,12 @@ def test_logs_agent_prefers_live_stdout_for_active_subagent(tmp_path: Path, caps
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "execution trace:" in output
-    assert "derived live transcript" in output
+    assert "latest_subagent: id=SA-0001 role=swe engine=codex status=running" in output
+    assert "produced_output=yes" in output
+    assert "latest_subagent_trace_source:" in output
+    assert "stdout.log" in output
+    assert "derived live transcript" not in output
     assert "stale live transcript" not in output
-    assert "stdout:" in output
     assert "stale snapshot" not in output
 
 
@@ -189,8 +191,10 @@ def test_logs_agent_derives_active_plain_text_trace_without_transcript(
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "execution trace:" in output
-    assert "plain live output" in output
+    assert "latest_subagent: id=SA-0001 role=swe engine=codex status=running" in output
+    assert "produced_output=yes" in output
+    assert "stdout.log" in output
+    assert "plain live output" not in output
     assert not (base / "transcript.md").exists()
 
 
@@ -205,8 +209,11 @@ def test_logs_agent_reads_compressed_completed_artifacts(tmp_path: Path, capsys:
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "final transcript" in output
-    assert "final stdout" in output
+    assert "latest_subagent: id=SA-0001 role=swe engine=codex status=completed" in output
+    assert "produced_output=yes" in output
+    assert "execution_trace.md.gz" in output
+    assert "final transcript" not in output
+    assert "final stdout" not in output
 
 
 def test_logs_agent_all_lists_all_subagents_with_duration(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

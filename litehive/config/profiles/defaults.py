@@ -8,7 +8,7 @@ SHARED_PROCESS_PROFILE: ProfileData = {
     "label": "Generic",
     "summary": "General software project workflow with deterministic local orchestration.",
     "source_of_truth": "tasks and implementation state live under `.litehive/`.",
-    "task_source_of_truth": "issues or task records define scope; prompts and execution traces are supporting evidence.",
+    "task_source_of_truth": "issues or task records define scope; DB-backed task evidence and reports support routing.",
     "orchestrator_model": "the local runner is the manager and owns stage routing.",
     "routing_model": "routing stays deterministic and local; subagents execute assigned stages but do not self-route.",
     "shared_stages": ["grooming", "implementing", "testing", "accepting", "commit_to_git"],
@@ -39,7 +39,7 @@ SHARED_PROCESS_PROFILE: ProfileData = {
     ],
     "tool_usage": [
         "- Use `uv run pytest -q` for the current smoke test suite.",
-        "- Update litehive task artifacts instead of inventing external state stores.",
+        "- Update Litehive task records and reports instead of inventing external state stores.",
         "- If you add a new command or workflow, document it here for future runs.",
     ],
     "workspace_overlay": [
@@ -108,17 +108,17 @@ PROCESS_PROFILE_OVERLAYS: dict[str, ProfileData] = {
         ),
         "specifics_heading": "## Codehive-style specifics",
         "specifics": [
-            "- Preserve execution visibility through task reports, subagent execution traces, and recent progress.",
+            "- Preserve execution visibility through task reports, task evidence, and recent progress.",
             "- Prefer narrow, reviewable scope per task and push follow-up work into later tasks.",
             "- Keep routing, retries, and escalation in local code rather than prompt-only behavior.",
         ],
         "tool_usage": [
-            "- Update litehive task artifacts instead of inventing external state stores.",
+            "- Update Litehive task records and reports instead of inventing external state stores.",
             "- If you add a new workflow or command, document it here so future runs inherit the same context.",
         ],
         "workspace_overlay": [
             "- Treat the orchestrator as the manager and the only authority for routing and retries.",
-            "- Maintain high execution visibility through reports, execution traces, and explicit stage summaries.",
+            "- Maintain high execution visibility through reports, task evidence, and explicit stage summaries.",
         ],
         "init_scaffold": [
             "- Seed codehive-style workspaces with deterministic routing notes, visibility expectations, and checkpoint policy."
@@ -154,7 +154,7 @@ PROCESS_PROFILE_OVERLAYS: dict[str, ProfileData] = {
         "commit_recovery": "keep generated build churn out of scope so checkpoints stay reviewable and deterministic.",
         "tool_usage": [
             "- Use the repository's documented build and test commands for the affected native target.",
-            "- Update litehive task artifacts instead of inventing external state stores.",
+            "- Update Litehive task records and reports instead of inventing external state stores.",
             "- If you add a new command or workflow, document it here for future runs.",
         ],
         "specifics_heading": "## C/C++ specifics",
@@ -194,7 +194,7 @@ PROCESS_PROFILE_OVERLAYS: dict[str, ProfileData] = {
         ],
         "tool_usage": [
             "- Use `uv run pytest -q` for the current smoke test suite unless the repo documents a different Django test command.",
-            "- Update litehive task artifacts instead of inventing external state stores.",
+            "- Update Litehive task records and reports instead of inventing external state stores.",
             "- If you add a new command or workflow, document it here for future runs.",
         ],
         "workspace_overlay": [
@@ -273,7 +273,7 @@ PROCESS_PROFILE_OVERLAYS: dict[str, ProfileData] = {
         "commit_recovery": "keep checkpoints deterministic and avoid opaque generated churn.",
         "tool_usage": [
             "- Use the repository's documented `cargo` commands for targeted verification.",
-            "- Update litehive task artifacts instead of inventing external state stores.",
+            "- Update Litehive task records and reports instead of inventing external state stores.",
             "- If you add a new command or workflow, document it here for future runs.",
         ],
         "specifics_heading": "## Rust specifics",

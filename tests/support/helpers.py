@@ -42,6 +42,10 @@ def _cmd_debug(args) -> int:
     return _invoke_cli(argv)
 
 
+def _cmd_evidence(args) -> int:
+    return _invoke_cli(["task", "evidence", args.task_id, "--workspace", args.workspace])
+
+
 def _cmd_list(args) -> int:
     argv = ["task", "list", "--workspace", args.workspace]
     if getattr(args, "show_all", False):

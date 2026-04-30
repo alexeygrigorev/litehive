@@ -306,15 +306,15 @@ def test_detectable_attention_items_reconcile_and_auto_clear(tmp_path: Path, mon
     assert "human_checkpoint_before_commit" in kinds
     flagged_item = next(item for item in items if item.kind == "flagged_task")
     assert flagged_item.suggested_action == (
-        f"Run `litehive task debug {flagged.id}` and then `litehive queue promote {flagged.id}` when it is ready to continue."
+        f"Run `litehive task evidence {flagged.id}` and then `litehive queue promote {flagged.id}` when it is ready to continue."
     )
     merge_item = next(item for item in items if item.kind == "merge_failed_task")
     assert merge_item.suggested_action == (
-        f"Run `litehive task debug {merge_failed.id} --worktree` and then `litehive queue requeue {merge_failed.id}`."
+        f"Run `litehive task evidence {merge_failed.id}` and then `litehive queue requeue {merge_failed.id}`."
     )
     checkpoint_item = next(item for item in items if item.kind == "human_checkpoint_before_commit")
     assert checkpoint_item.suggested_action == (
-        f"Run `litehive task debug {flagged.id} --worktree` to inspect the task, then continue with `litehive run` when you are ready to commit."
+        f"Run `litehive task evidence {flagged.id}` to inspect the task, then continue with `litehive run` when you are ready to commit."
     )
 
     shutil.rmtree(duplicate_dir)
@@ -408,7 +408,7 @@ def test_merge_failed_attention_refreshes_to_recovery_follow_up_when_commit_reco
     assert merge_item.title == f"Task {task.id} needs recovery follow-up"
     assert merge_item.reason == "Recovery crashed while handling commit-stage failure; operator follow-up is required."
     assert merge_item.suggested_action == (
-        f"Run `litehive task debug {task.id} --worktree` and then `litehive queue requeue {task.id}`."
+        f"Run `litehive task evidence {task.id}` and then `litehive queue requeue {task.id}`."
     )
 
 

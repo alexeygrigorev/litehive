@@ -223,7 +223,7 @@ def stage_prompt(
             "If the message is multiline or contains shell-sensitive characters, you may write it to `/tmp/verdict_msg.txt` and use `--message-file /tmp/verdict_msg.txt` instead.",
             "",
             "Your report is the PRIMARY way the next agent understands what happened.",
-            "Do NOT rely on your raw execution trace being read — write the report as if it is the only thing the next agent will see.",
+            "Do NOT rely on your live terminal session being read; write the report as if it is the only thing the next agent will see.",
             "",
             "Report requirements:",
             "- On PASS: explain what you verified, what tests you ran, what evidence confirms the acceptance criteria are met.",
@@ -288,7 +288,7 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
             "- You are the recovery agent responsible for diagnosing why this task stopped making progress and restoring a runnable path.",
             "- Your job is to diagnose why the previous agent failed and restore a runnable path by fixing Litehive infrastructure bugs.",
             "- You fix Litehive infrastructure bugs, not agent judgment disagreements. Semantic QA/reviewer rejects are not your job.",
-            "- Start from the failed subagent evidence first: stdout, stderr, execution trace, session metadata, exit code, and any `litehive agent report` attempt or error.",
+            "- Start with `litehive task evidence <task_id>` for DB-backed task state, recovery trigger/history, latest report/activity, subagent outcome, and worktree summary.",
             "- Your job is not to redo the failed stage's work, not to re-run the task's implementation or verification, and not to submit the failed stage verdict on the previous agent's behalf.",
             "- Make the smallest effective fix needed so the task can resume the current stage and finish cleanly.",
             "- If this workspace is not already the Litehive repo, switch into the repo at `litehive_source_path` and repair Litehive there.",
@@ -324,7 +324,7 @@ def _stage_role_prompt(stage: str, owner: str | None = None) -> list[str]:
     if stage == "implementing":
         return [
             "- You are the SWE responsible for completing the implementation within scope.",
-            "- Start from the task record, latest report, and latest rejection or recovery artifact before broad repository exploration.",
+            "- Start from the task record, latest report, and latest rejection or recovery evidence before broad repository exploration.",
             "- Treat the task goal, acceptance criteria, and plan as the execution contract; if they are missing or contradictory, route the issue back through grooming or recovery instead of guessing.",
             "- Before assuming the work is already implemented, run `git diff main...HEAD` in your worktree.",
             "- If there are no changes, implement from scratch regardless of what prior stage reports claim.",

@@ -28,8 +28,6 @@ from litehive.tasks.activity import load_task_activity
 
 
 SECTION_SEP = "\n"
-_RECOVERY_ARTIFACT_HEAD_CHARS = 2000
-_RECOVERY_ARTIFACT_TAIL_CHARS = 2000
 
 
 def serialize_prompt(
@@ -269,9 +267,8 @@ def _recovery_execution_root_section(prompt: dict[str, Any]) -> str:
 
 
 def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
-    blocks: list[str] = []
     lines = [
-        "Failed subagent diagnostics (read this before changing Litehive code):",
+        "Failed subagent evidence (DB-backed recovery state):",
         f"- subagent_id: {diagnostics.get('subagent_id') or '-'}",
         f"- role: {diagnostics.get('role') or '-'}",
         f"- engine: {diagnostics.get('engine') or '-'}",
@@ -280,56 +277,47 @@ def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
         f"- exit_code: {diagnostics.get('exit_code') if diagnostics.get('exit_code') is not None else '-'}",
         f"- did_produce_output: {'yes' if diagnostics.get('did_produce_output') else 'no'}",
     ]
-    blocks.append("\n".join(lines))
-    blocks.append(
-        "\n".join(
-            [
-                "Diagnosis checklist:",
-                "- Did the agent produce output?",
-                "- Search the execution trace/stdout/stderr for `litehive agent report`. Did it try to call it?",
-                "- If it called `litehive agent report`, what exact Litehive error did it get?",
-                "- What Litehive code path caused that failure, and what is the smallest safe fix?",
-                "- Do not rerun the failed stage's task work or submit that stage's verdict yourself.",
-            ]
-        )
-    )
     session_payload = diagnostics.get("session")
     if isinstance(session_payload, dict) and session_payload:
-        blocks.append(_yaml_block("subagent session store", session_payload))
+        for key in ("created_at", "updated_at"):
+            if session_payload.get(key):
+                lines.append(f"- session_{key}: {session_payload[key]}")
     report_payload = diagnostics.get("report")
     if isinstance(report_payload, dict) and report_payload:
-        blocks.append(_yaml_block("subagent report store", report_payload))
-    execution_trace = str(diagnostics.get("transcript") or "")
-    if execution_trace:
-        blocks.append(
-            _text_block(
-                "execution trace (derived from events/artifacts)",
-                execution_trace,
-                limit=_RECOVERY_ARTIFACT_HEAD_CHARS,
-                tail=False,
-            )
-        )
-    stdout = str(diagnostics.get("stdout") or "")
-    if stdout:
-        blocks.append(
-            _text_block(
-                "stdout.txt",
-                stdout,
-                limit=_RECOVERY_ARTIFACT_TAIL_CHARS,
-                tail=True,
-            )
-        )
-    stderr = str(diagnostics.get("stderr") or "")
-    if stderr:
-        blocks.append(
-            _text_block(
-                "stderr.txt",
-                stderr,
-                limit=_RECOVERY_ARTIFACT_TAIL_CHARS,
-                tail=True,
-            )
-        )
-    return "\n\n".join(blocks)
+        summary = str(report_payload.get("summary") or report_payload.get("message") or "").strip()
+        if summary:
+            lines.append(f"- report_summary: {_single_line(summary, limit=240)}")
+    signal = _compact_failure_signal(
+        str(diagnostics.get("stderr") or ""),
+        str(diagnostics.get("stdout") or ""),
+        str(diagnostics.get("transcript") or ""),
+    )
+    if signal:
+        lines.append(f"- output_signal: {signal}")
+    lines.extend(
+        [
+            "- Inspect with `litehive task evidence <task_id>` first; use `litehive pipeline journal <task_id>` when routing detail is needed.",
+            "- Do not rerun the failed stage's task work or submit that stage's verdict yourself.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _compact_failure_signal(*texts: str) -> str:
+    keywords = ("litehive agent report", "traceback", "error", "failed", "exception")
+    for text in texts:
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped and any(keyword in stripped.lower() for keyword in keywords):
+                return _single_line(stripped, limit=240)
+    return ""
+
+
+def _single_line(value: str, *, limit: int) -> str:
+    text = " ".join(value.split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + "..."
 
 
 def _recovery_history_section(recovery_history: list[dict[str, Any]]) -> str:
@@ -491,25 +479,6 @@ def _compact_list(items: list[str], *, limit: int, separator: str = ", ") -> str
         return separator.join(items)
     shown = separator.join(items[:limit])
     return f"{shown}{separator}+{len(items) - limit} more"
-
-
-def _yaml_block(label: str, payload: dict[str, Any]) -> str:
-    dumped = yaml.safe_dump(payload, sort_keys=False).rstrip()
-    return f"{label}:\n```yaml\n{dumped}\n```"
-
-
-def _text_block(label: str, text: str, *, limit: int, tail: bool) -> str:
-    total = len(text)
-    if total <= limit:
-        preview = text
-        direction = f"{total} chars"
-    elif tail:
-        preview = f"{_TRUNCATION_MARKER}\n{text[-limit:]}"
-        direction = f"{total} chars, showing last {limit}"
-    else:
-        preview = f"{text[:limit]}\n{_TRUNCATION_MARKER}"
-        direction = f"{total} chars, showing first {limit}"
-    return f"{label} ({direction}):\n```text\n{preview}\n```"
 
 
 def _pipeline_stage_key(name: str | None) -> str | None:

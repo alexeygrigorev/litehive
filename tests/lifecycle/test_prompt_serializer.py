@@ -160,8 +160,9 @@ def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
     assert "RecoveryContext" not in text
     assert "RecoveryRecord" not in text
     assert "FailureDiagnostics" not in text
+    assert "litehive task evidence <task_id>" in text
     assert "litehive pipeline journal <task_id>" in text
-    assert "litehive task logs <task_id> --agent" in text
+    assert "litehive task logs <task_id> --agent" not in text
 
 
 def test_serialize_recovery_diagnoses_invalid_current_config(workspace: Path) -> None:
@@ -255,12 +256,14 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
     assert diagnostics["session"]["status"] == "failed"
     assert diagnostics["report"]["summary"] == "implementing rejected: agent did not submit verdict via litehive agent report CLI"
 
-    assert "Failed subagent diagnostics" in text
+    assert "Failed subagent evidence" in text
     assert "exit_code: 17" in text
     assert "did_produce_output: yes" in text
-    assert "execution trace (derived from events/artifacts)" in text
-    assert "stdout.txt" in text
-    assert "stderr.txt" in text
+    assert "report_summary: implementing rejected: agent did not submit verdict via litehive agent report CLI" in text
+    assert "output_signal: report failed: unable to resolve workspace" in text
+    assert "execution trace (derived from events/artifacts)" not in text
+    assert "stdout.txt" not in text
+    assert "stderr.txt" not in text
     assert "unable to resolve workspace" in text
 
 

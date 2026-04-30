@@ -4,7 +4,6 @@ from datetime import datetime
 from pathlib import Path
 import time
 
-from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_session
 from litehive.config.paths import workspace_path
 from litehive.daemon.logs import latest_run_all_log_dir
@@ -57,32 +56,9 @@ def show_task_journal(root: Path, task) -> int:
 
 
 def show_latest_subagent(root: Path, task) -> int:
-    ref = _latest_subagent_ref(task)
-    if ref is None:
-        print(f"{task.id}: no subagents")
-        return 0
+    from litehive.cli.task_debug_support import render_task_evidence
 
-    is_active = bool(task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id)
-    base = task_dir(root, task) / ref.path
-    runtime_state = _runtime_state_for_ref(task, ref.id)
-    execution_trace = load_subagent_execution_trace(
-        root,
-        task,
-        ref,
-        active=is_active,
-        runtime_state=runtime_state,
-    )
-    stdout_path = _artifact_for_kind(base, "stdout", active=is_active)
-
-    print(f"task: {task.id}")
-    print(f"subagent: {ref.id}")
-    print(f"role: {ref.role}")
-    print(f"engine: {ref.engine}")
-    print(f"status: {ref.status}")
-
-    _print_text_tail(None if execution_trace is None else execution_trace.text, "execution trace")
-    _print_artifact_tail(stdout_path, "stdout")
-    return 0
+    return render_task_evidence(root, task)
 
 
 def list_task_subagents(root: Path, task) -> int:
@@ -227,36 +203,6 @@ def _artifact_for_kind(base: Path, kind: str, *, active: bool) -> Path | None:
             return archived
         return resolve_artifact_path(base, "stdout.log")
     raise ValueError(f"Unsupported artifact kind: {kind}")
-
-
-def _runtime_state_for_ref(task, subagent_id: str):
-    state = task.runtime.execution.active_subagent
-    if state is not None and state.id == subagent_id:
-        return state
-    return None
-
-
-def _print_text_tail(content: str | None, label: str) -> None:
-    if content is None:
-        print(f"{label}: (not found)")
-        return
-    if not content:
-        print(f"{label}: (empty)")
-        return
-    print(f"{label}:")
-    print(_tail_text(content))
-
-
-def _print_artifact_tail(path: Path | None, label: str) -> None:
-    if path is None:
-        print(f"{label}: (not found)")
-        return
-    content = read_text_artifact(path)
-    if not content:
-        print(f"{label}: (empty)")
-        return
-    print(f"{label}:")
-    print(_tail_text(content))
 
 
 def _pick_value(runtime_state, session: dict[str, object], *keys: str):

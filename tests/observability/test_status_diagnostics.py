@@ -485,7 +485,7 @@ def test_status_omits_recovery_failure_repair_guidance_from_default_path(tmp_pat
     assert exit_code == 0
     assert "recovery_failure:" not in output
     assert "recovery crashed while repairing the task" not in output
-    assert "litehive task debug T-0001 --worktree" not in output
+    assert "litehive task evidence T-0001" not in output
     assert "health:" not in output
 
 
@@ -523,7 +523,7 @@ def test_full_status_reports_terminal_recovery_failure_from_lifecycle_state(tmp_
         "recovery_failure: Task T-0001 has recovery failure (recovery_missing_target_stage) at `implementing`" in output
     )
     assert "recovery reported success but did not provide a target stage" in output
-    assert "litehive task debug T-0001 --worktree" in output
+    assert "litehive task evidence T-0001" in output
     assert "health: 1 broken, 0 warning" in output
 
 

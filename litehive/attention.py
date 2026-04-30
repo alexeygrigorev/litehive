@@ -492,7 +492,7 @@ def _flagged_and_merge_failed_items(root: Path, tasks: list[TaskRecord]) -> list
                         f" Flag reason: {task.flag_reason or 'unknown'}."
                     ),
                     suggested_action=(
-                        f"Run `litehive task debug {task.id}` and then `litehive queue promote {task.id}`"
+                        f"Run `litehive task evidence {task.id}` and then `litehive queue promote {task.id}`"
                         " when it is ready to continue."
                     ),
                     dedupe_key=f"flagged_task:{task.id}",
@@ -530,7 +530,7 @@ def _flagged_and_merge_failed_items(root: Path, tasks: list[TaskRecord]) -> list
                     title=title,
                     reason=reason,
                     suggested_action=(
-                        f"Run `litehive task debug {task.id} --worktree` and then `litehive queue requeue {task.id}`."
+                        f"Run `litehive task evidence {task.id}` and then `litehive queue requeue {task.id}`."
                     ),
                     dedupe_key=f"merge_failed_task:{task.id}",
                     metadata=metadata,
@@ -630,7 +630,7 @@ def _human_checkpoint_item(
         reason = f"Task {task.id} reached `human_checkpoint_before_commit` and needs operator review before commit."
         task_id = task.id
     action = (
-        f"Run `litehive task debug {task_id} --worktree` to inspect the task, then continue with `litehive run`"
+        f"Run `litehive task evidence {task_id}` to inspect the task, then continue with `litehive run`"
         " when you are ready to commit."
         if task_id
         else "Inspect the active task and then continue with `litehive run` when you are ready to commit."

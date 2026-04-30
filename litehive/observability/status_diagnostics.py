@@ -580,7 +580,7 @@ def _recovery_failure_issue(root: Path, task: TaskRecord) -> StatusIssue | None:
         severity="ERROR",
         message=(
             f"Task {task.id} has recovery failure ({reason}) at `{stage}`: {detail}"
-            f" — run `litehive task debug {task.id} --worktree`, inspect recovery diagnostics,"
+            f" — run `litehive task evidence {task.id}`, inspect recovery state,"
             f" then `litehive queue requeue {task.id}` when it is ready to continue."
         ),
     )

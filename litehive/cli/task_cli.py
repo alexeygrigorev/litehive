@@ -198,7 +198,23 @@ def add(
     return 0
 
 
-@app.command("debug", help="Inspect subagent artifacts for a task")
+@app.command("evidence", help="Show minimal routing and recovery evidence for a task")
+def evidence(
+    task_id: Annotated[str, typer.Argument(help="Task ID (e.g. T-0001)")],
+    workspace: WorkspaceOption = Path.cwd(),
+) -> int:
+    from litehive.cli.task_debug_support import render_task_evidence
+
+    ensure_workspace(workspace)
+    try:
+        task = require_task(workspace, task_id)
+    except ValueError:
+        print(f"task not found: {task_id}")
+        return 1
+    return render_task_evidence(workspace, task)
+
+
+@app.command("debug", help="Compatibility alias for `task evidence`")
 def debug(
     task_id: Annotated[str, typer.Argument(help="Task ID (e.g. T-0001)")],
     workspace: WorkspaceOption = Path.cwd(),
@@ -220,12 +236,12 @@ def debug(
     return debug_latest(workspace, task)
 
 
-@app.command("logs", help="Show daemon, task journal, and subagent logs")
+@app.command("logs", help="Show daemon logs, task journal, and compact subagent evidence")
 def logs(
     task_id: Annotated[str | None, typer.Argument(help="Optional task ID")] = None,
     workspace: WorkspaceOption = Path.cwd(),
     daemon: Annotated[bool, typer.Option(help="List latest daemon sessions")] = False,
-    agent: Annotated[bool, typer.Option(help="Show subagent execution trace/stdout")] = False,
+    agent: Annotated[bool, typer.Option(help="Show compact DB-backed subagent evidence")] = False,
     all_: Annotated[bool, typer.Option("--all", help="List all subagent runs")] = False,
     follow: Annotated[bool, typer.Option(help="Follow live stdout")] = False,
 ) -> int:

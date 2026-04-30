@@ -1,17 +1,32 @@
-"""Debug command — inspect subagent artifacts for a task."""
+"""Minimal task evidence rendering for operators and recovery."""
 
 from pathlib import Path
+import sqlite3
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
-from litehive.agents.session_store import load_subagent_report, load_subagent_session
+from litehive.agents.session_store import load_subagent_session
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,
     task_dir,
 )
-from litehive.tasks.activity import latest_task_activity_entry
+from litehive.tasks.activity import load_task_activity
 from litehive.tasks.report_storage import latest_stage_report
 from litehive.worktree import WorktreeService
+
+
+def render_task_evidence(root: Path, task) -> int:
+    """Render the compact evidence needed to route or recover a task."""
+    print(f"task: {task.id}")
+    print(f"title: {task.title}")
+    print(f"status: {task.status}")
+    print(f"pipeline_status: {task.pipeline_status}")
+    _print_lifecycle_evidence(root, task)
+    _print_latest_report(root, task)
+    _print_latest_activity(root, task)
+    _print_latest_subagent(root, task)
+    _print_worktree_evidence(root, task)
+    return 0
 
 
 def debug_all(root: Path, task):
@@ -30,94 +45,151 @@ def debug_all(root: Path, task):
 
 
 def debug_latest(root: Path, task):
-    """Show detailed info for the latest subagent."""
-    # Find the latest subagent ref and its artifact directory
+    """Compatibility entrypoint for the compact task evidence view."""
+    return render_task_evidence(root, task)
+
+
+def _print_lifecycle_evidence(root: Path, task) -> None:
+    try:
+        from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
+
+        state = SqlitePersistence(root).load(task.id)
+    except TaskNotFound:
+        print("lifecycle_state: not found")
+        return
+    except (OSError, sqlite3.DatabaseError, ValueError) as exc:
+        print(f"lifecycle_state: unavailable ({type(exc).__name__}: {exc})")
+        return
+
+    print(f"lifecycle_stage: {state.stage}")
+    print(f"failed_reason: {_enum_value(state.failed_reason) or '-'}")
+    print(f"failed_message: {state.failed_message or '-'}")
+    print(f"recovery_failure_explanation: {state.recovery_failure_explanation or '-'}")
+    trigger = state.active_recovery_trigger
+    if trigger is None:
+        print("active_recovery_trigger: none")
+    else:
+        fingerprint = trigger.failure_fingerprint
+        print(
+            "active_recovery_trigger: "
+            f"origin_stage={trigger.origin_stage or '-'} "
+            f"kind={trigger.trigger_event_kind.value} "
+            f"reason_code={trigger.reason_code or '-'} "
+            f"fingerprint={fingerprint.fingerprint} "
+            f"classification={fingerprint.classification or '-'}"
+        )
+        if trigger.message:
+            print(f"active_recovery_message: {_first_line(trigger.message)}")
+    print(f"recovery_history_count: {len(state.recovery_history)}")
+    if state.recovery_history:
+        outcome = state.recovery_history[-1]
+        print(
+            "latest_recovery: "
+            f"verdict={outcome.recovery_verdict or '-'} "
+            f"disposition={outcome.disposition.value} "
+            f"origin_stage={outcome.trigger.origin_stage or '-'} "
+            f"fingerprint={outcome.trigger.failure_fingerprint.fingerprint}"
+        )
+
+
+def _print_latest_report(root: Path, task) -> None:
+    report = latest_stage_report(root, task)
+    if report is None:
+        print("latest_stage_report: none")
+        return
+    print(
+        "latest_stage_report: "
+        f"stage={report.pipeline_state} verdict={report.verdict} source={report.source} "
+        f"summary={_first_line(report.summary)}"
+    )
+
+
+def _print_latest_activity(root: Path, task) -> None:
+    activity = load_task_activity(root, task)
+    if not activity:
+        print("latest_activity: none")
+        return
+    entry = activity[-1]
+    print(
+        "latest_activity: "
+        f"stage={entry.stage} role={entry.role} verdict={entry.verdict} "
+        f"message={_first_line(entry.message)}"
+    )
+
+
+def _print_latest_subagent(root: Path, task) -> None:
     if not task.subagents:
-        print(f"{task.id}: no subagents")
-        return 0
+        print("latest_subagent: none")
+        return
 
     ref = task.subagents[-1]
     sa_base = task_dir(root, task) / ref.path
-
-    # -- Session info --
-    print(f"task: {task.id}")
-    print(f"subagent: {ref.id}")
-    print(f"engine: {ref.engine}")
-    print(f"role: {ref.role}")
-    print(f"status: {ref.status}")
-
-    # Prefer task runtime state loaded from SQLite; fall back to session artifacts when needed.
     runtime_sa = None
     if task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id:
         runtime_sa = task.runtime.execution.active_subagent
 
+    exit_code = None
+    started_at = None
+    completed_at = None
     if runtime_sa is not None:
-        print(f"exit_code: {runtime_sa.exit_code if runtime_sa.exit_code is not None else '-'}")
-        print(f"started_at: {runtime_sa.started_at}")
-        if runtime_sa.completed_at:
-            print(f"completed_at: {runtime_sa.completed_at}")
+        exit_code = runtime_sa.exit_code
+        started_at = runtime_sa.started_at
+        completed_at = runtime_sa.completed_at
     else:
         session_data = load_subagent_session(root, task.id, ref.id)
         if session_data:
-            ec = session_data.get("exit_code")
-            print(f"exit_code: {ec if ec is not None else '-'}")
-            if "created_at" in session_data:
-                print(f"created_at: {session_data['created_at']}")
-            if "updated_at" in session_data:
-                print(f"session_updated_at: {session_data['updated_at']}")
-        else:
-            print("exit_code: -")
+            exit_code = session_data.get("exit_code")
+            started_at = session_data.get("created_at")
+            completed_at = session_data.get("updated_at")
 
-    # -- Verdict from task activity --
-    _print_verdict(root, task, ref.role)
-
-    # -- Report summary --
+    produced_output = False
+    trace = None
     if sa_base.exists():
-        report_data = load_subagent_report(root, task.id, ref.id)
-        if report_data.get("verdict"):
-            print(f"report_verdict: {report_data['verdict']}")
-    stage_report = latest_stage_report(root, task, source="hook")
-    if stage_report is not None:
-        print(f"stage_report_verdict: {stage_report.verdict}")
-        print(f"stage_report_source: {stage_report.source}")
-        print(f"stage_report_pipeline_state: {stage_report.pipeline_state}")
-        print(f"stage_report_summary: {stage_report.summary}")
+        is_active = bool(task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id)
+        trace = load_subagent_execution_trace(root, task, ref, active=is_active, runtime_state=runtime_sa)
+        produced_output = trace is not None and bool(trace.text.strip())
+        for filename in ("stdout.txt", "stdout.log", "stderr.txt", "stderr.log"):
+            path = resolve_artifact_path(sa_base, filename)
+            if path is not None and read_text_artifact(path).strip():
+                produced_output = True
+                break
 
-    # -- Execution trace summary (first 200 chars) --
-    if sa_base.exists():
-        _print_execution_trace(root, task, ref, runtime_sa)
-
-    # -- stdout tail (last 500 chars) --
-    if sa_base.exists():
-        _print_stream_tail(sa_base, "stdout.txt", "stdout")
-
-    # -- stderr tail (last 500 chars) --
-    if sa_base.exists():
-        _print_stream_tail(sa_base, "stderr.txt", "stderr")
-
-    return 0
+    print(
+        "latest_subagent: "
+        f"id={ref.id} role={ref.role} engine={ref.engine} status={ref.status} "
+        f"exit_code={exit_code if exit_code is not None else '-'} "
+        f"started_at={started_at or '-'} completed_at={completed_at or '-'} "
+        f"produced_output={'yes' if produced_output else 'no'}"
+    )
+    if trace is not None:
+        print(f"latest_subagent_trace_source: {trace.source.relative_to(root)}")
 
 
 def debug_worktree(root: Path, task):
-    """Show whether the task worktree exists and what changed inside it."""
-    inspection = WorktreeService(root).inspect_task_worktree(task)
+    """Compatibility entrypoint for worktree-only evidence."""
     print(f"task: {task.id}")
+    _print_worktree_evidence(root, task)
+    return 0
+
+
+def _print_worktree_evidence(root: Path, task) -> None:
+    inspection = WorktreeService(root).inspect_task_worktree(task)
     if not inspection.worktree_rel:
-        print("worktree: no worktree")
-        return 0
+        print("worktree: none")
+        return
 
     if not inspection.exists:
-        print(f"worktree: {inspection.worktree_rel}")
-        print("exists: no")
-        print("no worktree")
-        return 0
+        print(f"worktree: {inspection.worktree_rel} exists=no")
+        return
 
-    print(f"worktree: {inspection.worktree_rel}")
-    print("exists: yes")
-
-    _print_path_list("uncommitted", inspection.uncommitted)
-    _print_path_list("committed_ahead_of_main", inspection.committed_ahead_of_main)
-    return 0
+    print(
+        f"worktree: {inspection.worktree_rel} exists=yes "
+        f"uncommitted={len(inspection.uncommitted)} committed_ahead_of_main={len(inspection.committed_ahead_of_main)}"
+    )
+    if inspection.uncommitted:
+        print(f"worktree_uncommitted: {_compact_paths(inspection.uncommitted)}")
+    if inspection.committed_ahead_of_main:
+        print(f"worktree_committed_ahead_of_main: {_compact_paths(inspection.committed_ahead_of_main)}")
 
 
 def _read_exit_code(root: Path, task_id: str, subagent_id: str) -> int | None:
@@ -127,78 +199,21 @@ def _read_exit_code(root: Path, task_id: str, subagent_id: str) -> int | None:
     return value if isinstance(value, int) else None
 
 
-def _print_verdict(root, task, role):
-    """Cross-reference task activity for the latest non-comment verdict matching the role."""
-    verdict_entry = latest_task_activity_entry(
-        root,
-        task,
-        role=role,
-        verdicts={"pass", "reject", "blocked"},
-    )
-
-    if verdict_entry is not None:
-        print(f"verdict: {verdict_entry.verdict}")
-        print(f"verdict_stage: {verdict_entry.stage}")
-        # Show first line of verdict message
-        first_line = verdict_entry.message.split("\n", 1)[0][:120]
-        print(f"verdict_message: {first_line}")
-    else:
-        print("verdict: none")
+def _enum_value(value) -> str | None:
+    if value is None:
+        return None
+    return value.value if hasattr(value, "value") else str(value)
 
 
-def _print_execution_trace(root, task, ref, runtime_sa):
-    """Print first 200 chars of the execution trace."""
-    is_active = bool(task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id)
-    trace = load_subagent_execution_trace(
-        root,
-        task,
-        ref,
-        active=is_active,
-        runtime_state=runtime_sa,
-    )
-    if trace is None:
-        print("execution trace: (not found)")
-        return
-    try:
-        content = trace.text
-        total_len = len(content)
-        preview = content[:200]
-        if total_len > 200:
-            print(f"execution trace ({total_len} chars, showing first 200):")
-        else:
-            print(f"execution trace ({total_len} chars):")
-        print(f"  {preview}")
-    except Exception:
-        print("execution trace: (error reading)")
+def _first_line(value: str, *, limit: int = 180) -> str:
+    text = value.strip().splitlines()[0] if value.strip() else "-"
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + "..."
 
 
-def _print_stream_tail(sa_base, filename, label):
-    """Print last 500 chars of a stream artifact."""
-    path = resolve_artifact_path(sa_base, filename)
-    if path is None:
-        print(f"{label}: (not found)")
-        return
-    try:
-        content = read_text_artifact(path)
-        total_len = len(content)
-        if total_len == 0:
-            print(f"{label}: (empty)")
-            return
-        tail = content[-500:]
-        if total_len > 500:
-            print(f"{label} (last 500 of {total_len} chars):")
-            print(f"  ...{tail}")
-        else:
-            print(f"{label} ({total_len} chars):")
-            print(f"  {tail}")
-    except Exception:
-        print(f"{label}: (error reading)")
+def _compact_paths(paths: list[str], *, limit: int = 6) -> str:
+    shown = paths[:limit]
+    suffix = "" if len(paths) <= limit else f", ... (+{len(paths) - limit})"
+    return ", ".join(shown) + suffix
 
-
-def _print_path_list(label: str, paths: list[str]) -> None:
-    print(f"{label}:")
-    if not paths:
-        print("  (none)")
-        return
-    for path in paths:
-        print(f"  - {path}")
