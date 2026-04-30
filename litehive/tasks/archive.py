@@ -30,10 +30,8 @@ logger = logging.getLogger(__name__)
 _ARCHIVABLE_TASK_STATUSES = {"done", "closed"}
 _CLOSE_REASON_INDEX_STATUS = {"execution_cancelled": "cancelled"}
 _LEGACY_RUNTIME_YAML_FILES = (
-    "comments.yaml",
     "report.yaml",
     "task.yaml",
-    "thread.yaml",
 )
 
 

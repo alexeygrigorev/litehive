@@ -54,9 +54,6 @@ class RuntimeStore:
             from litehive.tasks.event_log import rebuild_sqlite_from_task_event_log
 
             rebuild_sqlite_from_task_event_log(self.root)
-        from litehive.tasks.activity import migrate_legacy_task_activity_files
-
-        migrate_legacy_task_activity_files(self.root)
 
     def _should_rebuild_from_task_event_log(self) -> bool:
         from litehive.tasks.event_log import sqlite_task_tables_empty, task_event_log_has_events

@@ -1,61 +1,20 @@
-"""Task activity boundary over the SQLite-backed store plus legacy imports."""
+"""Task activity boundary over the SQLite-backed store."""
 
 from datetime import UTC, datetime
 import json
 from pathlib import Path
-import re
 from typing import Iterable
 
 from pydantic import ValidationError
-import yaml
 
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.tasks.event_log import append_task_event
-from .paths import task_dir, tasks_root
 
-_TASK_DIR_ID_PATTERN = re.compile(r"^(T-\d{4})-")
-
-
-def task_activity_path(root: Path, task: TaskRecord) -> Path:
-    return task_dir(root, task, bootstrap=False) / "comments.yaml"
-
-
-def legacy_task_activity_path(root: Path, task: TaskRecord) -> Path:
-    return task_dir(root, task, bootstrap=False) / "thread.yaml"
-
-
-def resolve_task_activity_path(root: Path, task: TaskRecord) -> Path:
-    activity_path = task_activity_path(root, task)
-    if activity_path.exists():
-        return activity_path
-    legacy_path = legacy_task_activity_path(root, task)
-    if legacy_path.exists():
-        return legacy_path
-    return activity_path
 
 
 def load_task_activity(root: Path, task: TaskRecord) -> list[TaskActivityEntry]:
-    db_activity = _load_task_activity_from_db(root, task)
-    if db_activity:
-        _remove_legacy_task_activity_files(root, task)
-        return db_activity
-    for path in (task_activity_path(root, task), legacy_task_activity_path(root, task)):
-        legacy_payload = _read_task_activity_file(path)
-        if legacy_payload is None:
-            continue
-        entries, valid = legacy_payload
-        if valid:
-            if entries:
-                _save_task_activity_to_db(root, task.id, entries)
-            _remove_legacy_task_activity_files(root, task)
-            return entries
-        path.unlink(missing_ok=True)
-    return []
-
-
-def _load_task_activity_from_db(root: Path, task: TaskRecord) -> list[TaskActivityEntry]:
     with connect_workspace_db(root) as connection:
         rows = connection.execute(
             """
@@ -82,34 +41,6 @@ def _load_task_activity_from_db(root: Path, task: TaskRecord) -> list[TaskActivi
     return activity
 
 
-def _read_task_activity_file(path: Path) -> tuple[list[TaskActivityEntry], bool] | None:
-    if not path.exists():
-        return None
-    try:
-        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return [], False
-    return _deserialize_task_activity_payload(loaded)
-
-
-def _deserialize_task_activity_payload(payload: object) -> tuple[list[TaskActivityEntry], bool]:
-    if payload is None:
-        return [], True
-    if not isinstance(payload, list):
-        return [], False
-    activity: list[TaskActivityEntry] = []
-    valid = True
-    for entry in payload:
-        if not isinstance(entry, dict):
-            valid = False
-            continue
-        try:
-            activity.append(TaskActivityEntry(**entry))
-        except ValidationError:
-            valid = False
-    return activity, valid
-
-
 def _save_task_activity_to_db(root: Path, task_id: str, activity: list[TaskActivityEntry]) -> None:
     with connect_workspace_db(root) as connection:
         connection.execute("DELETE FROM task_activity WHERE task_id = ?", (task_id,))
@@ -133,18 +64,12 @@ def _save_task_activity_to_db(root: Path, task_id: str, activity: list[TaskActiv
 
 def save_task_activity(root: Path, task: TaskRecord, activity: list[TaskActivityEntry]) -> None:
     _save_task_activity_to_db(root, task.id, activity)
-    _remove_legacy_task_activity_files(root, task)
 
 
 def append_task_activity(root: Path, task: TaskRecord, entry: TaskActivityEntry) -> None:
     activity = load_task_activity(root, task)
     activity.append(entry)
     save_task_activity(root, task, activity)
-
-
-def _remove_legacy_task_activity_files(root: Path, task: TaskRecord) -> None:
-    for path in (task_activity_path(root, task), legacy_task_activity_path(root, task)):
-        path.unlink(missing_ok=True)
 
 
 def latest_task_activity_entry(
@@ -181,56 +106,3 @@ def _parse_created_at(value: str) -> datetime:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
     return dt
-
-
-def migrate_legacy_task_activity_files(root: Path) -> bool:
-    tasks_dir = tasks_root(root, bootstrap=False)
-    if not tasks_dir.exists():
-        return False
-
-    mutated = False
-    legacy_paths = sorted(tasks_dir.glob("*/comments.yaml"))
-    legacy_paths.extend(sorted(tasks_dir.glob("*/thread.yaml")))
-    archive_dir = tasks_dir / "archive"
-    if archive_dir.exists():
-        legacy_paths.extend(sorted(archive_dir.glob("*/comments.yaml")))
-        legacy_paths.extend(sorted(archive_dir.glob("*/thread.yaml")))
-
-    for legacy_path in legacy_paths:
-        if not legacy_path.is_file():
-            continue
-        activity_path = legacy_path.with_name("comments.yaml")
-        if legacy_path.name == "thread.yaml" and activity_path.exists():
-            parsed = _read_task_activity_file(activity_path)
-            if parsed is not None and parsed[1]:
-                task_id = _task_id_from_task_dir_name(activity_path.parent.name)
-                if task_id is not None:
-                    _save_task_activity_to_db(root, task_id, parsed[0])
-            activity_path.unlink()
-            legacy_path.unlink()
-            mutated = True
-            continue
-
-        task_id = _task_id_from_task_dir_name(activity_path.parent.name)
-        if task_id is None:
-            legacy_path.unlink()
-            mutated = True
-            continue
-
-        parsed = _read_task_activity_file(legacy_path)
-        if parsed is None or not parsed[1]:
-            legacy_path.unlink()
-            mutated = True
-            continue
-        _save_task_activity_to_db(root, task_id, parsed[0])
-        legacy_path.unlink()
-        mutated = True
-
-    return mutated
-
-
-def _task_id_from_task_dir_name(name: str) -> str | None:
-    match = _TASK_DIR_ID_PATTERN.match(name)
-    if match is None:
-        return None
-    return match.group(1)
