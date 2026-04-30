@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 
 from typer.testing import CliRunner
 
@@ -24,7 +25,13 @@ def test_repair_clean_workspace_with_100_tasks_skips_task_scan(tmp_path: Path, m
     for index in range(100):
         create_task(tmp_path, title=f"Task {index}")
     monkeypatch.setattr("litehive.state.records.list_tasks", _boom)
+    start = time.perf_counter()
     result = CliRunner().invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
+    elapsed = time.perf_counter() - start
     assert result.return_value == 0
+    assert elapsed < 1.0
+    assert "repaired: no" in result.output
     assert "active_task_id: None" in result.output
     assert "queue_length: 100" in result.output
+    assert "repair completed clean run" in result.output
+    assert "no inconsistencies found" in result.output
