@@ -159,10 +159,6 @@ def _recovery_history_key(item: dict[str, Any]) -> tuple[str | None, str, str, s
     )
 
 
-def _runtime_recovery_payload(outcome: RuntimeRecoveryOutcome) -> dict[str, Any]:
-    return outcome.model_dump(mode="json")
-
-
 def _state_recovery_payload(outcome: Any) -> dict[str, Any]:
     trigger = outcome.trigger
     return {
@@ -179,12 +175,16 @@ def _state_recovery_payload(outcome: Any) -> dict[str, Any]:
     }
 
 
+def _runtime_recovery_projection_payload(outcome: RuntimeRecoveryOutcome) -> dict[str, Any]:
+    return outcome.model_dump(mode="json")
+
+
 def _merged_recovery_history_payload(state: TaskState, task_record: Any) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
     seen: set[tuple[str | None, str, str, str, str | None]] = set()
     runtime_history = [] if task_record is None else list(task_record.runtime.pipeline.recovery_history)
     items = [
-        *[_runtime_recovery_payload(outcome) for outcome in runtime_history],
+        *[_runtime_recovery_projection_payload(outcome) for outcome in runtime_history],
         *[_state_recovery_payload(outcome) for outcome in state.recovery_history],
     ]
     for item in items:

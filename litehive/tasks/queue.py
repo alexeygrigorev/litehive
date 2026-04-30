@@ -499,7 +499,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                 # terminal and looping forever.
                 from litehive.lifecycle.persistence import SqlitePersistence
 
-                SqlitePersistence(root).reset(next_task.id)
+                SqlitePersistence(root).reset(next_task.id, preserve_run_memory=True)
             if next_task.status in {"queued", "interrupted"}:
                 next_task.status = "in_progress"
             queue_additions = [task_id for task_id in state.queue if task_id not in original_queue]

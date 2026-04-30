@@ -122,13 +122,11 @@ class RuntimeHookRejectFingerprint(BaseModel):
 
 
 class RuntimeRecoveryOutcome(BaseModel):
-    """Compact projection of a ``RecoveryOutcome`` persisted on task runtime.
+    """Read-only storage projection of a ``RecoveryOutcome``.
 
-    Survives pipeline-state resets so later recovery turns can still see
-    prior failure fingerprints for the same task. This is not a second
-    recovery model: ``TaskState.recovery_history`` owns full
-    ``RecoveryOutcome`` objects, while ``PipelineRuntime.recovery_history``
-    keeps this compact history for prompts and status surfaces.
+    ``TaskState.recovery_history`` owns full ``RecoveryOutcome`` objects.
+    Runtime stores this compact copy only for status/debug/prompt surfaces and
+    must only be updated from the lifecycle projection path.
     """
 
     origin_stage: str | None = None
@@ -144,10 +142,11 @@ class RuntimeRecoveryOutcome(BaseModel):
 
 
 class RuntimeFailedRunRecord(BaseModel):
-    """Cross-run memory for terminal stage retry exhaustion.
+    """Read-only storage projection for terminal retry exhaustion.
 
-    This lives on the task runtime so it survives v2 pipeline state resets
-    performed by manual requeue and stale/flagged-task recovery paths.
+    ``TaskState.failed_run_history`` owns the mutable records. Runtime stores
+    this copy only for queue/status surfaces and must only be updated from the
+    lifecycle projection path or explicit operator-ack projection.
     """
 
     stage: str
@@ -216,16 +215,15 @@ class RuntimeInterruptionState(BaseModel):
 
 
 class PipelineRuntime(BaseModel):
-    """Mutable runtime state owned by the task pipeline.
+    """Projected pipeline execution state stored with ``TaskRecord``.
 
-    This slice tracks run status, stage progress, retry accounting, terminal
-    outcomes, and recovery memory. It deliberately excludes subagent and
-    engine-switch bookkeeping, which belongs to ExecutionRuntime.
+    Lifecycle-owned fields here are not authoritative. ``TaskState`` owns the
+    state-machine position, retry/recovery/failed-run memory, and hook tracking;
+    lifecycle orchestration overwrites this projection after each transition.
+    Non-lifecycle task operations may still write closure/interruption outcomes.
 
-    Recovery memory here mirrors the canonical state-machine vocabulary:
-    ``recovery_history`` stores compact ``RuntimeRecoveryOutcome`` projections
-    of ``RecoveryOutcome`` objects, and ``failed_run_history`` stores separate
-    terminal retry-exhaustion records.
+    This slice deliberately excludes subagent and engine-switch bookkeeping,
+    which belongs to ExecutionRuntime.
     """
 
     git: RuntimeGitState = Field(default_factory=RuntimeGitState)

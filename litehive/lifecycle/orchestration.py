@@ -68,7 +68,7 @@ from .nodes.system import (
     PreExecRecoveryNode,
     ReadyNode,
 )
-from .persistence import FailedRunRecord, Limits, SqlitePersistence, TaskNotFound, TaskState, failed_run_key
+from .persistence import FailedRunRecord, Limits, SqlitePersistence, TaskNotFound, TaskState
 from .registry import build_registry
 from .runner import StateMachineRunner
 from .sessions import SqliteSessionStore
@@ -91,10 +91,17 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
         entry_stage=entry_stage,
     )
 
-    def _fresh_state() -> TaskState:
+    def _fresh_state(
+        *,
+        failed_run_history: dict[str, FailedRunRecord] | None = None,
+        recovery_history: list | None = None,
+        recovery_budget_history_start: int = 0,
+    ) -> TaskState:
         state = TaskState(
             **fresh_state_kwargs,
-            failed_run_history=_state_failed_run_history_from_runtime(task_record.runtime.pipeline.failed_run_history),
+            recovery_history=[] if recovery_history is None else recovery_history,
+            recovery_budget_history_start=recovery_budget_history_start,
+            failed_run_history={} if failed_run_history is None else failed_run_history,
             limits=persistence.limits,
         )
         persistence.save(state)
@@ -107,8 +114,24 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
             return _fresh_state()
 
     def _initialize_fresh_state() -> TaskState:
-        persistence.reset(task_id)
-        return _fresh_state()
+        preserved_failed_runs: dict[str, FailedRunRecord] = {}
+        preserved_recovery_history = []
+        recovery_budget_history_start = 0
+        try:
+            previous_state = persistence.load(task_id)
+            preserved_failed_runs = previous_state.failed_run_history
+            preserved_recovery_history = previous_state.recovery_history
+            recovery_budget_history_start = len(previous_state.recovery_history)
+        except TaskNotFound:
+            preserved_failed_runs = {}
+            preserved_recovery_history = []
+            recovery_budget_history_start = 0
+        persistence.reset(task_id, preserve_run_memory=True)
+        return _fresh_state(
+            failed_run_history=preserved_failed_runs,
+            recovery_history=preserved_recovery_history,
+            recovery_budget_history_start=recovery_budget_history_start,
+        )
 
     try:
         state = persistence.load(task_id)
@@ -202,19 +225,16 @@ def _runtime_recovery_key(outcome: RuntimeRecoveryOutcome) -> tuple[str | None, 
     )
 
 
-def _merged_runtime_recovery_history(
-    existing: list[RuntimeRecoveryOutcome],
-    current_state: TaskState,
-) -> list[RuntimeRecoveryOutcome]:
-    merged: list[RuntimeRecoveryOutcome] = []
+def _runtime_recovery_history_projection(current_state: TaskState) -> list[RuntimeRecoveryOutcome]:
+    projected: list[RuntimeRecoveryOutcome] = []
     seen: set[tuple[str | None, str, str, str, str | None]] = set()
-    for item in [*existing, *[_runtime_recovery_outcome(outcome) for outcome in current_state.recovery_history]]:
+    for item in [_runtime_recovery_outcome(outcome) for outcome in current_state.recovery_history]:
         key = _runtime_recovery_key(item)
         if key in seen:
             continue
         seen.add(key)
-        merged.append(item)
-    return merged
+        projected.append(item)
+    return projected
 
 
 def _runtime_failed_run_record(record: FailedRunRecord) -> RuntimeFailedRunRecord:
@@ -234,64 +254,8 @@ def _runtime_failed_run_record(record: FailedRunRecord) -> RuntimeFailedRunRecor
     )
 
 
-def _state_failed_run_record(record: RuntimeFailedRunRecord) -> FailedRunRecord:
-    return FailedRunRecord(
-        stage=record.stage,
-        failure_shape=record.failure_shape,
-        count=record.count,
-        first_at=record.first_at,
-        latest_at=record.latest_at,
-        last_reason=record.last_reason,
-        source=record.source,
-        classification=record.classification,
-        retry_limit=record.retry_limit,
-        failed_reason=record.failed_reason,
-        operator_override_count=record.operator_override_count,
-        last_operator_override_at=record.last_operator_override_at,
-    )
-
-
-def _state_failed_run_history_from_runtime(
-    runtime_history: dict[str, RuntimeFailedRunRecord],
-) -> dict[str, FailedRunRecord]:
-    history: dict[str, FailedRunRecord] = {}
-    for key, record in runtime_history.items():
-        state_record = _state_failed_run_record(record)
-        history[str(key) or failed_run_key(state_record.stage, state_record.failure_shape)] = state_record
-    return history
-
-
-def _merge_runtime_failed_run_record(
-    existing: RuntimeFailedRunRecord | None,
-    current: RuntimeFailedRunRecord,
-) -> RuntimeFailedRunRecord:
-    if existing is None:
-        return current
-    return RuntimeFailedRunRecord(
-        stage=current.stage or existing.stage,
-        failure_shape=current.failure_shape or existing.failure_shape,
-        count=max(existing.count, current.count),
-        first_at=existing.first_at or current.first_at,
-        latest_at=current.latest_at or existing.latest_at,
-        last_reason=current.last_reason or existing.last_reason,
-        source=current.source or existing.source,
-        classification=current.classification or existing.classification,
-        retry_limit=current.retry_limit or existing.retry_limit,
-        failed_reason=current.failed_reason or existing.failed_reason,
-        operator_override_count=max(existing.operator_override_count, current.operator_override_count),
-        last_operator_override_at=current.last_operator_override_at or existing.last_operator_override_at,
-    )
-
-
-def _merged_runtime_failed_run_history(
-    existing: dict[str, RuntimeFailedRunRecord],
-    current_state: TaskState,
-) -> dict[str, RuntimeFailedRunRecord]:
-    merged = {str(key): record.model_copy(deep=True) for key, record in existing.items()}
-    for key, state_record in current_state.failed_run_history.items():
-        runtime_record = _runtime_failed_run_record(state_record)
-        merged[str(key)] = _merge_runtime_failed_run_record(merged.get(str(key)), runtime_record)
-    return merged
+def _runtime_failed_run_history_projection(current_state: TaskState) -> dict[str, RuntimeFailedRunRecord]:
+    return {str(key): _runtime_failed_run_record(record) for key, record in current_state.failed_run_history.items()}
 
 
 def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
@@ -299,14 +263,8 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
     task_record.runtime.pipeline.consecutive_same_hook_rejects = state.consecutive_same_hook_rejects
     task_record.runtime.pipeline.last_hook_reject_fingerprint = _runtime_hook_reject_fingerprint(state)
     task_record.runtime.pipeline.hook_reject_recovery_invoked = state.hook_reject_recovery_invoked
-    task_record.runtime.pipeline.recovery_history = _merged_runtime_recovery_history(
-        task_record.runtime.pipeline.recovery_history,
-        state,
-    )
-    task_record.runtime.pipeline.failed_run_history = _merged_runtime_failed_run_history(
-        task_record.runtime.pipeline.failed_run_history,
-        state,
-    )
+    task_record.runtime.pipeline.recovery_history = _runtime_recovery_history_projection(state)
+    task_record.runtime.pipeline.failed_run_history = _runtime_failed_run_history_projection(state)
     if state.stage in {PipelineState.DONE, PipelineState.FAILED}:
         # Set appropriate terminal execution status
         if state.stage == PipelineState.DONE:

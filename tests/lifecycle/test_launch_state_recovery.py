@@ -2,12 +2,12 @@ import subprocess
 from pathlib import Path
 
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.runtime import RuntimeStageState
+from litehive.domain.runtime import RuntimeFailedRunRecord, RuntimeStageState
 from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.system import StubCommitNode
-from litehive.lifecycle.orchestration import run_task
-from litehive.lifecycle.persistence import SqlitePersistence, TaskState
+from litehive.lifecycle.orchestration import _load_or_initialize, _sync_back, run_task
+from litehive.lifecycle.persistence import FailedRunRecord, SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
 from litehive.recovery.execution_recovery import recover_stale_runner_state
 from litehive.state.persist import load_state, save_state
@@ -185,3 +185,43 @@ def test_completed_task_recovery_then_close_reconciles_all_state_layers(tmp_path
     assert final_task_state.status == "done"
     assert final_task_state.pipeline_status == "done"
     assert task.id not in final_state.queue
+
+
+def test_runtime_failed_run_projection_does_not_seed_fresh_lifecycle_state(tmp_path: Path) -> None:
+    _init_workspace_git_repo(tmp_path)
+    task = create_task(tmp_path, title="Ignore stale runtime failed-run projection")
+    task.pipeline_status = "implementing"
+    task.runtime.pipeline.failed_run_history["implementing:stale"] = RuntimeFailedRunRecord(
+        stage="implementing",
+        failure_shape="stale",
+        count=99,
+    )
+    save_task(tmp_path, task)
+
+    state = _load_or_initialize(task.id, tmp_path, SqlitePersistence(tmp_path))
+
+    assert state.entry_stage == "implementing"
+    assert state.failed_run_history == {}
+
+
+def test_lifecycle_projection_overwrites_stale_runtime_failed_run_state(tmp_path: Path) -> None:
+    _init_workspace_git_repo(tmp_path)
+    task = create_task(tmp_path, title="Overwrite stale runtime projection")
+    task.runtime.pipeline.failed_run_history["implementing:stale"] = RuntimeFailedRunRecord(
+        stage="implementing",
+        failure_shape="stale",
+        count=99,
+    )
+    save_task(tmp_path, task)
+    state = TaskState(task_id=task.id, stage="implementing", pipeline_mode=PipelineMode.FULL)
+    state.failed_run_history["implementing:current"] = FailedRunRecord(
+        stage="implementing",
+        failure_shape="current",
+        count=1,
+    )
+
+    refreshed = _sync_back(state, tmp_path)
+
+    assert refreshed is not None
+    assert set(refreshed.runtime.pipeline.failed_run_history) == {"implementing:current"}
+    assert refreshed.runtime.pipeline.failed_run_history["implementing:current"].count == 1

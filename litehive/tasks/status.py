@@ -161,10 +161,10 @@ class TaskTransitionService:
         )
 
 
-def _reset_pipeline_state(root: Path, task_id: str) -> None:
+def _reset_pipeline_state(root: Path, task_id: str, *, preserve_run_memory: bool = False) -> None:
     from litehive.lifecycle.persistence import SqlitePersistence
 
-    SqlitePersistence(root).reset(task_id)
+    SqlitePersistence(root).reset(task_id, preserve_run_memory=preserve_run_memory)
 
 
 def _terminate_subagent_pid(
@@ -652,7 +652,7 @@ def _requeue_task_transition(
         if blocked_failed_runs and not force:
             raise ValueError(failed_run_block_message(task, blocked_failed_runs))
         if blocked_failed_runs and force:
-            failed_run_overrides = mark_failed_run_operator_override(task, blocked_failed_runs)
+            failed_run_overrides = mark_failed_run_operator_override(root, task, blocked_failed_runs)
         state = load_state(root)
         queue_before = list(state.queue)
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
@@ -678,7 +678,7 @@ def _requeue_task_transition(
             pipeline_status=implementation_entry_stage(task),
             clear_last_outcome=task.status not in {"flagged", "parked"},
         )
-        _reset_pipeline_state(root, task.id)
+        _reset_pipeline_state(root, task.id, preserve_run_memory=True)
         _queue_task(state, task.id, front=front)
         _persist_transition(
             root,

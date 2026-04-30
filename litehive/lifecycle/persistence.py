@@ -295,6 +295,7 @@ class TaskState:
     stage_retry: dict[PipelineState, int] = field(default_factory=dict)
     active_recovery_trigger: RecoveryTrigger | None = None
     recovery_history: list[RecoveryOutcome] = field(default_factory=list)
+    recovery_budget_history_start: int = 0
     pre_exec_recovery_attempt: int = 0
     agent_elapsed_seconds: float = 0.0
     merge_context: MergeContext | None = None
@@ -323,7 +324,7 @@ class TaskState:
         }
 
     def recovery_attempts_for_origin(self, origin_stage: PipelineState) -> int:
-        count = sum(1 for outcome in self.recovery_history if outcome.trigger.origin_stage == origin_stage)
+        count = sum(1 for outcome in self._budget_recovery_history() if outcome.trigger.origin_stage == origin_stage)
         if self.active_recovery_trigger is not None and self.active_recovery_trigger.origin_stage == origin_stage:
             count += 1
         return count
@@ -331,7 +332,10 @@ class TaskState:
     def recovery_budget_available(self, trigger: RecoveryTrigger) -> bool:
         if trigger.reason_code == "hook_reject_loop":
             return not self.hook_reject_recovery_invoked
-        return all(outcome.trigger.budget_key() != trigger.budget_key() for outcome in self.recovery_history)
+        return all(outcome.trigger.budget_key() != trigger.budget_key() for outcome in self._budget_recovery_history())
+
+    def _budget_recovery_history(self) -> list[RecoveryOutcome]:
+        return self.recovery_history[max(0, self.recovery_budget_history_start) :]
 
 
 class Persistence(Protocol):
@@ -375,6 +379,7 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
             state.active_recovery_trigger.to_payload() if state.active_recovery_trigger is not None else None
         ),
         "recovery_history": [outcome.to_payload() for outcome in state.recovery_history],
+        "recovery_budget_history_start": state.recovery_budget_history_start,
         "pre_exec_recovery_attempt": state.pre_exec_recovery_attempt,
         "agent_elapsed_seconds": state.agent_elapsed_seconds,
         "merge_context": (state.merge_context.to_payload() if state.merge_context is not None else None),
@@ -429,6 +434,7 @@ def _state_from_row(
         recovery_history=[
             RecoveryOutcome.from_payload(dict(item)) for item in list(recovery_history or []) if isinstance(item, dict)
         ],
+        recovery_budget_history_start=int(payload.get("recovery_budget_history_start") or 0),
         pre_exec_recovery_attempt=int(payload.get("pre_exec_recovery_attempt") or 0),
         agent_elapsed_seconds=float(payload.get("agent_elapsed_seconds") or 0.0),
         merge_context=(MergeContext.from_payload(dict(merge_context)) if isinstance(merge_context, dict) else None),
@@ -531,17 +537,48 @@ class SqlitePersistence:
             limits=self.limits,
         )
 
-    def reset(self, task_id: str) -> None:
-        """Delete the v2 pipeline state row for a task.
+    def reset(self, task_id: str, *, preserve_run_memory: bool = False) -> None:
+        """Reset lifecycle state for a task.
 
         Called when the task-level layer resets a flagged task back to
-        queued (dequeue auto-recovery path). Without this, the v2 state
-        machine keeps its terminal ``failed`` stage and the runner
-        immediately re-emits the failed terminal on the next run — an
-        infinite retry loop.
+        queued (dequeue auto-recovery path), or closes/cancels a task. Requeue
+        callers can preserve lifecycle-owned failed-run/recovery memory so the
+        next runner launch does not need to copy it back from runtime.
         """
+        try:
+            previous = self.load(task_id)
+        except TaskNotFound:
+            previous = None
         with connect_workspace_db(self.workspace_root) as connection:
-            connection.execute("DELETE FROM pipeline_task_state WHERE task_id = ?", (task_id,))
+            preserved_failed_runs = {} if previous is None else previous.failed_run_history
+            preserved_recovery_history = [] if previous is None else previous.recovery_history
+            if previous is None or not preserve_run_memory or (not preserved_failed_runs and not preserved_recovery_history):
+                connection.execute("DELETE FROM pipeline_task_state WHERE task_id = ?", (task_id,))
+            else:
+                reset_state = TaskState(
+                    task_id=task_id,
+                    stage=PipelineState.READY,
+                    pipeline_mode=previous.pipeline_mode,
+                    recovery_history=previous.recovery_history,
+                    recovery_budget_history_start=len(previous.recovery_history),
+                    failed_run_history=preserved_failed_runs,
+                    limits=self.limits,
+                )
+                payload = _state_payload(reset_state)
+                connection.execute(
+                    """
+                    UPDATE pipeline_task_state
+                    SET stage = ?, pipeline_mode = ?, payload = ?, updated_at = ?
+                    WHERE task_id = ?
+                    """,
+                    (
+                        str(reset_state.stage),
+                        reset_state.pipeline_mode.value,
+                        json.dumps(payload, sort_keys=True),
+                        utcnow(),
+                        task_id,
+                    ),
+                )
             append_task_event(
                 self.workspace_root,
                 event_type="pipeline_task_state_reset",
