@@ -7,7 +7,7 @@ from pathlib import Path
 from litehive.config.workspace_files import workspace_gitignore_path
 from litehive.config.workspace import ensure_workspace, render_workspace_gitignore
 from litehive.git.ops import default_commit_message
-from litehive.domain.common import utcnow
+from litehive.domain.common import PipelineMode, utcnow
 from litehive.domain.reports import FollowUpTaskSpec
 from litehive.fs_cleanup import remove_tree_logged
 from litehive.domain.task import (
@@ -248,8 +248,10 @@ def create_task(
     ensure_workspace(root)
     if retry_limit is not None and retry_limit < 0:
         raise ValueError("Retry limit must be 0 or greater")
-    if pipeline_mode not in {"single", "full"}:
-        raise ValueError(f"Unsupported pipeline_mode '{pipeline_mode}'")
+    try:
+        pipeline_mode_enum = PipelineMode(pipeline_mode)
+    except ValueError:
+        raise ValueError(f"Unsupported pipeline_mode '{pipeline_mode}'") from None
     if priority is not None and priority not in VALID_TASK_PRIORITIES:
         raise ValueError(f"Unsupported priority '{priority}'; choose from {sorted(VALID_TASK_PRIORITIES)}")
     if task_type is not None and task_type not in VALID_TASK_TYPES:
@@ -269,7 +271,7 @@ def create_task(
             depends_on=list(depends_on or []),
             task_type=task_type,
             model=model,
-            pipeline_mode=pipeline_mode,  # type: ignore[arg-type]
+            pipeline_mode=pipeline_mode_enum,
             priority=priority or "medium",
             goal=goal,
             acceptance_criteria=normalize_acceptance_criteria(acceptance_criteria),
@@ -356,7 +358,7 @@ def create_follow_up_tasks(
                 created_from=TaskCreationSource(
                     source="follow_up",
                     task_id=parent_task.id,
-                    stage=stage,  # type: ignore[arg-type]
+                    stage=stage,
                     rationale=follow_up.rationale,
                     blocking=follow_up.blocking,
                 ),
