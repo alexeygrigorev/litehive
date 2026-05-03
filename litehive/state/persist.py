@@ -9,6 +9,7 @@ from pathlib import Path
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord, WorkspaceState
+from litehive.state.locking import workspace_lock, workspace_mutation_guard
 from litehive.state.store import runtime_store
 from litehive.tasks.audit import TaskAuditEntry
 
@@ -106,8 +107,6 @@ def write_atomic_files_and_then(writes: dict[Path, str], callback) -> None:
 
 
 def save_state(root: Path, state: WorkspaceState) -> None:
-    from litehive.state.locking import workspace_mutation_guard
-
     with workspace_mutation_guard(root):
         runtime_store(root).save_workspace_state(state)
 
@@ -128,8 +127,6 @@ def save_state_without_runner_guard(
 
 
 def record_task_completion(root: Path, *, final_stage: str | None) -> tuple[int, str | None]:
-    from litehive.state.locking import workspace_lock
-
     with workspace_lock(root):
         state = load_state(root)
         if final_stage == "done":
@@ -143,8 +140,6 @@ def record_task_completion(root: Path, *, final_stage: str | None) -> tuple[int,
 
 
 def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
-    from litehive.state.locking import workspace_lock
-
     with workspace_lock(root):
         state = load_state(root)
         if stop_reason is None and state.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
@@ -252,7 +247,7 @@ def persist_tasks_and_state(
     protected_task_ids: list[str] | tuple[str, ...] = (),
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
-    from litehive.state.locking import workspace_mutation_guard
+    # inline: state.records top-level-imports state.persist (would cycle).
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
 
     for task in tasks:
@@ -282,6 +277,7 @@ def persist_tasks_and_state_without_runner_guard(
     protected_task_ids: list[str] | tuple[str, ...] = (),
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
+    # inline: state.records top-level-imports state.persist (would cycle).
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
 
     for task in tasks:

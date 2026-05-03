@@ -16,6 +16,7 @@ from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.lock_manager import WorkspaceLockManager
 from litehive.state.process_lock import ProcessLockManager
+from litehive.state.store import runtime_store
 
 from litehive.tasks.constants import (
     HEARTBEAT_LATE_THRESHOLD_SECONDS,
@@ -79,8 +80,6 @@ def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> Non
 
 
 def _save_runner_process_state(root: Path, status: RunnerStatusState) -> None:
-    from litehive.state.store import runtime_store
-
     runtime_store(root).save_process_state(
         "runner",
         status=str(status.status or RunnerStatus.RUNNING),
@@ -89,8 +88,6 @@ def _save_runner_process_state(root: Path, status: RunnerStatusState) -> None:
 
 
 def _clear_runner_process_state(root: Path) -> None:
-    from litehive.state.store import runtime_store
-
     runtime_store(root).clear_process_state("runner")
 
 
@@ -120,6 +117,7 @@ def runner_lock_is_active(root: Path) -> bool:
 
 
 def runner_status_needs_reconciliation(root: Path) -> bool:
+    # inline: state.records and state.persist top-level-import state.locking (would cycle).
     from litehive.state.records import list_tasks
     from litehive.state.persist import load_state
 
@@ -299,6 +297,7 @@ def _auto_repair_stale_state(root: Path) -> None:
     active_task_id or ``execution_status == "running"`` is leftover from
     a crashed process and must be cleaned up before we start.
     """
+    # inline: recovery.workspace_repair top-level-imports state.locking (would cycle).
     from litehive.recovery.workspace_repair import repair_workspace_state
 
     try:
@@ -399,6 +398,7 @@ def ensure_future_task_mutation_allowed(
     *,
     state: WorkspaceState | None = None,
 ) -> None:
+    # inline: state.records / tasks.queue top-level-import state.locking (would cycle).
     from litehive.state.records import get_task
     from litehive.tasks.queue import is_task_eligible_for_execution, active_task_markers
 
@@ -437,7 +437,7 @@ def persist_future_task_update(
     journal_message: str | None = None,
     audit_entries: list["TaskAuditEntry"] | None = None,
 ) -> None:
-    from litehive.state.store import runtime_store
+    # inline: state.records top-level-imports state.locking (would cycle).
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
 
     task.updated_at = utcnow()
