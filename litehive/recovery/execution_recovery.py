@@ -20,7 +20,23 @@ from litehive.domain.runtime import (
 )
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import WorkspaceRepairSummary
+from litehive.db.schema import connect_workspace_db
 from litehive.observability.events import last_event_timestamp
+from litehive.state.locking import (
+    current_thread_owns_runner_guard,
+    read_runner_lock_metadata,
+    runner_lock_is_held,
+    runner_lock_pid_is_stale,
+    runner_metadata_present,
+    subagent_process_is_stale,
+    workspace_lock,
+)
+from litehive.state.persist import (
+    load_state as load_workspace_state,
+    persist_tasks_and_state_without_runner_guard,
+    save_state_without_runner_guard,
+)
+from litehive.state.records import list_tasks
 from litehive.tasks.recovery_reports import record_recovery_report
 from litehive.tasks.runtime import (
     apply_task_outcome,
@@ -130,18 +146,6 @@ def recover_stale_runner_state(
     *,
     summary: WorkspaceRepairSummary | None = None,
 ) -> bool:
-    from litehive.state.locking import (
-        current_thread_owns_runner_guard,
-        runner_lock_is_held,
-        workspace_lock,
-    )
-    from litehive.state.persist import (
-        load_state as load_workspace_state,
-        persist_tasks_and_state_without_runner_guard,
-        save_state_without_runner_guard,
-    )
-    from litehive.state.records import list_tasks
-
     root = root.resolve()
     with workspace_lock(root):
         state = load_workspace_state(root)
@@ -208,8 +212,6 @@ def recover_stale_runner_state(
 
 
 def _running_task_ids(root: Path) -> list[str]:
-    from litehive.db.schema import connect_workspace_db
-
     with connect_workspace_db(root) as connection:
         try:
             rows = connection.execute(
@@ -388,12 +390,6 @@ def _can_attempt_stale_runner_recovery(
     tasks_by_id: dict[str, TaskRecord],
     running_task_ids: list[str],
 ) -> bool:
-    from litehive.state.locking import (
-        current_thread_owns_runner_guard,
-        runner_lock_is_held,
-        runner_lock_pid_is_stale,
-    )
-
     if len(running_task_ids) > 1:
         return False
     if not current_thread_owns_runner_guard(root) and runner_lock_is_held(root):
@@ -443,7 +439,7 @@ def _recover_stale_running_task(
     *,
     summary: WorkspaceRepairSummary | None,
 ) -> tuple[bool, str | None, bool]:
-    from litehive.state.locking import subagent_process_is_stale
+    # inline: tasks.queue top-level-imports execution_recovery (would cycle).
     from litehive.tasks.queue import (
         canonicalize_resumable_queue_task,
         is_task_eligible_for_execution,
@@ -502,8 +498,6 @@ def _recover_running_tasks(
     *,
     summary: WorkspaceRepairSummary | None,
 ) -> dict[str, object]:
-    from litehive.state.locking import read_runner_lock_metadata, runner_metadata_present
-
     mutated = False
     transitioned: list[TaskRecord] = []
     journal_messages: dict[str, str] = {}
@@ -540,6 +534,7 @@ def _normalize_nonrunning_resumable_tasks(
     tasks_by_id: dict[str, TaskRecord],
     summary: WorkspaceRepairSummary | None,
 ) -> dict[str, object]:
+    # inline: tasks.queue top-level-imports execution_recovery (would cycle).
     from litehive.tasks.queue import (
         canonicalize_resumable_queue_task,
         is_task_eligible_for_execution,
@@ -611,8 +606,6 @@ def _normalize_nonrunning_resumable_tasks(
 
 
 def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
-    from litehive.db.schema import connect_workspace_db
-
     with connect_workspace_db(root) as connection:
         try:
             row = connection.execute(
@@ -708,8 +701,6 @@ def _update_active_task_after_recovery(
 
 
 def _task_state_row_exists(root: Path, task_id: str) -> bool:
-    from litehive.db.schema import connect_workspace_db
-
     with connect_workspace_db(root) as connection:
         try:
             row = connection.execute(

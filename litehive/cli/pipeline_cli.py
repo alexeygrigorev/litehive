@@ -6,14 +6,18 @@ from typing import Annotated
 import typer
 
 from litehive.cli.common import make_typer
+from litehive.domain.common import canonical_pipeline_state
+from litehive.lifecycle.journal import SqliteJournal
+from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
+from litehive.lifecycle.transitions import list_transitions
+from litehive.state.records import get_task_record
+from litehive.tasks.report_storage import latest_recovery_report, latest_stage_report
 
 app = make_typer(invoke_without_command=True)
 
 
 @app.command("rules", help="List pipeline transition rules as readable rows")
 def pipeline_rules_command() -> int:
-    from litehive.lifecycle.transitions import list_transitions
-
     for rule in list_transitions():
         from_state = (
             "|".join(str(stage) for stage in sorted(rule.from_state))
@@ -33,9 +37,6 @@ def pipeline_set_state_command(
     stage: Annotated[str, typer.Argument(help="Target stage")],
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
 ) -> None:
-    from litehive.domain.common import canonical_pipeline_state
-    from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
-
     store = SqlitePersistence(workspace)
     try:
         state = store.load(task_id)
@@ -54,8 +55,6 @@ def pipeline_reset_command(
     task_id: Annotated[str, typer.Argument(help="Task id")],
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
 ) -> None:
-    from litehive.lifecycle.persistence import SqlitePersistence
-
     SqlitePersistence(workspace).reset_all(task_id)
     print(f"task: {task_id}")
     print("reset: ok")
@@ -67,11 +66,6 @@ def pipeline_journal_command(
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
     limit: Annotated[int, typer.Option("--limit", "-n", help="Max transitions to show")] = 50,
 ) -> int:
-    from litehive.lifecycle.journal import SqliteJournal
-    from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
-    from litehive.state.records import get_task_record
-    from litehive.tasks.report_storage import latest_recovery_report, latest_stage_report
-
     journal = SqliteJournal(workspace)
     store = SqlitePersistence(workspace)
     try:
