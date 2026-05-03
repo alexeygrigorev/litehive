@@ -388,6 +388,73 @@ Single site: `litehive/main.py:59`. The fast/slow distinction is
 gone; `--full` is the only remaining variant and it's handled in
 the same dispatcher. Rename + update call sites.
 
+## P14a. Package `__init__.py` re-exports cause real import cycles
+
+While hoisting inline imports in `litehive/observability/status.py`
+we hit a concrete cycle: `daemon/__init__.py` re-exports
+`start_background_daemon` / `stop_workspace_daemon` from
+`daemon.execution`, which means *importing anything from
+`litehive.daemon.<submodule>`* runs `daemon/__init__.py` and pulls
+in `daemon.execution` — even when the caller only wants something
+unrelated like `daemon.logs.latest_run_all_log_dir`. Because
+`daemon.execution` imports `observability.status`, the cycle bites.
+
+This pattern recurs across the codebase: package `__init__.py`
+files re-export a "public surface" that drags in heavy modules.
+The user-recorded preference is that `__init__.py` is the import
+surface only, with no behavior — typer apps, CLI logic, and
+side-effecting helpers live in a named sibling module.
+
+Fix shape:
+
+1. Remove the imports from `litehive/daemon/__init__.py`. Update
+   each caller to import directly from `daemon.execution` /
+   `daemon.registry`.
+2. Sweep the rest of the package `__init__.py` files in
+   `litehive/`. Keep only docstrings; move re-exports out.
+3. After the sweep, attempt the inline-import hoist in
+   `observability/status.py` again — the cycle should be gone.
+
+This unblocks P2 (inline import hoist) for several hot files and
+makes module dependencies legible at the import statement instead
+of "you have to know which `__init__.py` re-exports what".
+
+## P14. Static type checking is not enforced
+
+The codebase has 10+ `# type: ignore[arg-type]` lines (P3) and the
+recent fixes show many of them existed because no checker was
+running CI-side to catch the regressions. We should adopt a static
+type checker — strong candidates:
+
+- **pyrefly** (Meta) — Rust-backed, very fast, tuned for monorepo
+  ergonomics. Good fit for a project where speed matters more than
+  exhaustive Pythonic-edge coverage.
+- **pyright / basedpyright** — well-known, broad ecosystem support,
+  good IDE integration.
+- **mypy** — slower, baseline coverage, the conservative pick.
+
+Recommendation: **pyrefly** because it is fast and we will be
+running it on every PR.
+
+Adoption plan (mechanical, low-risk to ship gradually):
+
+1. Add the checker as a dev dependency. Pin a version.
+2. Land a baseline config (strict on `litehive/domain/`,
+   `litehive/lifecycle/`, and `litehive/agents/`; lenient elsewhere
+   for now).
+3. Bake the existing errors into a baseline file so CI is green
+   from day one. New code must not add to the baseline.
+4. Add a CI step that runs the checker on PRs.
+5. Burn down the baseline file over time. Each `# type: ignore`
+   removed (P3) drops one entry from the baseline.
+6. Remove escape hatches (`# type: ignore`, `Any`, missing
+   annotations) only after the checker is wired up — otherwise a
+   later refactor will re-introduce them and we won't notice.
+
+This sits between the style sweeps (P1, P2) and the larger
+refactors (P5, P6, P9): it raises the floor so future cleanup
+doesn't regress.
+
 ## Sequencing for execution
 
 The recording asked for "step by step, never break things". Order:
@@ -399,6 +466,10 @@ The recording asked for "step by step, never break things". Order:
 3. **Add `ruff` rule for inline imports.** First, fix the inline
    imports that aren't justified (P2). Annotate the rest. Then
    enable the rule.
+3a. **Adopt a static type checker (pyrefly).** Pin it, land a
+    baseline file, wire CI. Once enabled, the type-ignore burndown
+    in P3 has automated guardrails — anything we remove can't slip
+    back in unnoticed.
 4. **Stop deleting debug artifacts.** Remove the
    `prune_superseded_subagent_artifacts` call from
    `agents/manager.py` (P8). Add docstrings to

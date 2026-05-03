@@ -7,6 +7,7 @@ from pathlib import Path
 import sqlite3
 from typing import TYPE_CHECKING, Any, Literal
 
+from litehive.attention import waiting_for_you_lines
 from litehive.config.paths import workspace_path
 from litehive.config.engine_models import active_engine_freezes
 from litehive.config.model import LitehiveConfig
@@ -15,8 +16,12 @@ from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.reports import ExecutionEstimate
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskIntentRecord, TaskRecord, TaskStateRecord, WorkspaceState
+from litehive.state.records import get_task
 
 if TYPE_CHECKING:
+    # Inline at use site below: status_diagnostics transitively imports
+    # litehive.daemon (via daemon.logs -> daemon.__init__), and daemon
+    # imports back into this module — top-level import cycles.
     from litehive.observability.status_diagnostics import StatusIssue
 
 # Ordered pipeline stages for remaining-time estimation.
@@ -46,9 +51,8 @@ def collect_task_pipeline_status(
     read_only: bool = False,
     diagnostics: bool = False,
 ) -> TaskPipelineStatusData:
-    from litehive.attention import waiting_for_you_lines
+    # inline: breaks the daemon <-> observability import cycle (see TYPE_CHECKING block above).
     from litehive.observability.status_diagnostics import collect_operational_status_snapshot, collect_status_snapshot
-    from litehive.state.records import get_task
 
     resolved_root = root.resolve()
     snapshot = (

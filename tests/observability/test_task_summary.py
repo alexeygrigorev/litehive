@@ -124,8 +124,17 @@ def test_collect_task_pipeline_status_prefers_runner_active_task_id(tmp_path: Pa
         "litehive.observability.status_diagnostics.collect_operational_status_snapshot",
         lambda root: snapshot,
     )
-    monkeypatch.setattr("litehive.attention.waiting_for_you_lines", lambda root: ["operator_needed: unavailable"])
-    monkeypatch.setattr("litehive.state.records.get_task", lambda root, task_id: active_task if task_id else None)
+    # ``collect_task_pipeline_status`` imports ``waiting_for_you_lines`` and
+    # ``get_task`` at module scope, so patching the callees at their original
+    # locations no longer hits the bindings the function uses.
+    monkeypatch.setattr(
+        "litehive.observability.status.waiting_for_you_lines",
+        lambda root, **_: ["operator_needed: unavailable"],
+    )
+    monkeypatch.setattr(
+        "litehive.observability.status.get_task",
+        lambda root, task_id: active_task if task_id else None,
+    )
 
     status = collect_task_pipeline_status(tmp_path)
 
