@@ -26,7 +26,10 @@ from litehive.tasks.constants import (
 from litehive.state.locking import workspace_lock, workspace_mutation_guard
 from litehive.state.persist import (
     load_state,
+    merged_state_for_runner_owned_write,
     save_state_without_runner_guard,
+    skip_bootstrap_load_state,
+    workspace_transition_writes,
     write_atomic_files_and_then,
 )
 from litehive.tasks.audit import (
@@ -185,8 +188,6 @@ def _persist_created_tasks(
     cleanup_dirs: list[Path],
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
-    from litehive.state.persist import merged_state_for_runner_owned_write, skip_bootstrap_load_state
-
     with skip_bootstrap_load_state():
         merged_state = merged_state_for_runner_owned_write(
             root,
@@ -256,6 +257,7 @@ def create_task(
         raise ValueError(f"Unsupported priority '{priority}'; choose from {sorted(VALID_TASK_PRIORITIES)}")
     if task_type is not None and task_type not in VALID_TASK_TYPES:
         raise ValueError(f"Unsupported task type '{task_type}'")
+    # inline: tasks.queue top-level-imports state.records (would cycle).
     from litehive.tasks.queue import validate_task_dependencies
 
     with workspace_lock(root):
@@ -539,8 +541,6 @@ def require_task(root: Path, task_id: str) -> TaskRecord:
 
 
 def save_task(root: Path, task: TaskRecord) -> None:
-    from litehive.state.persist import workspace_transition_writes
-
     task.updated_at = utcnow()
     with workspace_mutation_guard(root):
         writes = workspace_transition_writes(root, tasks=[task])

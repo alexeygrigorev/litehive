@@ -292,6 +292,7 @@ from litehive.state.records import create_task
 from litehive.state.persist import load_state
 from litehive.state.persist import save_state_without_runner_guard
 from litehive.state import persist as workflow_module
+from litehive.state import records as records_module
 
 root = Path(__import__("sys").argv[1])
 ensure_workspace(root)
@@ -309,7 +310,10 @@ def inject_latest_state(root, *, state, protected_task_ids=()):
         save_state_without_runner_guard(root, latest)
     return original_merge(root, state=state, protected_task_ids=protected_task_ids)
 
+# state.records imports merged_state_for_runner_owned_write at module scope, so
+# patching the source module alone no longer hits the binding create_task uses.
 workflow_module.merged_state_for_runner_owned_write = inject_latest_state
+records_module.merged_state_for_runner_owned_write = inject_latest_state
 added = create_task(root, title="Added while runner updated queue")
 print(json.dumps({"id": added.id, "queue": load_state(root).queue}))
 """

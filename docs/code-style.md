@@ -111,6 +111,26 @@ from tests.support.helpers import make_workspace, run_cli
 - Do not paper over the impedance with `# type: ignore[arg-type]`.
   If you find yourself reaching for one, fix the receiver instead.
 
+## Workspace Identity
+
+- `root: Path | None` is a code smell inside business logic. The
+  workspace is not optional — there is no meaningful "no
+  workspace" state below the CLI entry point. Drop the default,
+  drop the optionality, drop the `if root is not None:` guard.
+  The only legitimate identity check belongs at the CLI / process
+  entry where a `Path` is first turned into a workspace handle.
+- Helpers should ask for the *thing they actually need* —
+  ideally a `Workspace` (or similar) value object that owns the
+  SQLite store, config, and paths — not a raw `Path`. The
+  current pattern of threading `root: Path` through nearly every
+  function is a holdover from the file-based era; SQLite is now
+  the source of truth and the workspace identity should be
+  explicit.
+- Until the `Workspace` object exists, treat `root: Path`
+  parameters as a placeholder for that identity. Don't make
+  them optional, and don't reconstruct workspace context inside
+  helpers — pass through what the caller already has.
+
 ## Refactoring Discipline
 
 - Before any non-trivial refactor (file split, module move,
