@@ -111,6 +111,19 @@ from tests.support.helpers import make_workspace, run_cli
 - Do not paper over the impedance with `# type: ignore[arg-type]`.
   If you find yourself reaching for one, fix the receiver instead.
 
+## Refactoring Discipline
+
+- Before any non-trivial refactor (file split, module move,
+  storage swap, helper deletion, enum reshape), the affected
+  behavior must be covered by tests **first**. The refactor
+  series begins with a "characterization tests" commit if
+  coverage is missing; the structural commits come after, with
+  the suite green at each step.
+- The bar for new tests in this position is "the test would
+  have failed before the fix". A test that asserts the new shape
+  but never failed under the old shape does not protect
+  anything and can be deleted.
+
 ## Function Docstrings
 
 - Helpers whose existence is not obvious from the name need a

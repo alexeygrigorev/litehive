@@ -20,8 +20,40 @@ from litehive.tasks.constants import (
     RUNNER_LOCKS,
     RUNNER_LOCKS_MUTEX,
 )
-from litehive.tasks.audit import TaskAuditState, build_task_audit_entry, snapshot_task_audit_state
-from litehive.state.locking import workspace_lock
+from litehive.domain.reports import TaskActivityEntry
+from litehive.lifecycle.persistence import SqlitePersistence
+from litehive.recovery.execution_recovery import recover_stale_runner_state
+from litehive.state.locking import (
+    ensure_future_task_mutation_allowed,
+    persist_future_task_update,
+    read_runner_lock_metadata,
+    runner_lock_is_held,
+    runner_pid_is_alive,
+    workspace_lock,
+)
+from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
+from litehive.state.records import get_task_record, require_task
+from litehive.tasks.activity import (
+    append_task_activity,
+    load_task_activity,
+    save_task_activity,
+)
+from litehive.tasks.activity_rendering import (
+    is_retractable_pass_entry,
+    normalized_files_changed,
+    retract_activity_entry,
+)
+from litehive.tasks.audit import (
+    TaskAuditState,
+    append_task_audit_entries,
+    build_task_audit_entry,
+    snapshot_task_audit_state,
+)
+from litehive.tasks.failed_runs import (
+    blocking_failed_run_records,
+    failed_run_block_message,
+    mark_failed_run_operator_override,
+)
 from litehive.domain.task_ops import StopTaskSummary, SwitchTaskSummary, WorkspaceConflictError
 from litehive.tasks.normalization import (
     missing_acceptance_criteria_reason,
@@ -31,8 +63,17 @@ from litehive.tasks.normalization import (
     implementation_entry_stage,
 )
 from litehive.tasks.paths import latest_subagent_base, task_dir
-from litehive.tasks.queue import drop_task_from_workspace_state
-from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
+from litehive.tasks.queue import (
+    active_task_markers,
+    drop_task_from_workspace_state,
+    move_queued_task,
+    reset_task_for_recovery,
+    resumable_queue_stage,
+    validate_single_active_task,
+    validate_task_dependencies,
+)
+from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity, mark_engine_switch
+from litehive.worktree import resolve_recorded_worktree_path
 
 
 class TaskTransitionService:
@@ -162,7 +203,6 @@ class TaskTransitionService:
 
 
 def _reset_pipeline_state(root: Path, task_id: str, *, preserve_run_memory: bool = False) -> None:
-    from litehive.lifecycle.persistence import SqlitePersistence
 
     SqlitePersistence(root).reset_current_lifecycle_state(task_id, preserve_run_memory=preserve_run_memory)
 
@@ -174,7 +214,6 @@ def _terminate_subagent_pid(
     wait_timeout_seconds: float = 5.0,
     poll_interval_seconds: float = 0.1,
 ) -> bool:
-    from litehive.state.locking import runner_pid_is_alive
 
     def _pid_is_dead() -> bool:
         if pid is None:
@@ -226,7 +265,6 @@ def _terminate_subagent_pid(
 
 
 def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
-    from litehive.tasks.queue import validate_single_active_task, active_task_markers
 
     markers = active_task_markers(root, state)
     if not markers:
@@ -237,9 +275,6 @@ def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
 
 
 def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskRecord:
-    from litehive.state.records import get_task_record
-    from litehive.state.persist import load_state
-    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     with workspace_lock(root):
         state = load_state(root)
@@ -319,15 +354,6 @@ def stop_current_task(
     wait_timeout_seconds: float = 5.0,
     poll_interval_seconds: float = 0.1,
 ) -> StopTaskSummary:
-    from litehive.state.records import require_task
-    from litehive.state.persist import load_state
-    from litehive.tasks.queue import active_task_markers
-    from litehive.state.locking import (
-        read_runner_lock_metadata,
-        runner_lock_is_held,
-        runner_pid_is_alive,
-    )
-    from litehive.recovery.execution_recovery import recover_stale_runner_state
 
     state = load_state(root)
     try:
@@ -438,12 +464,6 @@ def switch_task_engine(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> SwitchTaskSummary:
-    from litehive.state.records import get_task_record, require_task
-    from litehive.state.persist import load_state
-    from litehive.tasks.activity import append_task_activity
-    from litehive.tasks.audit import append_task_audit_entries
-    from litehive.tasks.queue import move_queued_task
-    from litehive.tasks.runtime import mark_engine_switch
 
     if engine not in VALID_TASK_ENGINES:
         raise ValueError(f"Unsupported engine '{engine}'")
@@ -491,7 +511,6 @@ def switch_task_engine(
         raise ValueError(f"Task {task.id} is {task.status} and cannot be switched into a queued runnable state")
 
     prior_work_paths = _switch_prior_work_paths(root, task)
-    from litehive.domain.reports import TaskActivityEntry
 
     append_task_activity(
         root,
@@ -555,7 +574,6 @@ def _persist_transition(
     before_queue: list[str],
     context: dict[str, object] | None = None,
 ) -> None:
-    from litehive.state.persist import persist_task_and_state_without_runner_guard
 
     persist_task_and_state_without_runner_guard(
         root,
@@ -587,22 +605,6 @@ def _requeue_task_transition(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    from litehive.state.records import get_task_record
-    from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
-    from litehive.state.persist import load_state
-    from litehive.tasks.activity import load_task_activity, save_task_activity
-    from litehive.tasks.queue import reset_task_for_recovery
-    from litehive.tasks.failed_runs import (
-        blocking_failed_run_records,
-        failed_run_block_message,
-        mark_failed_run_operator_override,
-    )
-    from litehive.tasks.activity_rendering import (
-        normalized_files_changed,
-        is_retractable_pass_entry,
-        retract_activity_entry,
-    )
-    from litehive.worktree import resolve_recorded_worktree_path
 
     def _task_checkout_path(task: TaskRecord) -> Path:
         worktree_path = resolve_recorded_worktree_path(
@@ -688,10 +690,6 @@ def _requeue_task_transition(
 
 
 def _resume_task_transition(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
-    from litehive.state.records import require_task
-    from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
-    from litehive.state.persist import load_state
-    from litehive.tasks.queue import reset_task_for_recovery, resumable_queue_stage
 
     with workspace_lock(root):
         task = require_task(root, task_id)
@@ -758,9 +756,6 @@ def _abandon_task_transition(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    from litehive.state.records import require_task
-    from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
-    from litehive.state.persist import load_state
 
     with workspace_lock(root):
         task = require_task(root, task_id)
@@ -874,14 +869,6 @@ def _close_task_transition(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    from litehive.state.records import get_task_record
-    from litehive.state.locking import (
-        ensure_future_task_mutation_allowed,
-        read_runner_lock_metadata,
-        runner_lock_is_held,
-        workspace_lock,
-    )
-    from litehive.state.persist import load_state
 
     """Mark a task as explicitly closed with a terminal outcome.
 
@@ -958,9 +945,6 @@ def _park_task_transition(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    from litehive.state.records import require_task
-    from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
-    from litehive.state.persist import load_state
 
     """Mark a task as parked.
 
@@ -1014,10 +998,6 @@ def _update_task_transition(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    from litehive.state.records import get_task_record
-    from litehive.state.locking import ensure_future_task_mutation_allowed, persist_future_task_update, workspace_lock
-    from litehive.state.persist import load_state
-    from litehive.tasks.queue import validate_task_dependencies
 
     if outcome is not ... and outcome is not None:
         return close_task(
