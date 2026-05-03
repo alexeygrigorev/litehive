@@ -10,10 +10,23 @@ This file records local style decisions that are easy to regress during refactor
   a circular dependency that cannot be untangled by reorganizing
   modules. Each remaining inline import must carry a comment
   explaining the reason (`# inline: …`).
+- "Only used in this one function" is **not** a valid reason to
+  keep an import inline. Hoist it. Inline imports are not a
+  code-organization tool.
+- Do not alias modules with `from X import Y as Z`. If you need
+  a module reference (e.g. for monkey-patching in tests), use
+  `import X.Y` and refer to symbols by the full dotted path.
+  Aliasing hides the real module name and invites brittle
+  test-side patching.
 - Do not use `from __future__ import annotations`. The project
   targets a Python where annotations are already evaluated lazily by
   default, and the import only complicates runtime introspection
   (e.g. `dataclasses.fields(...).type` becoming a string).
+- `if TYPE_CHECKING:` blocks need the same justification as inline
+  imports. If the same module is also imported at runtime
+  elsewhere in the file, the TYPE_CHECKING block buys nothing —
+  drop it. Only keep one when it actually breaks a runtime cycle
+  while preserving the type annotation.
 - Import directly from the module that owns the behavior.
 - Do not add thin wrapper modules that only re-export imports from another file.
 - Do not add modules whose whole body is `from x import ...` plus `__all__`.
@@ -110,6 +123,45 @@ from tests.support.helpers import make_workspace, run_cli
   equivalent) and then carried as the typed value.
 - Do not paper over the impedance with `# type: ignore[arg-type]`.
   If you find yourself reaching for one, fix the receiver instead.
+
+## Module Organization
+
+- **Findability** is the criterion. When deciding which file or
+  package something lives in, pick the placement that lets the
+  next reader locate it without project-history knowledge. If a
+  domain dataclass is hidden inside a 1400-line utility module,
+  that's a findability bug.
+- A function that lives in module A but whose only callers are
+  in module B should move to module B.
+- Names that hint at history ("fast_status", "v2_handler",
+  "legacy_*") cost everyone who comes later — rename them.
+
+## Classes vs. Free Functions
+
+- A class whose methods only delegate to free functions is not
+  a class — it's a namespace with extra steps. Either own the
+  behavior in methods, or get rid of the class.
+- When a class has grown too big, split its responsibilities
+  into smaller classes that *interact with each other*. Do not
+  keep the outer class as a façade in front of free functions.
+
+## Package `__init__.py`
+
+- `__init__.py` files hold no behavior — no typer apps, no CLI
+  registration, no side-effecting imports. Re-exporting from
+  submodules is also discouraged, because it forces every caller
+  of one submodule to load every other (hidden import cycles).
+- They *should* hold a docstring naming each module in the
+  package and what it owns, so a reader can navigate the
+  package without `grep -r`.
+
+## Agent Authority Over Project Configuration
+
+- Lint rules, formatter configuration, CI step definitions, and
+  ruff/pyrefly settings are operator-owned. Subagents do not
+  modify them without explicit operator instruction.
+- If a project rule disappears mysteriously and an agent ran
+  recently, suspect the agent first.
 
 ## Workspace Identity
 

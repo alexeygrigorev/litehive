@@ -27,6 +27,7 @@ from litehive.state.locking import workspace_lock, workspace_mutation_guard
 from litehive.state.persist import (
     load_state,
     save_state_without_runner_guard,
+    workspace_transition_writes,
     write_atomic_files_and_then,
 )
 from litehive.tasks.audit import (
@@ -542,11 +543,6 @@ def require_task(root: Path, task_id: str) -> TaskRecord:
 
 
 def save_task(root: Path, task: TaskRecord) -> None:
-    # inline: state.persist is already top-level imported, but
-    # ``workspace_transition_writes`` is only used here and pulling it to
-    # the top would only add noise without breaking any cycle.
-    from litehive.state.persist import workspace_transition_writes
-
     task.updated_at = utcnow()
     with workspace_mutation_guard(root):
         writes = workspace_transition_writes(root, tasks=[task])
