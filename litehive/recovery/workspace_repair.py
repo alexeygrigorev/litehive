@@ -1,7 +1,5 @@
 """Workspace repair entrypoint used by the daemon and repair CLI."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from litehive.db.schema import connect_workspace_db

@@ -1,7 +1,5 @@
 """Detect broken `.venv/bin` entrypoints after `uv cache clean`."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 import errno
 import os

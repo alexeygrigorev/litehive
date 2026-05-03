@@ -1,7 +1,5 @@
 """Durable append-only task audit log backed by the workspace database."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 import json
 import sqlite3

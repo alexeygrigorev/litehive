@@ -1,7 +1,5 @@
 """Execution recovery helpers."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from pathlib import Path
 import sqlite3

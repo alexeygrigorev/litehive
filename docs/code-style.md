@@ -4,6 +4,16 @@ This file records local style decisions that are easy to regress during refactor
 
 ## Imports
 
+- All imports live at the top of the module. Inline imports inside
+  functions/methods are only allowed when (a) the import is genuinely
+  heavy and the call site needs cold-start latency or (b) it breaks
+  a circular dependency that cannot be untangled by reorganizing
+  modules. Each remaining inline import must carry a comment
+  explaining the reason (`# inline: …`).
+- Do not use `from __future__ import annotations`. The project
+  targets a Python where annotations are already evaluated lazily by
+  default, and the import only complicates runtime introspection
+  (e.g. `dataclasses.fields(...).type` becoming a string).
 - Import directly from the module that owns the behavior.
 - Do not add thin wrapper modules that only re-export imports from another file.
 - Do not add modules whose whole body is `from x import ...` plus `__all__`.
@@ -73,6 +83,61 @@ from tests.support.helpers import make_workspace, run_cli
 - Prefer deleting speculative extensibility over preserving it “just in case”.
 - If a class exists only to generalize one current call site, collapse it unless there is a committed near-term second implementation.
 - Keep CLI code thin. Business logic should not be reimplemented in CLI handlers.
+
+## Control Flow
+
+- Prefer flat early-return over nested `if x is not None:` (or any
+  guard) blocks. If the negative branch is short, write
+  `if x is None: return <something>` and continue at the top level
+  instead of indenting the rest of the function under the positive
+  branch.
+- Required parameters should be required. Do not give a parameter
+  like `root: Path | None = None` a default just because some
+  call site doesn't have one — make the missing data the call
+  site's problem.
+
+## Domain Values
+
+- Do not store, compare, or pass-around domain values (stages,
+  pipeline states, verdicts, modes, roles, statuses) as raw
+  strings. Use the enums in `litehive/domain/common.py`
+  (`PipelineState`, `TaskStage`, `PipelineStatus`, `PipelineMode`,
+  …). String comparisons against domain values rot silently when
+  enums are renamed; typed values fail loudly.
+- Convert at the boundary. Strings entering the system from the
+  database, JSON payloads, or CLI arguments should be converted
+  immediately via `canonical_pipeline_state(...)` (or its
+  equivalent) and then carried as the typed value.
+- Do not paper over the impedance with `# type: ignore[arg-type]`.
+  If you find yourself reaching for one, fix the receiver instead.
+
+## Subagent Artifacts
+
+- Do not delete subagent execution evidence (prompts, stdout/stderr
+  streams, execution traces) on the success path. They are valuable
+  for retrospective debugging when something fails downstream.
+- Format-flip cleanup (e.g. removing the `.gz` variant when writing
+  the plain variant of the same artifact) is fine and should be
+  documented as such in the helper.
+
+## Side-Effecting Subsystems
+
+- One module per side-effecting subsystem. All git invocations go
+  through `litehive/git/ops.py`. No raw `subprocess.run(["git", …])`
+  outside that module. If a needed helper is missing, add it there.
+- Helpers always take an explicit `cwd: Path`. Do not `os.chdir`.
+
+## Prompts
+
+- Long prompt strings do not live as Python literals. Prompts go
+  in templates (Jinja2 under `templates/prompts/`) and are rendered
+  by a typed builder. The Python side passes typed inputs.
+- Do not add free-form `dict[str, str]` slots to prompt builders.
+  Each input should be a typed field with a docstring explaining
+  what the agent uses it for.
+- Domain prose (e.g. "stage owner for grooming") belongs on the
+  domain object as a property/method, not as ad-hoc text in the
+  prompt module.
 
 ## Defensive Coding
 

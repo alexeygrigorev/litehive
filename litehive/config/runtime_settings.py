@@ -1,7 +1,5 @@
 """Audited runtime settings stored in the workspace database."""
 
-from __future__ import annotations
-
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path

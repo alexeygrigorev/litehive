@@ -1,7 +1,5 @@
 """Small recovery exceptions shared by task selection."""
 
-from __future__ import annotations
-
 from typing import Literal
 
 LaunchFailureContext = Literal[
