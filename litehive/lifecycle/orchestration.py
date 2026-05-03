@@ -27,7 +27,12 @@ from pathlib import Path
 from litehive.config.loading import load_config
 from litehive.config.engine_models import resolve_task_rejection_loop_limit, resolve_task_retry_policy
 from litehive.git.ops import GitError, current_head
-from litehive.domain.reports import StageReport, TaskActivityEntry
+from litehive.domain.reports import (
+    ReportPipelineState,
+    StageReport,
+    TaskActivityEntry,
+    canonical_report_pipeline_state,
+)
 from litehive.domain.task import TaskRecord
 from litehive.domain.runtime import RuntimeFailedRunRecord, RuntimeHookRejectFingerprint, RuntimeRecoveryOutcome
 from litehive.domain.common import (
@@ -628,15 +633,26 @@ def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
     return out
 
 
-def _report_stage_for_phase(phase: str | PipelineState) -> str:
-    try:
-        state = canonical_pipeline_state(phase)
-    except ValueError:
-        return str(phase)
-    if state in {PipelineState.MERGE_RESOLVING, PipelineState.RECOVERING}:
-        return str(state)
+def _report_stage_for_phase(phase: str | PipelineState) -> ReportPipelineState:
+    """Project a pipeline phase to the typed :class:`ReportPipelineState`.
+
+    Hook-emitted reports use whichever stage the runner was passing
+    through when the hook fired. We collapse internal node states down
+    to their owning task stage, except merge-resolving and recovering,
+    which are first-class report stages.
+    """
+    state = canonical_pipeline_state(phase)
+    if state == PipelineState.MERGE_RESOLVING:
+        return "merge_resolving"
+    if state == PipelineState.RECOVERING:
+        return "recovering"
     task_stage = task_stage_for_pipeline_state(state)
-    return str(state) if task_stage is None else str(task_stage)
+    if task_stage is None:
+        # No task-stage projection exists; fall back to the report
+        # converter, which raises if the value is also not a valid
+        # report stage.
+        return canonical_report_pipeline_state(str(state))
+    return task_stage
 
 
 def _record_hook_warnings(
@@ -651,7 +667,7 @@ def _record_hook_warnings(
     feedback = "\n\n".join(warnings)
     report = StageReport(
         task_id=task.id,
-        pipeline_state=report_stage,  # type: ignore[arg-type]
+        pipeline_state=report_stage,
         verdict="pass",
         source="hook",
         summary=summary,
@@ -669,7 +685,7 @@ def _record_hook_warnings(
         task,
         TaskActivityEntry(
             role="hook",
-            stage=report_stage,
+            stage=str(report_stage),
             verdict="comment",
             message=message,
         ),
@@ -711,7 +727,7 @@ def _record_hook_reject(
         )
     report = StageReport(
         task_id=task.id,
-        pipeline_state=report_stage,  # type: ignore[arg-type]
+        pipeline_state=report_stage,
         verdict="reject",
         source="hook",
         summary=summary,
@@ -727,7 +743,7 @@ def _record_hook_reject(
         task,
         TaskActivityEntry(
             role="hook",
-            stage=report_stage,
+            stage=str(report_stage),
             verdict="reject",
             message=message,
         ),
