@@ -111,6 +111,24 @@ from tests.support.helpers import make_workspace, run_cli
 - Do not paper over the impedance with `# type: ignore[arg-type]`.
   If you find yourself reaching for one, fix the receiver instead.
 
+## Function Docstrings
+
+- Helpers whose existence is not obvious from the name need a
+  short docstring saying *what problem they solve* and *why they
+  exist*. The "why" is the part that rots silently when the
+  surrounding code changes — without it, future readers can't
+  tell whether the helper is still load-bearing.
+- When the caller is not obvious — different module, more than
+  one, or only one but in an unexpected place — name the caller
+  in **domain terms**: "called by the accepting stage when the
+  reviewer submits a reject", not "called from
+  `runner.py:387`". Code paths get renamed; the domain story
+  stays true. File/function references in docstrings become
+  silent lies the moment something moves.
+- For helpers with exactly one obvious caller in the same module,
+  the location is self-documenting; don't add a callers note for
+  its own sake.
+
 ## Subagent Artifacts
 
 - Do not delete subagent execution evidence (prompts, stdout/stderr
