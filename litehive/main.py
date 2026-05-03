@@ -1,4 +1,15 @@
-"""Lightweight CLI entrypoint with a fast status path."""
+"""Lightweight CLI entrypoint with a fast status path.
+
+This module is the process entry point and is the only place where
+inline imports inside functions are routinely allowed. The reason is
+cold-start latency: ``litehive`` is invoked frequently from the
+shell (``litehive status``, in particular, runs in tight feedback
+loops) and importing the full Click/Typer CLI and its transitive
+dependencies for every invocation adds tens of milliseconds. The
+``main()`` dispatcher therefore loads each sub-app only on the
+branch that needs it. Code-style rule R1 in ``docs/code-style.md``
+calls this out as the canonical exception.
+"""
 
 import os
 import sys
