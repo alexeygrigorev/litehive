@@ -23,7 +23,6 @@ from litehive.domain.reports import StageReport
 from litehive.domain.task import TaskRecord
 from litehive.observability.engine_monitoring import record_engine_execution, record_engine_observation
 from litehive.agents.artifacts import (
-    prune_superseded_subagent_artifacts,
     write_stream_artifact,
     write_text_if_changed,
 )
@@ -414,7 +413,6 @@ class SubagentManager(SessionMixin):
             continuation=continuation,
             extra_warnings=callback_warnings,
         )
-        prune_superseded_subagent_artifacts(task_dir(self.root, task), keep_subagent_id=ref.id)
         if proc is not None:
             record_engine_execution(
                 self.root,
