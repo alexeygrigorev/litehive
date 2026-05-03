@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Callable
 
-from litehive.agents.manager import SubagentManager
+from litehive.agents.merge_resolver import run_worktree_merge_agent
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import workspace_path
@@ -608,7 +608,7 @@ def resolve_task_execution_root(
                         task,
                         f"[worktree] Rebase onto {main_head[:8]} failed. Launching merge agent.",
                     )
-                    _run_worktree_merge_agent(root, worktree_path, task, main_head, config=config)
+                    run_worktree_merge_agent(root, worktree_path, task, main_head, config=config)
             _remove_origin_remote(worktree_path)
             return worktree_path
 
@@ -1119,83 +1119,6 @@ def _task_can_resume_with_owned_dirty_paths(
 def _remove_origin_remote(worktree_path: Path) -> None:
     """Remove origin remote from worktree (placeholder)."""
     _ = worktree_path
-
-
-def _run_worktree_merge_agent(
-    root: Path,
-    worktree_path: Path,
-    task: TaskRecord,
-    main_head: str,
-    *,
-    config: LitehiveConfig | None = None,
-) -> None:
-    """Run merge agent to resolve worktree conflicts."""
-    merge = subprocess.run(
-        ["git", "merge", main_head, "--no-edit"],
-        cwd=worktree_path,
-        capture_output=True,
-        text=True,
-    )
-    if merge.returncode == 0:
-        append_journal(root, task, "[worktree] Merged main into worktree.")
-        return
-
-    conflict_proc = subprocess.run(
-        ["git", "diff", "--name-only", "--diff-filter=U"],
-        cwd=worktree_path,
-        capture_output=True,
-        text=True,
-    )
-    conflicts = [candidate.strip() for candidate in conflict_proc.stdout.splitlines() if candidate.strip()]
-    if not conflicts:
-        subprocess.run(["git", "merge", "--abort"], cwd=worktree_path, capture_output=True)
-        append_journal(
-            root,
-            task,
-            f"[worktree] Merge failed (no conflict files detected): {merge.stderr.strip()}",
-        )
-        return
-
-    append_journal(
-        root,
-        task,
-        f"[worktree] Merge conflict on {len(conflicts)} file(s). Launching merge agent.",
-    )
-    cfg = config or load_config(root)
-    from litehive.tasks.recovery_engine import resolve_recovery_engine
-
-    try:
-        engine_name, model = resolve_recovery_engine(root, task, cfg)
-    except GitError as exc:
-        append_journal(root, task, f"[worktree] Merge agent unavailable: {exc}")
-        return
-    subagents = SubagentManager(root, execution_root=worktree_path)
-    subagents.run(
-        task,
-        role="merge-resolver",
-        engine_name=engine_name,
-        model=model,
-        prompt=(
-            f"Git merge conflict while updating task {task.id} worktree to latest main.\n"
-            f"Conflicting files: {', '.join(conflicts)}\n\n"
-            "Resolution rules:\n"
-            "- Preserve BOTH sides' intent - combine changes, don't pick one side.\n"
-            "- Main branch has latest infrastructure. Worktree has task's feature code.\n"
-            "- Never silently drop changes from either side.\n\n"
-            "After resolving: git add the files, then git commit --no-edit.\n"
-        ),
-    )
-    remaining = subprocess.run(
-        ["git", "diff", "--name-only", "--diff-filter=U"],
-        cwd=worktree_path,
-        capture_output=True,
-        text=True,
-    )
-    if not remaining.stdout.strip():
-        append_journal(root, task, "[worktree] Merge agent resolved conflicts.")
-        return
-    subprocess.run(["git", "merge", "--abort"], cwd=worktree_path, capture_output=True)
-    append_journal(root, task, "[worktree] Merge agent could not resolve. Worktree kept as-is.")
 
 
 def _worktree_commits_ahead_of_main(root: Path, worktree_path: Path) -> list[str]:
