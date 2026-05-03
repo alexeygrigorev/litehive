@@ -19,7 +19,7 @@ from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, Trigge
 from litehive.domain.task import WorkspaceState
 from litehive.lifecycle.persistence import SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
-from litehive.main import fast_status
+from litehive.main import dispatch_status
 from litehive.observability.engine_monitoring import record_engine_execution
 from litehive.observability.status_diagnostics import (
     _load_runner_status_for_status,
@@ -32,8 +32,8 @@ from litehive.state.persist import save_state
 from tests.support.helpers import _cmd_status
 
 
-def _run_fast_status(workspace: Path, capsys) -> tuple[int, str]:
-    exit_code = fast_status(["--workspace", str(workspace)])
+def _run_dispatch_status(workspace: Path, capsys) -> tuple[int, str]:
+    exit_code = dispatch_status(["--workspace", str(workspace)])
     return exit_code, capsys.readouterr().out
 
 
@@ -85,7 +85,7 @@ def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path:
     config_file.write_text("[", encoding="utf-8")
     state_db.write_text("not a sqlite database", encoding="utf-8")
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 1
     assert f"config: CORRUPT at {config_file} (line 1)" in output
@@ -100,7 +100,7 @@ def test_status_reports_corrupt_workspace_registry_without_raising(tmp_path: Pat
     registry_path = litehive_root() / "workspaces.db"
     registry_path.write_text("not a sqlite database", encoding="utf-8")
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 0
     assert f"registry: BROKEN at {registry_path}" not in output
@@ -114,7 +114,7 @@ def test_status_reports_invalid_merged_config_without_silent_defaulting(tmp_path
     config_file = workspace_dir(tmp_path) / "config.yaml"
     config_file.write_text("poll_interval_seconds: not-a-number\n", encoding="utf-8")
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 1
     assert "config: INVALID merged config (" in output
@@ -128,7 +128,7 @@ def test_status_reports_non_mapping_config_without_silent_defaulting(tmp_path: P
     config_file = workspace_dir(tmp_path) / "config.yaml"
     config_file.write_text("- not\n- a\n- mapping\n", encoding="utf-8")
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 1
     assert f"config: INVALID at {config_file} (expected YAML mapping)" in output
@@ -144,7 +144,7 @@ def test_status_preserves_valid_config_fields_when_reporting_invalid_config(tmp_
         encoding="utf-8",
     )
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 1
     assert "default_engine: claude" in output
@@ -168,7 +168,7 @@ def test_status_reports_legacy_engine_fallbacks_config_error(tmp_path: Path, cap
         encoding="utf-8",
     )
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 1
     assert "config: INVALID merged config (" in output
@@ -196,7 +196,7 @@ def test_status_ignores_legacy_engine_monitoring_yaml_and_renders_db_data(tmp_pa
     monitoring_file = workspace_dir(tmp_path) / "engine-monitoring.yaml"
     monitoring_file.write_text("[", encoding="utf-8")
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 0
     assert f"CORRUPT at {monitoring_file}" not in output
@@ -207,7 +207,7 @@ def test_status_ignores_legacy_engine_monitoring_yaml_and_renders_db_data(tmp_pa
 def test_status_reports_never_started_runner_without_lock(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 0
     assert "runner_status: never_started" in output
@@ -230,7 +230,7 @@ def test_status_reports_stale_runner_lock(tmp_path: Path, capsys, monkeypatch) -
     )
     monkeypatch.setattr("litehive.observability.status_diagnostics.runner_pid_is_alive", lambda pid: False)
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 1
     assert "runner_status: dead" in output
@@ -287,7 +287,7 @@ def test_status_reports_stopped_runner_for_empty_lock_file(tmp_path: Path, capsy
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text("{}\n", encoding="utf-8")
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 0
     assert "runner_status: stopped" in output
@@ -302,7 +302,7 @@ def test_status_reports_queued_task_missing_from_sqlite_index(tmp_path: Path, ca
         connection.execute("DELETE FROM task_intent WHERE task_id = ?", (task.id,))
         connection.commit()
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 0
     assert "queued_tasks: 1" in output
@@ -362,7 +362,7 @@ def test_status_reports_wedged_runner_heartbeat(tmp_path: Path, capsys) -> None:
         encoding="utf-8",
     )
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 1
     assert "runner_state: WEDGED (heartbeat 11 min stale)" in output
@@ -386,7 +386,7 @@ def test_status_reports_dead_daemon_pid(tmp_path: Path, capsys, monkeypatch) -> 
     monkeypatch.setattr("litehive.daemon.registry.pid_is_alive", lambda pid: False)
     monkeypatch.setattr("litehive.observability.status_diagnostics.pid_is_alive", lambda pid: False)
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 0
     assert "daemon_status:" not in output
@@ -400,7 +400,7 @@ def test_status_reports_failed_last_cycle(tmp_path: Path, capsys) -> None:
     repair_log = log_dir / "0001-repair.log"
     repair_log.write_text("Traceback (most recent call last):\nboom\n", encoding="utf-8")
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 0
     assert "last_cycle:" not in output
@@ -423,7 +423,7 @@ heru = { path = "../heru", editable = true }
         encoding="utf-8",
     )
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 0
     assert "heru_link:" not in output
@@ -443,7 +443,7 @@ def test_status_reports_origin_divergence_as_attention_required(tmp_path: Path, 
         ),
     )
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 0
     assert "pool_stop_reason: diverged_from_origin" in output
@@ -480,7 +480,7 @@ def test_status_omits_recovery_failure_repair_guidance_from_default_path(tmp_pat
     task.runtime.pipeline.last_outcome.reason = "recovery crashed while repairing the task"
     save_task(tmp_path, task)
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 0
     assert "recovery_failure:" not in output
@@ -555,7 +555,7 @@ def test_status_omits_backlog_runtime_stage_repair_guidance_from_default_path(tm
     save_task(tmp_path, task)
     save_state(tmp_path, WorkspaceState(queue=[]))
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 0
     assert "queued_tasks: 0" in output
@@ -574,7 +574,7 @@ def test_status_omits_queued_stage_normalization_warning_from_default_path(tmp_p
     task.runtime.pipeline.current_stage.status = "idle"
     save_task(tmp_path, task)
 
-    exit_code, output = _run_fast_status(tmp_path, capsys)
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
     assert exit_code == 0
     assert "backlog_damage:" not in output

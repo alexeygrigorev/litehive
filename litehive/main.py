@@ -56,7 +56,13 @@ def _requests_help(argv: list[str]) -> bool:
     return any(arg in {"--help", "-h"} for arg in argv)
 
 
-def fast_status(argv: list[str]) -> int:
+def dispatch_status(argv: list[str]) -> int:
+    """Run the default ``litehive status`` without loading the full Click/Typer CLI.
+
+    Lives in ``main.py`` so the common path stays cheap on cold start.
+    """
+    # inline: keep CLI cold start fast — these modules are heavy and only
+    # needed when the user actually asks for status.
     from litehive.observability.status_diagnostics import (
         render_operational_issue_lines,
         status_has_problems,
@@ -110,7 +116,7 @@ def main() -> int:
             return cli_main()
 
     if argv and argv[0] == "status" and "--full" not in argv and "--fast" not in argv:
-        return fast_status(argv[1:])
+        return dispatch_status(argv[1:])
 
     if argv and argv[0] == "agent":
         import click

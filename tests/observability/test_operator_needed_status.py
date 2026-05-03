@@ -5,7 +5,7 @@ from litehive.attention import append_attention_log, collect_operator_needed_sta
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.execution import run_daemon_loop
-from litehive.main import fast_status
+from litehive.main import dispatch_status
 from litehive.sandbox.git_wrapper import main as git_wrapper_main
 from litehive.state.persist import load_state, save_state, set_pool_stop_reason
 from litehive.state.records import create_task, save_task
@@ -20,7 +20,7 @@ def test_status_surfaces_flagged_task_as_operator_needed(tmp_path: Path, capsys)
     task.flag_reason = "needs operator review"
     save_task(tmp_path, task)
 
-    exit_code = fast_status(["--workspace", str(tmp_path)])
+    exit_code = dispatch_status(["--workspace", str(tmp_path)])
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -36,7 +36,7 @@ def test_status_surfaces_runner_pool_stop_as_operator_needed(tmp_path: Path, cap
     ensure_workspace(tmp_path)
     save_state(tmp_path, WorkspaceState(pool_stop_reason="diverged_from_origin"))
 
-    exit_code = fast_status(["--workspace", str(tmp_path)])
+    exit_code = dispatch_status(["--workspace", str(tmp_path)])
     output = capsys.readouterr().out
 
     assert exit_code == 0
@@ -48,7 +48,7 @@ def test_status_surfaces_runner_pool_stop_as_operator_needed(tmp_path: Path, cap
 def test_status_reports_no_operator_needed_when_workspace_is_clear(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
 
-    exit_code = fast_status(["--workspace", str(tmp_path)])
+    exit_code = dispatch_status(["--workspace", str(tmp_path)])
     output = capsys.readouterr().out
 
     assert exit_code == 0

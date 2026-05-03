@@ -299,7 +299,7 @@ def test_main_routes_queue_subcommands_through_root_cli(
     assert captured["argv"] == ["litehive", "queue", "recover", "T-0001"]
 
 
-def test_fast_status_prefers_runner_active_task_id(
+def test_dispatch_status_prefers_runner_active_task_id(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -319,7 +319,7 @@ def test_fast_status_prefers_runner_active_task_id(
         ],
     )
 
-    exit_code = main_module.fast_status([])
+    exit_code = main_module.dispatch_status([])
     output = capsys.readouterr().out
 
     assert exit_code == 0
