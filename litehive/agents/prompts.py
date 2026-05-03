@@ -44,7 +44,6 @@ def stage_prompt(
         f"Stage: {stage}",
         f"Stage owner: {stage_owner}",
         f"Process profile: {profile['label']}",
-        f"Task type: {task.task_type or '-'}",
         "",
         "Workspace context:",
         workspace_context.strip() or "No workspace context provided.",
