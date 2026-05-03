@@ -1,2 +1,0 @@
-[stderr]
-Error: No such file or directory (os error 2)

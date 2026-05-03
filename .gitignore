@@ -13,6 +13,9 @@ tmp-*/
 $tmpdir/
 
 # Litehive runtime artifacts (execution residue, not project state)
+.litehive/tasks/
+.litehive/stale-task-artifacts/
+.litehive/attention/
 .litehive/tasks/*/journal.md
 .litehive/tasks/archive/*/journal.md
 .litehive/tasks/*/subagents/

@@ -1,6 +1,0 @@
-Reading additional input from stdin...
-2026-04-03T06:17:49.634640Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /home/alexey/git/litehive/.litehive/worktrees/T-0106-add-parallel-worker-fanout-within-a-single-task/litehive/subagents.py:
-            task.subagents.append(ref)
-            save_task(self.root, task)
-            mark_subagent_started(self.root, task, ref, step=step)
-        self._write_session_start(base, ref, prompt)
