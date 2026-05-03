@@ -120,13 +120,13 @@ def test_collect_task_pipeline_status_prefers_runner_active_task_id(tmp_path: Pa
     )
     active_task = SimpleNamespace(id="T-0381", title="Move stage and recovery reports off YAML storage")
 
+    # ``collect_task_pipeline_status`` imports its callees at module scope, so
+    # patching the callees at their original locations no longer hits the
+    # bindings the function uses — patch the local re-imports here.
     monkeypatch.setattr(
-        "litehive.observability.status_diagnostics.collect_operational_status_snapshot",
+        "litehive.observability.status.collect_operational_status_snapshot",
         lambda root: snapshot,
     )
-    # ``collect_task_pipeline_status`` imports ``waiting_for_you_lines`` and
-    # ``get_task`` at module scope, so patching the callees at their original
-    # locations no longer hits the bindings the function uses.
     monkeypatch.setattr(
         "litehive.observability.status.waiting_for_you_lines",
         lambda root, **_: ["operator_needed: unavailable"],
