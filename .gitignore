@@ -36,3 +36,6 @@ $tmpdir/
 
 .claude/
 .codex
+
+# Local transcripts (Google Recorder fetches)
+fetched/
