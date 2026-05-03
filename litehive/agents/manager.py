@@ -19,7 +19,7 @@ from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.agents.sandbox import SandboxError, SandboxLauncher
 from litehive.observability.events import append_event
 from heru.types import SubagentRef
-from litehive.domain.reports import StageReport
+from litehive.domain.reports import REPORT_VERDICT_KINDS, StageReport
 from litehive.domain.task import TaskRecord
 from litehive.observability.engine_monitoring import record_engine_execution, record_engine_observation
 from litehive.agents.artifacts import (
@@ -49,7 +49,6 @@ from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.tasks.report_storage import record_stage_report
 
 _REPORTABLE_STAGES = {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
-_REPORT_FILE_VERDICTS = {"pass", "reject", "blocked", "resume", "advance", "done", "budget_hit"}
 _DEFAULT_STAGE_FOR_ROLE = {
     "planner": "grooming",
     "swe": "implementing",
@@ -74,7 +73,7 @@ def _latest_report_files_changed(
         task,
         stage=pipeline_state,
         source_subagent_id=source_subagent_id,
-        verdicts=_REPORT_FILE_VERDICTS,
+        verdicts=REPORT_VERDICT_KINDS,
     )
     if latest is None:
         return []

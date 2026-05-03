@@ -60,6 +60,34 @@ def canonical_stage_report_verdict(verdict: str) -> StageReportVerdict | None:
     return _STAGE_REPORT_VERDICT_ALIASES.get(verdict.strip().lower())
 
 
+# Activity-entry verdicts that count as a CLI-submitted stage report.
+# Excludes "comment", which is operator/agent commentary that does not
+# advance the stage report.
+REPORT_VERDICT_KINDS: frozenset[TaskActivityVerdict] = frozenset(
+    {"pass", "reject", "blocked", "resume", "advance", "done", "budget_hit"}
+)
+
+
+_REPORT_PIPELINE_STATE_LITERALS: frozenset[str] = frozenset({"merge_resolving", "recovering"})
+
+
+def canonical_report_pipeline_state(value: str | TaskStage) -> ReportPipelineState:
+    """Convert a stage label to the typed ``ReportPipelineState``.
+
+    Accepts the string used by callers (e.g. ``"implementing"``,
+    ``"merge_resolving"``) and returns either the matching
+    :class:`TaskStage` member or one of the literal extensions allowed
+    on stage reports. Raises :class:`ValueError` otherwise — there is
+    no fallback "unknown" stage.
+    """
+    if isinstance(value, TaskStage):
+        return value
+    text = str(value)
+    if text in _REPORT_PIPELINE_STATE_LITERALS:
+        return text  # type: ignore[return-value]  # narrowed to literal by membership check
+    return TaskStage(text)
+
+
 class StageReport(BaseModel):
     """Normalized machine-readable summary of a pipeline state execution.
 
@@ -216,6 +244,7 @@ __all__ = [
     "RecoveryAction",
     "RecoveryEvidenceItem",
     "RecoveryReport",
+    "REPORT_VERDICT_KINDS",
     "ReportPipelineState",
     "SEMANTIC_REJECT_CLASSIFICATION",
     "StageReport",
@@ -223,6 +252,7 @@ __all__ = [
     "TaskActivityEntry",
     "TRUNCATION_MARKER",
     "cap_feedback",
+    "canonical_report_pipeline_state",
     "canonical_stage_report_verdict",
     "classify_task_activity_verdict",
 ]
