@@ -16,6 +16,8 @@ def make_typer(*, invoke_without_command: bool = False) -> typer.Typer:
         context_settings={"help_option_names": ["-h", "--help"]},
         invoke_without_command=invoke_without_command,
         no_args_is_help=False,
+        rich_markup_mode=None,
+        pretty_exceptions_enable=False,
     )
 
 

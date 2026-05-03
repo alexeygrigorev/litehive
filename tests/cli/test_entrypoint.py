@@ -55,6 +55,19 @@ def test_root_help_hides_legacy_shortcuts_and_internal_aliases() -> None:
         assert command in result.output
 
 
+def test_help_output_uses_plain_click_format_for_agent_token_efficiency() -> None:
+    runner = CliRunner()
+    border_chars = {"\u256d", "\u256e", "\u2570", "\u256f", "\u2500", "\u2502"}
+
+    for argv in (["--help"], ["task", "--help"], ["queue", "--help"]):
+        result = runner.invoke(modern_cli.app, argv)
+
+        assert result.exit_code == 0, result.output
+        assert "Usage:" in result.output
+        assert "Options:" in result.output
+        assert not any(char in result.output for char in border_chars)
+
+
 def test_removed_root_aliases_are_no_longer_available() -> None:
     removed_aliases = [
         "add",

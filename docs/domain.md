@@ -1,129 +1,119 @@
 # Domain Model
 
-This document defines the high-level domain model and canonical terminology for Litehive.
-
-It follows the general format defined in [domain-spec.md](domain-spec.md).
-
-**NOTE**: Detailed rationale, usage patterns, and field explanations for domain models have been moved into code docstrings and field annotations. See the domain classes in `litehive/domain/` for comprehensive documentation of when/how/why each model is used.
+This document defines Litehive's durable domain vocabulary. Detailed field
+semantics belong in the model docstrings under `litehive/domain/`; this file
+keeps the terms, ownership boundaries, and storage rules that should stay
+stable across refactors.
 
 ## Normative Rules
 
-- use one canonical term per concept
-- do not use `v2` in user-facing language
-- do not use bare overloaded words like `status`, `state`, `reason`, or `outcome` when more than one kind is in scope
-- group related concepts by domain so review is local, not scattered
+- Use one canonical term per concept.
+- Do not expose historical implementation labels such as `v2` in user-facing
+  commands, docs, or prompts.
+- Avoid overloaded bare words such as `status`, `state`, `reason`, and
+  `outcome` when more than one kind is in scope.
+- Keep detailed field rationale in code docstrings so it changes with the
+  implementation.
 
-## Domain Overview
+## Domain Areas
 
-Litehive's domain model is organized into the following domains:
-
-- **Workspace Domain**: workspace-scoped coordination and task queue management
-- **Task Domain**: core work items and their lifecycle states  
-- **Pipeline Domain**: task execution flow and state transitions
-- **Recovery Domain**: failure handling and recovery coordination
-- **Execution Domain**: live execution state and subagent management
-- **Activity Domain**: human-readable task history and reporting
-- **Artifacts Domain**: persisted execution byproducts and traces
-- **Configuration Domain**: operator-controlled workspace settings
-
-For detailed domain model documentation including creation context, usage patterns, and field explanations, see the corresponding modules in `litehive/domain/`.
-
-## Modeling Terms
-
-Litehive uses lightweight Domain-Driven Design terminology. Key concepts include:
-
-- **Domain**: A coherent area of the model (workspace, task, pipeline, etc.)
-- **Entity**: Objects with stable identity that persist over time (`TaskRecord`,
-  subagent runtime/session records)
-- **Value Object**: Descriptive objects defined by their fields (`FailureFingerprint`, `RecoveryTrigger`)
-- **Service**: Behavior that coordinates multiple entities (task transition
-  operations, state-machine runner, recovery coordination)
-- **Store**: Persistence boundaries (`WorkspaceStore`, `ArtifactStore`)
-- **Actor**: People or components that do work (`Operator`, `Runner`, `Subagent`)
-- **Event**: Typed facts about what happened (`AcceptEvent`, `RejectEvent`)
-
-**Ubiquitous Language Rule**: Code, docs, CLI, and discussions should use the same terms (e.g., if code says `PipelineState`, don't casually call it `phase` or `status`).
+- **Workspace**: repository registration, workspace configuration, locks,
+  backups, and workspace health.
+- **Task**: task intent, task records, task lifecycle category, queue
+  membership, and operator task transitions.
+- **Pipeline**: internal state-machine positions, transition rules, lifecycle
+  nodes, hooks, and stage routing.
+- **Execution**: runner status, live subagent state, engine continuations,
+  interruptions, and runtime projections.
+- **Recovery**: failure fingerprints, recovery triggers, recovery outcomes,
+  recovery budgets, and failed-run history.
+- **Reports and Activity**: stage reports, recovery reports, task activity, task
+  evidence, audit records, and human-readable history.
+- **Artifacts**: raw prompt, event stream, stdout/stderr, execution trace, and
+  other support data retained outside the canonical task model.
+- **Engine Monitoring**: engine usage observations, quota state, availability,
+  freezes, and routing hints.
 
 ## Naming Rules
 
-- Use `task` for the core work item
-- Use `pipeline` for the task execution flow  
-- Use `message` for human-readable text
-- Use `reason_code` for normalized machine-readable classification
-- Use `rationale` for operator or agent explanation of a choice
+- Use `task` for the core work item.
+- Use `pipeline` for the task execution flow.
+- Use `pipeline_state` for the internal runner node.
+- Use `pipeline_status` for the operator-facing progress projection.
+- Use `task_status` for the high-level task lifecycle category.
+- Use `reason_code` for normalized machine-readable classification.
+- Use `rationale` for operator or agent explanation text.
+- Use `message` for human-readable event or report text.
+
+## Core Distinctions
+
+`TaskStatus` is the operator-visible lifecycle category: `queued`,
+`in_progress`, `interrupted`, `parked`, `done`, `closed`, or `flagged`.
+
+`PipelineState` is the internal runner state machine. It includes executable
+agent stages, hook states, system states, recovery, merge resolution, and
+terminal states.
+
+`PipelineStatus` is only a coarse display projection persisted on task records.
+It is not the state machine.
+
+`StageReport.pipeline_state` uses the `ReportPipelineState` projection from
+`litehive/domain/reports.py`. Stage report verdicts are canonically `pass`,
+`reject`, or `blocked`; broader activity verdicts are normalized at the report
+boundary.
+
+Close outcomes such as `wont_do`, `deferred`, `duplicate`, and
+`execution_cancelled` are close reasons, not task statuses. Merge failures are
+represented as flagged tasks with `flag_reason = "merge_failed"`.
 
 ## Recovery Vocabulary
 
-The recovery domain uses the implemented recovery model as canonical:
+- `FailureFingerprint` is the recovery identity and budget key.
+- `failure_diagnostics` is report evidence on stage or outcome records; it is
+  not a recovery-domain model.
+- `RecoveryTrigger` is the active cause that routed a task into recovery. It is
+  persisted as `active_recovery_trigger` and surfaced to recovery prompts as
+  `recovery_trigger`.
+- `RecoveryOutcome` is one completed recovery attempt or denial. Outcomes are
+  persisted in `recovery_history`.
+- `RuntimeRecoveryOutcome` is the compact runtime projection used by
+  `TaskRuntime.pipeline.recovery_history`.
+- `failed_run_history` is separate cross-run retry-exhaustion memory.
+- Retired names such as `FailureDiagnostics`, `RecoveryContext`, and
+  `RecoveryRecord` should not be reintroduced.
 
-- `FailureFingerprint` is the recovery identity and budget key. It replaces the older document-only `FailureDiagnostics` model name.
-- `failure_diagnostics` is a report/outcome evidence field on `StageReport` and `TaskOutcomeState`; it is not a recovery-domain model.
-- `RecoveryTrigger` is the active recovery cause/context. It is stored as `TaskState.active_recovery_trigger`, serialized as `active_recovery_trigger`, and surfaced to recovery prompts as `recovery_trigger`.
-- `RecoveryOutcome` is one completed recovery attempt or denial. It is stored in `TaskState.recovery_history`.
-- `RuntimeRecoveryOutcome` is the compact task-runtime projection of `RecoveryOutcome`, stored in `TaskRuntime.pipeline.recovery_history` so recovery prompts can retain prior fingerprints after state resets.
-- `failed_run_history` is separate cross-run retry-exhaustion memory; it is not a recovery outcome.
-- `RecoveryContext` and `RecoveryRecord` are retired names. New code and docs should use `RecoveryTrigger`, `RecoveryOutcome`, `recovery_trigger`, and `recovery_history`.
+## Domain Modules
 
-## Cross-Domain Actors
+- `litehive/domain/common.py`: shared enums, projections, and helpers.
+- `litehive/domain/task.py`: task and workspace records.
+- `litehive/domain/runtime.py`: runtime, interruption, subagent, and runner
+  state models.
+- `litehive/domain/recovery.py`: recovery enums and persisted value objects.
+- `litehive/domain/reports.py`: stage reports, recovery reports, task activity,
+  and report projections.
+- `litehive/domain/engine.py`: engine monitoring and live event-stream models.
+- `litehive/domain/agent.py`: subagent execution result models and exceptions.
+- `litehive/domain/pool.py`: worktree and dirty-worktree gate reports.
+- `litehive/domain/task_ops.py`: task-operation result and error dataclasses.
+- `litehive/domain/lifecycle_deltas.py`: transition deltas and recovery trigger
+  construction.
+- `litehive/lifecycle/persistence.py`: persisted lifecycle `TaskState`.
 
-Key actors that operate across multiple domains:
+## Actors
 
-- **Operator**: Human using Litehive through CLI commands
-- **Runner**: Top-level process orchestrating task execution  
-- **Pipeline Node**: Executable unit for one pipeline state
-- **Subagent**: External agent execution for specific roles (planning, implementation, QA, etc.)
-- **Store**: Persistence boundary for structured data
-
-*See `litehive/domain/` for detailed actor definitions and responsibilities.*
-
-## Domain Model Reference
-
-The complete domain model documentation with detailed usage patterns, creation contexts, and field explanations has been moved to **code docstrings** in the domain modules. 
-
-Each domain module contains comprehensive docstrings for all models, including:
-- Purpose and creation context  
-- Field-level usage explanations
-- Actor responsibilities and usage patterns
-- When/how/why each model is populated and consumed
-
-### Domain Modules
-
-- **`litehive/domain/common.py`** - Shared enums and utilities across all domains
-- **`litehive/domain/task.py`** - Task entities and task lifecycle models  
-- **`litehive/domain/engine.py`** - Pipeline execution flow and state management
-- **`litehive/domain/recovery.py`** - Failure handling and recovery coordination
-- **`litehive/domain/runtime.py`** - Live execution state and subagent management
-- **`litehive/domain/reports.py`** - Human-readable activity and structured reports
-- **`litehive/domain/agent.py`** - Subagent execution and artifact persistence  
-- **`litehive/lifecycle/persistence.py`** - Task state persistence (TaskState class)
-
-### Key Model Categories
-
-**Core Entities**: `TaskRecord`, subagent session/runtime records - objects with stable identity
-**Value Objects**: `TaskRetryPolicy`, `FailureFingerprint`, `RecoveryTrigger`, `RecoveryOutcome` - descriptive data structures
-**Enums**: `TaskStatus`, `PipelineState`, `PipelineStatus`, `Verdict` - normalized classification
-
-`PipelineState` is the internal runner state machine. `PipelineStatus` is only
-the operator-facing progress projection persisted on task records for display
-and filtering. `StageReport.pipeline_state` uses the named
-`ReportPipelineState` projection documented in `litehive/domain/reports.py`.
-Stage report verdicts are canonically `pass`, `reject`, or `blocked`; broader
-activity verdicts are normalized into that set at the report boundary.
-
-**Services**: task transition operations, `StateMachineRunner`, recovery coordination - domain behavior coordination
-**Runtime State**: `TaskRuntime`, `PipelineRuntime`, `ExecutionRuntime` - mutable execution tracking
+- **Operator**: human using Litehive through CLI commands.
+- **Runner**: top-level process that owns task execution.
+- **Pipeline Node**: executable unit for one pipeline state.
+- **Subagent**: external agent execution for a specific role.
+- **Store**: persistence boundary for structured data.
 
 ## Storage Rule
 
 Task intent, queue state, runtime state, reports, events, monitoring, and audit
-records belong in SQLite. The only LiteHive-owned YAML file that should remain
+records belong in SQLite. The only Litehive-owned YAML file that should remain
 in a workspace is `.litehive/config.yaml`; all other structured workspace state
-should use the database or append-only text/JSONL artifacts when they are
-intentionally logs.
+should use the database, JSONL/text logs, or disposable artifact files.
 
-Built-in profile defaults are typed Python package data, not YAML files or
-workspace-owned runtime files. When old workspace YAML is found under
-`.litehive`, Litehive first creates a compressed database backup, moves the
-YAML outside `.litehive`, and then removes the workspace copies.
-
-For implementation details, usage patterns, and field-level documentation, consult the docstrings in the corresponding domain module.
+Built-in profile defaults are typed Python package data, not workspace-owned
+YAML. Historical workspace YAML belongs in migration or cleanup code only, not
+in current domain models.
