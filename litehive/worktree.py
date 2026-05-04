@@ -28,11 +28,15 @@ from litehive.git.ops import (
     GitError,
     add_worktree,
     add_worktree_branch,
+    cherry_pick_abort,
+    cherry_pick_no_commit,
+    commit_reuse_message,
     current_head,
     delete_branch,
     fetch as git_fetch,
     has_changes,
     has_non_litehive_changes,
+    index_has_staged_changes,
     is_git_repo,
     list_worktrees_porcelain,
     merge_abort,
@@ -786,26 +790,14 @@ def _apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueRes
     # Perform the actual rescue cherry-pick
     stashed_metadata = _stash_litehive_changes(root)
     for commit_sha in candidate.commit_shas:
-        pick = subprocess.run(
-            ["git", "cherry-pick", "--no-commit", commit_sha],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if pick.returncode != 0:
-            conflicts = _git_lines(root, "diff", "--name-only", "--diff-filter=U")
+        ok, pick_message = cherry_pick_no_commit(root, commit_sha)
+        if not ok:
+            conflicts = unmerged_files(root)
             metadata_conflicts = [path for path in conflicts if _is_task_metadata_path(path, task.id)]
             if conflicts and len(metadata_conflicts) == len(conflicts):
                 _resolve_metadata_conflicts(root, metadata_conflicts)
             else:
-                subprocess.run(
-                    ["git", "cherry-pick", "--abort"],
-                    cwd=root,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
+                cherry_pick_abort(root)
                 _restore_litehive_changes(root, stashed_metadata)
                 save_task(root, task)
                 _ensure_unmerged_worktree_state(root, task.id, candidate.worktree_rel)
@@ -814,27 +806,14 @@ def _apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueRes
                     worktree_rel=candidate.worktree_rel,
                     status="manual_conflict",
                     commit_shas=candidate.commit_shas,
-                    message=pick.stderr.strip() or "git cherry-pick failed",
+                    message=pick_message or "git cherry-pick failed",
                 )
 
         _drop_task_metadata_changes(root, task.id)
-        staged = subprocess.run(
-            ["git", "diff", "--cached", "--quiet", "--exit-code"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if staged.returncode == 0:
-            continue
-        if staged.returncode != 1:
-            subprocess.run(
-                ["git", "cherry-pick", "--abort"],
-                cwd=root,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+        try:
+            has_staged = index_has_staged_changes(root)
+        except GitError:
+            cherry_pick_abort(root)
             _restore_litehive_changes(root, stashed_metadata)
             save_task(root, task)
             _ensure_unmerged_worktree_state(root, task.id, candidate.worktree_rel)
@@ -845,22 +824,12 @@ def _apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueRes
                 commit_shas=candidate.commit_shas,
                 message="unable to inspect staged rescue changes",
             )
+        if not has_staged:
+            continue
 
-        commit = subprocess.run(
-            ["git", "commit", "--reuse-message", commit_sha],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if commit.returncode != 0:
-            subprocess.run(
-                ["git", "cherry-pick", "--abort"],
-                cwd=root,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+        committed, commit_message = commit_reuse_message(root, commit_sha)
+        if not committed:
+            cherry_pick_abort(root)
             _restore_litehive_changes(root, stashed_metadata)
             save_task(root, task)
             _ensure_unmerged_worktree_state(root, task.id, candidate.worktree_rel)
@@ -869,7 +838,7 @@ def _apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueRes
                 worktree_rel=candidate.worktree_rel,
                 status="manual_conflict",
                 commit_shas=candidate.commit_shas,
-                message=commit.stderr.strip() or "git commit failed after rescue cherry-pick",
+                message=commit_message or "git commit failed after rescue cherry-pick",
             )
 
     _restore_litehive_changes(root, stashed_metadata)

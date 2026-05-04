@@ -159,6 +159,52 @@ def current_branch(cwd: Path) -> str | None:
     return proc.stdout.strip() or None
 
 
+def cherry_pick_no_commit(cwd: Path, sha: str) -> tuple[bool, str]:
+    """Run ``git cherry-pick --no-commit <sha>``.
+
+    Returns ``(success, stderr_or_stdout)``. Used by the worktree
+    rescue flow which wants to inspect the staged result before
+    committing.
+    """
+    proc = _run_git(cwd, "cherry-pick", "--no-commit", sha)
+    if proc.returncode == 0:
+        return True, proc.stdout
+    return False, proc.stderr.strip() or proc.stdout.strip()
+
+
+def cherry_pick_abort(cwd: Path) -> None:
+    """Best-effort ``git cherry-pick --abort``. Silent on failure."""
+    _run_git(cwd, "cherry-pick", "--abort")
+
+
+def index_has_staged_changes(cwd: Path) -> bool:
+    """Return whether the index has staged changes ready to commit.
+
+    Wraps ``git diff --cached --quiet --exit-code``. Translates
+    git's exit codes: 0 = no diff, 1 = differs, anything else =
+    error (raises :class:`GitError`).
+    """
+    proc = _run_git(cwd, "diff", "--cached", "--quiet", "--exit-code")
+    if proc.returncode == 0:
+        return False
+    if proc.returncode == 1:
+        return True
+    raise GitError(f"git diff --cached failed in {cwd}: {proc.stderr.strip() or proc.stdout.strip()}")
+
+
+def commit_reuse_message(cwd: Path, sha: str) -> tuple[bool, str]:
+    """Run ``git commit --reuse-message=<sha>``.
+
+    Returns ``(success, stderr_or_stdout)``. Used by the rescue
+    flow when re-applying a cherry-picked commit so the message
+    metadata stays intact.
+    """
+    proc = _run_git(cwd, "commit", "--reuse-message", sha)
+    if proc.returncode == 0:
+        return True, proc.stdout
+    return False, proc.stderr.strip() or proc.stdout.strip()
+
+
 def cherry_check(cwd: Path, upstream_sha: str, head_sha: str) -> list[str] | None:
     """Run ``git cherry <upstream> <head>`` and return the marker lines.
 
