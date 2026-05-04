@@ -44,18 +44,19 @@ from litehive.tasks.runtime import (
     mark_subagent_progress,
     mark_subagent_started,
 )
+from litehive.domain.common import PipelineState, TaskStage
 from litehive.tasks.activity import latest_task_activity_entry
 from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.tasks.report_storage import record_stage_report
 
-_REPORTABLE_STAGES = {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
-_DEFAULT_STAGE_FOR_ROLE = {
-    "planner": "grooming",
-    "swe": "implementing",
-    "qa": "testing",
-    "reviewer": "accepting",
-    "merge-resolver": "merge_resolving",
-    "recovery": "recovering",
+_REPORTABLE_STAGES: frozenset[str] = frozenset(stage.value for stage in TaskStage)
+_DEFAULT_STAGE_FOR_ROLE: dict[str, str] = {
+    "planner": TaskStage.GROOMING.value,
+    "swe": TaskStage.IMPLEMENTING.value,
+    "qa": TaskStage.TESTING.value,
+    "reviewer": TaskStage.ACCEPTING.value,
+    "merge-resolver": PipelineState.MERGE_RESOLVING.value,
+    "recovery": PipelineState.RECOVERING.value,
 }
 
 logger = logging.getLogger(__name__)
@@ -172,20 +173,24 @@ class SubagentManager(SessionMixin):
         if current_stage:
             return current_stage
         pipeline_stage = str(task.pipeline_status) if task.pipeline_status else ""
-        if pipeline_stage in _REPORTABLE_STAGES or pipeline_stage in {"merge_resolving", "recovering"}:
+        if (
+            pipeline_stage in _REPORTABLE_STAGES
+            or pipeline_stage == PipelineState.MERGE_RESOLVING
+            or pipeline_stage == PipelineState.RECOVERING
+        ):
             return pipeline_stage
         if role and role in _DEFAULT_STAGE_FOR_ROLE:
             return _DEFAULT_STAGE_FOR_ROLE[role]
-        return "implementing"
+        return TaskStage.IMPLEMENTING.value
 
     @classmethod
     def _report_stage_for_task(cls, task: TaskRecord, role: str | None = None) -> str:
         stage = cls._agent_stage_for_task(task, role)
-        if stage in _REPORTABLE_STAGES or stage == "recovering":
+        if stage in _REPORTABLE_STAGES or stage == PipelineState.RECOVERING:
             return stage
-        if stage == "merge_resolving":
-            return "merge_resolving"
-        return "implementing"
+        if stage == PipelineState.MERGE_RESOLVING:
+            return PipelineState.MERGE_RESOLVING.value
+        return TaskStage.IMPLEMENTING.value
 
     def run(
         self,
