@@ -476,21 +476,82 @@ def checkout_ref(cwd: Path, ref: str) -> bool:
     return _run_git(cwd, "checkout", ref).returncode == 0
 
 
-def stash_push(cwd: Path, message: str, *, include_untracked: bool = False) -> tuple[bool, str]:
-    """Run ``git stash push -m <message>`` (optionally ``-u``).
+def stash_push(
+    cwd: Path,
+    message: str,
+    *,
+    include_untracked: bool = False,
+    paths: list[str] | None = None,
+) -> tuple[bool, str]:
+    """Run ``git stash push -m <message>`` (optionally ``-u`` and path-scoped).
 
     Returns ``(success, stderr_or_stdout)``. Untracked files are
-    included via ``-u`` when the caller asks; needed when the
-    runner wants to fully clean a worktree before a merge.
+    included via ``-u`` when the caller asks; the optional
+    ``paths`` argument scopes the stash to specific pathspecs
+    (used by the rescue flow to stash only ``.litehive`` metadata).
     """
     args = ["stash", "push"]
     if include_untracked:
         args.append("-u")
     args.extend(["-m", message])
+    if paths:
+        args.append("--")
+        args.extend(paths)
     proc = _run_git(cwd, *args)
     if proc.returncode == 0:
         return True, proc.stdout
     return False, proc.stderr.strip() or proc.stdout.strip()
+
+
+def stash_apply(cwd: Path, ref: str) -> tuple[bool, str]:
+    """Best-effort ``git stash apply <ref>``. Returns ``(success, message)``."""
+    proc = _run_git(cwd, "stash", "apply", ref)
+    if proc.returncode == 0:
+        return True, proc.stdout
+    return False, proc.stderr.strip() or proc.stdout.strip()
+
+
+def stash_drop(cwd: Path, ref: str) -> None:
+    """Best-effort ``git stash drop <ref>``. Silent on failure."""
+    _run_git(cwd, "stash", "drop", ref)
+
+
+def checkout_ours(cwd: Path, paths: list[str]) -> None:
+    """Run ``git checkout --ours -- <paths>``. Best-effort.
+
+    Used by the rescue flow when we want to keep our side of a
+    merge conflict on a specific set of paths (typically task
+    metadata) without bringing in the conflicting upstream copy.
+    """
+    if not paths:
+        return
+    _run_git(cwd, "checkout", "--ours", "--", *paths)
+
+
+def restore_paths(
+    cwd: Path,
+    paths: list[str],
+    *,
+    source: str = "HEAD",
+    staged: bool = True,
+    worktree: bool = True,
+) -> None:
+    """Run ``git restore`` for the given paths.
+
+    Wraps ``git restore --source=<source> [--staged] [--worktree]
+    -- <paths>``. Used by the rescue flow to drop task-metadata
+    changes from staging without disturbing other staged paths.
+    """
+    if not paths:
+        return
+    args = ["restore", f"--source={source}"]
+    if staged:
+        args.append("--staged")
+    if worktree:
+        args.append("--worktree")
+    args.append("--")
+    args.extend(paths)
+    _run_git(cwd, *args)
 
 
 def stash_pop(cwd: Path, *, ref: str | None = None, with_index: bool = False) -> tuple[bool, str]:

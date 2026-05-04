@@ -5,7 +5,6 @@ operations that were previously scattered across multiple modules.
 """
 
 import logging
-import subprocess
 from pathlib import Path, PurePosixPath
 from typing import Callable
 
@@ -26,10 +25,13 @@ from litehive.domain.worktree import (
 from litehive.fs_cleanup import remove_tree_logged
 from litehive.git.ops import (
     GitError,
+    add_paths,
     add_worktree,
     add_worktree_branch,
+    cherry_check,
     cherry_pick_abort,
     cherry_pick_no_commit,
+    checkout_ours,
     commit_reuse_message,
     current_head,
     delete_branch,
@@ -45,7 +47,10 @@ from litehive.git.ops import (
     rebase_worktree_onto,
     remote_url,
     remove_worktree,
+    restore_paths,
     rev_parse_verify,
+    stash_apply,
+    stash_drop,
     stash_pop,
     stash_push,
     status_porcelain,
@@ -56,9 +61,6 @@ from litehive.git.ops import (
 )
 
 
-def status_porcelain_untracked(cwd: Path) -> bool:
-    """Whether the worktree has any dirty entries including untracked files."""
-    return bool(status_porcelain_with_options(cwd, include_ignored=False))
 from litehive.state.records import (
     clear_task_worktree_path,
     get_task,
@@ -71,8 +73,14 @@ from litehive.state.records import (
 from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
 from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard, save_state
 from litehive.tasks.activity import load_task_activity
-from litehive.tasks.journal import append_journal
 from litehive.tasks.activity_rendering import normalized_files_changed
+from litehive.tasks.journal import append_journal
+
+
+def status_porcelain_untracked(cwd: Path) -> bool:
+    """Whether the worktree has any dirty entries including untracked files."""
+    return bool(status_porcelain_with_options(cwd, include_ignored=False))
+
 
 logger = logging.getLogger(__name__)
 
@@ -962,17 +970,9 @@ def _worktree_commits_ahead_of_main(root: Path, worktree_path: Path) -> list[str
 
 def _worktree_patch_already_on_main(root: Path, wt_head: str, main_head: str) -> bool:
     """Check if worktree patch is already on main."""
-    cherry = subprocess.run(
-        ["git", "cherry", main_head, wt_head],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        check=False,
-    )
-    if cherry.returncode != 0:
+    lines = cherry_check(root, main_head, wt_head)
+    if lines is None:
         return False
-    lines = [line.strip() for line in cherry.stdout.splitlines() if line.strip()]
     return not lines or all(line.startswith("-") for line in lines)
 
 
@@ -986,35 +986,20 @@ def _resolve_metadata_conflicts(root: Path, paths: list[str]) -> None:
     """Resolve metadata conflicts by taking ours."""
     if not paths:
         return
-    subprocess.run(
-        ["git", "checkout", "--ours", "--", *paths],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    subprocess.run(
-        ["git", "add", "--", *paths],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    checkout_ours(root, paths)
+    try:
+        add_paths(root, paths)
+    except GitError:
+        # Best-effort restage — the rescue flow continues and will
+        # surface a manual_conflict result if that fails too.
+        pass
 
 
 def _drop_task_metadata_changes(root: Path, task_id: str) -> None:
     """Drop task metadata changes from staging."""
     changed_paths = _git_lines(root, "diff", "--cached", "--name-only")
     metadata_paths = [path for path in changed_paths if _is_task_metadata_path(path, task_id)]
-    if not metadata_paths:
-        return
-    subprocess.run(
-        ["git", "restore", "--source=HEAD", "--staged", "--worktree", "--", *metadata_paths],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    restore_paths(root, metadata_paths, source="HEAD", staged=True, worktree=True)
 
 
 def _finalize_rescue(root: Path, task, *, outcome: str, head_sha: str | None) -> None:
@@ -1073,24 +1058,16 @@ _git_lines = git_stdout_lines
 
 def _stash_litehive_changes(root: Path) -> str | None:
     """Stash .litehive changes and return stash ref."""
-    status = subprocess.run(
-        ["git", "status", "--porcelain", "--untracked-files=all", "--", ".litehive"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if status.returncode != 0 or not status.stdout.strip():
+    if not _git_lines(root, "status", "--porcelain", "--untracked-files=all", "--", ".litehive"):
         return None
-    before = _git_stdout(root, "rev-parse", "-q", "--verify", "refs/stash")
-    subprocess.run(
-        ["git", "stash", "push", "-u", "-m", "litehive-worktree-rescue", "--", ".litehive"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
+    before = rev_parse_verify(root, "refs/stash") or ""
+    stash_push(
+        root,
+        "litehive-worktree-rescue",
+        include_untracked=True,
+        paths=[".litehive"],
     )
-    after = _git_stdout(root, "rev-parse", "-q", "--verify", "refs/stash")
+    after = rev_parse_verify(root, "refs/stash") or ""
     if after and after != before:
         return after
     return None
@@ -1100,29 +1077,11 @@ def _restore_litehive_changes(root: Path, stash_ref: str | None) -> None:
     """Restore .litehive changes from stash."""
     if not stash_ref:
         return
-    restored = subprocess.run(
-        ["git", "stash", "pop", "--index", stash_ref],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if restored.returncode == 0:
+    ok, _ = stash_pop(root, ref=stash_ref, with_index=True)
+    if ok:
         return
-    subprocess.run(
-        ["git", "stash", "apply", stash_ref],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    subprocess.run(
-        ["git", "stash", "drop", stash_ref],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    stash_apply(root, stash_ref)
+    stash_drop(root, stash_ref)
 
 
 def _worktree_has_non_metadata_changes(root: Path, worktree_path: Path, task_id: str) -> bool:
