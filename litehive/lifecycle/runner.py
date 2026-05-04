@@ -192,7 +192,7 @@ class StateMachineRunner:
         if not isinstance(event, (Pass, HookOk)):
             return
         if pipeline_stage_for_phase(from_stage) == pipeline_stage_for_phase(to_stage):
-            if from_stage not in {"commit", "merge_resolving"}:
+            if from_stage not in {PipelineState.COMMIT, PipelineState.MERGE_RESOLVING}:
                 return
         StateMachineRunner._clear_hook_reject_tracking(state, clear_recovery_invoked=True)
 

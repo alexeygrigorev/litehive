@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from litehive.db.schema import connect_workspace_db
-from litehive.domain.common import utcnow
+from litehive.domain.common import TaskStage, utcnow
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.state.locking import workspace_lock
 from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
@@ -16,7 +16,7 @@ from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
 from .execution_recovery import recover_stale_runner_state
 
 
-_TERMINAL_REPAIR_STAGES = {"accepting", "commit_to_git"}
+_TERMINAL_REPAIR_STAGES = frozenset({TaskStage.ACCEPTING, TaskStage.COMMIT_TO_GIT})
 
 
 def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
