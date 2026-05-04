@@ -27,13 +27,16 @@ from litehive.fs_cleanup import remove_tree_logged
 from litehive.git.ops import (
     GitError,
     add_worktree,
+    add_worktree_branch,
     current_head,
     fetch as git_fetch,
     has_changes,
     has_non_litehive_changes,
     is_git_repo,
+    list_worktrees_porcelain,
     merge_abort,
     merge_no_edit,
+    prune_worktrees,
     rebase_worktree_onto,
     remote_url,
     remove_worktree,
@@ -95,14 +98,7 @@ class WorktreeService:
                 worktree = task_worktree_path(self.root, task)
                 worktree.parent.mkdir(parents=True, exist_ok=True)
                 self.prune_stale_worktrees()
-                created = subprocess.run(
-                    ["git", "worktree", "add", "--force", "-B", branch, str(worktree), "HEAD"],
-                    cwd=str(self.root),
-                    capture_output=True,
-                    text=True,
-                )
-                if created.returncode != 0:
-                    raise GitError(f"git worktree add failed: {created.stderr.strip() or created.stdout.strip()}")
+                add_worktree_branch(self.root, branch, worktree, force=True)
                 ensure_worktree_venv_link(self.root, worktree)
                 set_task_worktree_path(task, serialize_worktree_path(worktree))
                 save_task(self.root, task)
@@ -179,28 +175,14 @@ class WorktreeService:
         _require_clean_main_checkout(self.root)
 
     def prune_stale_worktrees(self) -> None:
-        proc = subprocess.run(
-            ["git", "worktree", "prune", "--expire", "now"],
-            cwd=str(self.root),
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode != 0:
-            raise GitError(f"git worktree prune failed: {proc.stderr.strip() or proc.stdout.strip()}")
+        prune_worktrees(self.root, expire_now=True)
 
     def registered_worktree_for_branch(self, branch: str) -> Path | None:
-        proc = subprocess.run(
-            ["git", "worktree", "list", "--porcelain"],
-            cwd=str(self.root),
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode != 0:
-            raise GitError(f"git worktree list failed: {proc.stderr.strip() or proc.stdout.strip()}")
+        porcelain = list_worktrees_porcelain(self.root)
 
         current_path: Path | None = None
         current_branch: str | None = None
-        for raw_line in proc.stdout.splitlines():
+        for raw_line in porcelain.splitlines():
             line = raw_line.strip()
             if not line:
                 if current_branch == branch and current_path is not None and current_path.exists():

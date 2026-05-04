@@ -311,10 +311,49 @@ def move_worktree(root: Path, source: Path, destination: Path) -> None:
         raise GitError(proc.stderr.strip() or "git worktree move failed")
 
 
-def prune_worktrees(root: Path) -> None:
-    proc = _run_git(root, "worktree", "prune")
+def prune_worktrees(root: Path, *, expire_now: bool = False) -> None:
+    """Run ``git worktree prune``, optionally with ``--expire now``.
+
+    ``expire_now=True`` forces git to garbage-collect stale worktree
+    directories immediately rather than after the configured grace
+    period; the runner uses it before re-adding a worktree at the
+    same path.
+    """
+    args = ["worktree", "prune"]
+    if expire_now:
+        args.extend(["--expire", "now"])
+    proc = _run_git(root, *args)
     if proc.returncode != 0:
         raise GitError(proc.stderr.strip() or "git worktree prune failed")
+
+
+def add_worktree_branch(root: Path, branch: str, path: Path, *, ref: str = "HEAD", force: bool = False) -> None:
+    """Create a new worktree for ``branch`` at ``path``.
+
+    Wraps ``git worktree add [-f] -B <branch> <path> <ref>``. ``-B``
+    creates or resets the branch; ``--force`` lets the call succeed
+    even when ``path`` already exists in the worktree list (used by
+    the runner when it has already cleaned up the directory).
+    """
+    args = ["worktree", "add"]
+    if force:
+        args.append("--force")
+    args.extend(["-B", branch, str(path), ref])
+    proc = _run_git(root, *args)
+    if proc.returncode != 0:
+        raise GitError(f"git worktree add failed: {proc.stderr.strip() or proc.stdout.strip()}")
+
+
+def list_worktrees_porcelain(root: Path) -> str:
+    """Return the raw ``git worktree list --porcelain`` output.
+
+    The caller is expected to parse the porcelain blocks. Raises
+    :class:`GitError` on failure.
+    """
+    proc = _run_git(root, "worktree", "list", "--porcelain")
+    if proc.returncode != 0:
+        raise GitError(f"git worktree list failed: {proc.stderr.strip() or proc.stdout.strip()}")
+    return proc.stdout
 
 
 def merge_commit(root: Path, commit_sha: str) -> str:
