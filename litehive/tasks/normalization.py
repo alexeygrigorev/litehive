@@ -2,6 +2,7 @@
 
 import re
 
+from litehive.domain.common import PipelineStatus, TaskStage
 from litehive.domain.task import TaskRecord
 
 
@@ -71,10 +72,10 @@ def missing_acceptance_criteria_cli_warning(task: TaskRecord) -> str | None:
 
 def implementation_entry_stage(task: TaskRecord) -> str:
     if getattr(task, "pipeline_mode", "full") == "single":
-        return "implementing"
+        return TaskStage.IMPLEMENTING.value
     if missing_acceptance_criteria_reason(task) is not None:
-        return "grooming"
-    return "implementing"
+        return TaskStage.GROOMING.value
+    return TaskStage.IMPLEMENTING.value
 
 
 def needs_normalization(task: TaskRecord) -> str | None:
@@ -88,7 +89,7 @@ def needs_normalization(task: TaskRecord) -> str | None:
     """
     if getattr(task, "pipeline_mode", "full") == "single":
         return None
-    if task.pipeline_status in {"backlog", "grooming"}:
+    if task.pipeline_status in {PipelineStatus.BACKLOG, PipelineStatus.GROOMING}:
         return None
     if task.acceptance_criteria:
         return None
@@ -98,12 +99,22 @@ def needs_normalization(task: TaskRecord) -> str | None:
     return f"Task is underspecified ({', '.join(reasons)}) and needs planner normalization before retry."
 
 
+_ACCEPTANCE_REROUTE_STATUSES = frozenset(
+    {
+        PipelineStatus.IMPLEMENTING,
+        PipelineStatus.TESTING,
+        PipelineStatus.ACCEPTING,
+        PipelineStatus.COMMIT_TO_GIT,
+    }
+)
+
+
 def reroute_stage_for_acceptance_criteria(task: TaskRecord) -> str:
     if getattr(task, "pipeline_mode", "full") == "single":
         return task.pipeline_status
-    if task.pipeline_status in {"implementing", "testing", "accepting", "commit_to_git"}:
+    if task.pipeline_status in _ACCEPTANCE_REROUTE_STATUSES:
         if missing_acceptance_criteria_reason(task) is not None:
-            return "grooming"
+            return TaskStage.GROOMING.value
         return task.pipeline_status
     return task.pipeline_status
 
