@@ -12,7 +12,7 @@ from litehive.config.paths import workspace_path
 from litehive.config.engine_models import active_engine_freezes
 from litehive.config.model import LitehiveConfig
 from litehive.db.schema import connect_workspace_db
-from litehive.domain.common import TaskStatus
+from litehive.domain.common import TaskStage, TaskStatus
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.reports import ExecutionEstimate
 from litehive.domain.runtime import RunnerStatusState
@@ -26,7 +26,13 @@ from litehive.state.records import get_task
 from litehive.tasks.report_storage import load_workspace_stage_reports
 
 # Ordered pipeline stages for remaining-time estimation.
-_PIPELINE_STAGES = ["grooming", "implementing", "testing", "accepting", "commit_to_git"]
+_PIPELINE_STAGES: list[TaskStage] = [
+    TaskStage.GROOMING,
+    TaskStage.IMPLEMENTING,
+    TaskStage.TESTING,
+    TaskStage.ACCEPTING,
+    TaskStage.COMMIT_TO_GIT,
+]
 
 StatusRenderMode = Literal["fast", "full"]
 
@@ -179,8 +185,8 @@ def estimate_task_execution(root: Path, task: TaskRecord) -> ExecutionEstimate:
 
     current_step = task.runtime.pipeline.current_stage.stage or task.pipeline_status or _PIPELINE_STAGES[0]
     try:
-        current_idx = _PIPELINE_STAGES.index(current_step)
-    except ValueError:
+        current_idx = next(i for i, stage in enumerate(_PIPELINE_STAGES) if stage == current_step)
+    except StopIteration:
         current_idx = 0
     remaining_stages = len(_PIPELINE_STAGES) - current_idx
     remaining_seconds = remaining_stages * avg_duration
