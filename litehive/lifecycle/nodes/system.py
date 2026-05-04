@@ -6,7 +6,16 @@ from typing import Callable
 
 from litehive.domain.common import PipelineMode, PipelineState, TaskStage
 from litehive.domain.task import TaskRecord
-from litehive.git.ops import generated_completion_commit_message
+from litehive.git.ops import (
+    GitError,
+    check_ignore,
+    current_head,
+    generated_completion_commit_message,
+    merge_abort,
+    merge_no_edit,
+    rev_parse_verify,
+    unmerged_files,
+)
 
 from ..events import (
     CleanState,
@@ -32,10 +41,6 @@ class MergeConflict(Exception):
     def __init__(self, conflict_files: list[str]) -> None:
         super().__init__(f"{len(conflict_files)} unresolved file(s)")
         self.conflict_files = conflict_files
-
-
-class GitError(Exception):
-    pass
 
 
 class SystemNode(Node):
@@ -303,18 +308,7 @@ def _is_ignored_even_if_tracked(repo_root: Path, relpath: str) -> bool:
     evaluate ignore rules for the path regardless of index state so the main
     cleanup commit can skip those runtime artifacts safely.
     """
-
-    proc = subprocess.run(
-        ["git", "check-ignore", "--quiet", "--no-index", "--", relpath],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode == 0:
-        return True
-    if proc.returncode == 1:
-        return False
-    raise GitError(f"git check-ignore failed in {repo_root}: {proc.stderr.strip() or proc.stdout.strip()}")
+    return check_ignore(repo_root, relpath)
 
 
 def _status_entry_needs_git_add(code: str) -> bool:
@@ -456,15 +450,7 @@ class GitCommitNode(CommitNode):
         raise MergeConflict(unresolved)
 
     def main_head(self) -> str | None:
-        proc = subprocess.run(
-            ["git", "rev-parse", "--verify", "HEAD"],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode != 0:
-            return None
-        return proc.stdout.strip() or None
+        return current_head(self.main_repo_root)
 
     def autocommit_worktree_changes(self, worktree: Path, state: TaskState) -> None:
         """Commit any uncommitted SWE edits inside the worktree.
@@ -702,13 +688,7 @@ class GitCommitNode(CommitNode):
         return files
 
     def _merge_in_progress(self) -> bool:
-        proc = subprocess.run(
-            ["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
-        return proc.returncode == 0
+        return rev_parse_verify(self.main_repo_root, "MERGE_HEAD") is not None
 
     def _conclude_in_progress_merge(self) -> None:
         commit = subprocess.run(
@@ -739,20 +719,7 @@ class GitCommitNode(CommitNode):
         return bool(lines) and all(line.startswith("-") for line in lines)
 
     def _unresolved_conflicts(self) -> list[str]:
-        proc = subprocess.run(
-            ["git", "diff", "--name-only", "--diff-filter=U"],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode != 0:
-            return []
-        return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+        return unmerged_files(self.main_repo_root)
 
     def _abort_merge(self) -> None:
-        subprocess.run(
-            ["git", "merge", "--abort"],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
+        merge_abort(self.main_repo_root)

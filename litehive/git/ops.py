@@ -110,6 +110,23 @@ def fetch(cwd: Path, remote: str, *refs: str) -> tuple[bool, str]:
     return proc.returncode == 0, proc.stderr.strip()
 
 
+def check_ignore(cwd: Path, path: str) -> bool:
+    """Return whether ``path`` is ignored under ``.gitignore`` rules.
+
+    Wraps ``git check-ignore --quiet --no-index -- <path>``. The
+    ``--no-index`` flag asks git to evaluate ignore rules even for
+    paths that are tracked (e.g. old task report artifacts the
+    runner now wants to skip from a fresh ``git add``). Raises
+    :class:`GitError` for unexpected exit codes.
+    """
+    proc = _run_git(cwd, "check-ignore", "--quiet", "--no-index", "--", path)
+    if proc.returncode == 0:
+        return True
+    if proc.returncode == 1:
+        return False
+    raise GitError(f"git check-ignore failed in {cwd}: {proc.stderr.strip() or proc.stdout.strip()}")
+
+
 def stdout_or_none(cwd: Path, *args: str) -> str | None:
     """Run ``git <args>`` and return stripped stdout, or ``None`` on failure.
 
