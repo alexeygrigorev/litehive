@@ -16,7 +16,7 @@ from litehive.state.records import create_task, get_task, list_tasks, save_task
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.tasks.queue import dequeue_next_task, restore_missing_queued_tasks
 from litehive.tasks.status import resume_task, stop_current_task
-from litehive.worktree import inspect_dirty_worktree_gate
+from litehive.worktree_inspection import inspect_dirty_worktree_gate
 
 
 def _set_running_task(task, *, stage: str = "implementing") -> None:
@@ -165,14 +165,14 @@ def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
         ),
     )
 
-    monkeypatch.setattr("litehive.worktree.is_git_repo", lambda root: True)
+    monkeypatch.setattr("litehive.worktree_inspection.is_git_repo", lambda root: True)
 
     def _status_porcelain(path: Path) -> list[str]:
         if Path(path).resolve() == tmp_path.resolve():
             return [" M src/app.py"]
         return []
 
-    monkeypatch.setattr("litehive.worktree.status_porcelain", _status_porcelain)
+    monkeypatch.setattr("litehive.worktree_inspection.status_porcelain", _status_porcelain)
 
     task.status = "interrupted"
     task.pipeline_status = "implementing"

@@ -5,12 +5,11 @@ operations that were previously scattered across multiple modules.
 """
 
 import logging
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Callable
 
 from litehive.agents.merge_resolver import run_worktree_merge_agent
 from litehive.config.model import LitehiveConfig
-from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
 from litehive.domain.task import TaskRecord
 from litehive.domain.worktree import (
     ManagedWorktree,
@@ -45,10 +44,7 @@ from litehive.git.ops import (
     rev_parse_verify,
     stash_pop,
     stash_push,
-    status_porcelain,
     status_porcelain_with_options,
-    stdout_lines as git_stdout_lines,
-    stdout_or_none as git_stdout_or_none,
     unmerged_files,
 )
 
@@ -57,17 +53,18 @@ from litehive.state.records import (
     clear_task_worktree_path,
     get_task,
     get_task_worktree_path,
-    list_tasks,
     save_task,
     set_task_worktree_path,
 )
-from litehive.tasks.activity import load_task_activity
-from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.tasks.journal import append_journal
 from litehive.worktree_cleanup import (
     cleanup_terminal_task_worktree,
     collect_managed_worktrees,
     remove_cleanable_worktrees,
+)
+from litehive.worktree_inspection import (
+    worktree_committed_changes,
+    worktree_uncommitted_changes,
 )
 from litehive.worktree_rescue import (
     apply_rescue_candidate,
@@ -171,8 +168,8 @@ class WorktreeService:
             worktree_rel=worktree_rel,
             worktree_path=worktree_path,
             exists=True,
-            uncommitted=_worktree_uncommitted_changes(worktree_path),
-            committed_ahead_of_main=_worktree_committed_changes(self.root, worktree_path),
+            uncommitted=worktree_uncommitted_changes(worktree_path),
+            committed_ahead_of_main=worktree_committed_changes(self.root, worktree_path),
         )
 
     def task_has_missing_recorded_worktree(self, task_id: str) -> bool:
@@ -322,81 +319,6 @@ class WorktreeService:
 # own sibling module and many callers only need them.
 
 
-def git_worktree_blocks_pool(root: Path) -> bool:
-    """Check if dirty worktrees block the pool."""
-    return inspect_dirty_worktree_gate(root).blocks_pool
-
-
-def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
-    """Inspect dirty worktrees and task ownership."""
-    if not is_git_repo(root):
-        return DirtyWorktreeGateReport()
-
-    findings: list[DirtyWorktreeFinding] = []
-    try:
-        dirty_entries = status_porcelain(root)
-    except GitError:
-        return DirtyWorktreeGateReport()
-
-    tasks = list_tasks(root, strict=False)
-    if dirty_entries:
-        owners = [task for task in tasks if _task_can_resume_with_owned_dirty_paths(root, task, dirty_entries)]
-        finding = DirtyWorktreeFinding(
-            location_kind="main-checkout",
-            ownership="main-checkout",
-            dirty_paths=_dirty_entry_paths(dirty_entries),
-        )
-        if len(owners) == 1:
-            finding.ownership = "task-owned"
-            finding.task_id = owners[0].id
-            finding.worktree_path = get_task_worktree_path(owners[0])
-        elif len(owners) > 1:
-            finding.ownership = "ambiguous-ownership"
-            finding.task_id = ",".join(task.id for task in owners)
-        findings.append(finding)
-
-    for task in tasks:
-        worktree_path = resolve_recorded_worktree_path(root, get_task_worktree_path(task))
-        if worktree_path is None:
-            continue
-        recorded_path = get_task_worktree_path(task)
-        if not worktree_path.exists():
-            findings.append(
-                DirtyWorktreeFinding(
-                    location_kind="task-worktree",
-                    ownership="missing-recorded-worktree",
-                    task_id=task.id,
-                    worktree_path=recorded_path,
-                )
-            )
-            continue
-        try:
-            worktree_dirty_entries = status_porcelain(worktree_path)
-        except GitError:
-            findings.append(
-                DirtyWorktreeFinding(
-                    location_kind="task-worktree",
-                    ownership="missing-recorded-worktree",
-                    task_id=task.id,
-                    worktree_path=recorded_path,
-                )
-            )
-            continue
-        if not worktree_dirty_entries:
-            continue
-        findings.append(
-            DirtyWorktreeFinding(
-                location_kind="task-worktree",
-                ownership="task-owned-worktree",
-                task_id=task.id,
-                worktree_path=recorded_path,
-                dirty_paths=_dirty_entry_paths(worktree_dirty_entries),
-            )
-        )
-
-    return DirtyWorktreeGateReport(findings=findings)
-
-
 def resolve_task_execution_root(
     root: Path,
     task: TaskRecord,
@@ -451,88 +373,6 @@ def resolve_task_execution_root(
 # apply_rescue_candidate) live in ``litehive.worktree_rescue``. Both are
 # self-contained and can be imported without pulling in WorktreeService.
 
-
-
-# === Private Helper Functions ===
-
-
-def _dirty_entry_paths(dirty_entries: list[str]) -> list[str]:
-    """Extract file paths from git status --porcelain output."""
-    paths: list[str] = []
-    for entry in dirty_entries:
-        if len(entry) < 3:
-            continue
-        raw = entry[3:].strip()
-        if raw.startswith('"') and raw.endswith('"'):
-            raw = raw[1:-1].replace('\\"', '"')
-        if " -> " in raw:
-            raw = raw.split(" -> ", 1)[1].strip()
-        if raw:
-            paths.append(raw)
-    return paths
-
-
-def _worktree_uncommitted_changes(worktree_path: Path) -> list[str]:
-    try:
-        return sorted(set(_dirty_entry_paths(status_porcelain(worktree_path))))
-    except GitError:
-        return []
-
-
-def _worktree_committed_changes(root: Path, worktree_path: Path) -> list[str]:
-    main_head = current_head(root) or "HEAD"
-    fork_point = git_stdout_or_none(worktree_path, "merge-base", main_head, "HEAD")
-    if not fork_point:
-        return []
-    return sorted(set(git_stdout_lines(worktree_path, "diff", "--name-only", fork_point, "HEAD")))
-
-
-def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
-    """Get the set of paths a task is allowed to commit."""
-    paths: set[PurePosixPath] = set()
-    paths.add(PurePosixPath(".litehive") / "tasks" / f"{task.id}-{task.slug}")
-    for entry in load_task_activity(root, task):
-        for changed_file in normalized_files_changed(entry.files_changed):
-            paths.add(PurePosixPath(changed_file))
-    return paths
-
-
-def _unexpected_dirty_paths(
-    dirty_entries: list[str],
-    allowed_paths: set[PurePosixPath],
-) -> list[str]:
-    """Get dirty paths that aren't allowed for this task."""
-    unexpected = []
-    for entry in dirty_entries:
-        if len(entry) < 3:
-            continue
-        raw = entry[3:].strip()
-        if raw.startswith('"') and raw.endswith('"'):
-            raw = raw[1:-1].replace('\\"', '"')
-        if not raw:
-            continue
-        if "$tmpdir" in raw or raw.startswith("/tmp/"):
-            continue
-        if raw.startswith(".litehive/"):
-            if not any(raw == str(path) or raw.startswith(f"{path}/") for path in allowed_paths):
-                continue
-        if any(raw == str(path) or raw.startswith(f"{path}/") for path in allowed_paths):
-            continue
-        unexpected.append(raw)
-    return unexpected
-
-
-def _task_can_resume_with_owned_dirty_paths(
-    root: Path,
-    task: TaskRecord,
-    dirty_entries: list[str],
-) -> bool:
-    """Check if task can resume with these dirty paths."""
-    if task.status != "interrupted":
-        return False
-    if task.pipeline_status in {"backlog", "done"}:
-        return False
-    return not _unexpected_dirty_paths(dirty_entries, _allowed_commit_paths(root, task))
 
 
 def _remove_origin_remote(worktree_path: Path) -> None:
