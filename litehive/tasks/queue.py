@@ -271,7 +271,7 @@ def canonicalize_resumable_queue_task(task: TaskRecord, *, stage: str | None = N
     if target_stage is None:
         return None
     now = clear_task_run_activity(task, execution_status="idle")
-    task.status = "queued"
+    task.status = TaskStatus.QUEUED
     task.close_reason = None
     task.flag_reason = None
     task.pipeline_status = target_stage
@@ -283,7 +283,7 @@ def canonicalize_resumable_queue_task(task: TaskRecord, *, stage: str | None = N
 
 def _needs_manual_intervention(task: TaskRecord) -> bool:
     return has_blocking_failed_run_history(task) or (
-        task.status == "flagged"
+        task.status == TaskStatus.FLAGGED
         and (
             task.flag_count >= 3
             or task.flag_reason
@@ -299,7 +299,7 @@ def _needs_manual_intervention(task: TaskRecord) -> bool:
 
 
 def _is_recovery_budget_exhausted(task: TaskRecord) -> bool:
-    return task.status == "flagged" and task.flag_reason in {
+    return task.status == TaskStatus.FLAGGED and task.flag_reason in {
         "crash_budget_exhausted",
         "recovery_budget_exhausted",
         "recovery_failed",
@@ -358,12 +358,12 @@ def _normalize_stale_pipeline_statuses(
         stage = str(task.pipeline_status)
         if stage in {"backlog", active_stage}:
             continue
-        if task.status != "queued":
+        if task.status != TaskStatus.QUEUED:
             continue
         if task_has_resume_marker(task):
             continue
         now = utcnow()
-        task.pipeline_status = "backlog"
+        task.pipeline_status = PipelineStatus.BACKLOG
         task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage="backlog")
         task.runtime.pipeline.updated_at = now
         if task.runtime.pipeline.last_outcome.kind == "interrupted":
@@ -384,8 +384,8 @@ def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
             save_state(root, state)
             return state
         task = require_task(root, task_id)
-        if task.status == "queued":
-            task.status = "in_progress"
+        if task.status == TaskStatus.QUEUED:
+            task.status = TaskStatus.IN_PROGRESS
         persist_task_and_state(root, task=task, state=state)
         return state
 
@@ -431,8 +431,8 @@ def plan_task_selections(root: Path) -> TaskPlan:
             simulated_state.active_task_id = None
             simulated_state.queue = [item for item in simulated_state.queue if item != next_task.id]
             simulated_task = tasks_by_id[next_task.id]
-            simulated_task.status = "done"
-            simulated_task.pipeline_status = "done"
+            simulated_task.status = TaskStatus.DONE
+            simulated_task.pipeline_status = PipelineStatus.DONE
 
 
 def dequeue_next_task(root: Path) -> TaskRecord | None:
@@ -459,7 +459,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
             state.queue = [item for item in state.queue if item != next_task.id]
             mutated = True
         if mutated:
-            if next_task.status == "flagged":
+            if next_task.status == TaskStatus.FLAGGED:
                 if _needs_manual_intervention(next_task) or _is_recovery_budget_exhausted(next_task):
                     if state.active_task_id == next_task.id:
                         state.active_task_id = None
@@ -499,8 +499,8 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                 from litehive.lifecycle.persistence import SqlitePersistence  # noqa: PLC0415
 
                 SqlitePersistence(root).reset_current_lifecycle_state(next_task.id, preserve_run_memory=True)
-            if next_task.status in {"queued", "interrupted"}:
-                next_task.status = "in_progress"
+            if next_task.status in {TaskStatus.QUEUED, TaskStatus.INTERRUPTED}:
+                next_task.status = TaskStatus.IN_PROGRESS
             queue_additions = [task_id for task_id in state.queue if task_id not in original_queue]
             if normalized_tasks:
                 tasks_to_persist = {task.id: task for task in normalized_tasks}
@@ -522,7 +522,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
 
 
 def _is_parked_task(task: TaskRecord) -> bool:
-    return task.status == "parked"
+    return task.status == TaskStatus.PARKED
 
 
 def is_task_eligible_for_execution(task: TaskRecord) -> bool:
@@ -532,15 +532,15 @@ def is_task_eligible_for_execution(task: TaskRecord) -> bool:
         return False
     if _has_terminal_outcome_kind(task):
         return False
-    if task.pipeline_status == "done":
+    if task.pipeline_status == PipelineStatus.DONE:
         return False
     if _needs_manual_intervention(task):
         return False
     if _is_recovery_budget_exhausted(task):
         return False
-    if task.status in {"queued", "in_progress", "flagged"}:
+    if task.status in {TaskStatus.QUEUED, TaskStatus.IN_PROGRESS, TaskStatus.FLAGGED}:
         return True
-    if task.status == "interrupted":
+    if task.status == TaskStatus.INTERRUPTED:
         return True
     return False
 
@@ -552,7 +552,7 @@ def _auto_recovery_stage_for_flagged_task(task: TaskRecord) -> str:
 
 
 def _is_task_completed(task: TaskRecord) -> bool:
-    return task.status == "done" and task.pipeline_status == "done"
+    return task.status == TaskStatus.DONE and task.pipeline_status == PipelineStatus.DONE
 
 
 def _task_blockers(task: TaskRecord, tasks_by_id: dict[str, TaskRecord]) -> list[str]:
@@ -631,7 +631,9 @@ def _dependent_task_count(task_id: str, queue: list[str], tasks_by_id: dict[str,
 
 
 def _is_interrupted_task(task: TaskRecord) -> bool:
-    return is_task_eligible_for_execution(task) and (task.status == "in_progress" or task.pipeline_status != "backlog")
+    return is_task_eligible_for_execution(task) and (
+        task.status == TaskStatus.IN_PROGRESS or task.pipeline_status != PipelineStatus.BACKLOG
+    )
 
 
 def _task_selection_key(
@@ -684,7 +686,7 @@ def restore_missing_queued_tasks(
             continue
         # Missing resumable work must reclaim queue visibility ahead of later
         # queued tasks or the runner can hand off past unfinished execution.
-        if task.status == "in_progress" or resumable_queue_stage(task) is not None:
+        if task.status == TaskStatus.IN_PROGRESS or resumable_queue_stage(task) is not None:
             queued_ids.add(task_id)
             restored_front.append(task_id)
     if restored_front:
@@ -781,7 +783,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
                 summary="Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`.",
                 reason=stale_interruption_reason(task, TaskStage.COMMIT_TO_GIT.value),
             )
-            task.status = "queued"
+            task.status = TaskStatus.QUEUED
             enqueue_recovered_task(state, task.id)
             state.active_task_id = None
             persist_task_and_state(
@@ -797,7 +799,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
             and is_task_eligible_for_execution(task)
             and task.runtime.pipeline.execution_status != "running"
         ):
-            task.status = "queued"
+            task.status = TaskStatus.QUEUED
             enqueue_recovered_task(state, task.id)
             state.active_task_id = None
             persist_task_and_state(
@@ -817,7 +819,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
                 reason=stale_interruption_reason(task, task.pipeline_status),
             )
             if not _is_parked_task(task):
-                task.status = "queued"
+                task.status = TaskStatus.QUEUED
                 enqueue_recovered_task(state, task.id)
             state.active_task_id = None
             persist_task_and_state(
@@ -845,7 +847,11 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
     ):
         markers.setdefault(current_state.active_task_id, []).append("workspace.active_task_id")
     for task in tasks:
-        if task.status == "in_progress" and task.pipeline_status != "done" and is_task_eligible_for_execution(task):
+        if (
+            task.status == TaskStatus.IN_PROGRESS
+            and task.pipeline_status != PipelineStatus.DONE
+            and is_task_eligible_for_execution(task)
+        ):
             markers.setdefault(task.id, []).append("task.status=in_progress")
         if task.runtime.pipeline.execution_status == "running":
             markers.setdefault(task.id, []).append("runtime.pipeline.execution_status=running")
