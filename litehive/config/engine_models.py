@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from heru import get_engine
+from litehive.domain.common import TaskStage
 from heru.quota import (
     check_claude_quota,
     check_codex_quota,
@@ -385,12 +386,25 @@ def _is_recovery_run(task: TaskRecord) -> bool:
     }
 
 
+_RECOVERY_HIJACKABLE_STAGES = frozenset({TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING})
+
+# Engine selection only knows about the four agent-driven stages; other
+# stages (commit_to_git, recovering, …) fall through to ``swe`` as the
+# default selector role. Keeping this map separate from
+# ``TaskStage.owner_role`` so the engine-resolution fallback stays
+# stable when the canonical stage→role mapping changes.
+_ENGINE_SELECTION_ROLE_BY_STAGE: dict[TaskStage, str] = {
+    TaskStage.GROOMING: "planner",
+    TaskStage.IMPLEMENTING: "swe",
+    TaskStage.TESTING: "qa",
+    TaskStage.ACCEPTING: "reviewer",
+}
+
+
 def _role_for_stage(stage: str, task: TaskRecord | None = None) -> str:
-    if task is not None and stage in {"implementing", "testing", "accepting"} and _is_recovery_run(task):
+    if task is not None and stage in _RECOVERY_HIJACKABLE_STAGES and _is_recovery_run(task):
         return "recovery"
-    return {
-        "grooming": "planner",
-        "implementing": "swe",
-        "testing": "qa",
-        "accepting": "reviewer",
-    }.get(stage, "swe")
+    try:
+        return _ENGINE_SELECTION_ROLE_BY_STAGE.get(TaskStage(stage), "swe")
+    except ValueError:
+        return "swe"
