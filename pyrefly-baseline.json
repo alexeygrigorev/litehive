@@ -493,18 +493,6 @@
       "severity": "error"
     },
     {
-      "line": 284,
-      "column": 12,
-      "stop_line": 284,
-      "stop_column": 19,
-      "path": "litehive/agents/prompts.py",
-      "code": -2,
-      "name": "bad-return",
-      "description": "Returned type `Unknown | None` is not assignable to declared return type `str`",
-      "concise_description": "Returned type `Unknown | None` is not assignable to declared return type `str`",
-      "severity": "error"
-    },
-    {
       "line": 123,
       "column": 9,
       "stop_line": 123,
