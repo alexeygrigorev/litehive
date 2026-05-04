@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-integration test-all lint
+.PHONY: test test-unit test-integration test-all lint typecheck
 
 # Default: fast unit tests only (tests/).
 test: test-unit
@@ -20,3 +20,10 @@ test-all:
 lint:
 	uv run ruff check litehive tests tests_integration
 	uv run ruff format --check litehive tests tests_integration
+
+# Type-check against the recorded baseline. CI should run this; only
+# new type errors (above the baseline) will fail. To refresh the
+# baseline after intentional widening, run:
+#   uv run pyrefly check --baseline pyrefly-baseline.json --update-baseline
+typecheck:
+	uv run pyrefly check --baseline pyrefly-baseline.json

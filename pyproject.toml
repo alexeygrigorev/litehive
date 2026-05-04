@@ -57,9 +57,35 @@ dev = [
     "pytest-timeout>=2.4.0",
     "ruff>=0.12.0",
     "pytest-xdist>=3.8.0",
+    "pyrefly>=0.62.0",
 ]
 
 [tool.uv.sources]
 heru = { path = "../heru", editable = true }
 
 [tool.ruff.format]
+
+[tool.pyrefly]
+# Type-check sources and tests, but not the local fetched-transcript
+# cache or build artifacts. Notebooks are not yet in use; keep the
+# ipynb glob so a future notebook is checked automatically.
+project-includes = [
+    "litehive/**/*.py",
+    "tests/**/*.py",
+    "tests_integration/**/*.py",
+    "**/*.ipynb",
+]
+project-excludes = [
+    ".venv/**",
+    "build/**",
+    "dist/**",
+    "fetched/**",
+]
+# All current errors are recorded in pyrefly-baseline.json so CI is
+# green from day one. New errors fail; existing ones are silenced
+# until they are individually fixed.  Refresh with:
+#   uv run pyrefly check --baseline pyrefly-baseline.json --update-baseline
+#
+# Burndown plan: every type-ignore removed (or domain-string fix per
+# R4) drops one entry from the baseline. Do not re-baseline to mask
+# new regressions — fix the regression instead.
