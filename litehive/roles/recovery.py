@@ -4,7 +4,7 @@ from typing import Any
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_report, load_subagent_session
 from litehive.config.loading import load_config
-from litehive.domain.common import PipelineState
+from litehive.domain.common import PipelineState, pipeline_stage_key as _pipeline_stage_key
 from litehive.domain.runtime import RuntimeRecoveryOutcome
 from litehive.lifecycle.events import Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
 from litehive.lifecycle.nodes.agent import AgentVerdict
@@ -139,18 +139,6 @@ class RecoveryAgent(RoleAgent):
         return RecoveryFailed(reason=verdict.reason or "recovery_failed")
 
 
-def _pipeline_stage_key(name: str | None) -> str | None:
-    if name in {"before_grooming", "grooming", "after_grooming", "recovering"}:
-        return "grooming"
-    if name in {"before_implementing", "implementing", "after_implementing"}:
-        return "implementing"
-    if name in {"before_testing", "testing", "after_testing"}:
-        return "testing"
-    if name in {"before_accepting", "accepting", "after_accepting"}:
-        return "accepting"
-    if name in {"commit", "after_commit", "merge_resolving"}:
-        return "commit_to_git"
-    return name
 
 
 def _recovery_history_key(item: dict[str, Any]) -> tuple[str | None, str, str, str, str | None]:

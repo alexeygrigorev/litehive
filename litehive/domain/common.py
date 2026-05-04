@@ -277,6 +277,40 @@ def task_stage_for_pipeline_state(value: str | PipelineState) -> TaskStage | Non
     return _TASK_STAGE_BY_PIPELINE_STATE.get(canonical_pipeline_state(value))
 
 
+def pipeline_stage_key(name: str | None) -> str | None:
+    """Collapse any pipeline-state name to its coarse TaskStage key.
+
+    Accepts the full set of internal pipeline-state names
+    (``before_grooming``, ``grooming``, ``after_grooming``, etc.)
+    plus the special ``recovering`` and ``merge_resolving`` cases,
+    and returns the matching :class:`TaskStage` value as a string
+    (``"grooming"`` / ``"implementing"`` / ``"testing"`` /
+    ``"accepting"`` / ``"commit_to_git"``).
+
+    Returns the original ``name`` for anything that doesn't match
+    a known pipeline-state shape, so callers can keep flowing
+    arbitrary keys through a single helper. Returns ``None`` when
+    ``name`` is ``None``.
+
+    Used by recovery, prompt serialization, and lifecycle deltas
+    to bucket per-state activity into the operator-facing stage
+    they belong to.
+    """
+    if name is None:
+        return None
+    if name in {"before_grooming", "grooming", "after_grooming", str(PipelineState.RECOVERING)}:
+        return TaskStage.GROOMING.value
+    if name in {"before_implementing", "implementing", "after_implementing"}:
+        return TaskStage.IMPLEMENTING.value
+    if name in {"before_testing", "testing", "after_testing"}:
+        return TaskStage.TESTING.value
+    if name in {"before_accepting", "accepting", "after_accepting"}:
+        return TaskStage.ACCEPTING.value
+    if name in {"commit", "after_commit", str(PipelineState.MERGE_RESOLVING)}:
+        return TaskStage.COMMIT_TO_GIT.value
+    return name
+
+
 def pipeline_status_for_pipeline_state(value: str | PipelineState) -> PipelineStatus:
     """Return the operator-facing ``PipelineStatus`` projection for a machine state."""
     return _PIPELINE_STATUS_BY_PIPELINE_STATE[canonical_pipeline_state(value)]
@@ -341,6 +375,7 @@ __all__ = [
     "Verdict",
     "cap_feedback",
     "canonical_pipeline_state",
+    "pipeline_stage_key",
     "pipeline_status_for_pipeline_state",
     "task_stage_for_pipeline_state",
     "utcnow",

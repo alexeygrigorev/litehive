@@ -33,7 +33,7 @@ from litehive.lifecycle.persistence import (
     RejectionLoop,
     TaskState,
 )
-from litehive.domain.common import PipelineState
+from litehive.domain.common import PipelineState, pipeline_stage_key
 from litehive.lifecycle.types import FailedReason
 
 EffectFn = Callable[[TaskState, Event], "StateDelta"]
@@ -366,19 +366,11 @@ def enter_pre_exec_recovery(state: TaskState, event: Event) -> StateDelta:
 
 
 def _pipeline_stage_key(name: str | None) -> str | None:
-    if name in {None, ""}:
+    """Same as ``litehive.domain.common.pipeline_stage_key`` plus
+    treating empty string as ``None``."""
+    if name == "":
         return None
-    if name in {"before_grooming", "grooming", "after_grooming", "recovering"}:
-        return "grooming"
-    if name in {"before_implementing", "implementing", "after_implementing"}:
-        return "implementing"
-    if name in {"before_testing", "testing", "after_testing"}:
-        return "testing"
-    if name in {"before_accepting", "accepting", "after_accepting"}:
-        return "accepting"
-    if name in {"commit", "after_commit", "merge_resolving"}:
-        return "commit_to_git"
-    return name
+    return pipeline_stage_key(name)
 
 
 def _retry_counter_stage(origin_stage: str | None) -> PipelineState | None:
