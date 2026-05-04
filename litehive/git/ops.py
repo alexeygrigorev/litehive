@@ -110,6 +110,122 @@ def fetch(cwd: Path, remote: str, *refs: str) -> tuple[bool, str]:
     return proc.returncode == 0, proc.stderr.strip()
 
 
+def head_sha_strict(cwd: Path) -> str:
+    """Return ``HEAD`` sha; raise :class:`GitError` if it can't be read.
+
+    The non-strict counterpart is :func:`current_head`. Use this when
+    the caller treats a missing HEAD as a hard error rather than a
+    "not initialized yet" signal.
+    """
+    proc = _run_git(cwd, "rev-parse", "HEAD")
+    if proc.returncode != 0:
+        raise GitError(f"cannot read HEAD at {cwd}: {proc.stderr.strip()}")
+    return proc.stdout.strip()
+
+
+def current_branch(cwd: Path) -> str | None:
+    """Return the current branch name, or ``None`` for a detached HEAD.
+
+    Wraps ``git symbolic-ref --quiet --short HEAD``. Used by the
+    runner to know which branch a worktree is checked out on.
+    """
+    proc = _run_git(cwd, "symbolic-ref", "--quiet", "--short", "HEAD")
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.strip() or None
+
+
+def cherry_check(cwd: Path, upstream_sha: str, head_sha: str) -> list[str] | None:
+    """Run ``git cherry <upstream> <head>`` and return the marker lines.
+
+    Returns ``None`` when the call fails (non-zero exit). On success
+    each entry is ``+ <sha>`` (commit needs to land) or ``- <sha>``
+    (already in upstream). Used by the worktree-rescue path to ask
+    "are this branch's commits already on main?".
+    """
+    proc = _run_git(cwd, "cherry", upstream_sha, head_sha)
+    if proc.returncode != 0:
+        return None
+    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+
+def status_porcelain_with_options(cwd: Path, *, include_ignored: bool = False) -> list[str]:
+    """``git status --porcelain`` with optional ``--ignored --untracked-files=all``.
+
+    Used by the runner's auto-commit code to enumerate dirty entries.
+    Raises :class:`GitError` on git failure.
+    """
+    args = ["status", "--porcelain"]
+    if include_ignored:
+        args.extend(["--ignored", "--untracked-files=all"])
+    proc = _run_git(cwd, *args)
+    if proc.returncode != 0:
+        raise GitError(f"git status failed in {cwd}: {proc.stderr.strip() or proc.stdout.strip()}")
+    return [line for line in proc.stdout.splitlines() if line.strip()]
+
+
+def add_paths(cwd: Path, paths: list[str], *, all_flag: bool = False) -> None:
+    """Run ``git add [--all] -- <paths>`` in ``cwd``.
+
+    Raises :class:`GitError` if the add fails. ``all_flag`` controls
+    whether ``--all`` is passed (used for cleanup commits where new
+    files should be staged); without it, only paths explicitly named
+    are staged.
+    """
+    args = ["add"]
+    if all_flag:
+        args.append("--all")
+    args.extend(["--", *paths])
+    proc = _run_git(cwd, *args)
+    if proc.returncode != 0:
+        raise GitError(f"git add failed in {cwd}: {proc.stderr.strip() or proc.stdout.strip()}")
+
+
+def commit_with_message_stdin(cwd: Path, message: str) -> None:
+    """Commit currently-staged changes with ``message`` piped via stdin.
+
+    Wraps ``git commit -F -``. Used when the runner builds a
+    multi-line commit body that includes characters which would be
+    awkward on the command line. Raises :class:`GitError` on failure.
+    """
+    proc = subprocess.run(
+        ["git", "commit", "-F", "-"],
+        cwd=str(cwd),
+        input=message,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise GitError(f"git commit failed in {cwd}: {proc.stderr.strip() or proc.stdout.strip()}")
+
+
+def commit_no_edit(cwd: Path) -> None:
+    """Conclude an in-progress merge with ``git commit --no-edit``.
+
+    Raises :class:`GitError` on failure. Used when a merge is
+    already partially applied and the runner just needs to seal it.
+    """
+    proc = _run_git(cwd, "commit", "--no-edit")
+    if proc.returncode != 0:
+        raise GitError(
+            f"git commit --no-edit failed in {cwd}: "
+            f"{proc.stderr.strip() or proc.stdout.strip()}"
+        )
+
+
+def is_path_tracked(cwd: Path, path: str) -> bool:
+    """Return whether ``path`` is currently tracked in the index.
+
+    Wraps ``git ls-files --error-unmatch -- <path>``. Used when
+    filtering paths the caller wants to ``git add`` — a
+    no-longer-existing path that's still tracked is safe to add
+    (it'll be staged as a deletion); a no-longer-existing untracked
+    path would error out the whole batch.
+    """
+    return _run_git(cwd, "ls-files", "--error-unmatch", "--", path).returncode == 0
+
+
 def check_ignore(cwd: Path, path: str) -> bool:
     """Return whether ``path`` is ignored under ``.gitignore`` rules.
 

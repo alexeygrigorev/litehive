@@ -1,5 +1,4 @@
 import shutil
-import subprocess
 from abc import abstractmethod
 from pathlib import Path
 from typing import Callable
@@ -8,12 +7,20 @@ from litehive.domain.common import PipelineMode, PipelineState, TaskStage
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import (
     GitError,
+    add_paths,
     check_ignore,
+    cherry_check,
+    commit_no_edit,
+    commit_with_message_stdin,
+    current_branch,
     current_head,
     generated_completion_commit_message,
+    head_sha_strict,
+    is_path_tracked,
     merge_abort,
     merge_no_edit,
     rev_parse_verify,
+    status_porcelain_with_options,
     unmerged_files,
 )
 
@@ -401,8 +408,8 @@ class GitCommitNode(CommitNode):
             self._conclude_in_progress_merge()
             return None
 
-        result = self.git_merge(branch_ref)
-        if result.returncode == 0:
+        merge_ok, merge_message = merge_no_edit(self.main_repo_root, branch_ref)
+        if merge_ok:
             # Clean merge or "Already up to date" (which is the case when
             # the task has no dedicated worktree and branch_ref == current
             # HEAD). Either way, commit stage passes.
@@ -430,16 +437,15 @@ class GitCommitNode(CommitNode):
 
         unresolved = self._unresolved_conflicts()
         if not unresolved:
-            stderr = result.stderr.strip() or result.stdout.strip()
             # Dirty checkout: git refuses to start because local changes
             # would be overwritten.  Parse the affected files and route
             # them to the MergeAgent instead of crashing.
-            dirty_files = self._parse_dirty_checkout_files(stderr)
+            dirty_files = self._parse_dirty_checkout_files(merge_message)
             if dirty_files:
                 raise MergeConflict(dirty_files)
             # Genuine non-conflict failure (bad ref, missing commit, …).
             self._abort_merge()
-            raise GitError(f"git merge failed with no conflict files: {stderr}")
+            raise GitError(f"git merge failed with no conflict files: {merge_message}")
 
         # Leave the worktree in the unresolved state. The state machine
         # routes MergeConflictDetected → merge_resolving (MergeAgent), which
@@ -485,24 +491,9 @@ class GitCommitNode(CommitNode):
         needs_add = [path for code, path in committable if _status_entry_needs_git_add(code)]
 
         if needs_add:
-            add = subprocess.run(
-                ["git", "add", "--", *needs_add],
-                cwd=str(worktree),
-                capture_output=True,
-                text=True,
-            )
-            if add.returncode != 0:
-                raise GitError(f"git add failed in {worktree}: {add.stderr.strip()}")
+            add_paths(worktree, needs_add)
         message = self._generated_commit_message(state, detail="auto-commit worktree changes")
-        commit = subprocess.run(
-            ["git", "commit", "-F", "-"],
-            cwd=str(worktree),
-            input=message,
-            capture_output=True,
-            text=True,
-        )
-        if commit.returncode != 0:
-            raise GitError(f"git commit failed in {worktree}: {commit.stderr.strip() or commit.stdout.strip()}")
+        commit_with_message_stdin(worktree, message)
 
     def autocommit_main_checkout_changes(self, state: TaskState) -> str | None:
         """Commit any remaining dirty non-ignored files on main after a clean merge."""
@@ -520,26 +511,9 @@ class GitCommitNode(CommitNode):
         needs_add = self._filter_stageable_paths(self.main_repo_root, needs_add)
 
         if needs_add:
-            add = subprocess.run(
-                ["git", "add", "--all", "--", *needs_add],
-                cwd=str(self.main_repo_root),
-                capture_output=True,
-                text=True,
-            )
-            if add.returncode != 0:
-                raise GitError(f"git add failed in {self.main_repo_root}: {add.stderr.strip() or add.stdout.strip()}")
+            add_paths(self.main_repo_root, needs_add, all_flag=True)
         message = self._generated_commit_message(state, detail="auto-commit dirty main checkout")
-        commit = subprocess.run(
-            ["git", "commit", "-F", "-"],
-            cwd=str(self.main_repo_root),
-            input=message,
-            capture_output=True,
-            text=True,
-        )
-        if commit.returncode != 0:
-            raise GitError(
-                f"git commit failed in {self.main_repo_root}: {commit.stderr.strip() or commit.stdout.strip()}"
-            )
+        commit_with_message_stdin(self.main_repo_root, message)
         head = self.main_head()
         if head is None:
             raise GitError("main cleanup commit completed but main HEAD could not be resolved")
@@ -569,13 +543,7 @@ class GitCommitNode(CommitNode):
             if candidate.exists() or candidate.is_symlink():
                 filtered.append(relpath)
                 continue
-            tracked = subprocess.run(
-                ["git", "ls-files", "--error-unmatch", "--", relpath],
-                cwd=str(repo_root),
-                capture_output=True,
-                text=True,
-            )
-            if tracked.returncode == 0:
+            if is_path_tracked(repo_root, relpath):
                 filtered.append(relpath)
         return filtered
 
@@ -585,22 +553,8 @@ class GitCommitNode(CommitNode):
         *,
         include_ignored: bool = False,
     ) -> list[tuple[str, str]]:
-        command = ["git", "status", "--porcelain"]
-        if include_ignored:
-            command.extend(["--ignored", "--untracked-files=all"])
-        status = subprocess.run(
-            command,
-            cwd=str(repo_root),
-            capture_output=True,
-            text=True,
-        )
-        if status.returncode != 0:
-            raise GitError(f"git status failed in {repo_root}: {status.stderr.strip() or status.stdout.strip()}")
-
         entries: list[tuple[str, str]] = []
-        for line in status.stdout.splitlines():
-            if not line.strip():
-                continue
+        for line in status_porcelain_with_options(repo_root, include_ignored=include_ignored):
             # Porcelain format: "XY path" for most changes; "R  old -> new" for
             # renames, "C  old -> new" for copies. Extract the new path for
             # rename/copy entries — `git add -- "old -> new"` is not valid.
@@ -628,34 +582,10 @@ class GitCommitNode(CommitNode):
             shutil.copy2(source, destination)
 
     def worktree_head(self, worktree: Path) -> str:
-        proc = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode != 0:
-            raise GitError(f"cannot read worktree HEAD at {worktree}: {proc.stderr.strip()}")
-        return proc.stdout.strip()
+        return head_sha_strict(worktree)
 
     def worktree_branch(self, worktree: Path) -> str | None:
-        proc = subprocess.run(
-            ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode != 0:
-            return None
-        return proc.stdout.strip() or None
-
-    def git_merge(self, branch_ref: str) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            ["git", "merge", branch_ref, "--no-edit"],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
+        return current_branch(worktree)
 
     @staticmethod
     def _parse_dirty_checkout_files(stderr: str) -> list[str]:
@@ -691,31 +621,14 @@ class GitCommitNode(CommitNode):
         return rev_parse_verify(self.main_repo_root, "MERGE_HEAD") is not None
 
     def _conclude_in_progress_merge(self) -> None:
-        commit = subprocess.run(
-            ["git", "commit", "--no-edit"],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
-        if commit.returncode == 0:
-            return
-        raise GitError(
-            "git merge is already in progress but could not be concluded: "
-            f"{commit.stderr.strip() or commit.stdout.strip()}"
-        )
+        commit_no_edit(self.main_repo_root)
 
     def worktree_patch_already_on_main(self, worktree_head: str, main_head: str | None) -> bool:
         if not main_head:
             return False
-        cherry = subprocess.run(
-            ["git", "cherry", main_head, worktree_head],
-            cwd=str(self.main_repo_root),
-            capture_output=True,
-            text=True,
-        )
-        if cherry.returncode != 0:
+        lines = cherry_check(self.main_repo_root, main_head, worktree_head)
+        if lines is None:
             return False
-        lines = [line.strip() for line in cherry.stdout.splitlines() if line.strip()]
         return bool(lines) and all(line.startswith("-") for line in lines)
 
     def _unresolved_conflicts(self) -> list[str]:

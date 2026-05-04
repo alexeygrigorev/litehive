@@ -524,11 +524,14 @@ def test_commit_node_reports_already_landed_noop_reconciliation(git_repo_with_br
     monkeypatch.setattr(node, "worktree_head", lambda worktree: "feature-head")
     monkeypatch.setattr(node, "main_head", lambda: "main-head")
 
-    def fail_merge(branch_ref: str) -> None:
-        del branch_ref
+    def fail_merge(cwd, ref):
+        del cwd, ref
         pytest.fail("already-landed patches skip git merge")
 
-    monkeypatch.setattr(node, "git_merge", fail_merge)
+    # ``git merge`` now goes through ``litehive.git.ops.merge_no_edit`` (imported
+    # into ``lifecycle.nodes.system``); patch the local binding so this test
+    # still proves the merge call is skipped on the already-landed path.
+    monkeypatch.setattr("litehive.lifecycle.nodes.system.merge_no_edit", fail_merge)
     monkeypatch.setattr(node, "worktree_patch_already_on_main", lambda wt_head, main_head: True)
 
     event = node.run(make_state(stage="commit"))
