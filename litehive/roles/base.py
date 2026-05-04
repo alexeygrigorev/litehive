@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import ValidationError
 import yaml
 
-from litehive.domain.common import PipelineState
+from litehive.domain.common import PipelineState, TaskStage
 from litehive.lifecycle.nodes.agent import AgentNode, EngineSelector, SessionProvider
 from litehive.lifecycle.persistence import LastRejection, TaskState
 from .guidance import default_startup_guidance
@@ -243,15 +243,9 @@ def _failed_run_history_payload(state: TaskState) -> list[dict[str, Any]]:
 
 
 _IMPLEMENTING_RETRY_ORIGIN_BY_PHASE: dict[str, str] = {
-    "before_implementing": "implementing",
-    "implementing": "implementing",
-    "after_implementing": "implementing",
-    "before_testing": "testing",
-    "testing": "testing",
-    "after_testing": "testing",
-    "before_accepting": "accepting",
-    "accepting": "accepting",
-    "after_accepting": "accepting",
+    f"{prefix}{stage.value}": stage.value
+    for stage in (TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING)
+    for prefix in ("before_", "", "after_")
 }
 
 
