@@ -1,8 +1,15 @@
-"""Minimal operator-needed status projection.
+"""Operator-needed status projection backed by SQLite.
 
-Litehive no longer persists a rich attention-item queue. Operator visibility is
-derived from authoritative task and runner state: flagged tasks and pool stop
-reasons that require human action.
+Litehive no longer persists a rich attention-item queue. Operator
+visibility is derived from authoritative task and runner state:
+flagged tasks and pool stop reasons that require human action.
+
+Best-effort operator diagnostics that don't fit those structured
+sources (e.g. "merge-resolver wrapper rejected a destructive git
+command") are appended to the ``attention_log`` table instead of
+the previous file-based runtime log. SQLite is the source of
+truth for everything else in the workspace; the attention log
+follows.
 """
 
 from dataclasses import dataclass
@@ -10,7 +17,7 @@ from pathlib import Path
 import sqlite3
 
 from litehive.config.workspace import normalize_workspace_root
-from litehive.config.workspace_files import workspace_dir
+from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state
@@ -38,13 +45,46 @@ class OperatorNeededState:
         return bool(self.flagged_tasks) or self.pool_stop_reason is not None
 
 
+@dataclass(frozen=True, slots=True)
+class AttentionLogEntry:
+    created_at: str
+    message: str
+
+
 def append_attention_log(workspace: Path, message: str) -> None:
-    """Append a best-effort operator diagnostic to the runtime log."""
+    """Persist a best-effort operator diagnostic to the attention log table.
+
+    Used by the merge-resolver git wrapper, the daemon's
+    origin-divergence guard, and any other code path that needs to
+    record a one-off operator-facing event that doesn't fit
+    elsewhere. Schema lives at migration 0009.
+    """
     root = normalize_workspace_root(workspace, source="append_attention_log")
-    path = workspace_dir(root) / "runtime" / "attention.log"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(f"{utcnow()}\t{message}\n")
+    with connect_workspace_db(root) as connection:
+        connection.execute(
+            "INSERT INTO attention_log (created_at, message) VALUES (?, ?)",
+            (utcnow(), message),
+        )
+        connection.commit()
+
+
+def read_attention_log(workspace: Path, *, limit: int | None = None) -> list[AttentionLogEntry]:
+    """Return attention-log entries newest-first, optionally limited.
+
+    Reading is best-effort: if the table does not yet exist (e.g.
+    migrations have not run on a freshly-initialized workspace),
+    return an empty list rather than raising.
+    """
+    root = normalize_workspace_root(workspace, source="read_attention_log")
+    query = "SELECT created_at, message FROM attention_log ORDER BY id DESC"
+    if limit is not None:
+        query += f" LIMIT {int(limit)}"
+    with connect_workspace_db(root) as connection:
+        try:
+            rows = connection.execute(query).fetchall()
+        except sqlite3.OperationalError:
+            return []
+    return [AttentionLogEntry(created_at=row[0], message=row[1]) for row in rows]
 
 
 def collect_operator_needed_state(root: Path) -> OperatorNeededState:

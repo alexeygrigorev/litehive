@@ -1,7 +1,12 @@
 import io
 from pathlib import Path
 
-from litehive.attention import append_attention_log, collect_operator_needed_state, waiting_for_you_lines
+from litehive.attention import (
+    append_attention_log,
+    collect_operator_needed_state,
+    read_attention_log,
+    waiting_for_you_lines,
+)
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.execution import run_daemon_loop
@@ -61,9 +66,10 @@ def test_operator_log_is_runtime_diagnostic_not_queue_item(tmp_path: Path) -> No
 
     append_attention_log(tmp_path, "manual diagnostic")
 
-    log_path = tmp_path / ".litehive" / "runtime" / "attention.log"
-    assert "manual diagnostic" in log_path.read_text(encoding="utf-8")
+    entries = read_attention_log(tmp_path)
+    assert any(entry.message == "manual diagnostic" for entry in entries)
     assert not (tmp_path / ".litehive" / "attention").exists()
+    assert not (tmp_path / ".litehive" / "runtime" / "attention.log").exists()
 
 
 def test_git_wrapper_block_logs_without_persisting_attention_queue(tmp_path: Path, capsys) -> None:
@@ -78,10 +84,13 @@ def test_git_wrapper_block_logs_without_persisting_attention_queue(tmp_path: Pat
 
     assert exit_code == 2
     assert "blocked destructive git command" in err
-    assert "merge-resolver git wrapper rejected `git push --force origin main`" in (
-        tmp_path / ".litehive" / "runtime" / "attention.log"
-    ).read_text(encoding="utf-8")
+    entries = read_attention_log(tmp_path)
+    assert any(
+        "merge-resolver git wrapper rejected `git push --force origin main`" in entry.message
+        for entry in entries
+    )
     assert not (tmp_path / ".litehive" / "attention").exists()
+    assert not (tmp_path / ".litehive" / "runtime" / "attention.log").exists()
 
 
 def test_runner_stops_before_running_tasks_when_operator_stop_reason_is_set(tmp_path: Path, monkeypatch) -> None:

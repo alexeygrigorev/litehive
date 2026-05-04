@@ -44,6 +44,7 @@ _REQUIRED_TABLES_BY_MIGRATION = {
     5: {"task_intent"},
     6: {"runtime_settings", "runtime_settings_audit_log"},
     7: {"runtime_process_state"},
+    9: {"attention_log"},
 }
 
 

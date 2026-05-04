@@ -15,6 +15,7 @@ from typing import TextIO
 
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
+from litehive.attention import append_attention_log
 from litehive.db.schema import apply_pending_migrations
 from litehive.git import ops as git_ops
 from litehive.observability.status import (
@@ -120,12 +121,14 @@ def sleep_with_stop(seconds: float, *, stop_requested_fn) -> None:
 
 
 def _append_attention_log(workspace: Path, message: str) -> None:
-    """Append a timestamped entry to the runtime attention log (gitignored)."""
-    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    path = workspace / ".litehive" / "runtime" / "attention.log"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(f"{timestamp}\t{message}\n")
+    """Persist a daemon-side attention entry through the canonical store.
+
+    Daemon used to maintain its own file-based duplicate of the
+    attention log; the litehive-wide rule is "everything in SQLite",
+    so this thin wrapper exists only to keep the import surface
+    daemon-internal while delegating to ``litehive.attention``.
+    """
+    append_attention_log(workspace, message)
 
 
 def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:

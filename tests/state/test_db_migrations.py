@@ -72,6 +72,7 @@ def test_embedded_initial_migration_is_discoverable() -> None:
         "0006_runtime_settings.sql",
         "0007_task_metadata_and_process_state.sql",
         "0008_remove_pipeline_session_turn_metric.sql",
+        "0009_attention_log.sql",
     ]
     assert migrations[0].version == 1
     assert "CREATE TABLE IF NOT EXISTS pool_state" in migrations[0].sql
@@ -109,7 +110,7 @@ def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeyp
     ensure_workspace(tmp_path)
     staged = (
         *available_migrations(),
-        Migration(version=9, name="0009_add_marker.sql", sql="CREATE TABLE marker (id INTEGER PRIMARY KEY);"),
+        Migration(version=10, name="0010_add_marker.sql", sql="CREATE TABLE marker (id INTEGER PRIMARY KEY);"),
     )
     monkeypatch.setattr("litehive.db.schema.available_migrations", lambda: staged)
 
@@ -117,13 +118,13 @@ def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeyp
     dry_run = CliRunner().invoke(app, ["db", "migrate", "--dry-run", "--workspace", str(tmp_path)])
 
     assert status.exit_code == 0, status.output
-    assert "schema_version: 8" in status.output
+    assert "schema_version: 9" in status.output
     assert "pending_migrations: 1" in status.output
-    assert "pending: 0009_add_marker.sql" in status.output
+    assert "pending: 0010_add_marker.sql" in status.output
 
     assert dry_run.exit_code == 0, dry_run.output
     assert "dry_run: yes" in dry_run.output
-    assert "would_apply: 0009_add_marker.sql" in dry_run.output
+    assert "would_apply: 0010_add_marker.sql" in dry_run.output
 
     with sqlite3.connect(workspace_path(tmp_path, "data.db")) as connection:
         marker = connection.execute(
@@ -137,8 +138,8 @@ def test_apply_pending_migrations_rolls_back_failed_migration(tmp_path: Path, mo
     staged = (
         *available_migrations(),
         Migration(
-            version=9,
-            name="0009_broken.sql",
+            version=10,
+            name="0010_broken.sql",
             sql=("CREATE TABLE broken_marker (id INTEGER PRIMARY KEY);INSERT INTO missing_table(value) VALUES (1);"),
         ),
     )
@@ -155,7 +156,7 @@ def test_apply_pending_migrations_rolls_back_failed_migration(tmp_path: Path, mo
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'broken_marker'"
         ).fetchone()
 
-    assert applied_versions == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert applied_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     assert broken_marker is None
 
 
@@ -204,7 +205,7 @@ def test_migration_0005_does_not_import_deprecated_task_yaml(tmp_path: Path) -> 
     with pytest.raises(TaskLaunchFailure, match="missing from SQLite task_intent"):
         peek_next_task(tmp_path)
 
-    assert applied_versions == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert applied_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     assert intent_rows == []
     assert queue_row is not None
     assert json.loads(queue_row["payload"]) == ["T-0001"]
@@ -224,8 +225,8 @@ def test_daemon_run_applies_pending_migrations_before_start(
     staged = (
         *available_migrations(),
         Migration(
-            version=9,
-            name="0009_daemon_marker.sql",
+            version=10,
+            name="0010_daemon_marker.sql",
             sql="CREATE TABLE daemon_marker (id INTEGER PRIMARY KEY);",
         ),
     )
@@ -248,7 +249,7 @@ def test_daemon_run_applies_pending_migrations_before_start(
         daemon_marker = connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'daemon_marker'"
         ).fetchone()
-    assert applied_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert applied_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     assert daemon_marker is not None
 
 
@@ -310,7 +311,7 @@ def test_legacy_workspace_db_rebuild_replays_task_event_log_without_task_yaml_re
         rows = connection.execute("SELECT task_id FROM task_state ORDER BY task_id").fetchall()
         queue_row = connection.execute("SELECT payload FROM queue WHERE workspace_key = 'workspace'").fetchone()
 
-    assert applied_versions == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert applied_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     assert rows == [(task.id,)]
     assert queue_row is not None
     assert json.loads(queue_row[0]) == [task.id]
