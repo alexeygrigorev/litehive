@@ -33,7 +33,7 @@ _REQUIRED_SECTION_HEADERS = [
     "Stage owner:",
     "Process profile:",
     "Workspace context:",
-    "Shared process:",
+    "Working agreement:",
     "Project overlay:",
     "Prompt scaffold:",
     "Role focus:",
@@ -43,6 +43,24 @@ _REQUIRED_SECTION_HEADERS = [
     "Plan:",
     "Constraints:",
 ]
+
+
+def test_stage_prompt_drops_orchestrator_routing_meta_block(tmp_path: Path) -> None:
+    """Per docs/feedback-2026-05-03.md (P9): the orchestrator/routing/
+    role-model/source-of-truth lines are meta about the system shape,
+    flagged as unclear noise for the agent. They must not appear."""
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Drop meta noise", goal="confirm absence")
+
+    text = stage_prompt(task, "implementing", root=tmp_path)
+
+    assert "Orchestrator model:" not in text
+    assert "Routing model:" not in text
+    assert "Role model:" not in text
+    assert "Source of truth:" not in text
+    assert "Task source of truth:" not in text
+    assert "Shared stages:" not in text
+    assert "Shared process:" not in text
 
 
 @pytest.mark.parametrize(

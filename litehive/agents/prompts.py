@@ -41,6 +41,14 @@ def stage_prompt(
     stage_role = _stage_role_prompt(stage, stage_owner)
     startup_guidance = _agent_startup_guidance(config, stage_owner, root=root)
 
+    # Per docs/feedback-2026-05-03.md (P9): the orchestrator/routing/
+    # role/source-of-truth meta lines were flagged as unclear noise
+    # for the agent. Dropped from the rendered prompt; they remain in
+    # the process-profile dict for any other consumer (e.g. operator
+    # context.md rendering) until those callers are reviewed too.
+    # The fields the agent *does* still need — TDD expectations,
+    # verification discipline, acceptance flow, commit-and-recovery
+    # phrasing — remain on the ``Working agreement`` block below.
     lines = [
         f"Task: {task.id} {task.title}",
         f"Stage: {stage}",
@@ -50,13 +58,7 @@ def stage_prompt(
         "Workspace context:",
         workspace_context.strip() or "No workspace context provided.",
         "",
-        "Shared process:",
-        f"- Orchestrator model: {profile['orchestrator_model']}",
-        f"- Routing model: {profile['routing_model']}",
-        f"- Shared stages: {' -> '.join(profile['shared_stages'])}.",
-        f"- Role model: {profile['role_model']}",
-        f"- Source of truth: {profile['source_of_truth']}",
-        f"- Task source of truth: {profile['task_source_of_truth']}",
+        "Working agreement:",
         f"- TDD expectations: {profile['tdd_expectations']}",
         f"- Verification discipline: {profile['verification_discipline']}",
         f"- Acceptance flow: {profile['acceptance_flow']}",
