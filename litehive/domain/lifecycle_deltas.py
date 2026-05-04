@@ -33,7 +33,7 @@ from litehive.lifecycle.persistence import (
     RejectionLoop,
     TaskState,
 )
-from litehive.domain.common import PipelineState, pipeline_stage_key
+from litehive.domain.common import PipelineState, TaskStage, pipeline_stage_key
 from litehive.lifecycle.types import FailedReason
 
 EffectFn = Callable[[TaskState, Event], "StateDelta"]
@@ -309,7 +309,7 @@ def _next_rejection_loop(
         return None
     rejection_stage = _pipeline_stage_key(state.stage)
     target_stage = _pipeline_stage_key(retry_target_stage)
-    if rejection_stage not in {"testing", "accepting"} or target_stage != "implementing":
+    if rejection_stage not in {TaskStage.TESTING, TaskStage.ACCEPTING} or target_stage != TaskStage.IMPLEMENTING:
         return None
     if state.rejection_loop is None:
         return RejectionLoop(
@@ -375,7 +375,13 @@ def _pipeline_stage_key(name: str | None) -> str | None:
 
 def _retry_counter_stage(origin_stage: str | None) -> PipelineState | None:
     key = _pipeline_stage_key(origin_stage)
-    if key in {"grooming", "implementing", "testing", "accepting", "commit_to_git"}:
+    if key in {
+        TaskStage.GROOMING,
+        TaskStage.IMPLEMENTING,
+        TaskStage.TESTING,
+        TaskStage.ACCEPTING,
+        TaskStage.COMMIT_TO_GIT,
+    }:
         return key
     return origin_stage
 
