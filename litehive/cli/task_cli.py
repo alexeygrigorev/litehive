@@ -3,12 +3,28 @@ from typing import Annotated
 
 import typer
 
+from litehive.cli.agent_cli import current_agent_role, resolve_active_agent_task_mutation_target
 from litehive.cli.common import WorkspaceOption, choice, make_typer
 from litehive.cli.display import task_dependencies_label, task_model_label
 from litehive.cli.parse import (
     parse_acceptance_criteria,
     parse_dependency_ids,
     parse_text_list_option,
+)
+from litehive.cli.task_debug_support import (
+    debug_all,
+    debug_latest,
+    debug_worktree,
+    render_task_evidence,
+)
+from litehive.cli.task_logs_support import (
+    follow_active_subagent,
+    list_daemon_sessions,
+    list_task_subagents,
+    load_task_with_runtime,
+    show_latest_daemon_log,
+    show_latest_subagent,
+    show_task_journal,
 )
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task, get_task, list_tasks as load_tasks, require_task
@@ -109,7 +125,6 @@ def evidence(
     task_id: Annotated[str, typer.Argument(help="Task ID (e.g. T-0001)")],
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-    from litehive.cli.task_debug_support import render_task_evidence
 
     ensure_workspace(workspace)
     try:
@@ -127,7 +142,6 @@ def debug(
     all_: Annotated[bool, typer.Option("--all", help="List all subagents")] = False,
     worktree: Annotated[bool, typer.Option(help="Show worktree details")] = False,
 ) -> int:
-    from litehive.cli.task_debug_support import debug_all, debug_latest, debug_worktree
 
     ensure_workspace(workspace)
     try:
@@ -151,15 +165,6 @@ def logs(
     all_: Annotated[bool, typer.Option("--all", help="List all subagent runs")] = False,
     follow: Annotated[bool, typer.Option(help="Follow live stdout")] = False,
 ) -> int:
-    from litehive.cli.task_logs_support import (
-        follow_active_subagent,
-        list_daemon_sessions,
-        list_task_subagents,
-        load_task_with_runtime,
-        show_latest_daemon_log,
-        show_latest_subagent,
-        show_task_journal,
-    )
 
     ensure_workspace(workspace)
     if follow:
@@ -273,7 +278,6 @@ def close(
     reason: Annotated[str | None, typer.Option(help="Optional rationale")] = None,
     follow_up_task: Annotated[str | None, typer.Option(help="Optional follow-up task id")] = None,
 ) -> int:
-    from litehive.cli.agent_cli import current_agent_role, resolve_active_agent_task_mutation_target
 
     agent_role = current_agent_role()
     close_kwargs: dict[str, str] = {}
@@ -320,7 +324,6 @@ def update(
     constraints: Annotated[list[str] | None, typer.Option("--constraint", help="Replace task constraints")] = None,
     plan: Annotated[list[str] | None, typer.Option("--plan-step", help="Replace task plan steps")] = None,
 ) -> int:
-    from litehive.cli.agent_cli import current_agent_role, resolve_active_agent_task_mutation_target
 
     agent_role = current_agent_role()
     update_kwargs: dict[str, object] = {}
