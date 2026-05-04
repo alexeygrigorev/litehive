@@ -87,7 +87,7 @@ def prepare_interrupted_task(
     now = utcnow()
     interruption_reason = reason or summary
     timestamps = _interruption_timestamps(task, now)
-    task.status = "interrupted"
+    task.status = TaskStatus.INTERRUPTED
     task.pipeline_status = stage
     task.runtime.pipeline.execution_status = "interrupted"
     task.runtime.pipeline.run_started_at = None
@@ -553,16 +553,20 @@ def _normalize_nonrunning_resumable_tasks(
     for task in tasks_by_id.values():
         if task.runtime.pipeline.execution_status == "running":
             continue
-        if task.status not in {"queued", "in_progress", "interrupted"}:
+        if task.status not in {TaskStatus.QUEUED, TaskStatus.IN_PROGRESS, TaskStatus.INTERRUPTED}:
             continue
         has_resume_marker = task_has_resume_marker(task)
         # Crash cleanup can leave a task queued with execution_status
         # "interrupted" and a trusted stage marker. That state is not eligible
         # for normal dequeue, but repair must still canonicalize it back to a
         # runnable queued/idle task.
-        if task.status != "interrupted" and not is_task_eligible_for_execution(task) and not has_resume_marker:
+        if (
+            task.status != TaskStatus.INTERRUPTED
+            and not is_task_eligible_for_execution(task)
+            and not has_resume_marker
+        ):
             continue
-        if task.status == "queued" and task.id != state.active_task_id and not has_resume_marker:
+        if task.status == TaskStatus.QUEUED and task.id != state.active_task_id and not has_resume_marker:
             continue
         stage = resumable_queue_stage(task)
         if stage is None:
@@ -570,7 +574,7 @@ def _normalize_nonrunning_resumable_tasks(
         queue_contains_task = task.id in state.queue
         queue_index = None if not queue_contains_task else state.queue.index(task.id)
         should_normalize = (
-            task.status != "queued"
+            task.status != TaskStatus.QUEUED
             or task.runtime.pipeline.execution_status != "idle"
             or task.pipeline_status != stage
             or task.runtime.pipeline.current_stage.stage != stage
@@ -581,7 +585,7 @@ def _normalize_nonrunning_resumable_tasks(
         if not should_normalize:
             continue
 
-        was_in_progress = task.status == "in_progress"
+        was_in_progress = task.status == TaskStatus.IN_PROGRESS
         normalized_stage = canonicalize_resumable_queue_task(task, stage=stage)
         if normalized_stage is None:
             continue

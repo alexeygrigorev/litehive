@@ -4,7 +4,7 @@ import threading
 from pathlib import Path
 
 from litehive.git.ops import GitError, current_head, path_differs_at_ref
-from litehive.domain.common import PipelineStatus, TaskStage
+from litehive.domain.common import PipelineStatus, TaskStage, TaskStatus
 from litehive.domain.task import TaskRecord, WorkspaceState
 
 from litehive.tasks.constants import (
@@ -168,7 +168,7 @@ def _requeue_task_transition(
         state = load_state(root)
         queue_before = list(state.queue)
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", "parked", *CLOSED_TASK_STATUSES}:
+        if task.status not in {TaskStatus.FLAGGED, TaskStatus.PARKED, *CLOSED_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not flagged, parked, or closed")
         main_ref = current_head(root)
         if main_ref is not None:
@@ -188,7 +188,7 @@ def _requeue_task_transition(
             task,
             status="queued",
             pipeline_status=implementation_entry_stage(task),
-            clear_last_outcome=task.status not in {"flagged", "parked"},
+            clear_last_outcome=task.status not in {TaskStatus.FLAGGED, TaskStatus.PARKED},
         )
         _reset_pipeline_state(root, task.id, preserve_run_memory=True)
         _queue_task(state, task.id, front=front)
@@ -221,16 +221,16 @@ def _resume_task_transition(root: Path, task_id: str, *, front: bool = False) ->
         queue_before = list(state.queue)
         resumed_stage = resumable_queue_stage(task)
         stranded_in_progress = (
-            task.status == "in_progress"
+            task.status == TaskStatus.IN_PROGRESS
             and task.runtime.pipeline.execution_status in {"interrupted", "idle"}
             and resumed_stage is not None
         )
-        already_queued_resumable = task.status == "queued" and resumed_stage is not None
+        already_queued_resumable = task.status == TaskStatus.QUEUED and resumed_stage is not None
         if state.active_task_id == task.id and task.runtime.pipeline.execution_status != "running":
             state.active_task_id = None
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if (
-            task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}
+            task.status not in {TaskStatus.FLAGGED, *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}
             and not stranded_in_progress
             and not already_queued_resumable
         ):
@@ -246,7 +246,7 @@ def _resume_task_transition(root: Path, task_id: str, *, front: bool = False) ->
             task,
             status="queued",
             pipeline_status=resumed_stage,
-            clear_last_outcome=task.status not in {"interrupted", "parked", "flagged"}
+            clear_last_outcome=task.status not in {TaskStatus.INTERRUPTED, TaskStatus.PARKED, TaskStatus.FLAGGED}
             and not stranded_in_progress
             and not already_queued_resumable,
         )
@@ -286,7 +286,7 @@ def _abandon_task_transition(
         state = load_state(root)
         queue_before = list(state.queue)
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status not in {"flagged", *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
+        if task.status not in {TaskStatus.FLAGGED, *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, or closed")
         _terminate_subagent_pid(
             task.id,
@@ -331,7 +331,7 @@ def _queue_task(state: WorkspaceState, task_id: str, *, front: bool = False) -> 
 
 def _apply_cancelled_task_state(task: TaskRecord, *, reason: str) -> None:
     clear_task_run_activity(task, execution_status="cancelled")
-    task.status = "closed"
+    task.status = TaskStatus.CLOSED
     task.close_reason = "execution_cancelled"
     task.flag_reason = None
     apply_task_outcome(
@@ -355,10 +355,10 @@ def _apply_close_task_state(
 ) -> str:
     execution_status = "done" if outcome == "done" else "cancelled"
     clear_task_run_activity(task, execution_status=execution_status)
-    task.status = "done" if outcome == "done" else "closed"
+    task.status = TaskStatus.DONE if outcome == "done" else TaskStatus.CLOSED
     task.close_reason = outcome
     task.flag_reason = None
-    task.pipeline_status = pipeline_status or ("done" if outcome == "done" else task.pipeline_status)
+    task.pipeline_status = pipeline_status or (PipelineStatus.DONE if outcome == "done" else task.pipeline_status)
     apply_task_outcome(
         task,
         kind=task.status,
@@ -379,7 +379,7 @@ def _apply_close_task_state(
 
 def _apply_parked_task_state(task: TaskRecord) -> None:
     clear_task_run_activity(task, execution_status="paused")
-    task.status = "parked"
+    task.status = TaskStatus.PARKED
 
 
 def _close_task_transition(
@@ -431,7 +431,7 @@ def _close_task_transition(
         state = load_state(root)
         queue_before = list(state.queue)
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status == "done":
+        if task.status == TaskStatus.DONE:
             raise ValueError(f"Task {task.id} is already done and cannot be closed")
         journal_message = _apply_close_task_state(
             task,
@@ -479,7 +479,7 @@ def _park_task_transition(
         state = load_state(root)
         queue_before = list(state.queue)
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
-        if task.status == "done":
+        if task.status == TaskStatus.DONE:
             raise ValueError(f"Task {task.id} is already done and cannot be parked")
         _apply_parked_task_state(task)
         drop_task_from_workspace_state(state, task.id)
