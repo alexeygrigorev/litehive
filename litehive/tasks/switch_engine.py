@@ -16,6 +16,7 @@ is one self-contained operator action with its own audit shape.
 from pathlib import Path
 
 from litehive.config.loading import load_config
+from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import SwitchTaskSummary
@@ -98,9 +99,9 @@ def switch_task_engine(
 
     task = require_task(root, task_id)
     before_task = snapshot_task_audit_state(task)
-    if task.pipeline_status == "done":
+    if task.pipeline_status == PipelineStatus.DONE:
         raise ValueError(f"Task {task.id} is already done")
-    if task.pipeline_status == "backlog":
+    if task.pipeline_status == PipelineStatus.BACKLOG:
         raise ValueError(f"Task {task.id} is still in backlog and has no runnable stage to resume")
 
     state = load_state(root)
@@ -128,10 +129,10 @@ def switch_task_engine(
     )
     task = require_task(root, task.id)
 
-    if task.status == "queued":
+    if task.status == TaskStatus.QUEUED:
         move_queued_task(root, task.id, 1)
         task = require_task(root, task.id)
-    elif task.status in {"interrupted", "parked", "flagged", *CLOSED_TASK_STATUSES}:
+    elif task.status in {TaskStatus.INTERRUPTED, TaskStatus.PARKED, TaskStatus.FLAGGED, *CLOSED_TASK_STATUSES}:
         task = resume_task(root, task.id, front=True)
     else:
         raise ValueError(f"Task {task.id} is {task.status} and cannot be switched into a queued runnable state")

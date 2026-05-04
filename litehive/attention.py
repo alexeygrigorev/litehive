@@ -18,7 +18,7 @@ import sqlite3
 
 from litehive.config.workspace import normalize_workspace_root
 from litehive.db.schema import connect_workspace_db
-from litehive.domain.common import utcnow
+from litehive.domain.common import TaskStatus, utcnow
 from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state
 from litehive.state.records import list_tasks
@@ -92,7 +92,7 @@ def collect_operator_needed_state(root: Path) -> OperatorNeededState:
     state = load_state(root, bootstrap=False)
     flagged_tasks = tuple(
         sorted(
-            (task for task in list_tasks(root, strict=False) if task.status == "flagged"),
+            (task for task in list_tasks(root, strict=False) if task.status == TaskStatus.FLAGGED),
             key=lambda task: task.id,
         )
     )

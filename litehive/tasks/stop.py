@@ -17,7 +17,7 @@ import signal
 import time
 from pathlib import Path
 
-from litehive.domain.common import TaskStage, utcnow
+from litehive.domain.common import PipelineStatus, TaskStage, TaskStatus, utcnow
 from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.domain.task_ops import StopTaskSummary, WorkspaceConflictError
@@ -55,13 +55,13 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
             raise ValueError(f"Task {task_id} not found")
         before_task = snapshot_task_audit_state(task)
         queue_before = list(state.queue)
-        if task.pipeline_status == "done":
+        if task.pipeline_status == PipelineStatus.DONE:
             raise ValueError(f"Task {task.id} is already done")
         stage = task.runtime.pipeline.current_stage.stage or task.pipeline_status
 
         # Park the task - this is intentional operator action, not system interruption
         now = utcnow()
-        task.status = "parked"
+        task.status = TaskStatus.PARKED
         task.runtime.pipeline.execution_status = "idle"
         task.runtime.pipeline.run_started_at = None
         task.runtime.pipeline.updated_at = now
@@ -81,14 +81,14 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
 
         # Special case: tasks at commit_to_git stage remain queued instead of parked
         if stage == TaskStage.COMMIT_TO_GIT:
-            task.status = "queued"
+            task.status = TaskStatus.QUEUED
 
         # Remove from active/queue state
         state.active_task_id = None
         state.queue = [item for item in state.queue if item != task.id]
 
         # Re-add to queue front if remaining queued
-        if task.status == "queued" and task.pipeline_status != "done":
+        if task.status == TaskStatus.QUEUED and task.pipeline_status != PipelineStatus.DONE:
             state.queue.insert(0, task.id)
 
         journal_message = f"Task execution stopped via CLI from `{stage}` stage. Status: {task.status}."

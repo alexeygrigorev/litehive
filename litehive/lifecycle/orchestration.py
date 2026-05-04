@@ -39,6 +39,7 @@ from litehive.domain.common import (
     PipelineState,
     PipelineStatus,
     TaskStage,
+    TaskStatus,
     canonical_pipeline_state,
     cap_feedback,
     pipeline_status_for_pipeline_state,
@@ -574,7 +575,7 @@ def _cleanup_terminal_worktree(root: Path, task: TaskRecord | None) -> None:
     fresh = get_task(root, task.id)
     if fresh is not None:
         task = fresh
-    if task.status == "flagged" and task.flag_reason in _MANUAL_REVIEW_FLAG_REASONS:
+    if task.status == TaskStatus.FLAGGED and task.flag_reason in _MANUAL_REVIEW_FLAG_REASONS:
         return
     cleanup_terminal_task_worktree(root, task)
 

@@ -2,8 +2,9 @@
 
 from pathlib import Path
 
-from litehive.git.ops import GitError
+from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.task import TaskRecord
+from litehive.git.ops import GitError
 from litehive.state.persist import load_state
 from litehive.tasks.normalization import implementation_entry_stage
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
@@ -13,7 +14,7 @@ from litehive.state.persist import persist_task_and_state
 
 
 def require_completed_task(task: TaskRecord, action: str) -> None:
-    if task.status != "done" or task.pipeline_status != "done":
+    if task.status != TaskStatus.DONE or task.pipeline_status != PipelineStatus.DONE:
         raise GitError(f"Task {task.id} is not completed; cannot {action}")
 
 

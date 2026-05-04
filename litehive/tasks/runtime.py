@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from litehive.domain.common import utcnow
+from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
 from litehive.domain.reports import StageReport
 from litehive.domain.runtime import (
     RuntimeEngineContinuation,
@@ -98,7 +98,7 @@ def mark_task_run_finished(root: Path, task: TaskRecord, final_status: str) -> N
 
 def apply_flag_count_auto_defer(task: TaskRecord) -> None:
     """Increment flag_count and auto-defer if the threshold is reached."""
-    if task.status != "flagged":
+    if task.status != TaskStatus.FLAGGED:
         return
     task.flag_count += 1
     if task.flag_count >= 3:
@@ -120,12 +120,17 @@ def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) 
             state_changed = True
         if (
             final_status in {"paused", "queued", "interrupted"}
-            and task.status == "queued"
-            and task.pipeline_status != "done"
+            and task.status == TaskStatus.QUEUED
+            and task.pipeline_status != PipelineStatus.DONE
         ):
             state.queue.insert(0, task.id)
             state_changed = True
-        if final_status == "done" and task.status == "done" and task.pipeline_status == "done" and not state_changed:
+        if (
+            final_status == "done"
+            and task.status == TaskStatus.DONE
+            and task.pipeline_status == PipelineStatus.DONE
+            and not state_changed
+        ):
             write_task_runtime(root, task)
             return task
         persist_task_and_state(root, task=task, state=state)
