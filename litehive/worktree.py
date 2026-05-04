@@ -10,7 +10,6 @@ from typing import Callable
 
 from litehive.agents.merge_resolver import run_worktree_merge_agent
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import workspace_path
 from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
 from litehive.domain.task import TaskRecord, UnmergedWorktree
 from litehive.domain.task_ops import WorkspaceConflictError
@@ -23,6 +22,14 @@ from litehive.domain.worktree import (
     WorktreeSyncResult,
 )
 from litehive.fs_cleanup import remove_tree_logged
+from litehive.worktree_paths import (
+    ensure_worktree_venv_link,
+    is_managed_worktree_path,
+    resolve_recorded_worktree_path,
+    serialize_worktree_path,
+    task_worktree_branch,
+    task_worktree_path,
+)
 from litehive.git.ops import (
     GitError,
     add_paths,
@@ -318,72 +325,9 @@ class WorktreeService:
         raise GitError(f"git stash pop failed: {message}")
 
 
-# === Path Utilities ===
-
-
-def task_worktree_path(root: Path, task: TaskRecord) -> Path:
-    """Get the expected worktree path for a task."""
-    return workspace_path(root, "worktrees") / f"{task.id}-{task.slug}"
-
-
-def task_worktree_branch(task: TaskRecord) -> str:
-    """Get the branch name for a task worktree."""
-    return f"litehive/{task.id}-{task.slug}"
-
-
-def is_managed_worktree_path(root: Path, worktree_path: str | None) -> bool:
-    """Check if a worktree path is managed by Litehive."""
-    if not worktree_path:
-        return False
-    path = Path(worktree_path).expanduser()
-    if not path.is_absolute():
-        return False
-    try:
-        return path.resolve().is_relative_to(workspace_path(root, "worktrees").resolve())
-    except OSError:
-        return False
-
-
-def resolve_recorded_worktree_path(root: Path, worktree_path: str | None) -> Path | None:
-    """Resolve a recorded worktree path to an absolute path."""
-    if not worktree_path:
-        return None
-    path = Path(worktree_path).expanduser()
-    if not path.is_absolute():
-        path = root / path
-    return path.resolve()
-
-
-def serialize_worktree_path(path: Path) -> str:
-    """Serialize a worktree path for storage."""
-    return str(path.expanduser().resolve())
-
-
-# === Worktree Lifecycle ===
-
-
-def ensure_worktree_venv_link(root: Path, worktree_path: Path) -> Path | None:
-    """Ensure the worktree has a venv symlink to the main venv."""
-    main_venv = (root / ".venv").expanduser()
-    if not (main_venv.exists() or main_venv.is_symlink()):
-        return None
-
-    worktree_venv = worktree_path / ".venv"
-    if worktree_venv.is_symlink() and worktree_venv.resolve() == main_venv.resolve():
-        return worktree_venv
-
-    if worktree_venv.is_symlink() or worktree_venv.exists():
-        if worktree_venv.is_dir() and not worktree_venv.is_symlink():
-            remove_tree_logged(
-                worktree_venv,
-                logger=logger,
-                target_label="worktree venv directory",
-            )
-        else:
-            worktree_venv.unlink()
-
-    worktree_venv.symlink_to(main_venv, target_is_directory=main_venv.is_dir())
-    return worktree_venv
+# Path utilities live in ``litehive.worktree_paths``. They are pure path
+# arithmetic with no git or state dependencies, so they belong in their
+# own sibling module and many callers only need them.
 
 
 def git_worktree_blocks_pool(root: Path) -> bool:
