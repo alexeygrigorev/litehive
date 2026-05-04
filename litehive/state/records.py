@@ -7,7 +7,7 @@ from pathlib import Path
 from litehive.config.workspace_files import workspace_gitignore_path
 from litehive.config.workspace import ensure_workspace, render_workspace_gitignore
 from litehive.git.ops import default_commit_message
-from litehive.domain.common import PipelineMode, utcnow
+from litehive.domain.common import PipelineMode, TaskStatus, utcnow
 from litehive.domain.reports import FollowUpTaskSpec
 from litehive.fs_cleanup import remove_tree_logged
 from litehive.domain.task import (
@@ -151,7 +151,7 @@ def _normalize_task_commit_sha_state(task: TaskRecord) -> None:
 
 def _normalize_task_flag_reason(task: TaskRecord) -> None:
     canonicalize_task_terminal_state(task)
-    if task.status == "flagged":
+    if task.status == TaskStatus.FLAGGED:
         task.flag_reason = task.flag_reason or task.runtime.pipeline.last_outcome.reason_code or "unknown"
         return
     task.flag_reason = None

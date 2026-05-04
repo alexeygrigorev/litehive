@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from litehive.db.schema import connect_workspace_db
-from litehive.domain.common import TaskStage, utcnow
+from litehive.domain.common import PipelineStatus, TaskStage, TaskStatus, utcnow
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.state.locking import workspace_lock
 from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
@@ -45,10 +45,10 @@ def _normalize_stale_terminal_tasks(root: Path, *, summary: WorkspaceRepairSumma
             before_task = snapshot_task_audit_state(task)
             queue_before = list(state.queue)
             now = utcnow()
-            task.status = "done"
+            task.status = TaskStatus.DONE
             task.close_reason = "done"
             task.flag_reason = None
-            task.pipeline_status = "done"
+            task.pipeline_status = PipelineStatus.DONE
             clear_task_run_activity(task, execution_status="done", updated_at=now, clear_interruption=True)
             task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage="done")
             apply_task_outcome(

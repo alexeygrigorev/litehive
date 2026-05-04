@@ -53,7 +53,7 @@ def collect_rescue_candidates(root: Path) -> list[RescueCandidate]:
     """
     candidates: list[RescueCandidate] = []
     for task in list_tasks(root, strict=False):
-        if task.status != "flagged" or task.flag_reason != "merge_failed":
+        if task.status != TaskStatus.FLAGGED or task.flag_reason != "merge_failed":
             continue
         worktree_rel = get_task_worktree_path(task)
         if not is_managed_worktree_path(root, worktree_rel):

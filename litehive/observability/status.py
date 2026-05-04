@@ -12,6 +12,7 @@ from litehive.config.paths import workspace_path
 from litehive.config.engine_models import active_engine_freezes
 from litehive.config.model import LitehiveConfig
 from litehive.db.schema import connect_workspace_db
+from litehive.domain.common import TaskStatus
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.reports import ExecutionEstimate
 from litehive.domain.runtime import RunnerStatusState
@@ -265,9 +266,9 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
     lines.append(f"  auto_commit={task.git.auto_commit}")
     if task.git.commit_message:
         lines.append(f"  commit_message={task.git.commit_message}")
-    if task.status == "flagged":
+    if task.status == TaskStatus.FLAGGED:
         lines.append(f"  flag_reason={task.flag_reason or 'unknown'}")
-    if task.status in {"closed", "done"}:
+    if task.status in {TaskStatus.CLOSED, TaskStatus.DONE}:
         lines.append(f"  close_reason={task.close_reason or 'unknown'}")
 
     runtime = task.runtime
@@ -381,7 +382,7 @@ def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = N
                 )
             )
 
-    if task.status == "flagged" and task.flag_reason == "merge_failed":
+    if task.status == TaskStatus.FLAGGED and task.flag_reason == "merge_failed":
         wt_path = task.runtime.pipeline.git.worktree_path or task.git.worktree_path
         if wt_path:
             lines.append(f"  unmerged_worktree={wt_path}")

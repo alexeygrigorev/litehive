@@ -60,7 +60,7 @@ def queue_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> 
             f"title={task.title} depends_on={task_dependencies_label(task.id, task.depends_on)}"
             f"{task_interruption_label(task)}"
         )
-    resumable = [task for task in tasks if task.status in {"interrupted", "parked"}]
+    resumable = [task for task in tasks if task.status in {TaskStatus.INTERRUPTED, TaskStatus.PARKED}]
     print(f"resumable_tasks: {len(resumable)}")
     for index, task in enumerate(resumable, start=1):
         print(
@@ -97,7 +97,7 @@ def promote(
     ensure_workspace(workspace)
     try:
         task = require_task(workspace, task_id)
-        if task.status in {"interrupted", "parked", "flagged", "closed"}:
+        if task.status in {TaskStatus.INTERRUPTED, TaskStatus.PARKED, TaskStatus.FLAGGED, TaskStatus.CLOSED}:
             task = resume_task(workspace, task_id, front=True)
             print(f"task: {task.id} {task.title}")
             print("status: queued")
