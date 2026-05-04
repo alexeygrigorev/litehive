@@ -12,7 +12,7 @@ import yaml
 from pydantic import ValidationError
 
 from litehive.config.loading import merge_config_layers
-from litehive.config.model import LitehiveConfig
+from litehive.config.model import LitehiveConfig, validate_config_data
 from litehive.config.paths import litehive_root, workspace_path
 from litehive.config.registry import workspace_registry_error, workspace_registry_path
 from litehive.config.workspace_files import config_path
@@ -22,6 +22,7 @@ from litehive.domain.common import RunnerStatus
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
+from litehive.observability.engine_monitoring import load_engine_monitoring
 from litehive.state.store import runtime_store
 from litehive.state.locking import runner_metadata_present, runner_pid_is_alive
 
@@ -204,8 +205,6 @@ def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssu
 
 
 def _validate_status_config_data(data: Mapping[str, Any]) -> dict[str, Any]:
-    from litehive.config.model import validate_config_data
-
     return validate_config_data(data)
 
 
@@ -281,8 +280,6 @@ def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue
 def _load_engine_monitoring_for_status(
     root: Path,
 ) -> tuple[WorkspaceEngineMonitoring, list[StatusIssue]]:
-    from litehive.observability.engine_monitoring import load_engine_monitoring
-
     try:
         return load_engine_monitoring(root), []
     except (OSError, sqlite3.DatabaseError, ValueError, ValidationError) as exc:
@@ -426,6 +423,8 @@ def _probe_heru_link(root: Path) -> list[StatusIssue]:
 def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIssue]:
     if state.pool_stop_reason != "diverged_from_origin":
         return []
+    # inline: daemon.execution top-level-imports observability.status, which
+    # top-level-imports this module (would cycle).
     from litehive.daemon.execution import check_origin_divergence
 
     message = check_origin_divergence(root)

@@ -7,6 +7,9 @@ from litehive.agents.session_store import load_subagent_artifacts, load_subagent
 from litehive.domain.reports import RecoveryEvidenceItem, StageReport
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
+from litehive.observability.engine_monitoring import load_engine_monitoring
+from litehive.observability.events import read_events
+from litehive.state.records import get_task_worktree_path
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.paths import (
     latest_run_all_log_path,
@@ -16,6 +19,7 @@ from litehive.tasks.paths import (
     task_dir,
 )
 from litehive.tasks.report_storage import latest_stage_report
+from litehive.worktree import resolve_recorded_worktree_path
 
 
 def collect_recovery_evidence(
@@ -24,12 +28,6 @@ def collect_recovery_evidence(
     *,
     stage: str | None = None,
 ) -> list[RecoveryEvidenceItem]:
-    from litehive.observability.engine_monitoring import load_engine_monitoring
-    from litehive.observability.events import read_events
-
-    from litehive.state.records import get_task_worktree_path
-    from litehive.worktree import resolve_recorded_worktree_path
-
     evidence: list[RecoveryEvidenceItem] = []
     activity_entries = load_task_activity(root, task)
     task_events = read_events(root, task)
