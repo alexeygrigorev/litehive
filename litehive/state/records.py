@@ -7,7 +7,7 @@ from pathlib import Path
 from litehive.config.workspace_files import workspace_gitignore_path
 from litehive.config.workspace import ensure_workspace, render_workspace_gitignore
 from litehive.git.ops import default_commit_message
-from litehive.domain.common import PipelineMode, TaskStatus, utcnow
+from litehive.domain.common import PipelineMode, TaskStage, TaskStatus, utcnow
 from litehive.domain.reports import FollowUpTaskSpec
 from litehive.fs_cleanup import remove_tree_logged
 from litehive.domain.task import (
@@ -331,7 +331,7 @@ def create_follow_up_tasks(
 ) -> list[TaskRecord]:
     if not follow_ups:
         return []
-    if stage not in {"grooming", "testing", "accepting"}:
+    if stage not in {TaskStage.GROOMING, TaskStage.TESTING, TaskStage.ACCEPTING}:
         return []
 
     ensure_workspace(root)
