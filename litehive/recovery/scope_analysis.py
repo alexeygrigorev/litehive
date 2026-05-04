@@ -4,6 +4,16 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from litehive.git.ops import (
+    GitError,
+    checkout_ref,
+    diff_name_status,
+    path_exists_in_ref,
+    show_at_ref,
+    stash_pop,
+    stash_push,
+)
+
 
 class ScopeAnalysisError(RuntimeError):
     """Raised when scope analysis cannot inspect the current worktree."""
@@ -58,21 +68,10 @@ def analyze_scope_changes(workspace_root: Path, task_id: str) -> dict[str, Any]:
 def _get_deleted_files(workspace_root: Path) -> list[str]:
     """Get list of files deleted in the worktree compared to main."""
     try:
-        result = subprocess.run(
-            ["git", "diff", "main...HEAD", "--name-status"],
-            cwd=workspace_root,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (subprocess.CalledProcessError, OSError) as exc:
-        raise ScopeAnalysisError(f"git diff failed for {workspace_root}: {exc}") from exc
-
-    deleted_files = []
-    for line in result.stdout.strip().split("\n"):
-        if line.strip() and line.startswith("D\t"):
-            deleted_files.append(line[2:])
-    return deleted_files
+        entries = diff_name_status(workspace_root, "main...HEAD")
+    except GitError as exc:
+        raise ScopeAnalysisError(str(exc)) from exc
+    return [path for status, path in entries if status == "D"]
 
 
 def _classify_deleted_files(workspace_root: Path, deleted_files: list[str]) -> tuple[list[str], list[str]]:
@@ -101,14 +100,7 @@ def _is_file_broken_on_main(workspace_root: Path, file_path: str) -> bool:
     2. It's a test file that fails when run on main
     3. It has syntax errors or import errors on main
     """
-    try:
-        result = subprocess.run(
-            ["git", "cat-file", "-e", f"main:{file_path}"], cwd=workspace_root, capture_output=True, check=False
-        )
-    except OSError as exc:
-        raise ScopeAnalysisError(f"git cat-file failed for {file_path}: {exc}") from exc
-
-    if result.returncode != 0:
+    if not path_exists_in_ref(workspace_root, "main", file_path):
         return True
     if _is_test_file(file_path):
         return _is_test_broken_on_main(workspace_root, file_path)
@@ -132,34 +124,25 @@ def _is_test_file(file_path: str) -> bool:
 def _is_test_broken_on_main(workspace_root: Path, test_file: str) -> bool:
     """Check if a test file is broken (failing) on main branch."""
     try:
-        subprocess.run(
-            ["git", "stash", "push", "-m", "temp-stash-for-scope-analysis"],
-            cwd=workspace_root,
-            capture_output=True,
-            check=False,
-        )
+        stash_push(workspace_root, "temp-stash-for-scope-analysis")
 
         try:
-            subprocess.run(["git", "checkout", "main"], cwd=workspace_root, capture_output=True, check=True)
+            if not checkout_ref(workspace_root, "main"):
+                raise ScopeAnalysisError(f"could not checkout main to test {test_file}")
 
-            # Try to run the specific test file
             test_result = subprocess.run(
                 ["python", "-m", "pytest", test_file, "-x", "--tb=no", "-q"],
                 cwd=workspace_root,
                 capture_output=True,
-                timeout=30,  # 30 second timeout
+                timeout=30,
                 check=False,
             )
 
-            # Test is broken if pytest fails
             is_broken = test_result.returncode != 0
 
         finally:
-            # Return to original branch
-            subprocess.run(["git", "checkout", "-"], cwd=workspace_root, capture_output=True, check=False)
-
-            # Restore stashed changes
-            subprocess.run(["git", "stash", "pop"], cwd=workspace_root, capture_output=True, check=False)
+            checkout_ref(workspace_root, "-")
+            stash_pop(workspace_root)
 
         return is_broken
 
@@ -170,23 +153,17 @@ def _is_test_broken_on_main(workspace_root: Path, test_file: str) -> bool:
 def _has_syntax_errors_on_main(workspace_root: Path, file_path: str) -> bool:
     """Check if a file has syntax errors on main branch."""
     try:
-        result = subprocess.run(
-            ["git", "show", f"main:{file_path}"], cwd=workspace_root, capture_output=True, text=True, check=True
-        )
-
-        # Try to compile the Python file to check for syntax errors
-        if file_path.endswith(".py"):
-            try:
-                compile(result.stdout, file_path, "exec")
-                return False  # No syntax error
-            except SyntaxError:
-                return True  # Has syntax error
-
-        # For non-Python files, assume they're not broken
-        return False
-
-    except (subprocess.CalledProcessError, OSError) as exc:
+        contents = show_at_ref(workspace_root, "main", file_path)
+    except GitError as exc:
         raise ScopeAnalysisError(f"could not inspect {file_path} on main: {exc}") from exc
+
+    if not file_path.endswith(".py"):
+        return False
+    try:
+        compile(contents, file_path, "exec")
+        return False
+    except SyntaxError:
+        return True
 
 
 def _classify_changes(

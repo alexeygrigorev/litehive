@@ -103,6 +103,69 @@ def merge_commit(root: Path, commit_sha: str) -> str:
     return head
 
 
+def diff_name_status(cwd: Path, *args: str) -> list[tuple[str, str]]:
+    """Return ``[(status, path), ...]`` for ``git diff --name-status <args>``.
+
+    ``status`` is the single-letter git diff code (``M``, ``A``,
+    ``D``, ``R``, …). Used by recovery/scope_analysis to enumerate
+    files added or deleted between branches.
+    """
+    proc = _run_git(cwd, "diff", "--name-status", *args)
+    if proc.returncode != 0:
+        raise GitError(proc.stderr.strip() or "git diff --name-status failed")
+    out: list[tuple[str, str]] = []
+    for line in proc.stdout.splitlines():
+        if not line.strip():
+            continue
+        status, _, path = line.partition("\t")
+        if not path:
+            continue
+        out.append((status, path))
+    return out
+
+
+def path_exists_in_ref(cwd: Path, ref: str, path: str) -> bool:
+    """Return whether ``ref:path`` resolves to an object.
+
+    Wraps ``git cat-file -e <ref>:<path>``. The recovery
+    scope-analysis flow uses this to ask "did this file exist on
+    main when the worktree branched off?".
+    """
+    proc = _run_git(cwd, "cat-file", "-e", f"{ref}:{path}")
+    return proc.returncode == 0
+
+
+def show_at_ref(cwd: Path, ref: str, path: str) -> str:
+    """Return the contents of ``path`` at ``ref`` (``git show ref:path``).
+
+    Raises :class:`GitError` when the path is not present in the ref.
+    """
+    proc = _run_git(cwd, "show", f"{ref}:{path}")
+    if proc.returncode != 0:
+        raise GitError(proc.stderr.strip() or f"git show {ref}:{path} failed")
+    return proc.stdout
+
+
+def checkout_ref(cwd: Path, ref: str) -> bool:
+    """Best-effort ``git checkout <ref>``. Returns success.
+
+    Used in the recovery scope-analysis flow which temporarily
+    switches branches to run a check, then switches back. The
+    caller is expected to handle the false return.
+    """
+    return _run_git(cwd, "checkout", ref).returncode == 0
+
+
+def stash_push(cwd: Path, message: str) -> bool:
+    """Best-effort ``git stash push -m <message>``. Returns success."""
+    return _run_git(cwd, "stash", "push", "-m", message).returncode == 0
+
+
+def stash_pop(cwd: Path) -> bool:
+    """Best-effort ``git stash pop``. Returns success."""
+    return _run_git(cwd, "stash", "pop").returncode == 0
+
+
 def merge_no_edit(cwd: Path, ref: str) -> tuple[bool, str]:
     """Run ``git merge <ref> --no-edit`` in ``cwd``.
 
