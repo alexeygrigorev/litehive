@@ -109,6 +109,19 @@ from tests.support.helpers import make_workspace, run_cli
   call site doesn't have one — make the missing data the call
   site's problem.
 
+## Hoist inline expressions to named locals
+
+- Inline string operations like `latest.message.splitlines()[0]`,
+  expression chains, and one-line transformations get hoisted to
+  a named local variable when (a) the result is used more than
+  once, or (b) the inline form is hard to read at a glance.
+  Names document intent; chains do not.
+- Same for diagnostic dicts and other "what is this thing?"
+  expressions: `failure_diagnostics = {...}` then pass
+  `failure_diagnostics`. The reader should be able to tell from
+  the name what the value represents without parsing the
+  construction expression.
+
 ## Domain Values
 
 - Do not store, compare, or pass-around domain values (stages,
