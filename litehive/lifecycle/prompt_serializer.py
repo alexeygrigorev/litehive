@@ -484,15 +484,15 @@ def _compact_list(items: list[str], *, limit: int, separator: str = ", ") -> str
 
 def _pipeline_stage_key(name: str | None) -> str | None:
     if name in {"before_grooming", "grooming", "after_grooming"}:
-        return "grooming"
+        return TaskStage.GROOMING
     if name in {"before_implementing", "implementing", "after_implementing"}:
-        return "implementing"
+        return TaskStage.IMPLEMENTING
     if name in {"before_testing", "testing", "after_testing"}:
-        return "testing"
+        return TaskStage.TESTING
     if name in {"before_accepting", "accepting", "after_accepting"}:
-        return "accepting"
+        return TaskStage.ACCEPTING
     if name in {"before_commit", "commit", "after_commit", "merge_resolving"}:
-        return "commit_to_git"
+        return TaskStage.COMMIT_TO_GIT
     return name
 
 
