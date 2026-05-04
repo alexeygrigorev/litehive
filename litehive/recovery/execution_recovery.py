@@ -11,7 +11,7 @@ from litehive.agents.session_store import (
     save_subagent_artifacts,
 )
 from litehive.config.loading import load_config
-from litehive.domain.common import utcnow
+from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.runtime import (
@@ -228,7 +228,11 @@ def _running_task_ids(root: Path) -> list[str]:
 
 
 def _should_requeue_commit_stage_task(task: TaskRecord) -> bool:
-    return task.pipeline_status == "commit_to_git" and task.status in {"queued", "in_progress", "interrupted"}
+    return task.pipeline_status == PipelineStatus.COMMIT_TO_GIT and task.status in {
+        TaskStatus.QUEUED,
+        TaskStatus.IN_PROGRESS,
+        TaskStatus.INTERRUPTED,
+    }
 
 
 def _has_inactive_running_tasks(

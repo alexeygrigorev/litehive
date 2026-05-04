@@ -4,7 +4,7 @@ logic (dequeue, block, dep-resolve)."""
 import logging
 from pathlib import Path
 
-from litehive.domain.common import utcnow
+from litehive.domain.common import PipelineStatus, TaskStage, TaskStatus, utcnow
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.runtime import TaskOutcomeState
@@ -307,10 +307,10 @@ def _is_recovery_budget_exhausted(task: TaskRecord) -> bool:
 
 
 def _should_requeue_commit_stage_task(task: TaskRecord) -> bool:
-    return task.pipeline_status == "commit_to_git" and task.status in {
-        "queued",
-        "in_progress",
-        "interrupted",
+    return task.pipeline_status == PipelineStatus.COMMIT_TO_GIT and task.status in {
+        TaskStatus.QUEUED,
+        TaskStatus.IN_PROGRESS,
+        TaskStatus.INTERRUPTED,
     }
 
 
@@ -546,8 +546,8 @@ def is_task_eligible_for_execution(task: TaskRecord) -> bool:
 
 
 def _auto_recovery_stage_for_flagged_task(task: TaskRecord) -> str:
-    if task.pipeline_status == "commit_to_git":
-        return "commit_to_git"
+    if task.pipeline_status == PipelineStatus.COMMIT_TO_GIT:
+        return TaskStage.COMMIT_TO_GIT.value
     return implementation_entry_stage(task)
 
 
@@ -777,9 +777,9 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
             prepare_interrupted_task(
                 root,
                 task,
-                stage="commit_to_git",
+                stage=TaskStage.COMMIT_TO_GIT.value,
                 summary="Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`.",
-                reason=stale_interruption_reason(task, "commit_to_git"),
+                reason=stale_interruption_reason(task, TaskStage.COMMIT_TO_GIT.value),
             )
             task.status = "queued"
             enqueue_recovered_task(state, task.id)
