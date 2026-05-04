@@ -11,7 +11,12 @@ from litehive.domain.runtime import TaskOutcomeState
 from litehive.domain.task import TaskRecord, WorkspaceState
 
 from litehive.recovery.detection import TaskLaunchFailure
-from litehive.recovery.execution_recovery import recover_stale_runner_state
+from litehive.recovery.execution_recovery import (
+    interruption_journal_message,
+    prepare_interrupted_task,
+    recover_stale_runner_state,
+    stale_interruption_reason,
+)
 from litehive.state.locking import (
     ensure_future_task_mutation_allowed,
     workspace_lock,
@@ -491,7 +496,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                 # `ready` instead of re-emitting the sticky `failed` terminal
                 # and looping forever. Transition/journal history remains the
                 # source for prior-attempt metrics.
-                from litehive.lifecycle.persistence import SqlitePersistence
+                from litehive.lifecycle.persistence import SqlitePersistence  # noqa: PLC0415
 
                 SqlitePersistence(root).reset_current_lifecycle_state(next_task.id, preserve_run_memory=True)
             if next_task.status in {"queued", "interrupted"}:

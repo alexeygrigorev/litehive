@@ -141,7 +141,7 @@ class RoleAgent(AgentNode):
         if root is None:
             return []
         try:
-            from litehive.config.loading import load_config
+            from litehive.config.loading import load_config  # noqa: PLC0415
 
             config = load_config(root)
         except (OSError, TypeError, ValidationError, ValueError, yaml.YAMLError):
@@ -257,7 +257,7 @@ _IMPLEMENTING_RETRY_ORIGIN_BY_PHASE: dict[str, str] = {
 
 def _latest_reject_stage_for_implementing(root: Path, task_id: str) -> str | None:
     try:
-        from litehive.lifecycle.journal import SqliteJournal
+        from litehive.lifecycle.journal import SqliteJournal  # noqa: PLC0415
 
         transitions = SqliteJournal(root).load_transitions(task_id)
     except Exception:

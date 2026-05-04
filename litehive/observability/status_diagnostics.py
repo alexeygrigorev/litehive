@@ -425,7 +425,7 @@ def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIs
         return []
     # inline: daemon.execution top-level-imports observability.status, which
     # top-level-imports this module (would cycle).
-    from litehive.daemon.execution import check_origin_divergence
+    from litehive.daemon.execution import check_origin_divergence  # noqa: PLC0415
 
     message = check_origin_divergence(root)
     detail = (
@@ -469,7 +469,7 @@ def _probe_task_index_references(
     if not db_path.exists():
         return []
     try:
-        from litehive.state.rebuild_safety import sqlite_task_ids
+        from litehive.state.rebuild_safety import sqlite_task_ids  # noqa: PLC0415
 
         db_ids = sqlite_task_ids(db_path)
     except (OSError, sqlite3.DatabaseError, ValueError) as exc:
@@ -514,7 +514,7 @@ def _probe_task_status_damage(
     if not workspace_path(root, "data.db").exists():
         return []
     try:
-        from litehive.state.records import list_tasks
+        from litehive.state.records import list_tasks  # noqa: PLC0415
 
         tasks = list_tasks(root, strict=False)
     except (OSError, sqlite3.DatabaseError, ValueError) as exc:
@@ -588,7 +588,7 @@ def _recovery_failure_issue(root: Path, task: TaskRecord) -> StatusIssue | None:
 def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureContext:
     context = _RecoveryFailureContext()
     try:
-        from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
+        from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound  # noqa: PLC0415
 
         state = SqlitePersistence(root).load(task.id)
     except TaskNotFound:

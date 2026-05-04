@@ -215,7 +215,7 @@ def _latest_stage_report_for_task(root: Path | None, task: TaskRecord) -> Any | 
     if root is None:
         return None
     try:
-        from litehive.tasks.report_storage import latest_stage_report
+        from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
 
         return latest_stage_report(root, task)
     except (OSError, sqlite3.DatabaseError, ValueError):
@@ -242,7 +242,7 @@ def _latest_stage_failure_classification(root: Path | None, task: TaskRecord) ->
     if root is None:
         return None
     try:
-        from litehive.tasks.report_storage import latest_stage_report
+        from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
 
         report = latest_stage_report(root, task)
     except (OSError, sqlite3.DatabaseError, ValueError):

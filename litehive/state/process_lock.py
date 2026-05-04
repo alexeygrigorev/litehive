@@ -110,7 +110,7 @@ class ProcessLockManager:
 
     def save_process_state(self, workspace: Path, payload: dict[str, object], *, status: str = "running") -> None:
         """Save process state to runtime store."""
-        from litehive.state.store import runtime_store
+        from litehive.state.store import runtime_store  # noqa: PLC0415
 
         runtime_store(workspace).save_process_state(
             self.process_name,
@@ -120,7 +120,7 @@ class ProcessLockManager:
 
     def clear_process_state(self, workspace: Path) -> None:
         """Clear process state from runtime store."""
-        from litehive.state.store import runtime_store
+        from litehive.state.store import runtime_store  # noqa: PLC0415
 
         runtime_store(workspace).clear_process_state(self.process_name)
 

@@ -47,7 +47,14 @@ line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]
-extend-select = ["E402", "F401"]
+# E402: module-level imports must come first
+# F401: unused imports
+# PLC0415: imports should be at top-level (no inline imports unless
+#          they break a real cycle or shave cold-start latency; the
+#          remaining ones in the codebase carry an explicit
+#          ``# noqa: PLC0415`` annotation paired with a comment
+#          explaining the cycle).
+extend-select = ["E402", "F401", "PLC0415"]
 
 [dependency-groups]
 dev = [

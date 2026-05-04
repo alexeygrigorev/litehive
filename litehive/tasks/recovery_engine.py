@@ -15,7 +15,7 @@ def resolve_recovery_engine(
     # inline: kept so tests can monkey-patch ``select_engine`` on the
     # config.engine_models module (the canonical home) and have callers
     # here see it.
-    from litehive.config.engine_models import select_engine
+    from litehive.config.engine_models import select_engine  # noqa: PLC0415
 
     if config is None:
         return "codex", None

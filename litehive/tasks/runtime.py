@@ -344,7 +344,7 @@ def duration_seconds(started_at: str | None, ended_at: str | None) -> int:
     if started_at is None or ended_at is None:
         return 0
     try:
-        from datetime import datetime
+        from datetime import datetime  # noqa: PLC0415
 
         started = datetime.fromisoformat(started_at)
         ended = datetime.fromisoformat(ended_at)

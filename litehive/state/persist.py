@@ -248,7 +248,7 @@ def persist_tasks_and_state(
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     # inline: state.records top-level-imports state.persist (would cycle).
-    from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
+    from litehive.state.records import ensure_runtime_ignored, task_state_for_storage  # noqa: PLC0415
 
     for task in tasks:
         task.updated_at = utcnow()
@@ -278,7 +278,7 @@ def persist_tasks_and_state_without_runner_guard(
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     # inline: state.records top-level-imports state.persist (would cycle).
-    from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
+    from litehive.state.records import ensure_runtime_ignored, task_state_for_storage  # noqa: PLC0415
 
     for task in tasks:
         task.updated_at = utcnow()

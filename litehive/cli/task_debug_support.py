@@ -51,7 +51,7 @@ def debug_latest(root: Path, task):
 
 def _print_lifecycle_evidence(root: Path, task) -> None:
     try:
-        from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
+        from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound  # noqa: PLC0415
 
         state = SqlitePersistence(root).load(task.id)
     except TaskNotFound:

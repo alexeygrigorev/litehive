@@ -188,7 +188,7 @@ def _persist_created_tasks(
 ) -> None:
     # inline: kept so tests can monkey-patch ``merged_state_for_runner_owned_write``
     # on the persist module (the canonical home) and have callers here see it.
-    from litehive.state.persist import merged_state_for_runner_owned_write, skip_bootstrap_load_state
+    from litehive.state.persist import merged_state_for_runner_owned_write, skip_bootstrap_load_state  # noqa: PLC0415
 
     with skip_bootstrap_load_state():
         merged_state = merged_state_for_runner_owned_write(
@@ -260,7 +260,7 @@ def create_task(
     if task_type is not None and task_type not in VALID_TASK_TYPES:
         raise ValueError(f"Unsupported task type '{task_type}'")
     # inline: tasks.queue top-level-imports state.records (would cycle).
-    from litehive.tasks.queue import validate_task_dependencies
+    from litehive.tasks.queue import validate_task_dependencies  # noqa: PLC0415
 
     with workspace_lock(root):
         state = load_state(root, bootstrap=False)

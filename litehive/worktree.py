@@ -10,7 +10,6 @@ from pathlib import Path, PurePosixPath
 from typing import Callable
 
 from litehive.agents.merge_resolver import run_worktree_merge_agent
-from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import workspace_path
 from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
@@ -670,7 +669,7 @@ def _remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[st
                 try:
                     save_task(root, task)
                 except WorkspaceConflictError:
-                    from litehive.attention import append_attention_log
+                    from litehive.attention import append_attention_log  # noqa: PLC0415
 
                     append_attention_log(
                         root,

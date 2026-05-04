@@ -557,7 +557,7 @@ class HeruEngineAdapter:
         prompt_text: str,
         source_subagent_id: str,
     ):
-        from litehive.agents.session_store import save_subagent_artifacts
+        from litehive.agents.session_store import save_subagent_artifacts  # noqa: PLC0415
 
         save_subagent_artifacts(
             self.workspace_root,
@@ -585,7 +585,7 @@ class HeruEngineAdapter:
 
     @staticmethod
     def extract_continuation_id(result, fallback: str | None) -> str | None:
-        from litehive.domain.agent import SubagentResult
+        from litehive.domain.agent import SubagentResult  # noqa: PLC0415
 
         if not isinstance(result, SubagentResult):
             return fallback
@@ -603,7 +603,7 @@ class HeruEngineAdapter:
     @staticmethod
     def _reraise(exc: Exception) -> None:
         """Translate heru exceptions into the error taxonomy."""
-        from heru import RetryableExecutionFailure
+        from heru import RetryableExecutionFailure  # noqa: PLC0415
 
         kind = exc.kind if isinstance(exc, RetryableExecutionFailure) else None
         message = str(exc)

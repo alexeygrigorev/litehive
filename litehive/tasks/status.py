@@ -290,8 +290,8 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
         stage = task.runtime.pipeline.current_stage.stage or task.pipeline_status
 
         # Park the task - this is intentional operator action, not system interruption
-        from litehive.domain.common import utcnow
-        from litehive.domain.runtime import RuntimeInterruptionState
+        from litehive.domain.common import utcnow  # noqa: PLC0415
+        from litehive.domain.runtime import RuntimeInterruptionState  # noqa: PLC0415
 
         now = utcnow()
         task.status = "parked"

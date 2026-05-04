@@ -20,8 +20,8 @@ def require_completed_task(task: TaskRecord, action: str) -> None:
 def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
     root = root.resolve()
     with workspace_mutation_guard(root), workspace_lock(root):
-        from litehive.state.records import get_task
-        from litehive.tasks.queue import drop_task_from_workspace_state
+        from litehive.state.records import get_task  # noqa: PLC0415
+        from litehive.tasks.queue import drop_task_from_workspace_state  # noqa: PLC0415
 
         task = get_task(root, task_id)
         if task is None:

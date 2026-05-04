@@ -118,8 +118,8 @@ def runner_lock_is_active(root: Path) -> bool:
 
 def runner_status_needs_reconciliation(root: Path) -> bool:
     # inline: state.records and state.persist top-level-import state.locking (would cycle).
-    from litehive.state.records import list_tasks
-    from litehive.state.persist import load_state
+    from litehive.state.records import list_tasks  # noqa: PLC0415
+    from litehive.state.persist import load_state  # noqa: PLC0415
 
     state = load_state(root)
     if state.active_task_id is not None:
@@ -138,7 +138,7 @@ def heartbeat_is_late(heartbeat_at: str | None) -> bool:
     if heartbeat_at is None:
         return False
     try:
-        from datetime import UTC, datetime
+        from datetime import UTC, datetime  # noqa: PLC0415
 
         ts = datetime.fromisoformat(heartbeat_at)
         age = (datetime.now(UTC) - ts).total_seconds()
@@ -298,12 +298,12 @@ def _auto_repair_stale_state(root: Path) -> None:
     a crashed process and must be cleaned up before we start.
     """
     # inline: recovery.workspace_repair top-level-imports state.locking (would cycle).
-    from litehive.recovery.workspace_repair import repair_workspace_state
+    from litehive.recovery.workspace_repair import repair_workspace_state  # noqa: PLC0415
 
     try:
         result = repair_workspace_state(root)
         if result.mutated:
-            import sys
+            import sys  # noqa: PLC0415
 
             print(
                 f"auto-repair: cleared stale state "
@@ -399,8 +399,8 @@ def ensure_future_task_mutation_allowed(
     state: WorkspaceState | None = None,
 ) -> None:
     # inline: state.records / tasks.queue top-level-import state.locking (would cycle).
-    from litehive.state.records import get_task
-    from litehive.tasks.queue import is_task_eligible_for_execution, active_task_markers
+    from litehive.state.records import get_task  # noqa: PLC0415
+    from litehive.tasks.queue import is_task_eligible_for_execution, active_task_markers  # noqa: PLC0415
 
     markers = active_task_markers(root, state)
     conflicts: list[str] = []
@@ -438,7 +438,7 @@ def persist_future_task_update(
     audit_entries: list["TaskAuditEntry"] | None = None,
 ) -> None:
     # inline: state.records top-level-imports state.locking (would cycle).
-    from litehive.state.records import ensure_runtime_ignored, task_state_for_storage
+    from litehive.state.records import ensure_runtime_ignored, task_state_for_storage  # noqa: PLC0415
 
     task.updated_at = utcnow()
     runtime_store(root).save_runtime_transaction(

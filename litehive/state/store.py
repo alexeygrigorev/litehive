@@ -49,12 +49,12 @@ class RuntimeStore:
                 connection.commit()
             connection.commit()
         if self._should_rebuild_from_task_event_log():
-            from litehive.tasks.event_log import rebuild_sqlite_from_task_event_log
+            from litehive.tasks.event_log import rebuild_sqlite_from_task_event_log  # noqa: PLC0415
 
             rebuild_sqlite_from_task_event_log(self.root)
 
     def _should_rebuild_from_task_event_log(self) -> bool:
-        from litehive.tasks.event_log import sqlite_task_tables_empty, task_event_log_has_events
+        from litehive.tasks.event_log import sqlite_task_tables_empty, task_event_log_has_events  # noqa: PLC0415
 
         return task_event_log_has_events(self.root) and sqlite_task_tables_empty(self.root)
 

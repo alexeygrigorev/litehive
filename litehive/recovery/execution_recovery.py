@@ -440,7 +440,7 @@ def _recover_stale_running_task(
     summary: WorkspaceRepairSummary | None,
 ) -> tuple[bool, str | None, bool]:
     # inline: tasks.queue top-level-imports execution_recovery (would cycle).
-    from litehive.tasks.queue import (
+    from litehive.tasks.queue import (  # noqa: PLC0415
         canonicalize_resumable_queue_task,
         is_task_eligible_for_execution,
         resumable_running_stage,
@@ -535,7 +535,7 @@ def _normalize_nonrunning_resumable_tasks(
     summary: WorkspaceRepairSummary | None,
 ) -> dict[str, object]:
     # inline: tasks.queue top-level-imports execution_recovery (would cycle).
-    from litehive.tasks.queue import (
+    from litehive.tasks.queue import (  # noqa: PLC0415
         canonicalize_resumable_queue_task,
         is_task_eligible_for_execution,
         resumable_queue_stage,

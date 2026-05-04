@@ -242,7 +242,7 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
     workspace_path(root, "data.db").parent.mkdir(parents=True, exist_ok=True)
     # inline: state.store transitively pulls db.schema which loads config.*
     # back through litehive/config/__init__.py during partial init.
-    from litehive.state.store import RuntimeStore
+    from litehive.state.store import RuntimeStore  # noqa: PLC0415
 
     RuntimeStore(root).bootstrap()
 

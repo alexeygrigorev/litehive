@@ -74,11 +74,11 @@ def dispatch_status(argv: list[str]) -> int:
     """
     # inline: keep CLI cold start fast — these modules are heavy and only
     # needed when the user actually asks for status.
-    from litehive.observability.status_diagnostics import (
+    from litehive.observability.status_diagnostics import (  # noqa: PLC0415
         render_operational_issue_lines,
         status_has_problems,
     )
-    from litehive.observability.status import collect_task_pipeline_status, render_task_pipeline_status_lines
+    from litehive.observability.status import collect_task_pipeline_status, render_task_pipeline_status_lines  # noqa: PLC0415
 
     try:
         explicit_workspace = _workspace_override_from_argv(argv)
@@ -122,7 +122,7 @@ def main() -> int:
                 return 1
             route_via_root_cli = True
         if route_via_root_cli:
-            from litehive.cli.app import main as cli_main
+            from litehive.cli.app import main as cli_main  # noqa: PLC0415
 
             return cli_main()
 
@@ -130,8 +130,8 @@ def main() -> int:
         return dispatch_status(argv[1:])
 
     if argv and argv[0] == "agent":
-        import click
-        from litehive.cli.agent_cli import agent_app
+        import click  # noqa: PLC0415
+        from litehive.cli.agent_cli import agent_app  # noqa: PLC0415
 
         sys.argv = [sys.argv[0], *argv[1:]]
         try:
@@ -146,8 +146,8 @@ def main() -> int:
         return 0 if result is None else int(result)
 
     if argv and argv[0] == "task":
-        import click
-        from litehive.cli.task_cli import app as task_app
+        import click  # noqa: PLC0415
+        from litehive.cli.task_cli import app as task_app  # noqa: PLC0415
 
         sys.argv = [sys.argv[0], *argv[1:]]
         try:
@@ -162,8 +162,8 @@ def main() -> int:
         return 0 if result is None else int(result)
 
     if argv and argv[0] == "pipeline":
-        import click
-        from litehive.cli.pipeline_cli import app as pipeline_app
+        import click  # noqa: PLC0415
+        from litehive.cli.pipeline_cli import app as pipeline_app  # noqa: PLC0415
 
         sys.argv = [sys.argv[0], *argv[1:]]
         try:
@@ -177,7 +177,7 @@ def main() -> int:
             return 1
         return 0 if result is None else int(result)
 
-    from litehive.cli.app import main as cli_main
+    from litehive.cli.app import main as cli_main  # noqa: PLC0415
 
     return cli_main()
 

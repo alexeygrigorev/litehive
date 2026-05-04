@@ -165,7 +165,7 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         self.main_ref = main_ref
 
     def sync(self, state: TaskState) -> bool:
-        from litehive.worktree import WorktreeMergeConflict, WorktreeService
+        from litehive.worktree import WorktreeMergeConflict, WorktreeService  # noqa: PLC0415
 
         try:
             result = WorktreeService(self.workspace_root).sync_task_worktree(
@@ -210,7 +210,7 @@ class PreExecRecoveryNode(SystemNode):
             try:
                 repair(state)
             except Exception as exc:
-                import sys
+                import sys  # noqa: PLC0415
 
                 print(
                     f"[pre-exec repair] ignored error: {type(exc).__name__}: {exc}",
