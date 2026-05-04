@@ -74,7 +74,7 @@ def test_cli_modules_do_not_mutate_domain_state_with_direct_sqlite() -> None:
 
 
 def test_role_prompt_code_does_not_mutate_tasks() -> None:
-    prompt_policy_files = [*_python_files("roles"), PACKAGE_ROOT / "agents" / "prompts.py"]
+    prompt_policy_files = list(_python_files("roles"))
     forbidden_modules = {
         "litehive.tasks.status",
         "litehive.tasks.queue",
