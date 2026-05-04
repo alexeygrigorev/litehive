@@ -16,6 +16,7 @@ from typing import TextIO
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import apply_pending_migrations
+from litehive.git import ops as git_ops
 from litehive.observability.status import (
     collect_task_pipeline_status,
     render_runner_status_line,
@@ -47,16 +48,6 @@ DAEMON_EXIT_POLL_INTERVAL_SECONDS = 0.1
 _CONTINUE_STOP_REASONS = {None, "None", "queue_exhausted", "task_requeued"}
 
 
-def _git(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", *args],
-        cwd=workspace,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
 def check_origin_divergence(workspace: Path) -> str | None:
     """Return a human-readable reason if local main has diverged from origin/main.
 
@@ -71,27 +62,22 @@ def check_origin_divergence(workspace: Path) -> str | None:
     """
     if not (workspace / ".git").exists():
         return None
-    remotes = _git(workspace, "remote")
-    if remotes.returncode != 0 or "origin" not in remotes.stdout.split():
+    if "origin" not in git_ops.list_remote_names(workspace):
         return None
-    fetch = _git(workspace, "fetch", "origin", "main")
-    if fetch.returncode != 0:
-        logger.warning("git fetch origin main failed: %s", fetch.stderr.strip())
+    ok, stderr = git_ops.fetch(workspace, "origin", "main")
+    if not ok:
+        logger.warning("git fetch origin main failed: %s", stderr)
         return None
-    local_rev = _git(workspace, "rev-parse", "--verify", "main")
-    remote_rev = _git(workspace, "rev-parse", "--verify", "origin/main")
-    if local_rev.returncode != 0 or remote_rev.returncode != 0:
+    local_sha = git_ops.rev_parse_verify(workspace, "main")
+    remote_sha = git_ops.rev_parse_verify(workspace, "origin/main")
+    if local_sha is None or remote_sha is None:
         return None
-    local_sha = local_rev.stdout.strip()
-    remote_sha = remote_rev.stdout.strip()
     if local_sha == remote_sha:
         return None
     # Either side being an ancestor of the other is a fast-forward — not diverged.
-    local_is_ancestor = _git(workspace, "merge-base", "--is-ancestor", local_sha, remote_sha)
-    if local_is_ancestor.returncode == 0:
+    if git_ops.is_ancestor(workspace, local_sha, remote_sha):
         return None
-    remote_is_ancestor = _git(workspace, "merge-base", "--is-ancestor", remote_sha, local_sha)
-    if remote_is_ancestor.returncode == 0:
+    if git_ops.is_ancestor(workspace, remote_sha, local_sha):
         return None
     return (
         f"local main ({local_sha[:8]}) and origin/main ({remote_sha[:8]}) have diverged. "

@@ -75,6 +75,55 @@ def current_head(root: Path) -> str | None:
     return proc.stdout.strip() or None
 
 
+def rev_parse_verify(cwd: Path, ref: str) -> str | None:
+    """Return the sha for ``ref`` (``git rev-parse --verify <ref>``).
+
+    Returns ``None`` when the ref does not resolve. Used by the
+    daemon's origin-divergence check to compare ``main`` against
+    ``origin/main``.
+    """
+    proc = _run_git(cwd, "rev-parse", "--verify", ref)
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.strip() or None
+
+
+def list_remote_names(cwd: Path) -> list[str]:
+    """Return the configured remote names (``git remote``).
+
+    Returns an empty list if the call fails (e.g. not a git repo).
+    """
+    proc = _run_git(cwd, "remote")
+    if proc.returncode != 0:
+        return []
+    return [name for name in proc.stdout.split() if name]
+
+
+def fetch(cwd: Path, remote: str, *refs: str) -> tuple[bool, str]:
+    """Best-effort ``git fetch <remote> <refs...>``.
+
+    Returns ``(success, stderr)``. Network issues are intentionally
+    not raised — the daemon treats fetch failure as "no opinion"
+    rather than a halt condition.
+    """
+    proc = _run_git(cwd, "fetch", remote, *refs)
+    return proc.returncode == 0, proc.stderr.strip()
+
+
+def path_differs_at_ref(cwd: Path, ref: str, path: str) -> bool:
+    """Return whether ``path`` differs between the worktree and ``ref``.
+
+    Wraps ``git diff --quiet <ref> -- <path>`` and translates the
+    exit code: 0 = identical, 1 = differs, anything else = error.
+    """
+    proc = _run_git(cwd, "diff", "--quiet", ref, "--", path)
+    if proc.returncode == 0:
+        return False
+    if proc.returncode == 1:
+        return True
+    raise GitError(proc.stderr.strip() or f"git diff --quiet failed for {path}")
+
+
 def add_worktree(root: Path, path: Path, *, ref: str = "HEAD") -> None:
     proc = _run_git(root, "worktree", "add", "--detach", str(path), ref)
     if proc.returncode != 0:

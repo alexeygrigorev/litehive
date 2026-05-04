@@ -2,13 +2,12 @@
 
 import os
 import signal
-import subprocess
 import threading
 import time
 from pathlib import Path
 
 from litehive.config.loading import load_config
-from litehive.git.ops import current_head
+from litehive.git.ops import GitError, current_head, path_differs_at_ref
 from litehive.domain.task import TaskRecord, WorkspaceState
 
 from litehive.tasks.constants import (
@@ -615,18 +614,10 @@ def _requeue_task_transition(
         return root
 
     def _path_differs_from_main(checkout_path: Path, main_ref: str, relative_path: str) -> bool:
-        proc = subprocess.run(
-            ["git", "diff", "--quiet", main_ref, "--", relative_path],
-            cwd=checkout_path,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if proc.returncode == 1:
-            return True
-        if proc.returncode == 0:
-            return False
-        raise ValueError(proc.stderr.strip() or f"git diff failed for {relative_path}")
+        try:
+            return path_differs_at_ref(checkout_path, main_ref, relative_path)
+        except GitError as exc:
+            raise ValueError(str(exc)) from exc
 
     with workspace_lock(root):
         task = get_task_record(root, task_id)
