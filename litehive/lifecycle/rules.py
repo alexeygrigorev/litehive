@@ -6,6 +6,7 @@ Read top to bottom to understand routing. Each row is:
 Ctrl+click any S.STAGE to see the node that runs there.
 """
 
+from litehive.domain.common import PipelineState
 from litehive.domain.lifecycle_deltas import (
     clear_completed_rejection_loop,
     enter_pre_exec_recovery,
@@ -253,8 +254,8 @@ RULES: list[Rule] = [
         from_state=S.TESTING,
         on_event=Reject,
         transition_to=S.ACCEPTING,
-        when=stage_retries_exhausted("testing") & last_hook_ok(),
-        with_effect=remember_rejection("accepting"),
+        when=stage_retries_exhausted(PipelineState.TESTING) & last_hook_ok(),
+        with_effect=remember_rejection(PipelineState.ACCEPTING),
     ),
     *retry_epoch_rules(
         S.TESTING,

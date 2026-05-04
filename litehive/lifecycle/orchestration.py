@@ -436,7 +436,7 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
         root,
         task_record,
         role="recovery",
-        stage="recovering",
+        stage=PipelineState.RECOVERING.value,
         verdicts={"reject"},
     )
     if latest is None or not latest.follow_up_task_id:
@@ -445,7 +445,7 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
     apply_task_outcome(
         task_record,
         kind="flagged",
-        stage=(trigger.origin_stage if trigger is not None else "recovering"),
+        stage=(trigger.origin_stage if trigger is not None else PipelineState.RECOVERING.value),
         reason_code="stage_exception",
         reason=state.failed_message or latest.message or "Recovery escalated to a follow-up task.",
         retry_count=task_record.runtime.pipeline.retry_count,
@@ -642,9 +642,9 @@ def _report_stage_for_phase(phase: str | PipelineState) -> ReportPipelineState:
     """
     state = canonical_pipeline_state(phase)
     if state == PipelineState.MERGE_RESOLVING:
-        return "merge_resolving"
+        return PipelineState.MERGE_RESOLVING.value
     if state == PipelineState.RECOVERING:
-        return "recovering"
+        return PipelineState.RECOVERING.value
     task_stage = task_stage_for_pipeline_state(state)
     if task_stage is None:
         # No task-stage projection exists; fall back to the report
