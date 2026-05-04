@@ -103,6 +103,40 @@ def merge_commit(root: Path, commit_sha: str) -> str:
     return head
 
 
+def merge_no_edit(cwd: Path, ref: str) -> tuple[bool, str]:
+    """Run ``git merge <ref> --no-edit`` in ``cwd``.
+
+    Returns ``(success, stderr_or_stdout)``. Used by the
+    merge-resolver agent flow which needs to distinguish a clean
+    merge from a conflict (and surface the message either way).
+    """
+    proc = _run_git(cwd, "merge", ref, "--no-edit")
+    if proc.returncode == 0:
+        return True, proc.stdout
+    return False, proc.stderr.strip() or proc.stdout.strip()
+
+
+def merge_abort(cwd: Path) -> None:
+    """Best-effort ``git merge --abort`` in ``cwd``.
+
+    Used after a conflicting merge could not be resolved (either
+    automatically or by the merge-resolver agent). Failure is
+    intentionally silent — we are already on the failure path and
+    have nothing more to recover.
+    """
+    _run_git(cwd, "merge", "--abort")
+
+
+def unmerged_files(cwd: Path) -> list[str]:
+    """Return paths with merge conflicts (``--diff-filter=U``).
+
+    Called after ``merge_no_edit`` returns a non-success result to
+    enumerate the files the merge-resolver agent needs to fix.
+    """
+    proc = _run_git(cwd, "diff", "--name-only", "--diff-filter=U")
+    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+
 def is_ancestor(root: Path, ancestor_sha: str, descendant_sha: str) -> bool:
     proc = _run_git(root, "merge-base", "--is-ancestor", ancestor_sha, descendant_sha)
     if proc.returncode == 0:

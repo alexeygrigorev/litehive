@@ -2,19 +2,17 @@
 
 Lives next to the other agent runners (``litehive.agents``) instead of
 inside ``worktree.py`` so the worktree module is about worktrees and
-agent-running stays in one place. The actual git plumbing — try the
-merge, collect conflict files, abort if the agent failed — stays here
-because it is specific to this agent's contract.
+agent-running stays in one place. All git plumbing goes through
+``litehive.git.ops``; this module only orchestrates the subagent.
 """
 
-import subprocess
 from pathlib import Path
 
 from litehive.agents.manager import SubagentManager
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.domain.task import TaskRecord
-from litehive.git.ops import GitError
+from litehive.git.ops import GitError, merge_abort, merge_no_edit, unmerged_files
 from litehive.tasks.journal import append_journal
 from litehive.tasks.recovery_engine import resolve_recovery_engine
 
@@ -47,23 +45,18 @@ def run_worktree_merge_agent(
     If the agent does not clear all conflicts, the merge is aborted so
     the worktree is left in its pre-merge state.
     """
-    merge = subprocess.run(
-        ["git", "merge", main_head, "--no-edit"],
-        cwd=worktree_path,
-        capture_output=True,
-        text=True,
-    )
-    if merge.returncode == 0:
+    merged, message = merge_no_edit(worktree_path, main_head)
+    if merged:
         append_journal(root, task, "[worktree] Merged main into worktree.")
         return
 
-    conflicts = _list_unresolved_files(worktree_path)
+    conflicts = unmerged_files(worktree_path)
     if not conflicts:
-        subprocess.run(["git", "merge", "--abort"], cwd=worktree_path, capture_output=True)
+        merge_abort(worktree_path)
         append_journal(
             root,
             task,
-            f"[worktree] Merge failed (no conflict files detected): {merge.stderr.strip()}",
+            f"[worktree] Merge failed (no conflict files detected): {message}",
         )
         return
 
@@ -88,18 +81,8 @@ def run_worktree_merge_agent(
         prompt=_MERGE_PROMPT_TEMPLATE.format(task_id=task.id, conflicts=", ".join(conflicts)),
     )
 
-    if not _list_unresolved_files(worktree_path):
+    if not unmerged_files(worktree_path):
         append_journal(root, task, "[worktree] Merge agent resolved conflicts.")
         return
-    subprocess.run(["git", "merge", "--abort"], cwd=worktree_path, capture_output=True)
+    merge_abort(worktree_path)
     append_journal(root, task, "[worktree] Merge agent could not resolve. Worktree kept as-is.")
-
-
-def _list_unresolved_files(worktree_path: Path) -> list[str]:
-    proc = subprocess.run(
-        ["git", "diff", "--name-only", "--diff-filter=U"],
-        cwd=worktree_path,
-        capture_output=True,
-        text=True,
-    )
-    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
