@@ -28,6 +28,7 @@ from litehive.cli.task_logs_support import (
 )
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task, get_task, list_tasks as load_tasks, require_task
+from litehive.domain.common import TaskStatus
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
@@ -37,13 +38,13 @@ app = make_typer(invoke_without_command=True)
 
 
 def _display_flag_reason(task) -> str:
-    if task.status != "flagged":
+    if task.status != TaskStatus.FLAGGED:
         return "-"
     return task.flag_reason or "unknown"
 
 
 def _display_close_reason(task) -> str:
-    if task.status not in {"closed", "done"}:
+    if task.status not in {TaskStatus.CLOSED, TaskStatus.DONE}:
         return "-"
     return task.close_reason or task.runtime.pipeline.last_outcome.reason_code or "unknown"
 
@@ -192,12 +193,16 @@ def list_tasks(
     tasks = load_tasks(workspace, strict=False)
     filtered = []
     for task in tasks:
-        if not show_all and task.status == "done":
+        if not show_all and task.status == TaskStatus.DONE:
             continue
         filtered.append(task)
     for task in filtered:
-        flag_reason = f" flag_reason={_display_flag_reason(task)}" if task.status == "flagged" else ""
-        close_reason = f" close_reason={_display_close_reason(task)}" if task.status in {"closed", "done"} else ""
+        flag_reason = f" flag_reason={_display_flag_reason(task)}" if task.status == TaskStatus.FLAGGED else ""
+        close_reason = (
+            f" close_reason={_display_close_reason(task)}"
+            if task.status in {TaskStatus.CLOSED, TaskStatus.DONE}
+            else ""
+        )
         print(f"{task.id} [{task.status}/{task.pipeline_status}] {task.title}{flag_reason}{close_reason}")
     return 0
 

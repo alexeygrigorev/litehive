@@ -1,3 +1,6 @@
+from litehive.domain.common import TaskStatus
+
+
 def format_engine_int_map(values):
     if not values:
         return "-"
@@ -25,7 +28,7 @@ def task_dependencies_label(task_id, dependencies):
 
 
 def task_interruption_label(task):
-    if task.status != "interrupted" or task.runtime.pipeline.current_stage.status != "interrupted":
+    if task.status != TaskStatus.INTERRUPTED or task.runtime.pipeline.current_stage.status != "interrupted":
         return ""
     interruption = task.runtime.execution.interruption
     stage = (

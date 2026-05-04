@@ -1,4 +1,4 @@
-from litehive.domain.common import utcnow
+from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
 from litehive.state.records import list_tasks
 from litehive.tasks.report_storage import load_stage_reports_for_task_id
 
@@ -40,7 +40,7 @@ def _pool_task_report_entry(
 def _pending_pool_tasks(root):
     pending = []
     for task in list_tasks(root):
-        if task.status in {"queued", "in_progress"} and task.pipeline_status != "done":
+        if task.status in {TaskStatus.QUEUED, TaskStatus.IN_PROGRESS} and task.pipeline_status != PipelineStatus.DONE:
             pending.append(
                 _pool_task_report_entry(
                     root,
@@ -57,7 +57,7 @@ def _pending_pool_tasks(root):
 def _resumable_pool_tasks(root):
     resumable = []
     for task in list_tasks(root):
-        if task.status not in {"interrupted", "parked"} or task.pipeline_status == "done":
+        if task.status not in {TaskStatus.INTERRUPTED, TaskStatus.PARKED} or task.pipeline_status == PipelineStatus.DONE:
             continue
         resumable.append(
             _pool_task_report_entry(
@@ -78,7 +78,7 @@ def _resumable_pool_tasks(root):
 def _closed_pool_tasks(root):
     closed = []
     for task in list_tasks(root):
-        if task.status != "closed":
+        if task.status != TaskStatus.CLOSED:
             continue
         closed.append(
             _pool_task_report_entry(

@@ -19,6 +19,7 @@ from litehive.cli.display import format_retry_on
 from litehive.cli.common import WorkspaceOption
 from litehive.config.workspace import ensure_workspace
 from litehive.daemon.registry import daemon_metadata
+from litehive.domain.common import TaskStatus
 from litehive.observability.status import (
     collect_task_pipeline_status,
     collect_recent_activity,
@@ -195,12 +196,14 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     state = load_state(root)
     tasks = list_tasks_state_first(root, state=state, include_runtime=True)
     active_task = get_task(root, state.active_task_id) if state.active_task_id else None
-    flagged_tasks = [task for task in tasks if task.status == "flagged"]
+    flagged_tasks = [task for task in tasks if task.status == TaskStatus.FLAGGED]
     worktrees = collect_managed_worktrees(root)
     dirty_report = inspect_dirty_worktree_gate(root)
     quota_health = collect_quota_health()
     completed = sorted(
-        (task for task in tasks if task.status == "done"), key=lambda task: task.updated_at or "", reverse=True
+        (task for task in tasks if task.status == TaskStatus.DONE),
+        key=lambda task: task.updated_at or "",
+        reverse=True,
     )[:3]
 
     print("=== Workspace Health ===")
