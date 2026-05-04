@@ -322,8 +322,8 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
     journal_message: str | None = None
     commit_result = state.commit_result
     if state.stage == PipelineState.DONE:
-        task_record.status = "done"
-        task_record.pipeline_status = "done"
+        task_record.status = TaskStatus.DONE
+        task_record.pipeline_status = PipelineStatus.DONE
         task_record.close_reason = "done"
         task_record.flag_reason = None
         if commit_result is not None:
@@ -343,15 +343,15 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
         failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
         merge_reject = state.last_rejection_by_stage.get(PipelineState.MERGE_RESOLVING)
         if origin_stage == PipelineState.MERGE_RESOLVING or merge_reject is not None:
-            task_record.status = "flagged"
-            task_record.pipeline_status = "flagged"
+            task_record.status = TaskStatus.FLAGGED
+            task_record.pipeline_status = PipelineStatus.FLAGGED
             task_record.close_reason = None
             task_record.flag_reason = "merge_failed"
             if state.failed_message:
                 journal_message = f"commit_to_git failed during merge reconciliation: {state.failed_message}"
         else:
-            task_record.status = "flagged"
-            task_record.pipeline_status = "flagged"
+            task_record.status = TaskStatus.FLAGGED
+            task_record.pipeline_status = PipelineStatus.FLAGGED
             task_record.close_reason = None
             if failed_reason == "hook_reject_loop" or (
                 trigger is not None and trigger.reason_code == "hook_reject_loop"
@@ -371,7 +371,7 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
                     "crash_budget_exhausted" if trigger_kind in {"crash", "timeout"} else "recovery_budget_exhausted"
                 )
     else:
-        task_record.status = "in_progress"
+        task_record.status = TaskStatus.IN_PROGRESS
         task_record.close_reason = None
         task_record.flag_reason = None
         task_record.pipeline_status = pipeline_status_for_pipeline_state(state.stage)
@@ -397,7 +397,7 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
         action = "status_changed"
         if state.stage == PipelineState.FAILED:
             action = "failed"
-        elif state.stage == PipelineState.DONE and task_record.status == "done":
+        elif state.stage == PipelineState.DONE and task_record.status == TaskStatus.DONE:
             action = "completed"
         audit_entries.append(
             build_task_audit_entry(
@@ -563,7 +563,7 @@ def _mark_task_interrupted_on_crash(root: Path, task: TaskRecord, persistence: o
         fresh = get_task(root, task.id)
         if fresh is not None and fresh.runtime.pipeline.execution_status == "running":
             fresh.runtime.pipeline.execution_status = "interrupted"
-            fresh.status = "queued"
+            fresh.status = TaskStatus.QUEUED
             save_task(root, fresh)
     except Exception:
         pass  # best-effort — don't mask the original crash

@@ -554,7 +554,7 @@ def render_active_tasks_section(
 
 def find_last_completed_task(tasks: list[TaskRecord]) -> TaskRecord | None:
     """Return the most recently completed (done) task by updated_at."""
-    done_tasks = [t for t in tasks if t.status == "done"]
+    done_tasks = [t for t in tasks if t.status == TaskStatus.DONE]
     if not done_tasks:
         return None
     return max(done_tasks, key=lambda t: t.updated_at or "")
