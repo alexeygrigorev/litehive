@@ -18,7 +18,7 @@ from litehive.config.registry import workspace_registry_error, workspace_registr
 from litehive.config.workspace_files import config_path
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.daemon.registry import daemon_metadata, pid_is_alive
-from litehive.domain.common import PipelineStatus, RunnerStatus, TaskStage
+from litehive.domain.common import PipelineStatus, RunnerStatus, TaskStage, TaskStatus
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
@@ -634,11 +634,11 @@ def _backlog_damage_issue(
 ) -> StatusIssue | None:
     if task.id == active_task_id:
         return None
-    status = str(task.status)
-    pipeline_status = str(task.pipeline_status)
-    if status not in {"queued", "in_progress", "interrupted"}:
+    status = task.status
+    pipeline_status = task.pipeline_status
+    if status not in {TaskStatus.QUEUED, TaskStatus.IN_PROGRESS, TaskStatus.INTERRUPTED}:
         return None
-    missing_from_queue = status == "queued" and task.id not in queued_ids
+    missing_from_queue = status == TaskStatus.QUEUED and task.id not in queued_ids
 
     runtime_stage = _runtime_resume_stage(task)
     if pipeline_status == PipelineStatus.BACKLOG and runtime_stage is not None:
