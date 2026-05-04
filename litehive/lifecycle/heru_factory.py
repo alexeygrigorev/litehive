@@ -36,7 +36,7 @@ from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.config.loading import load_config
 from litehive.domain.agent import EngineFailure
-from litehive.domain.common import OutcomeReasonCode, Verdict, cap_feedback
+from litehive.domain.common import OutcomeReasonCode, PipelineState, TaskStage, Verdict, cap_feedback
 from litehive.domain.reports import StageReport
 from litehive.domain.lifecycle_deltas import recovery_trigger_from_event
 from litehive.git.ops import GitError, is_git_repo, status_porcelain
@@ -87,7 +87,7 @@ class _NullSessions:
 
 
 def _allowed_verdicts_for_stage(stage: str) -> set[str]:
-    if stage == "recovering":
+    if stage == PipelineState.RECOVERING.value:
         return {"resume", "advance", "done", "budget_hit", "reject"}
     return {"pass", "reject"}
 
@@ -184,7 +184,7 @@ def _rewrite_hallucinated_implementing_pass(
 
     report = StageReport(
         task_id=task.id,
-        pipeline_state="implementing",
+        pipeline_state=TaskStage.IMPLEMENTING,
         verdict="reject",
         source="agent",
         summary="implementing reject: pass report claimed files_changed but the execution checkout was clean",
@@ -285,7 +285,7 @@ def latest_verdict_after(
     if latest is None:
         return None
     changed_files = normalized_files_changed(latest.files_changed)
-    if stage == "implementing" and latest.verdict == "pass":
+    if stage == PipelineState.IMPLEMENTING.value and latest.verdict == "pass":
         checkout, worktree_status = execution_checkout_status(workspace_root, task)
         if worktree_status == [] and changed_files:
             return _rewrite_hallucinated_implementing_pass(
@@ -481,12 +481,12 @@ class HeruEngineAdapter:
         recovery_prompt = self._direct_recovery_prompt(task=task, state=state, startup_message=startup_message)
         recovery_execution_root = _agent_execution_root(self.workspace_root, task, role="recovery")
         after_ts = datetime.min.replace(tzinfo=UTC)
-        if state.stage == "recovering":
+        if state.stage == PipelineState.RECOVERING:
             previous_recovery = latest_task_activity_entry(
                 self.workspace_root,
                 task,
-                stage="recovering",
-                verdicts=_allowed_verdicts_for_stage("recovering"),
+                stage=str(PipelineState.RECOVERING),
+                verdicts=_allowed_verdicts_for_stage(str(PipelineState.RECOVERING)),
             )
             if previous_recovery is not None:
                 after_ts = previous_recovery.created_at
@@ -497,12 +497,12 @@ class HeruEngineAdapter:
             prompt_text=recovery_prompt,
             source_subagent_id=source_subagent_id,
         )
-        if state.stage != "recovering":
+        if state.stage != PipelineState.RECOVERING:
             return None
         return latest_verdict_after(
             self.workspace_root,
             state.task_id,
-            "recovering",
+            str(PipelineState.RECOVERING),
             after_ts,
             source_subagent_id=source_subagent_id,
         )
@@ -529,7 +529,7 @@ class HeruEngineAdapter:
             )
         return replace(
             state,
-            stage="recovering",
+            stage=PipelineState.RECOVERING,
             active_recovery_trigger=trigger,
             recovery_failure_explanation=self._direct_recovery_explanation(
                 state.recovery_failure_explanation,
@@ -579,7 +579,7 @@ class HeruEngineAdapter:
                 "LITEHIVE_WORKSPACE_ROOT": str(self.workspace_root),
                 "LITEHIVE_AGENT_ROLE": "recovery",
                 "LITEHIVE_SUBAGENT_ID": source_subagent_id,
-                "LITEHIVE_STAGE": "recovering",
+                "LITEHIVE_STAGE": PipelineState.RECOVERING.value,
             },
         )
 
