@@ -4,7 +4,7 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Callable
 
-from litehive.domain.common import PipelineState
+from litehive.domain.common import PipelineMode, PipelineState, TaskStage
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import generated_completion_commit_message
 
@@ -216,7 +216,9 @@ class PreExecRecoveryNode(SystemNode):
                     f"[pre-exec repair] ignored error: {type(exc).__name__}: {exc}",
                     file=sys.stderr,
                 )
-        resume_stage = state.entry_stage or ("implementing" if state.pipeline_mode.value == "single" else "grooming")
+        resume_stage = state.entry_stage or (
+            TaskStage.IMPLEMENTING.value if state.pipeline_mode == PipelineMode.SINGLE else TaskStage.GROOMING.value
+        )
         return PreExecRecoverySucceeded(resume_stage=resume_stage)
 
 
