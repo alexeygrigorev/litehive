@@ -37,6 +37,8 @@ from litehive.domain.task import TaskRecord
 from litehive.domain.runtime import RuntimeFailedRunRecord, RuntimeHookRejectFingerprint, RuntimeRecoveryOutcome
 from litehive.domain.common import (
     PipelineState,
+    PipelineStatus,
+    TaskStage,
     canonical_pipeline_state,
     cap_feedback,
     pipeline_status_for_pipeline_state,
@@ -159,9 +161,9 @@ def _entry_stage_for_task(task_record: TaskRecord) -> PipelineState | None:
         )
         or task_record.pipeline_status
     )
-    if stage in {None, "backlog", "done", "flagged"}:
+    if stage in {None, PipelineStatus.BACKLOG, PipelineStatus.DONE, PipelineStatus.FLAGGED}:
         return None
-    if stage == "commit_to_git":
+    if stage == TaskStage.COMMIT_TO_GIT:
         return PipelineState.COMMIT
     return canonical_pipeline_state(stage)
 
@@ -338,8 +340,8 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
         trigger = _latest_recovery_trigger(state)
         origin_stage = trigger.origin_stage if trigger is not None else None
         failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
-        merge_reject = state.last_rejection_by_stage.get("merge_resolving")
-        if origin_stage == "merge_resolving" or merge_reject is not None:
+        merge_reject = state.last_rejection_by_stage.get(PipelineState.MERGE_RESOLVING)
+        if origin_stage == PipelineState.MERGE_RESOLVING or merge_reject is not None:
             task_record.status = "flagged"
             task_record.pipeline_status = "flagged"
             task_record.close_reason = None

@@ -120,7 +120,7 @@ class RoleAgent(AgentNode):
         implementing key.
         """
         fallback = state.last_rejection_by_stage.get(self.NODE_NAME)
-        if self.NODE_NAME != "implementing":
+        if self.NODE_NAME != PipelineState.IMPLEMENTING:
             return fallback
         root = self.prompt_context.workspace_root
         if root is None:
