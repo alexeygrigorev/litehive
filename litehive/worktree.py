@@ -29,6 +29,7 @@ from litehive.git.ops import (
     add_worktree,
     add_worktree_branch,
     current_head,
+    delete_branch,
     fetch as git_fetch,
     has_changes,
     has_non_litehive_changes,
@@ -511,13 +512,7 @@ def _cleanup_terminal_task_worktree(root: Path, task: TaskRecord) -> None:
     clear_task_worktree_path(task)
     save_task(root, task)
     branch = task_worktree_branch(task)
-    subprocess.run(
-        ["git", "branch", "-D", branch],
-        cwd=str(root),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    delete_branch(root, branch)
 
 
 # === Worktree Discovery and Listing ===

@@ -110,6 +110,17 @@ def fetch(cwd: Path, remote: str, *refs: str) -> tuple[bool, str]:
     return proc.returncode == 0, proc.stderr.strip()
 
 
+def delete_branch(cwd: Path, branch: str) -> None:
+    """Best-effort ``git branch -D <branch>`` in ``cwd``.
+
+    Used after a managed worktree is removed: the runner cleans up
+    the branch ref so it doesn't shadow a future task with the same
+    slug. Ignores failures (e.g. branch already gone) — the call
+    site does not act on the result.
+    """
+    _run_git(cwd, "branch", "-D", branch)
+
+
 def remote_url(cwd: Path, remote: str = "origin") -> str | None:
     """Return the URL configured for ``remote``, or ``None`` if missing.
 
