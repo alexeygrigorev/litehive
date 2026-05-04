@@ -56,6 +56,13 @@ target-version = "py311"
 #          explaining the cycle).
 extend-select = ["E402", "F401", "PLC0415"]
 
+[tool.ruff.lint.per-file-ignores]
+# Tests intentionally use inline imports for fixture isolation and to
+# defer heavy module loading. The PLC0415 rule applies to production
+# code only (``litehive/``); test scaffolding has different concerns.
+"tests/**/*.py" = ["PLC0415"]
+"tests_integration/**/*.py" = ["PLC0415"]
+
 [dependency-groups]
 dev = [
     "pycodestyle>=2.14.0",
