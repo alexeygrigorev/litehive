@@ -75,128 +75,12 @@ from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity, 
 from litehive.worktree import resolve_recorded_worktree_path
 
 
-class TaskTransitionService:
-    """Application service that owns task lifecycle transitions."""
-
-    def __init__(self, root: Path):
-        self.root = root
-
-    def close(
-        self,
-        task_id: str,
-        *,
-        outcome: str,
-        reason: str | None = None,
-        follow_up_task_id: str | None = None,
-        audit_actor: str = "operator",
-        audit_source: str = "cli",
-    ) -> TaskRecord:
-        return _close_task_transition(
-            self.root,
-            task_id,
-            outcome=outcome,
-            reason=reason,
-            follow_up_task_id=follow_up_task_id,
-            audit_actor=audit_actor,
-            audit_source=audit_source,
-        )
-
-    def park(
-        self,
-        task_id: str,
-        *,
-        reason: str = "Task parked via CLI.",
-        audit_actor: str = "operator",
-        audit_source: str = "cli",
-    ) -> TaskRecord:
-        return _park_task_transition(
-            self.root,
-            task_id,
-            reason=reason,
-            audit_actor=audit_actor,
-            audit_source=audit_source,
-        )
-
-    def abandon(
-        self,
-        task_id: str,
-        *,
-        reason: str = "Task abandoned via CLI.",
-        audit_actor: str = "operator",
-        audit_source: str = "cli",
-    ) -> TaskRecord:
-        return _abandon_task_transition(
-            self.root,
-            task_id,
-            reason=reason,
-            audit_actor=audit_actor,
-            audit_source=audit_source,
-        )
-
-    def requeue(
-        self,
-        task_id: str,
-        *,
-        front: bool = False,
-        force: bool = False,
-        audit_actor: str = "operator",
-        audit_source: str = "cli",
-    ) -> TaskRecord:
-        return _requeue_task_transition(
-            self.root,
-            task_id,
-            front=front,
-            force=force,
-            audit_actor=audit_actor,
-            audit_source=audit_source,
-        )
-
-    def resume(self, task_id: str, *, front: bool = False) -> TaskRecord:
-        return _resume_task_transition(self.root, task_id, front=front)
-
-    def update(
-        self,
-        task_id: str,
-        *,
-        title: str | object = ...,
-        depends_on: list[str] | object = ...,
-        model: str | None | object = ...,
-        retry_limit: int | None | object = ...,
-        priority: str | object = ...,
-        goal: str | object = ...,
-        acceptance_criteria: list[str] | object = ...,
-        constraints: list[str] | object = ...,
-        plan: list[str] | object = ...,
-        auto_commit: bool | object = ...,
-        outcome: str | None | object = ...,
-        outcome_reason: str | None | object = ...,
-        action: str | None | object = ...,
-        allow_active_agent_task_mutation: bool = False,
-        journal_message: str | None = None,
-        audit_actor: str = "operator",
-        audit_source: str = "cli",
-    ) -> TaskRecord:
-        return _update_task_transition(
-            self.root,
-            task_id,
-            title=title,
-            depends_on=depends_on,
-            model=model,
-            retry_limit=retry_limit,
-            priority=priority,
-            goal=goal,
-            acceptance_criteria=acceptance_criteria,
-            constraints=constraints,
-            plan=plan,
-            auto_commit=auto_commit,
-            outcome=outcome,
-            outcome_reason=outcome_reason,
-            action=action,
-            allow_active_agent_task_mutation=allow_active_agent_task_mutation,
-            journal_message=journal_message,
-            audit_actor=audit_actor,
-            audit_source=audit_source,
-        )
+# Per docs/feedback-2026-05-03.md (R10c): no class shells whose
+# methods only delegate to free functions. The lifecycle transitions
+# below are the actual implementations; the public API is the
+# ``requeue_task`` / ``close_task`` / ``park_task`` / ``abandon_task``
+# / ``resume_task`` / ``update_task`` wrappers at the bottom of this
+# module.
 
 
 def _reset_pipeline_state(root: Path, task_id: str, *, preserve_run_memory: bool = False) -> None:
@@ -1119,10 +1003,6 @@ def _update_task_transition(
         return task
 
 
-def task_transition_service(root: Path) -> TaskTransitionService:
-    return TaskTransitionService(root)
-
-
 def requeue_task(
     root: Path,
     task_id: str,
@@ -1132,7 +1012,8 @@ def requeue_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    return task_transition_service(root).requeue(
+    return _requeue_task_transition(
+        root,
         task_id,
         front=front,
         force=force,
@@ -1142,7 +1023,7 @@ def requeue_task(
 
 
 def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
-    return task_transition_service(root).resume(task_id, front=front)
+    return _resume_task_transition(root, task_id, front=front)
 
 
 def abandon_task(
@@ -1153,7 +1034,8 @@ def abandon_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    return task_transition_service(root).abandon(
+    return _abandon_task_transition(
+        root,
         task_id,
         reason=reason,
         audit_actor=audit_actor,
@@ -1171,7 +1053,8 @@ def close_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    return task_transition_service(root).close(
+    return _close_task_transition(
+        root,
         task_id,
         outcome=outcome,
         reason=reason,
@@ -1189,7 +1072,8 @@ def park_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    return task_transition_service(root).park(
+    return _park_task_transition(
+        root,
         task_id,
         reason=reason,
         audit_actor=audit_actor,
@@ -1219,7 +1103,8 @@ def update_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    return task_transition_service(root).update(
+    return _update_task_transition(
+        root,
         task_id,
         title=title,
         depends_on=depends_on,
