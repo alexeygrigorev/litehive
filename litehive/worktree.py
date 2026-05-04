@@ -12,7 +12,6 @@ from litehive.agents.merge_resolver import run_worktree_merge_agent
 from litehive.config.model import LitehiveConfig
 from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
 from litehive.domain.task import TaskRecord
-from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.domain.worktree import (
     ManagedWorktree,
     RescueCandidate,
@@ -24,7 +23,6 @@ from litehive.domain.worktree import (
 from litehive.fs_cleanup import remove_tree_logged
 from litehive.worktree_paths import (
     ensure_worktree_venv_link,
-    is_managed_worktree_path,
     resolve_recorded_worktree_path,
     serialize_worktree_path,
     task_worktree_branch,
@@ -35,7 +33,6 @@ from litehive.git.ops import (
     add_worktree,
     add_worktree_branch,
     current_head,
-    delete_branch,
     fetch as git_fetch,
     has_changes,
     is_git_repo,
@@ -45,7 +42,6 @@ from litehive.git.ops import (
     prune_worktrees,
     rebase_worktree_onto,
     remote_url,
-    remove_worktree,
     rev_parse_verify,
     stash_pop,
     stash_push,
@@ -65,10 +61,14 @@ from litehive.state.records import (
     save_task,
     set_task_worktree_path,
 )
-from litehive.state.persist import load_state
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.tasks.journal import append_journal
+from litehive.worktree_cleanup import (
+    cleanup_terminal_task_worktree,
+    collect_managed_worktrees,
+    remove_cleanable_worktrees,
+)
 from litehive.worktree_rescue import (
     apply_rescue_candidate,
     collect_rescue_candidates,
@@ -143,10 +143,10 @@ class WorktreeService:
         return WorktreeSyncResult(changed=main_changed or changed, worktree_path=worktree)
 
     def collect_managed_worktrees(self) -> list[ManagedWorktree]:
-        return _collect_managed_worktrees(self.root)
+        return collect_managed_worktrees(self.root)
 
     def remove_cleanable_worktrees(self, *, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
-        return _remove_cleanable_worktrees(self.root, dry_run=dry_run)
+        return remove_cleanable_worktrees(self.root, dry_run=dry_run)
 
     def collect_rescue_candidates(self) -> list[RescueCandidate]:
         return collect_rescue_candidates(self.root)
@@ -190,7 +190,7 @@ class WorktreeService:
         save_task(self.root, task)
 
     def cleanup_terminal_task_worktree(self, task: TaskRecord) -> None:
-        _cleanup_terminal_task_worktree(self.root, task)
+        cleanup_terminal_task_worktree(self.root, task)
 
     def require_clean_main_checkout(self) -> None:
         require_clean_main_checkout(self.root)
@@ -444,124 +444,12 @@ def resolve_task_execution_root(
     return worktree_path
 
 
-def cleanup_terminal_task_worktree(root: Path, task: TaskRecord) -> None:
-    """Remove a terminal task's worktree and clear its metadata."""
-    WorktreeService(root).cleanup_terminal_task_worktree(task)
-
-
-def _cleanup_terminal_task_worktree(root: Path, task: TaskRecord) -> None:
-    """Remove a terminal task's worktree and branch, then clear task metadata."""
-    worktree_rel = get_task_worktree_path(task)
-    if not worktree_rel:
-        return
-    worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
-    if worktree_path is not None and worktree_path.exists():
-        remove_worktree(root, worktree_path, force=True)
-    clear_task_worktree_path(task)
-    save_task(root, task)
-    branch = task_worktree_branch(task)
-    delete_branch(root, branch)
-
-
-# === Worktree Discovery and Listing ===
-
-
-def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
-    """Collect all Litehive-managed worktrees with their metadata."""
-    return WorktreeService(root).collect_managed_worktrees()
-
-
-def _collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
-    """Collect all Litehive-managed worktrees with their metadata."""
-    state = load_state(root)
-    active_task = get_task(root, state.active_task_id) if state.active_task_id else None
-    active_path = get_task_worktree_path(active_task) if active_task is not None else None
-
-    worktrees: list[ManagedWorktree] = []
-    for task in list_tasks(root, strict=False):
-        worktree_rel = get_task_worktree_path(task)
-        if not is_managed_worktree_path(root, worktree_rel):
-            continue
-        worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
-        if worktree_path is None or not worktree_path.exists() or worktree_rel is None:
-            continue
-        try:
-            change_count = len(status_porcelain(worktree_path))
-        except GitError:
-            change_count = 0
-        worktrees.append(
-            ManagedWorktree(
-                task_id=task.id,
-                status=task.status,
-                worktree_rel=worktree_rel,
-                worktree_path=worktree_path,
-                change_count=change_count,
-                active=task.id == state.active_task_id or worktree_rel == active_path,
-            )
-        )
-    return sorted(worktrees, key=lambda item: item.task_id)
-
-
-# === Worktree Cleanup ===
-
-
-def remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
-    """Remove cleanable worktrees and return categorized results."""
-    return WorktreeService(root).remove_cleanable_worktrees(dry_run=dry_run)
-
-
-def _remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
-    """Remove cleanable worktrees and return categorized results."""
-    worktrees = _collect_managed_worktrees(root)
-    candidates = [item for item in worktrees if item.cleanable]
-    skipped_active = [item for item in worktrees if item.active]
-
-    if dry_run:
-        return {
-            "candidates": candidates,
-            "skipped_active": skipped_active,
-            "removed": [],
-            "deferred": [],
-            "failures": [],
-        }
-
-    failures = []
-    removed = []
-    deferred = []
-
-    for item in candidates:
-        try:
-            remove_worktree(root, item.worktree_path, force=True)
-            task = get_task(root, item.task_id)
-            if task is not None:
-                clear_task_worktree_path(task)
-                try:
-                    save_task(root, task)
-                except WorkspaceConflictError:
-                    from litehive.attention import append_attention_log  # noqa: PLC0415
-
-                    append_attention_log(
-                        root,
-                        (f"deferred worktree metadata clearing for {item.task_id}: workspace locked by active runner"),
-                    )
-                    deferred.append(item)
-                    continue
-            removed.append(item)
-        except GitError as exc:
-            failures.append((item, str(exc)))
-
-    return {
-        "candidates": candidates,
-        "skipped_active": skipped_active,
-        "removed": removed,
-        "deferred": deferred,
-        "failures": failures,
-    }
-
-
-# Rescue operations live in ``litehive.worktree_rescue``. They are a
-# self-contained cherry-pick flow that only the CLI rescue command and
-# WorktreeService dispatch into.
+# Cleanup and discovery operations (cleanup_terminal_task_worktree,
+# collect_managed_worktrees, remove_cleanable_worktrees) live in
+# ``litehive.worktree_cleanup``. Rescue operations
+# (collect_rescue_candidates, require_clean_main_checkout,
+# apply_rescue_candidate) live in ``litehive.worktree_rescue``. Both are
+# self-contained and can be imported without pulling in WorktreeService.
 
 
 

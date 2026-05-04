@@ -2480,8 +2480,8 @@
       "path": "litehive/state/locking.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `object` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
-      "concise_description": "Argument `object` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`",
+      "description": "Argument `object` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
+      "concise_description": "Argument `object` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | str` in function `int.__new__`",
       "severity": "error"
     },
     {
@@ -2564,8 +2564,8 @@
       "path": "litehive/state/store.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `object` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
-      "concise_description": "Argument `object` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`",
+      "description": "Argument `object` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
+      "concise_description": "Argument `object` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | str` in function `int.__new__`",
       "severity": "error"
     },
     {
@@ -2576,8 +2576,8 @@
       "path": "litehive/tasks/event_log.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `object` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
-      "concise_description": "Argument `object` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`",
+      "description": "Argument `object` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
+      "concise_description": "Argument `object` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | str` in function `int.__new__`",
       "severity": "error"
     },
     {
@@ -2840,8 +2840,8 @@
       "path": "litehive/tasks/report_storage.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
-      "concise_description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`",
+      "description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
+      "concise_description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | str` in function `int.__new__`",
       "severity": "error"
     },
     {
@@ -2852,8 +2852,8 @@
       "path": "litehive/tasks/report_storage.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
-      "concise_description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`",
+      "description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
+      "concise_description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | str` in function `int.__new__`",
       "severity": "error"
     },
     {
@@ -3272,16 +3272,16 @@
       "path": "litehive/tasks/stop.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
-      "concise_description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`",
+      "description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
+      "concise_description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | str` in function `int.__new__`",
       "severity": "error"
     },
     {
-      "line": 617,
+      "line": 126,
       "column": 12,
-      "stop_line": 623,
+      "stop_line": 132,
       "stop_column": 6,
-      "path": "litehive/worktree.py",
+      "path": "litehive/worktree_cleanup.py",
       "code": -2,
       "name": "bad-return",
       "description": "Returned type `dict[str, list[ManagedWorktree] | list[tuple[ManagedWorktree, str]]]` is not assignable to declared return type `dict[str, list[ManagedWorktree]]`",
