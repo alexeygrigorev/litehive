@@ -6,7 +6,6 @@ import threading
 import time
 from pathlib import Path
 
-from litehive.config.loading import load_config
 from litehive.git.ops import GitError, current_head, path_differs_at_ref
 from litehive.domain.common import PipelineStatus, TaskStage
 from litehive.domain.task import TaskRecord, WorkspaceState
@@ -14,12 +13,10 @@ from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.tasks.constants import (
     CLOSED_TASK_STATUSES,
     RESUMABLE_TASK_STATUSES,
-    VALID_TASK_ENGINES,
     VALID_TASK_PRIORITIES,
     RUNNER_LOCKS,
     RUNNER_LOCKS_MUTEX,
 )
-from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.recovery.execution_recovery import recover_stale_runner_state
 from litehive.state.locking import (
@@ -33,7 +30,6 @@ from litehive.state.locking import (
 from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
 from litehive.state.records import get_task_record, require_task
 from litehive.tasks.activity import (
-    append_task_activity,
     load_task_activity,
     save_task_activity,
 )
@@ -44,7 +40,6 @@ from litehive.tasks.activity_rendering import (
 )
 from litehive.tasks.audit import (
     TaskAuditState,
-    append_task_audit_entries,
     build_task_audit_entry,
     snapshot_task_audit_state,
 )
@@ -53,7 +48,7 @@ from litehive.tasks.failed_runs import (
     failed_run_block_message,
     mark_failed_run_operator_override,
 )
-from litehive.domain.task_ops import StopTaskSummary, SwitchTaskSummary, WorkspaceConflictError
+from litehive.domain.task_ops import StopTaskSummary, WorkspaceConflictError
 from litehive.tasks.normalization import (
     missing_acceptance_criteria_reason,
     normalize_acceptance_criteria,
@@ -61,18 +56,16 @@ from litehive.tasks.normalization import (
     reroute_stage_for_acceptance_criteria,
     implementation_entry_stage,
 )
-from litehive.tasks.paths import latest_subagent_base, task_dir
 from litehive.tasks.queue import (
     active_task_markers,
     drop_task_from_workspace_state,
-    move_queued_task,
     reset_task_for_recovery,
     resumable_queue_stage,
     validate_single_active_task,
     validate_task_dependencies,
 )
 from litehive.tasks._process_signals import terminate_subagent_pid
-from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity, mark_engine_switch
+from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
 from litehive.worktree import resolve_recorded_worktree_path
 
 
@@ -243,152 +236,9 @@ def stop_current_task(
     return StopTaskSummary(task=task, runner_pid=runner_pid, signal_sent=runner_pid is not None)
 
 
-def _effective_task_engine(root: Path, task: TaskRecord) -> str:
-    if task.runtime.execution.active_subagent is not None:
-        return task.runtime.execution.active_subagent.engine
-    if task.subagents:
-        return task.subagents[-1].engine
-    return load_config(root).default_engine
-
-
-def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
-    paths: list[str] = []
-    for candidate in (ref.path for ref in reversed(task.subagents)):
-        if candidate and candidate not in paths:
-            paths.append(candidate)
-    base = latest_subagent_base(root, task)
-    if base is not None:
-        rel_path = str(base.relative_to(task_dir(root, task)))
-        if rel_path not in paths:
-            paths.append(rel_path)
-    return paths
-
-
-def _switch_activity_entry_message(
-    task: TaskRecord,
-    *,
-    reason: str,
-    previous_engine: str,
-    new_engine: str,
-    prior_work_paths: list[str],
-) -> str:
-    lines = [
-        f"Engine switch requested: {reason}",
-        f"engine: {previous_engine} -> {new_engine}",
-        f"resume_from: {task.pipeline_status}",
-    ]
-    if prior_work_paths:
-        lines.append("prior_work:")
-        lines.extend(f"- {path}" for path in prior_work_paths)
-    else:
-        lines.append("prior_work: no prior subagent artifacts recorded")
-    return "\n".join(lines)
-
-
-def switch_task_engine(
-    root: Path,
-    task_id: str,
-    *,
-    engine: str,
-    reason: str,
-    audit_actor: str = "operator",
-    audit_source: str = "cli",
-) -> SwitchTaskSummary:
-
-    if engine not in VALID_TASK_ENGINES:
-        raise ValueError(f"Unsupported engine '{engine}'")
-    if not reason.strip():
-        raise ValueError("Switch reason must not be empty")
-
-    task = require_task(root, task_id)
-    before_task = snapshot_task_audit_state(task)
-    if task.pipeline_status == "done":
-        raise ValueError(f"Task {task.id} is already done")
-    if task.pipeline_status == "backlog":
-        raise ValueError(f"Task {task.id} is still in backlog and has no runnable stage to resume")
-
-    state = load_state(root)
-    was_active = state.active_task_id == task_id
-    runner_pid: int | None = None
-    signal_sent = False
-    if was_active:
-        stop_summary = stop_current_task(root)
-        task = stop_summary.task
-        runner_pid = stop_summary.runner_pid
-        signal_sent = stop_summary.signal_sent
-    else:
-        task = get_task_record(root, task_id)
-        if task is None:
-            raise ValueError(f"Task {task_id} not found")
-
-    previous_engine = _effective_task_engine(root, task)
-    mark_engine_switch(
-        root,
-        task,
-        stage=task.pipeline_status,
-        from_engine=previous_engine,
-        to_engine=engine,
-        reason=reason.strip(),
-    )
-    task = require_task(root, task.id)
-
-    if task.status == "queued":
-        move_queued_task(root, task.id, 1)
-        task = require_task(root, task.id)
-    elif task.status in {"interrupted", "parked", "flagged", *CLOSED_TASK_STATUSES}:
-        task = resume_task(root, task.id, front=True)
-    else:
-        raise ValueError(f"Task {task.id} is {task.status} and cannot be switched into a queued runnable state")
-
-    prior_work_paths = _switch_prior_work_paths(root, task)
-
-    append_task_activity(
-        root,
-        task,
-        TaskActivityEntry(
-            role="operator",
-            stage=task.pipeline_status,
-            verdict="comment",
-            message=_switch_activity_entry_message(
-                task,
-                reason=reason.strip(),
-                previous_engine=previous_engine,
-                new_engine=engine,
-                prior_work_paths=prior_work_paths,
-            ),
-        ),
-    )
-    append_task_audit_entries(
-        root,
-        [
-            build_task_audit_entry(
-                task_id=task.id,
-                action="engine_switched",
-                actor=audit_actor,
-                source=audit_source,
-                before_task=before_task,
-                after_task=task,
-                context={
-                    "old_value": previous_engine,
-                    "new_value": engine,
-                    "from_engine": previous_engine,
-                    "to_engine": engine,
-                    "reason": reason.strip(),
-                    "prior_work_paths": prior_work_paths,
-                    "was_active": was_active,
-                },
-            )
-        ],
-    )
-    return SwitchTaskSummary(
-        task=task,
-        previous_engine=previous_engine,
-        new_engine=engine,
-        was_active=was_active,
-        runner_pid=runner_pid,
-        signal_sent=signal_sent,
-        prior_work_paths=prior_work_paths,
-    )
+# Engine switching extracted to ``tasks/switch_engine.py`` so this
+# module no longer carries the operator-flow plumbing.
+from litehive.tasks.switch_engine import switch_task_engine  # noqa: F401, E402
 
 
 def _persist_transition(
