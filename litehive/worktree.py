@@ -6,7 +6,6 @@ operations that were previously scattered across multiple modules.
 
 import logging
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Callable
 
@@ -17,6 +16,14 @@ from litehive.config.paths import workspace_path
 from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
 from litehive.domain.task import TaskRecord, UnmergedWorktree
 from litehive.domain.task_ops import WorkspaceConflictError
+from litehive.domain.worktree import (
+    ManagedWorktree,
+    RescueCandidate,
+    RescueResult,
+    TaskWorktreeInspection,
+    WorktreeMergeConflict,
+    WorktreeSyncResult,
+)
 from litehive.fs_cleanup import remove_tree_logged
 from litehive.git.ops import (
     GitError,
@@ -46,75 +53,6 @@ from litehive.tasks.journal import append_journal
 from litehive.tasks.activity_rendering import normalized_files_changed
 
 logger = logging.getLogger(__name__)
-
-# Constants
-_CLEANABLE_STATUSES = {"closed", "done"}
-
-
-@dataclass(slots=True)
-class ManagedWorktree:
-    """Information about a Litehive-managed task worktree."""
-
-    task_id: str
-    status: str
-    worktree_rel: str
-    worktree_path: Path
-    change_count: int
-    active: bool
-
-    @property
-    def cleanable(self) -> bool:
-        return self.status in _CLEANABLE_STATUSES and not self.active
-
-
-@dataclass(slots=True)
-class RescueCandidate:
-    """A worktree that may need rescue (cherry-pick to main)."""
-
-    task_id: str
-    worktree_rel: str
-    worktree_path: Path
-    commit_shas: list[str]
-
-
-@dataclass(slots=True)
-class RescueResult:
-    """Result of attempting to rescue a worktree."""
-
-    task_id: str
-    worktree_rel: str
-    status: str
-    commit_shas: list[str]
-    head_sha: str | None = None
-    message: str | None = None
-
-
-class WorktreeMergeConflict(Exception):
-    """Raised when worktree sync leaves unresolved files behind."""
-
-    def __init__(self, conflict_files: list[str]) -> None:
-        super().__init__(f"{len(conflict_files)} unresolved file(s)")
-        self.conflict_files = conflict_files
-
-
-@dataclass(slots=True)
-class WorktreeSyncResult:
-    """Outcome of pre-exec lifecycle worktree synchronization."""
-
-    changed: bool
-    worktree_path: Path | None = None
-
-
-@dataclass(slots=True)
-class TaskWorktreeInspection:
-    """Inspectable status for a task's recorded worktree."""
-
-    task_id: str
-    worktree_rel: str | None
-    worktree_path: Path | None
-    exists: bool
-    uncommitted: list[str]
-    committed_ahead_of_main: list[str]
 
 
 class WorktreeService:
