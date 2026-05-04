@@ -23,6 +23,7 @@ from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
 from litehive.domain.reports import TaskActivityEntry, classify_task_activity_verdict
+from litehive.tasks.status import close_task, update_task
 from litehive.state.records import get_task_record
 from litehive.state.persist import load_state
 from litehive.tasks.activity import append_task_activity
@@ -306,8 +307,6 @@ def agent_update_command(
     constraints: Annotated[list[str] | None, typer.Option("--constraint")] = None,
     priority: Annotated[str | None, typer.Option("--priority")] = None,
 ) -> None:
-    from litehive.tasks.status import update_task
-
     target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
 
     sentinel = ...
@@ -335,8 +334,6 @@ def agent_close_command(
     ] = "duplicate",
     reason: Annotated[str, typer.Option("--reason")] = "",
 ) -> None:
-    from litehive.tasks.status import close_task
-
     target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
 
     task = close_task(

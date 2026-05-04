@@ -40,6 +40,8 @@ def load_effective_config_data(root: Path) -> dict[str, Any]:
 
 def load_config(root: Path) -> LitehiveConfig:
     ensure_workspace(root)
+    # inline: runtime_settings transitively pulls db.schema which loads
+    # config.* back through litehive/config/__init__.py during partial init.
     from litehive.config.runtime_settings import apply_runtime_settings_to_config_data
 
     data = apply_runtime_settings_to_config_data(root, load_effective_config_data(root))

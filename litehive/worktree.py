@@ -37,7 +37,8 @@ from litehive.state.records import (
     set_task_commit_sha,
     set_task_worktree_path,
 )
-from litehive.state.persist import load_state, save_state
+from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
+from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard, save_state
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.journal import append_journal
 from litehive.tasks.activity_rendering import normalized_files_changed
@@ -1189,9 +1190,6 @@ def _drop_task_metadata_changes(root: Path, task_id: str) -> None:
 
 def _finalize_rescue(root: Path, task, *, outcome: str, head_sha: str | None) -> None:
     """Finalize rescue operation by updating task state."""
-    from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
-    from litehive.state.persist import persist_task_and_state_without_runner_guard
-
     journal_message = "Worktree rescue found no commits ahead of main; cleared pending rescue state."
     if outcome == "rescued" and head_sha:
         journal_message = f"Worktree rescue applied onto main at {head_sha}."

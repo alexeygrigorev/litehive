@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import click
 import typer
 
+from litehive.cli.agent_cli import block_if_agent
 from litehive.cli.common import WorkspaceOption, choice, require_subcommand
 from litehive.config.engine_models import select_engine
 from litehive.config.loading import load_config
@@ -349,8 +350,6 @@ def report_command(
     ] = None,
     files_changed: Annotated[list[str] | None, typer.Option(help="Changed paths; repeat for multiple")] = None,
 ) -> int:
-    from litehive.cli.agent_cli import block_if_agent
-
     block_if_agent()
     if message == "-":
         message = sys.stdin.read()

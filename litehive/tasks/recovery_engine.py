@@ -12,6 +12,9 @@ def resolve_recovery_engine(
     task: TaskRecord,
     config: LitehiveConfig | None,
 ) -> tuple[str, str | None]:
+    # inline: kept so tests can monkey-patch ``select_engine`` on the
+    # config.engine_models module (the canonical home) and have callers
+    # here see it.
     from litehive.config.engine_models import select_engine
 
     if config is None:

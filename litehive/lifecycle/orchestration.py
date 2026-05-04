@@ -57,6 +57,7 @@ from litehive.tasks.report_storage import record_stage_report
 from litehive.tasks.runtime import apply_task_outcome
 from litehive.state.locking import persist_future_task_update
 from litehive.state.locking import runner_heartbeat, workspace_runner_guard
+from litehive.state.persist import load_state, persist_tasks_and_state, save_state
 
 from litehive.roles.base import PromptContext
 from .events import HookOk, Reject
@@ -459,8 +460,6 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
 
 
 def _clear_terminal_task_from_workspace_state(root: Path, task_id: str) -> None:
-    from litehive.state.persist import load_state, persist_tasks_and_state
-
     state = load_state(root)
     if state.active_task_id == task_id:
         state.active_task_id = None
@@ -552,8 +551,6 @@ def _mark_task_interrupted_on_crash(root: Path, task: TaskRecord, persistence: o
     runner start can resume it instead of finding stale "running" state.
     """
     try:
-        from litehive.state.persist import load_state, save_state
-
         state = load_state(root)
         if state.active_task_id == task.id:
             state.active_task_id = None

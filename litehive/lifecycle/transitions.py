@@ -198,6 +198,7 @@ def retry_epoch_rules(counter_stage, phases, retry_target, *, exhausted_reason: 
 
 def list_transitions() -> list[Rule]:
     """Return the default rule table from ``rules.py``."""
+    # inline: rules.py top-level-imports transitions.py for ``Rule`` etc.
     from .rules import RULES
 
     return list(RULES)

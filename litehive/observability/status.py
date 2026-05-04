@@ -22,6 +22,7 @@ from litehive.observability.status_diagnostics import (
     collect_status_snapshot,
 )
 from litehive.state.records import get_task
+from litehive.tasks.report_storage import load_workspace_stage_reports
 
 # Ordered pipeline stages for remaining-time estimation.
 _PIPELINE_STAGES = ["grooming", "implementing", "testing", "accepting", "commit_to_git"]
@@ -192,8 +193,6 @@ def estimate_task_execution(root: Path, task: TaskRecord) -> ExecutionEstimate:
 
 def _collect_report_durations(root: Path) -> list[float]:
     """Collect positive stage report durations from workspace runtime storage."""
-    from litehive.tasks.report_storage import load_workspace_stage_reports
-
     return [
         float(report.duration_seconds) for report in load_workspace_stage_reports(root) if report.duration_seconds > 0
     ]

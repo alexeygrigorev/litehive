@@ -6,6 +6,7 @@ from litehive.config.model import LitehiveConfig
 from litehive.roles.guidance import default_startup_guidance
 from litehive.config.profiles.loader import resolve_process_profile
 from litehive.domain.task import TaskRecord
+from litehive.tasks.activity_rendering import render_task_activity
 from litehive.tasks.normalization import (
     infer_acceptance_criteria,
     missing_acceptance_criteria_reason,
@@ -202,8 +203,6 @@ def stage_prompt(
         )
 
     # Include the task activity log so agents see the full history.
-    from litehive.tasks.activity_rendering import render_task_activity
-
     activity_text = render_task_activity(root, task, for_prompt=True) if root is not None else ""
     if activity_text:
         lines.extend(["", activity_text])

@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 
 from litehive.agents.session_store import load_subagent_session
+from litehive.cli.task_debug_support import render_task_evidence
 from litehive.config.paths import workspace_path
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.state.records import get_task_record, list_tasks
@@ -56,8 +57,6 @@ def show_task_journal(root: Path, task) -> int:
 
 
 def show_latest_subagent(root: Path, task) -> int:
-    from litehive.cli.task_debug_support import render_task_evidence
-
     return render_task_evidence(root, task)
 
 

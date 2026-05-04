@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from litehive.config.profiles.loader import resolve_process_profile
+
 
 def _shared_stage_text(stages: list[str]) -> str:
     return " -> ".join(stages) + "."
@@ -57,8 +59,6 @@ def _render_stage_prompt_scaffolding(profile: dict[str, Any]) -> list[str]:
 
 
 def render_context_template(profile_name: str) -> str:
-    from litehive.config.profiles.loader import resolve_process_profile
-
     profile = resolve_process_profile(profile_name)
     lines = [
         "# Litehive Workspace Context",
