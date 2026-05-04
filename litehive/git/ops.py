@@ -110,6 +110,35 @@ def fetch(cwd: Path, remote: str, *refs: str) -> tuple[bool, str]:
     return proc.returncode == 0, proc.stderr.strip()
 
 
+def stdout_or_none(cwd: Path, *args: str) -> str | None:
+    """Run ``git <args>`` and return stripped stdout, or ``None`` on failure.
+
+    Used by worktree helpers that ask git read-only questions where
+    "the call failed" and "the answer is empty" should both collapse
+    to ``None`` for the caller's convenience (e.g.
+    ``git rev-parse``, ``git branch --show-current``,
+    ``git merge-base``).
+    """
+    proc = _run_git(cwd, *args)
+    if proc.returncode != 0:
+        return None
+    value = proc.stdout.strip()
+    return value or None
+
+
+def stdout_lines(cwd: Path, *args: str) -> list[str]:
+    """Run ``git <args>`` and return non-empty stripped output lines.
+
+    Returns an empty list on failure or empty output. Used by
+    worktree helpers that ask for path or revision lists
+    (``git diff --name-only``, ``git rev-list``, etc.).
+    """
+    value = stdout_or_none(cwd, *args)
+    if value is None:
+        return []
+    return [line.strip() for line in value.splitlines() if line.strip()]
+
+
 def path_differs_at_ref(cwd: Path, ref: str, path: str) -> bool:
     """Return whether ``path`` differs between the worktree and ``ref``.
 

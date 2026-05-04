@@ -27,6 +27,8 @@ from litehive.git.ops import (
     rebase_worktree_onto,
     remove_worktree,
     status_porcelain,
+    stdout_lines as git_stdout_lines,
+    stdout_or_none as git_stdout_or_none,
 )
 from litehive.state.records import (
     clear_task_worktree_path,
@@ -1238,27 +1240,8 @@ def _ensure_unmerged_worktree_state(root: Path, task_id: str, worktree_rel: str)
     save_state(root, state)
 
 
-def _git_stdout(root: Path, *args: str) -> str | None:
-    """Run git command and return stdout or None."""
-    proc = subprocess.run(
-        ["git", *args],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if proc.returncode != 0:
-        return None
-    value = proc.stdout.strip()
-    return value or None
-
-
-def _git_lines(root: Path, *args: str) -> list[str]:
-    """Run git command and return non-empty lines."""
-    value = _git_stdout(root, *args)
-    if not value:
-        return []
-    return [line.strip() for line in value.splitlines() if line.strip()]
+_git_stdout = git_stdout_or_none
+_git_lines = git_stdout_lines
 
 
 def _stash_litehive_changes(root: Path) -> str | None:
