@@ -110,6 +110,19 @@ def fetch(cwd: Path, remote: str, *refs: str) -> tuple[bool, str]:
     return proc.returncode == 0, proc.stderr.strip()
 
 
+def remote_url(cwd: Path, remote: str = "origin") -> str | None:
+    """Return the URL configured for ``remote``, or ``None`` if missing.
+
+    Wraps ``git remote get-url <remote>``. Used by the worktree
+    code to ask "does this checkout have an origin?" without
+    surfacing a noisy ``GitError`` on the missing-remote path.
+    """
+    proc = _run_git(cwd, "remote", "get-url", remote)
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.strip() or None
+
+
 def head_sha_strict(cwd: Path) -> str:
     """Return ``HEAD`` sha; raise :class:`GitError` if it can't be read.
 

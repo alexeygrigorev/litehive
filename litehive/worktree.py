@@ -28,13 +28,19 @@ from litehive.git.ops import (
     GitError,
     add_worktree,
     current_head,
+    fetch as git_fetch,
+    has_changes,
     has_non_litehive_changes,
     is_git_repo,
+    merge_abort,
+    merge_no_edit,
     rebase_worktree_onto,
+    remote_url,
     remove_worktree,
     status_porcelain,
     stdout_lines as git_stdout_lines,
     stdout_or_none as git_stdout_or_none,
+    unmerged_files,
 )
 from litehive.state.records import (
     clear_task_worktree_path,
@@ -243,23 +249,13 @@ class WorktreeService:
         stash_ref = self._stash_local_changes(worktree)
         restored_stash = False
         try:
-            fetch = subprocess.run(
-                ["git", "fetch", "origin"],
-                cwd=str(worktree),
-                capture_output=True,
-                text=True,
-            )
-            if fetch.returncode != 0:
-                raise GitError(f"git fetch failed: {fetch.stderr.strip() or fetch.stdout.strip()}")
+            ok, fetch_message = git_fetch(worktree, "origin")
+            if not ok:
+                raise GitError(f"git fetch failed: {fetch_message}")
 
-            merge = subprocess.run(
-                ["git", "merge", main_ref, "--no-edit"],
-                cwd=str(worktree),
-                capture_output=True,
-                text=True,
-            )
-            if merge.returncode == 0:
-                changed = "Already up to date" not in merge.stdout
+            merged, merge_message = merge_no_edit(worktree, main_ref)
+            if merged:
+                changed = "Already up to date" not in merge_message
                 self._restore_local_changes(worktree, stash_ref)
                 restored_stash = True
                 return changed
@@ -268,15 +264,10 @@ class WorktreeService:
             if unresolved:
                 raise WorktreeMergeConflict(unresolved)
 
-            subprocess.run(
-                ["git", "merge", "--abort"],
-                cwd=str(worktree),
-                capture_output=True,
-                text=True,
-            )
+            merge_abort(worktree)
             self._restore_local_changes(worktree, stash_ref)
             restored_stash = True
-            raise GitError(f"worktree_sync merge failed: {merge.stderr.strip() or merge.stdout.strip()}")
+            raise GitError(f"worktree_sync merge failed: {merge_message}")
         except Exception:
             if stash_ref and not restored_stash and not self._unresolved(worktree):
                 self._restore_local_changes(worktree, stash_ref)
@@ -284,47 +275,19 @@ class WorktreeService:
 
     @staticmethod
     def _head(worktree: Path) -> str | None:
-        proc = subprocess.run(
-            ["git", "rev-parse", "--verify", "HEAD"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode != 0:
-            return None
-        return proc.stdout.strip() or None
+        return current_head(worktree)
 
     @staticmethod
     def _is_dirty(worktree: Path) -> bool:
-        proc = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        return proc.returncode == 0 and bool(proc.stdout.strip())
+        return has_changes(worktree)
 
     @staticmethod
     def _has_origin(worktree: Path) -> bool:
-        proc = subprocess.run(
-            ["git", "remote", "get-url", "origin"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        return proc.returncode == 0 and bool(proc.stdout.strip())
+        return remote_url(worktree, "origin") is not None
 
     @staticmethod
     def _unresolved(worktree: Path) -> list[str]:
-        proc = subprocess.run(
-            ["git", "diff", "--name-only", "--diff-filter=U"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode != 0:
-            return []
-        return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+        return unmerged_files(worktree)
 
     @staticmethod
     def _stash_local_changes(worktree: Path) -> str | None:
