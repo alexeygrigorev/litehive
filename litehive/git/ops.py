@@ -419,14 +419,39 @@ def checkout_ref(cwd: Path, ref: str) -> bool:
     return _run_git(cwd, "checkout", ref).returncode == 0
 
 
-def stash_push(cwd: Path, message: str) -> bool:
-    """Best-effort ``git stash push -m <message>``. Returns success."""
-    return _run_git(cwd, "stash", "push", "-m", message).returncode == 0
+def stash_push(cwd: Path, message: str, *, include_untracked: bool = False) -> tuple[bool, str]:
+    """Run ``git stash push -m <message>`` (optionally ``-u``).
+
+    Returns ``(success, stderr_or_stdout)``. Untracked files are
+    included via ``-u`` when the caller asks; needed when the
+    runner wants to fully clean a worktree before a merge.
+    """
+    args = ["stash", "push"]
+    if include_untracked:
+        args.append("-u")
+    args.extend(["-m", message])
+    proc = _run_git(cwd, *args)
+    if proc.returncode == 0:
+        return True, proc.stdout
+    return False, proc.stderr.strip() or proc.stdout.strip()
 
 
-def stash_pop(cwd: Path) -> bool:
-    """Best-effort ``git stash pop``. Returns success."""
-    return _run_git(cwd, "stash", "pop").returncode == 0
+def stash_pop(cwd: Path, *, ref: str | None = None, with_index: bool = False) -> tuple[bool, str]:
+    """Run ``git stash pop [--index] [<ref>]``.
+
+    Returns ``(success, stderr_or_stdout)``. ``with_index`` restores
+    staging metadata; ``ref`` pops a specific stash entry rather than
+    the top of the stack.
+    """
+    args = ["stash", "pop"]
+    if with_index:
+        args.append("--index")
+    if ref is not None:
+        args.append(ref)
+    proc = _run_git(cwd, *args)
+    if proc.returncode == 0:
+        return True, proc.stdout
+    return False, proc.stderr.strip() or proc.stdout.strip()
 
 
 def merge_no_edit(cwd: Path, ref: str) -> tuple[bool, str]:

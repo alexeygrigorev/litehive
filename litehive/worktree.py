@@ -40,11 +40,20 @@ from litehive.git.ops import (
     rebase_worktree_onto,
     remote_url,
     remove_worktree,
+    rev_parse_verify,
+    stash_pop,
+    stash_push,
     status_porcelain,
+    status_porcelain_with_options,
     stdout_lines as git_stdout_lines,
     stdout_or_none as git_stdout_or_none,
     unmerged_files,
 )
+
+
+def status_porcelain_untracked(cwd: Path) -> bool:
+    """Whether the worktree has any dirty entries including untracked files."""
+    return bool(status_porcelain_with_options(cwd, include_ignored=False))
 from litehive.state.records import (
     clear_task_worktree_path,
     get_task,
@@ -273,36 +282,13 @@ class WorktreeService:
 
     @staticmethod
     def _stash_local_changes(worktree: Path) -> str | None:
-        status = subprocess.run(
-            ["git", "status", "--porcelain", "--untracked-files=all"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        if status.returncode != 0 or not status.stdout.strip():
+        if not status_porcelain_untracked(worktree):
             return None
-        before = subprocess.run(
-            ["git", "rev-parse", "-q", "--verify", "refs/stash"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        stash = subprocess.run(
-            ["git", "stash", "push", "-u", "-m", "litehive-worktree-sync"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        if stash.returncode != 0:
-            raise GitError(f"git stash push failed: {stash.stderr.strip() or stash.stdout.strip()}")
-        after = subprocess.run(
-            ["git", "rev-parse", "-q", "--verify", "refs/stash"],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        before_ref = before.stdout.strip()
-        after_ref = after.stdout.strip()
+        before_ref = rev_parse_verify(worktree, "refs/stash") or ""
+        ok, message = stash_push(worktree, "litehive-worktree-sync", include_untracked=True)
+        if not ok:
+            raise GitError(f"git stash push failed: {message}")
+        after_ref = rev_parse_verify(worktree, "refs/stash") or ""
         if not after_ref or after_ref == before_ref:
             return None
         return after_ref
@@ -310,18 +296,13 @@ class WorktreeService:
     def _restore_local_changes(self, worktree: Path, stash_ref: str | None) -> None:
         if not stash_ref:
             return
-        restored = subprocess.run(
-            ["git", "stash", "pop", "--index", stash_ref],
-            cwd=str(worktree),
-            capture_output=True,
-            text=True,
-        )
-        if restored.returncode == 0:
+        ok, message = stash_pop(worktree, ref=stash_ref, with_index=True)
+        if ok:
             return
         unresolved = self._unresolved(worktree)
         if unresolved:
             raise WorktreeMergeConflict(unresolved)
-        raise GitError(f"git stash pop failed: {restored.stderr.strip() or restored.stdout.strip()}")
+        raise GitError(f"git stash pop failed: {message}")
 
 
 # === Path Utilities ===
