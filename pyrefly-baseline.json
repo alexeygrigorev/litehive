@@ -3049,45 +3049,9 @@
       "severity": "error"
     },
     {
-      "line": 295,
-      "column": 23,
-      "stop_line": 295,
-      "stop_column": 31,
-      "path": "litehive/tasks/status.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['parked']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['parked']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 315,
-      "column": 27,
-      "stop_line": 315,
-      "stop_column": 35,
-      "path": "litehive/tasks/status.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 375,
-      "column": 30,
-      "stop_line": 375,
-      "stop_column": 33,
-      "path": "litehive/tasks/status.py",
-      "code": -2,
-      "name": "bad-argument-type",
-      "description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
-      "concise_description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`",
-      "severity": "error"
-    },
-    {
-      "line": 708,
+      "line": 242,
       "column": 36,
-      "stop_line": 708,
+      "stop_line": 242,
       "stop_column": 49,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3097,9 +3061,9 @@
       "severity": "error"
     },
     {
-      "line": 800,
+      "line": 334,
       "column": 19,
-      "stop_line": 800,
+      "stop_line": 334,
       "stop_column": 27,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3109,9 +3073,9 @@
       "severity": "error"
     },
     {
-      "line": 824,
+      "line": 358,
       "column": 19,
-      "stop_line": 824,
+      "stop_line": 358,
       "stop_column": 60,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3121,9 +3085,9 @@
       "severity": "error"
     },
     {
-      "line": 827,
+      "line": 361,
       "column": 28,
-      "stop_line": 827,
+      "stop_line": 361,
       "stop_column": 102,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3133,9 +3097,9 @@
       "severity": "error"
     },
     {
-      "line": 848,
+      "line": 382,
       "column": 19,
-      "stop_line": 848,
+      "stop_line": 382,
       "stop_column": 27,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3145,9 +3109,9 @@
       "severity": "error"
     },
     {
-      "line": 1044,
+      "line": 578,
       "column": 79,
-      "stop_line": 1044,
+      "stop_line": 578,
       "stop_column": 89,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3157,9 +3121,9 @@
       "severity": "error"
     },
     {
-      "line": 1045,
+      "line": 579,
       "column": 36,
-      "stop_line": 1045,
+      "stop_line": 579,
       "stop_column": 46,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3169,9 +3133,9 @@
       "severity": "error"
     },
     {
-      "line": 1052,
+      "line": 586,
       "column": 26,
-      "stop_line": 1052,
+      "stop_line": 586,
       "stop_column": 31,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3181,9 +3145,9 @@
       "severity": "error"
     },
     {
-      "line": 1055,
+      "line": 589,
       "column": 44,
-      "stop_line": 1055,
+      "stop_line": 589,
       "stop_column": 59,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3193,9 +3157,9 @@
       "severity": "error"
     },
     {
-      "line": 1057,
+      "line": 591,
       "column": 45,
-      "stop_line": 1057,
+      "stop_line": 591,
       "stop_column": 56,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3205,9 +3169,9 @@
       "severity": "error"
     },
     {
-      "line": 1062,
+      "line": 596,
       "column": 29,
-      "stop_line": 1062,
+      "stop_line": 596,
       "stop_column": 37,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3217,9 +3181,9 @@
       "severity": "error"
     },
     {
-      "line": 1065,
+      "line": 599,
       "column": 25,
-      "stop_line": 1065,
+      "stop_line": 599,
       "stop_column": 29,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3229,9 +3193,9 @@
       "severity": "error"
     },
     {
-      "line": 1068,
+      "line": 602,
       "column": 75,
-      "stop_line": 1068,
+      "stop_line": 602,
       "stop_column": 94,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3241,9 +3205,9 @@
       "severity": "error"
     },
     {
-      "line": 1071,
+      "line": 605,
       "column": 62,
-      "stop_line": 1071,
+      "stop_line": 605,
       "stop_column": 73,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3253,9 +3217,9 @@
       "severity": "error"
     },
     {
-      "line": 1074,
+      "line": 608,
       "column": 55,
-      "stop_line": 1074,
+      "stop_line": 608,
       "stop_column": 59,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3265,9 +3229,9 @@
       "severity": "error"
     },
     {
-      "line": 1077,
+      "line": 611,
       "column": 36,
-      "stop_line": 1077,
+      "stop_line": 611,
       "stop_column": 47,
       "path": "litehive/tasks/status.py",
       "code": -2,
@@ -3277,15 +3241,51 @@
       "severity": "error"
     },
     {
-      "line": 1079,
+      "line": 613,
       "column": 32,
-      "stop_line": 1079,
+      "stop_line": 613,
       "stop_column": 75,
       "path": "litehive/tasks/status.py",
       "code": -2,
       "name": "bad-assignment",
       "description": "`str` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
       "concise_description": "`str` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
+      "severity": "error"
+    },
+    {
+      "line": 64,
+      "column": 23,
+      "stop_line": 64,
+      "stop_column": 31,
+      "path": "litehive/tasks/stop.py",
+      "code": -2,
+      "name": "bad-assignment",
+      "description": "`Literal['parked']` is not assignable to attribute `status` with type `TaskStatus`",
+      "concise_description": "`Literal['parked']` is not assignable to attribute `status` with type `TaskStatus`",
+      "severity": "error"
+    },
+    {
+      "line": 84,
+      "column": 27,
+      "stop_line": 84,
+      "stop_column": 35,
+      "path": "litehive/tasks/stop.py",
+      "code": -2,
+      "name": "bad-assignment",
+      "description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
+      "concise_description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
+      "severity": "error"
+    },
+    {
+      "line": 143,
+      "column": 30,
+      "stop_line": 143,
+      "stop_column": 33,
+      "path": "litehive/tasks/stop.py",
+      "code": -2,
+      "name": "bad-argument-type",
+      "description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`\n  Protocol `Buffer` requires attribute `__buffer__`",
+      "concise_description": "Argument `int | None` is not assignable to parameter `x` with type `Buffer | SupportsIndex | SupportsInt | SupportsTrunc | str` in function `int.__new__`",
       "severity": "error"
     },
     {
