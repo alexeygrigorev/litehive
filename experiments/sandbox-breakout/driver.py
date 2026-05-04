@@ -9,9 +9,12 @@ import tempfile
 from heru import get_engine
 from heru.base import CLIInvocation, ExternalCLIAdapter
 from litehive.agents.sandbox import SandboxLauncher
-from litehive.config.model import LitehiveConfig
+from litehive.config.model import (
+    ExternalEngineSandboxConfig,
+    ExternalEngineSandboxPolicy,
+    LitehiveConfig,
+)
 from litehive.config.workspace import ensure_workspace
-from litehive.config import ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
 from litehive.fs_cleanup import remove_tree_logged
 
 logger = logging.getLogger(__name__)
