@@ -554,7 +554,7 @@ def fail(reason: FailedReason) -> EffectFn:
             message = ""
         outcome = None
         explanation = None
-        if state.stage == "recovering":
+        if state.stage == PipelineState.RECOVERING:
             trigger = state.active_recovery_trigger
             if trigger is not None:
                 outcome = RecoveryOutcome(
@@ -580,7 +580,7 @@ def fail(reason: FailedReason) -> EffectFn:
                 message=message,
             ),
             append_recovery_outcome=outcome,
-            clear_active_recovery_trigger=state.stage == "recovering",
+            clear_active_recovery_trigger=state.stage == PipelineState.RECOVERING,
             clear_rejection_loop=True,
             set_recovery_failure_explanation=explanation,
         )
