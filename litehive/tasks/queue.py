@@ -48,7 +48,9 @@ logger = logging.getLogger(__name__)
 _TERMINAL_EXECUTION_STATUSES = {"done", "cancelled", "failed", "blocked", "interrupted"}
 _TERMINAL_OUTCOME_KINDS = {"closed", "duplicate", "deferred", "wont_do"}
 _TRUSTED_STAGE_MARKER_STATUSES = {"idle", "paused", "interrupted", "running"}
-_RESUMABLE_PIPELINE_STAGES = {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
+_RESUMABLE_PIPELINE_STAGES: frozenset[TaskStage] = frozenset(
+    {TaskStage.GROOMING, TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING, TaskStage.COMMIT_TO_GIT}
+)
 
 
 # --- list ops ---

@@ -18,7 +18,7 @@ from litehive.config.registry import workspace_registry_error, workspace_registr
 from litehive.config.workspace_files import config_path
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.daemon.registry import daemon_metadata, pid_is_alive
-from litehive.domain.common import RunnerStatus
+from litehive.domain.common import PipelineStatus, RunnerStatus, TaskStage
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
@@ -39,7 +39,9 @@ _RECOVERY_FAILURE_STATE_REASONS = {
     "recovery_exhausted",
     "recovery_missing_target_stage",
 }
-_RESUMABLE_PIPELINE_STAGES = {"grooming", "implementing", "testing", "accepting", "commit_to_git"}
+_RESUMABLE_PIPELINE_STAGES: frozenset[TaskStage] = frozenset(
+    {TaskStage.GROOMING, TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING, TaskStage.COMMIT_TO_GIT}
+)
 _TRUSTED_STAGE_MARKER_STATUSES = {"idle", "paused", "interrupted", "running"}
 _TASKS_UNAVAILABLE_KEYS = {"state"}
 
@@ -639,7 +641,7 @@ def _backlog_damage_issue(
     missing_from_queue = status == "queued" and task.id not in queued_ids
 
     runtime_stage = _runtime_resume_stage(task)
-    if pipeline_status == "backlog" and runtime_stage is not None:
+    if pipeline_status == PipelineStatus.BACKLOG and runtime_stage is not None:
         queue_detail = (
             " It is missing from WorkspaceState.queue, so the scheduler will not see it." if missing_from_queue else ""
         )
@@ -655,7 +657,7 @@ def _backlog_damage_issue(
 
     if (
         status == "queued"
-        and pipeline_status not in {"backlog", "done", active_stage}
+        and pipeline_status not in {PipelineStatus.BACKLOG, PipelineStatus.DONE, active_stage}
         and not _task_has_resume_marker(task)
     ):
         return StatusIssue(

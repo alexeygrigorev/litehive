@@ -7,7 +7,7 @@ from pathlib import Path
 from litehive.config.workspace_files import workspace_gitignore_path
 from litehive.config.workspace import ensure_workspace, render_workspace_gitignore
 from litehive.git.ops import default_commit_message
-from litehive.domain.common import PipelineMode, TaskStage, TaskStatus, utcnow
+from litehive.domain.common import PipelineMode, PipelineStatus, TaskStage, TaskStatus, utcnow
 from litehive.domain.reports import FollowUpTaskSpec
 from litehive.fs_cleanup import remove_tree_logged
 from litehive.domain.task import (
@@ -71,7 +71,7 @@ def _task_creation_stage(root: Path, *, current_task_id: str | None) -> str | No
     if runtime_stage:
         return runtime_stage
     pipeline_stage = str(current_task.pipeline_status).strip()
-    if pipeline_stage and pipeline_stage != "backlog":
+    if pipeline_stage and pipeline_stage != PipelineStatus.BACKLOG:
         return pipeline_stage
     return None
 

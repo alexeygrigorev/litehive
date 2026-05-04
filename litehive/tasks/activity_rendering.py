@@ -3,12 +3,13 @@
 from pathlib import Path
 from typing import Iterable
 
+from litehive.domain.common import TaskStage
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.tasks.activity import append_task_activity, load_task_activity
 
 RETRACTED_FILESYSTEM_MARKER = "[retracted - filesystem check shows no changes landed]"
-_RETRACTABLE_STEPS = {"implementing", "testing", "accepting"}
+_RETRACTABLE_STEPS: frozenset[TaskStage] = frozenset({TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING})
 _FILES_CHANGED_PLACEHOLDERS = {"none", "n/a", "-", ""}
 
 
