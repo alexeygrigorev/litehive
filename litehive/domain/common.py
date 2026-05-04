@@ -299,15 +299,15 @@ def pipeline_stage_key(name: str | None) -> str | None:
     if name is None:
         return None
     if name in {"before_grooming", "grooming", "after_grooming", str(PipelineState.RECOVERING)}:
-        return TaskStage.GROOMING.value
+        return TaskStage.GROOMING
     if name in {"before_implementing", "implementing", "after_implementing"}:
-        return TaskStage.IMPLEMENTING.value
+        return TaskStage.IMPLEMENTING
     if name in {"before_testing", "testing", "after_testing"}:
-        return TaskStage.TESTING.value
+        return TaskStage.TESTING
     if name in {"before_accepting", "accepting", "after_accepting"}:
-        return TaskStage.ACCEPTING.value
+        return TaskStage.ACCEPTING
     if name in {"commit", "after_commit", str(PipelineState.MERGE_RESOLVING)}:
-        return TaskStage.COMMIT_TO_GIT.value
+        return TaskStage.COMMIT_TO_GIT
     return name
 
 
