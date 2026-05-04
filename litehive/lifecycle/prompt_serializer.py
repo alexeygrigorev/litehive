@@ -22,6 +22,7 @@ from typing import Any
 from pydantic import ValidationError
 import yaml
 
+from litehive.domain.common import PipelineState, TaskStage
 from litehive.domain.task import TaskRecord
 from litehive.state.records import get_task
 from litehive.tasks.activity import load_task_activity
@@ -569,11 +570,11 @@ def _trim_activity_for_prompt(
 
     kept: list[dict[str, Any]] = []
 
-    if current_stage == "grooming":
+    if current_stage == TaskStage.GROOMING:
         pass  # no activity context needed
 
-    elif current_stage == "implementing":
-        g = _last_where(stage="grooming", verdict="pass")
+    elif current_stage == TaskStage.IMPLEMENTING:
+        g = _last_where(stage=TaskStage.GROOMING.value, verdict="pass")
         if g:
             kept.append(g)
         # On retry, the rejection is rendered in the dedicated last_rejection
@@ -581,28 +582,28 @@ def _trim_activity_for_prompt(
         if not last_rejection:
             for e in reversed(activity):
                 if e.get("verdict") == "reject" and e.get("stage") in (
-                    "testing",
-                    "accepting",
-                    "implementing",
+                    TaskStage.TESTING.value,
+                    TaskStage.ACCEPTING.value,
+                    TaskStage.IMPLEMENTING.value,
                 ):
                     kept.append(e)
                     break
 
-    elif current_stage == "testing":
-        p = _last_where(stage="implementing", verdict="pass")
+    elif current_stage == TaskStage.TESTING:
+        p = _last_where(stage=TaskStage.IMPLEMENTING.value, verdict="pass")
         if p:
             kept.append(p)
 
-    elif current_stage == "accepting":
-        p = _last_where(stage="implementing", verdict="pass")
+    elif current_stage == TaskStage.ACCEPTING:
+        p = _last_where(stage=TaskStage.IMPLEMENTING.value, verdict="pass")
         if p:
             kept.append(p)
-        t = _last_where(stage="testing", verdict="pass")
+        t = _last_where(stage=TaskStage.TESTING.value, verdict="pass")
         if t:
             kept.append(t)
 
-    elif current_stage == "recovering":
-        p = _last_where(stage="implementing", verdict="pass")
+    elif current_stage == PipelineState.RECOVERING:
+        p = _last_where(stage=TaskStage.IMPLEMENTING.value, verdict="pass")
         if p:
             kept.append(p)
         # The crash or rejection that triggered recovery
@@ -613,7 +614,7 @@ def _trim_activity_for_prompt(
 
     else:
         # Fallback: grooming pass + last per (stage, verdict)
-        g = _last_where(stage="grooming", verdict="pass")
+        g = _last_where(stage=TaskStage.GROOMING.value, verdict="pass")
         if g:
             kept.append(g)
         seen: set[tuple[str, str]] = set()
