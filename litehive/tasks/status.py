@@ -15,7 +15,6 @@ from litehive.tasks.constants import (
     RESUMABLE_TASK_STATUSES,
     VALID_TASK_ENGINES,
     VALID_TASK_PRIORITIES,
-    VALID_TASK_TYPES,
     RUNNER_LOCKS,
     RUNNER_LOCKS_MUTEX,
 )
@@ -160,7 +159,6 @@ class TaskTransitionService:
         *,
         title: str | object = ...,
         depends_on: list[str] | object = ...,
-        task_type: str | None | object = ...,
         model: str | None | object = ...,
         retry_limit: int | None | object = ...,
         priority: str | object = ...,
@@ -182,7 +180,6 @@ class TaskTransitionService:
             task_id,
             title=title,
             depends_on=depends_on,
-            task_type=task_type,
             model=model,
             retry_limit=retry_limit,
             priority=priority,
@@ -972,7 +969,6 @@ def _update_task_transition(
     *,
     title: str | object = ...,
     depends_on: list[str] | object = ...,
-    task_type: str | None | object = ...,
     model: str | None | object = ...,
     retry_limit: int | None | object = ...,
     priority: str | object = ...,
@@ -1050,10 +1046,6 @@ def _update_task_transition(
         if title is not ...:
             task.title = str(title)
 
-        if task_type is not ...:
-            if task_type is not None and task_type not in VALID_TASK_TYPES:
-                raise ValueError(f"Unsupported task type '{task_type}'")
-            task.task_type = task_type
 
         if model is not ...:
             task.model = model
@@ -1089,7 +1081,6 @@ def _update_task_transition(
             for name, changed in (
                 ("depends_on", depends_on is not ...),
                 ("title", title is not ...),
-                ("task_type", task_type is not ...),
                 ("model", model is not ...),
                 ("retry_limit", retry_limit is not ...),
                 ("priority", priority is not ...),
@@ -1211,7 +1202,6 @@ def update_task(
     *,
     title: str | object = ...,
     depends_on: list[str] | object = ...,
-    task_type: str | None | object = ...,
     model: str | None | object = ...,
     retry_limit: int | None | object = ...,
     priority: str | object = ...,
@@ -1232,7 +1222,6 @@ def update_task(
         task_id,
         title=title,
         depends_on=depends_on,
-        task_type=task_type,
         model=model,
         retry_limit=retry_limit,
         priority=priority,

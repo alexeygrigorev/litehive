@@ -301,7 +301,6 @@ def test_task_intent_persists_only_intent_fields_and_runtime_moves_to_db(tmp_pat
         "slug",
         "title",
         "created_at",
-        "task_type",
         "pipeline_mode",
         "priority",
         "depends_on",

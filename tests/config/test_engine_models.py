@@ -81,17 +81,6 @@ def test_resolve_engine_name_ignores_title_keywords_uses_default(
     assert resolve_engine_plan(task, config) == ["codex"]
 
 
-def test_resolve_engine_name_ignores_task_type_for_engine_selection(
-    tmp_path: Path,
-) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
-    config = load_config(tmp_path)
-    task = create_task(tmp_path, title="Research engine quota behavior", task_type="review")
-
-    assert resolve_engine_name(task, config) == "codex"
-    assert resolve_engine_plan(task, config) == ["codex"]
-
-
 def test_resolve_engine_name_uses_default_engine_without_task_override(
     tmp_path: Path,
 ) -> None:

@@ -31,7 +31,6 @@ class _RepeatRecoveryEscalationEngine:
         follow_up = create_task(
             self.workspace,
             title=f"Recovery follow-up: {repeated['fingerprint']}",
-            task_type="bugfix",
             goal=f"Fix the repeated recovery failure for `{repeated['fingerprint']}`.",
             acceptance_criteria=[
                 f"Root cause for `{repeated['fingerprint']}` is identified",
@@ -103,5 +102,4 @@ def test_recovery_repeat_fingerprint_escalates_after_requeue(tmp_path: Path) -> 
 
     follow_up = get_task(tmp_path, follow_up_ids[0])
     assert follow_up is not None
-    assert follow_up.task_type == "bugfix"
     assert "repeatable infra crash" in follow_up.goal

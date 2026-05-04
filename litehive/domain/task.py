@@ -139,7 +139,6 @@ class TaskIntentRecord(BaseModel):
     slug: str  # Human-readable task identifier
     title: str  # Brief task summary
     created_at: str = Field(default_factory=utcnow)
-    task_type: str | None = None  # Optional task categorization
     pipeline_mode: PipelineMode = PipelineMode.FULL  # Execution mode (full vs single)
     priority: str = "medium"  # Task scheduling priority
     depends_on: list[str] = Field(default_factory=list)  # Upstream task IDs
@@ -225,7 +224,6 @@ class TaskRecord(BaseModel):
     slug: str  # Human-readable task identifier
     title: str  # Brief task summary
     depends_on: list[str] = Field(default_factory=list)  # Upstream task IDs that must complete first
-    task_type: str | None = None  # Optional task categorization
     model: str | None = None  # AI model being used for execution
     pipeline_mode: PipelineMode = PipelineMode.FULL  # Execution mode (full vs single stage)
     status: TaskStatus = TaskStatus.QUEUED  # High-level execution or terminal category
@@ -254,7 +252,6 @@ class TaskRecord(BaseModel):
             slug=self.slug,
             title=self.title,
             created_at=self.created_at,
-            task_type=self.task_type,
             pipeline_mode=self.pipeline_mode,
             priority=self.priority,
             depends_on=list(self.depends_on),

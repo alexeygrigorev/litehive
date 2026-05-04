@@ -8,7 +8,6 @@ from litehive.domain.task_ops import RunnerLockState
 
 VALID_TASK_PRIORITIES = {"low", "medium", "high", "critical"}
 VALID_TASK_ENGINES = {"codex", "opencode", "gemini", "copilot", "claude", "goz"}
-VALID_TASK_TYPES = {"adapter", "bugfix", "docs", "refactor", "research", "review"}
 TASK_PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 MISSING = object()

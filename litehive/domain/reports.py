@@ -143,7 +143,6 @@ class FollowUpTaskSpec(BaseModel):
     blocking: bool = False  # Whether this blocks the current task
     goal: str = ""  # Main objective of the follow-up task
     acceptance_criteria: list[str] = Field(default_factory=list)  # Completion conditions
-    task_type: str | None = None  # Optional task type classification
 
 
 class RecoveryEvidenceItem(BaseModel):

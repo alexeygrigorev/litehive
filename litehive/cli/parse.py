@@ -1,12 +1,9 @@
 from heru import ENGINE_CHOICES
 
-from litehive.tasks.constants import VALID_TASK_TYPES
 from litehive.tasks.normalization import (
     normalize_acceptance_criteria,
     normalize_task_text_list,
 )
-
-TASK_TYPE_CHOICES = sorted(VALID_TASK_TYPES)
 
 
 def parse_dependency_ids(

@@ -19,10 +19,7 @@ from litehive.domain.task import (
 )
 from litehive.state.store import runtime_store
 
-from litehive.tasks.constants import (
-    VALID_TASK_PRIORITIES,
-    VALID_TASK_TYPES,
-)
+from litehive.tasks.constants import VALID_TASK_PRIORITIES
 from litehive.state.locking import workspace_lock, workspace_mutation_guard
 from litehive.state.persist import (
     load_state,
@@ -240,7 +237,6 @@ def create_task(
     title: str,
     depends_on: list[str] | None = None,
     pipeline_mode: str = "full",
-    task_type: str | None = None,
     model: str | None = None,
     retry_limit: int | None = None,
     goal: str = "",
@@ -257,8 +253,6 @@ def create_task(
         raise ValueError(f"Unsupported pipeline_mode '{pipeline_mode}'") from None
     if priority is not None and priority not in VALID_TASK_PRIORITIES:
         raise ValueError(f"Unsupported priority '{priority}'; choose from {sorted(VALID_TASK_PRIORITIES)}")
-    if task_type is not None and task_type not in VALID_TASK_TYPES:
-        raise ValueError(f"Unsupported task type '{task_type}'")
     # inline: tasks.queue top-level-imports state.records (would cycle).
     from litehive.tasks.queue import validate_task_dependencies  # noqa: PLC0415
 
@@ -273,7 +267,6 @@ def create_task(
             slug=slug,
             title=title,
             depends_on=list(depends_on or []),
-            task_type=task_type,
             model=model,
             pipeline_mode=pipeline_mode_enum,
             priority=priority or "medium",
@@ -356,7 +349,6 @@ def create_follow_up_tasks(
                 id=task_id,
                 slug=slug,
                 title=follow_up.title,
-                task_type=follow_up.task_type,
                 goal=follow_up.goal,
                 acceptance_criteria=normalize_acceptance_criteria(follow_up.acceptance_criteria),
                 created_from=TaskCreationSource(
