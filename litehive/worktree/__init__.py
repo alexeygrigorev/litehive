@@ -2,11 +2,11 @@
 
 The implementation is split across sibling modules:
 
-* ``litehive.worktree_paths`` — pure path/branch arithmetic.
-* ``litehive.worktree_inspection`` — read-only dirty-state and ownership reports.
-* ``litehive.worktree_cleanup`` — listing and cleanup of managed worktrees.
-* ``litehive.worktree_rescue`` — operator-driven cherry-pick onto main.
-* ``litehive.worktree_service`` — ``WorktreeService`` create/reuse/sync flow.
+* ``litehive.worktree.paths`` — pure path/branch arithmetic.
+* ``litehive.worktree.inspection`` — read-only dirty-state and ownership reports.
+* ``litehive.worktree.cleanup`` — listing and cleanup of managed worktrees.
+* ``litehive.worktree.rescue`` — operator-driven cherry-pick onto main.
+* ``litehive.worktree.service`` — ``WorktreeService`` create/reuse/sync flow.
 
 This module hosts ``resolve_task_execution_root`` (which constructs the
 execution root for a task) and continues to re-export common names so
@@ -28,25 +28,25 @@ from litehive.state.records import (
     set_task_worktree_path,
 )
 from litehive.tasks.journal import append_journal
-from litehive.worktree_cleanup import (
+from litehive.worktree.cleanup import (
     cleanup_terminal_task_worktree,
     collect_managed_worktrees,
     remove_cleanable_worktrees,
 )
-from litehive.worktree_inspection import inspect_dirty_worktree_gate
-from litehive.worktree_paths import (
+from litehive.worktree.inspection import inspect_dirty_worktree_gate
+from litehive.worktree.paths import (
     ensure_worktree_venv_link,
     resolve_recorded_worktree_path,
     serialize_worktree_path,
     task_worktree_branch,
     task_worktree_path,
 )
-from litehive.worktree_rescue import (
+from litehive.worktree.rescue import (
     apply_rescue_candidate,
     collect_rescue_candidates,
     require_clean_main_checkout,
 )
-from litehive.worktree_service import WorktreeService, status_porcelain_untracked
+from litehive.worktree.service import WorktreeService, status_porcelain_untracked
 
 __all__ = [
     "WorktreeMergeConflict",

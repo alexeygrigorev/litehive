@@ -20,7 +20,7 @@ from litehive.state.records import (
     list_tasks,
     save_task,
 )
-from litehive.worktree_paths import (
+from litehive.worktree.paths import (
     is_managed_worktree_path,
     resolve_recorded_worktree_path,
     task_worktree_branch,

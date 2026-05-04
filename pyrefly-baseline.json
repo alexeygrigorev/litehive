@@ -1033,9 +1033,9 @@
       "severity": "error"
     },
     {
-      "line": 242,
+      "line": 243,
       "column": 83,
-      "stop_line": 242,
+      "stop_line": 243,
       "stop_column": 86,
       "path": "litehive/cli/queue_cli.py",
       "code": -2,
@@ -1057,9 +1057,9 @@
       "severity": "error"
     },
     {
-      "line": 96,
+      "line": 97,
       "column": 22,
-      "stop_line": 96,
+      "stop_line": 97,
       "stop_column": 54,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1069,9 +1069,9 @@
       "severity": "error"
     },
     {
-      "line": 97,
+      "line": 98,
       "column": 31,
-      "stop_line": 97,
+      "stop_line": 98,
       "stop_column": 77,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1081,9 +1081,9 @@
       "severity": "error"
     },
     {
-      "line": 275,
+      "line": 280,
       "column": 9,
-      "stop_line": 275,
+      "stop_line": 280,
       "stop_column": 12,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1093,9 +1093,9 @@
       "severity": "error"
     },
     {
-      "line": 352,
+      "line": 357,
       "column": 22,
-      "stop_line": 352,
+      "stop_line": 357,
       "stop_column": 98,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1105,9 +1105,9 @@
       "severity": "error"
     },
     {
-      "line": 353,
+      "line": 358,
       "column": 31,
-      "stop_line": 353,
+      "stop_line": 358,
       "stop_column": 95,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1117,9 +1117,9 @@
       "severity": "error"
     },
     {
-      "line": 354,
+      "line": 359,
       "column": 23,
-      "stop_line": 354,
+      "stop_line": 359,
       "stop_column": 103,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1129,9 +1129,9 @@
       "severity": "error"
     },
     {
-      "line": 355,
+      "line": 360,
       "column": 16,
-      "stop_line": 355,
+      "stop_line": 360,
       "stop_column": 82,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1141,9 +1141,9 @@
       "severity": "error"
     },
     {
-      "line": 367,
+      "line": 372,
       "column": 13,
-      "stop_line": 367,
+      "stop_line": 372,
       "stop_column": 28,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1153,9 +1153,9 @@
       "severity": "error"
     },
     {
-      "line": 367,
+      "line": 372,
       "column": 13,
-      "stop_line": 367,
+      "stop_line": 372,
       "stop_column": 28,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1165,9 +1165,9 @@
       "severity": "error"
     },
     {
-      "line": 367,
+      "line": 372,
       "column": 13,
-      "stop_line": 367,
+      "stop_line": 372,
       "stop_column": 28,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1177,9 +1177,9 @@
       "severity": "error"
     },
     {
-      "line": 367,
+      "line": 372,
       "column": 13,
-      "stop_line": 367,
+      "stop_line": 372,
       "stop_column": 28,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1333,33 +1333,9 @@
       "severity": "error"
     },
     {
-      "line": 213,
-      "column": 50,
-      "stop_line": 213,
-      "stop_column": 63,
-      "path": "litehive/cli/workspace.py",
-      "code": -2,
-      "name": "bad-argument-type",
-      "description": "Argument `list[Never]` is not assignable to parameter `flagged_tasks` with type `list[TaskRecord]` in function `litehive.observability.status.render_health_flagged_task_lines`",
-      "concise_description": "Argument `list[Never]` is not assignable to parameter `flagged_tasks` with type `list[TaskRecord]` in function `litehive.observability.status.render_health_flagged_task_lines`",
-      "severity": "error"
-    },
-    {
-      "line": 234,
-      "column": 55,
-      "stop_line": 234,
-      "stop_column": 64,
-      "path": "litehive/cli/workspace.py",
-      "code": -2,
-      "name": "bad-argument-type",
-      "description": "Argument `list[Never]` is not assignable to parameter `completed` with type `list[TaskRecord]` in function `litehive.observability.status.render_health_recent_completion_lines`",
-      "concise_description": "Argument `list[Never]` is not assignable to parameter `completed` with type `list[TaskRecord]` in function `litehive.observability.status.render_health_recent_completion_lines`",
-      "severity": "error"
-    },
-    {
-      "line": 285,
+      "line": 289,
       "column": 35,
-      "stop_line": 285,
+      "stop_line": 289,
       "stop_column": 41,
       "path": "litehive/cli/workspace.py",
       "code": -2,
@@ -1508,8 +1484,8 @@
       "path": "litehive/domain/lifecycle_deltas.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `Literal['accepting', 'testing']` is not assignable to parameter `rejection_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
-      "concise_description": "Argument `Literal['accepting', 'testing']` is not assignable to parameter `rejection_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
+      "description": "Argument `Literal[TaskStage.ACCEPTING, TaskStage.TESTING]` is not assignable to parameter `rejection_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
+      "concise_description": "Argument `Literal[TaskStage.ACCEPTING, TaskStage.TESTING]` is not assignable to parameter `rejection_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
       "severity": "error"
     },
     {
@@ -1520,8 +1496,8 @@
       "path": "litehive/domain/lifecycle_deltas.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `Literal['implementing']` is not assignable to parameter `retry_target_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
-      "concise_description": "Argument `Literal['implementing']` is not assignable to parameter `retry_target_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
+      "description": "Argument `Literal[TaskStage.IMPLEMENTING]` is not assignable to parameter `retry_target_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
+      "concise_description": "Argument `Literal[TaskStage.IMPLEMENTING]` is not assignable to parameter `retry_target_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
       "severity": "error"
     },
     {
@@ -1532,8 +1508,8 @@
       "path": "litehive/domain/lifecycle_deltas.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `Literal['accepting', 'testing']` is not assignable to parameter `rejection_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
-      "concise_description": "Argument `Literal['accepting', 'testing']` is not assignable to parameter `rejection_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
+      "description": "Argument `Literal[TaskStage.ACCEPTING, TaskStage.TESTING]` is not assignable to parameter `rejection_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
+      "concise_description": "Argument `Literal[TaskStage.ACCEPTING, TaskStage.TESTING]` is not assignable to parameter `rejection_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
       "severity": "error"
     },
     {
@@ -1544,26 +1520,26 @@
       "path": "litehive/domain/lifecycle_deltas.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `Literal['implementing']` is not assignable to parameter `retry_target_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
-      "concise_description": "Argument `Literal['implementing']` is not assignable to parameter `retry_target_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
+      "description": "Argument `Literal[TaskStage.IMPLEMENTING]` is not assignable to parameter `retry_target_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
+      "concise_description": "Argument `Literal[TaskStage.IMPLEMENTING]` is not assignable to parameter `retry_target_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
       "severity": "error"
     },
     {
-      "line": 379,
+      "line": 385,
       "column": 16,
-      "stop_line": 379,
+      "stop_line": 385,
       "stop_column": 19,
       "path": "litehive/domain/lifecycle_deltas.py",
       "code": -2,
       "name": "bad-return",
-      "description": "Returned type `Literal['accepting', 'commit_to_git', 'grooming', 'implementing', 'testing']` is not assignable to declared return type `PipelineState | None`",
-      "concise_description": "Returned type `Literal['accepting', 'commit_to_git', 'grooming', 'implementing', 'testing']` is not assignable to declared return type `PipelineState | None`",
+      "description": "Returned type `TaskStage` is not assignable to declared return type `PipelineState | None`",
+      "concise_description": "Returned type `TaskStage` is not assignable to declared return type `PipelineState | None`",
       "severity": "error"
     },
     {
-      "line": 380,
+      "line": 386,
       "column": 12,
-      "stop_line": 380,
+      "stop_line": 386,
       "stop_column": 24,
       "path": "litehive/domain/lifecycle_deltas.py",
       "code": -2,
@@ -1664,8 +1640,8 @@
       "path": "litehive/lifecycle/nodes/system.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `(TaskState) -> Path` is not assignable to parameter `worktree_resolver` with type `((object) -> Path) | None` in function `litehive.worktree.WorktreeService.sync_task_worktree`",
-      "concise_description": "Argument `(TaskState) -> Path` is not assignable to parameter `worktree_resolver` with type `((object) -> Path) | None` in function `litehive.worktree.WorktreeService.sync_task_worktree`",
+      "description": "Argument `(TaskState) -> Path` is not assignable to parameter `worktree_resolver` with type `((object) -> Path) | None` in function `litehive.worktree.service.WorktreeService.sync_task_worktree`",
+      "concise_description": "Argument `(TaskState) -> Path` is not assignable to parameter `worktree_resolver` with type `((object) -> Path) | None` in function `litehive.worktree.service.WorktreeService.sync_task_worktree`",
       "severity": "error"
     },
     {
@@ -1705,93 +1681,9 @@
       "severity": "error"
     },
     {
-      "line": 324,
-      "column": 30,
-      "stop_line": 324,
-      "stop_column": 36,
-      "path": "litehive/lifecycle/orchestration.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['done']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['done']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 325,
-      "column": 39,
-      "stop_line": 325,
-      "stop_column": 45,
-      "path": "litehive/lifecycle/orchestration.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['done']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "concise_description": "`Literal['done']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 345,
-      "column": 34,
-      "stop_line": 345,
-      "stop_column": 43,
-      "path": "litehive/lifecycle/orchestration.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['flagged']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['flagged']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 346,
-      "column": 43,
-      "stop_line": 346,
-      "stop_column": 52,
-      "path": "litehive/lifecycle/orchestration.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['flagged']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "concise_description": "`Literal['flagged']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 352,
-      "column": 34,
-      "stop_line": 352,
-      "stop_column": 43,
-      "path": "litehive/lifecycle/orchestration.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['flagged']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['flagged']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 353,
-      "column": 43,
-      "stop_line": 353,
-      "stop_column": 52,
-      "path": "litehive/lifecycle/orchestration.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['flagged']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "concise_description": "`Literal['flagged']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 373,
-      "column": 30,
-      "stop_line": 373,
-      "stop_column": 43,
-      "path": "litehive/lifecycle/orchestration.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['in_progress']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['in_progress']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 392,
+      "line": 393,
       "column": 9,
-      "stop_line": 392,
+      "stop_line": 393,
       "stop_column": 27,
       "path": "litehive/lifecycle/orchestration.py",
       "code": -2,
@@ -1801,9 +1693,9 @@
       "severity": "error"
     },
     {
-      "line": 393,
+      "line": 394,
       "column": 12,
-      "stop_line": 393,
+      "stop_line": 394,
       "stop_column": 39,
       "path": "litehive/lifecycle/orchestration.py",
       "code": -2,
@@ -1813,9 +1705,9 @@
       "severity": "error"
     },
     {
-      "line": 448,
+      "line": 449,
       "column": 16,
-      "stop_line": 448,
+      "stop_line": 449,
       "stop_column": 95,
       "path": "litehive/lifecycle/orchestration.py",
       "code": -2,
@@ -1825,21 +1717,9 @@
       "severity": "error"
     },
     {
-      "line": 565,
-      "column": 28,
-      "stop_line": 565,
-      "stop_column": 36,
-      "path": "litehive/lifecycle/orchestration.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 822,
+      "line": 823,
       "column": 24,
-      "stop_line": 822,
+      "stop_line": 823,
       "stop_column": 34,
       "path": "litehive/lifecycle/orchestration.py",
       "code": -2,
@@ -1849,9 +1729,9 @@
       "severity": "error"
     },
     {
-      "line": 831,
+      "line": 832,
       "column": 24,
-      "stop_line": 831,
+      "stop_line": 832,
       "stop_column": 61,
       "path": "litehive/lifecycle/orchestration.py",
       "code": -2,
@@ -1861,9 +1741,9 @@
       "severity": "error"
     },
     {
-      "line": 862,
+      "line": 863,
       "column": 61,
-      "stop_line": 862,
+      "stop_line": 863,
       "stop_column": 76,
       "path": "litehive/lifecycle/orchestration.py",
       "code": -2,
@@ -2185,27 +2065,15 @@
       "severity": "error"
     },
     {
-      "line": 594,
+      "line": 596,
       "column": 12,
-      "stop_line": 594,
+      "stop_line": 596,
       "stop_column": 24,
       "path": "litehive/observability/status_diagnostics.py",
       "code": -2,
       "name": "unbound-name",
       "description": "`TaskNotFound` is uninitialized",
       "concise_description": "`TaskNotFound` is uninitialized",
-      "severity": "error"
-    },
-    {
-      "line": 90,
-      "column": 19,
-      "stop_line": 90,
-      "stop_column": 32,
-      "path": "litehive/recovery/execution_recovery.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['interrupted']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['interrupted']` is not assignable to attribute `status` with type `TaskStatus`",
       "severity": "error"
     },
     {
@@ -2314,30 +2182,6 @@
       "name": "bad-return",
       "description": "Returned type `Literal[True] | object` is not assignable to declared return type `bool`",
       "concise_description": "Returned type `Literal[True] | object` is not assignable to declared return type `bool`",
-      "severity": "error"
-    },
-    {
-      "line": 48,
-      "column": 27,
-      "stop_line": 48,
-      "stop_column": 33,
-      "path": "litehive/recovery/workspace_repair.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['done']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['done']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 51,
-      "column": 36,
-      "stop_line": 51,
-      "stop_column": 42,
-      "path": "litehive/recovery/workspace_repair.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['done']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "concise_description": "`Literal['done']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
       "severity": "error"
     },
     {
@@ -2545,18 +2389,6 @@
       "severity": "error"
     },
     {
-      "line": 155,
-      "column": 28,
-      "stop_line": 155,
-      "stop_column": 107,
-      "path": "litehive/state/records.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['unknown']` is not assignable to attribute `flag_reason` with type `Never`",
-      "concise_description": "`Literal['unknown']` is not assignable to attribute `flag_reason` with type `Never`",
-      "severity": "error"
-    },
-    {
       "line": 642,
       "column": 20,
       "stop_line": 642,
@@ -2593,9 +2425,9 @@
       "severity": "error"
     },
     {
-      "line": 189,
+      "line": 191,
       "column": 19,
-      "stop_line": 189,
+      "stop_line": 191,
       "stop_column": 25,
       "path": "litehive/tasks/queue.py",
       "code": -2,
@@ -2605,9 +2437,9 @@
       "severity": "error"
     },
     {
-      "line": 192,
+      "line": 194,
       "column": 28,
-      "stop_line": 192,
+      "stop_line": 194,
       "stop_column": 43,
       "path": "litehive/tasks/queue.py",
       "code": -2,
@@ -2617,9 +2449,9 @@
       "severity": "error"
     },
     {
-      "line": 200,
+      "line": 202,
       "column": 52,
-      "stop_line": 200,
+      "stop_line": 202,
       "stop_column": 67,
       "path": "litehive/tasks/queue.py",
       "code": -2,
@@ -2629,21 +2461,9 @@
       "severity": "error"
     },
     {
-      "line": 274,
-      "column": 19,
-      "stop_line": 274,
-      "stop_column": 27,
-      "path": "litehive/tasks/queue.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 277,
+      "line": 279,
       "column": 28,
-      "stop_line": 277,
+      "stop_line": 279,
       "stop_column": 40,
       "path": "litehive/tasks/queue.py",
       "code": -2,
@@ -2653,9 +2473,9 @@
       "severity": "error"
     },
     {
-      "line": 280,
+      "line": 282,
       "column": 52,
-      "stop_line": 280,
+      "stop_line": 282,
       "stop_column": 64,
       "path": "litehive/tasks/queue.py",
       "code": -2,
@@ -2665,45 +2485,9 @@
       "severity": "error"
     },
     {
-      "line": 366,
-      "column": 32,
-      "stop_line": 366,
-      "stop_column": 41,
-      "path": "litehive/tasks/queue.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['backlog']` is not assignable to attribute `pipeline_status` with type `Never`",
-      "concise_description": "`Literal['backlog']` is not assignable to attribute `pipeline_status` with type `Never`",
-      "severity": "error"
-    },
-    {
-      "line": 367,
-      "column": 47,
-      "stop_line": 367,
-      "stop_column": 96,
-      "path": "litehive/tasks/queue.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`RuntimeStageState` is not assignable to attribute `current_stage` with type `Never`",
-      "concise_description": "`RuntimeStageState` is not assignable to attribute `current_stage` with type `Never`",
-      "severity": "error"
-    },
-    {
-      "line": 368,
-      "column": 44,
-      "stop_line": 368,
-      "stop_column": 47,
-      "path": "litehive/tasks/queue.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`str` is not assignable to attribute `updated_at` with type `Never`",
-      "concise_description": "`str` is not assignable to attribute `updated_at` with type `Never`",
-      "severity": "error"
-    },
-    {
-      "line": 370,
+      "line": 372,
       "column": 56,
-      "stop_line": 370,
+      "stop_line": 372,
       "stop_column": 65,
       "path": "litehive/tasks/queue.py",
       "code": -2,
@@ -2713,57 +2497,9 @@
       "severity": "error"
     },
     {
-      "line": 388,
-      "column": 27,
-      "stop_line": 388,
-      "stop_column": 40,
-      "path": "litehive/tasks/queue.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['in_progress']` is not assignable to attribute `status` with type `Never`",
-      "concise_description": "`Literal['in_progress']` is not assignable to attribute `status` with type `Never`",
-      "severity": "error"
-    },
-    {
-      "line": 434,
-      "column": 37,
-      "stop_line": 434,
-      "stop_column": 43,
-      "path": "litehive/tasks/queue.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['done']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['done']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 435,
-      "column": 46,
-      "stop_line": 435,
-      "stop_column": 52,
-      "path": "litehive/tasks/queue.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['done']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "concise_description": "`Literal['done']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 503,
-      "column": 36,
-      "stop_line": 503,
-      "stop_column": 49,
-      "path": "litehive/tasks/queue.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['in_progress']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['in_progress']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 745,
+      "line": 749,
       "column": 13,
-      "stop_line": 753,
+      "stop_line": 757,
       "stop_column": 14,
       "path": "litehive/tasks/queue.py",
       "code": -2,
@@ -2773,45 +2509,9 @@
       "severity": "error"
     },
     {
-      "line": 784,
+      "line": 850,
       "column": 27,
-      "stop_line": 784,
-      "stop_column": 35,
-      "path": "litehive/tasks/queue.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 800,
-      "column": 27,
-      "stop_line": 800,
-      "stop_column": 35,
-      "path": "litehive/tasks/queue.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 820,
-      "column": 31,
-      "stop_line": 820,
-      "stop_column": 39,
-      "path": "litehive/tasks/queue.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 846,
-      "column": 27,
-      "stop_line": 846,
+      "stop_line": 850,
       "stop_column": 61,
       "path": "litehive/tasks/queue.py",
       "code": -2,
@@ -3025,18 +2725,6 @@
       "severity": "error"
     },
     {
-      "line": 105,
-      "column": 28,
-      "stop_line": 105,
-      "stop_column": 66,
-      "path": "litehive/tasks/runtime.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['flagged 3 times - needs human review']` is not assignable to attribute `flag_reason` with type `Never`",
-      "concise_description": "`Literal['flagged 3 times - needs human review']` is not assignable to attribute `flag_reason` with type `Never`",
-      "severity": "error"
-    },
-    {
       "line": 242,
       "column": 36,
       "stop_line": 242,
@@ -3049,51 +2737,15 @@
       "severity": "error"
     },
     {
-      "line": 334,
-      "column": 19,
-      "stop_line": 334,
-      "stop_column": 27,
-      "path": "litehive/tasks/status.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['closed']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['closed']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 358,
-      "column": 19,
-      "stop_line": 358,
-      "stop_column": 60,
-      "path": "litehive/tasks/status.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['closed', 'done']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['closed', 'done']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
       "line": 361,
       "column": 28,
       "stop_line": 361,
-      "stop_column": 102,
+      "stop_column": 115,
       "path": "litehive/tasks/status.py",
       "code": -2,
       "name": "bad-assignment",
       "description": "`PipelineStatus | str` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
       "concise_description": "`PipelineStatus | str` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 382,
-      "column": 19,
-      "stop_line": 382,
-      "stop_column": 27,
-      "path": "litehive/tasks/status.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['parked']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['parked']` is not assignable to attribute `status` with type `TaskStatus`",
       "severity": "error"
     },
     {
@@ -3241,30 +2893,6 @@
       "severity": "error"
     },
     {
-      "line": 64,
-      "column": 23,
-      "stop_line": 64,
-      "stop_column": 31,
-      "path": "litehive/tasks/stop.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['parked']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['parked']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 84,
-      "column": 27,
-      "stop_line": 84,
-      "stop_column": 35,
-      "path": "litehive/tasks/stop.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
       "line": 143,
       "column": 30,
       "stop_line": 143,
@@ -3281,7 +2909,7 @@
       "column": 12,
       "stop_line": 132,
       "stop_column": 6,
-      "path": "litehive/worktree_cleanup.py",
+      "path": "litehive/worktree/cleanup.py",
       "code": -2,
       "name": "bad-return",
       "description": "Returned type `dict[str, list[ManagedWorktree] | list[tuple[ManagedWorktree, str]]]` is not assignable to declared return type `dict[str, list[ManagedWorktree]]`",

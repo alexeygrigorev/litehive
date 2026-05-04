@@ -22,7 +22,7 @@ from litehive.git.ops import (
 from litehive.state.records import get_task_worktree_path, list_tasks
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.activity_rendering import normalized_files_changed
-from litehive.worktree_paths import resolve_recorded_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path
 
 
 def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:

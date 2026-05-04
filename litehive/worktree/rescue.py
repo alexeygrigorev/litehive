@@ -42,7 +42,7 @@ from litehive.state.records import (
     save_task,
     set_task_commit_sha,
 )
-from litehive.worktree_paths import is_managed_worktree_path, resolve_recorded_worktree_path
+from litehive.worktree.paths import is_managed_worktree_path, resolve_recorded_worktree_path
 
 
 def collect_rescue_candidates(root: Path) -> list[RescueCandidate]:

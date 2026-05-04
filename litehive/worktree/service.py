@@ -44,20 +44,20 @@ from litehive.state.records import (
     save_task,
     set_task_worktree_path,
 )
-from litehive.worktree_cleanup import (
+from litehive.worktree.cleanup import (
     cleanup_terminal_task_worktree,
     collect_managed_worktrees,
     remove_cleanable_worktrees,
 )
-from litehive.worktree_inspection import worktree_committed_changes, worktree_uncommitted_changes
-from litehive.worktree_paths import (
+from litehive.worktree.inspection import worktree_committed_changes, worktree_uncommitted_changes
+from litehive.worktree.paths import (
     ensure_worktree_venv_link,
     resolve_recorded_worktree_path,
     serialize_worktree_path,
     task_worktree_branch,
     task_worktree_path,
 )
-from litehive.worktree_rescue import apply_rescue_candidate, collect_rescue_candidates, require_clean_main_checkout
+from litehive.worktree.rescue import apply_rescue_candidate, collect_rescue_candidates, require_clean_main_checkout
 
 
 def status_porcelain_untracked(cwd: Path) -> bool:
