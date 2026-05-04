@@ -8,6 +8,7 @@ from pathlib import Path
 
 from litehive.config.loading import load_config
 from litehive.git.ops import GitError, current_head, path_differs_at_ref
+from litehive.domain.common import PipelineStatus, TaskStage
 from litehive.domain.task import TaskRecord, WorkspaceState
 
 from litehive.tasks.constants import (
@@ -310,7 +311,7 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
         )
 
         # Special case: tasks at commit_to_git stage remain queued instead of parked
-        if stage == "commit_to_git":
+        if stage == TaskStage.COMMIT_TO_GIT:
             task.status = "queued"
 
         # Remove from active/queue state
@@ -702,7 +703,7 @@ def _resume_task_transition(root: Path, task_id: str, *, front: bool = False) ->
             raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, or closed")
         if resumed_stage is None:
             raise ValueError(f"Task {task.id} has no resumable stage")
-        if resumed_stage in {"implementing", "testing", "accepting"}:
+        if resumed_stage in {TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING}:
             original_pipeline_status = task.pipeline_status
             task.pipeline_status = resumed_stage
             resumed_stage = reroute_stage_for_acceptance_criteria(task)
@@ -1095,7 +1096,7 @@ def _update_task_transition(
 
         if journal_message is None:
             journal_message = "Task metadata updated via CLI."
-        if task.pipeline_status == "grooming" and missing_acceptance_criteria_reason(task) is not None:
+        if task.pipeline_status == PipelineStatus.GROOMING and missing_acceptance_criteria_reason(task) is not None:
             journal_message += " Rerouted to `grooming` until structured acceptance criteria are added."
         persist_future_task_update(
             root,
