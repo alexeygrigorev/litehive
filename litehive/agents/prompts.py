@@ -5,6 +5,7 @@ from pathlib import Path
 from litehive.config.model import LitehiveConfig
 from litehive.roles.guidance import default_startup_guidance
 from litehive.config.profiles.loader import resolve_process_profile
+from litehive.domain.common import TaskStage
 from litehive.domain.task import TaskRecord
 from litehive.tasks.activity_rendering import render_task_activity
 from litehive.tasks.normalization import (
@@ -243,13 +244,17 @@ def stage_prompt(
 
 
 def _stage_owner_for_stage(stage: str) -> str:
-    return {
-        "grooming": "planner",
-        "implementing": "swe",
-        "testing": "qa",
-        "accepting": "reviewer",
-        "commit_to_git": "runner",
-    }.get(stage, "swe")
+    """Resolve the subagent role for a stage string.
+
+    Defers to ``TaskStage.<member>.owner_role`` so the role mapping
+    lives on the domain enum. Falls back to ``"swe"`` when the stage
+    string is not a known :class:`TaskStage` value (recovery, hook
+    phases, etc. that are routed via ``role_name`` already).
+    """
+    try:
+        return TaskStage(stage).owner_role
+    except ValueError:
+        return "swe"
 
 
 def _runner_hook_prompt_lines(stage: str, config: LitehiveConfig | None) -> list[str]:

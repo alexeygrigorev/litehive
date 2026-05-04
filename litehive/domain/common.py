@@ -149,6 +149,37 @@ class TaskStage(StringEnum):
     ACCEPTING = "accepting"  # Final review and acceptance
     COMMIT_TO_GIT = "commit_to_git"  # Git commit and merge operations
 
+    @property
+    def owner_role(self) -> str:
+        """Subagent role that owns this stage (planner/swe/qa/reviewer/runner).
+
+        The mapping is fixed: it expresses *who* runs this stage,
+        not *what* they do. Lives on the enum so prompt and prompt
+        scaffolding code don't carry their own copy of the same
+        lookup table.
+        """
+        return _STAGE_OWNER_ROLES[self]
+
+
+_STAGE_OWNER_ROLES: dict["TaskStage", str] = {}
+
+
+def _populate_stage_owners() -> None:
+    # Populated after the enum is defined to avoid forward-reference
+    # ceremony with the enum members.
+    _STAGE_OWNER_ROLES.update(
+        {
+            TaskStage.GROOMING: "planner",
+            TaskStage.IMPLEMENTING: "swe",
+            TaskStage.TESTING: "qa",
+            TaskStage.ACCEPTING: "reviewer",
+            TaskStage.COMMIT_TO_GIT: "runner",
+        }
+    )
+
+
+_populate_stage_owners()
+
 
 class TaskStatus(StringEnum):
     """High-level execution or terminal category for a task.
