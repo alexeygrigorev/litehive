@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import ValidationError
 import yaml
 
+from litehive.config.profiles.model import ProcessProfile
 from litehive.domain.common import PipelineState, TaskStage
 from litehive.lifecycle.nodes.agent import AgentNode, EngineSelector, SessionProvider
 from litehive.lifecycle.persistence import LastRejection, TaskState
@@ -27,7 +28,7 @@ class PromptContext:
 
     workspace_root: Path | None = None
     startup_guidance: dict[str, list[str]] = field(default_factory=dict)
-    profile_overlay: dict[str, Any] | None = None
+    profile_overlay: ProcessProfile | None = None
 
 
 def _bulletize(lines: list[str]) -> str:
@@ -189,10 +190,10 @@ class RoleAgent(AgentNode):
                 layers.append((f"{key}:startup", _bulletize(bullets)))
 
         profile = self.prompt_context.profile_overlay
-        if profile:
-            stage_block = profile.get("stages", {}).get(self.NODE_NAME)
-            if stage_block:
-                layers.append(("profile", stage_block))
+        if profile is not None:
+            stage_bullets = profile.stage_instructions.get(self.NODE_NAME)
+            if stage_bullets:
+                layers.append(("profile", "\n".join(stage_bullets)))
 
         return layers, instruction_variant
 

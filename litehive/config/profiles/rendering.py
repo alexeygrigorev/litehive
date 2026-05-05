@@ -1,54 +1,53 @@
 """Process profile rendering helpers."""
 
-from typing import Any
-
 from litehive.config.profiles.loader import resolve_process_profile
+from litehive.config.profiles.model import ProcessProfile
 
 
 def _shared_stage_text(stages: list[str]) -> str:
     return " -> ".join(stages) + "."
 
 
-def _render_process_overlay(profile: dict[str, Any]) -> list[str]:
+def _render_process_overlay(profile: ProcessProfile) -> list[str]:
     return [
         "## Process overlay",
-        f"- Source of truth: {profile['source_of_truth']}",
-        f"- Task source of truth: {profile['task_source_of_truth']}",
-        f"- Orchestrator model: {profile['orchestrator_model']}",
-        f"- Routing model: {profile['routing_model']}",
-        f"- Shared stages: {_shared_stage_text(profile['shared_stages'])}",
-        f"- Role model: {profile['role_model']}",
-        f"- TDD expectations: {profile['tdd_expectations']}",
-        f"- Verification discipline: {profile['verification_discipline']}",
-        f"- Acceptance flow: {profile['acceptance_flow']}",
-        f"- Commit and recovery: {profile['commit_recovery']}",
+        f"- Source of truth: {profile.source_of_truth}",
+        f"- Task source of truth: {profile.task_source_of_truth}",
+        f"- Orchestrator model: {profile.orchestrator_model}",
+        f"- Routing model: {profile.routing_model}",
+        f"- Shared stages: {_shared_stage_text(profile.shared_stages)}",
+        f"- Role model: {profile.role_model}",
+        f"- TDD expectations: {profile.tdd_expectations}",
+        f"- Verification discipline: {profile.verification_discipline}",
+        f"- Acceptance flow: {profile.acceptance_flow}",
+        f"- Commit and recovery: {profile.commit_recovery}",
     ]
 
 
-def _render_project_overlay(profile: dict[str, Any]) -> list[str]:
+def _render_project_overlay(profile: ProcessProfile) -> list[str]:
     return [
         "## Project overlay",
-        f"- {profile['summary']}",
-        *profile["workspace_overlay"],
+        f"- {profile.summary}",
+        *profile.workspace_overlay,
     ]
 
 
-def _render_scaffold_sections(profile: dict[str, Any]) -> list[str]:
+def _render_scaffold_sections(profile: ProcessProfile) -> list[str]:
     return [
         "## Init scaffold",
-        *profile["init_scaffold"],
+        *profile.init_scaffold,
         "",
         "## Prompt scaffold",
-        *profile["prompt_scaffold"],
+        *profile.prompt_scaffold,
         "",
     ]
 
 
-def _render_stage_prompt_scaffolding(profile: dict[str, Any]) -> list[str]:
+def _render_stage_prompt_scaffolding(profile: ProcessProfile) -> list[str]:
     lines = ["## Stage prompt scaffolding"]
-    for stage in profile["shared_stages"]:
-        stage_instructions = profile.get("stage_instructions", {}).get(stage, [])
-        stage_overlay = profile.get("stage_overlay", {}).get(stage, [])
+    for stage in profile.shared_stages:
+        stage_instructions = profile.stage_instructions.get(stage, [])
+        stage_overlay = profile.stage_overlay.get(stage, [])
         if not stage_instructions and not stage_overlay:
             continue
         lines.extend(["", f"### {stage}"])
@@ -63,7 +62,7 @@ def render_context_template(profile_name: str) -> str:
     lines = [
         "# Litehive Workspace Context",
         "",
-        f"Process profile: {profile['label']}",
+        f"Process profile: {profile.label}",
         "",
         "Describe this repository and how subagents should work in it.",
         "",
@@ -79,11 +78,11 @@ def render_context_template(profile_name: str) -> str:
     lines.append("")
     lines.extend(_render_scaffold_sections(profile))
     lines.extend(_render_stage_prompt_scaffolding(profile))
-    if profile.get("specifics_heading"):
-        lines.append(profile["specifics_heading"])
-        lines.extend(profile.get("specifics", []))
+    if profile.specifics_heading:
+        lines.append(profile.specifics_heading)
+        lines.extend(profile.specifics)
         lines.append("")
     lines.extend(
-        ["## Development rules", *profile["development_rules"], "", "## Tool usage", *profile["tool_usage"], ""]
+        ["## Development rules", *profile.development_rules, "", "## Tool usage", *profile.tool_usage, ""]
     )
     return "\n".join(lines)

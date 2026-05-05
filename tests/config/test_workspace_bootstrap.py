@@ -536,19 +536,19 @@ def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None
 def test_resolve_process_profile_merges_shared_process_with_overlay() -> None:
     profile = resolve_process_profile("codehive")
 
-    assert profile["label"] == "Codehive-style"
-    assert profile["shared_stages"] == [
+    assert profile.label == "Codehive-style"
+    assert profile.shared_stages == [
         "grooming",
         "implementing",
         "testing",
         "accepting",
         "commit_to_git",
     ]
-    assert profile["orchestrator_model"]
-    assert profile["routing_model"]
-    assert profile["role_model"]
-    assert profile["prompt_scaffold"]
-    assert profile["stage_overlay"]["accepting"]
+    assert profile.orchestrator_model
+    assert profile.routing_model
+    assert profile.role_model
+    assert profile.prompt_scaffold
+    assert profile.stage_overlay["accepting"]
 
 
 def test_process_profiles_are_loaded_from_typed_defaults() -> None:
@@ -558,9 +558,9 @@ def test_process_profiles_are_loaded_from_typed_defaults() -> None:
 
     profile = resolve_process_profile("python")
 
-    assert profile["label"] == "Python"
-    assert profile["prompt_scaffold"][0] == SHARED_PROCESS_PROFILE["prompt_scaffold"][0]
-    assert profile["workspace_overlay"][-1] == "- Keep dependency and packaging changes explicit and minimal."
+    assert profile.label == "Python"
+    assert profile.prompt_scaffold[0] == SHARED_PROCESS_PROFILE["prompt_scaffold"][0]
+    assert profile.workspace_overlay[-1] == "- Keep dependency and packaging changes explicit and minimal."
 
 
 def test_resolve_process_profile_rejects_unknown_profile() -> None:

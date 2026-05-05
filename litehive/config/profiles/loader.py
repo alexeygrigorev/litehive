@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 from litehive.config.profiles.defaults import PROCESS_PROFILE_OVERLAYS, SHARED_PROCESS_PROFILE
+from litehive.config.profiles.model import ProcessProfile
 
 _LIST_KEYS = {
     "development_rules",
@@ -22,8 +23,8 @@ def available_process_profiles() -> list[str]:
     return sorted(PROCESS_PROFILES)
 
 
-def resolve_process_profile(name: str | None) -> dict[str, Any]:
-    profile = deepcopy(SHARED_PROCESS_PROFILE)
+def resolve_process_profile(name: str | None) -> ProcessProfile:
+    profile: dict[str, Any] = deepcopy(SHARED_PROCESS_PROFILE)
     if name is None:
         overlay: dict[str, Any] = {}
     else:
@@ -40,4 +41,4 @@ def resolve_process_profile(name: str | None) -> dict[str, Any]:
                 profile[key].setdefault(stage, []).extend(deepcopy(instructions))
             continue
         profile[key] = deepcopy(value)
-    return profile
+    return ProcessProfile.from_dict(profile)
