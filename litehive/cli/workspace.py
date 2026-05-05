@@ -48,6 +48,7 @@ from litehive.state.records import get_task, list_tasks_state_first
 from litehive.state.persist import load_state
 from litehive.state.records import list_tasks
 from litehive.domain.task_ops import WorkspaceConflictError, WorkspaceRepairSummary
+from litehive.workspace import Workspace
 from litehive.worktree.cleanup import collect_managed_worktrees
 from litehive.worktree.inspection import inspect_dirty_worktree_gate
 
@@ -158,7 +159,7 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     ensure_workspace(workspace)
     start_time = time.perf_counter()
     try:
-        summary = repair_workspace_state(workspace)
+        summary = repair_workspace_state(Workspace.from_path(workspace))
     except WorkspaceConflictError as exc:
         print(f"repair failed: {exc}")
         return 1

@@ -1,9 +1,8 @@
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol
 
-from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import PipelineState, utcnow
+from litehive.workspace import Workspace
 
 
 @dataclass
@@ -51,11 +50,11 @@ class SqliteSessionStore:
     turn fills in engine continuation state.
     """
 
-    def __init__(self, workspace_root: Path) -> None:
-        self.workspace_root = workspace_root
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
 
     def get_or_create(self, task_id: str, node_name: PipelineState, engine_name: str) -> Session:
-        with connect_workspace_db(self.workspace_root) as connection:
+        with self.workspace.connect() as connection:
             row = connection.execute(
                 """
                 SELECT engine_session_id, conversation_id
@@ -72,7 +71,7 @@ class SqliteSessionStore:
         )
 
     def persist(self, task_id: str, node_name: PipelineState, engine_name: str, session: Session) -> None:
-        with connect_workspace_db(self.workspace_root) as connection:
+        with self.workspace.connect() as connection:
             connection.execute(
                 """
                 INSERT INTO pipeline_sessions (
@@ -96,7 +95,7 @@ class SqliteSessionStore:
             connection.commit()
 
     def clear_node_sessions(self, task_id: str, node_name: PipelineState) -> None:
-        with connect_workspace_db(self.workspace_root) as connection:
+        with self.workspace.connect() as connection:
             connection.execute(
                 "DELETE FROM pipeline_sessions WHERE task_id = ? AND node_name = ?",
                 (task_id, str(node_name)),

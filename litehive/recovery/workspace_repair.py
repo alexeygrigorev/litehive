@@ -1,8 +1,5 @@
 """Workspace repair entrypoint used by the daemon and repair CLI."""
 
-from pathlib import Path
-
-from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import PipelineStatus, TaskStage, TaskStatus, utcnow
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.state.locking import workspace_lock
@@ -12,6 +9,7 @@ from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_sta
 from litehive.tasks.queue import idle_stage_state
 from litehive.tasks.report_storage import latest_stage_report
 from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
+from litehive.workspace import Workspace
 
 from .execution_recovery import recover_stale_runner_state
 
@@ -19,22 +17,23 @@ from .execution_recovery import recover_stale_runner_state
 _TERMINAL_REPAIR_STAGES = frozenset({TaskStage.ACCEPTING, TaskStage.COMMIT_TO_GIT})
 
 
-def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
+def repair_workspace_state(workspace: Workspace) -> WorkspaceRepairSummary:
     """Reconcile workspace runtime state after a daemon crash or a forgotten terminal task; called by the daemon startup path and the `litehive repair` CLI."""
     summary = WorkspaceRepairSummary()
-    summary.stale_runner_recovered = recover_stale_runner_state(root, summary=summary)
+    summary.stale_runner_recovered = recover_stale_runner_state(workspace.root, summary=summary)
     summary.mutated = summary.stale_runner_recovered
-    normalized = _normalize_stale_terminal_tasks(root, summary=summary)
+    normalized = _normalize_stale_terminal_tasks(workspace, summary=summary)
     summary.mutated = summary.mutated or normalized
     return summary
 
 
-def _normalize_stale_terminal_tasks(root: Path, summary: WorkspaceRepairSummary | None = None) -> bool:
+def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepairSummary | None = None) -> bool:
     mutated = False
+    root = workspace.root
     with workspace_lock(root):
         state = load_state(root, bootstrap=False)
         queued_ids = set(state.queue)
-        for task_id in _stale_terminal_candidate_ids(root):
+        for task_id in _stale_terminal_candidate_ids(workspace):
             if state.active_task_id == task_id or task_id in queued_ids:
                 continue
             task = get_task_record(root, task_id)
@@ -99,8 +98,8 @@ def _normalize_stale_terminal_tasks(root: Path, summary: WorkspaceRepairSummary 
     return mutated
 
 
-def _stale_terminal_candidate_ids(root: Path) -> list[str]:
-    with connect_workspace_db(root) as connection:
+def _stale_terminal_candidate_ids(workspace: Workspace) -> list[str]:
+    with workspace.connect() as connection:
         rows = connection.execute(
             """
             WITH latest_stage_report AS (

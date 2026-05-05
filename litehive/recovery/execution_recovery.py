@@ -30,6 +30,7 @@ from litehive.state.persist import (
     save_state_without_runner_guard,
 )
 from litehive.state.records import list_tasks
+from litehive.workspace import Workspace
 
 
 __all__ = [
@@ -47,6 +48,7 @@ def recover_stale_runner_state(
 ) -> bool:
     """Top-level entry point for "is the workspace stuck because a previous runner died?" — invoked by the queue, daemon, ``litehive stop``, and CLI repair flows. Returns whether anything was mutated; takes the workspace lock and only acts when no live runner owns the lock."""
     root = root.resolve()
+    workspace = Workspace.from_path(root)
     with workspace_lock(root):
         state = load_workspace_state(root)
         running_task_ids = _running_task_ids(root)
@@ -56,7 +58,7 @@ def recover_stale_runner_state(
             running_task_ids,
             current_thread_owns_runner_guard=current_thread_owns_runner_guard(root),
             runner_lock_held=runner_lock_is_held(root),
-            has_repair_candidates=has_nonrunning_resumable_repair_candidates(root),
+            has_repair_candidates=has_nonrunning_resumable_repair_candidates(workspace),
         ):
             return False
         # Repair must tolerate disk-only task dirs that are missing runtime

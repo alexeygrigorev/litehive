@@ -318,9 +318,10 @@ def _auto_repair_stale_state(root: Path) -> None:
     """
     # inline: recovery.workspace_repair top-level-imports state.locking (would cycle).
     from litehive.recovery.workspace_repair import repair_workspace_state  # noqa: PLC0415
+    from litehive.workspace import Workspace  # noqa: PLC0415
 
     try:
-        result = repair_workspace_state(root)
+        result = repair_workspace_state(Workspace.from_path(root))
         if result.mutated:
             import sys  # noqa: PLC0415
 

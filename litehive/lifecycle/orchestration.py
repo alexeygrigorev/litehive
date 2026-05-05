@@ -53,6 +53,7 @@ from .runtime_sync import (
     _sync_back,
 )
 from .sessions import SqliteSessionStore
+from litehive.workspace import Workspace
 from .transitions import Transition
 from .worktree_setup import (
     _build_worktree_sync_node,
@@ -127,7 +128,7 @@ def run_task(
             model_override=model_override,
             check_quota=engine_factory is None,
         )
-        sessions = SqliteSessionStore(root)
+        sessions = SqliteSessionStore(Workspace.from_path(root))
         journal = SqliteJournal(root)
         hook_runner = SubprocessHookRunner(
             root,

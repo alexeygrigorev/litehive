@@ -1,12 +1,11 @@
 """Repair pass for tasks that are *not* currently flagged ``running`` but were left in a wedged shape (queued/in-progress/interrupted at a resumable stage) after a crash."""
 
-from pathlib import Path
 import sqlite3
 
 from litehive.domain.common import TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import WorkspaceRepairSummary
-from litehive.db.schema import connect_workspace_db
+from litehive.workspace import Workspace
 
 
 def normalize_nonrunning_resumable_tasks(
@@ -93,9 +92,9 @@ def normalize_nonrunning_resumable_tasks(
     }
 
 
-def has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
+def has_nonrunning_resumable_repair_candidates(workspace: Workspace) -> bool:
     """SQLite-side existence probe used by the fast-path skip check; encodes the same "is this task wedged at a resumable stage?" predicate as :func:`normalize_nonrunning_resumable_tasks` so we don't load every task into Python just to learn there's nothing to repair."""
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         try:
             row = connection.execute(
                 """

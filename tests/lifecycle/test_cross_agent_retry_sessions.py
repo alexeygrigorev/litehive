@@ -15,6 +15,7 @@ from litehive.lifecycle.sessions import SqliteSessionStore
 from litehive.lifecycle.types import PipelineMode
 from litehive.roles.base import PromptContext
 from litehive.state.records import create_task
+from litehive.workspace import Workspace
 
 
 class _FixedSelector:
@@ -84,7 +85,7 @@ def _build_runner(
     engine,
 ) -> tuple[StateMachineRunner, SqliteSessionStore]:
     persistence = SqlitePersistence(workspace)
-    sessions = SqliteSessionStore(workspace)
+    sessions = SqliteSessionStore(Workspace.from_path(workspace))
     registry = build_registry(
         selector=_FixedSelector(engine),
         session_store=sessions,

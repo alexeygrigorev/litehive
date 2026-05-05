@@ -38,6 +38,7 @@ from litehive.lifecycle.persistence import (
 )
 from litehive.lifecycle.sessions import Session, SqliteSessionStore
 from litehive.lifecycle.types import PipelineMode
+from litehive.workspace import Workspace
 
 
 @pytest.fixture
@@ -304,7 +305,7 @@ def test_reset_current_lifecycle_state_preserves_journal_history(workspace: Path
 
 
 def test_sessions_empty_get_or_create_returns_fresh(workspace: Path) -> None:
-    sessions = SqliteSessionStore(workspace)
+    sessions = SqliteSessionStore(Workspace.from_path(workspace))
     session = sessions.get_or_create("T-0001", "implementing", "codex")
     assert session.engine_session_id is None
     assert session.conversation_id is None
@@ -320,7 +321,7 @@ def test_pipeline_sessions_schema_omits_retained_turn_metric(workspace: Path) ->
 
 
 def test_sessions_persist_roundtrip(workspace: Path) -> None:
-    sessions = SqliteSessionStore(workspace)
+    sessions = SqliteSessionStore(Workspace.from_path(workspace))
     session = Session(
         engine_session_id="cdx-abc-123",
         conversation_id="conv-xyz",
@@ -334,7 +335,7 @@ def test_sessions_persist_roundtrip(workspace: Path) -> None:
 
 
 def test_sessions_keyed_by_task_node_engine_triple(workspace: Path) -> None:
-    sessions = SqliteSessionStore(workspace)
+    sessions = SqliteSessionStore(Workspace.from_path(workspace))
 
     sessions.persist("T-0001", "implementing", "codex", Session(engine_session_id="cdx-1"))
     sessions.persist("T-0001", "implementing", "claude", Session(engine_session_id="cla-1"))
@@ -353,7 +354,7 @@ def test_sessions_keyed_by_task_node_engine_triple(workspace: Path) -> None:
 
 
 def test_sessions_upsert_replaces_existing_row(workspace: Path) -> None:
-    sessions = SqliteSessionStore(workspace)
+    sessions = SqliteSessionStore(Workspace.from_path(workspace))
     sessions.persist("T-0001", "implementing", "codex", Session(engine_session_id="first"))
     sessions.persist("T-0001", "implementing", "codex", Session(engine_session_id="second"))
 
@@ -362,7 +363,7 @@ def test_sessions_upsert_replaces_existing_row(workspace: Path) -> None:
 
 
 def test_sessions_clear_node_sessions_removes_only_target_task_and_node(workspace: Path) -> None:
-    sessions = SqliteSessionStore(workspace)
+    sessions = SqliteSessionStore(Workspace.from_path(workspace))
     sessions.persist("T-0001", "implementing", "codex", Session(engine_session_id="cdx-1"))
     sessions.persist("T-0001", "implementing", "claude", Session(engine_session_id="cla-1"))
     sessions.persist("T-0001", "testing", "codex", Session(engine_session_id="qa-1"))
