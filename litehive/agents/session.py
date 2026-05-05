@@ -142,7 +142,6 @@ class SessionMixin:
     def write_session_metadata(
         self,
         task: TaskRecord,
-        base: Path,
         ref: SubagentRef,
         exit_code: int | None,
         pid: int | None,
@@ -181,7 +180,7 @@ class SessionMixin:
             },
         )
 
-    def record_subagent_pid(self, task: TaskRecord, base: Path, ref: SubagentRef, pid: int | None) -> None:
+    def record_subagent_pid(self, task: TaskRecord, ref: SubagentRef, pid: int | None) -> None:
         """Pin the engine PID into the runtime row, the session metadata, and the event log.
 
         The recovery flow keys off this PID to decide whether a crashed
@@ -193,7 +192,6 @@ class SessionMixin:
         mark_subagent_pid(self.root, task, pid)
         self.write_session_metadata(
             task,
-            base,
             ref,
             exit_code=None,
             pid=pid,
@@ -220,7 +218,6 @@ class SessionMixin:
 
     def completed_inactivity_timeout(
         self,
-        engine_name: str,
         execution: CLIExecutionResult,
     ) -> SubagentInactivityTimeout | None:
         """Detect a watchdog-killed run from its stderr marker after the process has already exited.
@@ -275,7 +272,6 @@ class SessionMixin:
 
     def write_event_stream(
         self,
-        base: Path,
         ref: SubagentRef,
         task: TaskRecord,
         stdout: str,

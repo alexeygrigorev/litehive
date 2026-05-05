@@ -104,7 +104,7 @@ def event_stream_from_events(
     return event_stream
 
 
-def render_execution_trace_from_streams(engine_name: str, stdout: str, stderr: str) -> str:
+def render_execution_trace_from_streams(stdout: str, stderr: str) -> str:
     """Build a trace from raw stdout/stderr when no structured event stream artifact survived; fallback path used by the loader when the modern session-store events are missing."""
     events = parse_unified_events(stdout)
     if events:
@@ -162,7 +162,6 @@ def load_subagent_execution_trace(
     stdout = _read_stream_artifact(base, "stdout", active=active)
     if stdout is not None or stderr is not None:
         trace = render_execution_trace_from_streams(
-            ref.engine,
             stdout="" if stdout is None else stdout.text,
             stderr="" if stderr is None else stderr.text,
         )

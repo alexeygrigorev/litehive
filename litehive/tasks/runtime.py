@@ -244,11 +244,12 @@ def mark_stage_started(root: Path, task: TaskRecord, stage: str) -> None:
 
 def mark_stage_finished(root: Path, task: TaskRecord, report: StageReport) -> None:
     """Record that a pipeline stage just exited and flush to disk; called by the stage dispatcher so the next stage starts from a clean current_stage marker."""
-    apply_stage_finished(task, report)
+    del report
+    apply_stage_finished(task)
     save_task_runtime(root, task)
 
 
-def apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
+def apply_stage_finished(task: TaskRecord) -> None:
     """In-memory variant of mark_stage_finished; called by transitions that hold the workspace lock and want to batch the stage-end marker with other writes."""
     now = utcnow()
     task.runtime.pipeline.updated_at = now

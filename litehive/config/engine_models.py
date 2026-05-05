@@ -202,7 +202,6 @@ def _quota_block_reason(engine_name: str, status: object) -> tuple[str | None, s
 
 
 def engine_quota_block(
-    root: Path,
     engine_name: str,
 ) -> tuple[str | None, datetime | None]:
     """Probe the engine's vendor quota and return ``(skip_reason, freeze_until)`` if the limit is currently exhausted; called by the engine-selection loop so that quota-blocked engines are skipped and auto-frozen until the reset time."""
@@ -269,7 +268,7 @@ def select_engine(
             engine_name not in frozen_engines and _parse_datetime_utc(config.engine_freeze.get(engine_name)) is not None
         )
         if check_quota:
-            quota_reason, freeze_until = engine_quota_block(root, engine_name)
+            quota_reason, freeze_until = engine_quota_block(engine_name)
         else:
             quota_reason, freeze_until = (None, None)
         if quota_reason is not None:

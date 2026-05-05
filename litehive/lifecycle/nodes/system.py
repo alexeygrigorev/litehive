@@ -148,6 +148,7 @@ class WorktreeSyncNode(SystemNode):
     def sync(self, state: TaskState) -> bool:
         """Return True if anything was merged, False if already up-to-date
         or the worktree isn't available yet. Subclasses override to call git."""
+        del state
         return False
 
 
@@ -155,6 +156,7 @@ class NoopWorktreeSyncNode(WorktreeSyncNode):
     """Always-pass variant — use when worktrees aren't in play (tests, dry runs)."""
 
     def sync(self, state: TaskState) -> bool:
+        del state
         return False
 
 
@@ -281,6 +283,7 @@ class StubCommitNode(CommitNode):
     """
 
     def _merge_worktree(self, state: TaskState) -> dict[str, object] | None:
+        del state
         return None
 
 

@@ -415,6 +415,7 @@ def enter_pre_exec_recovery(state: TaskState, event: Event) -> StateDelta:
     needing pre-exec recovery (worktree never reached a clean state).
     Bumps the pre-exec attempt counter so the budget guard can stop
     retrying eventually."""
+    del state, event
     return StateDelta(inc_pre_exec_recovery_attempt=True)
 
 

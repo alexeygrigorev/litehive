@@ -91,7 +91,7 @@ def _worktree_metadata_repair(root: Path):
     return _repair
 
 
-def _mark_task_interrupted_on_crash(root: Path, task: TaskRecord, persistence: object) -> None:
+def _mark_task_interrupted_on_crash(root: Path, task: TaskRecord) -> None:
     """Best-effort cleanup when run_task raises an unexpected exception.
 
     Clears active_task_id and marks the task as interrupted so the next

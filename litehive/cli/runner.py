@@ -492,7 +492,7 @@ def backup_restore(
     return 0
 
 
-def db_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> None:
+def db_group(ctx: typer.Context) -> None:
     """Typer group callback for ``litehive db``; passes through to subcommands or errors on bare invocation."""
     if ctx.invoked_subcommand is not None:
         return

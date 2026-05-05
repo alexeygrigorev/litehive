@@ -131,6 +131,7 @@ class PipelineJournal(ABC):
 
     def _load_starting_seq(self, task_id: str) -> int:
         """Hook for subclasses to resume seq numbering across restarts; the base returns 0 so in-memory journals always start fresh."""
+        del task_id
         return 0
 
     @abstractmethod
@@ -340,8 +341,10 @@ class NullJournal(PipelineJournal):
         payload: dict[str, Any],
     ) -> None:
         """No-op store: tests and one-shot CLIs use ``NullJournal`` to keep the runner contract while skipping persistence."""
+        del task_id, seq, created_at, kind, payload
         return None
 
     def _log(self, kind: str, task_id: str, payload: dict[str, Any]) -> None:
         """Suppress runner log lines too, so lifecycle tests asserting on stderr stay deterministic when the journal is disabled."""
+        del kind, task_id, payload
         return None

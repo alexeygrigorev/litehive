@@ -180,7 +180,7 @@ def run_task(
             except BaseException:
                 # Runner crashed — mark task as interrupted so it can be
                 # resumed instead of leaving stale "running" state behind.
-                _mark_task_interrupted_on_crash(root, task, persistence)
+                _mark_task_interrupted_on_crash(root, task)
                 raise
 
         # 4. Mirror terminal state back to the TaskRecord.

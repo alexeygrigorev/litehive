@@ -102,6 +102,7 @@ class SandboxLauncher:
         internally by wrap_invocation, so workspace-level config and per-engine
         overrides only need to be merged in one place.
         """
+        del role
         policy = self._policy_for_engine(engine_name)
         sandbox_enabled = self.config.external_engine_sandbox.enabled and policy is not None and policy.enabled
         if not sandbox_enabled:
@@ -159,7 +160,6 @@ class SandboxLauncher:
         return self._wrap_docker(
             engine_name,
             role,
-            binary_name,
             binary_path,
             invocation,
             summary,
@@ -169,7 +169,6 @@ class SandboxLauncher:
         self,
         engine_name: str,
         role: str,
-        binary_name: str,
         binary_path: str,
         invocation: CLIInvocation,
         summary: SandboxPolicySummary,

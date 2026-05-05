@@ -190,6 +190,7 @@ class AgentNode(Node):
         flag the serializer can surface. Subclasses with non-dict prompts
         must override.
         """
+        del state
         from .. import prompt_types  # noqa: PLC0415  (avoid cycle)
 
         if isinstance(original_prompt, prompt_types.AgentPrompt):

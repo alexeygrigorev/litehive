@@ -236,7 +236,7 @@ class SubagentManager(SessionMixin):
             nonlocal engine_started
             engine_started = True
             try:
-                self.record_subagent_pid(task, base, ref, pid)
+                self.record_subagent_pid(task, ref, pid)
             except Exception as exc:  # callback failures must not crash the runner
                 self._record_live_callback_failure(
                     ref=ref,
@@ -335,7 +335,7 @@ class SubagentManager(SessionMixin):
                     prompt,
                     **filter_supported_kwargs(run_callable, run_kwargs),
                 )
-            completed_timeout = self.completed_inactivity_timeout(engine_name, proc)
+            completed_timeout = self.completed_inactivity_timeout(proc)
             if completed_timeout is not None:
                 raise completed_timeout
             transcript = self.render_execution_trace(
@@ -534,7 +534,7 @@ class SubagentManager(SessionMixin):
                 "interruption_reason": interruption_reason,
             },
         )
-        self.write_event_stream(base, ref, task, "" if execution is None else execution.stdout)
+        self.write_event_stream(ref, task, "" if execution is None else execution.stdout)
 
     def write_session_progress(
         self,
@@ -559,7 +559,7 @@ class SubagentManager(SessionMixin):
                 adapter=engine,
                 execution=execution,
             )
-        self.record_subagent_pid(task, base, ref, execution.pid)
+        self.record_subagent_pid(task, ref, execution.pid)
         mark_subagent_progress(
             self.root,
             task,
@@ -569,7 +569,6 @@ class SubagentManager(SessionMixin):
         )
         self.write_session_metadata(
             task,
-            base,
             ref,
             exit_code=None,
             pid=execution.pid,
@@ -636,7 +635,7 @@ class SubagentManager(SessionMixin):
             interruption_reason=None,
             continuation=continuation,
         )
-        self.write_event_stream(base, ref, task, execution.stdout)
+        self.write_event_stream(ref, task, execution.stdout)
         self.check_stdout_inactivity(base, ref.engine, execution)
 
     def _parse_execution_report(

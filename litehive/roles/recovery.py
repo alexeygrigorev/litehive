@@ -115,7 +115,7 @@ class RecoveryAgent(RoleAgent):
 
         # Analyze scope changes to distinguish operator cleanup from SWE scope creep
         if root is not None:
-            scope_analysis = analyze_scope_changes(root, state.task_id)
+            scope_analysis = analyze_scope_changes(root)
 
         return RecoveryPrompt(
             role=base.role,

@@ -469,7 +469,7 @@ def test_select_engine_records_quota_freeze_and_falls_back(
     task = TaskRecord(id="T-0001", slug="test", title="test", status="queued", pipeline_status="implementing")
     config = load_config(tmp_path)
 
-    def fake_quota_block(root: Path, engine_name: str):
+    def fake_quota_block(engine_name: str):
         if engine_name == "codex":
             return f"codex quota exhausted (used 100%, resets at {freeze_iso})", freeze_until
         return None, None
@@ -499,7 +499,7 @@ def test_engine_quota_block_consumes_current_heru_normalized_windows(
     )
     monkeypatch.setattr(engine_models, "check_codex_quota", lambda: status)
 
-    reason, freeze_until = engine_models.engine_quota_block(tmp_path, "codex")
+    reason, freeze_until = engine_models.engine_quota_block("codex")
 
     assert reason == "codex usage limit reached, resets 2026-04-27T00:00:00Z"
     assert freeze_until == datetime(2026, 4, 27, tzinfo=timezone.utc)
@@ -556,7 +556,7 @@ def test_select_engine_skips_active_freeze_without_quota_call(
     config = load_config(tmp_path)
     quota_calls: list[str] = []
 
-    def fake_quota_block(root: Path, engine_name: str):
+    def fake_quota_block(engine_name: str):
         quota_calls.append(engine_name)
         return None, None
 
@@ -589,7 +589,7 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
     config = load_config(tmp_path)
     quota_calls: list[str] = []
 
-    def fake_quota_block(root: Path, engine_name: str):
+    def fake_quota_block(engine_name: str):
         quota_calls.append(engine_name)
         if engine_name == "codex":
             return f"codex quota exhausted (used 100%, resets at {refreshed_iso})", refreshed
@@ -623,7 +623,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
     config = load_config(tmp_path)
     quota_calls: list[str] = []
 
-    def fake_quota_block(root: Path, engine_name: str):
+    def fake_quota_block(engine_name: str):
         quota_calls.append(engine_name)
         return None, None
 

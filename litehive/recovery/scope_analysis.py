@@ -19,12 +19,11 @@ class ScopeAnalysisError(RuntimeError):
     """Raised when scope analysis cannot inspect the current worktree."""
 
 
-def analyze_scope_changes(workspace_root: Path, task_id: str) -> dict[str, Any]:
+def analyze_scope_changes(workspace_root: Path) -> dict[str, Any]:
     """Analyze worktree changes to distinguish operator cleanup from SWE scope creep.
 
     Args:
         workspace_root: Root directory of the workspace
-        task_id: ID of the current task
 
     Returns:
         Dict containing scope analysis with:

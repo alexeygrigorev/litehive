@@ -66,8 +66,6 @@ def build_registry(
     hook_specs: dict[PipelineState, list[HookSpec]] | None = None,
     retry_budget: int = 3,
     retry_on: tuple[str, ...] = ("execution_limit", "timeout"),
-    retry_backoff_seconds: float = 0.0,
-    retry_backoff_multiplier: float = 2.0,
 ) -> NodeRegistry:
     """Assemble every node the state machine can route to.
 

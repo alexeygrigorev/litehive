@@ -60,6 +60,7 @@ def mode(m: PipelineMode | str) -> Guard:
         want = PipelineMode(m)
 
     def check(state: TaskState, event: Event) -> bool:
+        del event
         return state.pipeline_mode == want
 
     return Guard(check, f"mode={want.value}")
@@ -68,6 +69,7 @@ def mode(m: PipelineMode | str) -> Guard:
 def stage_retries_remaining(stage: PipelineState) -> Guard:
     """True when this stage still has reject-retry attempts left under the per-stage retry limit. Gates the retry-target rule emitted by `retry_epoch_rules` so a Reject loops the task back to the configured stage instead of failing it."""
     def check(state: TaskState, event: Event) -> bool:
+        del event
         return state.stage_retry.get(stage, 0) < state.limits.stage_retry_limit
 
     return Guard(check, f"stage_retries_remaining({stage})")
@@ -76,6 +78,7 @@ def stage_retries_remaining(stage: PipelineState) -> Guard:
 def stage_retries_exhausted(stage: PipelineState) -> Guard:
     """True once this stage has burned its full reject-retry budget. Combined with `last_hook_ok` to escape a stuck testing stage by jumping to accepting instead of failing the task outright."""
     def check(state: TaskState, event: Event) -> bool:
+        del event
         return state.stage_retry.get(stage, 0) >= state.limits.stage_retry_limit
 
     return Guard(check, f"stage_retries_exhausted({stage})")
@@ -84,6 +87,7 @@ def stage_retries_exhausted(stage: PipelineState) -> Guard:
 def last_hook_ok() -> Guard:
     """True when the most recent hook report passed. Pairs with `stage_retries_exhausted` so we only override testing rejects when the hook itself was happy — semantic-only failure, not a broken pipeline."""
     def check(state: TaskState, event: Event) -> bool:
+        del event
         return state.last_report.hook_ok is True
 
     return Guard(check, "last_hook_ok")
@@ -111,6 +115,7 @@ def rejection_loop_detected(retry_target_stage: PipelineState) -> Guard:
 def zero_change_shortcut() -> Guard:
     """True when the implementing stage produced no file changes and no new tests. Lets `single`-mode tasks short-circuit straight to DONE instead of running an empty commit through the merge pipeline."""
     def check(state: TaskState, event: Event) -> bool:
+        del event
         return state.last_report.files_changed == 0 and state.last_report.tests_added == 0
 
     return Guard(check, "zero_change_shortcut")
@@ -119,6 +124,7 @@ def zero_change_shortcut() -> Guard:
 def pre_exec_budget_remaining() -> Guard:
     """True while the task has not yet used its single pre-exec recovery attempt. Reserved for a pre-exec entry rule; not currently wired into the rule table."""
     def check(state: TaskState, event: Event) -> bool:
+        del event
         return state.pre_exec_recovery_attempt < 1
 
     return Guard(check, "pre_exec_budget_remaining")
@@ -149,6 +155,7 @@ def recovery_resume_is_concrete() -> Guard:
 
 def _always(state: TaskState, event: Event) -> bool:
     """Predicate body for the module-level `always` guard; backs unconditional rule rows that need a Guard object for uniformity."""
+    del state, event
     return True
 
 

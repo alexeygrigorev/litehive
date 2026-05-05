@@ -128,6 +128,7 @@ def resume_from_origin(state: TaskState, event: Event) -> PipelineState:
 
 def resume_from_pre_exec(state: TaskState, event: Event) -> PipelineState:
     """Pick where to enter the pipeline after the pre-exec probe self-heals; wired into the RULES table as the `transition_to` for `PreExecRecoverySucceeded` so the runner respects whatever phase the probe asked us to resume at."""
+    del state
     if not isinstance(event, PreExecRecoverySucceeded):
         raise TypeError(f"resume_from_pre_exec expects PreExecRecoverySucceeded, got {type(event).__name__}")
     e = event

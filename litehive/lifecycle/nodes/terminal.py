@@ -18,4 +18,5 @@ class TerminalNode(Node):
         self.name = name
 
     def run(self, state: TaskState) -> Event:
+        del state
         return Pass()
