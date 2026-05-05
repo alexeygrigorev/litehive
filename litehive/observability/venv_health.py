@@ -97,7 +97,11 @@ def daemon_broken_venv_message(workspace_root: Path, findings: list[BrokenVenvEx
 
 
 def _venv_bin_dir(venv_path: Path) -> Path:
-    return venv_path / ("Scripts" if os.name == "nt" else "bin")
+    if os.name == "nt":
+        bin_name = "Scripts"
+    else:
+        bin_name = "bin"
+    return venv_path / bin_name
 
 
 def _iter_probe_candidates(bin_dir: Path) -> list[Path]:

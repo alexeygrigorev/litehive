@@ -79,9 +79,17 @@ def repair_summary_lines(
 ) -> list[str]:
     """Render the workspace-repair summary as printable lines; `result_label` lets the same formatter serve both `repair` (label='repaired') and the implicit cleanup that runs from other commands."""
     del include_extended_fields
+    if summary.mutated:
+        mutated_label = "yes"
+    else:
+        mutated_label = "no"
+    if summary.stale_runner_recovered:
+        stale_runner_label = "yes"
+    else:
+        stale_runner_label = "no"
     lines = [
-        f"{result_label}: {'yes' if summary.mutated else 'no'}",
-        f"stale_runner_recovered: {'yes' if summary.stale_runner_recovered else 'no'}",
+        f"{result_label}: {mutated_label}",
+        f"stale_runner_recovered: {stale_runner_label}",
     ]
     if summary.cleared_active_task_id or include_empty:
         lines.append(f"cleared_active_task_id: {summary.cleared_active_task_id or '-'}")
@@ -93,7 +101,11 @@ def repair_summary_lines(
     ]
     for label, values in items:
         if values or include_empty:
-            lines.append(f"{label}: {' '.join(values) if values else '-'}")
+            if values:
+                values_label = " ".join(values)
+            else:
+                values_label = "-"
+            lines.append(f"{label}: {values_label}")
     return lines
 
 
@@ -261,7 +273,11 @@ def health_daemon_status(root: Path) -> tuple[str, str]:
     if entry is None or entry.get("status") != "running":
         return ("stopped", "-")
     pid = entry.get("pid")
-    return ("running", str(pid) if pid is not None else "-")
+    if pid is not None:
+        pid_label = str(pid)
+    else:
+        pid_label = "-"
+    return ("running", pid_label)
 
 
 def collect_quota_health() -> list[_QuotaHealth]:
@@ -306,7 +322,11 @@ def quota_health(
     if reset_at is not None:
         summary += f" reset={reset_at}"
     limit_reached = bool(getattr(status, "limit_reached", False))
-    return _QuotaHealth(engine, "warning" if limit_reached else "ok", summary, limit_reached)
+    if limit_reached:
+        quota_status_label = "warning"
+    else:
+        quota_status_label = "ok"
+    return _QuotaHealth(engine, quota_status_label, summary, limit_reached)
 
 
 cmd_status = status_command

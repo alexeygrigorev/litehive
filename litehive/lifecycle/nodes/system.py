@@ -249,9 +249,11 @@ class PreExecRecoveryNode(SystemNode):
                     f"[pre-exec repair] ignored error: {type(exc).__name__}: {exc}",
                     file=sys.stderr,
                 )
-        resume_stage = state.entry_stage or (
-            TaskStage.IMPLEMENTING.value if state.pipeline_mode == PipelineMode.SINGLE else TaskStage.GROOMING.value
-        )
+        if state.pipeline_mode == PipelineMode.SINGLE:
+            default_resume_stage = TaskStage.IMPLEMENTING.value
+        else:
+            default_resume_stage = TaskStage.GROOMING.value
+        resume_stage = state.entry_stage or default_resume_stage
         return PreExecRecoverySucceeded(resume_stage=resume_stage)
 
 

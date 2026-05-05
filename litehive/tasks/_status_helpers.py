@@ -138,7 +138,11 @@ def _apply_close_task_state(
         task.status = TaskStatus.CLOSED
     task.close_reason = outcome
     task.flag_reason = None
-    task.pipeline_status = pipeline_status or (PipelineStatus.DONE if outcome == "done" else task.pipeline_status)
+    if outcome == "done":
+        pipeline_status_fallback = PipelineStatus.DONE
+    else:
+        pipeline_status_fallback = task.pipeline_status
+    task.pipeline_status = pipeline_status or pipeline_status_fallback
     apply_task_outcome(
         task,
         kind=task.status,

@@ -469,10 +469,14 @@ def persist_future_task_update(
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage  # noqa: PLC0415
 
     task.updated_at = utcnow()
+    if journal_message is None:
+        task_journal_messages = None
+    else:
+        task_journal_messages = {task.id: journal_message}
     runtime_store(root).save_runtime_transaction(
         task_intents={task.id: task.to_intent_record()},
         task_states={task.id: task_state_for_storage(task)},
-        task_journal_messages=None if journal_message is None else {task.id: journal_message},
+        task_journal_messages=task_journal_messages,
         audit_entries=audit_entries,
     )
     ensure_runtime_ignored(root)

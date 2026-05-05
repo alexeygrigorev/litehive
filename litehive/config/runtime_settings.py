@@ -353,6 +353,18 @@ def load_runtime_setting_audit_entries(
     entries: list[RuntimeSettingAuditEntry] = []
     for row in rows:
         context = _json_loads(str(row["context_json"]))
+        if row["old_value_json"] is None:
+            old_value_arg = None
+        else:
+            old_value_arg = str(row["old_value_json"])
+        if row["new_value_json"] is None:
+            new_value_arg = None
+        else:
+            new_value_arg = str(row["new_value_json"])
+        if isinstance(context, dict):
+            context_value = context
+        else:
+            context_value = {}
         entries.append(
             RuntimeSettingAuditEntry(
                 id=int(row["id"]),
@@ -360,9 +372,9 @@ def load_runtime_setting_audit_entries(
                 created_at=str(row["created_at"]),
                 actor=str(row["actor"]),
                 source=str(row["source"]),
-                old_value=_json_loads(None if row["old_value_json"] is None else str(row["old_value_json"])),
-                new_value=_json_loads(None if row["new_value_json"] is None else str(row["new_value_json"])),
-                context=context if isinstance(context, dict) else {},
+                old_value=_json_loads(old_value_arg),
+                new_value=_json_loads(new_value_arg),
+                context=context_value,
             )
         )
     return entries

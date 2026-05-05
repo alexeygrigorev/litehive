@@ -107,7 +107,11 @@ def assert_database_rebuild_safe(
     """Refuse a destructive DB rebuild when the replay source cannot account for every task row; called by ``litehive rebuild``/migration paths so we never silently drop tasks that have evidence of work."""
     sqlite_ids = sqlite_task_ids(db_path)
     artifact_ids = task_artifact_dir_ids(root)
-    replay_ids = set(event_log_replay_task_ids(root) if replay_task_ids is None else replay_task_ids)
+    if replay_task_ids is None:
+        replay_source = event_log_replay_task_ids(root)
+    else:
+        replay_source = replay_task_ids
+    replay_ids = set(replay_source)
 
     # Protect rows the active DB still knows about. Generic task artifact
     # directories are not enough to infer active work; old terminal tasks keep

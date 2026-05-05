@@ -162,12 +162,20 @@ def _print_latest_subagent(root: Path, task) -> None:
                 produced_output = True
                 break
 
+    if exit_code is not None:
+        exit_code_label = exit_code
+    else:
+        exit_code_label = "-"
+    if produced_output:
+        produced_output_label = "yes"
+    else:
+        produced_output_label = "no"
     print(
         "latest_subagent: "
         f"id={ref.id} role={ref.role} engine={ref.engine} status={ref.status} "
-        f"exit_code={exit_code if exit_code is not None else '-'} "
+        f"exit_code={exit_code_label} "
         f"started_at={started_at or '-'} completed_at={completed_at or '-'} "
-        f"produced_output={'yes' if produced_output else 'no'}"
+        f"produced_output={produced_output_label}"
     )
     if trace is not None:
         print(f"latest_subagent_trace_source: {trace.source.relative_to(root)}")

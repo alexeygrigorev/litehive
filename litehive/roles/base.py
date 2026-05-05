@@ -113,7 +113,7 @@ class RoleAgent(AgentNode):
             instruction_variant=instruction_variant,
             instruction_layers=instruction_layers,
             last_report=state.last_report.to_payload(),
-            last_rejection=_last_rejection_payload(last_rejection) if last_rejection is not None else None,
+            last_rejection=_last_rejection_payload_or_none(last_rejection),
             failed_run_history=_failed_run_history_payload(state),
             runner_hooks=runner_hooks,
         )
@@ -225,6 +225,13 @@ class RoleAgent(AgentNode):
             return None
         text = md_path.read_text(encoding="utf-8").strip()
         return text or None
+
+
+def _last_rejection_payload_or_none(last_rejection: LastRejection | None) -> dict[str, str] | None:
+    """Wrap `_last_rejection_payload` so callers can hand off `None` directly; lets the prompt-builder avoid an inline ternary at the call site."""
+    if last_rejection is None:
+        return None
+    return _last_rejection_payload(last_rejection)
 
 
 def _last_rejection_payload(last_rejection: LastRejection) -> dict[str, str]:

@@ -69,18 +69,38 @@ def build_task_audit_entry(
     created_at: str | None = None,
 ) -> TaskAuditEntry:
     """Compose a structured audit row from the call-site's before/after snapshots; used by every task-mutation surface (CLI, recovery, lifecycle) so the schema stays uniform and queryable."""
+    if before_task is None:
+        task_status_before = None
+        pipeline_status_before = None
+    else:
+        task_status_before = str(before_task.status)
+        pipeline_status_before = str(before_task.pipeline_status)
+    if after_task is None:
+        task_status_after = None
+        pipeline_status_after = None
+    else:
+        task_status_after = str(after_task.status)
+        pipeline_status_after = str(after_task.pipeline_status)
+    if before_queue is None:
+        queue_position_before = None
+    else:
+        queue_position_before = queue_position(before_queue, task_id)
+    if after_queue is None:
+        queue_position_after = None
+    else:
+        queue_position_after = queue_position(after_queue, task_id)
     return TaskAuditEntry(
         task_id=task_id,
         created_at=created_at or utcnow(),
         action=action,
         actor=actor,
         source=source,
-        task_status_before=None if before_task is None else str(before_task.status),
-        task_status_after=None if after_task is None else str(after_task.status),
-        pipeline_status_before=None if before_task is None else str(before_task.pipeline_status),
-        pipeline_status_after=None if after_task is None else str(after_task.pipeline_status),
-        queue_position_before=None if before_queue is None else queue_position(before_queue, task_id),
-        queue_position_after=None if after_queue is None else queue_position(after_queue, task_id),
+        task_status_before=task_status_before,
+        task_status_after=task_status_after,
+        pipeline_status_before=pipeline_status_before,
+        pipeline_status_after=pipeline_status_after,
+        queue_position_before=queue_position_before,
+        queue_position_after=queue_position_after,
         context=dict(context or {}),
     )
 
@@ -193,6 +213,30 @@ def load_task_audit_entries(
             context = {}
         if not isinstance(context, dict):
             context = {}
+        if row["task_status_before"] is None:
+            task_status_before = None
+        else:
+            task_status_before = str(row["task_status_before"])
+        if row["task_status_after"] is None:
+            task_status_after = None
+        else:
+            task_status_after = str(row["task_status_after"])
+        if row["pipeline_status_before"] is None:
+            pipeline_status_before = None
+        else:
+            pipeline_status_before = str(row["pipeline_status_before"])
+        if row["pipeline_status_after"] is None:
+            pipeline_status_after = None
+        else:
+            pipeline_status_after = str(row["pipeline_status_after"])
+        if row["queue_position_before"] is None:
+            queue_position_before = None
+        else:
+            queue_position_before = int(row["queue_position_before"])
+        if row["queue_position_after"] is None:
+            queue_position_after = None
+        else:
+            queue_position_after = int(row["queue_position_after"])
         entries.append(
             TaskAuditEntry(
                 id=int(row["id"]),
@@ -201,20 +245,12 @@ def load_task_audit_entries(
                 action=str(row["action"]),
                 actor=str(row["actor"]),
                 source=str(row["source"]),
-                task_status_before=(None if row["task_status_before"] is None else str(row["task_status_before"])),
-                task_status_after=(None if row["task_status_after"] is None else str(row["task_status_after"])),
-                pipeline_status_before=(
-                    None if row["pipeline_status_before"] is None else str(row["pipeline_status_before"])
-                ),
-                pipeline_status_after=(
-                    None if row["pipeline_status_after"] is None else str(row["pipeline_status_after"])
-                ),
-                queue_position_before=(
-                    None if row["queue_position_before"] is None else int(row["queue_position_before"])
-                ),
-                queue_position_after=(
-                    None if row["queue_position_after"] is None else int(row["queue_position_after"])
-                ),
+                task_status_before=task_status_before,
+                task_status_after=task_status_after,
+                pipeline_status_before=pipeline_status_before,
+                pipeline_status_after=pipeline_status_after,
+                queue_position_before=queue_position_before,
+                queue_position_after=queue_position_after,
                 context=context,
             )
         )

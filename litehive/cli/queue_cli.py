@@ -182,11 +182,19 @@ def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"stop failed: {exc}")
         return 1
+    if summary.runner_pid is not None:
+        runner_pid_label = summary.runner_pid
+    else:
+        runner_pid_label = "-"
+    if summary.signal_sent:
+        signal_sent_label = "yes"
+    else:
+        signal_sent_label = "no"
     print(f"task: {summary.task.id} {summary.task.title}")
     print(f"status: {summary.task.status}")
     print(f"pipeline_stage: {summary.task.pipeline_status}")
-    print(f"runner_pid: {summary.runner_pid if summary.runner_pid is not None else '-'}")
-    print(f"signal_sent: {'yes' if summary.signal_sent else 'no'}")
+    print(f"runner_pid: {runner_pid_label}")
+    print(f"signal_sent: {signal_sent_label}")
     return 0
 
 
@@ -264,9 +272,21 @@ def switch(
     print("status: queued")
     print(f"pipeline_stage: {summary.task.pipeline_status}")
     print(f"pipeline_status: {summary.task.pipeline_status}")
+    if summary.was_active:
+        was_active_label = "yes"
+    else:
+        was_active_label = "no"
+    if summary.runner_pid is not None:
+        runner_pid_label = summary.runner_pid
+    else:
+        runner_pid_label = "-"
+    if summary.signal_sent:
+        signal_sent_label = "yes"
+    else:
+        signal_sent_label = "no"
     print(f"engine: {summary.previous_engine} -> {summary.new_engine}")
-    print(f"was_active: {'yes' if summary.was_active else 'no'}")
-    print(f"runner_pid: {summary.runner_pid if summary.runner_pid is not None else '-'}")
-    print(f"signal_sent: {'yes' if summary.signal_sent else 'no'}")
+    print(f"was_active: {was_active_label}")
+    print(f"runner_pid: {runner_pid_label}")
+    print(f"signal_sent: {signal_sent_label}")
     print(f"position: {state.queue.index(summary.task.id) + 1}")
     return 0

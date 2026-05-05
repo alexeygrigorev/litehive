@@ -55,9 +55,13 @@ def _abandon_task_transition(
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {TaskStatus.FLAGGED, *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, or closed")
+        if task.runtime.execution.active_subagent is None:
+            active_subagent_pid = None
+        else:
+            active_subagent_pid = task.runtime.execution.active_subagent.pid
         _terminate_subagent_pid(
             task.id,
-            None if task.runtime.execution.active_subagent is None else task.runtime.execution.active_subagent.pid,
+            active_subagent_pid,
         )
         _apply_cancelled_task_state(task, reason=reason)
         drop_task_from_workspace_state(state, task.id)

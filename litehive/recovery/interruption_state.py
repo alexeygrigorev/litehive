@@ -122,8 +122,12 @@ def _set_interruption_metadata(
         retry_count=task.runtime.pipeline.retry_count,
         retry_limit=task.runtime.pipeline.retry_limit,
     )
+    if interrupted_subagent is not None:
+        interruption_source = "subagent"
+    else:
+        interruption_source = "runner"
     task.runtime.execution.interruption = RuntimeInterruptionState(
-        source="subagent" if interrupted_subagent is not None else "runner",
+        source=interruption_source,
         stage=stage,
         pipeline_status=stage,
         resume_stage=stage,

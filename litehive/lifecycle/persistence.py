@@ -42,8 +42,12 @@ class LastReport:
     def from_payload(cls, payload: dict[str, Any]) -> "LastReport":
         """Rebuild a report from the persisted json payload, tolerating old shapes where ``files_changed`` was stored as a list rather than a count."""
         files_changed = payload.get("files_changed", 0)
+        if isinstance(files_changed, list):
+            files_changed_count = len(files_changed)
+        else:
+            files_changed_count = int(files_changed)
         return cls(
-            files_changed=len(files_changed) if isinstance(files_changed, list) else int(files_changed),
+            files_changed=files_changed_count,
             tests_added=int(payload.get("tests_added", 0)),
             changed_files=_string_list(payload.get("changed_files")),
             test_results=_string_list(payload.get("test_results")),
@@ -392,28 +396,48 @@ def _string_list(value: Any) -> list[str]:
 
 def _state_payload(state: TaskState) -> dict[str, Any]:
     """Serialize the non-column fields of ``TaskState`` into the json blob ``SqlitePersistence.save`` writes to ``pipeline_task_state.payload``; the inverse of ``_state_from_row`` and the only producer of that column shape."""
+    if state.entry_stage is None:
+        entry_stage_payload = None
+    else:
+        entry_stage_payload = str(state.entry_stage)
+    if state.active_recovery_trigger is not None:
+        active_recovery_trigger_payload = state.active_recovery_trigger.to_payload()
+    else:
+        active_recovery_trigger_payload = None
+    if state.merge_context is not None:
+        merge_context_payload = state.merge_context.to_payload()
+    else:
+        merge_context_payload = None
+    if state.commit_result is not None:
+        commit_result_payload = state.commit_result.to_payload()
+    else:
+        commit_result_payload = None
+    if state.rejection_loop is not None:
+        rejection_loop_payload = state.rejection_loop.to_payload()
+    else:
+        rejection_loop_payload = None
+    if state.last_hook_reject_fingerprint is not None:
+        last_hook_reject_fingerprint_payload = state.last_hook_reject_fingerprint.to_payload()
+    else:
+        last_hook_reject_fingerprint_payload = None
     return {
-        "entry_stage": None if state.entry_stage is None else str(state.entry_stage),
+        "entry_stage": entry_stage_payload,
         "stage_retry": {str(stage): count for stage, count in state.stage_retry.items()},
-        "active_recovery_trigger": (
-            state.active_recovery_trigger.to_payload() if state.active_recovery_trigger is not None else None
-        ),
+        "active_recovery_trigger": active_recovery_trigger_payload,
         "recovery_history": [outcome.to_payload() for outcome in state.recovery_history],
         "recovery_budget_history_start": state.recovery_budget_history_start,
         "pre_exec_recovery_attempt": state.pre_exec_recovery_attempt,
         "agent_elapsed_seconds": state.agent_elapsed_seconds,
-        "merge_context": (state.merge_context.to_payload() if state.merge_context is not None else None),
-        "commit_result": (state.commit_result.to_payload() if state.commit_result is not None else None),
+        "merge_context": merge_context_payload,
+        "commit_result": commit_result_payload,
         "last_report": state.last_report.to_payload(),
         "last_rejection_by_stage": {
             str(stage): rej.to_payload() for stage, rej in state.last_rejection_by_stage.items()
         },
         "failed_run_history": {key: record.to_payload() for key, record in state.failed_run_history.items()},
-        "rejection_loop": (state.rejection_loop.to_payload() if state.rejection_loop is not None else None),
+        "rejection_loop": rejection_loop_payload,
         "consecutive_same_hook_rejects": state.consecutive_same_hook_rejects,
-        "last_hook_reject_fingerprint": (
-            state.last_hook_reject_fingerprint.to_payload() if state.last_hook_reject_fingerprint is not None else None
-        ),
+        "last_hook_reject_fingerprint": last_hook_reject_fingerprint_payload,
         "hook_reject_recovery_invoked": state.hook_reject_recovery_invoked,
         "failed_reason": state.failed_reason,
         "failed_message": state.failed_message,
@@ -438,28 +462,52 @@ def _state_from_row(
     merge_context = payload.get("merge_context")
     commit_result = payload.get("commit_result")
     rejection_loop = payload.get("rejection_loop")
+    if payload.get("entry_stage") is None:
+        entry_stage_value = None
+    else:
+        entry_stage_value = canonical_pipeline_state(payload["entry_stage"])
+    if isinstance(active_recovery_trigger, dict):
+        active_recovery_trigger_value = RecoveryTrigger.from_payload(dict(active_recovery_trigger))
+    else:
+        active_recovery_trigger_value = None
+    if isinstance(merge_context, dict):
+        merge_context_value = MergeContext.from_payload(dict(merge_context))
+    else:
+        merge_context_value = None
+    if isinstance(commit_result, dict):
+        commit_result_value = CommitResult.from_payload(dict(commit_result))
+    else:
+        commit_result_value = None
+    if isinstance(rejection_loop, dict):
+        rejection_loop_value = RejectionLoop.from_payload(dict(rejection_loop))
+    else:
+        rejection_loop_value = None
+    if hook_fingerprint_data is not None:
+        last_hook_reject_fingerprint_value = HookRejectFingerprint.from_payload(hook_fingerprint_data)
+    else:
+        last_hook_reject_fingerprint_value = None
+    if payload.get("failed_reason"):
+        failed_reason_value = FailedReason(payload["failed_reason"])
+    else:
+        failed_reason_value = None
     return TaskState(
         task_id=task_id,
         stage=canonical_pipeline_state(stage),
         pipeline_mode=PipelineMode(pipeline_mode),
-        entry_stage=(None if payload.get("entry_stage") is None else canonical_pipeline_state(payload["entry_stage"])),
+        entry_stage=entry_stage_value,
         stage_retry={
             canonical_pipeline_state(stage_name): int(retry_count)
             for stage_name, retry_count in (payload.get("stage_retry") or {}).items()
         },
-        active_recovery_trigger=(
-            RecoveryTrigger.from_payload(dict(active_recovery_trigger))
-            if isinstance(active_recovery_trigger, dict)
-            else None
-        ),
+        active_recovery_trigger=active_recovery_trigger_value,
         recovery_history=[
             RecoveryOutcome.from_payload(dict(item)) for item in list(recovery_history or []) if isinstance(item, dict)
         ],
         recovery_budget_history_start=int(payload.get("recovery_budget_history_start") or 0),
         pre_exec_recovery_attempt=int(payload.get("pre_exec_recovery_attempt") or 0),
         agent_elapsed_seconds=float(payload.get("agent_elapsed_seconds") or 0.0),
-        merge_context=(MergeContext.from_payload(dict(merge_context)) if isinstance(merge_context, dict) else None),
-        commit_result=(CommitResult.from_payload(dict(commit_result)) if isinstance(commit_result, dict) else None),
+        merge_context=merge_context_value,
+        commit_result=commit_result_value,
         last_report=LastReport.from_payload(last_report_data),
         last_rejection_by_stage={
             canonical_pipeline_state(stage_name): LastRejection.from_payload(rej)
@@ -470,13 +518,11 @@ def _state_from_row(
             for key, record in failed_run_history_data.items()
             if isinstance(record, dict)
         },
-        rejection_loop=(RejectionLoop.from_payload(dict(rejection_loop)) if isinstance(rejection_loop, dict) else None),
+        rejection_loop=rejection_loop_value,
         consecutive_same_hook_rejects=int(payload.get("consecutive_same_hook_rejects") or 0),
-        last_hook_reject_fingerprint=(
-            HookRejectFingerprint.from_payload(hook_fingerprint_data) if hook_fingerprint_data is not None else None
-        ),
+        last_hook_reject_fingerprint=last_hook_reject_fingerprint_value,
         hook_reject_recovery_invoked=bool(payload.get("hook_reject_recovery_invoked", False)),
-        failed_reason=(FailedReason(payload["failed_reason"]) if payload.get("failed_reason") else None),
+        failed_reason=failed_reason_value,
         failed_message=payload.get("failed_message"),
         recovery_failure_explanation=payload.get("recovery_failure_explanation"),
         limits=limits,

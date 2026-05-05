@@ -21,8 +21,12 @@ if TYPE_CHECKING:
 
 def _header_section(prompt: "AgentPrompt", task_record: TaskRecord | None) -> str:
     """Identify the task and pipeline coordinates so the agent knows which run it is on."""
+    if task_record is not None:
+        title_suffix = f" — {task_record.title}"
+    else:
+        title_suffix = ""
     lines = [
-        f"Task: {prompt.task_id}" + (f" — {task_record.title}" if task_record is not None else ""),
+        f"Task: {prompt.task_id}{title_suffix}",
         f"Stage: {prompt.stage}",
         f"Role: {prompt.role}",
         f"Pipeline mode: {prompt.pipeline_mode.value}",
@@ -157,6 +161,15 @@ def _recovery_execution_root_section(prompt: "RecoveryPrompt") -> str:
 
 def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
     """Hand the recovery agent persisted evidence of the failed subagent run instead of asking it to dig."""
+    exit_code_value = diagnostics.get("exit_code")
+    if exit_code_value is not None:
+        exit_code_label = exit_code_value
+    else:
+        exit_code_label = "-"
+    if diagnostics.get("did_produce_output"):
+        did_produce_output_label = "yes"
+    else:
+        did_produce_output_label = "no"
     lines = [
         "Failed subagent evidence (DB-backed recovery state):",
         f"- subagent_id: {diagnostics.get('subagent_id') or '-'}",
@@ -164,8 +177,8 @@ def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
         f"- engine: {diagnostics.get('engine') or '-'}",
         f"- status: {diagnostics.get('status') or '-'}",
         f"- path: {diagnostics.get('path') or '-'}",
-        f"- exit_code: {diagnostics.get('exit_code') if diagnostics.get('exit_code') is not None else '-'}",
-        f"- did_produce_output: {'yes' if diagnostics.get('did_produce_output') else 'no'}",
+        f"- exit_code: {exit_code_label}",
+        f"- did_produce_output: {did_produce_output_label}",
     ]
     session_payload = diagnostics.get("session")
     if isinstance(session_payload, dict) and session_payload:

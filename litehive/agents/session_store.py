@@ -24,7 +24,11 @@ def _load_subagent_payload(workspace: Workspace, task_id: str, subagent_id: str)
     if row is None:
         return {}, None
     payload = json.loads(row["payload"])
-    return payload if isinstance(payload, dict) else {}, row["created_at"]
+    if isinstance(payload, dict):
+        payload_value = payload
+    else:
+        payload_value = {}
+    return payload_value, row["created_at"]
 
 
 def load_subagent_artifacts(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:

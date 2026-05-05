@@ -44,6 +44,14 @@ def collect_recovery_evidence(
     engine_record = monitoring.engines.get(engine_name or "")
     subagent_base = latest_subagent_base(root, task)
 
+    if task.close_reason:
+        close_reason_part = f" close_reason={task.close_reason}"
+    else:
+        close_reason_part = ""
+    if task.flag_reason:
+        flag_reason_part = f" flag_reason={task.flag_reason}"
+    else:
+        flag_reason_part = ""
     evidence.append(
         RecoveryEvidenceItem(
             kind="task",
@@ -51,8 +59,8 @@ def collect_recovery_evidence(
             exists=True,
             summary=(
                 f"status={task.status} pipeline_status={task.pipeline_status} priority={task.priority}"
-                + (f" close_reason={task.close_reason}" if task.close_reason else "")
-                + (f" flag_reason={task.flag_reason}" if task.flag_reason else "")
+                + close_reason_part
+                + flag_reason_part
             ),
         )
     )
@@ -101,28 +109,34 @@ def collect_recovery_evidence(
     if subagent_base is not None:
         rel_subagent_path = str(subagent_base.relative_to(task_dir(root, task)))
         subagent_ref = next((ref for ref in task.subagents if ref.path == rel_subagent_path), None)
-        artifacts = {} if subagent_ref is None else load_subagent_artifacts(workspace, task.id, subagent_ref.id)
-        event_stream = {} if subagent_ref is None else load_subagent_event_stream(workspace, task.id, subagent_ref.id)
+        if subagent_ref is None:
+            artifacts: dict = {}
+            event_stream: dict = {}
+        else:
+            artifacts = load_subagent_artifacts(workspace, task.id, subagent_ref.id)
+            event_stream = load_subagent_event_stream(workspace, task.id, subagent_ref.id)
         runtime_state = None
         if subagent_ref is not None:
             active_subagent = task.runtime.execution.active_subagent
             interruption = task.runtime.execution.interruption
-            interrupted_subagent = None if interruption is None else interruption.subagent
+            if interruption is None:
+                interrupted_subagent = None
+            else:
+                interrupted_subagent = interruption.subagent
             for state in (active_subagent, interrupted_subagent):
                 if state is not None and state.id == subagent_ref.id:
                     runtime_state = state
                     break
-        trace_view = (
-            None
-            if subagent_ref is None
-            else load_subagent_execution_trace(
+        if subagent_ref is None:
+            trace_view = None
+        else:
+            trace_view = load_subagent_execution_trace(
                 root,
                 task,
                 subagent_ref,
                 active=runtime_state is not None and runtime_state.status == "running",
                 runtime_state=runtime_state,
             )
-        )
         structured_artifact_keys = {"session", "report", "event_stream"}
         for key, label in (
             ("session", "latest subagent session"),
@@ -132,22 +146,29 @@ def collect_recovery_evidence(
             ("stderr.txt", "latest subagent stderr"),
             ("event_stream", "latest subagent event stream"),
         ):
-            path = (
-                trace_view.source
-                if key == "execution_trace" and isinstance(trace_view.source if trace_view else None, Path)
-                else None
-                if key in structured_artifact_keys or key == "execution_trace"
-                else resolve_artifact_path(subagent_base, key)
-            )
-            exists = (
-                bool(event_stream)
-                if key == "event_stream"
-                else key in structured_artifact_keys
-                and key in artifacts
-                or key == "execution_trace"
-                and trace_view is not None
-            )
-            display_path = path if path is not None else subagent_base / key
+            if trace_view:
+                trace_source_for_key = trace_view.source
+            else:
+                trace_source_for_key = None
+            if key == "execution_trace" and isinstance(trace_source_for_key, Path):
+                path = trace_view.source
+            elif key in structured_artifact_keys or key == "execution_trace":
+                path = None
+            else:
+                path = resolve_artifact_path(subagent_base, key)
+            if key == "event_stream":
+                exists = bool(event_stream)
+            else:
+                exists = (
+                    key in structured_artifact_keys
+                    and key in artifacts
+                    or key == "execution_trace"
+                    and trace_view is not None
+                )
+            if path is not None:
+                display_path = path
+            else:
+                display_path = subagent_base / key
             evidence.append(
                 RecoveryEvidenceItem(
                     kind="subagent_artifact",
@@ -171,19 +192,19 @@ def collect_recovery_evidence(
                 summary="latest daemon/run-all wrapper log",
             )
         )
+    if engine_record is None:
+        engine_monitoring_summary = "no engine record"
+    else:
+        engine_monitoring_summary = (
+            f"engine={engine_record.engine} invocations={engine_record.invocation_count} "
+            f"failures={engine_record.failure_count} limits={engine_record.limit_event_count}"
+        )
     evidence.append(
         RecoveryEvidenceItem(
             kind="engine_monitoring",
             label="engine monitoring",
             exists=bool(monitoring.engines),
-            summary=(
-                "no engine record"
-                if engine_record is None
-                else (
-                    f"engine={engine_record.engine} invocations={engine_record.invocation_count} "
-                    f"failures={engine_record.failure_count} limits={engine_record.limit_event_count}"
-                )
-            ),
+            summary=engine_monitoring_summary,
         )
     )
 
@@ -211,13 +232,19 @@ def collect_recovery_evidence(
                 metadata={"dirty_paths": status_entry_paths(root_status)},
             )
         )
+        if worktree_path is not None:
+            worktree_exists = worktree_path.exists()
+            worktree_summary = f"dirty={len(worktree_status)}"
+        else:
+            worktree_exists = False
+            worktree_summary = "task worktree not configured"
         evidence.append(
             RecoveryEvidenceItem(
                 kind="worktree",
                 label="task worktree state",
                 path=worktree_rel,
-                exists=worktree_path.exists() if worktree_path is not None else False,
-                summary=("task worktree not configured" if worktree_path is None else f"dirty={len(worktree_status)}"),
+                exists=worktree_exists,
+                summary=worktree_summary,
                 metadata={"dirty_paths": status_entry_paths(worktree_status), "stage": stage},
             )
         )

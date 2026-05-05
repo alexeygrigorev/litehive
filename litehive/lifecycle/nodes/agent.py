@@ -223,9 +223,13 @@ class AgentNode(Node):
         while True:
             engine = self.selector.select(state, self.name, frozenset(excluded))
             if engine is None:
+                if last_exc:
+                    crash_message = str(last_exc)
+                else:
+                    crash_message = "no engine eligible"
                 return Crash(
                     exc_type="AllEnginesExhausted",
-                    message=str(last_exc) if last_exc else "no engine eligible",
+                    message=crash_message,
                 )
 
             # One session per (task, node, engine). Retries on the same engine

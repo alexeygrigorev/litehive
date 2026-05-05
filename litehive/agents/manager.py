@@ -407,16 +407,30 @@ class SubagentManager(SessionMixin):
             raise
 
         save_task(self.root, task)
+        if proc is None:
+            proc_exit_code = 0
+            proc_pid = None
+        else:
+            proc_exit_code = proc.exit_code
+            proc_pid = proc.pid
+        if failure is None or failure.kind != "execution_interrupted":
+            interruption_reason = None
+        else:
+            interruption_reason = failure.reason
+        if failure is None:
+            failure_kind = None
+            failure_reason = None
+        else:
+            failure_kind = failure.kind
+            failure_reason = failure.reason
         mark_subagent_finished(
             self.root,
             task,
             ref,
             transcript,
-            0 if proc is None else proc.exit_code,
-            pid=None if proc is None else proc.pid,
-            interruption_reason=(
-                None if failure is None or failure.kind != "execution_interrupted" else failure.reason
-            ),
+            proc_exit_code,
+            pid=proc_pid,
+            interruption_reason=interruption_reason,
             continuation=continuation,
         )
         self._write_session_finish(
@@ -425,11 +439,9 @@ class SubagentManager(SessionMixin):
             ref,
             prompt,
             transcript,
-            0 if proc is None else proc.exit_code,
+            proc_exit_code,
             proc,
-            interruption_reason=(
-                None if failure is None or failure.kind != "execution_interrupted" else failure.reason
-            ),
+            interruption_reason=interruption_reason,
             continuation=continuation,
             extra_warnings=callback_warnings,
         )
@@ -440,14 +452,14 @@ class SubagentManager(SessionMixin):
                 engine_name=engine_name,
                 adapter=execution_engine,
                 execution=proc,
-                failure_kind=None if failure is None else failure.kind,
-                failure_reason=None if failure is None else failure.reason,
+                failure_kind=failure_kind,
+                failure_reason=failure_reason,
             )
         return SubagentResult(
             ref=ref,
             execution=proc,
             execution_trace=transcript,
-            exit_code=0 if proc is None else proc.exit_code,
+            exit_code=proc_exit_code,
             failure=failure,
             continuation=continuation,
         )
@@ -501,14 +513,26 @@ class SubagentManager(SessionMixin):
             source_subagent_id=ref.id,
         )
         record_stage_report(self.workspace, task, report)
+        if execution is None:
+            execution_stdout = ""
+            execution_stderr = ""
+            execution_pid = None
+        else:
+            execution_stdout = execution.stdout
+            execution_stderr = execution.stderr
+            execution_pid = execution.pid
+        if continuation is None:
+            continuation_payload = None
+        else:
+            continuation_payload = continuation.model_dump(mode="python")
         self.write_session_snapshot(
             task,
             base,
             ref,
             prompt=prompt,
             transcript=transcript + "\n",
-            stdout="" if execution is None else execution.stdout,
-            stderr="" if execution is None else execution.stderr,
+            stdout=execution_stdout,
+            stderr=execution_stderr,
             report_payload={
                 "status": ref.status,
                 "summary": report.summary,
@@ -517,15 +541,15 @@ class SubagentManager(SessionMixin):
                 "warnings": report.warnings,
                 "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
                 "interruption_reason": interruption_reason,
-                "continuation": None if continuation is None else continuation.model_dump(mode="python"),
+                "continuation": continuation_payload,
             },
             exit_code=exit_code,
-            pid=None if execution is None else execution.pid,
+            pid=execution_pid,
             interruption_reason=interruption_reason,
             continuation=continuation,
         )
-        write_stream_artifact(base, "stdout", "" if execution is None else execution.stdout, compress=True)
-        write_stream_artifact(base, "stderr", "" if execution is None else execution.stderr, compress=True)
+        write_stream_artifact(base, "stdout", execution_stdout, compress=True)
+        write_stream_artifact(base, "stderr", execution_stderr, compress=True)
         if execution is not None:
             self.append_stream_delta(base, ref, "stdout", execution.stdout)
             self.append_stream_delta(base, ref, "stderr", execution.stderr)
@@ -542,7 +566,7 @@ class SubagentManager(SessionMixin):
                 "interruption_reason": interruption_reason,
             },
         )
-        self.write_event_stream(ref, task, "" if execution is None else execution.stdout)
+        self.write_event_stream(ref, task, execution_stdout)
 
     def write_session_progress(
         self,
@@ -615,6 +639,10 @@ class SubagentManager(SessionMixin):
                 execution=execution,
                 transcript=transcript,
             )
+            if continuation is None:
+                continuation_payload = None
+            else:
+                continuation_payload = continuation.model_dump(mode="python")
             report_payload = {
                 "status": ref.status,
                 "summary": report.summary,
@@ -627,7 +655,7 @@ class SubagentManager(SessionMixin):
                 "tests": report.tests,
                 "warnings": report.warnings,
                 "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
-                "continuation": None if continuation is None else continuation.model_dump(mode="python"),
+                "continuation": continuation_payload,
             }
         self.write_session_snapshot(
             task,
@@ -655,6 +683,10 @@ class SubagentManager(SessionMixin):
         transcript: str,
     ) -> StageReport:
         """Single helper that ``_write_session_finish`` and ``write_session_progress`` route through to construct a ``StageReport`` from the engine's transcript so the live-progress and finish paths produce reports of the same shape."""
+        if execution is None:
+            execution_exit_code = 0
+        else:
+            execution_exit_code = execution.exit_code
         return stage_report_from_subagent(
             task,
             stage,
@@ -662,7 +694,7 @@ class SubagentManager(SessionMixin):
                 ref=ref,
                 execution=execution,
                 execution_trace=transcript,
-                exit_code=0 if execution is None else execution.exit_code,
+                exit_code=execution_exit_code,
             ),
             root=self.root,
         )

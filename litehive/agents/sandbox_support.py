@@ -54,7 +54,11 @@ def forced_engine_rw_state_dirs(
     candidates: list[Path] = []
     if engine_name == "codex":
         codex_home = effective_env.get("CODEX_HOME")
-        candidates.append(Path(codex_home).expanduser() if codex_home else home / ".codex")
+        if codex_home:
+            codex_path = Path(codex_home).expanduser()
+        else:
+            codex_path = home / ".codex"
+        candidates.append(codex_path)
     elif engine_name == "claude":
         candidates.append(home / ".claude")
     elif engine_name == "copilot":

@@ -59,11 +59,15 @@ def _update_task_transition(
     """Edit task metadata or route the operator's intent into a terminal transition (close/park/requeue/abandon); uses ``...`` sentinels so callers can distinguish "leave field alone" from "set to None"."""
 
     if outcome is not ... and outcome is not None:
+        if outcome_reason is not ... and outcome_reason is not None:
+            close_reason_arg = str(outcome_reason)
+        else:
+            close_reason_arg = None
         return close_task(
             root,
             task_id,
             outcome=str(outcome),
-            reason=str(outcome_reason) if outcome_reason is not ... and outcome_reason is not None else None,
+            reason=close_reason_arg,
             audit_actor=audit_actor,
             audit_source=audit_source,
         )

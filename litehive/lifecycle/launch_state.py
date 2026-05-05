@@ -51,11 +51,19 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
         rows; the optional kwargs let the reset branch carry forward the
         prior failure history.
         """
+        if recovery_history is None:
+            recovery_history_value: list = []
+        else:
+            recovery_history_value = recovery_history
+        if failed_run_history is None:
+            failed_run_history_value: dict = {}
+        else:
+            failed_run_history_value = failed_run_history
         state = TaskState(
             **fresh_state_kwargs,
-            recovery_history=[] if recovery_history is None else recovery_history,
+            recovery_history=recovery_history_value,
             recovery_budget_history_start=recovery_budget_history_start,
-            failed_run_history={} if failed_run_history is None else failed_run_history,
+            failed_run_history=failed_run_history_value,
             limits=persistence.limits,
         )
         persistence.save(state)
@@ -113,13 +121,13 @@ def _entry_stage_for_task(task_record: TaskRecord) -> PipelineState | None:
     ``None`` so the caller starts a fresh pipeline rather than re-running a
     stage on a task that has already left the pipeline.
     """
+    if task_record.runtime.execution.interruption is None:
+        interruption_resume_stage = None
+    else:
+        interruption_resume_stage = task_record.runtime.execution.interruption.resume_stage
     stage = (
         task_record.runtime.pipeline.current_stage.stage
-        or (
-            None
-            if task_record.runtime.execution.interruption is None
-            else task_record.runtime.execution.interruption.resume_stage
-        )
+        or interruption_resume_stage
         or task_record.pipeline_status
     )
     if stage in {None, PipelineStatus.BACKLOG, PipelineStatus.DONE, PipelineStatus.FLAGGED}:

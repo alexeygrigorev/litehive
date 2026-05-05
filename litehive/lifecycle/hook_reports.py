@@ -28,24 +28,36 @@ from litehive.workspace import Workspace
 from .nodes.hook import HookSpec
 
 
+def _normalize_hook_spec_data(hook) -> dict:
+    """Coerce a string-or-dict hook entry into the dict shape `_build_hook_spec` expects."""
+    if isinstance(hook, str):
+        return {"command": hook}
+    return hook
+
+
+def _build_hook_spec(spec_data: dict) -> HookSpec:
+    """Construct a `HookSpec` from a normalized dict, honoring the `None`-pass-through rule for description and instructions_on_failure."""
+    if spec_data.get("description") is None:
+        description = None
+    else:
+        description = str(spec_data["description"])
+    if spec_data.get("instructions_on_failure") is None:
+        instructions_on_failure = None
+    else:
+        instructions_on_failure = str(spec_data["instructions_on_failure"])
+    return HookSpec(
+        command=str(spec_data["command"]),
+        timeout_seconds=float(spec_data.get("timeout_seconds", 60)),
+        description=description,
+        instructions_on_failure=instructions_on_failure,
+    )
+
+
 def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
     """Translate ``LitehiveConfig.runner_hooks`` into ``HookSpec`` lists."""
     out: dict[str, list[HookSpec]] = {}
     for phase, hooks in (getattr(config, "runner_hooks", None) or {}).items():
-        specs = [
-            HookSpec(
-                command=str(spec_data["command"]),
-                timeout_seconds=float(spec_data.get("timeout_seconds", 60)),
-                description=None if spec_data.get("description") is None else str(spec_data["description"]),
-                instructions_on_failure=(
-                    None
-                    if spec_data.get("instructions_on_failure") is None
-                    else str(spec_data["instructions_on_failure"])
-                ),
-            )
-            for hook in hooks or []
-            for spec_data in [{"command": hook} if isinstance(hook, str) else hook]
-        ]
+        specs = [_build_hook_spec(_normalize_hook_spec_data(hook)) for hook in hooks or []]
         if specs:
             out[phase] = specs
     return out

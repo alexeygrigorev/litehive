@@ -333,14 +333,34 @@ def agent_update_command(
     target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
 
     sentinel = ...
+    if goal is not None:
+        goal_arg = goal
+    else:
+        goal_arg = sentinel
+    if acceptance_criteria is not None:
+        acceptance_criteria_arg = acceptance_criteria
+    else:
+        acceptance_criteria_arg = sentinel
+    if plan is not None:
+        plan_arg = plan
+    else:
+        plan_arg = sentinel
+    if constraints is not None:
+        constraints_arg = constraints
+    else:
+        constraints_arg = sentinel
+    if priority is not None:
+        priority_arg = priority
+    else:
+        priority_arg = sentinel
     update_task(
         target.root,
         target.task_id,
-        goal=goal if goal is not None else sentinel,
-        acceptance_criteria=acceptance_criteria if acceptance_criteria is not None else sentinel,
-        plan=plan if plan is not None else sentinel,
-        constraints=constraints if constraints is not None else sentinel,
-        priority=priority if priority is not None else sentinel,
+        goal=goal_arg,
+        acceptance_criteria=acceptance_criteria_arg,
+        plan=plan_arg,
+        constraints=constraints_arg,
+        priority=priority_arg,
         allow_active_agent_task_mutation=True,
         audit_actor="agent",
         audit_source="agent",

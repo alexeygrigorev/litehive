@@ -172,8 +172,12 @@ def pipeline_journal_command(
         print(f"\ntransitions (last {len(recent)} of {len(transitions)}):")
         for row in recent:
             desc = row["rule_description"] or ""
+            if desc:
+                desc_suffix = f"  # {desc}"
+            else:
+                desc_suffix = ""
             print(
                 f"  {row['seq']:3d} {row['created_at']}  {row['from_stage']:25s} --[{row['event_type']:25s}]--> {row['to_stage']}"
-                + (f"  # {desc}" if desc else "")
+                + desc_suffix
             )
     return 0

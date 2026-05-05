@@ -59,15 +59,23 @@ def engine_command(
         if name not in ENGINE_CHOICES:
             print(f"engine default: unknown engine '{name}'")
             return 1
+        if reason:
+            default_context = {"reason": reason}
+        else:
+            default_context = None
         change = set_default_engine(
             Workspace.from_path(workspace),
             name,
             actor="operator",
             source="cli",
-            context={"reason": reason} if reason else None,
+            context=default_context,
         )
         print(f"default_engine: {change.old_value} -> {change.new_value}")
-        print(f"updated: {'yes' if change.changed else 'no'}")
+        if change.changed:
+            updated_label = "yes"
+        else:
+            updated_label = "no"
+        print(f"updated: {updated_label}")
         return 0
     if action == "preference":
         try:
@@ -78,19 +86,27 @@ def engine_command(
         if preference is None:
             print("engine preference: provide a comma-separated engine list")
             return 1
+        if reason:
+            preference_context = {"reason": reason}
+        else:
+            preference_context = None
         try:
             change = set_engine_preference(
                 Workspace.from_path(workspace),
                 preference,
                 actor="operator",
                 source="cli",
-                context={"reason": reason} if reason else None,
+                context=preference_context,
             )
         except ValueError as exc:
             print(f"engine preference: {exc}")
             return 1
         print(f"engine_preference: {_engine_list_label(change.old_value)} -> {_engine_list_label(change.new_value)}")
-        print(f"updated: {'yes' if change.changed else 'no'}")
+        if change.changed:
+            updated_label = "yes"
+        else:
+            updated_label = "no"
+        print(f"updated: {updated_label}")
         return 0
     if name not in ENGINE_CHOICES:
         print(f"engine {action}: unknown engine '{name}'")
@@ -108,7 +124,11 @@ def engine_command(
             source="cli",
             reason=reason,
         )
-        print(f"engine_frozen: {name} until {freeze_iso}" + (f" reason={reason}" if reason else ""))
+        if reason:
+            reason_part = f" reason={reason}"
+        else:
+            reason_part = ""
+        print(f"engine_frozen: {name} until {freeze_iso}" + reason_part)
         return 0
     if not clear_persisted_engine_freeze(
         workspace,
@@ -165,9 +185,13 @@ def _render_engine_status_lines(root: Path) -> list[str]:
     config = load_config(root)
     active_freezes = active_engine_freezes(config)
     quota_statuses = _collect_quota_statuses()
+    if config.engine_preference:
+        engine_preference_label = ",".join(config.engine_preference)
+    else:
+        engine_preference_label = "-"
     lines = [
         f"default_engine: {config.default_engine}",
-        f"engine_preference: {','.join(config.engine_preference) if config.engine_preference else '-'}",
+        f"engine_preference: {engine_preference_label}",
         f"engine_freeze: {', '.join(f'{k}={v}' for k, v in sorted(config.engine_freeze.items())) or '-'}",
     ]
     for engine_name in ENGINE_CHOICES:
@@ -176,13 +200,21 @@ def _render_engine_status_lines(root: Path) -> list[str]:
             frozen_until = config.engine_freeze.get(engine_name)
         else:
             frozen_until = None
+        if caps.available:
+            available_label = "yes"
+        else:
+            available_label = "no"
+        if frozen_until:
+            frozen_label = "yes"
+        else:
+            frozen_label = "no"
         lines.extend(
             [
                 "",
                 (
                     f"engine: {engine_name} "
-                    f"available={'yes' if caps.available else 'no'} "
-                    f"frozen={'yes' if frozen_until else 'no'} "
+                    f"available={available_label} "
+                    f"frozen={frozen_label} "
                     f"frozen_until={frozen_until or '-'}"
                 ),
                 _render_quota_line(engine_name, quota_statuses[engine_name]),

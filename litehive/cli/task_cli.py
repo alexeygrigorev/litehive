@@ -73,7 +73,11 @@ def _print_creation_provenance(task) -> None:
     print(f"  task_id: {created_from.task_id or '-'}")
     print(f"  stage: {created_from.stage or '-'}")
     print(f"  role: {created_from.role or '-'}")
-    print(f"  blocking: {'yes' if created_from.blocking else 'no'}")
+    if created_from.blocking:
+        blocking_label = "yes"
+    else:
+        blocking_label = "no"
+    print(f"  blocking: {blocking_label}")
     print(f"  rationale: {created_from.rationale or '-'}")
 
 
@@ -97,12 +101,20 @@ def add(
     try:
         depends_on = parse_dependency_ids(depends_on)
         acceptance_criteria = parse_acceptance_criteria(acceptance_criteria)
+        if depends_on is ...:
+            depends_on_arg = None
+        else:
+            depends_on_arg = depends_on
+        if acceptance_criteria is ...:
+            acceptance_criteria_arg = None
+        else:
+            acceptance_criteria_arg = acceptance_criteria
         task = create_task(
             workspace,
             title=title,
-            depends_on=None if depends_on is ... else depends_on,
+            depends_on=depends_on_arg,
             goal=goal,
-            acceptance_criteria=None if acceptance_criteria is ... else acceptance_criteria,
+            acceptance_criteria=acceptance_criteria_arg,
             priority=priority,
         )
     except (ValueError, WorkspaceConflictError) as exc:
@@ -110,7 +122,11 @@ def add(
         return 1
     print(f"Created task {task.id} in {workspace / '.litehive' / 'tasks' / (task.id + '-' + task.slug)}")
     print(f"priority: {task.priority}")
-    print(f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}")
+    if task.retry_policy.max_retries is not None:
+        retry_limit_label = task.retry_policy.max_retries
+    else:
+        retry_limit_label = "default"
+    print(f"retry_limit: {retry_limit_label}")
     print(f"pipeline_mode: {task.pipeline_mode}")
     print(f"model: {task_model_label(task.model)}")
     print(f"depends_on: {task_dependencies_label(task.id, task.depends_on)}")
@@ -255,7 +271,11 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
     pipeline_runtime = task.runtime.pipeline
     print(f"execution_status: {pipeline_runtime.execution_status or '-'}")
     current_stage = pipeline_runtime.current_stage
-    print(f"current_stage: {current_stage.stage if current_stage and current_stage.stage else '-'}")
+    if current_stage and current_stage.stage:
+        current_stage_label = current_stage.stage
+    else:
+        current_stage_label = "-"
+    print(f"current_stage: {current_stage_label}")
     print(f"retry_count: {pipeline_runtime.retry_count}")
     print(f"last_outcome: {pipeline_runtime.last_outcome or '-'}")
     return 0
@@ -365,13 +385,25 @@ def update(
         constraints = parse_text_list_option(constraints, option_name="constraints", allow_clear=True)
         plan = parse_text_list_option(plan, option_name="plan", allow_clear=True)
 
+        if title is not None:
+            title_arg = title
+        else:
+            title_arg = ...
+        if priority is not None:
+            priority_arg = priority
+        else:
+            priority_arg = ...
+        if goal is not None:
+            goal_arg = goal
+        else:
+            goal_arg = ...
         task = update_task(
             mutation_workspace,
             mutation_task_id,
-            title=title if title is not None else ...,
+            title=title_arg,
             depends_on=depends_on,
-            priority=priority if priority is not None else ...,
-            goal=goal if goal is not None else ...,
+            priority=priority_arg,
+            goal=goal_arg,
             acceptance_criteria=acceptance_criteria,
             constraints=constraints,
             plan=plan,
@@ -382,7 +414,11 @@ def update(
         return 1
     print(f"task: {task.id} {task.title}")
     print(f"model: {task_model_label(task.model)}")
-    print(f"retry_limit: {task.retry_policy.max_retries if task.retry_policy.max_retries is not None else 'default'}")
+    if task.retry_policy.max_retries is not None:
+        retry_limit_label = task.retry_policy.max_retries
+    else:
+        retry_limit_label = "default"
+    print(f"retry_limit: {retry_limit_label}")
     print(f"priority: {task.priority}")
     print(f"auto_commit: {task.git.auto_commit}")
     print(f"depends_on: {task_dependencies_label(task.id, task.depends_on)}")

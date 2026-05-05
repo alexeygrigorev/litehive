@@ -119,8 +119,12 @@ def restart(workspace: WorkspaceOption = Path.cwd()) -> int:
     except RuntimeError as exc:
         print(f"daemon restart failed: {exc}")
         return 1
+    if previous is not None:
+        previous_pid_label = previous.get("pid")
+    else:
+        previous_pid_label = "-"
     print(f"workspace: {workspace.resolve()}")
-    print(f"previous_pid: {previous.get('pid') if previous is not None else '-'}")
+    print(f"previous_pid: {previous_pid_label}")
     print(f"pid: {pid}")
     print("daemon_status: running")
     return 0
@@ -252,7 +256,10 @@ def _preview_single(
     selection = peek_next_task_selection(workspace)
     if selection.task is None:
         state = load_state(workspace)
-        print("No runnable task." if state.queue else "No queued task.")
+        if state.queue:
+            print("No runnable task.")
+        else:
+            print("No queued task.")
         return 0
 
     config = load_config(workspace)
@@ -307,7 +314,10 @@ def _run_drain(
         if not iteration.ran_task:
             if tasks_run == 0:
                 state = load_state(workspace)
-                print("No runnable task." if state.queue else "No queued task.")
+                if state.queue:
+                    print("No runnable task.")
+                else:
+                    print("No queued task.")
             return 0
 
         tasks_run += 1
@@ -530,8 +540,12 @@ def db_migrate(
     except MigrationApplyError as exc:
         print(f"db migrate failed: {exc}")
         return 1
+    if plan.dry_run:
+        dry_run_label = "yes"
+    else:
+        dry_run_label = "no"
     print(f"workspace: {workspace}")
-    print(f"dry_run: {'yes' if plan.dry_run else 'no'}")
+    print(f"dry_run: {dry_run_label}")
     if plan.pending_migrations:
         if plan.dry_run:
             label = "would_apply"

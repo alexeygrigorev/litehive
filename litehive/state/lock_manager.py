@@ -117,7 +117,11 @@ class WorkspaceLockManager:
         flock-mode flag is normalized in one place and tests can swap the
         behaviour by subclassing.
         """
-        mode = fcntl.LOCK_EX | (fcntl.LOCK_NB if nonblocking else 0)
+        if nonblocking:
+            nonblocking_flag = fcntl.LOCK_NB
+        else:
+            nonblocking_flag = 0
+        mode = fcntl.LOCK_EX | nonblocking_flag
         fcntl.flock(handle.fileno(), mode)
 
     def unlock(self, handle: TextIO) -> None:

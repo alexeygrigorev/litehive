@@ -84,9 +84,11 @@ def record_engine_execution(
     """Bump invocation/success/failure counters and persist the latest usage observation after an engine CLI run completes; called by the orchestrator runner once per stage execution so the workspace's quota/usage view in ``litehive status`` reflects what the agents actually consumed."""
     monitoring = load_engine_monitoring(workspace)
     extract_usage_observation = getattr(adapter, "extract_usage_observation", None)
-    observation = (
-        extract_usage_observation(execution) if callable(extract_usage_observation) else None
-    ) or EngineUsageObservation()
+    if callable(extract_usage_observation):
+        extracted_observation = extract_usage_observation(execution)
+    else:
+        extracted_observation = None
+    observation = extracted_observation or EngineUsageObservation()
     monitoring = _apply_engine_observation(
         monitoring,
         engine_name=engine_name,
@@ -111,9 +113,11 @@ def record_engine_observation(
     """Persist mid-execution usage telemetry without bumping the invocation counter, short-circuiting when there is nothing useful to record; called when an engine emits a streaming usage event the runner wants to capture before the final ``record_engine_execution`` call."""
     monitoring = load_engine_monitoring(workspace)
     extract_usage_observation = getattr(adapter, "extract_usage_observation", None)
-    observation = (
-        extract_usage_observation(execution) if callable(extract_usage_observation) else None
-    ) or EngineUsageObservation()
+    if callable(extract_usage_observation):
+        extracted_observation = extract_usage_observation(execution)
+    else:
+        extracted_observation = None
+    observation = extracted_observation or EngineUsageObservation()
     if (
         observation.usage is None
         and observation.limit_reason is None

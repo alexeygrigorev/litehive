@@ -712,6 +712,16 @@ def _task_intent_column_values(
     state: TaskStateRecord | None = None,
 ) -> dict[str, str]:
     """Project a ``TaskIntentRecord`` (and the optional live state) onto the flat denormalized columns of ``task_intent``; the single producer of those column values so list/filter queries see the same shape regardless of which call path wrote the row."""
+    if intent.created_from is None:
+        provenance_payload: dict = {}
+    else:
+        provenance_payload = intent.created_from.model_dump(mode="json")
+    if state is None:
+        lifecycle_status = "queued"
+        pipeline_status = "backlog"
+    else:
+        lifecycle_status = str(state.status)
+        pipeline_status = str(state.pipeline_status)
     return {
         "slug": intent.slug,
         "title": intent.title,
@@ -722,12 +732,9 @@ def _task_intent_column_values(
         "constraints_json": json.dumps(intent.constraints, sort_keys=True),
         "plan_json": json.dumps(intent.plan, sort_keys=True),
         "dependencies_json": json.dumps(intent.depends_on, sort_keys=True),
-        "provenance_json": json.dumps(
-            {} if intent.created_from is None else intent.created_from.model_dump(mode="json"),
-            sort_keys=True,
-        ),
-        "lifecycle_status": "queued" if state is None else str(state.status),
-        "pipeline_status": "backlog" if state is None else str(state.pipeline_status),
+        "provenance_json": json.dumps(provenance_payload, sort_keys=True),
+        "lifecycle_status": lifecycle_status,
+        "pipeline_status": pipeline_status,
     }
 
 

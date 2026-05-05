@@ -114,6 +114,10 @@ class RecoveryAgent(RoleAgent):
         # Analyze scope changes to distinguish operator cleanup from SWE scope creep
         scope_analysis = analyze_scope_changes(workspace)
 
+        if trigger is not None:
+            recovery_trigger_payload = trigger.to_payload()
+        else:
+            recovery_trigger_payload = None
         return RecoveryPrompt(
             role=base.role,
             stage=base.stage,
@@ -134,7 +138,7 @@ class RecoveryAgent(RoleAgent):
             litehive_source_path=litehive_source_path,
             recovery_execution_root=recovery_execution_root,
             recovery_config_diagnostic=recovery_config_diagnostic,
-            recovery_trigger=trigger.to_payload() if trigger is not None else None,
+            recovery_trigger=recovery_trigger_payload,
             recovery_history=recovery_history,
             repeated_recovery_fingerprint=repeated_recovery_fingerprint,
             recovery_failure_explanation=state.recovery_failure_explanation,
@@ -345,13 +349,12 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
         ),
         None,
     )
-    subagent_id = (
-        runtime_state.id
-        if runtime_state is not None
-        else subagent_ref.id
-        if subagent_ref is not None
-        else subagent_base.name.split("-", 2)[0]
-    )
+    if runtime_state is not None:
+        subagent_id = runtime_state.id
+    elif subagent_ref is not None:
+        subagent_id = subagent_ref.id
+    else:
+        subagent_id = subagent_base.name.split("-", 2)[0]
     if not subagent_id:
         return None
 
@@ -383,25 +386,23 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
         if isinstance(session_exit_code, int):
             exit_code = session_exit_code
 
+    if runtime_state is not None:
+        runtime_role = runtime_state.role
+        runtime_engine = runtime_state.engine
+        runtime_status = runtime_state.status
+    elif subagent_ref is not None:
+        runtime_role = subagent_ref.role
+        runtime_engine = subagent_ref.engine
+        runtime_status = subagent_ref.status
+    else:
+        runtime_role = None
+        runtime_engine = None
+        runtime_status = None
     return {
         "subagent_id": subagent_id,
-        "role": (
-            runtime_state.role if runtime_state is not None else subagent_ref.role if subagent_ref is not None else None
-        ),
-        "engine": (
-            runtime_state.engine
-            if runtime_state is not None
-            else subagent_ref.engine
-            if subagent_ref is not None
-            else None
-        ),
-        "status": (
-            runtime_state.status
-            if runtime_state is not None
-            else subagent_ref.status
-            if subagent_ref is not None
-            else None
-        ),
+        "role": runtime_role,
+        "engine": runtime_engine,
+        "status": runtime_status,
         "path": rel_path,
         "exit_code": exit_code,
         "did_produce_output": any(text.strip() for text in (execution_trace, stdout, stderr)),

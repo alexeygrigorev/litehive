@@ -317,9 +317,13 @@ def _hook_reject_delta(state: TaskState, event: Event, recovery_invoked: bool | 
     entry, and terminal-fail deltas so all three keep the counter coherent."""
     fingerprint = _hook_fingerprint_from_event(event)
     if fingerprint is None:
+        if recovery_invoked is None:
+            recovery_invoked_value = False
+        else:
+            recovery_invoked_value = recovery_invoked
         return StateDelta(
             clear_hook_reject_tracking=True,
-            set_hook_reject_recovery_invoked=False if recovery_invoked is None else recovery_invoked,
+            set_hook_reject_recovery_invoked=recovery_invoked_value,
         )
     same_as_last = (
         state.last_hook_reject_fingerprint is not None
@@ -329,12 +333,14 @@ def _hook_reject_delta(state: TaskState, event: Event, recovery_invoked: bool | 
         count = state.consecutive_same_hook_rejects + 1
     else:
         count = 1
+    if recovery_invoked is not None:
+        recovery_invoked_value = recovery_invoked
+    else:
+        recovery_invoked_value = state.hook_reject_recovery_invoked
     return StateDelta(
         set_consecutive_same_hook_rejects=count,
         set_last_hook_reject_fingerprint=fingerprint,
-        set_hook_reject_recovery_invoked=(
-            recovery_invoked if recovery_invoked is not None else state.hook_reject_recovery_invoked
-        ),
+        set_hook_reject_recovery_invoked=recovery_invoked_value,
     )
 
 
@@ -399,10 +405,14 @@ def enter_recovery(state: TaskState, event: Event) -> StateDelta:
     "recovery now owns this loop", and clears stale rejection-loop /
     explanation state so the next attempt starts clean."""
     trigger = recovery_trigger_from_event(state, event)
+    if _hook_reject_loop_detected(state, event):
+        hook_recovery_invoked: bool | None = True
+    else:
+        hook_recovery_invoked = None
     hook_delta = _hook_reject_delta(
         state,
         event,
-        recovery_invoked=True if _hook_reject_loop_detected(state, event) else None,
+        recovery_invoked=hook_recovery_invoked,
     )
     return StateDelta(
         set_active_recovery_trigger=trigger,
@@ -481,12 +491,20 @@ def record_recovery_success(state: TaskState, event: Event) -> StateDelta:
     preserve_hook_tracking = trigger is not None and trigger.reason_code == "hook_reject_loop"
     if preserve_hook_tracking and _hook_recovery_made_progress(trigger, event):
         preserve_hook_tracking = False
+    if trigger is not None:
+        retry_counter_stage_arg = trigger.origin_stage
+    else:
+        retry_counter_stage_arg = None
+    if not preserve_hook_tracking:
+        hook_recovery_invoked_value = False
+    else:
+        hook_recovery_invoked_value = True
     return StateDelta(
-        reset_stage_retry=_retry_counter_stage(trigger.origin_stage if trigger is not None else None),
+        reset_stage_retry=_retry_counter_stage(retry_counter_stage_arg),
         clear_active_recovery_trigger=True,
         append_recovery_outcome=outcome,
         clear_hook_reject_tracking=not preserve_hook_tracking,
-        set_hook_reject_recovery_invoked=False if not preserve_hook_tracking else True,
+        set_hook_reject_recovery_invoked=hook_recovery_invoked_value,
         clear_rejection_loop=True,
         clear_recovery_failure_explanation=True,
     )
@@ -547,8 +565,12 @@ def _rejection_tracking_delta(
         set_rej = None
     hook_delta = _hook_reject_delta(state, event, recovery_invoked=False)
     rejection_loop_delta = _rejection_loop_delta(state, event, retry_target_stage=retry_target_stage)
+    if increment_retry:
+        inc_stage_retry_arg = stage
+    else:
+        inc_stage_retry_arg = None
     return StateDelta(
-        inc_stage_retry=stage if increment_retry else None,
+        inc_stage_retry=inc_stage_retry_arg,
         set_last_rejection=set_rej,
         set_rejection_loop=rejection_loop_delta.set_rejection_loop,
         clear_rejection_loop=rejection_loop_delta.clear_rejection_loop,

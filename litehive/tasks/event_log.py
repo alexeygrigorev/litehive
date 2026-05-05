@@ -511,7 +511,11 @@ def _insert_task_state(connection: sqlite3.Connection, task_id: str, payload: di
 def _insert_task_journal(connection: sqlite3.Connection, task_id: str, journal: list[dict[str, Any]]) -> None:
     """Upsert every journal entry for a task during replay, preferring the persisted ``entry_index`` over the loop counter so re-replays stay idempotent under ``INSERT OR REPLACE``."""
     for fallback_index, entry in enumerate(journal):
-        entry_index = int(entry.get("entry_index") if entry.get("entry_index") is not None else fallback_index)
+        if entry.get("entry_index") is not None:
+            entry_index_raw = entry.get("entry_index")
+        else:
+            entry_index_raw = fallback_index
+        entry_index = int(entry_index_raw)
         created_at = str(entry.get("created_at") or utcnow())
         message = str(entry.get("message") or "")
         metadata = entry.get("metadata")
@@ -690,6 +694,10 @@ def _optional_int(value: object) -> int | None:
 
 def _task_intent_column_values(intent: TaskIntentRecord) -> dict[str, str]:
     """Project a ``TaskIntentRecord`` onto the denormalized columns of ``task_intent`` so ``_insert_task_intent`` can bind them to the prepared statement; keeps the JSON-vs-column projection in one place."""
+    if intent.created_from is None:
+        provenance_payload: dict = {}
+    else:
+        provenance_payload = intent.created_from.model_dump(mode="json")
     return {
         "slug": intent.slug,
         "title": intent.title,
@@ -700,10 +708,7 @@ def _task_intent_column_values(intent: TaskIntentRecord) -> dict[str, str]:
         "constraints_json": json.dumps(intent.constraints, sort_keys=True),
         "plan_json": json.dumps(intent.plan, sort_keys=True),
         "dependencies_json": json.dumps(intent.depends_on, sort_keys=True),
-        "provenance_json": json.dumps(
-            {} if intent.created_from is None else intent.created_from.model_dump(mode="json"),
-            sort_keys=True,
-        ),
+        "provenance_json": json.dumps(provenance_payload, sort_keys=True),
         "lifecycle_status": "queued",
         "pipeline_status": "backlog",
     }

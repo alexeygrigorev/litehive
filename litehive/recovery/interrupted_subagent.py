@@ -98,6 +98,10 @@ def _write_interrupted_subagent_artifacts(
     workspace = Workspace.from_path(root)
     session_payload = load_subagent_session(workspace, task.id, subagent.id)
     report_payload = load_subagent_report(workspace, task.id, subagent.id)
+    if subagent.continuation is None:
+        continuation_payload = None
+    else:
+        continuation_payload = subagent.continuation.model_dump(mode="python")
     session_payload.update(
         {
             "id": subagent.id,
@@ -111,7 +115,7 @@ def _write_interrupted_subagent_artifacts(
             "exit_code": subagent.exit_code,
             "interruption_reason": subagent.interruption_reason or None,
             "resume_stage": resume_stage,
-            "continuation": None if subagent.continuation is None else subagent.continuation.model_dump(mode="python"),
+            "continuation": continuation_payload,
         }
     )
     report_payload["status"] = subagent.status

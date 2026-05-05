@@ -152,19 +152,27 @@ def load_subagent_execution_trace(
             )
 
     stderr = _read_stream_artifact(base, "stderr", active=active)
+    if stderr is None:
+        stderr_text = ""
+    else:
+        stderr_text = stderr.text
     event_stream = load_subagent_event_stream(Workspace.from_path(root), task.id, ref.id)
     event_trace = render_execution_trace_from_event_stream_payload(
         event_stream,
-        stderr="" if stderr is None else stderr.text,
+        stderr=stderr_text,
     )
     if event_trace:
         return ExecutionTraceView(text=event_trace, source="subagent_sessions:event_stream")
 
     stdout = _read_stream_artifact(base, "stdout", active=active)
+    if stdout is None:
+        stdout_text = ""
+    else:
+        stdout_text = stdout.text
     if stdout is not None or stderr is not None:
         trace = render_execution_trace_from_streams(
-            stdout="" if stdout is None else stdout.text,
-            stderr="" if stderr is None else stderr.text,
+            stdout=stdout_text,
+            stderr=stderr_text,
         )
         if stdout is None:
             source = None

@@ -1,9 +1,9 @@
 {
   "errors": [
     {
-      "line": 274,
+      "line": 280,
       "column": 61,
-      "stop_line": 274,
+      "stop_line": 280,
       "stop_column": 73,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -13,9 +13,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -25,9 +25,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -37,9 +37,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -49,9 +49,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -61,9 +61,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -73,9 +73,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -85,9 +85,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -97,9 +97,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -109,9 +109,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -121,9 +121,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -133,9 +133,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -145,9 +145,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -157,9 +157,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -169,9 +169,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -181,9 +181,9 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 324,
       "column": 21,
-      "stop_line": 318,
+      "stop_line": 324,
       "stop_column": 78,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -193,9 +193,9 @@
       "severity": "error"
     },
     {
-      "line": 338,
+      "line": 344,
       "column": 21,
-      "stop_line": 338,
+      "stop_line": 344,
       "stop_column": 72,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -205,9 +205,9 @@
       "severity": "error"
     },
     {
-      "line": 338,
+      "line": 344,
       "column": 21,
-      "stop_line": 338,
+      "stop_line": 344,
       "stop_column": 72,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -217,9 +217,9 @@
       "severity": "error"
     },
     {
-      "line": 338,
+      "line": 344,
       "column": 21,
-      "stop_line": 338,
+      "stop_line": 344,
       "stop_column": 72,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -229,9 +229,9 @@
       "severity": "error"
     },
     {
-      "line": 338,
+      "line": 344,
       "column": 21,
-      "stop_line": 338,
+      "stop_line": 344,
       "stop_column": 72,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -241,9 +241,9 @@
       "severity": "error"
     },
     {
-      "line": 338,
+      "line": 344,
       "column": 21,
-      "stop_line": 338,
+      "stop_line": 344,
       "stop_column": 72,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -253,9 +253,9 @@
       "severity": "error"
     },
     {
-      "line": 338,
+      "line": 344,
       "column": 21,
-      "stop_line": 338,
+      "stop_line": 344,
       "stop_column": 72,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -265,9 +265,9 @@
       "severity": "error"
     },
     {
-      "line": 338,
+      "line": 344,
       "column": 21,
-      "stop_line": 338,
+      "stop_line": 344,
       "stop_column": 72,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -277,9 +277,9 @@
       "severity": "error"
     },
     {
-      "line": 338,
+      "line": 344,
       "column": 21,
-      "stop_line": 338,
+      "stop_line": 344,
       "stop_column": 72,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -289,9 +289,9 @@
       "severity": "error"
     },
     {
-      "line": 338,
+      "line": 344,
       "column": 21,
-      "stop_line": 338,
+      "stop_line": 344,
       "stop_column": 72,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -301,9 +301,9 @@
       "severity": "error"
     },
     {
-      "line": 338,
+      "line": 344,
       "column": 21,
-      "stop_line": 338,
+      "stop_line": 344,
       "stop_column": 72,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -313,9 +313,9 @@
       "severity": "error"
     },
     {
-      "line": 338,
+      "line": 344,
       "column": 21,
-      "stop_line": 338,
+      "stop_line": 344,
       "stop_column": 72,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -325,9 +325,9 @@
       "severity": "error"
     },
     {
-      "line": 338,
+      "line": 344,
       "column": 21,
-      "stop_line": 338,
+      "stop_line": 344,
       "stop_column": 72,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -337,9 +337,9 @@
       "severity": "error"
     },
     {
-      "line": 340,
+      "line": 346,
       "column": 67,
-      "stop_line": 340,
+      "stop_line": 346,
       "stop_column": 71,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -349,9 +349,9 @@
       "severity": "error"
     },
     {
-      "line": 345,
+      "line": 351,
       "column": 17,
-      "stop_line": 345,
+      "stop_line": 351,
       "stop_column": 21,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -361,9 +361,9 @@
       "severity": "error"
     },
     {
-      "line": 347,
+      "line": 353,
       "column": 76,
-      "stop_line": 347,
+      "stop_line": 353,
       "stop_column": 80,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -373,9 +373,9 @@
       "severity": "error"
     },
     {
-      "line": 348,
+      "line": 354,
       "column": 16,
-      "stop_line": 348,
+      "stop_line": 354,
       "stop_column": 30,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -385,9 +385,9 @@
       "severity": "error"
     },
     {
-      "line": 355,
+      "line": 361,
       "column": 31,
-      "stop_line": 355,
+      "stop_line": 361,
       "stop_column": 45,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -397,10 +397,10 @@
       "severity": "error"
     },
     {
-      "line": 409,
-      "column": 36,
-      "stop_line": 409,
-      "stop_column": 50,
+      "line": 414,
+      "column": 30,
+      "stop_line": 414,
+      "stop_column": 44,
       "path": "litehive/agents/manager.py",
       "code": -2,
       "name": "missing-attribute",
@@ -409,10 +409,10 @@
       "severity": "error"
     },
     {
-      "line": 410,
-      "column": 43,
-      "stop_line": 410,
-      "stop_column": 51,
+      "line": 415,
+      "column": 24,
+      "stop_line": 415,
+      "stop_column": 32,
       "path": "litehive/agents/manager.py",
       "code": -2,
       "name": "missing-attribute",
@@ -421,21 +421,9 @@
       "severity": "error"
     },
     {
-      "line": 422,
-      "column": 36,
-      "stop_line": 422,
-      "stop_column": 50,
-      "path": "litehive/agents/manager.py",
-      "code": -2,
-      "name": "missing-attribute",
-      "description": "Object of class `object` has no attribute `exit_code`",
-      "concise_description": "Object of class `object` has no attribute `exit_code`",
-      "severity": "error"
-    },
-    {
-      "line": 423,
+      "line": 443,
       "column": 13,
-      "stop_line": 423,
+      "stop_line": 443,
       "stop_column": 17,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -445,9 +433,9 @@
       "severity": "error"
     },
     {
-      "line": 436,
+      "line": 454,
       "column": 27,
-      "stop_line": 436,
+      "stop_line": 454,
       "stop_column": 31,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -457,9 +445,9 @@
       "severity": "error"
     },
     {
-      "line": 442,
+      "line": 460,
       "column": 23,
-      "stop_line": 442,
+      "stop_line": 460,
       "stop_column": 27,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -469,21 +457,9 @@
       "severity": "error"
     },
     {
-      "line": 444,
-      "column": 46,
-      "stop_line": 444,
-      "stop_column": 60,
-      "path": "litehive/agents/manager.py",
-      "code": -2,
-      "name": "missing-attribute",
-      "description": "Object of class `object` has no attribute `exit_code`",
-      "concise_description": "Object of class `object` has no attribute `exit_code`",
-      "severity": "error"
-    },
-    {
-      "line": 632,
+      "line": 668,
       "column": 28,
-      "stop_line": 632,
+      "stop_line": 668,
       "stop_column": 42,
       "path": "litehive/agents/manager.py",
       "code": -2,
@@ -493,9 +469,9 @@
       "severity": "error"
     },
     {
-      "line": 133,
+      "line": 137,
       "column": 9,
-      "stop_line": 133,
+      "stop_line": 137,
       "stop_column": 28,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -505,9 +481,9 @@
       "severity": "error"
     },
     {
-      "line": 146,
+      "line": 150,
       "column": 9,
-      "stop_line": 146,
+      "stop_line": 150,
       "stop_column": 12,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -517,9 +493,9 @@
       "severity": "error"
     },
     {
-      "line": 163,
+      "line": 167,
       "column": 43,
-      "stop_line": 163,
+      "stop_line": 167,
       "stop_column": 52,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -529,9 +505,9 @@
       "severity": "error"
     },
     {
-      "line": 168,
+      "line": 172,
       "column": 42,
-      "stop_line": 168,
+      "stop_line": 172,
       "stop_column": 54,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -541,9 +517,9 @@
       "severity": "error"
     },
     {
-      "line": 169,
+      "line": 173,
       "column": 20,
-      "stop_line": 173,
+      "stop_line": 177,
       "stop_column": 14,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -553,9 +529,9 @@
       "severity": "error"
     },
     {
-      "line": 172,
+      "line": 176,
       "column": 17,
-      "stop_line": 172,
+      "stop_line": 176,
       "stop_column": 68,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -565,9 +541,9 @@
       "severity": "error"
     },
     {
-      "line": 172,
+      "line": 176,
       "column": 17,
-      "stop_line": 172,
+      "stop_line": 176,
       "stop_column": 68,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -577,9 +553,9 @@
       "severity": "error"
     },
     {
-      "line": 172,
+      "line": 176,
       "column": 17,
-      "stop_line": 172,
+      "stop_line": 176,
       "stop_column": 68,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -589,9 +565,9 @@
       "severity": "error"
     },
     {
-      "line": 172,
+      "line": 176,
       "column": 17,
-      "stop_line": 172,
+      "stop_line": 176,
       "stop_column": 68,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -601,9 +577,9 @@
       "severity": "error"
     },
     {
-      "line": 172,
+      "line": 176,
       "column": 17,
-      "stop_line": 172,
+      "stop_line": 176,
       "stop_column": 68,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -613,9 +589,9 @@
       "severity": "error"
     },
     {
-      "line": 172,
+      "line": 176,
       "column": 17,
-      "stop_line": 172,
+      "stop_line": 176,
       "stop_column": 68,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -625,9 +601,9 @@
       "severity": "error"
     },
     {
-      "line": 172,
+      "line": 176,
       "column": 57,
-      "stop_line": 172,
+      "stop_line": 176,
       "stop_column": 67,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -637,9 +613,9 @@
       "severity": "error"
     },
     {
-      "line": 184,
+      "line": 188,
       "column": 9,
-      "stop_line": 184,
+      "stop_line": 188,
       "stop_column": 17,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -649,9 +625,9 @@
       "severity": "error"
     },
     {
-      "line": 203,
+      "line": 207,
       "column": 48,
-      "stop_line": 203,
+      "stop_line": 207,
       "stop_column": 57,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -661,9 +637,9 @@
       "severity": "error"
     },
     {
-      "line": 211,
+      "line": 215,
       "column": 65,
-      "stop_line": 211,
+      "stop_line": 215,
       "stop_column": 91,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -673,9 +649,9 @@
       "severity": "error"
     },
     {
-      "line": 212,
+      "line": 216,
       "column": 47,
-      "stop_line": 212,
+      "stop_line": 216,
       "stop_column": 59,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -685,9 +661,9 @@
       "severity": "error"
     },
     {
-      "line": 213,
+      "line": 217,
       "column": 20,
-      "stop_line": 217,
+      "stop_line": 221,
       "stop_column": 14,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -697,9 +673,9 @@
       "severity": "error"
     },
     {
-      "line": 216,
+      "line": 220,
       "column": 17,
-      "stop_line": 216,
+      "stop_line": 220,
       "stop_column": 78,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -709,9 +685,9 @@
       "severity": "error"
     },
     {
-      "line": 216,
+      "line": 220,
       "column": 17,
-      "stop_line": 216,
+      "stop_line": 220,
       "stop_column": 78,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -721,9 +697,9 @@
       "severity": "error"
     },
     {
-      "line": 216,
+      "line": 220,
       "column": 17,
-      "stop_line": 216,
+      "stop_line": 220,
       "stop_column": 78,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -733,9 +709,9 @@
       "severity": "error"
     },
     {
-      "line": 216,
+      "line": 220,
       "column": 17,
-      "stop_line": 216,
+      "stop_line": 220,
       "stop_column": 78,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -745,9 +721,9 @@
       "severity": "error"
     },
     {
-      "line": 216,
+      "line": 220,
       "column": 17,
-      "stop_line": 216,
+      "stop_line": 220,
       "stop_column": 78,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -757,9 +733,9 @@
       "severity": "error"
     },
     {
-      "line": 216,
+      "line": 220,
       "column": 17,
-      "stop_line": 216,
+      "stop_line": 220,
       "stop_column": 78,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -769,9 +745,9 @@
       "severity": "error"
     },
     {
-      "line": 216,
+      "line": 220,
       "column": 17,
-      "stop_line": 216,
+      "stop_line": 220,
       "stop_column": 78,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -781,9 +757,9 @@
       "severity": "error"
     },
     {
-      "line": 216,
+      "line": 220,
       "column": 17,
-      "stop_line": 216,
+      "stop_line": 220,
       "stop_column": 78,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -793,9 +769,9 @@
       "severity": "error"
     },
     {
-      "line": 216,
+      "line": 220,
       "column": 62,
-      "stop_line": 216,
+      "stop_line": 220,
       "stop_column": 77,
       "path": "litehive/agents/sandbox_support.py",
       "code": -2,
@@ -868,42 +844,18 @@
       "line": 159,
       "column": 42,
       "stop_line": 159,
-      "stop_column": 51,
+      "stop_column": 56,
       "path": "litehive/agents/session.py",
       "code": -2,
       "name": "missing-attribute",
-      "description": "Object of class `SessionMixin` has no attribute `root`",
-      "concise_description": "Object of class `SessionMixin` has no attribute `root`",
+      "description": "Object of class `SessionMixin` has no attribute `workspace`",
+      "concise_description": "Object of class `SessionMixin` has no attribute `workspace`",
       "severity": "error"
     },
     {
-      "line": 163,
+      "line": 167,
       "column": 13,
-      "stop_line": 163,
-      "stop_column": 22,
-      "path": "litehive/agents/session.py",
-      "code": -2,
-      "name": "missing-attribute",
-      "description": "Object of class `SessionMixin` has no attribute `root`",
-      "concise_description": "Object of class `SessionMixin` has no attribute `root`",
-      "severity": "error"
-    },
-    {
-      "line": 192,
-      "column": 27,
-      "stop_line": 192,
-      "stop_column": 36,
-      "path": "litehive/agents/session.py",
-      "code": -2,
-      "name": "missing-attribute",
-      "description": "Object of class `SessionMixin` has no attribute `root`",
-      "concise_description": "Object of class `SessionMixin` has no attribute `root`",
-      "severity": "error"
-    },
-    {
-      "line": 202,
-      "column": 13,
-      "stop_line": 202,
+      "stop_line": 167,
       "stop_column": 27,
       "path": "litehive/agents/session.py",
       "code": -2,
@@ -913,9 +865,33 @@
       "severity": "error"
     },
     {
-      "line": 217,
+      "line": 196,
+      "column": 27,
+      "stop_line": 196,
+      "stop_column": 36,
+      "path": "litehive/agents/session.py",
+      "code": -2,
+      "name": "missing-attribute",
+      "description": "Object of class `SessionMixin` has no attribute `root`",
+      "concise_description": "Object of class `SessionMixin` has no attribute `root`",
+      "severity": "error"
+    },
+    {
+      "line": 206,
+      "column": 13,
+      "stop_line": 206,
+      "stop_column": 27,
+      "path": "litehive/agents/session.py",
+      "code": -2,
+      "name": "missing-attribute",
+      "description": "Object of class `SessionMixin` has no attribute `workspace`",
+      "concise_description": "Object of class `SessionMixin` has no attribute `workspace`",
+      "severity": "error"
+    },
+    {
+      "line": 221,
       "column": 16,
-      "stop_line": 217,
+      "stop_line": 221,
       "stop_column": 27,
       "path": "litehive/agents/session.py",
       "code": -2,
@@ -925,21 +901,21 @@
       "severity": "error"
     },
     {
-      "line": 289,
+      "line": 293,
       "column": 13,
-      "stop_line": 289,
-      "stop_column": 22,
+      "stop_line": 293,
+      "stop_column": 27,
       "path": "litehive/agents/session.py",
       "code": -2,
       "name": "missing-attribute",
-      "description": "Object of class `SessionMixin` has no attribute `root`",
-      "concise_description": "Object of class `SessionMixin` has no attribute `root`",
+      "description": "Object of class `SessionMixin` has no attribute `workspace`",
+      "concise_description": "Object of class `SessionMixin` has no attribute `workspace`",
       "severity": "error"
     },
     {
-      "line": 317,
+      "line": 321,
       "column": 28,
-      "stop_line": 317,
+      "stop_line": 321,
       "stop_column": 40,
       "path": "litehive/agents/session.py",
       "code": -2,
@@ -949,27 +925,27 @@
       "severity": "error"
     },
     {
-      "line": 318,
+      "line": 322,
       "column": 42,
-      "stop_line": 318,
-      "stop_column": 51,
+      "stop_line": 322,
+      "stop_column": 56,
       "path": "litehive/agents/session.py",
       "code": -2,
       "name": "missing-attribute",
-      "description": "Object of class `SessionMixin` has no attribute `root`",
-      "concise_description": "Object of class `SessionMixin` has no attribute `root`",
+      "description": "Object of class `SessionMixin` has no attribute `workspace`",
+      "concise_description": "Object of class `SessionMixin` has no attribute `workspace`",
       "severity": "error"
     },
     {
-      "line": 322,
+      "line": 330,
       "column": 13,
-      "stop_line": 322,
-      "stop_column": 22,
+      "stop_line": 330,
+      "stop_column": 27,
       "path": "litehive/agents/session.py",
       "code": -2,
       "name": "missing-attribute",
-      "description": "Object of class `SessionMixin` has no attribute `root`",
-      "concise_description": "Object of class `SessionMixin` has no attribute `root`",
+      "description": "Object of class `SessionMixin` has no attribute `workspace`",
+      "concise_description": "Object of class `SessionMixin` has no attribute `workspace`",
       "severity": "error"
     },
     {
@@ -997,9 +973,9 @@
       "severity": "error"
     },
     {
-      "line": 64,
+      "line": 68,
       "column": 13,
-      "stop_line": 64,
+      "stop_line": 68,
       "stop_column": 17,
       "path": "litehive/cli/engine.py",
       "code": -2,
@@ -1009,9 +985,9 @@
       "severity": "error"
     },
     {
-      "line": 105,
+      "line": 121,
       "column": 25,
-      "stop_line": 105,
+      "stop_line": 121,
       "stop_column": 29,
       "path": "litehive/cli/engine.py",
       "code": -2,
@@ -1021,9 +997,9 @@
       "severity": "error"
     },
     {
-      "line": 115,
+      "line": 135,
       "column": 21,
-      "stop_line": 115,
+      "stop_line": 135,
       "stop_column": 25,
       "path": "litehive/cli/engine.py",
       "code": -2,
@@ -1033,9 +1009,9 @@
       "severity": "error"
     },
     {
-      "line": 253,
+      "line": 261,
       "column": 83,
-      "stop_line": 253,
+      "stop_line": 261,
       "stop_column": 86,
       "path": "litehive/cli/queue_cli.py",
       "code": -2,
@@ -1045,9 +1021,9 @@
       "severity": "error"
     },
     {
-      "line": 369,
+      "line": 385,
       "column": 9,
-      "stop_line": 369,
+      "stop_line": 385,
       "stop_column": 12,
       "path": "litehive/cli/runner.py",
       "code": -2,
@@ -1057,9 +1033,9 @@
       "severity": "error"
     },
     {
-      "line": 98,
+      "line": 102,
       "column": 22,
-      "stop_line": 98,
+      "stop_line": 102,
       "stop_column": 54,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1069,9 +1045,9 @@
       "severity": "error"
     },
     {
-      "line": 99,
+      "line": 103,
       "column": 31,
-      "stop_line": 99,
+      "stop_line": 103,
       "stop_column": 77,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1081,9 +1057,9 @@
       "severity": "error"
     },
     {
-      "line": 286,
+      "line": 306,
       "column": 9,
-      "stop_line": 286,
+      "stop_line": 306,
       "stop_column": 12,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1093,9 +1069,9 @@
       "severity": "error"
     },
     {
-      "line": 363,
+      "line": 383,
       "column": 22,
-      "stop_line": 363,
+      "stop_line": 383,
       "stop_column": 98,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1105,9 +1081,9 @@
       "severity": "error"
     },
     {
-      "line": 364,
+      "line": 384,
       "column": 31,
-      "stop_line": 364,
+      "stop_line": 384,
       "stop_column": 95,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1117,9 +1093,9 @@
       "severity": "error"
     },
     {
-      "line": 365,
+      "line": 385,
       "column": 23,
-      "stop_line": 365,
+      "stop_line": 385,
       "stop_column": 103,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1129,9 +1105,9 @@
       "severity": "error"
     },
     {
-      "line": 366,
+      "line": 386,
       "column": 16,
-      "stop_line": 366,
+      "stop_line": 386,
       "stop_column": 82,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1141,9 +1117,9 @@
       "severity": "error"
     },
     {
-      "line": 378,
+      "line": 410,
       "column": 13,
-      "stop_line": 378,
+      "stop_line": 410,
       "stop_column": 28,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1153,9 +1129,9 @@
       "severity": "error"
     },
     {
-      "line": 378,
+      "line": 410,
       "column": 13,
-      "stop_line": 378,
+      "stop_line": 410,
       "stop_column": 28,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1165,9 +1141,9 @@
       "severity": "error"
     },
     {
-      "line": 378,
+      "line": 410,
       "column": 13,
-      "stop_line": 378,
+      "stop_line": 410,
       "stop_column": 28,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1177,9 +1153,9 @@
       "severity": "error"
     },
     {
-      "line": 378,
+      "line": 410,
       "column": 13,
-      "stop_line": 378,
+      "stop_line": 410,
       "stop_column": 28,
       "path": "litehive/cli/task_cli.py",
       "code": -2,
@@ -1189,9 +1165,9 @@
       "severity": "error"
     },
     {
-      "line": 61,
+      "line": 62,
       "column": 12,
-      "stop_line": 61,
+      "stop_line": 62,
       "stop_column": 24,
       "path": "litehive/cli/task_debug_support.py",
       "code": -2,
@@ -1201,9 +1177,9 @@
       "severity": "error"
     },
     {
-      "line": 169,
+      "line": 181,
       "column": 48,
-      "stop_line": 169,
+      "stop_line": 181,
       "stop_column": 72,
       "path": "litehive/cli/task_debug_support.py",
       "code": -2,
@@ -1213,9 +1189,9 @@
       "severity": "error"
     },
     {
-      "line": 84,
+      "line": 85,
       "column": 37,
-      "stop_line": 84,
+      "stop_line": 85,
       "stop_column": 47,
       "path": "litehive/cli/task_logs_support.py",
       "code": -2,
@@ -1225,27 +1201,15 @@
       "severity": "error"
     },
     {
-      "line": 84,
+      "line": 85,
       "column": 49,
-      "stop_line": 84,
+      "stop_line": 85,
       "stop_column": 61,
       "path": "litehive/cli/task_logs_support.py",
       "code": -2,
       "name": "bad-argument-type",
       "description": "Argument `object | Any | None` is not assignable to parameter `completed_at` with type `datetime | str | None` in function `_format_duration`",
       "concise_description": "Argument `object | Any | None` is not assignable to parameter `completed_at` with type `datetime | str | None` in function `_format_duration`",
-      "severity": "error"
-    },
-    {
-      "line": 106,
-      "column": 13,
-      "stop_line": 106,
-      "stop_column": 25,
-      "path": "litehive/cli/task_logs_support.py",
-      "code": -2,
-      "name": "missing-attribute",
-      "description": "Object of class `object` has no attribute `runtime`",
-      "concise_description": "Object of class `object` has no attribute `runtime`",
       "severity": "error"
     },
     {
@@ -1261,9 +1225,21 @@
       "severity": "error"
     },
     {
-      "line": 113,
+      "line": 108,
+      "column": 13,
+      "stop_line": 108,
+      "stop_column": 25,
+      "path": "litehive/cli/task_logs_support.py",
+      "code": -2,
+      "name": "missing-attribute",
+      "description": "Object of class `object` has no attribute `runtime`",
+      "concise_description": "Object of class `object` has no attribute `runtime`",
+      "severity": "error"
+    },
+    {
+      "line": 114,
       "column": 22,
-      "stop_line": 113,
+      "stop_line": 114,
       "stop_column": 29,
       "path": "litehive/cli/task_logs_support.py",
       "code": -2,
@@ -1273,9 +1249,9 @@
       "severity": "error"
     },
     {
-      "line": 116,
+      "line": 117,
       "column": 27,
-      "stop_line": 116,
+      "stop_line": 117,
       "stop_column": 31,
       "path": "litehive/cli/task_logs_support.py",
       "code": -2,
@@ -1285,9 +1261,9 @@
       "severity": "error"
     },
     {
-      "line": 131,
+      "line": 132,
       "column": 28,
-      "stop_line": 131,
+      "stop_line": 132,
       "stop_column": 40,
       "path": "litehive/cli/task_logs_support.py",
       "code": -2,
@@ -1297,9 +1273,9 @@
       "severity": "error"
     },
     {
-      "line": 134,
+      "line": 135,
       "column": 12,
-      "stop_line": 134,
+      "stop_line": 135,
       "stop_column": 19,
       "path": "litehive/cli/task_logs_support.py",
       "code": -2,
@@ -1309,9 +1285,9 @@
       "severity": "error"
     },
     {
-      "line": 134,
+      "line": 135,
       "column": 41,
-      "stop_line": 134,
+      "stop_line": 135,
       "stop_column": 53,
       "path": "litehive/cli/task_logs_support.py",
       "code": -2,
@@ -1321,9 +1297,9 @@
       "severity": "error"
     },
     {
-      "line": 137,
+      "line": 138,
       "column": 12,
-      "stop_line": 137,
+      "stop_line": 138,
       "stop_column": 24,
       "path": "litehive/cli/task_logs_support.py",
       "code": -2,
@@ -1333,9 +1309,9 @@
       "severity": "error"
     },
     {
-      "line": 304,
+      "line": 320,
       "column": 35,
-      "stop_line": 304,
+      "stop_line": 320,
       "stop_column": 41,
       "path": "litehive/cli/workspace.py",
       "code": -2,
@@ -1345,9 +1321,9 @@
       "severity": "error"
     },
     {
-      "line": 71,
+      "line": 79,
       "column": 9,
-      "stop_line": 71,
+      "stop_line": 79,
       "stop_column": 22,
       "path": "litehive/cli/worktree_cli.py",
       "code": -2,
@@ -1357,9 +1333,9 @@
       "severity": "error"
     },
     {
-      "line": 185,
+      "line": 193,
       "column": 35,
-      "stop_line": 185,
+      "stop_line": 193,
       "stop_column": 41,
       "path": "litehive/config/engine_models.py",
       "code": -2,
@@ -1381,9 +1357,9 @@
       "severity": "error"
     },
     {
-      "line": 347,
+      "line": 353,
       "column": 48,
-      "stop_line": 347,
+      "stop_line": 353,
       "stop_column": 81,
       "path": "litehive/config/model.py",
       "code": -2,
@@ -1393,9 +1369,9 @@
       "severity": "error"
     },
     {
-      "line": 353,
+      "line": 359,
       "column": 46,
-      "stop_line": 353,
+      "stop_line": 359,
       "stop_column": 85,
       "path": "litehive/config/model.py",
       "code": -2,
@@ -1405,9 +1381,9 @@
       "severity": "error"
     },
     {
-      "line": 355,
+      "line": 361,
       "column": 59,
-      "stop_line": 355,
+      "stop_line": 361,
       "stop_column": 95,
       "path": "litehive/config/model.py",
       "code": -2,
@@ -1417,9 +1393,9 @@
       "severity": "error"
     },
     {
-      "line": 356,
+      "line": 362,
       "column": 59,
-      "stop_line": 356,
+      "stop_line": 362,
       "stop_column": 95,
       "path": "litehive/config/model.py",
       "code": -2,
@@ -1429,9 +1405,9 @@
       "severity": "error"
     },
     {
-      "line": 357,
+      "line": 363,
       "column": 60,
-      "stop_line": 357,
+      "stop_line": 363,
       "stop_column": 98,
       "path": "litehive/config/model.py",
       "code": -2,
@@ -1441,9 +1417,9 @@
       "severity": "error"
     },
     {
-      "line": 393,
+      "line": 399,
       "column": 49,
-      "stop_line": 393,
+      "stop_line": 399,
       "stop_column": 83,
       "path": "litehive/config/model.py",
       "code": -2,
@@ -1453,9 +1429,9 @@
       "severity": "error"
     },
     {
-      "line": 399,
+      "line": 405,
       "column": 42,
-      "stop_line": 399,
+      "stop_line": 405,
       "stop_column": 75,
       "path": "litehive/config/model.py",
       "code": -2,
@@ -1465,9 +1441,9 @@
       "severity": "error"
     },
     {
-      "line": 405,
+      "line": 411,
       "column": 48,
-      "stop_line": 405,
+      "stop_line": 411,
       "stop_column": 87,
       "path": "litehive/config/model.py",
       "code": -2,
@@ -1477,33 +1453,33 @@
       "severity": "error"
     },
     {
-      "line": 352,
+      "line": 363,
       "column": 29,
-      "stop_line": 352,
+      "stop_line": 363,
       "stop_column": 44,
       "path": "litehive/domain/lifecycle_deltas.py",
       "code": -2,
       "name": "bad-argument-type",
       "description": "Argument `Literal[TaskStage.ACCEPTING, TaskStage.TESTING]` is not assignable to parameter `rejection_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
       "concise_description": "Argument `Literal[TaskStage.ACCEPTING, TaskStage.TESTING]` is not assignable to parameter `rejection_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
-      "severity": "error"
-    },
-    {
-      "line": 353,
-      "column": 32,
-      "stop_line": 353,
-      "stop_column": 44,
-      "path": "litehive/domain/lifecycle_deltas.py",
-      "code": -2,
-      "name": "bad-argument-type",
-      "description": "Argument `Literal[TaskStage.IMPLEMENTING]` is not assignable to parameter `retry_target_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
-      "concise_description": "Argument `Literal[TaskStage.IMPLEMENTING]` is not assignable to parameter `retry_target_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
       "severity": "error"
     },
     {
       "line": 364,
-      "column": 25,
+      "column": 32,
       "stop_line": 364,
+      "stop_column": 44,
+      "path": "litehive/domain/lifecycle_deltas.py",
+      "code": -2,
+      "name": "bad-argument-type",
+      "description": "Argument `Literal[TaskStage.IMPLEMENTING]` is not assignable to parameter `retry_target_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
+      "concise_description": "Argument `Literal[TaskStage.IMPLEMENTING]` is not assignable to parameter `retry_target_stage` with type `PipelineState` in function `litehive.lifecycle.persistence.RejectionLoop.__init__`",
+      "severity": "error"
+    },
+    {
+      "line": 375,
+      "column": 25,
+      "stop_line": 375,
       "stop_column": 40,
       "path": "litehive/domain/lifecycle_deltas.py",
       "code": -2,
@@ -1513,9 +1489,9 @@
       "severity": "error"
     },
     {
-      "line": 365,
+      "line": 376,
       "column": 28,
-      "stop_line": 365,
+      "stop_line": 376,
       "stop_column": 40,
       "path": "litehive/domain/lifecycle_deltas.py",
       "code": -2,
@@ -1525,9 +1501,9 @@
       "severity": "error"
     },
     {
-      "line": 443,
+      "line": 458,
       "column": 16,
-      "stop_line": 443,
+      "stop_line": 458,
       "stop_column": 19,
       "path": "litehive/domain/lifecycle_deltas.py",
       "code": -2,
@@ -1537,9 +1513,9 @@
       "severity": "error"
     },
     {
-      "line": 444,
+      "line": 459,
       "column": 12,
-      "stop_line": 444,
+      "stop_line": 459,
       "stop_column": 24,
       "path": "litehive/domain/lifecycle_deltas.py",
       "code": -2,
@@ -1573,9 +1549,9 @@
       "severity": "error"
     },
     {
-      "line": 215,
+      "line": 219,
       "column": 25,
-      "stop_line": 215,
+      "stop_line": 219,
       "stop_column": 39,
       "path": "litehive/lifecycle/heru_factory.py",
       "code": -2,
@@ -1585,9 +1561,9 @@
       "severity": "error"
     },
     {
-      "line": 569,
+      "line": 574,
       "column": 13,
-      "stop_line": 569,
+      "stop_line": 574,
       "stop_column": 21,
       "path": "litehive/lifecycle/heru_factory.py",
       "code": -2,
@@ -1597,9 +1573,9 @@
       "severity": "error"
     },
     {
-      "line": 689,
+      "line": 694,
       "column": 20,
-      "stop_line": 689,
+      "stop_line": 694,
       "stop_column": 28,
       "path": "litehive/lifecycle/heru_factory.py",
       "code": -2,
@@ -1621,9 +1597,9 @@
       "severity": "error"
     },
     {
-      "line": 194,
+      "line": 205,
       "column": 35,
-      "stop_line": 194,
+      "stop_line": 205,
       "stop_column": 57,
       "path": "litehive/lifecycle/nodes/system.py",
       "code": -2,
@@ -1633,9 +1609,9 @@
       "severity": "error"
     },
     {
-      "line": 223,
+      "line": 235,
       "column": 26,
-      "stop_line": 223,
+      "stop_line": 235,
       "stop_column": 47,
       "path": "litehive/lifecycle/nodes/system.py",
       "code": -2,
@@ -1645,9 +1621,9 @@
       "severity": "error"
     },
     {
-      "line": 242,
+      "line": 257,
       "column": 54,
-      "stop_line": 242,
+      "stop_line": 257,
       "stop_column": 66,
       "path": "litehive/lifecycle/nodes/system.py",
       "code": -2,
@@ -1657,9 +1633,9 @@
       "severity": "error"
     },
     {
-      "line": 263,
+      "line": 279,
       "column": 26,
-      "stop_line": 263,
+      "stop_line": 279,
       "stop_column": 34,
       "path": "litehive/lifecycle/nodes/system.py",
       "code": -2,
@@ -1705,9 +1681,9 @@
       "severity": "error"
     },
     {
-      "line": 238,
+      "line": 242,
       "column": 19,
-      "stop_line": 238,
+      "stop_line": 242,
       "stop_column": 50,
       "path": "litehive/lifecycle/persistence.py",
       "code": -2,
@@ -1717,27 +1693,15 @@
       "severity": "error"
     },
     {
-      "line": 79,
+      "line": 85,
       "column": 30,
-      "stop_line": 79,
+      "stop_line": 85,
       "stop_column": 36,
       "path": "litehive/lifecycle/rules.py",
       "code": -2,
       "name": "bad-argument-type",
       "description": "Argument `str | Unknown` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
       "concise_description": "Argument `str | Unknown` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
-      "severity": "error"
-    },
-    {
-      "line": 116,
-      "column": 26,
-      "stop_line": 116,
-      "stop_column": 52,
-      "path": "litehive/lifecycle/rules.py",
-      "code": -2,
-      "name": "bad-argument-type",
-      "description": "Argument `Literal['pre_exec_recovery_failed']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
-      "concise_description": "Argument `Literal['pre_exec_recovery_failed']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
       "severity": "error"
     },
     {
@@ -1756,12 +1720,12 @@
       "line": 128,
       "column": 26,
       "stop_line": 128,
-      "stop_column": 44,
+      "stop_column": 52,
       "path": "litehive/lifecycle/rules.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `Literal['recovery_crashed']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
-      "concise_description": "Argument `Literal['recovery_crashed']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
+      "description": "Argument `Literal['pre_exec_recovery_failed']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
+      "concise_description": "Argument `Literal['pre_exec_recovery_failed']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
       "severity": "error"
     },
     {
@@ -1777,15 +1741,15 @@
       "severity": "error"
     },
     {
-      "line": 284,
+      "line": 140,
       "column": 26,
-      "stop_line": 284,
-      "stop_column": 47,
+      "stop_line": 140,
+      "stop_column": 44,
       "path": "litehive/lifecycle/rules.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `Literal['unrecoverable_error']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
-      "concise_description": "Argument `Literal['unrecoverable_error']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
+      "description": "Argument `Literal['recovery_crashed']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
+      "concise_description": "Argument `Literal['recovery_crashed']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
       "severity": "error"
     },
     {
@@ -1804,12 +1768,12 @@
       "line": 296,
       "column": 26,
       "stop_line": 296,
-      "stop_column": 48,
+      "stop_column": 47,
       "path": "litehive/lifecycle/rules.py",
       "code": -2,
       "name": "bad-argument-type",
-      "description": "Argument `Literal['time_budget_exceeded']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
-      "concise_description": "Argument `Literal['time_budget_exceeded']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
+      "description": "Argument `Literal['unrecoverable_error']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
+      "concise_description": "Argument `Literal['unrecoverable_error']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
       "severity": "error"
     },
     {
@@ -1825,9 +1789,21 @@
       "severity": "error"
     },
     {
-      "line": 316,
+      "line": 308,
       "column": 26,
-      "stop_line": 316,
+      "stop_line": 308,
+      "stop_column": 48,
+      "path": "litehive/lifecycle/rules.py",
+      "code": -2,
+      "name": "bad-argument-type",
+      "description": "Argument `Literal['time_budget_exceeded']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
+      "concise_description": "Argument `Literal['time_budget_exceeded']` is not assignable to parameter `reason` with type `FailedReason` in function `litehive.domain.lifecycle_deltas.fail.__init__`",
+      "severity": "error"
+    },
+    {
+      "line": 322,
+      "column": 26,
+      "stop_line": 322,
       "stop_column": 57,
       "path": "litehive/lifecycle/rules.py",
       "code": -2,
@@ -1837,9 +1813,9 @@
       "severity": "error"
     },
     {
-      "line": 322,
+      "line": 328,
       "column": 26,
-      "stop_line": 322,
+      "stop_line": 328,
       "stop_column": 46,
       "path": "litehive/lifecycle/rules.py",
       "code": -2,
@@ -1849,9 +1825,9 @@
       "severity": "error"
     },
     {
-      "line": 328,
+      "line": 334,
       "column": 26,
-      "stop_line": 328,
+      "stop_line": 334,
       "stop_column": 47,
       "path": "litehive/lifecycle/rules.py",
       "code": -2,
@@ -1861,9 +1837,9 @@
       "severity": "error"
     },
     {
-      "line": 334,
+      "line": 340,
       "column": 26,
-      "stop_line": 334,
+      "stop_line": 340,
       "stop_column": 44,
       "path": "litehive/lifecycle/rules.py",
       "code": -2,
@@ -1873,9 +1849,9 @@
       "severity": "error"
     },
     {
-      "line": 340,
+      "line": 346,
       "column": 26,
-      "stop_line": 340,
+      "stop_line": 346,
       "stop_column": 44,
       "path": "litehive/lifecycle/rules.py",
       "code": -2,
@@ -1897,9 +1873,9 @@
       "severity": "error"
     },
     {
-      "line": 274,
+      "line": 275,
       "column": 9,
-      "stop_line": 274,
+      "stop_line": 275,
       "stop_column": 27,
       "path": "litehive/lifecycle/runtime_sync.py",
       "code": -2,
@@ -1909,9 +1885,9 @@
       "severity": "error"
     },
     {
-      "line": 275,
+      "line": 276,
       "column": 12,
-      "stop_line": 275,
+      "stop_line": 276,
       "stop_column": 39,
       "path": "litehive/lifecycle/runtime_sync.py",
       "code": -2,
@@ -1921,10 +1897,10 @@
       "severity": "error"
     },
     {
-      "line": 338,
-      "column": 16,
-      "stop_line": 338,
-      "stop_column": 95,
+      "line": 353,
+      "column": 15,
+      "stop_line": 353,
+      "stop_column": 28,
       "path": "litehive/lifecycle/runtime_sync.py",
       "code": -2,
       "name": "bad-argument-type",
@@ -1933,9 +1909,9 @@
       "severity": "error"
     },
     {
-      "line": 122,
+      "line": 146,
       "column": 33,
-      "stop_line": 122,
+      "stop_line": 146,
       "stop_column": 53,
       "path": "litehive/lifecycle/transitions.py",
       "code": -2,
@@ -1945,9 +1921,9 @@
       "severity": "error"
     },
     {
-      "line": 144,
+      "line": 168,
       "column": 29,
-      "stop_line": 144,
+      "stop_line": 168,
       "stop_column": 46,
       "path": "litehive/lifecycle/transitions.py",
       "code": -2,
@@ -1957,9 +1933,9 @@
       "severity": "error"
     },
     {
-      "line": 211,
+      "line": 235,
       "column": 34,
-      "stop_line": 211,
+      "stop_line": 235,
       "stop_column": 50,
       "path": "litehive/lifecycle/transitions.py",
       "code": -2,
@@ -1969,9 +1945,9 @@
       "severity": "error"
     },
     {
-      "line": 90,
+      "line": 97,
       "column": 21,
-      "stop_line": 90,
+      "stop_line": 97,
       "stop_column": 32,
       "path": "litehive/observability/engine_monitoring.py",
       "code": -2,
@@ -1981,9 +1957,9 @@
       "severity": "error"
     },
     {
-      "line": 112,
+      "line": 122,
       "column": 9,
-      "stop_line": 112,
+      "stop_line": 122,
       "stop_column": 26,
       "path": "litehive/observability/engine_monitoring.py",
       "code": -2,
@@ -1993,9 +1969,9 @@
       "severity": "error"
     },
     {
-      "line": 113,
+      "line": 123,
       "column": 13,
-      "stop_line": 113,
+      "stop_line": 123,
       "stop_column": 37,
       "path": "litehive/observability/engine_monitoring.py",
       "code": -2,
@@ -2005,9 +1981,9 @@
       "severity": "error"
     },
     {
-      "line": 114,
+      "line": 124,
       "column": 17,
-      "stop_line": 114,
+      "stop_line": 124,
       "stop_column": 37,
       "path": "litehive/observability/engine_monitoring.py",
       "code": -2,
@@ -2017,9 +1993,9 @@
       "severity": "error"
     },
     {
-      "line": 115,
+      "line": 125,
       "column": 13,
-      "stop_line": 115,
+      "stop_line": 125,
       "stop_column": 33,
       "path": "litehive/observability/engine_monitoring.py",
       "code": -2,
@@ -2029,9 +2005,9 @@
       "severity": "error"
     },
     {
-      "line": 123,
+      "line": 133,
       "column": 21,
-      "stop_line": 123,
+      "stop_line": 133,
       "stop_column": 32,
       "path": "litehive/observability/engine_monitoring.py",
       "code": -2,
@@ -2041,9 +2017,9 @@
       "severity": "error"
     },
     {
-      "line": 170,
+      "line": 181,
       "column": 34,
-      "stop_line": 170,
+      "stop_line": 181,
       "stop_column": 44,
       "path": "litehive/observability/engine_monitoring.py",
       "code": -2,
@@ -2197,9 +2173,9 @@
       "severity": "error"
     },
     {
-      "line": 158,
+      "line": 162,
       "column": 45,
-      "stop_line": 158,
+      "stop_line": 162,
       "stop_column": 51,
       "path": "litehive/roles/recovery.py",
       "code": -2,
@@ -2209,9 +2185,9 @@
       "severity": "error"
     },
     {
-      "line": 163,
+      "line": 167,
       "column": 45,
-      "stop_line": 163,
+      "stop_line": 167,
       "stop_column": 51,
       "path": "litehive/roles/recovery.py",
       "code": -2,
@@ -2305,9 +2281,9 @@
       "severity": "error"
     },
     {
-      "line": 250,
+      "line": 256,
       "column": 25,
-      "stop_line": 250,
+      "stop_line": 256,
       "stop_column": 28,
       "path": "litehive/state/locking.py",
       "code": -2,
@@ -2317,9 +2293,9 @@
       "severity": "error"
     },
     {
-      "line": 390,
+      "line": 396,
       "column": 41,
-      "stop_line": 390,
+      "stop_line": 396,
       "stop_column": 47,
       "path": "litehive/state/locking.py",
       "code": -2,
@@ -2329,9 +2305,9 @@
       "severity": "error"
     },
     {
-      "line": 91,
+      "line": 98,
       "column": 37,
-      "stop_line": 91,
+      "stop_line": 98,
       "stop_column": 45,
       "path": "litehive/state/persist.py",
       "code": -2,
@@ -2341,9 +2317,9 @@
       "severity": "error"
     },
     {
-      "line": 111,
+      "line": 118,
       "column": 37,
-      "stop_line": 111,
+      "stop_line": 118,
       "stop_column": 45,
       "path": "litehive/state/persist.py",
       "code": -2,
@@ -2353,9 +2329,9 @@
       "severity": "error"
     },
     {
-      "line": 99,
+      "line": 106,
       "column": 28,
-      "stop_line": 99,
+      "stop_line": 106,
       "stop_column": 35,
       "path": "litehive/state/process_lock.py",
       "code": -2,
@@ -2365,9 +2341,9 @@
       "severity": "error"
     },
     {
-      "line": 100,
+      "line": 107,
       "column": 16,
-      "stop_line": 100,
+      "stop_line": 107,
       "stop_column": 24,
       "path": "litehive/state/process_lock.py",
       "code": -2,
@@ -2377,9 +2353,9 @@
       "severity": "error"
     },
     {
-      "line": 738,
+      "line": 753,
       "column": 20,
-      "stop_line": 738,
+      "stop_line": 753,
       "stop_column": 25,
       "path": "litehive/state/store.py",
       "code": -2,
@@ -2389,10 +2365,10 @@
       "severity": "error"
     },
     {
-      "line": 127,
+      "line": 145,
       "column": 28,
-      "stop_line": 127,
-      "stop_column": 115,
+      "stop_line": 145,
+      "stop_column": 71,
       "path": "litehive/tasks/_status_helpers.py",
       "code": -2,
       "name": "bad-assignment",
@@ -2401,9 +2377,9 @@
       "severity": "error"
     },
     {
-      "line": 669,
+      "line": 692,
       "column": 16,
-      "stop_line": 669,
+      "stop_line": 692,
       "stop_column": 21,
       "path": "litehive/tasks/event_log.py",
       "code": -2,
@@ -2425,9 +2401,9 @@
       "severity": "error"
     },
     {
-      "line": 192,
+      "line": 197,
       "column": 19,
-      "stop_line": 192,
+      "stop_line": 197,
       "stop_column": 25,
       "path": "litehive/tasks/queue_mutations.py",
       "code": -2,
@@ -2437,9 +2413,9 @@
       "severity": "error"
     },
     {
-      "line": 195,
+      "line": 200,
       "column": 28,
-      "stop_line": 195,
+      "stop_line": 200,
       "stop_column": 43,
       "path": "litehive/tasks/queue_mutations.py",
       "code": -2,
@@ -2449,9 +2425,9 @@
       "severity": "error"
     },
     {
-      "line": 203,
+      "line": 208,
       "column": 52,
-      "stop_line": 203,
+      "stop_line": 208,
       "stop_column": 67,
       "path": "litehive/tasks/queue_mutations.py",
       "code": -2,
@@ -2461,9 +2437,9 @@
       "severity": "error"
     },
     {
-      "line": 261,
+      "line": 273,
       "column": 28,
-      "stop_line": 261,
+      "stop_line": 273,
       "stop_column": 40,
       "path": "litehive/tasks/queue_mutations.py",
       "code": -2,
@@ -2473,9 +2449,9 @@
       "severity": "error"
     },
     {
-      "line": 264,
+      "line": 276,
       "column": 52,
-      "stop_line": 264,
+      "stop_line": 276,
       "stop_column": 64,
       "path": "litehive/tasks/queue_mutations.py",
       "code": -2,
@@ -2485,9 +2461,9 @@
       "severity": "error"
     },
     {
-      "line": 85,
+      "line": 92,
       "column": 56,
-      "stop_line": 85,
+      "stop_line": 92,
       "stop_column": 65,
       "path": "litehive/tasks/queue_selection.py",
       "code": -2,
@@ -2497,9 +2473,9 @@
       "severity": "error"
     },
     {
-      "line": 410,
+      "line": 449,
       "column": 13,
-      "stop_line": 418,
+      "stop_line": 457,
       "stop_column": 14,
       "path": "litehive/tasks/queue_selection.py",
       "code": -2,
@@ -2509,9 +2485,9 @@
       "severity": "error"
     },
     {
-      "line": 531,
+      "line": 570,
       "column": 27,
-      "stop_line": 531,
+      "stop_line": 570,
       "stop_column": 61,
       "path": "litehive/tasks/queue_selection.py",
       "code": -2,
@@ -2521,10 +2497,10 @@
       "severity": "error"
     },
     {
-      "line": 136,
-      "column": 17,
-      "stop_line": 136,
-      "stop_column": 34,
+      "line": 154,
+      "column": 24,
+      "stop_line": 154,
+      "stop_column": 41,
       "path": "litehive/tasks/recovery_evidence.py",
       "code": -2,
       "name": "missing-attribute",
@@ -2725,9 +2701,9 @@
       "severity": "error"
     },
     {
-      "line": 169,
+      "line": 171,
       "column": 36,
-      "stop_line": 169,
+      "stop_line": 171,
       "stop_column": 49,
       "path": "litehive/tasks/status_resume.py",
       "code": -2,
@@ -2737,9 +2713,9 @@
       "severity": "error"
     },
     {
-      "line": 115,
+      "line": 119,
       "column": 79,
-      "stop_line": 115,
+      "stop_line": 119,
       "stop_column": 89,
       "path": "litehive/tasks/status_update.py",
       "code": -2,
@@ -2749,9 +2725,9 @@
       "severity": "error"
     },
     {
-      "line": 116,
+      "line": 120,
       "column": 36,
-      "stop_line": 116,
+      "stop_line": 120,
       "stop_column": 46,
       "path": "litehive/tasks/status_update.py",
       "code": -2,
@@ -2761,9 +2737,9 @@
       "severity": "error"
     },
     {
-      "line": 123,
+      "line": 127,
       "column": 26,
-      "stop_line": 123,
+      "stop_line": 127,
       "stop_column": 31,
       "path": "litehive/tasks/status_update.py",
       "code": -2,
@@ -2773,9 +2749,9 @@
       "severity": "error"
     },
     {
-      "line": 126,
+      "line": 130,
       "column": 44,
-      "stop_line": 126,
+      "stop_line": 130,
       "stop_column": 59,
       "path": "litehive/tasks/status_update.py",
       "code": -2,
@@ -2785,9 +2761,9 @@
       "severity": "error"
     },
     {
-      "line": 128,
+      "line": 132,
       "column": 45,
-      "stop_line": 128,
+      "stop_line": 132,
       "stop_column": 56,
       "path": "litehive/tasks/status_update.py",
       "code": -2,
@@ -2797,9 +2773,9 @@
       "severity": "error"
     },
     {
-      "line": 133,
+      "line": 137,
       "column": 29,
-      "stop_line": 133,
+      "stop_line": 137,
       "stop_column": 37,
       "path": "litehive/tasks/status_update.py",
       "code": -2,
@@ -2809,9 +2785,9 @@
       "severity": "error"
     },
     {
-      "line": 136,
+      "line": 140,
       "column": 25,
-      "stop_line": 136,
+      "stop_line": 140,
       "stop_column": 29,
       "path": "litehive/tasks/status_update.py",
       "code": -2,
@@ -2821,9 +2797,9 @@
       "severity": "error"
     },
     {
-      "line": 139,
+      "line": 143,
       "column": 75,
-      "stop_line": 139,
+      "stop_line": 143,
       "stop_column": 94,
       "path": "litehive/tasks/status_update.py",
       "code": -2,
@@ -2833,9 +2809,9 @@
       "severity": "error"
     },
     {
-      "line": 142,
+      "line": 146,
       "column": 62,
-      "stop_line": 142,
+      "stop_line": 146,
       "stop_column": 73,
       "path": "litehive/tasks/status_update.py",
       "code": -2,
@@ -2845,9 +2821,9 @@
       "severity": "error"
     },
     {
-      "line": 145,
+      "line": 149,
       "column": 55,
-      "stop_line": 145,
+      "stop_line": 149,
       "stop_column": 59,
       "path": "litehive/tasks/status_update.py",
       "code": -2,
@@ -2857,9 +2833,9 @@
       "severity": "error"
     },
     {
-      "line": 148,
+      "line": 152,
       "column": 36,
-      "stop_line": 148,
+      "stop_line": 152,
       "stop_column": 47,
       "path": "litehive/tasks/status_update.py",
       "code": -2,
@@ -2869,9 +2845,9 @@
       "severity": "error"
     },
     {
-      "line": 150,
+      "line": 154,
       "column": 32,
-      "stop_line": 150,
+      "stop_line": 154,
       "stop_column": 75,
       "path": "litehive/tasks/status_update.py",
       "code": -2,
@@ -3013,9 +2989,9 @@
       "severity": "error"
     },
     {
-      "line": 337,
+      "line": 336,
       "column": 92,
-      "stop_line": 337,
+      "stop_line": 336,
       "stop_column": 106,
       "path": "tests/cli/test_agent_report.py",
       "code": -2,
@@ -3025,9 +3001,9 @@
       "severity": "error"
     },
     {
-      "line": 106,
+      "line": 105,
       "column": 19,
-      "stop_line": 106,
+      "stop_line": 105,
       "stop_column": 31,
       "path": "tests/cli/test_task_debug.py",
       "code": -2,
@@ -3037,9 +3013,9 @@
       "severity": "error"
     },
     {
-      "line": 107,
+      "line": 106,
       "column": 27,
-      "stop_line": 107,
+      "stop_line": 106,
       "stop_column": 45,
       "path": "tests/cli/test_task_debug.py",
       "code": -2,
@@ -6253,9 +6229,9 @@
       "severity": "error"
     },
     {
-      "line": 19,
+      "line": 20,
       "column": 19,
-      "stop_line": 19,
+      "stop_line": 20,
       "stop_column": 32,
       "path": "tests/recovery/test_runner_recovery.py",
       "code": -2,
@@ -6265,9 +6241,9 @@
       "severity": "error"
     },
     {
-      "line": 20,
+      "line": 21,
       "column": 28,
-      "stop_line": 20,
+      "stop_line": 21,
       "stop_column": 33,
       "path": "tests/recovery/test_runner_recovery.py",
       "code": -2,
@@ -6277,9 +6253,9 @@
       "severity": "error"
     },
     {
-      "line": 116,
+      "line": 117,
       "column": 28,
-      "stop_line": 116,
+      "stop_line": 117,
       "stop_column": 37,
       "path": "tests/recovery/test_runner_recovery.py",
       "code": -2,
@@ -6289,9 +6265,9 @@
       "severity": "error"
     },
     {
-      "line": 145,
+      "line": 146,
       "column": 19,
-      "stop_line": 145,
+      "stop_line": 146,
       "stop_column": 32,
       "path": "tests/recovery/test_runner_recovery.py",
       "code": -2,
@@ -6301,9 +6277,9 @@
       "severity": "error"
     },
     {
-      "line": 146,
+      "line": 147,
       "column": 28,
-      "stop_line": 146,
+      "stop_line": 147,
       "stop_column": 37,
       "path": "tests/recovery/test_runner_recovery.py",
       "code": -2,
@@ -6313,9 +6289,9 @@
       "severity": "error"
     },
     {
-      "line": 181,
+      "line": 182,
       "column": 19,
-      "stop_line": 181,
+      "stop_line": 182,
       "stop_column": 27,
       "path": "tests/recovery/test_runner_recovery.py",
       "code": -2,
@@ -6325,9 +6301,9 @@
       "severity": "error"
     },
     {
-      "line": 182,
+      "line": 183,
       "column": 28,
-      "stop_line": 182,
+      "stop_line": 183,
       "stop_column": 38,
       "path": "tests/recovery/test_runner_recovery.py",
       "code": -2,
@@ -6337,9 +6313,9 @@
       "severity": "error"
     },
     {
-      "line": 211,
+      "line": 212,
       "column": 19,
-      "stop_line": 211,
+      "stop_line": 212,
       "stop_column": 28,
       "path": "tests/recovery/test_runner_recovery.py",
       "code": -2,
@@ -6349,9 +6325,9 @@
       "severity": "error"
     },
     {
-      "line": 212,
+      "line": 213,
       "column": 28,
-      "stop_line": 212,
+      "stop_line": 213,
       "stop_column": 37,
       "path": "tests/recovery/test_runner_recovery.py",
       "code": -2,
@@ -6433,9 +6409,9 @@
       "severity": "error"
     },
     {
-      "line": 251,
+      "line": 250,
       "column": 47,
-      "stop_line": 251,
+      "stop_line": 250,
       "stop_column": 51,
       "path": "tests/state/test_task_runtime_storage.py",
       "code": -2,
@@ -6445,9 +6421,9 @@
       "severity": "error"
     },
     {
-      "line": 252,
+      "line": 251,
       "column": 54,
-      "stop_line": 252,
+      "stop_line": 251,
       "stop_column": 65,
       "path": "tests/state/test_task_runtime_storage.py",
       "code": -2,
@@ -6457,9 +6433,9 @@
       "severity": "error"
     },
     {
-      "line": 285,
+      "line": 284,
       "column": 19,
-      "stop_line": 285,
+      "stop_line": 284,
       "stop_column": 28,
       "path": "tests/state/test_task_runtime_storage.py",
       "code": -2,
@@ -6469,33 +6445,33 @@
       "severity": "error"
     },
     {
-      "line": 288,
+      "line": 287,
       "column": 28,
-      "stop_line": 288,
+      "stop_line": 287,
       "stop_column": 42,
       "path": "tests/state/test_task_runtime_storage.py",
       "code": -2,
       "name": "bad-assignment",
       "description": "`Literal['implementing']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
       "concise_description": "`Literal['implementing']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
+      "severity": "error"
+    },
+    {
+      "line": 341,
+      "column": 19,
+      "stop_line": 341,
+      "stop_column": 28,
+      "path": "tests/state/test_task_runtime_storage.py",
+      "code": -2,
+      "name": "bad-assignment",
+      "description": "`Literal['flagged']` is not assignable to attribute `status` with type `TaskStatus`",
+      "concise_description": "`Literal['flagged']` is not assignable to attribute `status` with type `TaskStatus`",
       "severity": "error"
     },
     {
       "line": 342,
-      "column": 19,
-      "stop_line": 342,
-      "stop_column": 28,
-      "path": "tests/state/test_task_runtime_storage.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['flagged']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['flagged']` is not assignable to attribute `status` with type `TaskStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 343,
       "column": 28,
-      "stop_line": 343,
+      "stop_line": 342,
       "stop_column": 42,
       "path": "tests/state/test_task_runtime_storage.py",
       "code": -2,
@@ -6505,9 +6481,9 @@
       "severity": "error"
     },
     {
-      "line": 411,
+      "line": 410,
       "column": 19,
-      "stop_line": 411,
+      "stop_line": 410,
       "stop_column": 28,
       "path": "tests/state/test_task_runtime_storage.py",
       "code": -2,
@@ -6517,9 +6493,9 @@
       "severity": "error"
     },
     {
-      "line": 414,
+      "line": 413,
       "column": 28,
-      "stop_line": 414,
+      "stop_line": 413,
       "stop_column": 42,
       "path": "tests/state/test_task_runtime_storage.py",
       "code": -2,

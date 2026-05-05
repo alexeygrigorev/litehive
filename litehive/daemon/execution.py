@@ -664,7 +664,15 @@ def daemon_status_lines(workspace: Path) -> list[str]:
     state = load_state(workspace)
     lines.append(render_runner_status_line(runner, state))
     latest_dir = latest_run_all_log_dir(workspace)
-    lines.append(f"latest_run_all_dir: {latest_dir if latest_dir is not None else '-'}")
+    if latest_dir is not None:
+        latest_dir_label = latest_dir
+    else:
+        latest_dir_label = "-"
+    lines.append(f"latest_run_all_dir: {latest_dir_label}")
     latest_run = latest_matching(latest_dir, "*-run.log")
-    lines.append(f"latest_run_log: {latest_run if latest_run is not None else '-'}")
+    if latest_run is not None:
+        latest_run_label = latest_run
+    else:
+        latest_run_label = "-"
+    lines.append(f"latest_run_log: {latest_run_label}")
     return lines

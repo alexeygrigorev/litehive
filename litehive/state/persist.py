@@ -73,9 +73,16 @@ def atomic_write_gzip_text(path: Path, content: str) -> None:
             temp_path.unlink()
 
 
+def _file_snapshot(path: Path) -> str | object:
+    """Return the current content of `path`, or the `_MISSING` sentinel when the file does not exist; used to capture a rollback baseline before a batch write."""
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    return _MISSING
+
+
 def write_atomic_files(writes: dict[Path, str]) -> None:
     """Write a batch of files all-or-nothing: if any write fails, rolls back already-applied writes from in-memory snapshots so a partial multi-file update is never observable."""
-    snapshots = {path: path.read_text(encoding="utf-8") if path.exists() else _MISSING for path in writes}
+    snapshots = {path: _file_snapshot(path) for path in writes}
     applied: list[Path] = []
     try:
         for path, content in writes.items():
@@ -94,7 +101,7 @@ def write_atomic_files(writes: dict[Path, str]) -> None:
 
 def write_atomic_files_and_then(writes: dict[Path, str], callback) -> None:
     """Same all-or-nothing batch write as `write_atomic_files`, but treats `callback` as part of the transaction — if the callback raises, the file writes are rolled back too. Used when a downstream side effect (e.g. SQLite commit) must be atomic with the file writes."""
-    snapshots = {path: path.read_text(encoding="utf-8") if path.exists() else _MISSING for path in writes}
+    snapshots = {path: _file_snapshot(path) for path in writes}
     applied: list[Path] = []
     try:
         for path, content in writes.items():
@@ -244,11 +251,15 @@ def persist_task_and_state(
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     """Single-task convenience over `persist_tasks_and_state`; the common case used by stage transitions that mutate exactly one task plus the workspace queue."""
+    if journal_message is not None:
+        journal_messages: dict[str, str] | None = {task.id: journal_message}
+    else:
+        journal_messages = None
     persist_tasks_and_state(
         root,
         tasks=[task],
         state=state,
-        journal_messages={task.id: journal_message} if journal_message is not None else None,
+        journal_messages=journal_messages,
         protected_task_ids=protected_task_ids,
         audit_entries=audit_entries,
     )
@@ -322,11 +333,15 @@ def persist_task_and_state_without_runner_guard(
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     """Single-task convenience over `persist_tasks_and_state_without_runner_guard`; the common case on the runner's hot path where one task transitions per write."""
+    if journal_message is not None:
+        journal_messages: dict[str, str] | None = {task.id: journal_message}
+    else:
+        journal_messages = None
     persist_tasks_and_state_without_runner_guard(
         root,
         tasks=[task],
         state=state,
-        journal_messages={task.id: journal_message} if journal_message is not None else None,
+        journal_messages=journal_messages,
         protected_task_ids=protected_task_ids,
         audit_entries=audit_entries,
     )

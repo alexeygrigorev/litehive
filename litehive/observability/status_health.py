@@ -67,9 +67,13 @@ def render_health_worktree_lines(worktrees: list[Any]) -> list[str]:
         lines.append("worktree: none")
         return lines
     for item in worktrees:
+        if item.active:
+            active_label = "yes"
+        else:
+            active_label = "no"
         lines.append(
             f"worktree: {item.task_id} status={item.status} changes={item.change_count} "
-            f"active={'yes' if item.active else 'no'} path={item.worktree_rel}"
+            f"active={active_label} path={item.worktree_rel}"
         )
     return lines
 
@@ -91,7 +95,11 @@ def render_health_worktree_finding_lines(report: Any) -> list[str]:
             details.append(f"task_id={finding.task_id}")
         if finding.worktree_path:
             details.append(f"path={finding.worktree_path}")
-        details.append("dirty_paths=" + (",".join(finding.dirty_paths) if finding.dirty_paths else "-"))
+        if finding.dirty_paths:
+            dirty_paths_label = ",".join(finding.dirty_paths)
+        else:
+            dirty_paths_label = "-"
+        details.append("dirty_paths=" + dirty_paths_label)
         lines.append("finding: " + " ".join(details))
     return lines
 

@@ -43,6 +43,14 @@ def record_recovery_report(
     workspace = Workspace.from_path(root)
     ref = insert_recovery_report(workspace, task, report)
     latest_report = latest_stage_report(workspace, task)
+    if latest_report is not None:
+        latest_report_part = f"\nlatest_stage_report: {stage_report_context(latest_report)}"
+    else:
+        latest_report_part = ""
+    if blocker:
+        blocker_part = f"\nblocker: {blocker}"
+    else:
+        blocker_part = ""
     append_task_activity(
         workspace,
         task,
@@ -54,8 +62,8 @@ def record_recovery_report(
                 f"Recovery trigger `{trigger_event_kind.value}`: {summary}\n"
                 f"runnable_state: {runnable_state}\n"
                 f"report: {ref}"
-                + (f"\nlatest_stage_report: {stage_report_context(latest_report)}" if latest_report is not None else "")
-                + (f"\nblocker: {blocker}" if blocker else "")
+                + latest_report_part
+                + blocker_part
             ),
         ),
     )

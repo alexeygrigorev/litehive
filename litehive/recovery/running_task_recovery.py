@@ -26,6 +26,13 @@ from litehive.tasks.recovery_reports import record_recovery_report
 from litehive.workspace import Workspace
 
 
+def _stale_pid_warnings(stale_pid: bool) -> list[str]:
+    """Return the warnings list `_record_stale_recovery` attaches to its recovery report; the caller never wants the literal placeholder when no stale PID was seen, so we surface an empty list instead."""
+    if stale_pid:
+        return ["stale subagent pid detected"]
+    return []
+
+
 def running_task_ids(workspace: Workspace) -> list[str]:
     with workspace.connect() as connection:
         try:
@@ -195,7 +202,7 @@ def _record_stale_recovery(
             ),
             RecoveryAction(action="requeue_stage", summary=f"Requeued the task at {stage}.", metadata={"stage": stage}),
         ],
-        warnings=["stale subagent pid detected"] if stale_pid else [],
+        warnings=_stale_pid_warnings(stale_pid),
     )
     if summary is not None and task.id not in summary.requeued_task_ids:
         summary.requeued_task_ids.append(task.id)

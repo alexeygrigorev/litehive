@@ -215,13 +215,17 @@ def _pool_summary_report_data(
     resumable = _resumable_pool_tasks(root)
     closed = _closed_pool_tasks(root)
     progress_status, summary = _pool_no_useful_progress_report(stop_reason)
+    if tasks_run is not None:
+        tasks_run_value = tasks_run
+    else:
+        tasks_run_value = len(completed) + len(flagged)
     return {
         "created_at": utcnow(),
         "summary": summary,
         "progress_status": progress_status,
         "stop_condition": pool_stop_condition_label(stop_reason),
         "stop_reason": stop_reason,
-        "tasks_run": tasks_run if tasks_run is not None else len(completed) + len(flagged),
+        "tasks_run": tasks_run_value,
         "completed_count": len(completed),
         "completed": completed,
         "flagged_count": len(flagged),

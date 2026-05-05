@@ -157,7 +157,7 @@ def collect_task_pipeline_status(
         issues=snapshot.issues,
         active_task_id=active_task_id,
         active_task=active_task,
-        queue_head=snapshot.state.queue[0] if snapshot.state.queue else None,
+        queue_head=_first_or_none(snapshot.state.queue),
         waiting_lines=waiting_lines,
         fast_runner_status=_fast_runner_state_label(resolved_root, snapshot.runner),
     )
@@ -180,13 +180,21 @@ def render_task_pipeline_status_lines(
     if mode == "full":
         lines = render_full_status_header_lines(workspace, status.config, status.state, status.runner)
     else:
+        if status.active_task_id is not None:
+            active_task_id_label = status.active_task_id
+        else:
+            active_task_id_label = "None"
+        if status.state.pool_stop_reason is not None:
+            pool_stop_reason_label = status.state.pool_stop_reason
+        else:
+            pool_stop_reason_label = "None"
         lines = [
             f"workspace: {workspace}",
             f"default_engine: {status.config.default_engine}",
             "mode: implementation",
-            f"active_task_id: {status.active_task_id if status.active_task_id is not None else 'None'}",
+            f"active_task_id: {active_task_id_label}",
             f"queued_tasks: {len(status.state.queue)}",
-            f"pool_stop_reason: {status.state.pool_stop_reason if status.state.pool_stop_reason is not None else 'None'}",
+            f"pool_stop_reason: {pool_stop_reason_label}",
         ]
 
     lines.extend(status.waiting_lines)
@@ -211,6 +219,13 @@ def render_task_pipeline_status_lines(
         lines.extend(render_runtime_policy_lines(status.config, retry_on_label))
 
     return lines
+
+
+def _first_or_none(items):
+    """Return the first element of a sequence, or `None` when it is empty; used so call sites can avoid inline ternaries when they only care about the head."""
+    if items:
+        return items[0]
+    return None
 
 
 def _fast_runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:

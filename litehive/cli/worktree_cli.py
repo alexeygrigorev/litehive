@@ -27,12 +27,16 @@ def ls(workspace: WorkspaceOption = Path.cwd()) -> int:
         print("worktrees: none")
         return 0
     for item in worktrees:
+        if item.active:
+            active_label = "yes"
+        else:
+            active_label = "no"
         print()
         print(f"task_id: {item.task_id}")
         print(f"status: {item.status}")
         print(f"change_count: {item.change_count}")
         print(f"worktree_path: {item.worktree_rel}")
-        print(f"active: {'yes' if item.active else 'no'}")
+        print(f"active: {active_label}")
     return 0
 
 
@@ -51,8 +55,12 @@ def clean(
     deferred = results["deferred"]
     failures = results["failures"]
 
+    if dry_run:
+        dry_run_label = "yes"
+    else:
+        dry_run_label = "no"
     print(f"workspace: {workspace}")
-    print(f"dry_run: {'yes' if dry_run else 'no'}")
+    print(f"dry_run: {dry_run_label}")
 
     for item in candidates:
         print(f"would_remove: {item.task_id} {item.status} {item.worktree_rel}")

@@ -281,6 +281,10 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
             action = "failed"
         elif state.stage == PipelineState.DONE and task_record.status == TaskStatus.DONE:
             action = "completed"
+        if state.failed_reason is None:
+            failed_reason_value = None
+        else:
+            failed_reason_value = getattr(state.failed_reason, "value", state.failed_reason)
         audit_entries.append(
             build_task_audit_entry(
                 task_id=task_record.id,
@@ -291,11 +295,7 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
                 after_task=task_record,
                 context={
                     "lifecycle_stage": state.stage,
-                    "failed_reason": (
-                        None
-                        if state.failed_reason is None
-                        else getattr(state.failed_reason, "value", state.failed_reason)
-                    ),
+                    "failed_reason": failed_reason_value,
                     "failed_message": state.failed_message,
                 },
             )
@@ -333,21 +333,35 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
     if latest is None or not latest.follow_up_task_id:
         return
     trigger = _latest_recovery_trigger(state)
+    if trigger is not None:
+        trigger_stage = trigger.origin_stage
+        failure_classification = trigger.failure_fingerprint.budget_key()
+        diagnostics_origin_stage = trigger.origin_stage
+        diagnostics_trigger_event_kind = trigger.trigger_event_kind.value
+        diagnostics_fingerprint = trigger.failure_fingerprint.fingerprint
+        diagnostics_budget_key = trigger.budget_key()
+    else:
+        trigger_stage = PipelineState.RECOVERING.value
+        failure_classification = None
+        diagnostics_origin_stage = None
+        diagnostics_trigger_event_kind = None
+        diagnostics_fingerprint = None
+        diagnostics_budget_key = None
     apply_task_outcome(
         task_record,
         kind="flagged",
-        stage=(trigger.origin_stage if trigger is not None else PipelineState.RECOVERING.value),
+        stage=trigger_stage,
         reason_code="stage_exception",
         reason=state.failed_message or latest.message or "Recovery escalated to a follow-up task.",
         retry_count=task_record.runtime.pipeline.retry_count,
         retry_limit=task_record.runtime.pipeline.retry_limit,
         follow_up_task_id=latest.follow_up_task_id,
-        failure_classification=(None if trigger is None else trigger.failure_fingerprint.budget_key()),
+        failure_classification=failure_classification,
         failure_diagnostics={
-            "origin_stage": None if trigger is None else trigger.origin_stage,
-            "trigger_event_kind": None if trigger is None else trigger.trigger_event_kind.value,
-            "fingerprint": None if trigger is None else trigger.failure_fingerprint.fingerprint,
-            "budget_key": None if trigger is None else trigger.budget_key(),
+            "origin_stage": diagnostics_origin_stage,
+            "trigger_event_kind": diagnostics_trigger_event_kind,
+            "fingerprint": diagnostics_fingerprint,
+            "budget_key": diagnostics_budget_key,
         },
     )
 

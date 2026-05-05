@@ -38,13 +38,17 @@ def load_task_journal(workspace: Workspace, task_id: str) -> list[TaskJournalEnt
             metadata = json.loads(str(row["metadata"]))
         except json.JSONDecodeError:
             metadata = {}
+        if isinstance(metadata, dict):
+            metadata_value = metadata
+        else:
+            metadata_value = {}
         entries.append(
             TaskJournalEntry(
                 task_id=str(row["task_id"]),
                 entry_index=int(row["entry_index"]),
                 created_at=str(row["created_at"]),
                 message=str(row["message"]),
-                metadata=metadata if isinstance(metadata, dict) else {},
+                metadata=metadata_value,
             )
         )
     return entries

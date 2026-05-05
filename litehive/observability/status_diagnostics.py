@@ -65,11 +65,15 @@ def collect_status_snapshot(root: Path) -> StatusSnapshot:
     state, state_issues = _load_state_for_status(root)
     runner, runner_issue = _load_runner_status_for_status(root)
     monitoring, monitoring_issues = _load_engine_monitoring_for_status(root)
+    if runner_issue is not None:
+        runner_issues_list: list = [runner_issue]
+    else:
+        runner_issues_list = []
     issues = [
         *registry_issues,
         *config_issues,
         *state_issues,
-        *([runner_issue] if runner_issue is not None else []),
+        *runner_issues_list,
         *monitoring_issues,
         *_probe_runner_state(root, state, runner),
         *_probe_daemon_status(root),
@@ -96,10 +100,14 @@ def collect_operational_status_snapshot(root: Path) -> StatusSnapshot:
     state, state_issues = _load_state_for_status(root)
     runner, runner_issue = _load_runner_status_for_status(root)
     monitoring, monitoring_issues = _load_engine_monitoring_for_status(root)
+    if runner_issue is not None:
+        runner_issues_list: list = [runner_issue]
+    else:
+        runner_issues_list = []
     issues = [
         *config_issues,
         *state_issues,
-        *([runner_issue] if runner_issue is not None else []),
+        *runner_issues_list,
         *monitoring_issues,
         *_probe_runner_state(root, state, runner),
         *_probe_pool_stop_reason(state),

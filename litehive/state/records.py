@@ -171,6 +171,13 @@ def _normalize_task_flag_reason(task: TaskRecord) -> None:
     task.flag_reason = None
 
 
+def _created_from_payload(task: TaskRecord) -> dict | None:
+    """Return the audit-context shape of `task.created_from`, or `None` when the task was created from scratch; isolated so the create-task and follow-up audit paths share the same null-handling."""
+    if task.created_from is None:
+        return None
+    return task.created_from.model_dump(mode="json")
+
+
 def _create_task_runtime_dirs(base: Path) -> None:
     """Materialize the per-task runtime layout (reports, subagents, artifacts) for both the manual create path and the follow-up batch path; raises if directories already exist so we never silently reuse stale debris from a previous task."""
     (base / "reports").mkdir(parents=True, exist_ok=False)
@@ -312,6 +319,10 @@ def create_task(
         elif task.created_from is not None and task.created_from.source == "follow_up":
             actor = "system"
             source = "follow_up"
+        if task.created_from is None:
+            created_from_payload = None
+        else:
+            created_from_payload = task.created_from.model_dump(mode="json")
         _persist_created_tasks(
             root,
             tasks=[task],
@@ -331,9 +342,7 @@ def create_task(
                         "title": task.title,
                         "priority": task.priority,
                         "pipeline_mode": str(task.pipeline_mode),
-                        "created_from": (
-                            None if task.created_from is None else task.created_from.model_dump(mode="json")
-                        ),
+                        "created_from": created_from_payload,
                     },
                 )
             ],
@@ -416,9 +425,7 @@ def create_follow_up_tasks(
                         "title": task.title,
                         "priority": task.priority,
                         "pipeline_mode": str(task.pipeline_mode),
-                        "created_from": (
-                            None if task.created_from is None else task.created_from.model_dump(mode="json")
-                        ),
+                        "created_from": _created_from_payload(task),
                     },
                 )
                 for task in created_tasks

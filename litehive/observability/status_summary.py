@@ -110,7 +110,11 @@ def _task_last_verdict_label(task: TaskRecord, workspace: Workspace) -> str:
     sections honest when one of the two has been pruned.
     """
     latest_report = _latest_stage_report_for_task(workspace, task)
-    return (None if latest_report is None else latest_report.verdict) or task.runtime.pipeline.last_outcome.kind or "-"
+    if latest_report is None:
+        latest_verdict = None
+    else:
+        latest_verdict = latest_report.verdict
+    return latest_verdict or task.runtime.pipeline.last_outcome.kind or "-"
 
 
 def _task_last_summary_label(task: TaskRecord, workspace: Workspace) -> str:
@@ -122,8 +126,12 @@ def _task_last_summary_label(task: TaskRecord, workspace: Workspace) -> str:
     walks each source in priority order.
     """
     latest_report = _latest_stage_report_for_task(workspace, task)
+    if latest_report is None:
+        latest_summary = None
+    else:
+        latest_summary = latest_report.summary
     return (
-        (None if latest_report is None else latest_report.summary)
+        latest_summary
         or task.runtime.pipeline.last_outcome.reason
         or task.flag_reason
         or task.close_reason

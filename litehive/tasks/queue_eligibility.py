@@ -38,15 +38,25 @@ def resumable_queue_stage(task: TaskRecord) -> str | None:
     """
     interruption = task.runtime.execution.interruption
     current_stage = task.runtime.pipeline.current_stage
+    if interruption is None:
+        interruption_resume_stage = None
+        interruption_pipeline_status = None
+    else:
+        interruption_resume_stage = interruption.resume_stage
+        interruption_pipeline_status = interruption.pipeline_status
     candidates = [
         task.pipeline_status,
-        None if interruption is None else interruption.resume_stage,
-        None if interruption is None else interruption.pipeline_status,
+        interruption_resume_stage,
+        interruption_pipeline_status,
     ]
     if current_stage.status in _TRUSTED_STAGE_MARKER_STATUSES:
         candidates.append(current_stage.stage)
     for candidate in candidates:
-        normalized = _normalize_resumable_stage_name(None if candidate is None else str(candidate))
+        if candidate is None:
+            candidate_str = None
+        else:
+            candidate_str = str(candidate)
+        normalized = _normalize_resumable_stage_name(candidate_str)
         if normalized is not None:
             return normalized
     return None
@@ -61,7 +71,11 @@ def resumable_running_stage(task: TaskRecord) -> str | None:
     """
     current_stage = task.runtime.pipeline.current_stage
     if current_stage.status == "running":
-        normalized = _normalize_resumable_stage_name(None if current_stage.stage is None else str(current_stage.stage))
+        if current_stage.stage is None:
+            current_stage_str = None
+        else:
+            current_stage_str = str(current_stage.stage)
+        normalized = _normalize_resumable_stage_name(current_stage_str)
         if normalized is not None:
             return normalized
     return resumable_queue_stage(task)

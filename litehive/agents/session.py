@@ -159,6 +159,10 @@ class SessionMixin:
         existing = load_subagent_session(self.workspace, task.id, ref.id)
         if isinstance(existing.get("created_at"), str):
             created_at = existing["created_at"]
+        if continuation is None:
+            continuation_payload = None
+        else:
+            continuation_payload = continuation.model_dump(mode="python")
         save_subagent_artifacts(
             self.workspace,
             task.id,
@@ -176,7 +180,7 @@ class SessionMixin:
                 "exit_code": exit_code,
                 "interruption_reason": interruption_reason,
                 "resource_control": resource_control,
-                "continuation": None if continuation is None else continuation.model_dump(mode="python"),
+                "continuation": continuation_payload,
             },
         )
 
@@ -318,6 +322,10 @@ class SessionMixin:
         existing = load_subagent_session(self.workspace, task.id, ref.id)
         if isinstance(existing.get("created_at"), str):
             created_at = existing["created_at"]
+        if continuation is None:
+            continuation_payload = None
+        else:
+            continuation_payload = continuation.model_dump(mode="python")
         save_subagent_artifacts(
             self.workspace,
             task.id,
@@ -335,7 +343,7 @@ class SessionMixin:
                 "exit_code": exit_code,
                 "interruption_reason": interruption_reason,
                 "resource_control": resource_control,
-                "continuation": None if continuation is None else continuation.model_dump(mode="python"),
+                "continuation": continuation_payload,
             },
             report=report_payload,
         )

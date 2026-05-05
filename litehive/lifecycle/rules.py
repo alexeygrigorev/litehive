@@ -51,19 +51,25 @@ from .transitions import Rule, entry_from_worktree_sync, resume_from_origin, res
 
 
 def _recovery_rules(from_state, on_event, when=None) -> list[Rule]:
+    if when is None:
+        exhausted_when = recovery_budget_exhausted()
+        available_when = recovery_budget_available()
+    else:
+        exhausted_when = when & recovery_budget_exhausted()
+        available_when = when & recovery_budget_available()
     return [
         Rule(
             from_state=from_state,
             on_event=on_event,
             transition_to=S.FAILED,
-            when=recovery_budget_exhausted() if when is None else when & recovery_budget_exhausted(),
+            when=exhausted_when,
             with_effect=exhaust_recovery_budget,
         ),
         Rule(
             from_state=from_state,
             on_event=on_event,
             transition_to=S.RECOVERING,
-            when=recovery_budget_available() if when is None else when & recovery_budget_available(),
+            when=available_when,
             with_effect=enter_recovery,
         ),
     ]

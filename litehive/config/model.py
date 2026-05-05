@@ -338,12 +338,18 @@ def _normalize_external_engine_sandbox_policy(
     if isinstance(raw_policy, ExternalEngineSandboxPolicy):
         policy = raw_policy
     else:
+        if raw_policy.get("network_mode") is None:
+            network_mode_arg = None
+        else:
+            network_mode_arg = str(raw_policy.get("network_mode"))
+        if raw_policy.get("workspace_mode") is None:
+            workspace_mode_arg = None
+        else:
+            workspace_mode_arg = str(raw_policy.get("workspace_mode"))
         policy = ExternalEngineSandboxPolicy(
             enabled=bool(raw_policy.get("enabled", False)),
-            network_mode=(None if raw_policy.get("network_mode") is None else str(raw_policy.get("network_mode"))),
-            workspace_mode=(
-                None if raw_policy.get("workspace_mode") is None else str(raw_policy.get("workspace_mode"))
-            ),
+            network_mode=network_mode_arg,
+            workspace_mode=workspace_mode_arg,
             environment=[str(item) for item in raw_policy.get("environment", [])],
             credential_inputs=[
                 _normalize_sandbox_credential_input(
