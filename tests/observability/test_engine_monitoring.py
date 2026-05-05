@@ -8,13 +8,14 @@ from litehive.observability.engine_monitoring import (
     load_engine_monitoring,
     record_engine_execution,
 )
+from litehive.workspace import Workspace
 
 
 def test_record_engine_execution_tracks_local_usage_fallback(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
     record_engine_execution(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task_id="T-0001",
         engine_name="codex",
         adapter=get_engine("codex"),
@@ -30,7 +31,7 @@ def test_record_engine_execution_tracks_local_usage_fallback(tmp_path: Path) -> 
         failure_reason="usage limit reached",
     )
 
-    monitoring = load_engine_monitoring(tmp_path)
+    monitoring = load_engine_monitoring(Workspace.from_path(tmp_path))
     record = monitoring.engines["codex"]
 
     assert record.source == "local"
@@ -65,7 +66,7 @@ def test_record_engine_execution_accepts_provider_usage_observation(tmp_path: Pa
             )
 
     record_engine_execution(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task_id="T-0002",
         engine_name="gemini",
         adapter=ProviderAdapter(
@@ -85,7 +86,7 @@ def test_record_engine_execution_accepts_provider_usage_observation(tmp_path: Pa
         failure_reason=None,
     )
 
-    monitoring = load_engine_monitoring(tmp_path)
+    monitoring = load_engine_monitoring(Workspace.from_path(tmp_path))
     record = monitoring.engines["gemini"]
 
     assert record.source == "provider"
@@ -102,7 +103,7 @@ def test_record_engine_execution_tracks_codex_provider_limit_observation(tmp_pat
     ensure_workspace(tmp_path)
 
     record_engine_execution(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task_id="T-0001",
         engine_name="codex",
         adapter=get_engine("codex"),
@@ -123,7 +124,7 @@ def test_record_engine_execution_tracks_codex_provider_limit_observation(tmp_pat
         failure_reason="usage limit reached",
     )
 
-    monitoring = load_engine_monitoring(tmp_path)
+    monitoring = load_engine_monitoring(Workspace.from_path(tmp_path))
     record = monitoring.engines["codex"]
 
     assert record.source == "provider"
@@ -144,7 +145,7 @@ def test_record_engine_execution_tracks_claude_provider_limit_observation(tmp_pa
     ensure_workspace(tmp_path)
 
     record_engine_execution(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task_id="T-0001",
         engine_name="claude",
         adapter=get_engine("claude"),
@@ -163,7 +164,7 @@ def test_record_engine_execution_tracks_claude_provider_limit_observation(tmp_pa
         failure_reason="rate limit reached",
     )
 
-    monitoring = load_engine_monitoring(tmp_path)
+    monitoring = load_engine_monitoring(Workspace.from_path(tmp_path))
     record = monitoring.engines["claude"]
 
     assert record.source == "provider"
@@ -182,7 +183,7 @@ def test_record_engine_execution_tracks_opencode_provider_usage_observation(tmp_
     ensure_workspace(tmp_path)
 
     record_engine_execution(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task_id="T-0001",
         engine_name="opencode",
         adapter=get_engine("opencode"),
@@ -202,7 +203,7 @@ def test_record_engine_execution_tracks_opencode_provider_usage_observation(tmp_
         failure_reason=None,
     )
 
-    monitoring = load_engine_monitoring(tmp_path)
+    monitoring = load_engine_monitoring(Workspace.from_path(tmp_path))
     record = monitoring.engines["opencode"]
 
     assert record.source == "provider"
@@ -225,6 +226,6 @@ def test_load_engine_monitoring_ignores_legacy_workspace_yaml(tmp_path: Path) ->
         encoding="utf-8",
     )
 
-    monitoring = load_engine_monitoring(tmp_path)
+    monitoring = load_engine_monitoring(Workspace.from_path(tmp_path))
 
     assert monitoring.engines == {}

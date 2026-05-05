@@ -24,6 +24,7 @@ from litehive.observability.status_io import (
 from litehive.observability.status_types import StatusIssue
 from litehive.state.locking import runner_metadata_present, runner_pid_is_alive
 from litehive.state.store import runtime_store
+from litehive.workspace import Workspace
 
 
 def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssue]]:
@@ -149,7 +150,7 @@ def _load_engine_monitoring_for_status(
     """Load engine usage stats; on failure return an empty record plus a WARN so status output is not blocked
     by a corrupt engine_monitoring table."""
     try:
-        return load_engine_monitoring(root), []
+        return load_engine_monitoring(Workspace.from_path(root)), []
     except (OSError, sqlite3.DatabaseError, ValueError, ValidationError) as exc:
         issue = StatusIssue(
             key="engine_monitoring",

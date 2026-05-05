@@ -48,6 +48,7 @@ from litehive.domain.common import PipelineState, TaskStage
 from litehive.tasks.activity import latest_task_activity_entry
 from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.tasks.report_storage import record_stage_report
+from litehive.workspace import Workspace
 
 _REPORTABLE_STAGES: frozenset[str] = frozenset(stage.value for stage in TaskStage)
 _DEFAULT_STAGE_FOR_ROLE: dict[str, str] = {
@@ -138,6 +139,7 @@ class SubagentManager(SessionMixin):
     def __init__(self, root: Path, execution_root: Path) -> None:
         self.root = root.resolve()
         self.execution_root = execution_root.resolve()
+        self.workspace = Workspace.from_path(self.root)
         self.config = load_config(self.root)
         self.sandbox = SandboxLauncher(self.root, self.config)
         self._stream_offsets: dict[str, int] = {}
@@ -427,7 +429,7 @@ class SubagentManager(SessionMixin):
         )
         if proc is not None:
             record_engine_execution(
-                self.root,
+                self.workspace,
                 task_id=task.id,
                 engine_name=engine_name,
                 adapter=execution_engine,
@@ -520,7 +522,7 @@ class SubagentManager(SessionMixin):
             self.append_stream_delta(base, ref, "stdout", execution.stdout)
             self.append_stream_delta(base, ref, "stderr", execution.stderr)
         append_event(
-            self.root,
+            self.workspace,
             task,
             "subagent_finished",
             data={
@@ -551,7 +553,7 @@ class SubagentManager(SessionMixin):
         continuation = self.extract_execution_continuation(ref.engine, execution)
         if isinstance(engine, ExternalCLIAdapter):
             record_engine_observation(
-                self.root,
+                self.workspace,
                 task_id=task.id,
                 engine_name=ref.engine,
                 adapter=engine,
@@ -579,7 +581,7 @@ class SubagentManager(SessionMixin):
         self.append_stream_delta(base, ref, "stdout", execution.stdout)
         self.append_stream_delta(base, ref, "stderr", execution.stderr)
         append_event(
-            self.root,
+            self.workspace,
             task,
             "subagent_progress",
             data={

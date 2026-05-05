@@ -1,11 +1,9 @@
 """Workspace-level engine usage and quota monitoring."""
 
 import json
-from pathlib import Path
 import sqlite3
 
 from litehive.config.paths import workspace_path
-from litehive.db.schema import connect_workspace_db
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.domain.common import utcnow
 from litehive.domain.engine import (
@@ -15,19 +13,20 @@ from litehive.domain.engine import (
     WorkspaceEngineMonitoring,
 )
 from litehive.state.locking import workspace_mutation_guard
+from litehive.workspace import Workspace
 
 
-def load_engine_monitoring(root: Path) -> WorkspaceEngineMonitoring:
-    return _load_engine_monitoring_from_db(root)
+def load_engine_monitoring(workspace: Workspace) -> WorkspaceEngineMonitoring:
+    return _load_engine_monitoring_from_db(workspace)
 
 
-def save_engine_monitoring(root: Path, monitoring: WorkspaceEngineMonitoring) -> None:
-    with workspace_mutation_guard(root):
-        _save_engine_monitoring_to_db(root, monitoring)
+def save_engine_monitoring(workspace: Workspace, monitoring: WorkspaceEngineMonitoring) -> None:
+    with workspace_mutation_guard(workspace.root):
+        _save_engine_monitoring_to_db(workspace, monitoring)
 
 
-def _load_engine_monitoring_from_db(root: Path) -> WorkspaceEngineMonitoring:
-    db_path = workspace_path(root, "data.db")
+def _load_engine_monitoring_from_db(workspace: Workspace) -> WorkspaceEngineMonitoring:
+    db_path = workspace_path(workspace.root, "data.db")
     if not db_path.exists():
         return WorkspaceEngineMonitoring()
     with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
@@ -51,8 +50,8 @@ def _load_engine_monitoring_from_db(root: Path) -> WorkspaceEngineMonitoring:
     return WorkspaceEngineMonitoring(engines=engines)
 
 
-def _save_engine_monitoring_to_db(root: Path, monitoring: WorkspaceEngineMonitoring) -> None:
-    with connect_workspace_db(root) as connection:
+def _save_engine_monitoring_to_db(workspace: Workspace, monitoring: WorkspaceEngineMonitoring) -> None:
+    with workspace.connect() as connection:
         connection.execute("DELETE FROM engine_monitoring")
         for engine_name, record in monitoring.engines.items():
             connection.execute(
@@ -70,7 +69,7 @@ def _save_engine_monitoring_to_db(root: Path, monitoring: WorkspaceEngineMonitor
 
 
 def record_engine_execution(
-    root: Path,
+    workspace: Workspace,
     task_id: str,
     engine_name: str,
     adapter: ExternalCLIAdapter,
@@ -78,7 +77,7 @@ def record_engine_execution(
     failure_kind: str | None,
     failure_reason: str | None,
 ) -> WorkspaceEngineMonitoring:
-    monitoring = load_engine_monitoring(root)
+    monitoring = load_engine_monitoring(workspace)
     extract_usage_observation = getattr(adapter, "extract_usage_observation", None)
     observation = (
         extract_usage_observation(execution) if callable(extract_usage_observation) else None
@@ -93,18 +92,18 @@ def record_engine_execution(
         failure_kind=failure_kind,
         failure_reason=failure_reason,
     )
-    save_engine_monitoring(root, monitoring)
+    save_engine_monitoring(workspace, monitoring)
     return monitoring
 
 
 def record_engine_observation(
-    root: Path,
+    workspace: Workspace,
     task_id: str,
     engine_name: str,
     adapter: ExternalCLIAdapter,
     execution: CLIExecutionResult,
 ) -> WorkspaceEngineMonitoring:
-    monitoring = load_engine_monitoring(root)
+    monitoring = load_engine_monitoring(workspace)
     extract_usage_observation = getattr(adapter, "extract_usage_observation", None)
     observation = (
         extract_usage_observation(execution) if callable(extract_usage_observation) else None
@@ -126,7 +125,7 @@ def record_engine_observation(
         failure_kind=None,
         failure_reason=None,
     )
-    save_engine_monitoring(root, monitoring)
+    save_engine_monitoring(workspace, monitoring)
     return monitoring
 
 

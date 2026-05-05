@@ -158,7 +158,7 @@ def _has_inactive_running_tasks(
     for task in tasks_by_id.values():
         if task.runtime.pipeline.execution_status != "running":
             continue
-        ts_str = last_event_timestamp(workspace.root, task)
+        ts_str = last_event_timestamp(workspace, task)
         if ts_str is None:
             continue
         try:

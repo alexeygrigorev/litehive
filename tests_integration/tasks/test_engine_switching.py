@@ -6,6 +6,7 @@ from litehive.tasks.paths import task_dir
 from litehive.state.persist import load_state
 from litehive.state.records import save_task_runtime
 from litehive.tasks.audit import load_task_audit_entries
+from litehive.workspace import Workspace
 
 from tests_integration.support.helpers import cli_command
 
@@ -63,6 +64,6 @@ def test_switch_cli_persists_engine_switch_and_requeues_task(integration_root) -
     assert refreshed.runtime.execution.last_engine_switch.from_engine == "codex"
     assert refreshed.runtime.execution.last_engine_switch.to_engine == "gemini"
     assert refreshed.runtime.execution.last_engine_switch.reason == "Need larger context window"
-    entries = load_task_audit_entries(integration_root, task_id=interrupted.id, action="engine_switched", limit=5)
+    entries = load_task_audit_entries(Workspace.from_path(integration_root), task_id=interrupted.id, action="engine_switched", limit=5)
     assert entries[0].context["prior_work_paths"] == ["subagents/SA-0002-swe"]
     assert load_state(integration_root).queue == [interrupted.id, first.id]

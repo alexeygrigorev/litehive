@@ -5,13 +5,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord
+from litehive.workspace import Workspace
 
 
 def append_event(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     kind: str,
     data: dict[str, Any] | None = None,
@@ -27,7 +27,7 @@ def append_event(
     }
     if data:
         event["data"] = data
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         connection.execute(
             """
             INSERT INTO events (task_id, created_at, event_kind, payload)
@@ -39,9 +39,9 @@ def append_event(
     return event
 
 
-def read_events(root: Path, task: TaskRecord) -> list[dict[str, Any]]:
+def read_events(workspace: Workspace, task: TaskRecord) -> list[dict[str, Any]]:
     """Read all events for a task from SQLite."""
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         rows = connection.execute(
             """
             SELECT payload
@@ -62,12 +62,12 @@ def read_events(root: Path, task: TaskRecord) -> list[dict[str, Any]]:
     return events
 
 
-def last_event_timestamp(root: Path, task: TaskRecord) -> str | None:
+def last_event_timestamp(workspace: Workspace, task: TaskRecord) -> str | None:
     """Return the timestamp of the last persisted event for a task.
 
     Returns ``None`` if no events exist.
     """
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         row = connection.execute(
             """
             SELECT created_at

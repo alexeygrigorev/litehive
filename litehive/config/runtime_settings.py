@@ -11,8 +11,8 @@ import yaml
 from litehive.config.model import LitehiveConfig, normalize_engine_sequence
 from litehive.config.paths import litehive_root
 from litehive.config.workspace_files import config_path
-from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
+from litehive.workspace import Workspace
 
 RUNTIME_SETTING_KEYS = ("default_engine", "engine_preference", "engine_freeze")
 
@@ -57,10 +57,10 @@ def _merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) ->
     return merged
 
 
-def _bootstrap_config_data(root: Path) -> dict[str, Any]:
+def _bootstrap_config_data(workspace: Workspace) -> dict[str, Any]:
     config = asdict(LitehiveConfig())
     config = _merge_config_layers(config, _read_config_layer(litehive_root() / "config.yaml"))
-    return _merge_config_layers(config, _read_config_layer(config_path(root)))
+    return _merge_config_layers(config, _read_config_layer(config_path(workspace.root)))
 
 
 def _json_dumps(value: Any) -> str:
@@ -109,13 +109,13 @@ def _load_setting_rows(connection: sqlite3.Connection) -> dict[str, Any]:
     return {str(row["key"]): _json_loads(str(row["value_json"])) for row in rows}
 
 
-def bootstrap_runtime_settings(root: Path, config_data: Mapping[str, Any] | None = None) -> None:
+def bootstrap_runtime_settings(workspace: Workspace, config_data: Mapping[str, Any] | None = None) -> None:
     """Seed audited runtime settings from config files once.
 
     The config file values are bootstrap-only. After the corresponding database
     rows exist, later config-file drift is ignored by runtime config loading.
     """
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         existing_keys = {
             str(row["key"])
             for row in connection.execute(
@@ -126,7 +126,7 @@ def bootstrap_runtime_settings(root: Path, config_data: Mapping[str, Any] | None
         missing_keys = [key for key in RUNTIME_SETTING_KEYS if key not in existing_keys]
         if not missing_keys:
             return
-        runtime_values = _runtime_values_from_config(config_data or _bootstrap_config_data(root))
+        runtime_values = _runtime_values_from_config(config_data or _bootstrap_config_data(workspace))
         now = utcnow()
         for key, value in runtime_values.items():
             if key not in missing_keys:
@@ -141,18 +141,18 @@ def bootstrap_runtime_settings(root: Path, config_data: Mapping[str, Any] | None
         connection.commit()
 
 
-def load_runtime_settings(root: Path) -> dict[str, Any]:
+def load_runtime_settings(workspace: Workspace) -> dict[str, Any]:
     """Return the current audited values for the engine-control settings, bootstrapping from config files on first access; called by the CLI ``runtime-settings show`` surface and by anywhere that needs the post-bootstrap view without merging it back into the full ``LitehiveConfig`` shape."""
-    bootstrap_runtime_settings(root)
-    with connect_workspace_db(root) as connection:
+    bootstrap_runtime_settings(workspace)
+    with workspace.connect() as connection:
         rows = _load_setting_rows(connection)
     return {key: rows[key] for key in RUNTIME_SETTING_KEYS if key in rows}
 
 
-def apply_runtime_settings_to_config_data(root: Path, config_data: Mapping[str, Any]) -> dict[str, Any]:
+def apply_runtime_settings_to_config_data(workspace: Workspace, config_data: Mapping[str, Any]) -> dict[str, Any]:
     """Overlay the audited runtime values on top of file-loaded config data and return a merged dict; called by config loading so that once a setting is in the database the file value is ignored, making the database the source of truth after bootstrap."""
-    bootstrap_runtime_settings(root, config_data)
-    with connect_workspace_db(root) as connection:
+    bootstrap_runtime_settings(workspace, config_data)
+    with workspace.connect() as connection:
         settings = _load_setting_rows(connection)
     effective = dict(config_data)
     for key in RUNTIME_SETTING_KEYS:
@@ -162,7 +162,7 @@ def apply_runtime_settings_to_config_data(root: Path, config_data: Mapping[str, 
 
 
 def set_runtime_setting(
-    root: Path,
+    workspace: Workspace,
     key: str,
     value: Any,
     actor: str,
@@ -172,10 +172,10 @@ def set_runtime_setting(
     """Write a single audited setting and append an audit-log row in the same transaction, returning a no-op ``RuntimeSettingChange`` when the value is unchanged; this is the one entry point through which every CLI/quota/recovery mutation must go so the audit log stays complete."""
     if key not in RUNTIME_SETTING_KEYS:
         raise ValueError(f"unsupported runtime setting {key!r}")
-    bootstrap_runtime_settings(root)
+    bootstrap_runtime_settings(workspace)
     now = utcnow()
     new_json = _json_dumps(value)
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         row = connection.execute("SELECT value_json FROM runtime_settings WHERE key = ?", (key,)).fetchone()
         if row is None:
             old_json = None
@@ -224,7 +224,7 @@ def set_runtime_setting(
 
 
 def set_default_engine(
-    root: Path,
+    workspace: Workspace,
     engine_name: str,
     actor: str = "operator",
     source: str = "cli",
@@ -232,7 +232,7 @@ def set_default_engine(
 ) -> RuntimeSettingChange:
     """Persist the workspace's default engine through the audited store; called by the CLI ``engine default`` command (``actor='operator'``) and intentionally typed as a thin wrapper so the audit trail records the semantic intent, not just a raw key write."""
     return set_runtime_setting(
-        root,
+        workspace,
         key="default_engine",
         value=engine_name,
         actor=actor,
@@ -242,7 +242,7 @@ def set_default_engine(
 
 
 def set_engine_preference(
-    root: Path,
+    workspace: Workspace,
     engines: Sequence[str],
     actor: str = "operator",
     source: str = "cli",
@@ -250,7 +250,7 @@ def set_engine_preference(
 ) -> RuntimeSettingChange:
     """Persist the engine fallback order through the audited store, normalising the sequence first so duplicate or empty entries are rejected up front; called by the CLI ``engine preference`` command."""
     return set_runtime_setting(
-        root,
+        workspace,
         key="engine_preference",
         value=normalize_engine_sequence(engines, field_name="engine_preference"),
         actor=actor,
@@ -260,7 +260,7 @@ def set_engine_preference(
 
 
 def set_engine_freeze(
-    root: Path,
+    workspace: Workspace,
     engine_name: str,
     freeze_iso: str,
     actor: str = "operator",
@@ -268,12 +268,12 @@ def set_engine_freeze(
     context: Mapping[str, Any] | None = None,
 ) -> RuntimeSettingChange:
     """Add or refresh one engine's freeze-until timestamp inside the freeze map and persist the whole map atomically; called by the CLI ``engine freeze`` command and by the engine-selection loop when a quota response carries a reset time, with the per-engine before/after values written into the audit context for easy diffing."""
-    settings = load_runtime_settings(root)
+    settings = load_runtime_settings(workspace)
     freeze_map = _freeze_value(settings.get("engine_freeze", {}))
     old_engine_value = freeze_map.get(engine_name)
     freeze_map[engine_name] = freeze_iso
     return set_runtime_setting(
-        root,
+        workspace,
         key="engine_freeze",
         value=freeze_map,
         actor=actor,
@@ -288,14 +288,14 @@ def set_engine_freeze(
 
 
 def clear_engine_freeze(
-    root: Path,
+    workspace: Workspace,
     engine_name: str,
     actor: str = "operator",
     source: str = "cli",
     context: Mapping[str, Any] | None = None,
 ) -> RuntimeSettingChange:
     """Remove a single engine's entry from the freeze map and persist the rest, returning an unchanged ``RuntimeSettingChange`` when the engine was already unfrozen so callers can avoid noisy "no-op" log lines; called by the CLI ``engine unfreeze`` command and by the engine-selection loop when a freeze window has expired."""
-    settings = load_runtime_settings(root)
+    settings = load_runtime_settings(workspace)
     freeze_map = _freeze_value(settings.get("engine_freeze", {}))
     old_engine_value = freeze_map.get(engine_name)
     if old_engine_value is None:
@@ -307,7 +307,7 @@ def clear_engine_freeze(
         )
     freeze_map.pop(engine_name)
     return set_runtime_setting(
-        root,
+        workspace,
         key="engine_freeze",
         value=freeze_map,
         actor=actor,
@@ -322,7 +322,7 @@ def clear_engine_freeze(
 
 
 def load_runtime_setting_audit_entries(
-    root: Path,
+    workspace: Workspace,
     key: str | None = None,
     limit: int = 20,
 ) -> list[RuntimeSettingAuditEntry]:
@@ -338,7 +338,7 @@ def load_runtime_setting_audit_entries(
     query += " ORDER BY id DESC LIMIT ?"
     params.append(limit)
 
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         rows = connection.execute(query, params).fetchall()
 
     entries: list[RuntimeSettingAuditEntry] = []

@@ -32,6 +32,7 @@ from litehive.tasks.constants import CLOSED_TASK_STATUSES, VALID_TASK_ENGINES
 from litehive.tasks.paths import latest_subagent_base, task_dir
 from litehive.tasks.queue import move_queued_task
 from litehive.tasks.runtime import mark_engine_switch
+from litehive.workspace import Workspace
 
 
 def _effective_task_engine(root: Path, task: TaskRecord) -> str:
@@ -155,7 +156,7 @@ def switch_task_engine(
         ),
     )
     append_task_audit_entries(
-        root,
+        Workspace.from_path(root),
         [
             build_task_audit_entry(
                 task_id=task.id,

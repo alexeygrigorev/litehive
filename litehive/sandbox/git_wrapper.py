@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 from litehive.attention import append_attention_log
+from litehive.workspace import Workspace
 
 _PROTECTED_REFS = {"main", "master", "origin/main", "origin/master"}
 
@@ -14,7 +15,7 @@ def main(argv: list[str], real_git_path: str, workspace_root: str) -> int:
     reason = rejection_reason(argv)
     if reason is not None:
         append_attention_log(
-            Path(workspace_root),
+            Workspace.from_path(Path(workspace_root)),
             f"merge-resolver git wrapper rejected `{_format_cmd(argv)}`: {reason}",
         )
         print(f"litehive git wrapper: blocked destructive git command: {reason}", file=sys.stderr)

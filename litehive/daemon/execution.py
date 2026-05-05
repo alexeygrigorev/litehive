@@ -17,6 +17,7 @@ from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.attention import append_attention_log
 from litehive.db.schema import apply_pending_migrations
+from litehive.workspace import Workspace
 from litehive.git.ops import fetch, is_ancestor, list_remote_names, rev_parse_verify
 from litehive.observability.status import (
     collect_task_pipeline_status,
@@ -132,7 +133,7 @@ def _append_attention_log(workspace: Path, message: str) -> None:
     so this thin wrapper exists only to keep the import surface
     daemon-internal while delegating to ``litehive.attention``.
     """
-    append_attention_log(workspace, message)
+    append_attention_log(Workspace.from_path(workspace), message)
 
 
 def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:

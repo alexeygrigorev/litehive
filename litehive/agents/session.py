@@ -39,7 +39,7 @@ _COMPLETED_INACTIVITY_PATTERN = re.compile(
 class SessionMixin:
     """Session I/O methods extracted from SubagentManager.
 
-    Subclasses must provide: self.root, self.sandbox, self.config, self._stream_offsets.
+    Subclasses must provide: self.root, self.workspace, self.sandbox, self.config, self._stream_offsets.
     """
 
     @staticmethod
@@ -108,7 +108,7 @@ class SessionMixin:
         ensure_session_log(base, "stdout")
         ensure_session_log(base, "stderr")
         append_event(
-            self.root,
+            self.workspace,
             task,
             "subagent_started",
             data={
@@ -199,7 +199,7 @@ class SessionMixin:
             continuation=None,
         )
         append_event(
-            self.root,
+            self.workspace,
             task,
             "subagent_pid",
             data={"subagent_id": ref.id, "pid": pid},

@@ -41,6 +41,7 @@ from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection
 from litehive.tasks.activity import append_task_activity
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.state.locking import runner_status
+from litehive.workspace import Workspace
 
 
 def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: typer.Typer) -> None:
@@ -569,7 +570,7 @@ def db_audit(
 ) -> int:
     """Print durable task audit log entries (status/queue/pipeline transitions) so operators can trace what happened to a task."""
     workspace = normalize_workspace_root(workspace, source="--workspace")
-    entries = load_task_audit_entries(workspace, task_id=task_id, action=action, limit=limit)
+    entries = load_task_audit_entries(Workspace.from_path(workspace), task_id=task_id, action=action, limit=limit)
     print(f"workspace: {workspace}")
     print(f"audit_entries: {len(entries)}")
     for entry in entries:
@@ -589,7 +590,7 @@ def db_audit(
 def db_settings(workspace: WorkspaceOption = Path.cwd()) -> int:
     """Print the audited runtime settings stored in the workspace database, sorted by key."""
     workspace = normalize_workspace_root(workspace, source="--workspace")
-    settings = load_runtime_settings(workspace)
+    settings = load_runtime_settings(Workspace.from_path(workspace))
     print(f"workspace: {workspace}")
     for key in sorted(settings):
         print(f"{key}: {json.dumps(settings[key], sort_keys=True)}")
@@ -603,7 +604,7 @@ def db_settings_audit(
 ) -> int:
     """Print the change history of audited runtime settings (old_value -> new_value with actor and source)."""
     workspace = normalize_workspace_root(workspace, source="--workspace")
-    entries = load_runtime_setting_audit_entries(workspace, key=key, limit=limit)
+    entries = load_runtime_setting_audit_entries(Workspace.from_path(workspace), key=key, limit=limit)
     print(f"workspace: {workspace}")
     print(f"setting_audit_entries: {len(entries)}")
     for entry in entries:

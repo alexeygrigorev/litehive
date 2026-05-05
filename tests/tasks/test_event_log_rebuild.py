@@ -12,6 +12,7 @@ from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, discard_created_task, get_task, require_task, save_task
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.audit import load_task_audit_entries
+from litehive.workspace import Workspace
 from litehive.tasks.event_log import (
     read_task_events,
     rebuild_sqlite_from_task_event_log,
@@ -191,7 +192,7 @@ def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_
     assert len(replayed_stage_reports) == 1
     assert replayed_stage_reports[0].summary == "stage report replay"
     assert {"created", "metadata_updated", "closed"} <= {
-        entry.action for entry in load_task_audit_entries(tmp_path, task_id=done.id, limit=10)
+        entry.action for entry in load_task_audit_entries(Workspace.from_path(tmp_path), task_id=done.id, limit=10)
     }
 
 
@@ -243,7 +244,7 @@ def test_replay_keeps_discarded_created_task_removed(tmp_path: Path) -> None:
     ]
     assert summary.tasks_rebuilt == 0
     assert get_task(tmp_path, task.id) is None
-    assert [entry.action for entry in load_task_audit_entries(tmp_path, task_id=task.id, limit=10)] == [
+    assert [entry.action for entry in load_task_audit_entries(Workspace.from_path(tmp_path), task_id=task.id, limit=10)] == [
         "removed",
         "created",
     ]

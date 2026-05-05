@@ -31,6 +31,7 @@ from litehive.lifecycle.types import PipelineMode
 from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
 from litehive.state.records import create_task, get_task_record
 from litehive.tasks.audit import load_task_audit_entries
+from litehive.workspace import Workspace
 
 
 def _run_engine(*args: str) -> tuple[int | None, str]:
@@ -100,7 +101,7 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
     config = load_config(tmp_path)
     assert "codex" not in config.engine_freeze
     assert config_path.read_text(encoding="utf-8") == raw_config_before
-    entries = load_runtime_setting_audit_entries(tmp_path, key="engine_freeze", limit=10)
+    entries = load_runtime_setting_audit_entries(Workspace.from_path(tmp_path), key="engine_freeze", limit=10)
     assert [entry.actor for entry in entries[:2]] == ["operator", "operator"]
     assert entries[0].context["engine"] == "codex"
     assert entries[0].context["old_value"] == "2099-12-31T00:00:00Z"
@@ -130,7 +131,7 @@ def test_default_engine_cli_persists_to_audited_db_not_config_file(tmp_path: Pat
     assert load_config(tmp_path).default_engine == "gemini"
     assert config_path.read_text(encoding="utf-8") == raw_config_before
 
-    entries = load_runtime_setting_audit_entries(tmp_path, key="default_engine", limit=5)
+    entries = load_runtime_setting_audit_entries(Workspace.from_path(tmp_path), key="default_engine", limit=5)
     assert len(entries) == 1
     assert entries[0].actor == "operator"
     assert entries[0].source == "cli"
@@ -340,7 +341,7 @@ def test_queue_switch_cli_queues_task_for_new_engine(tmp_path: Path) -> None:
     assert refreshed is not None
     assert refreshed.runtime.execution.last_engine_switch is not None
     assert refreshed.runtime.execution.last_engine_switch.to_engine == "gemini"
-    entries = load_task_audit_entries(tmp_path, task_id=task.id, action="engine_switched", limit=5)
+    entries = load_task_audit_entries(Workspace.from_path(tmp_path), task_id=task.id, action="engine_switched", limit=5)
     assert len(entries) == 1
     assert entries[0].actor == "operator"
     assert entries[0].source == "cli"

@@ -28,6 +28,7 @@ from litehive.observability.status_diagnostics import (
 )
 from litehive.state.records import create_task, save_task
 from litehive.state.persist import save_state
+from litehive.workspace import Workspace
 
 from tests.support.helpers import _cmd_status
 
@@ -178,7 +179,7 @@ def test_status_reports_legacy_engine_fallbacks_config_error(tmp_path: Path, cap
 def test_status_ignores_legacy_engine_monitoring_yaml_and_renders_db_data(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     record_engine_execution(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task_id="T-0001",
         engine_name="codex",
         adapter=get_engine("codex"),

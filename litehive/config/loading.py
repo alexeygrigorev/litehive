@@ -46,8 +46,9 @@ def load_config(root: Path) -> LitehiveConfig:
     # inline: runtime_settings transitively pulls db.schema which loads
     # config.* back through litehive/config/__init__.py during partial init.
     from litehive.config.runtime_settings import apply_runtime_settings_to_config_data  # noqa: PLC0415
+    from litehive.workspace import Workspace  # noqa: PLC0415
 
-    data = apply_runtime_settings_to_config_data(root, load_effective_config_data(root))
+    data = apply_runtime_settings_to_config_data(Workspace.from_path(root), load_effective_config_data(root))
     return LitehiveConfig(**validate_config_data(data))
 
 

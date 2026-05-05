@@ -25,6 +25,7 @@ from litehive.config.runtime_settings import (
     set_default_engine,
     set_engine_preference,
 )
+from litehive.workspace import Workspace
 
 
 def engine_command(
@@ -59,7 +60,7 @@ def engine_command(
             print(f"engine default: unknown engine '{name}'")
             return 1
         change = set_default_engine(
-            workspace,
+            Workspace.from_path(workspace),
             name,
             actor="operator",
             source="cli",
@@ -79,7 +80,7 @@ def engine_command(
             return 1
         try:
             change = set_engine_preference(
-                workspace,
+                Workspace.from_path(workspace),
                 preference,
                 actor="operator",
                 source="cli",
@@ -141,7 +142,7 @@ def _engine_list_label(value: object) -> str:
 
 def _render_engine_audit_lines(root: Path, key: str | None, limit: int) -> list[str]:
     """Render the operator-facing audit log of engine setting changes for the ``engine audit`` subcommand."""
-    entries = load_runtime_setting_audit_entries(root, key=key, limit=limit)
+    entries = load_runtime_setting_audit_entries(Workspace.from_path(root), key=key, limit=limit)
     lines = [f"setting_audit_entries: {len(entries)}"]
     for entry in entries:
         lines.extend(

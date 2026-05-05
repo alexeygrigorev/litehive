@@ -17,11 +17,11 @@ from pathlib import Path
 import sqlite3
 
 from litehive.config.workspace import normalize_workspace_root
-from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import TaskStatus, utcnow
 from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state
 from litehive.state.records import list_tasks
+from litehive.workspace import Workspace
 
 OPERATOR_NEEDED_POOL_STOP_REASONS = {
     "attention_required",
@@ -51,7 +51,7 @@ class AttentionLogEntry:
     message: str
 
 
-def append_attention_log(workspace: Path, message: str) -> None:
+def append_attention_log(workspace: Workspace, message: str) -> None:
     """Persist a best-effort operator diagnostic to the attention log table.
 
     Used by the merge-resolver git wrapper, the daemon's
@@ -59,8 +59,7 @@ def append_attention_log(workspace: Path, message: str) -> None:
     record a one-off operator-facing event that doesn't fit
     elsewhere. Schema lives at migration 0009.
     """
-    root = normalize_workspace_root(workspace, source="append_attention_log")
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         connection.execute(
             "INSERT INTO attention_log (created_at, message) VALUES (?, ?)",
             (utcnow(), message),
@@ -68,18 +67,17 @@ def append_attention_log(workspace: Path, message: str) -> None:
         connection.commit()
 
 
-def read_attention_log(workspace: Path, limit: int | None = None) -> list[AttentionLogEntry]:
+def read_attention_log(workspace: Workspace, limit: int | None = None) -> list[AttentionLogEntry]:
     """Return attention-log entries newest-first, optionally limited.
 
     Reading is best-effort: if the table does not yet exist (e.g.
     migrations have not run on a freshly-initialized workspace),
     return an empty list rather than raising.
     """
-    root = normalize_workspace_root(workspace, source="read_attention_log")
     query = "SELECT created_at, message FROM attention_log ORDER BY id DESC"
     if limit is not None:
         query += f" LIMIT {int(limit)}"
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         try:
             rows = connection.execute(query).fetchall()
         except sqlite3.OperationalError:

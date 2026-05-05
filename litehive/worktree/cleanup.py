@@ -9,6 +9,7 @@ from pathlib import Path
 
 from litehive.attention import append_attention_log
 from litehive.domain.task import TaskRecord
+from litehive.workspace import Workspace
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.domain.worktree import ManagedWorktree
 from litehive.git.ops import GitError, delete_branch, remove_worktree, status_porcelain
@@ -120,7 +121,7 @@ def remove_cleanable_worktrees(root: Path, dry_run: bool = False) -> dict[str, l
                     save_task(root, task)
                 except WorkspaceConflictError:
                     append_attention_log(
-                        root,
+                        Workspace.from_path(root),
                         (f"deferred worktree metadata clearing for {item.task_id}: workspace locked by active runner"),
                     )
                     deferred.append(item)

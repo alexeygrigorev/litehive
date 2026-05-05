@@ -20,6 +20,7 @@ from litehive.tasks.paths import (
 )
 from litehive.tasks.report_storage import latest_stage_report
 from litehive.worktree import resolve_recorded_worktree_path
+from litehive.workspace import Workspace
 
 
 def collect_recovery_evidence(
@@ -30,10 +31,10 @@ def collect_recovery_evidence(
     """Gather every signal the recovery agent needs into a single evidence list — task record, runtime state, sqlite activity/events, the latest stage report, the latest subagent's artifacts, the wrapper log, engine monitoring, and the dirty-path snapshot for both the main checkout and the task worktree — so the recovery prompt sees the same facts the operator would when triaging by hand."""
     evidence: list[RecoveryEvidenceItem] = []
     activity_entries = load_task_activity(root, task)
-    task_events = read_events(root, task)
+    task_events = read_events(Workspace.from_path(root), task)
     latest_report = latest_stage_report(root, task)
     latest_run_log = latest_run_all_log_path(root)
-    monitoring = load_engine_monitoring(root)
+    monitoring = load_engine_monitoring(Workspace.from_path(root))
     engine_name = None
     if task.runtime.execution.active_subagent is not None:
         engine_name = task.runtime.execution.active_subagent.engine

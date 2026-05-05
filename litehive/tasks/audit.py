@@ -3,15 +3,14 @@
 from dataclasses import dataclass
 import json
 import sqlite3
-from pathlib import Path
 from typing import Any, Iterable
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord
 from litehive.tasks.event_log import append_task_event, task_event_type_for_audit_action
+from litehive.workspace import Workspace
 
 
 @dataclass(frozen=True)
@@ -129,16 +128,16 @@ def insert_task_audit_entries(connection: sqlite3.Connection, entries: Iterable[
     )
 
 
-def append_task_audit_entries(root: Path, entries: Iterable[TaskAuditEntry]) -> None:
+def append_task_audit_entries(workspace: Workspace, entries: Iterable[TaskAuditEntry]) -> None:
     """Top-level "log these audit entries" call: writes audit rows and the parallel task-event entries in one transaction so external observers see the audit and the event log progress together."""
     entry_list = list(entries)
     if not entry_list:
         return
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         insert_task_audit_entries(connection, entry_list)
         for entry in entry_list:
             append_task_event(
-                root,
+                workspace.root,
                 event_type=task_event_type_for_audit_action(entry.action),
                 task_id=entry.task_id,
                 payload={"audit_entry": entry.model_dump(mode="json")},
@@ -147,7 +146,7 @@ def append_task_audit_entries(root: Path, entries: Iterable[TaskAuditEntry]) -> 
 
 
 def load_task_audit_entries(
-    root: Path,
+    workspace: Workspace,
     task_id: str | None = None,
     action: str | None = None,
     limit: int = 20,
@@ -183,7 +182,7 @@ def load_task_audit_entries(
     query += " ORDER BY id DESC LIMIT ?"
     params.append(limit)
 
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         rows = connection.execute(query, params).fetchall()
 
     entries: list[TaskAuditEntry] = []

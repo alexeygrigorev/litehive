@@ -15,6 +15,7 @@ from litehive.sandbox.git_wrapper import main as git_wrapper_main
 from litehive.state.persist import load_state, save_state, set_pool_stop_reason
 from litehive.state.records import create_task, save_task
 from litehive.domain.task import WorkspaceState
+from litehive.workspace import Workspace
 
 
 def test_status_surfaces_flagged_task_as_operator_needed(tmp_path: Path, capsys) -> None:
@@ -64,9 +65,10 @@ def test_status_reports_no_operator_needed_when_workspace_is_clear(tmp_path: Pat
 def test_operator_log_is_runtime_diagnostic_not_queue_item(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
 
-    append_attention_log(tmp_path, "manual diagnostic")
+    workspace = Workspace.from_path(tmp_path)
+    append_attention_log(workspace, "manual diagnostic")
 
-    entries = read_attention_log(tmp_path)
+    entries = read_attention_log(workspace)
     assert any(entry.message == "manual diagnostic" for entry in entries)
     assert not (tmp_path / ".litehive" / "attention").exists()
     assert not (tmp_path / ".litehive" / "runtime" / "attention.log").exists()
@@ -84,7 +86,7 @@ def test_git_wrapper_block_logs_without_persisting_attention_queue(tmp_path: Pat
 
     assert exit_code == 2
     assert "blocked destructive git command" in err
-    entries = read_attention_log(tmp_path)
+    entries = read_attention_log(Workspace.from_path(tmp_path))
     assert any(
         "merge-resolver git wrapper rejected `git push --force origin main`" in entry.message
         for entry in entries
