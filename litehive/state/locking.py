@@ -146,7 +146,7 @@ def read_runner_lock_metadata(root: Path) -> RunnerStatusState:
     data = _runner_lock_manager(root.resolve()).read_metadata(strict=True)
     if data is None:
         return RunnerStatusState()
-    return RunnerStatusState(**data)
+    return RunnerStatusState.model_validate(data)
 
 
 def runner_metadata_present(status: RunnerStatusState) -> bool:

@@ -5,6 +5,7 @@ from typer.testing import CliRunner
 
 from litehive.cli.app import app as cli_app
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.lifecycle.journal import SqliteJournal
@@ -21,8 +22,8 @@ from litehive.worktree.inspection import inspect_dirty_worktree_gate
 
 
 def _set_running_task(task, *, stage: str = "implementing") -> None:
-    task.status = "in_progress"
-    task.pipeline_status = stage
+    task.status = TaskStatus.IN_PROGRESS
+    task.pipeline_status = PipelineStatus(stage)
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.run_started_at = "2026-04-12T10:00:00Z"
     task.runtime.pipeline.current_stage.stage = stage
@@ -83,8 +84,8 @@ def test_restore_missing_queued_tasks_skips_parked_and_restores_interrupted(
         title="Interrupted work",
         acceptance_criteria=["resume interrupted work"],
     )
-    interrupted.status = "interrupted"
-    interrupted.pipeline_status = "implementing"
+    interrupted.status = TaskStatus.INTERRUPTED
+    interrupted.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, interrupted)
 
     parked = create_task(
@@ -92,8 +93,8 @@ def test_restore_missing_queued_tasks_skips_parked_and_restores_interrupted(
         title="Parked work",
         acceptance_criteria=["resume parked work explicitly"],
     )
-    parked.status = "parked"
-    parked.pipeline_status = "implementing"
+    parked.status = TaskStatus.PARKED
+    parked.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, parked)
 
     backlog = create_task(
@@ -101,8 +102,8 @@ def test_restore_missing_queued_tasks_skips_parked_and_restores_interrupted(
         title="Dormant backlog work",
         acceptance_criteria=["stay off the live queue until explicitly queued"],
     )
-    backlog.status = "queued"
-    backlog.pipeline_status = "backlog"
+    backlog.status = TaskStatus.QUEUED
+    backlog.pipeline_status = PipelineStatus.BACKLOG
     save_task(tmp_path, backlog)
 
     state = load_state(tmp_path)
@@ -122,8 +123,8 @@ def test_restore_missing_queued_tasks_skips_parked_and_restores_interrupted(
 def test_resume_task_allows_stranded_in_progress_task(tmp_path: Path, execution_status: str) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Resume stranded task")
-    task.status = "in_progress"
-    task.pipeline_status = "grooming"
+    task.status = TaskStatus.IN_PROGRESS
+    task.pipeline_status = PipelineStatus.GROOMING
     task.runtime.pipeline.execution_status = execution_status
     task.runtime.pipeline.current_stage.stage = "grooming"
     task.runtime.pipeline.current_stage.status = execution_status
@@ -175,8 +176,8 @@ def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
 
     monkeypatch.setattr("litehive.worktree.inspection.status_porcelain", _status_porcelain)
 
-    task.status = "interrupted"
-    task.pipeline_status = "implementing"
+    task.status = TaskStatus.INTERRUPTED
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, task)
     interrupted_report = inspect_dirty_worktree_gate(tmp_path)
 
@@ -192,8 +193,8 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
         title="Restart saved stage",
         acceptance_criteria=["resume in testing without replaying earlier stages"],
     )
-    task.status = "parked"
-    task.pipeline_status = "testing"
+    task.status = TaskStatus.PARKED
+    task.pipeline_status = PipelineStatus.TESTING
     task.runtime.pipeline.execution_status = "paused"
     task.runtime.pipeline.current_stage.stage = "testing"
     task.runtime.pipeline.current_stage.status = "paused"
@@ -231,8 +232,8 @@ def test_resume_task_recovers_preserved_stage_when_pipeline_status_degraded(tmp_
         title="Resume preserved stage",
         acceptance_criteria=["resume from testing after stale state cleanup"],
     )
-    task.status = "parked"
-    task.pipeline_status = "backlog"
+    task.status = TaskStatus.PARKED
+    task.pipeline_status = PipelineStatus.BACKLOG
     task.runtime.pipeline.execution_status = "paused"
     task.runtime.pipeline.current_stage.stage = "testing"
     task.runtime.pipeline.current_stage.status = "paused"
@@ -265,8 +266,8 @@ def test_resume_task_canonicalizes_stranded_in_progress_with_degraded_pipeline_s
         title="Resume stranded degraded task",
         acceptance_criteria=["resume from testing"],
     )
-    task.status = "in_progress"
-    task.pipeline_status = "backlog"
+    task.status = TaskStatus.IN_PROGRESS
+    task.pipeline_status = PipelineStatus.BACKLOG
     task.runtime.pipeline.execution_status = "idle"
     task.runtime.pipeline.current_stage.stage = "testing"
     task.runtime.pipeline.current_stage.status = "idle"
@@ -303,8 +304,8 @@ def test_queue_resume_and_requeue_keep_parked_semantics_explicit(
         title="Queued later",
         acceptance_criteria=["resume from testing", "requeue from implementing"],
     )
-    task.status = "parked"
-    task.pipeline_status = "testing"
+    task.status = TaskStatus.PARKED
+    task.pipeline_status = PipelineStatus.TESTING
     save_task(tmp_path, task)
 
     state = load_state(tmp_path)

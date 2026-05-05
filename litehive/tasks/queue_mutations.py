@@ -9,7 +9,7 @@ logic lives in ``queue_selection``; pure predicates live in
 
 from pathlib import Path
 
-from litehive.domain.common import TaskStatus, utcnow
+from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
 from litehive.domain.runtime import TaskOutcomeState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.locking import (
@@ -192,8 +192,8 @@ def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
 
 def reset_task_for_recovery(
     task: TaskRecord,
-    status: str,
-    pipeline_status: str,
+    status: TaskStatus | str,
+    pipeline_status: PipelineStatus | str,
     clear_last_outcome: bool = True,
 ) -> None:
     """
@@ -205,18 +205,22 @@ def reset_task_for_recovery(
     instead of leftover ``running``/``failed`` state from the previous run.
     """
     now = utcnow()
-    task.status = status
+    canonical_status = status if isinstance(status, TaskStatus) else TaskStatus(status)
+    canonical_pipeline_status = (
+        pipeline_status if isinstance(pipeline_status, PipelineStatus) else PipelineStatus(pipeline_status)
+    )
+    task.status = canonical_status
     task.close_reason = None
     task.flag_reason = None
-    task.pipeline_status = pipeline_status
+    task.pipeline_status = canonical_pipeline_status
     clear_task_run_activity(task, execution_status="idle", updated_at=now, clear_interruption=True)
     task.runtime.pipeline.retry_count = 0
     task.runtime.pipeline.retry_limit = 0
-    task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage=pipeline_status)
+    task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage=canonical_pipeline_status)
     if clear_last_outcome:
         task.runtime.pipeline.last_outcome = TaskOutcomeState()
     elif task.runtime.pipeline.last_outcome.kind == "interrupted":
-        task.runtime.pipeline.last_outcome.stage = pipeline_status
+        task.runtime.pipeline.last_outcome.stage = canonical_pipeline_status
 
 
 def enqueue_recovered_task(state: WorkspaceState, task_id: str) -> None:

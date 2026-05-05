@@ -28,7 +28,7 @@ from litehive.workspace import Workspace
 from litehive.lifecycle.persistence import FailedRunRecord, LastRejection, LastReport, TaskState
 from litehive.lifecycle.prompt_serializer import serialize_prompt
 from litehive.lifecycle.prompt_types import AgentPrompt
-from litehive.lifecycle.types import PipelineMode
+from litehive.lifecycle.types import FailedReason, PipelineMode
 from litehive.state.records import create_task, save_task
 from litehive.tasks.paths import task_dir
 
@@ -55,7 +55,7 @@ class _NullSessions:
 def make_state(task_id: str, stage: str = "implementing", **overrides) -> TaskState:
     return TaskState(
         task_id=task_id,
-        stage=stage,
+        stage=stage,  # type: ignore[arg-type]
         pipeline_mode=PipelineMode.FULL,
         **overrides,
     )
@@ -77,7 +77,7 @@ def make_prompt(
     """Build an ``AgentPrompt`` from the trimmed dict shape these tests historically used."""
     return AgentPrompt(
         role=role,
-        stage=stage,
+        stage=stage,  # type: ignore[arg-type]
         task_id=task_id,
         pipeline_mode=pipeline_mode,
         stage_retry=0,
@@ -163,7 +163,7 @@ def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
     agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(
         task.id,
-        stage="recovering",
+        stage=PipelineState.RECOVERING,
         active_recovery_trigger=RecoveryTrigger(
             origin_stage="implementing",
             trigger_event_kind=TriggerEventKind.CRASH,
@@ -205,7 +205,7 @@ def test_serialize_recovery_diagnoses_invalid_current_config(workspace: Path) ->
     agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(
         task.id,
-        stage="recovering",
+        stage=PipelineState.RECOVERING,
         active_recovery_trigger=RecoveryTrigger(
             origin_stage="implementing",
             trigger_event_kind=TriggerEventKind.CRASH,
@@ -263,7 +263,7 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
     agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(
         task.id,
-        stage="recovering",
+        stage=PipelineState.RECOVERING,
         active_recovery_trigger=RecoveryTrigger(
             origin_stage="implementing",
             trigger_event_kind=TriggerEventKind.CRASH,
@@ -322,7 +322,7 @@ def test_serialize_recovery_includes_repeated_fingerprint_escalation(workspace: 
     agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(
         task.id,
-        stage="recovering",
+        stage=PipelineState.RECOVERING,
         active_recovery_trigger=RecoveryTrigger(
             origin_stage="implementing",
             trigger_event_kind=TriggerEventKind.CRASH,
@@ -367,7 +367,7 @@ def test_serialize_recovery_ignores_same_budget_key_with_different_fingerprint(w
     agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(
         task.id,
-        stage="recovering",
+        stage=PipelineState.RECOVERING,
         active_recovery_trigger=RecoveryTrigger(
             origin_stage="implementing",
             trigger_event_kind=TriggerEventKind.CRASH,
@@ -438,7 +438,7 @@ def test_serialize_reads_activity_through_boundary(workspace: Path, monkeypatch)
         return [
             TaskActivityEntry(
                 role="planner",
-                stage="grooming",
+                stage=PipelineState.GROOMING,
                 verdict="pass",
                 message="scope ready",
             )
@@ -463,10 +463,10 @@ def test_serialize_includes_last_rejection(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(task.id)
-    state.last_rejection_by_stage["implementing"] = LastRejection(
+    state.last_rejection_by_stage[PipelineState.IMPLEMENTING] = LastRejection(
         source="qa",
         reason="tests fail with ImportError",
-        raised_at_phase="testing",
+        raised_at_phase=PipelineState.TESTING,
     )
     text = serialize_prompt(agent.build_prompt(state), task_record=task, workspace_root=workspace)
 
@@ -479,16 +479,16 @@ def test_serialize_includes_last_rejection(workspace: Path) -> None:
 def test_planner_prompt_surfaces_failed_run_history(workspace: Path) -> None:
     task = create_task(workspace, title="Repeated retry exhaustion")
     agent = PlannerAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
-    state = make_state(task.id, stage="grooming")
+    state = make_state(task.id, stage=PipelineState.GROOMING)
     state.failed_run_history["implementing:agent:tests fail"] = FailedRunRecord(
-        stage="implementing",
+        stage=PipelineState.IMPLEMENTING,
         failure_shape="agent:tests fail",
         count=2,
         latest_at="2026-04-25T10:00:00+00:00",
         last_reason="tests fail",
         source="agent",
         retry_limit=3,
-        failed_reason="semantic_reject",
+        failed_reason=FailedReason.SEMANTIC_REJECT,
     )
 
     prompt = agent.build_prompt(state)
@@ -505,7 +505,7 @@ def test_planner_prompt_requires_current_main_preflight_before_scoping(workspace
     task = create_task(workspace, title="Avoid redundant implementation", goal="check current main first")
     agent = PlannerAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
 
-    text = serialize_prompt(agent.build_prompt(make_state(task.id, stage="grooming")), task_record=task, workspace_root=workspace)
+    text = serialize_prompt(agent.build_prompt(make_state(task.id, stage=PipelineState.GROOMING)), task_record=task, workspace_root=workspace)
 
     preflight_idx = text.index("run a grooming preflight against current `main` and recent landed work")
     planning_idx = text.index("Frame the real user problem")
@@ -520,7 +520,7 @@ def test_retry_prompt_includes_prior_work_summary_from_last_report(workspace: Pa
     task = create_task(workspace, title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(task.id)
-    state.stage_retry["implementing"] = 1
+    state.stage_retry[PipelineState.IMPLEMENTING] = 1
     state.last_report = LastReport(
         files_changed=2,
         changed_files=[
@@ -549,7 +549,7 @@ def test_retry_prompt_omits_prior_work_when_last_report_has_no_retry_summary(wor
     task = create_task(workspace, title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(task.id)
-    state.stage_retry["implementing"] = 1
+    state.stage_retry[PipelineState.IMPLEMENTING] = 1
 
     text = serialize_prompt(agent.build_prompt(state), task_record=task, workspace_root=workspace)
 
@@ -560,7 +560,7 @@ def test_retry_prompt_filters_last_rejection_reason_from_prior_work(workspace: P
     task = create_task(workspace, title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(task.id)
-    state.stage_retry["implementing"] = 1
+    state.stage_retry[PipelineState.IMPLEMENTING] = 1
     state.last_report = LastReport(
         files_changed=1,
         changed_files=["litehive/lifecycle/prompt_serializer.py"],
@@ -569,10 +569,10 @@ def test_retry_prompt_filters_last_rejection_reason_from_prior_work(workspace: P
             "tests fail with ImportError",
         ],
     )
-    state.last_rejection_by_stage["implementing"] = LastRejection(
+    state.last_rejection_by_stage[PipelineState.IMPLEMENTING] = LastRejection(
         source="qa",
         reason="tests fail with ImportError",
-        raised_at_phase="testing",
+        raised_at_phase=PipelineState.TESTING,
     )
 
     text = serialize_prompt(agent.build_prompt(state), task_record=task, workspace_root=workspace)
@@ -587,10 +587,10 @@ def test_swe_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> Non
     task = create_task(workspace, title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(task.id)
-    state.last_rejection_by_stage["implementing"] = LastRejection(
+    state.last_rejection_by_stage[PipelineState.IMPLEMENTING] = LastRejection(
         source="qa",
         reason="integration sweep failed",
-        raised_at_phase="testing",
+        raised_at_phase=PipelineState.TESTING,
     )
 
     prompt = agent.build_prompt(state)
@@ -607,7 +607,7 @@ def test_qa_prompt_includes_default_vs_opt_in_verification_guidance(workspace: P
     task = create_task(workspace, title="t", goal="g")
     agent = QAAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
 
-    prompt = agent.build_prompt(make_state(task.id, stage="testing"))
+    prompt = agent.build_prompt(make_state(task.id, stage=PipelineState.TESTING))
     text = serialize_prompt(prompt, task_record=task, workspace_root=workspace)
 
     assert prompt.instruction_variant == "fresh"
@@ -618,11 +618,11 @@ def test_qa_prompt_includes_default_vs_opt_in_verification_guidance(workspace: P
 def test_qa_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     agent = QAAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
-    state = make_state(task.id, stage="testing")
-    state.last_rejection_by_stage["testing"] = LastRejection(
+    state = make_state(task.id, stage=PipelineState.TESTING)
+    state.last_rejection_by_stage[PipelineState.TESTING] = LastRejection(
         source="hook",
         reason="targeted verification still fails",
-        raised_at_phase="after_testing",
+        raised_at_phase=PipelineState.AFTER_TESTING,
     )
 
     prompt = agent.build_prompt(state)
@@ -638,11 +638,11 @@ def test_qa_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> None
 def test_reviewer_prompt_calls_out_qa_override_with_last_testing_rejection(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     agent = ReviewerAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
-    state = make_state(task.id, stage="accepting")
-    state.last_rejection_by_stage["accepting"] = LastRejection(
+    state = make_state(task.id, stage=PipelineState.ACCEPTING)
+    state.last_rejection_by_stage[PipelineState.ACCEPTING] = LastRejection(
         source="agent",
         reason="qa asked for style-only cleanup",
-        raised_at_phase="testing",
+        raised_at_phase=PipelineState.TESTING,
     )
 
     prompt = agent.build_prompt(state)
@@ -714,7 +714,7 @@ def test_swe_prompt_lists_after_stage_hooks_with_descriptions(workspace: Path) -
 
 def test_serialize_works_without_task_record(workspace: Path) -> None:
     agent = PlannerAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
-    state = make_state("T-XYZ", stage="grooming")
+    state = make_state("T-XYZ", stage=PipelineState.GROOMING)
     text = serialize_prompt(agent.build_prompt(state), task_record=None, workspace_root=workspace)
 
     assert "Task: T-XYZ" in text
@@ -737,7 +737,7 @@ def test_recovery_prompt_uses_recovery_verdict_contract(workspace: Path) -> None
     agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(
         task.id,
-        stage="recovering",
+        stage=PipelineState.RECOVERING,
         active_recovery_trigger=RecoveryTrigger(
             origin_stage="implementing",
             trigger_event_kind=TriggerEventKind.CRASH,
@@ -774,11 +774,11 @@ def test_implementing_retry_activity_keeps_only_grooming_and_dedups_last_rejecti
     task = create_task(workspace, title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(task.id)
-    state.stage_retry["implementing"] = 1
-    state.last_rejection_by_stage["implementing"] = LastRejection(
+    state.stage_retry[PipelineState.IMPLEMENTING] = 1
+    state.last_rejection_by_stage[PipelineState.IMPLEMENTING] = LastRejection(
         source="qa",
         reason="tests fail",
-        raised_at_phase="testing",
+        raised_at_phase=PipelineState.TESTING,
     )
     prompt = replace(
         agent.build_prompt(state),
@@ -807,16 +807,16 @@ def test_prompt_surfaces_semantic_reject_classification(workspace: Path) -> None
     task = create_task(workspace, title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(task.id)
-    state.stage_retry["implementing"] = 1
-    state.last_rejection_by_stage["implementing"] = LastRejection(
+    state.stage_retry[PipelineState.IMPLEMENTING] = 1
+    state.last_rejection_by_stage[PipelineState.IMPLEMENTING] = LastRejection(
         source="agent",
         reason="acceptance evidence is incomplete",
-        raised_at_phase="accepting",
+        raised_at_phase=PipelineState.ACCEPTING,
         classification=SEMANTIC_REJECT_CLASSIFICATION,
     )
     prompt = replace(
         agent.build_prompt(state),
-        stage="custom",
+        stage="custom",  # type: ignore[arg-type]
         activity=[
             {
                 "role": "reviewer",
@@ -837,38 +837,38 @@ def test_prompt_surfaces_semantic_reject_classification(workspace: Path) -> None
 def test_implementing_prompt_uses_latest_testing_reject_that_sent_work_back(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     journal = SqliteJournal(Workspace.from_path(workspace))
-    journal.task_started(task.id, "ready")
+    journal.task_started(task.id, PipelineState.READY)
     journal.transition(
         task.id,
-        "after_implementing",
+        PipelineState.AFTER_IMPLEMENTING,
         Reject(source="hook", reason="old hook failure"),
-        "implementing",
+        PipelineState.IMPLEMENTING,
         "",
         StateDelta(),
     )
-    journal.transition(task.id, "implementing", Pass(), "after_implementing", "", StateDelta())
-    journal.transition(task.id, "after_implementing", HookOk(), "before_testing", "", StateDelta())
-    journal.transition(task.id, "before_testing", HookOk(), "testing", "", StateDelta())
+    journal.transition(task.id, PipelineState.IMPLEMENTING, Pass(), PipelineState.AFTER_IMPLEMENTING, "", StateDelta())
+    journal.transition(task.id, PipelineState.AFTER_IMPLEMENTING, HookOk(), PipelineState.BEFORE_TESTING, "", StateDelta())
+    journal.transition(task.id, PipelineState.BEFORE_TESTING, HookOk(), PipelineState.TESTING, "", StateDelta())
     journal.transition(
         task.id,
-        "testing",
+        PipelineState.TESTING,
         Reject(source="agent", reason="latest qa failure"),
-        "implementing",
+        PipelineState.IMPLEMENTING,
         "",
         StateDelta(),
     )
 
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(task.id)
-    state.last_rejection_by_stage["implementing"] = LastRejection(
+    state.last_rejection_by_stage[PipelineState.IMPLEMENTING] = LastRejection(
         source="hook",
         reason="old hook failure",
-        raised_at_phase="after_implementing",
+        raised_at_phase=PipelineState.AFTER_IMPLEMENTING,
     )
-    state.last_rejection_by_stage["testing"] = LastRejection(
+    state.last_rejection_by_stage[PipelineState.TESTING] = LastRejection(
         source="agent",
         reason="latest qa failure",
-        raised_at_phase="testing",
+        raised_at_phase=PipelineState.TESTING,
     )
 
     prompt = agent.build_prompt(state)
@@ -883,36 +883,36 @@ def test_implementing_prompt_uses_latest_testing_reject_that_sent_work_back(work
 def test_implementing_prompt_keeps_latest_hook_reject_when_it_is_newest(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
     journal = SqliteJournal(Workspace.from_path(workspace))
-    journal.task_started(task.id, "ready")
+    journal.task_started(task.id, PipelineState.READY)
     journal.transition(
         task.id,
-        "testing",
+        PipelineState.TESTING,
         Reject(source="agent", reason="older qa failure"),
-        "implementing",
+        PipelineState.IMPLEMENTING,
         "",
         StateDelta(),
     )
-    journal.transition(task.id, "implementing", Pass(), "after_implementing", "", StateDelta())
+    journal.transition(task.id, PipelineState.IMPLEMENTING, Pass(), PipelineState.AFTER_IMPLEMENTING, "", StateDelta())
     journal.transition(
         task.id,
-        "after_implementing",
+        PipelineState.AFTER_IMPLEMENTING,
         Reject(source="hook", reason="newest hook failure"),
-        "implementing",
+        PipelineState.IMPLEMENTING,
         "",
         StateDelta(),
     )
 
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
     state = make_state(task.id)
-    state.last_rejection_by_stage["implementing"] = LastRejection(
+    state.last_rejection_by_stage[PipelineState.IMPLEMENTING] = LastRejection(
         source="hook",
         reason="newest hook failure",
-        raised_at_phase="after_implementing",
+        raised_at_phase=PipelineState.AFTER_IMPLEMENTING,
     )
-    state.last_rejection_by_stage["testing"] = LastRejection(
+    state.last_rejection_by_stage[PipelineState.TESTING] = LastRejection(
         source="agent",
         reason="older qa failure",
-        raised_at_phase="testing",
+        raised_at_phase=PipelineState.TESTING,
     )
 
     prompt = agent.build_prompt(state)
@@ -1027,7 +1027,7 @@ def test_activity_section_is_omitted_when_filtering_removes_all_entries(workspac
     task = create_task(workspace, title="t", goal="g")
     prompt = make_prompt(
         task.id,
-        stage="testing",
+        stage=PipelineState.TESTING,
         role="qa",
         activity=[
             {"role": "recovery", "stage": "recovering", "verdict": "comment", "message": "bookkeeping"},
@@ -1043,7 +1043,7 @@ def test_testing_activity_keeps_only_last_implementing_pass(workspace: Path) -> 
     task = create_task(workspace, title="t", goal="g")
     prompt = make_prompt(
         task.id,
-        stage="testing",
+        stage=PipelineState.TESTING,
         role="qa",
         activity=[
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
@@ -1064,7 +1064,7 @@ def test_accepting_activity_keeps_only_last_implementing_and_testing_passes(work
     task = create_task(workspace, title="t", goal="g")
     prompt = make_prompt(
         task.id,
-        stage="accepting",
+        stage=PipelineState.ACCEPTING,
         role="reviewer",
         activity=[
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},

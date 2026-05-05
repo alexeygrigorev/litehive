@@ -17,6 +17,7 @@ from litehive.state.locking import runner_lock_is_held
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, save_task
 from litehive.worktree import serialize_worktree_path, task_worktree_branch
+from litehive.domain.common import PipelineStatus, TaskStatus
 
 _RUNNER = CliRunner()
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -80,7 +81,7 @@ def _create_merge_failed_worktree_task(workspace: Path):
     _git_ok(worktree_path, "add", "feature.txt")
     _git_ok(worktree_path, "commit", "-m", "feature commit")
 
-    task.status = "flagged"
+    task.status = TaskStatus.FLAGGED
     task.pipeline_status = "flagged"
     task.flag_reason = "merge_failed"
     task.runtime.pipeline.git.worktree_path = serialize_worktree_path(worktree_path)
@@ -94,7 +95,7 @@ def _create_merge_failed_worktree_task(workspace: Path):
 
 
 def _flag_for_rescue(workspace: Path, task, worktree_path: Path) -> None:
-    task.status = "flagged"
+    task.status = TaskStatus.FLAGGED
     task.pipeline_status = "flagged"
     task.flag_reason = "merge_failed"
     task.runtime.pipeline.git.worktree_path = serialize_worktree_path(worktree_path)
@@ -155,8 +156,8 @@ def test_worktree_rescue_apply_completes_while_another_runner_holds_the_lock(tmp
     rescue_task, _ = _create_merge_failed_worktree_task(workspace)
 
     busy_task = create_task(workspace, title="Busy runner", auto_commit=False)
-    busy_task.status = "in_progress"
-    busy_task.pipeline_status = "implementing"
+    busy_task.status = TaskStatus.IN_PROGRESS
+    busy_task.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(workspace, busy_task)
 
     state = load_state(workspace)

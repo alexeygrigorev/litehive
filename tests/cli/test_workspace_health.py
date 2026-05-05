@@ -25,6 +25,7 @@ from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.report_storage import record_stage_report
 from litehive.workspace import Workspace
+from litehive.domain.common import PipelineStatus, TaskStatus
 
 _RUNNER = CliRunner()
 
@@ -151,8 +152,8 @@ def test_collect_quota_health_reuses_shared_statuses(monkeypatch) -> None:
 def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Repair stale resumable task")
-    task.status = "in_progress"
-    task.pipeline_status = "testing"
+    task.status = TaskStatus.IN_PROGRESS
+    task.pipeline_status = PipelineStatus.TESTING
     task.runtime.pipeline.execution_status = "idle"
     task.runtime.pipeline.current_stage.stage = "testing"
     task.runtime.pipeline.current_stage.status = "idle"
@@ -190,8 +191,8 @@ def test_repair_skips_legacy_disk_only_tasks_missing_runtime_state(tmp_path: Pat
     with connect_workspace_db(tmp_path) as connection:
         connection.execute("DELETE FROM task_state WHERE task_id = ?", (legacy.id,))
 
-    task.status = "in_progress"
-    task.pipeline_status = "testing"
+    task.status = TaskStatus.IN_PROGRESS
+    task.pipeline_status = PipelineStatus.TESTING
     task.runtime.pipeline.execution_status = "idle"
     task.runtime.pipeline.current_stage.stage = "testing"
     task.runtime.pipeline.current_stage.status = "idle"
@@ -215,8 +216,8 @@ def test_repair_skips_legacy_disk_only_tasks_missing_runtime_state(tmp_path: Pat
 def test_repair_normalizes_stale_queued_terminal_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Already accepted task")
-    task.status = "queued"
-    task.pipeline_status = "backlog"
+    task.status = TaskStatus.QUEUED
+    task.pipeline_status = PipelineStatus.BACKLOG
     task.runtime.pipeline.execution_status = "interrupted"
     task.runtime.pipeline.current_stage.stage = "backlog"
     task.runtime.pipeline.current_stage.status = "idle"

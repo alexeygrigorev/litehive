@@ -7,6 +7,7 @@ of the terminal transitions in ``status_close``/``status_resume``.
 
 import threading
 from pathlib import Path
+from typing import cast
 
 from litehive.domain.common import PipelineStatus
 from litehive.domain.task import TaskRecord
@@ -123,40 +124,43 @@ def _update_task_transition(
             ensure_future_task_mutation_allowed(root, [task.id], state=state)
 
         if depends_on is not ...:
-            validate_task_dependencies(root, task_id=task.id, depends_on=list(depends_on))
-            task.depends_on = list(depends_on)
+            depends_on_list = cast(list[str], depends_on)
+            validate_task_dependencies(root, task_id=task.id, depends_on=list(depends_on_list))
+            task.depends_on = list(depends_on_list)
 
         if title is not ...:
             task.title = str(title)
 
 
         if model is not ...:
-            task.model = model
+            task.model = cast("str | None", model)
 
         if retry_limit is not ...:
-            if retry_limit is not None and retry_limit < 0:
+            retry_limit_val = cast("int | None", retry_limit)
+            if retry_limit_val is not None and retry_limit_val < 0:
                 raise ValueError("Retry limit must be 0 or greater")
-            task.retry_policy.max_retries = retry_limit
+            task.retry_policy.max_retries = retry_limit_val
 
         if priority is not ...:
-            if priority not in VALID_TASK_PRIORITIES:
-                raise ValueError(f"Unsupported priority '{priority}'")
-            task.priority = priority
+            priority_val = cast(str, priority)
+            if priority_val not in VALID_TASK_PRIORITIES:
+                raise ValueError(f"Unsupported priority '{priority_val}'")
+            task.priority = priority_val
 
         if goal is not ...:
-            task.goal = goal
+            task.goal = cast(str, goal)
 
         if acceptance_criteria is not ...:
-            task.acceptance_criteria = normalize_acceptance_criteria(list(acceptance_criteria))
+            task.acceptance_criteria = normalize_acceptance_criteria(list(cast(list[str], acceptance_criteria)))
 
         if constraints is not ...:
-            task.constraints = normalize_task_text_list(list(constraints))
+            task.constraints = normalize_task_text_list(list(cast(list[str], constraints)))
 
         if plan is not ...:
-            task.plan = normalize_task_text_list(list(plan))
+            task.plan = normalize_task_text_list(list(cast(list[str], plan)))
 
         if auto_commit is not ...:
-            task.git.auto_commit = auto_commit
+            task.git.auto_commit = cast(bool, auto_commit)
 
         task.pipeline_status = reroute_stage_for_acceptance_criteria(task)
         changed_fields = [

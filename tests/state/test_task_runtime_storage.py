@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from litehive.agents.session_store import save_subagent_artifacts
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
-from litehive.domain.common import OutcomeKind, OutcomeReasonCode
+from litehive.domain.common import OutcomeKind, OutcomeReasonCode, PipelineStatus, TaskStatus
 from litehive.domain.reports import StageReport
 from litehive.domain.runtime import RuntimeInterruptionState, RuntimeSubagentState, TaskRuntime
 from litehive.domain.task import TaskRecord, TaskStateRecord
@@ -281,10 +281,10 @@ def test_task_intent_persists_only_intent_fields_and_runtime_moves_to_db(tmp_pat
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Intent only", auto_commit=False)
     task.model = "gpt-5.4"
-    task.status = "flagged"
+    task.status = TaskStatus.FLAGGED
     task.flag_reason = "needs-review"
     task.flag_count = 2
-    task.pipeline_status = "implementing"
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.current_stage.stage = "implementing"
     task.git.commit_sha = "abc123"
@@ -338,8 +338,8 @@ def test_task_intent_canonical_columns_preserve_existing_runtime_status(tmp_path
         depends_on=["T-0000"],
         created_from={"source": "manual", "rationale": "test"},
     )
-    task.status = "flagged"
-    task.pipeline_status = "implementing"
+    task.status = TaskStatus.FLAGGED
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     runtime_store(tmp_path).save_task_state(task.id, task.to_storage_state_record())
     runtime_store(tmp_path).save_task_intent(task.id, task.to_intent_record())
 
@@ -407,10 +407,10 @@ def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Roundtrip")
     task.model = "gpt-5.4"
-    task.status = "flagged"
+    task.status = TaskStatus.FLAGGED
     task.flag_reason = "needs-review"
     task.flag_count = 2
-    task.pipeline_status = "implementing"
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.git.commit_sha = "abc123"
     task.git.checkpoint_attempts = 3
     task.runtime.pipeline.execution_status = "running"

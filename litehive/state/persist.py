@@ -7,7 +7,7 @@ from contextvars import ContextVar
 from pathlib import Path
 
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.common import utcnow
+from litehive.domain.common import PipelineState, utcnow
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.locking import workspace_lock, workspace_mutation_guard
 from litehive.state.store import runtime_store
@@ -199,7 +199,7 @@ def save_state_without_runner_guard(
     runtime_store(root).save_workspace_state(state)
 
 
-def record_task_completion(root: Path, final_stage: str | None) -> tuple[int, str | None]:
+def record_task_completion(root: Path, final_stage: PipelineState | None) -> tuple[int, str | None]:
     """
     Update the consecutive-failure counter and trigger pool stop at the limit.
 
@@ -210,7 +210,7 @@ def record_task_completion(root: Path, final_stage: str | None) -> tuple[int, st
     """
     with workspace_lock(root):
         state = load_state(root)
-        if final_stage == "done":
+        if final_stage == PipelineState.DONE:
             state.consecutive_task_failures = 0
         else:
             state.consecutive_task_failures = max(0, int(state.consecutive_task_failures)) + 1

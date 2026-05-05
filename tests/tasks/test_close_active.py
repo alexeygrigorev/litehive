@@ -15,6 +15,7 @@ from litehive.tasks.journal import render_task_journal
 from litehive.workspace import Workspace
 from litehive.tasks.paths import runner_lock_path
 from litehive.state.persist import load_state
+from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.tasks.queue import set_active_task
 from litehive.state.locking import runner_lock_is_held
 from litehive.tasks.runtime import (
@@ -154,8 +155,8 @@ def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.setattr("litehive.cli.agent_cli.block_if_agent", lambda: None)
     task = create_task(tmp_path, title="Kill live subagent")
-    task.status = "queued"
-    task.pipeline_status = "implementing"
+    task.status = TaskStatus.QUEUED
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, task)
 
     sleeper = subprocess.Popen(

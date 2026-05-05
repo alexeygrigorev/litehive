@@ -1,3 +1,5 @@
+from types import EllipsisType
+
 from litehive.tasks.normalization import (
     normalize_acceptance_criteria,
     normalize_task_text_list,
@@ -5,10 +7,10 @@ from litehive.tasks.normalization import (
 
 
 def parse_dependency_ids(
-    raw_values,
-    task_id=None,
-    allow_clear=False,
-):
+    raw_values: list[str] | None,
+    task_id: str | None = None,
+    allow_clear: bool = False,
+) -> list[str] | EllipsisType:
     """
     Normalize ``--depends-on`` arguments into a deduplicated id list.
 
@@ -51,9 +53,9 @@ def parse_dependency_ids(
 
 
 def parse_acceptance_criteria(
-    raw_values,
-    allow_clear=False,
-):
+    raw_values: list[str] | None,
+    allow_clear: bool = False,
+) -> list[str] | EllipsisType:
     """
     Normalize repeated ``--acceptance-criteria`` values into a non-empty list.
 
@@ -77,10 +79,10 @@ def parse_acceptance_criteria(
 
 
 def parse_text_list_option(
-    raw_values,
-    option_name,
-    allow_clear=False,
-):
+    raw_values: list[str] | None,
+    option_name: str,
+    allow_clear: bool = False,
+) -> list[str] | EllipsisType:
     """
     Generic parser for repeatable text-list options (constraints, plan, …).
 

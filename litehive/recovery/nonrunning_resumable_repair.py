@@ -7,6 +7,7 @@ a resumable stage); the running-task counterpart lives in
 """
 
 import sqlite3
+from typing import TypedDict
 
 from litehive.domain.common import TaskStatus
 from litehive.domain.task import TaskRecord
@@ -14,11 +15,19 @@ from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.workspace import Workspace
 
 
+class NonrunningResumableRepairResult(TypedDict):
+    """Repair summary returned by :func:`normalize_nonrunning_resumable_tasks` so the caller can persist transitions and journal entries without a second walk."""
+
+    mutated: bool
+    transitioned: list[TaskRecord]
+    journal_messages: dict[str, str]
+
+
 def normalize_nonrunning_resumable_tasks(
     state,
     tasks_by_id: dict[str, TaskRecord],
     summary: WorkspaceRepairSummary | None,
-) -> dict[str, object]:
+) -> NonrunningResumableRepairResult:
     """
     Second-pass repair for tasks left in a wedged shape after a crash.
 

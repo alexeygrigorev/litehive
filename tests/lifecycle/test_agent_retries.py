@@ -109,7 +109,7 @@ def test_transient_error_retries_same_engine_and_succeeds() -> None:
         ],
     )
     node = _TrivialAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([engine]),
         InMemorySessionStore(),
         retry_budget=3,
@@ -125,7 +125,7 @@ def test_retry_exhaustion_becomes_engine_switch() -> None:
     codex = _ScriptedEngine("codex", [TransientError("x", failure_kind="timeout")] * 3)
     claude = _ScriptedEngine("claude", [AgentVerdict(outcome="pass")])
     node = _TrivialAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([codex, claude]),
         InMemorySessionStore(),
         retry_budget=3,
@@ -140,7 +140,7 @@ def test_all_engines_exhausted_returns_crash() -> None:
     codex = _ScriptedEngine("codex", [TransientError("a", failure_kind="timeout")] * 3)
     claude = _ScriptedEngine("claude", [TransientError("b", failure_kind="timeout")] * 3)
     node = _TrivialAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([codex, claude]),
         InMemorySessionStore(),
         retry_budget=3,
@@ -164,7 +164,7 @@ def test_retry_backoff_sleeps_between_attempts() -> None:
         ],
     )
     node = _TrivialAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([engine]),
         InMemorySessionStore(),
         retry_budget=3,
@@ -192,7 +192,7 @@ def test_nudge_required_reissues_turn_with_nudge_prompt() -> None:
     )
     store = InMemorySessionStore()
     node = _TrivialAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([engine]),
         store,
         retry_budget=3,
@@ -227,7 +227,7 @@ def test_nudge_keeps_existing_session_continuation() -> None:
 
     engine = _NudgingEngine()
     node = _TrivialAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([engine]),
         InMemorySessionStore(),
         retry_budget=3,
@@ -251,7 +251,7 @@ def test_nudge_does_not_consume_retry_budget() -> None:
         ],
     )
     node = _TrivialAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([engine]),
         InMemorySessionStore(),
         retry_budget=3,
@@ -275,7 +275,7 @@ def test_agent_node_preserves_reject_source_and_metadata() -> None:
         ],
     )
     node = _TrivialAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([engine]),
         InMemorySessionStore(),
         retry_budget=3,
@@ -294,7 +294,7 @@ def test_transient_error_not_in_retry_on_switches_engine_without_retry() -> None
     codex = _ScriptedEngine("codex", [TransientError("service busy", failure_kind="service")])
     claude = _ScriptedEngine("claude", [AgentVerdict(outcome="pass")])
     node = _TrivialAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([codex, claude]),
         InMemorySessionStore(),
         retry_budget=3,
@@ -434,7 +434,7 @@ def test_agent_node_retries_timeout_via_existing_retry_flow(
     adapter = HeruEngineAdapter(engine_name, tmp_path)
     store = InMemorySessionStore()
     node = _HeruPromptAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([adapter]),
         store,
         retry_budget=3,
@@ -469,7 +469,7 @@ def test_agent_node_nudges_timeout_retry_with_existing_codex_thread_id(tmp_path,
     adapter = HeruEngineAdapter("codex", tmp_path)
     store = InMemorySessionStore()
     node = _HeruPromptAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([adapter]),
         store,
         retry_budget=3,
@@ -514,7 +514,7 @@ def test_agent_node_nudges_timeout_retry_with_existing_codex_thread_id(tmp_path,
 def test_nudge_budget_exhausted_returns_crash() -> None:
     engine = _ScriptedEngine("codex", [NudgeRequired("silent")] * 5)
     node = _TrivialAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([engine]),
         InMemorySessionStore(),
         retry_budget=3,
@@ -534,7 +534,7 @@ def test_nudge_budget_exhausted_returns_crash() -> None:
 def test_unrecoverable_error_becomes_crash_immediately() -> None:
     engine = _ScriptedEngine("codex", [UnrecoverableError("broken prompt")])
     node = _TrivialAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([engine]),
         InMemorySessionStore(),
         retry_budget=3,
@@ -554,7 +554,7 @@ def test_engine_switch_uses_fresh_session_per_engine() -> None:
     claude = _ScriptedEngine("claude", [AgentVerdict(outcome="pass")])
     store = InMemorySessionStore()
     node = _TrivialAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _ListSelector([codex, claude]),
         store,
         retry_budget=3,

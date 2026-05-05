@@ -18,6 +18,7 @@ from .common import (
     FEEDBACK_CAP,
     OutcomeKind,
     OutcomeReasonCode,
+    PipelineStatus,
     TaskStage,
     TRUNCATION_MARKER,
     cap_feedback,
@@ -31,6 +32,11 @@ from .recovery import TriggerEventKind
 # stages; hook/system states are represented by their owning role stage, except
 # merge and recovery reports which need their own explicit labels.
 ReportPipelineState: TypeAlias = TaskStage | Literal["merge_resolving", "recovering"]
+# Activity entries can be authored at every stage a report can be authored at,
+# plus the operator-facing pipeline buckets (``backlog``, ``done``, ``flagged``)
+# the runner stamps on entries that aren't tied to an executable stage. The
+# union covers both without collapsing back to ``str``.
+TaskActivityStage: TypeAlias = ReportPipelineState | PipelineStatus
 StageReportVerdict: TypeAlias = Literal["pass", "reject", "blocked"]
 TaskActivityVerdict: TypeAlias = Literal[
     "pass",
@@ -262,8 +268,8 @@ class TaskActivityEntry(BaseModel):
     """
 
     role: str  # Who created this entry (agent role, operator, system)
-    stage: str  # Pipeline stage where activity occurred
-    target_stage: str | None = None  # Target stage if this is a transition
+    stage: TaskActivityStage  # Pipeline stage where activity occurred
+    target_stage: TaskActivityStage | None = None  # Target stage if this is a transition
     verdict: TaskActivityVerdict = "comment"  # Associated verdict if applicable
     verdict_classification: str | None = None  # Machine-readable verdict classification
     message: str  # Free-form human-readable activity description
@@ -286,6 +292,7 @@ __all__ = [
     "StageReport",
     "StageReportVerdict",
     "TaskActivityEntry",
+    "TaskActivityStage",
     "TRUNCATION_MARKER",
     "cap_feedback",
     "canonical_report_pipeline_state",

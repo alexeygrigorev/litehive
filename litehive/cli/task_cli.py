@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import EllipsisType
 from typing import Annotated
 
 import typer
@@ -142,16 +143,14 @@ def add(
     """
     ensure_workspace(workspace)
     try:
-        depends_on = parse_dependency_ids(depends_on)
-        acceptance_criteria = parse_acceptance_criteria(acceptance_criteria)
-        if depends_on is ...:
-            depends_on_arg = None
-        else:
-            depends_on_arg = depends_on
-        if acceptance_criteria is ...:
-            acceptance_criteria_arg = None
-        else:
-            acceptance_criteria_arg = acceptance_criteria
+        depends_on_parsed = parse_dependency_ids(depends_on)
+        acceptance_criteria_parsed = parse_acceptance_criteria(acceptance_criteria)
+        depends_on_arg: list[str] | None = (
+            depends_on_parsed if isinstance(depends_on_parsed, list) else None
+        )
+        acceptance_criteria_arg: list[str] | None = (
+            acceptance_criteria_parsed if isinstance(acceptance_criteria_parsed, list) else None
+        )
         task = create_task(
             workspace,
             title=title,
@@ -464,18 +463,18 @@ def update(
     not stomp on unspecified fields.
     """
     agent_role = current_agent_role()
-    update_kwargs: dict[str, object] = {}
+    allow_active_agent_task_mutation = False
+    audit_actor = "operator"
+    audit_source = "cli"
     mutation_workspace = workspace
     mutation_task_id = task_id
     if agent_role is not None:
         target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
         mutation_workspace = target.root
         mutation_task_id = target.task_id
-        update_kwargs = {
-            "allow_active_agent_task_mutation": True,
-            "audit_actor": "agent",
-            "audit_source": "agent",
-        }
+        allow_active_agent_task_mutation = True
+        audit_actor = "agent"
+        audit_source = "agent"
     ensure_workspace(mutation_workspace)
     if (
         title is None
@@ -489,34 +488,27 @@ def update(
         print("update failed: no changes requested")
         return 1
     try:
-        depends_on = parse_dependency_ids(depends_on, task_id=mutation_task_id, allow_clear=True)
-        acceptance_criteria = parse_acceptance_criteria(acceptance_criteria, allow_clear=True)
-        constraints = parse_text_list_option(constraints, option_name="constraints", allow_clear=True)
-        plan = parse_text_list_option(plan, option_name="plan", allow_clear=True)
+        depends_on_arg = parse_dependency_ids(depends_on, task_id=mutation_task_id, allow_clear=True)
+        acceptance_criteria_arg = parse_acceptance_criteria(acceptance_criteria, allow_clear=True)
+        constraints_arg = parse_text_list_option(constraints, option_name="constraints", allow_clear=True)
+        plan_arg = parse_text_list_option(plan, option_name="plan", allow_clear=True)
 
-        if title is not None:
-            title_arg = title
-        else:
-            title_arg = ...
-        if priority is not None:
-            priority_arg = priority
-        else:
-            priority_arg = ...
-        if goal is not None:
-            goal_arg = goal
-        else:
-            goal_arg = ...
+        title_arg: str | EllipsisType = title if title is not None else ...
+        priority_arg: str | EllipsisType = priority if priority is not None else ...
+        goal_arg: str | EllipsisType = goal if goal is not None else ...
         task = update_task(
             mutation_workspace,
             mutation_task_id,
             title=title_arg,
-            depends_on=depends_on,
+            depends_on=depends_on_arg,
             priority=priority_arg,
             goal=goal_arg,
-            acceptance_criteria=acceptance_criteria,
-            constraints=constraints,
-            plan=plan,
-            **update_kwargs,
+            acceptance_criteria=acceptance_criteria_arg,
+            constraints=constraints_arg,
+            plan=plan_arg,
+            allow_active_agent_task_mutation=allow_active_agent_task_mutation,
+            audit_actor=audit_actor,
+            audit_source=audit_source,
         )
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"update failed: {exc}")

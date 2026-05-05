@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 import yaml
@@ -32,6 +33,7 @@ from litehive.state.persist import load_state, persist_task_and_state_without_ru
 from litehive.state.records import create_task, get_task_record
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.workspace import Workspace
+from litehive.domain.common import PipelineState, PipelineStatus
 
 
 def _run_engine(*args: str) -> tuple[int | None, str]:
@@ -47,7 +49,7 @@ def _run_engine(*args: str) -> tuple[int | None, str]:
 def _prepare_runnable_task(root: Path, title: str) -> TaskRecord:
     task = create_task(root, title=title)
     state = load_state(root)
-    task.pipeline_status = "implementing"
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     persist_task_and_state_without_runner_guard(root, task=task, state=state)
     return get_task_record(root, task.id) or task
 
@@ -672,8 +674,8 @@ def test_lifecycle_selector_uses_shared_select_engine_when_task_record_missing(
     )
 
     engine = selector.select(
-        TaskState(task_id="T-4040", stage="implementing", pipeline_mode=PipelineMode.FULL),
-        "implementing",
+        TaskState(task_id="T-4040", stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL),
+        PipelineState.IMPLEMENTING,
         frozenset({"codex"}),
     )
 
@@ -781,7 +783,7 @@ def test_recovery_non_auto_branches_skip_frozen_engines(
     tmp_path: Path,
     recovery_engine: str | None,
     default_engine: str,
-    selector_kwargs: dict[str, object],
+    selector_kwargs: dict[str, Any],
 ) -> None:
     from litehive.config.engine_models import select_engine
     from litehive.tasks.recovery_engine import resolve_recovery_engine

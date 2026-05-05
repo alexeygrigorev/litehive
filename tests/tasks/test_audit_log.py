@@ -9,13 +9,14 @@ from litehive.config.workspace import ensure_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.status import requeue_task
+from litehive.domain.common import PipelineStatus, TaskStatus
 
 
 def test_requeue_writes_durable_audit_row_to_workspace_db(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Retry with audit")
-    task.status = "flagged"
-    task.pipeline_status = "implementing"
+    task.status = TaskStatus.FLAGGED
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, task)
 
     requeue_task(tmp_path, task.id, front=True, force=True)
@@ -45,14 +46,14 @@ def test_requeue_writes_durable_audit_row_to_workspace_db(tmp_path: Path) -> Non
 def test_db_audit_cli_shows_requeue_entry_for_done_task(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Complete after requeue")
-    task.status = "flagged"
-    task.pipeline_status = "implementing"
+    task.status = TaskStatus.FLAGGED
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, task)
 
     requeue_task(tmp_path, task.id, front=True)
     completed = require_task(tmp_path, task.id)
-    completed.status = "done"
-    completed.pipeline_status = "done"
+    completed.status = TaskStatus.DONE
+    completed.pipeline_status = PipelineStatus.DONE
     save_task(tmp_path, completed)
     state = load_state(tmp_path)
     state.queue = [task_id for task_id in state.queue if task_id != completed.id]

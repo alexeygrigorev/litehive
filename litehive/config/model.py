@@ -11,9 +11,44 @@ message rather than producing odd behaviour later.
 
 from dataclasses import dataclass, field, fields
 import re
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from litehive.config.profiles.loader import PROCESS_PROFILES
+
+
+def _as_iterable(value: object, *, field_name: str) -> Iterable[object]:
+    """
+    Coerce a ``raw_config.get(...)`` result into an iterable for normalisation.
+
+    Config values arrive typed as ``object`` because YAML loads into
+    arbitrary Python; this helper narrows them to a real iterable
+    (rejecting strings/bytes which iterate over chars and almost
+    always indicate a misshaped config) so downstream comprehensions
+    type-check cleanly.
+    """
+    if value is None:
+        return ()
+    if isinstance(value, (str, bytes)):
+        raise ValueError(f"{field_name} must be a list, got string")
+    if isinstance(value, Iterable):
+        return value
+    raise ValueError(f"{field_name} must be a list")
+
+
+def _as_mapping(value: object, *, field_name: str) -> Mapping[object, object]:
+    """
+    Coerce a ``raw_config.get(...)`` result into a mapping for normalisation.
+
+    Mirror of :func:`_as_iterable` for fields that expect a YAML
+    mapping; defends against an operator passing a list where a dict
+    is required and surfaces the field name in the error so the
+    misconfiguration is locatable.
+    """
+    if value is None:
+        return {}
+    if isinstance(value, Mapping):
+        return value
+    raise ValueError(f"{field_name} must be a mapping")
 
 
 # --- validation constants ---
@@ -332,6 +367,8 @@ def _normalize_runner_hook(
             hook["instructions_on_failure"] = cleaned
     timeout_seconds = raw_hook.get("timeout_seconds")
     if timeout_seconds is not None:
+        if not isinstance(timeout_seconds, (int, float, str)):
+            raise ValueError(f"{field_name}.timeout_seconds must be a number")
         timeout_value = float(timeout_seconds)
         if timeout_value <= 0:
             raise ValueError(f"{field_name}.timeout_seconds must be greater than 0")
@@ -373,7 +410,7 @@ def normalize_runner_hooks(
 
 
 def _normalize_sandbox_credential_input(
-    raw_input: SandboxCredentialInput | Mapping[str, object],
+    raw_input: object,
     field_name: str,
 ) -> SandboxCredentialInput:
     """
@@ -387,10 +424,12 @@ def _normalize_sandbox_credential_input(
     """
     if isinstance(raw_input, SandboxCredentialInput):
         credential = raw_input
-    else:
+    elif isinstance(raw_input, Mapping):
         env_var = str(raw_input.get("env_var", "")).strip()
         mount_path = str(raw_input.get("mount_path", "")).strip()
         credential = SandboxCredentialInput(env_var=env_var, mount_path=mount_path)
+    else:
+        raise ValueError(f"{field_name} must be a mapping or SandboxCredentialInput")
     if not re.fullmatch(r"[A-Z][A-Z0-9_]*", credential.env_var):
         raise ValueError(f"{field_name}.env_var must be an uppercase environment variable name")
     if not credential.mount_path.startswith("/"):
@@ -420,7 +459,7 @@ def _normalize_bind_list(raw_binds: list[str], field_name: str) -> list[str]:
 
 
 def _normalize_external_engine_sandbox_policy(
-    raw_policy: ExternalEngineSandboxPolicy | Mapping[str, object],
+    raw_policy: object,
     field_name: str,
 ) -> ExternalEngineSandboxPolicy:
     """
@@ -434,7 +473,7 @@ def _normalize_external_engine_sandbox_policy(
     """
     if isinstance(raw_policy, ExternalEngineSandboxPolicy):
         policy = raw_policy
-    else:
+    elif isinstance(raw_policy, Mapping):
         if raw_policy.get("network_mode") is None:
             network_mode_arg = None
         else:
@@ -447,18 +486,20 @@ def _normalize_external_engine_sandbox_policy(
             enabled=bool(raw_policy.get("enabled", False)),
             network_mode=network_mode_arg,
             workspace_mode=workspace_mode_arg,
-            environment=[str(item) for item in raw_policy.get("environment", [])],
+            environment=[str(item) for item in _as_iterable(raw_policy.get("environment"), field_name=f"{field_name}.environment")],
             credential_inputs=[
                 _normalize_sandbox_credential_input(
                     item,
                     field_name=f"{field_name}.credential_inputs[{index}]",
                 )
-                for index, item in enumerate(raw_policy.get("credential_inputs", []))
+                for index, item in enumerate(_as_iterable(raw_policy.get("credential_inputs"), field_name=f"{field_name}.credential_inputs"))
             ],
-            extra_ro_binds=[str(item).strip() for item in raw_policy.get("extra_ro_binds", [])],
-            extra_rw_binds=[str(item).strip() for item in raw_policy.get("extra_rw_binds", [])],
-            setenv={str(key): str(value) for key, value in (raw_policy.get("setenv") or {}).items()},
+            extra_ro_binds=[str(item).strip() for item in _as_iterable(raw_policy.get("extra_ro_binds"), field_name=f"{field_name}.extra_ro_binds")],
+            extra_rw_binds=[str(item).strip() for item in _as_iterable(raw_policy.get("extra_rw_binds"), field_name=f"{field_name}.extra_rw_binds")],
+            setenv={str(key): str(value) for key, value in _as_mapping(raw_policy.get("setenv"), field_name=f"{field_name}.setenv").items()},
         )
+    else:
+        raise ValueError(f"{field_name} must be a mapping or ExternalEngineSandboxPolicy")
     for index, env_name in enumerate(policy.environment):
         if not re.fullmatch(r"[A-Z][A-Z0-9_]*", env_name):
             raise ValueError(f"{field_name}.environment[{index}] must be an uppercase environment variable name")
@@ -501,19 +542,19 @@ def normalize_external_engine_sandbox_config(
             image=str(raw_config.get("image", "litehive-external-engine:latest")),
             workspace_mount_path=str(raw_config.get("workspace_mount_path", "/workspace")),
             binary_mount_root=str(raw_config.get("binary_mount_root", "/litehive/bin")),
-            runtime_args=[str(item) for item in raw_config.get("runtime_args", [])],
+            runtime_args=[str(item) for item in _as_iterable(raw_config.get("runtime_args"), field_name="external_engine_sandbox.runtime_args")],
             default_network_mode=str(raw_config.get("default_network_mode", "none")),
             default_workspace_mode=str(raw_config.get("default_workspace_mode", "rw")),
             read_only_rootfs=bool(raw_config.get("read_only_rootfs", True)),
             drop_capabilities=bool(raw_config.get("drop_capabilities", True)),
             no_new_privileges=bool(raw_config.get("no_new_privileges", True)),
-            tmpfs=[str(item) for item in raw_config.get("tmpfs", ["/tmp"])],
+            tmpfs=[str(item) for item in _as_iterable(raw_config.get("tmpfs", ["/tmp"]), field_name="external_engine_sandbox.tmpfs")],
             engine_policies={
-                engine_name: _normalize_external_engine_sandbox_policy(
+                str(engine_name): _normalize_external_engine_sandbox_policy(
                     policy,
                     field_name=f"external_engine_sandbox.engine_policies[{engine_name}]",
                 )
-                for engine_name, policy in dict(raw_config.get("engine_policies", {})).items()
+                for engine_name, policy in _as_mapping(raw_config.get("engine_policies"), field_name="external_engine_sandbox.engine_policies").items()
             },
         )
     if config.backend not in VALID_SANDBOX_BACKENDS:

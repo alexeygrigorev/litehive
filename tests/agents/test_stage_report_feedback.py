@@ -10,7 +10,7 @@ from litehive.agents.manager import SubagentManager
 from litehive.agents.parsing import stage_report_from_subagent
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.agent import EngineFailure, SubagentResult
-from litehive.domain.common import FEEDBACK_CAP
+from litehive.domain.common import FEEDBACK_CAP, TaskStage
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport, TaskActivityEntry
 from litehive.state.records import create_task
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
@@ -56,7 +56,7 @@ def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Pat
 
     report = stage_report_from_subagent(
         task,
-        "implementing",
+        TaskStage.IMPLEMENTING,
         _subagent_result(execution_trace="x" * (FEEDBACK_CAP + 500)),
         root=tmp_path,
     )
@@ -85,7 +85,7 @@ def test_stage_report_from_subagent_preserves_semantic_reject_classification(tmp
 
     report = stage_report_from_subagent(
         task,
-        "accepting",
+        TaskStage.ACCEPTING,
         _subagent_result(execution_trace="reviewer submitted reject"),
         root=tmp_path,
     )

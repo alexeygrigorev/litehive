@@ -12,12 +12,13 @@ from litehive.recovery.execution_recovery import prepare_interrupted_task, recov
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, save_task
 from litehive.workspace import Workspace
+from litehive.domain.common import PipelineStatus, TaskStatus
 
 
 def _seed_running_task(tmp_path: Path, *, stage: str, active: bool) -> tuple[str, str]:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title=f"{stage} recovery")
-    task.status = "in_progress"
+    task.status = TaskStatus.IN_PROGRESS
     task.pipeline_status = stage
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.run_started_at = "2026-04-12T10:00:00Z"
@@ -114,7 +115,7 @@ def test_recover_stale_runner_state_preserves_runtime_stage_when_pipeline_status
     task_id, _ = _seed_running_task(tmp_path, stage="testing", active=True)
     task = get_task(tmp_path, task_id)
     assert task is not None
-    task.pipeline_status = "backlog"
+    task.pipeline_status = PipelineStatus.BACKLOG
     save_task(tmp_path, task)
 
     assert recover_stale_runner_state(tmp_path) is True
@@ -143,8 +144,8 @@ def test_recover_stale_runner_state_canonicalizes_nonrunning_stranded_task(
         title="Stranded non-running task",
         acceptance_criteria=["resume from testing"],
     )
-    task.status = "in_progress"
-    task.pipeline_status = "backlog"
+    task.status = TaskStatus.IN_PROGRESS
+    task.pipeline_status = PipelineStatus.BACKLOG
     task.runtime.pipeline.execution_status = "idle"
     task.runtime.pipeline.current_stage.stage = "testing"
     task.runtime.pipeline.current_stage.status = "idle"
@@ -179,8 +180,8 @@ def test_recover_stale_runner_state_canonicalizes_queued_interrupted_marker(
         title="Queued interrupted task",
         acceptance_criteria=["resume from grooming"],
     )
-    task.status = "queued"
-    task.pipeline_status = "grooming"
+    task.status = TaskStatus.QUEUED
+    task.pipeline_status = PipelineStatus.GROOMING
     task.runtime.pipeline.execution_status = "interrupted"
     task.runtime.pipeline.current_stage.stage = "grooming"
     task.runtime.pipeline.current_stage.status = "running"
@@ -209,7 +210,7 @@ def test_recover_stale_runner_state_canonicalizes_queued_interrupted_marker(
 def test_recover_stale_runner_state_clears_non_running_active_task_id(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Flagged but not running")
-    task.status = "flagged"
+    task.status = TaskStatus.FLAGGED
     task.pipeline_status = "flagged"
     task.runtime.pipeline.execution_status = "idle"
     save_task(tmp_path, task)
@@ -235,8 +236,8 @@ def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> N
         report={"summary": "finished half the change"},
     )
 
-    task.status = "in_progress"
-    task.pipeline_status = "implementing"
+    task.status = TaskStatus.IN_PROGRESS
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.run_started_at = "2026-04-12T10:00:00Z"
     task.runtime.pipeline.current_stage.stage = "implementing"

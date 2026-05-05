@@ -83,7 +83,7 @@ class ExecutionResult:
 
     task: TaskRecord | None
     final_state: TaskState | None
-    final_stage: str
+    final_stage: PipelineState
     failed_reason: str | None = None
     failed_message: str | None = None
 

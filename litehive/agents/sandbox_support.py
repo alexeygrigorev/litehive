@@ -1,9 +1,9 @@
 """Generic sandbox helpers for wrapping external engine adapters."""
 
 from pathlib import Path
-from typing import Mapping, Protocol
+from typing import Callable, Mapping, Protocol, cast, runtime_checkable
 
-from heru.base import CLIExecutionResult, ExternalCLIAdapter
+from heru.base import CLIExecutionResult, CLIInvocation, ExternalCLIAdapter
 from heru.engine_detection import (
     ORIGINAL_EXTERNAL_ADAPTER_RUN,
     ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE,
@@ -13,11 +13,15 @@ from heru.engine_detection import (
 )
 
 
+@runtime_checkable
 class SandboxSummary(Protocol):
     """Sandbox policy snapshot the adapter advertises to the operator status surface — kept as a protocol so this module does not have to import the concrete summary type."""
 
-    enabled: bool
-    summary: str
+    @property
+    def enabled(self) -> bool: ...
+
+    @property
+    def summary(self) -> str: ...
 
 
 class SandboxLauncher(Protocol):
@@ -30,7 +34,7 @@ class SandboxLauncher(Protocol):
     pass a stub that satisfies the protocol.
     """
 
-    def policy_summary(self, engine_name: str, role: str = "") -> SandboxSummary:
+    def policy_summary(self, engine_name: str, role: str = "") -> "SandboxSummary":
         """Resolve the effective sandbox policy snapshot so adapters can advertise it without depending on the concrete launcher implementation."""
         ...
 
@@ -38,9 +42,9 @@ class SandboxLauncher(Protocol):
         self,
         engine_name: str,
         binary_name: str,
-        invocation: object,
+        invocation: CLIInvocation,
         role: str = "",
-    ) -> object:
+    ) -> CLIInvocation:
         """Rewrite a ``CLIInvocation`` to run inside the sandbox — called by ``SandboxedAdapter.finalize_invocation`` right before the engine is exec'd."""
         ...
 
@@ -177,14 +181,15 @@ class SandboxedAdapter(ExternalCLIAdapter):
         """Delegate capability detection to the wrapped adapter — sandboxing neither adds nor removes engine capabilities."""
         return self._adapter.detect_capabilities()
 
-    def finalize_invocation(self, invocation):
+    def finalize_invocation(self, invocation: CLIInvocation) -> CLIInvocation:
         """Hand the invocation to the sandbox launcher right before exec — this is where "engine wants to run X" turns into "actually run X confined"."""
-        return self._launcher.wrap_invocation(
+        wrapped = self._launcher.wrap_invocation(
             self._engine_name,
             self.binary,
             invocation,
             role=self._role,
         )
+        return cast(CLIInvocation, wrapped)
 
     def sandbox_details(self) -> tuple[bool, str]:
         """Expose the policy snapshot to the status/audit surface so operators can confirm the engine actually ran sandboxed for this run."""
@@ -195,9 +200,11 @@ class SandboxedAdapter(ExternalCLIAdapter):
         prompt: str,
         cwd: Path,
         model: str | None = None,
+        *,
         max_turns: int | None = None,
         resume_session_id: str | None = None,
-        on_started=None,
+        on_started: Callable[[int], None] | None = None,
+        extra_env: dict[str, str] | None = None,
         emit_unified: bool = False,
     ) -> CLIExecutionResult:
         """
@@ -211,16 +218,19 @@ class SandboxedAdapter(ExternalCLIAdapter):
         being silently skipped because we used the base ``run``.
         """
         if has_callable_override(self._adapter, "run", ORIGINAL_EXTERNAL_ADAPTER_RUN):
-            run_callable = effective_engine_callable(self._adapter, "run")
-            if not callable(run_callable):
-                run_callable = self._adapter.run
-            run_kwargs = {"model": model}
+            run_callable = cast(
+                Callable[..., CLIExecutionResult],
+                effective_engine_callable(self._adapter, "run") or self._adapter.run,
+            )
+            run_kwargs: dict[str, object] = {"model": model}
             if max_turns is not None:
                 run_kwargs["max_turns"] = max_turns
             if resume_session_id is not None:
                 run_kwargs["resume_session_id"] = resume_session_id
             if on_started is not None:
                 run_kwargs["on_started"] = on_started
+            if extra_env is not None:
+                run_kwargs["extra_env"] = extra_env
             run_kwargs["emit_unified"] = emit_unified
             return run_callable(
                 prompt,
@@ -234,6 +244,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
             max_turns=max_turns,
             resume_session_id=resume_session_id,
             on_started=on_started,
+            extra_env=extra_env,
             emit_unified=emit_unified,
         )
 
@@ -242,19 +253,22 @@ class SandboxedAdapter(ExternalCLIAdapter):
         prompt: str,
         cwd: Path,
         model: str | None = None,
+        *,
         max_turns: int | None = None,
         resume_session_id: str | None = None,
-        on_started=None,
-        on_update=None,
+        on_started: Callable[[int], None] | None = None,
+        on_update: Callable[[CLIExecutionResult], None] | None = None,
         inactivity_timeout_seconds: float = 0,
+        extra_env: dict[str, str] | None = None,
         emit_unified: bool = False,
     ) -> CLIExecutionResult:
         """Streaming counterpart of ``run`` with the same override-detection logic so engine-specific live paths still go through ``finalize_invocation``."""
         if has_callable_override(self._adapter, "run_live", ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE):
-            run_live_callable = effective_engine_callable(self._adapter, "run_live")
-            if not callable(run_live_callable):
-                run_live_callable = self._adapter.run_live
-            run_live_kwargs = {"model": model}
+            run_live_callable = cast(
+                Callable[..., CLIExecutionResult],
+                effective_engine_callable(self._adapter, "run_live") or self._adapter.run_live,
+            )
+            run_live_kwargs: dict[str, object] = {"model": model}
             if max_turns is not None:
                 run_live_kwargs["max_turns"] = max_turns
             if resume_session_id is not None:
@@ -265,6 +279,8 @@ class SandboxedAdapter(ExternalCLIAdapter):
                 run_live_kwargs["on_update"] = on_update
             if inactivity_timeout_seconds > 0:
                 run_live_kwargs["inactivity_timeout_seconds"] = inactivity_timeout_seconds
+            if extra_env is not None:
+                run_live_kwargs["extra_env"] = extra_env
             run_live_kwargs["emit_unified"] = emit_unified
             return run_live_callable(
                 prompt,
@@ -280,6 +296,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
             on_started=on_started,
             on_update=on_update,
             inactivity_timeout_seconds=inactivity_timeout_seconds,
+            extra_env=extra_env,
             emit_unified=emit_unified,
         )
 

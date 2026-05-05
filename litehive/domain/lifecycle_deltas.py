@@ -44,7 +44,7 @@ from litehive.lifecycle.persistence import (
     RejectionLoop,
     TaskState,
 )
-from litehive.domain.common import PipelineState, TaskStage, pipeline_stage_key
+from litehive.domain.common import PipelineState, TaskStage, canonical_pipeline_state, pipeline_stage_key
 from litehive.lifecycle.types import FailedReason
 
 EffectFn = Callable[[TaskState, Event], "StateDelta"]
@@ -398,22 +398,24 @@ def _next_rejection_loop(
     target_stage = _pipeline_stage_key(retry_target_stage)
     if rejection_stage not in {TaskStage.TESTING, TaskStage.ACCEPTING} or target_stage != TaskStage.IMPLEMENTING:
         return None
+    rejection_pipeline_state = canonical_pipeline_state(rejection_stage)
+    target_pipeline_state = canonical_pipeline_state(target_stage)
     if state.rejection_loop is None:
         return RejectionLoop(
-            rejection_stage=rejection_stage,
-            retry_target_stage=target_stage,
+            rejection_stage=rejection_pipeline_state,
+            retry_target_stage=target_pipeline_state,
             count=1,
         )
     if (
-        state.rejection_loop.rejection_stage == rejection_stage
-        and state.rejection_loop.retry_target_stage == target_stage
+        state.rejection_loop.rejection_stage == rejection_pipeline_state
+        and state.rejection_loop.retry_target_stage == target_pipeline_state
     ):
         count = state.rejection_loop.count + 1
     else:
         count = 1
     return RejectionLoop(
-        rejection_stage=rejection_stage,
-        retry_target_stage=target_stage,
+        rejection_stage=rejection_pipeline_state,
+        retry_target_stage=target_pipeline_state,
         count=count,
     )
 
@@ -527,8 +529,8 @@ def _retry_counter_stage(origin_stage: str | None) -> PipelineState | None:
         TaskStage.ACCEPTING,
         TaskStage.COMMIT_TO_GIT,
     }:
-        return key
-    return origin_stage
+        return key  # type: ignore[return-value]
+    return origin_stage  # type: ignore[return-value]
 
 
 def _hook_recovery_made_progress(trigger: RecoveryTrigger | None, event: Event) -> bool:

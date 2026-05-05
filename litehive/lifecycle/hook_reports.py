@@ -144,7 +144,7 @@ def _record_hook_warnings(
         task,
         TaskActivityEntry(
             role="hook",
-            stage=str(report_stage),
+            stage=report_stage,
             verdict="comment",
             message=message,
         ),
@@ -209,7 +209,7 @@ def _record_hook_reject(
         task,
         TaskActivityEntry(
             role="hook",
-            stage=str(report_stage),
+            stage=report_stage,
             verdict="reject",
             message=message,
         ),

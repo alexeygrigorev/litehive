@@ -6,7 +6,7 @@ from typing import Iterable
 
 from pydantic import ValidationError
 
-from litehive.domain.reports import TaskActivityEntry
+from litehive.domain.reports import TaskActivityEntry, TaskActivityStage
 from litehive.domain.task import TaskRecord
 from litehive.tasks.event_log import append_task_event
 from litehive.workspace import Workspace
@@ -103,7 +103,7 @@ def latest_task_activity_entry(
     workspace: Workspace,
     task: TaskRecord,
     role: str | None = None,
-    stage: str | None = None,
+    stage: TaskActivityStage | None = None,
     source_subagent_id: str | None = None,
     verdicts: Iterable[str] | None = None,
     after: datetime | None = None,

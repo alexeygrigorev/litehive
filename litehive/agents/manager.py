@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import sys
 import time
+from typing import Callable, cast
 
 from litehive.config.loading import load_config
 from heru import get_engine, resume_safe_model_override
@@ -19,7 +20,7 @@ from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.agents.sandbox import SandboxError, SandboxLauncher
 from litehive.observability.events import append_event
 from heru.types import SubagentRef
-from litehive.domain.reports import REPORT_VERDICT_KINDS, StageReport
+from litehive.domain.reports import REPORT_VERDICT_KINDS, ReportPipelineState, StageReport
 from litehive.domain.task import TaskRecord
 from litehive.observability.engine_monitoring import record_engine_execution, record_engine_observation
 from litehive.agents.artifacts import (
@@ -66,7 +67,7 @@ logger = logging.getLogger(__name__)
 def _latest_report_files_changed(
     workspace: Workspace,
     task: TaskRecord,
-    pipeline_state: str,
+    pipeline_state: ReportPipelineState,
     source_subagent_id: str | None = None,
 ) -> list[str]:
     """
@@ -236,7 +237,7 @@ class SubagentManager(SessionMixin):
         return TaskStage.IMPLEMENTING.value
 
     @classmethod
-    def _report_stage_for_task(cls, task: TaskRecord, role: str | None = None) -> str:
+    def _report_stage_for_task(cls, task: TaskRecord, role: str | None = None) -> ReportPipelineState:
         """
         Narrow the agent stage to one ``StageReport`` accepts.
 
@@ -246,11 +247,13 @@ class SubagentManager(SessionMixin):
         sync stage cannot accidentally land in the report storage.
         """
         stage = cls._agent_stage_for_task(task, role)
-        if stage in _REPORTABLE_STAGES or stage == PipelineState.RECOVERING:
-            return stage
+        if stage == PipelineState.RECOVERING:
+            return "recovering"
         if stage == PipelineState.MERGE_RESOLVING:
-            return PipelineState.MERGE_RESOLVING.value
-        return TaskStage.IMPLEMENTING.value
+            return "merge_resolving"
+        if stage in _REPORTABLE_STAGES:
+            return TaskStage(stage)
+        return TaskStage.IMPLEMENTING
 
     def run(
         self,
@@ -373,9 +376,10 @@ class SubagentManager(SessionMixin):
                 resume_session_id=resume_session_id,
             )
             if supports_live_execution(live_execution_probe):
-                run_live_callable = effective_engine_callable(execution_engine, "run_live")
-                if not callable(run_live_callable):
-                    run_live_callable = execution_engine.run_live
+                run_live_callable = cast(
+                    Callable[..., CLIExecutionResult],
+                    effective_engine_callable(execution_engine, "run_live") or execution_engine.run_live,
+                )
                 inactivity_timeout_seconds = self.subagent_inactivity_timeout_seconds(engine_name)
                 live_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
@@ -397,9 +401,10 @@ class SubagentManager(SessionMixin):
                     **filter_supported_kwargs(run_live_callable, live_kwargs),
                 )
             else:
-                run_callable = effective_engine_callable(execution_engine, "run")
-                if not callable(run_callable):
-                    run_callable = execution_engine.run
+                run_callable = cast(
+                    Callable[..., CLIExecutionResult],
+                    effective_engine_callable(execution_engine, "run") or execution_engine.run,
+                )
                 run_kwargs: dict[str, object] = {
                     "cwd": self.execution_root,
                     "model": effective_model,
@@ -599,7 +604,7 @@ class SubagentManager(SessionMixin):
         files_changed = _latest_report_files_changed(
             self.workspace,
             task,
-            str(report.pipeline_state),
+            report.pipeline_state,
             source_subagent_id=ref.id,
         )
         record_stage_report(self.workspace, task, report)
@@ -719,7 +724,7 @@ class SubagentManager(SessionMixin):
             },
         )
         report_stage = self._report_stage_for_task(task, ref.role)
-        report_payload = {
+        report_payload: dict[str, object] = {
             "status": ref.status,
             "summary": "",
             "files_changed": [],
@@ -746,7 +751,7 @@ class SubagentManager(SessionMixin):
                 "files_changed": _latest_report_files_changed(
                     self.workspace,
                     task,
-                    str(report.pipeline_state),
+                    report.pipeline_state,
                     source_subagent_id=ref.id,
                 ),
                 "tests": report.tests,
@@ -774,7 +779,7 @@ class SubagentManager(SessionMixin):
     def _parse_execution_report(
         self,
         task: TaskRecord,
-        stage: str,
+        stage: ReportPipelineState,
         ref: SubagentRef,
         execution: CLIExecutionResult | None,
         transcript: str,

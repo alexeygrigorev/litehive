@@ -378,7 +378,7 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
         Workspace.from_path(root),
         task_record,
         role="recovery",
-        stage=PipelineState.RECOVERING.value,
+        stage="recovering",
         verdicts={"reject"},
     )
     if latest is None or not latest.follow_up_task_id:

@@ -8,6 +8,7 @@ from litehive.lifecycle.persistence import Limits, TaskState
 from litehive.lifecycle.runner import StateMachineRunner
 from litehive.lifecycle.types import NodeType, PipelineMode
 from tests.support.lifecycle_fakes import InMemoryJournal, InMemoryPersistence
+from litehive.domain.common import PipelineState
 
 
 class _FixedEventNode(Node):
@@ -40,9 +41,9 @@ def _run_one_transition(event: Event, state: TaskState) -> tuple[TaskState, InMe
 def test_semantic_reject_fails_without_recovery_trigger() -> None:
     state = TaskState(
         task_id="T-0001",
-        stage="accepting",
+        stage=PipelineState.ACCEPTING,
         pipeline_mode=PipelineMode.FULL,
-        stage_retry={"accepting": 1},
+        stage_retry={PipelineState.ACCEPTING: 1},
         limits=Limits(stage_retry_limit=1),
     )
     event = Reject(
@@ -72,7 +73,7 @@ def test_semantic_reject_fails_without_recovery_trigger() -> None:
 def test_crash_and_timeout_enter_recovery(event: Event, expected_kind: TriggerEventKind) -> None:
     state = TaskState(
         task_id="T-0001",
-        stage="accepting",
+        stage=PipelineState.ACCEPTING,
         pipeline_mode=PipelineMode.FULL,
     )
 
@@ -113,7 +114,7 @@ def test_task_time_budget_exceeded_fails_before_next_pre_commit_stage() -> None:
     clock = _FakeClock()
     state = TaskState(
         task_id="T-0001",
-        stage="implementing",
+        stage=PipelineState.IMPLEMENTING,
         pipeline_mode=PipelineMode.FULL,
     )
     registry = NodeRegistry()

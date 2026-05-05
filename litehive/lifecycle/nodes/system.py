@@ -3,7 +3,7 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Callable
 
-from litehive.domain.common import PipelineMode, PipelineState, TaskStage
+from litehive.domain.common import PipelineMode, PipelineState
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import (
     GitError,
@@ -297,7 +297,7 @@ class PreExecRecoveryNode(SystemNode):
         the extension point so a new repair shape can be added without
         subclassing the node.
         """
-        super().__init__("recovering_pre_exec")
+        super().__init__(PipelineState.RECOVERING_PRE_EXEC)
         self.repairs = list(repairs or [])
 
     def run(self, state: TaskState) -> Event:
@@ -323,9 +323,9 @@ class PreExecRecoveryNode(SystemNode):
                     file=sys.stderr,
                 )
         if state.pipeline_mode == PipelineMode.SINGLE:
-            default_resume_stage = TaskStage.IMPLEMENTING.value
+            default_resume_stage = PipelineState.IMPLEMENTING
         else:
-            default_resume_stage = TaskStage.GROOMING.value
+            default_resume_stage = PipelineState.GROOMING
         resume_stage = state.entry_stage or default_resume_stage
         return PreExecRecoverySucceeded(resume_stage=resume_stage)
 
@@ -349,7 +349,7 @@ class CommitNode(SystemNode):
 
     def __init__(self) -> None:
         """Anchor the node at the ``commit`` pipeline stage so the runner dispatches the automatic merge here once the agent stages have all passed."""
-        super().__init__("commit")
+        super().__init__(PipelineState.COMMIT)
 
     def run(self, state: TaskState) -> Event:
         """

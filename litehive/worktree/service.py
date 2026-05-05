@@ -103,7 +103,7 @@ class WorktreeService:
         self,
         task_id: str,
         entry_stage: str | None,
-        worktree_resolver: "Callable[[object], Path] | None" = None,
+        worktree_resolver: "Callable[..., Path] | None" = None,
         resolver_state: object | None = None,
         main_ref: str = "origin/main",
     ) -> WorktreeSyncResult:

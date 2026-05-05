@@ -16,13 +16,14 @@ from litehive.state.persist import load_state, save_state, set_pool_stop_reason
 from litehive.state.records import create_task, save_task
 from litehive.domain.task import WorkspaceState
 from litehive.workspace import Workspace
+from litehive.domain.common import PipelineStatus, TaskStatus
 
 
 def test_status_surfaces_flagged_task_as_operator_needed(tmp_path: Path, capsys) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Flagged work")
-    task.status = "flagged"
-    task.pipeline_status = "implementing"
+    task.status = TaskStatus.FLAGGED
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.flag_reason = "needs operator review"
     save_task(tmp_path, task)
 

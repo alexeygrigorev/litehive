@@ -48,6 +48,7 @@ from .guards import (
 )
 from .stages import Stages as S
 from .transitions import Rule, entry_from_worktree_sync, resume_from_origin, resume_from_pre_exec, retry_epoch_rules
+from .types import FailedReason
 
 
 def _recovery_rules(from_state, on_event, when=None) -> list[Rule]:
@@ -76,7 +77,7 @@ def _recovery_rules(from_state, on_event, when=None) -> list[Rule]:
     ]
 
 
-def _terminal_reject_rules(from_state, when=None, reason="semantic_reject") -> list[Rule]:
+def _terminal_reject_rules(from_state, when=None, reason: FailedReason = FailedReason.SEMANTIC_REJECT) -> list[Rule]:
     """Build the "Reject from this state goes straight to FAILED" rule for stages where rejection is non-retryable (grooming, commit, merge-resolving)."""
     return [
         Rule(
@@ -121,25 +122,25 @@ RULES: list[Rule] = [
         from_state=S.PRE_EXEC_RECOVERY,
         on_event=PreExecRecoveryFailed,
         transition_to=S.FAILED,
-        with_effect=Fail("pre_exec_recovery_failed"),
+        with_effect=Fail(FailedReason.PRE_EXEC_RECOVERY_FAILED),
     ),
     Rule(
         from_state=S.PRE_EXEC_RECOVERY,
         on_event=PreExecRecoveryBudgetHit,
         transition_to=S.FAILED,
-        with_effect=Fail("pre_exec_recovery_failed"),
+        with_effect=Fail(FailedReason.PRE_EXEC_RECOVERY_FAILED),
     ),
     Rule(
         from_state=S.PRE_EXEC_RECOVERY,
         on_event=Crash,
         transition_to=S.FAILED,
-        with_effect=Fail("recovery_crashed"),
+        with_effect=Fail(FailedReason.RECOVERY_CRASHED),
     ),
     Rule(
         from_state=S.PRE_EXEC_RECOVERY,
         on_event=Timeout,
         transition_to=S.FAILED,
-        with_effect=Fail("recovery_crashed"),
+        with_effect=Fail(FailedReason.RECOVERY_CRASHED),
     ),
     # ── grooming ─────────────────────────────────────────────
     Rule(
@@ -289,25 +290,25 @@ RULES: list[Rule] = [
         from_state=S.ALL_STAGE_PHASES,
         on_event=StageRetryLimitHit,
         transition_to=S.FAILED,
-        with_effect=Fail("unrecoverable_error"),
+        with_effect=Fail(FailedReason.UNRECOVERABLE_ERROR),
     ),
     Rule(
         from_state=S.ALL_STAGE_PHASES,
         on_event=OverallRetryLimitHit,
         transition_to=S.FAILED,
-        with_effect=Fail("unrecoverable_error"),
+        with_effect=Fail(FailedReason.UNRECOVERABLE_ERROR),
     ),
     Rule(
         from_state=S.ALL_STAGE_PHASES,
         on_event=TaskTimeBudgetExceeded,
         transition_to=S.FAILED,
-        with_effect=Fail("time_budget_exceeded"),
+        with_effect=Fail(FailedReason.TIME_BUDGET_EXCEEDED),
     ),
     Rule(
         from_state=S.RECOVERING,
         on_event=TaskTimeBudgetExceeded,
         transition_to=S.FAILED,
-        with_effect=Fail("time_budget_exceeded"),
+        with_effect=Fail(FailedReason.TIME_BUDGET_EXCEEDED),
     ),
     # ── recovering ─────────────────────────────────────────────
     Rule(
@@ -321,31 +322,31 @@ RULES: list[Rule] = [
         from_state=S.RECOVERING,
         on_event=RecoverySucceeded,
         transition_to=S.FAILED,
-        with_effect=Fail("recovery_missing_target_stage"),
+        with_effect=Fail(FailedReason.RECOVERY_MISSING_TARGET_STAGE),
     ),
     Rule(
         from_state=S.RECOVERING,
         on_event=RecoveryFailed,
         transition_to=S.FAILED,
-        with_effect=Fail("recovery_exhausted"),
+        with_effect=Fail(FailedReason.RECOVERY_EXHAUSTED),
     ),
     Rule(
         from_state=S.RECOVERING,
         on_event=RecoveryBudgetHit,
         transition_to=S.FAILED,
-        with_effect=Fail("recovery_budget_hit"),
+        with_effect=Fail(FailedReason.RECOVERY_BUDGET_HIT),
     ),
     Rule(
         from_state=S.RECOVERING,
         on_event=Crash,
         transition_to=S.FAILED,
-        with_effect=Fail("recovery_crashed"),
+        with_effect=Fail(FailedReason.RECOVERY_CRASHED),
     ),
     Rule(
         from_state=S.RECOVERING,
         on_event=Timeout,
         transition_to=S.FAILED,
-        with_effect=Fail("recovery_crashed"),
+        with_effect=Fail(FailedReason.RECOVERY_CRASHED),
     ),
     # ── wildcards (must be last) ─────────────────────────────────────────────
     *_recovery_rules(S.ALL_STAGE_PHASES, Crash),

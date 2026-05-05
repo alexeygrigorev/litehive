@@ -132,12 +132,7 @@ def record_engine_execution(
     lag behind real usage.
     """
     monitoring = load_engine_monitoring(workspace)
-    extract_usage_observation = getattr(adapter, "extract_usage_observation", None)
-    if callable(extract_usage_observation):
-        extracted_observation = extract_usage_observation(execution)
-    else:
-        extracted_observation = None
-    observation = extracted_observation or EngineUsageObservation()
+    observation = _extract_usage_observation(adapter, execution)
     monitoring = _apply_engine_observation(
         monitoring,
         engine_name=engine_name,
@@ -150,6 +145,20 @@ def record_engine_execution(
     )
     save_engine_monitoring(workspace, monitoring)
     return monitoring
+
+
+def _extract_usage_observation(
+    adapter: ExternalCLIAdapter,
+    execution: CLIExecutionResult,
+) -> EngineUsageObservation:
+    """Probe the adapter for an ``extract_usage_observation`` hook and coerce its return into a typed observation — adapters that don't implement the hook get an empty observation so downstream logic stays uniform."""
+    extract_usage_observation = getattr(adapter, "extract_usage_observation", None)
+    if not callable(extract_usage_observation):
+        return EngineUsageObservation()
+    extracted = extract_usage_observation(execution)
+    if isinstance(extracted, EngineUsageObservation):
+        return extracted
+    return EngineUsageObservation()
 
 
 def record_engine_observation(
@@ -169,12 +178,7 @@ def record_engine_observation(
     :func:`record_engine_execution` call lands.
     """
     monitoring = load_engine_monitoring(workspace)
-    extract_usage_observation = getattr(adapter, "extract_usage_observation", None)
-    if callable(extract_usage_observation):
-        extracted_observation = extract_usage_observation(execution)
-    else:
-        extracted_observation = None
-    observation = extracted_observation or EngineUsageObservation()
+    observation = _extract_usage_observation(adapter, execution)
     if (
         observation.usage is None
         and observation.limit_reason is None

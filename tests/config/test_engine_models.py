@@ -11,6 +11,7 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.runtime import RuntimeEngineSwitch
 from litehive.state.records import create_task
+from litehive.domain.common import PipelineStatus
 
 
 def test_resolve_engine_name_prefers_run_override_then_workspace_default(
@@ -101,7 +102,7 @@ def test_resolve_engine_name_honors_stage_matched_engine_switch(tmp_path: Path) 
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Switch engine for retry")
-    task.pipeline_status = "implementing"
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.runtime.execution.last_engine_switch = RuntimeEngineSwitch(
         stage="implementing",
         from_engine="codex",
@@ -118,7 +119,7 @@ def test_resolve_engine_name_run_override_beats_stage_matched_engine_switch(tmp_
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Switch engine for retry")
-    task.pipeline_status = "implementing"
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.runtime.execution.last_engine_switch = RuntimeEngineSwitch(
         stage="implementing",
         from_engine="codex",
@@ -135,7 +136,7 @@ def test_resolve_engine_name_ignores_stage_mismatched_engine_switch(tmp_path: Pa
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Switch engine for retry")
-    task.pipeline_status = "implementing"
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.runtime.execution.last_engine_switch = RuntimeEngineSwitch(
         stage="testing",
         from_engine="codex",

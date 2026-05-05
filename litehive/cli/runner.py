@@ -25,6 +25,7 @@ from litehive.daemon.execution import (
 from litehive.daemon.registry import get_workspace_daemon
 from litehive.db.schema import MigrationApplyError, apply_pending_migrations, migration_status
 from litehive.git.ops import has_non_litehive_changes, is_git_repo
+from litehive.domain.common import PipelineState
 from litehive.domain.reports import TaskActivityEntry, TaskActivityVerdict
 from litehive.lifecycle.orchestration import run_task
 from litehive.state.backup import create_workspace_backup, list_workspace_backups, restore_workspace_backup
@@ -189,7 +190,7 @@ class _RunCommandIteration:
 
     exit_code: int
     ran_task: bool
-    final_stage: str | None = None
+    final_stage: PipelineState | None = None
     consecutive_task_failures: int = 0
     pool_stop_reason: str | None = None
 
@@ -425,7 +426,7 @@ def _run_drain(
             return 0
 
         tasks_run += 1
-        if stop_on_failure and iteration.final_stage != "done":
+        if stop_on_failure and iteration.final_stage != PipelineState.DONE:
             set_pool_stop_reason(workspace, "failure_detected")
             print("Pool stopped: failure_detected")
             return 0

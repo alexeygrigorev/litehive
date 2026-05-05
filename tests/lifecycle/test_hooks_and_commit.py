@@ -30,6 +30,7 @@ from litehive.tasks.paths import task_dir
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.report_storage import load_stage_reports
 from litehive.worktree import serialize_worktree_path, task_worktree_branch, task_worktree_path
+from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
 
 pytestmark = pytest.mark.integration
 
@@ -41,8 +42,8 @@ def _raw_task_state_payload(root: Path, task_id: str) -> dict:
     return json.loads(row["payload"])
 
 
-def make_state(stage: str = "before_grooming", task_id: str = "T-0001") -> TaskState:
-    return TaskState(task_id=task_id, stage=stage, pipeline_mode=PipelineMode.FULL)
+def make_state(stage: str | PipelineState = "before_grooming", task_id: str = "T-0001") -> TaskState:
+    return TaskState(task_id=task_id, stage=stage, pipeline_mode=PipelineMode.FULL)  # type: ignore[arg-type]
 
 
 class SequenceHookRunner(HookRunner):
@@ -84,14 +85,14 @@ def test_hook_environment_contains_task_id_and_stage(tmp_path: Path) -> None:
     runner = SubprocessHookRunner(tmp_path)
     result = runner.run(
         HookSpec(command='test "$LITEHIVE_TASK_ID:$LITEHIVE_STAGE" = "T-0042:grooming"'),
-        make_state(stage="grooming", task_id="T-0042"),
+        make_state(stage=PipelineState.GROOMING, task_id="T-0042"),
     )
     assert result is None
 
 
 def test_hook_node_with_passing_spec_emits_hook_ok(tmp_path: Path) -> None:
     node = HookNode(
-        "before_grooming",
+        PipelineState.BEFORE_GROOMING,
         hooks=[HookSpec(command="true")],
         runner=SubprocessHookRunner(tmp_path),
     )
@@ -102,7 +103,7 @@ def test_hook_node_with_passing_spec_emits_hook_ok(tmp_path: Path) -> None:
 
 def test_hook_node_with_failing_spec_emits_hook_reject(tmp_path: Path) -> None:
     node = HookNode(
-        "before_grooming",
+        PipelineState.BEFORE_GROOMING,
         hooks=[HookSpec(command="false")],
         runner=SubprocessHookRunner(tmp_path),
     )
@@ -116,7 +117,7 @@ def test_hook_node_with_failing_spec_emits_hook_reject(tmp_path: Path) -> None:
 
 def test_hook_node_warning_includes_command_exit_code_and_streams(tmp_path: Path) -> None:
     node = HookNode(
-        "after_implementing",
+        PipelineState.AFTER_IMPLEMENTING,
         hooks=[
             HookSpec(
                 command="sh -c 'echo stdout-line && echo stderr-line >&2 && exit 3'",
@@ -127,7 +128,7 @@ def test_hook_node_warning_includes_command_exit_code_and_streams(tmp_path: Path
         runner=SubprocessHookRunner(tmp_path),
     )
 
-    event = node.run(make_state(stage="after_implementing"))
+    event = node.run(make_state(stage=PipelineState.AFTER_IMPLEMENTING))
 
     assert isinstance(event, Reject)
     assert "sh -c 'echo stdout-line && echo stderr-line >&2 && exit 3'" in event.metadata["warnings"][0]
@@ -149,9 +150,9 @@ def test_hook_node_stops_after_first_failure() -> None:
             "third": None,
         }
     )
-    node = HookNode("after_implementing", hooks=hooks, runner=runner)
+    node = HookNode(PipelineState.AFTER_IMPLEMENTING, hooks=hooks, runner=runner)
 
-    event = node.run(make_state(stage="after_implementing"))
+    event = node.run(make_state(stage=PipelineState.AFTER_IMPLEMENTING))
 
     assert isinstance(event, Reject)
     assert runner.calls == ["first"]
@@ -201,7 +202,7 @@ def test_commit_node_clean_merge_returns_pass(git_repo_with_branch) -> None:
         worktree_resolver=lambda state: worktree,
     )
 
-    state = make_state(stage="commit")
+    state = make_state(stage=PipelineState.COMMIT)
     event = node.run(state)
     assert isinstance(event, Pass), event
     assert (main_repo / "b.txt").read_text() == "feature\n"
@@ -245,7 +246,7 @@ def test_commit_node_autocommits_uncommitted_worktree_edits(tmp_path: Path) -> N
         task_resolver=lambda state: task,
     )
 
-    state = make_state(stage="commit")
+    state = make_state(stage=PipelineState.COMMIT)
     event = node.run(state)
     message = subprocess.run(
         ["git", "log", "-1", "--pretty=%B"],
@@ -286,7 +287,7 @@ def test_commit_node_autocommits_staged_worktree_deletions(tmp_path: Path) -> No
     subprocess.run(["git", "rm", "-q", "--", "obsolete.txt"], cwd=worktree, check=True)
 
     node = GitCommitNode(repo, worktree_resolver=lambda state: worktree)
-    event = node.run(make_state(stage="commit"))
+    event = node.run(make_state(stage=PipelineState.COMMIT))
 
     status = subprocess.run(
         ["git", "status", "--short"],
@@ -337,7 +338,7 @@ def test_commit_node_autocommit_excludes_runner_owned_task_metadata(tmp_path: Pa
     (worktree / ".litehive" / "tasks" / "T-0001-demo" / "task.yaml").write_text("id: T-0001\nstatus: implementing\n")
 
     node = GitCommitNode(repo, worktree_resolver=lambda state: worktree)
-    event = node.run(make_state(stage="commit", task_id="T-0001"))
+    event = node.run(make_state(stage=PipelineState.COMMIT, task_id="T-0001"))
 
     assert isinstance(event, Pass), event
     assert (repo / "new.txt").read_text() == "agent wrote this\n"
@@ -378,7 +379,7 @@ def test_commit_node_autocommit_excludes_uv_lock(tmp_path: Path) -> None:
     (worktree / "uv.lock").write_text("version = 1\n# timestamp churn\n")
 
     node = GitCommitNode(repo, worktree_resolver=lambda state: worktree)
-    event = node.run(make_state(stage="commit"))
+    event = node.run(make_state(stage=PipelineState.COMMIT))
 
     assert isinstance(event, Pass), event
     assert (repo / "new.txt").read_text() == "agent wrote this\n"
@@ -399,7 +400,7 @@ def test_commit_node_autocommits_dirty_main_checkout_after_clean_merge(git_repo_
         worktree_resolver=lambda state: worktree,
     )
 
-    event = node.run(make_state(stage="commit"))
+    event = node.run(make_state(stage=PipelineState.COMMIT))
 
     assert isinstance(event, Pass), event
     assert (main_repo / "b.txt").read_text() == "feature\n"
@@ -434,7 +435,7 @@ def test_commit_node_autocommits_untracked_main_checkout_files_after_clean_merge
         worktree_resolver=lambda state: worktree,
     )
 
-    event = node.run(make_state(stage="commit"))
+    event = node.run(make_state(stage=PipelineState.COMMIT))
 
     status = subprocess.run(
         ["git", "status", "--short"],
@@ -490,7 +491,7 @@ def test_commit_node_main_checkout_autocommit_skips_stale_missing_pathspecs(
         ),
     )
 
-    cleanup_head = node.autocommit_main_checkout_changes(make_state(stage="commit"))
+    cleanup_head = node.autocommit_main_checkout_changes(make_state(stage=PipelineState.COMMIT))
 
     status = subprocess.run(
         ["git", "status", "--short"],
@@ -535,7 +536,7 @@ def test_commit_node_reports_already_landed_noop_reconciliation(git_repo_with_br
     monkeypatch.setattr("litehive.lifecycle.nodes.system.merge_no_edit", fail_merge)
     monkeypatch.setattr(node, "worktree_patch_already_on_main", lambda wt_head, main_head: True)
 
-    event = node.run(make_state(stage="commit"))
+    event = node.run(make_state(stage=PipelineState.COMMIT))
 
     assert isinstance(event, Pass), event
     assert event.metadata == {
@@ -566,7 +567,7 @@ def test_commit_node_with_conflict_emits_merge_conflict_detected(
         worktree_resolver=lambda state: worktree,
     )
 
-    state = make_state(stage="commit")
+    state = make_state(stage=PipelineState.COMMIT)
     event = node.run(state)
     assert isinstance(event, MergeConflictDetected)
     assert "a.txt" in event.conflict_files
@@ -595,13 +596,13 @@ def test_commit_node_concludes_resolved_in_progress_merge(git_repo_with_branch) 
         worktree_resolver=lambda state: worktree,
     )
 
-    conflict_event = node.run(make_state(stage="commit"))
+    conflict_event = node.run(make_state(stage=PipelineState.COMMIT))
     assert isinstance(conflict_event, MergeConflictDetected)
 
     (main_repo / "a.txt").write_text("main_change\nfeature_change\n")
     subprocess.run(["git", "add", "a.txt"], cwd=main_repo, check=True)
 
-    event = node.run(make_state(stage="commit"))
+    event = node.run(make_state(stage=PipelineState.COMMIT))
 
     assert isinstance(event, Pass), event
     assert (main_repo / "a.txt").read_text() == "main_change\nfeature_change\n"
@@ -619,7 +620,7 @@ def test_commit_node_concludes_resolved_in_progress_merge(git_repo_with_branch) 
 
 def test_stub_commit_node_always_passes() -> None:
     node = StubCommitNode()
-    event = node.run(make_state(stage="commit"))
+    event = node.run(make_state(stage=PipelineState.COMMIT))
     assert isinstance(event, Pass)
 
 
@@ -937,7 +938,7 @@ def test_reconcile_terminal_commit_sha_recovers_missing_sha_from_persisted_commi
     _init_workspace_git_repo(tmp_path)
     task = create_task(tmp_path, title="Repair missing terminal commit sha")
     persistence = SqlitePersistence(Workspace.from_path(tmp_path))
-    state = persistence.initialize(task.id, stage="done", pipeline_mode=PipelineMode.FULL)
+    state = persistence.initialize(task.id, stage=PipelineState.DONE, pipeline_mode=PipelineMode.FULL)
     head_sha = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=tmp_path,
@@ -950,14 +951,14 @@ def test_reconcile_terminal_commit_sha_recovers_missing_sha_from_persisted_commi
 
     fresh = get_task(tmp_path, task.id)
     assert fresh is not None
-    fresh.status = "done"
-    fresh.pipeline_status = "done"
+    fresh.status = TaskStatus.DONE
+    fresh.pipeline_status = PipelineStatus.DONE
     save_task(tmp_path, fresh)
 
     reconciled = reconcile_terminal_commit_sha(
         tmp_path,
         fresh,
-        final_state=TaskState(task_id=task.id, stage="done", pipeline_mode=PipelineMode.FULL),
+        final_state=TaskState(task_id=task.id, stage=PipelineState.DONE, pipeline_mode=PipelineMode.FULL),
         persistence=persistence,
     )
     reloaded = get_task(tmp_path, task.id)
@@ -1313,7 +1314,7 @@ def test_main_checkout_cleanup_skips_tracked_ignored_task_reports(tmp_path: Path
     report_path.write_text("stage: testing\nsummary: updated\n", encoding="utf-8")
 
     node = GitCommitNode(main_repo_root=tmp_path, worktree_resolver=lambda state: tmp_path)
-    head = node.autocommit_main_checkout_changes(make_state(stage="commit", task_id=seed_task.id))
+    head = node.autocommit_main_checkout_changes(make_state(stage=PipelineState.COMMIT, task_id=seed_task.id))
 
     status = subprocess.run(
         ["git", "status", "--short"],
@@ -1351,7 +1352,7 @@ def test_main_checkout_cleanup_commits_already_staged_deletions(tmp_path: Path) 
     subprocess.run(["git", "rm", "-q", "--", str(probe_file.relative_to(tmp_path))], cwd=tmp_path, check=True)
 
     node = GitCommitNode(main_repo_root=tmp_path, worktree_resolver=lambda state: tmp_path)
-    head = node.autocommit_main_checkout_changes(make_state(stage="commit", task_id="T-0429"))
+    head = node.autocommit_main_checkout_changes(make_state(stage=PipelineState.COMMIT, task_id="T-0429"))
 
     status = subprocess.run(
         ["git", "status", "--short"],

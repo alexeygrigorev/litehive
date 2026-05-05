@@ -35,7 +35,7 @@ ToFn = Callable[[TaskState, Event], PipelineState]
 ToSpec = PipelineState | str | ToFn | Stage
 
 
-def _entry_phase(stage: str | PipelineState) -> PipelineState:
+def _entry_phase(stage: str | PipelineState | None) -> PipelineState:
     """
     Translate a logical stage into the phase the runner re-enters on resume.
 
@@ -44,6 +44,8 @@ def _entry_phase(stage: str | PipelineState) -> PipelineState:
     so it resumes at itself. Used by the recovery and worktree-sync
     callable resume targets in this module.
     """
+    if stage is None:
+        return PipelineState.READY
     pipeline_state = canonical_pipeline_state(stage)
     if pipeline_state == PipelineState.COMMIT:
         return PipelineState.COMMIT
@@ -234,7 +236,7 @@ def retry_epoch_rules(counter_stage, phases, retry_target, exhausted_reason: Fai
             Rule(
                 from_state=phase,
                 on_event=Reject,
-                transition_to="failed",
+                transition_to=PipelineState.FAILED,
                 when=rejection_loop_detected(retry_target_name),
                 with_effect=FailRejectionLoop(
                     name,
@@ -246,7 +248,7 @@ def retry_epoch_rules(counter_stage, phases, retry_target, exhausted_reason: Fai
             Rule(
                 from_state=phase,
                 on_event=Reject,
-                transition_to="failed",
+                transition_to=PipelineState.FAILED,
                 when=hook_reject_loop_detected(),
                 with_effect=Fail(FailedReason.HOOK_REJECT_LOOP),
             )
@@ -267,7 +269,7 @@ def retry_epoch_rules(counter_stage, phases, retry_target, exhausted_reason: Fai
             Rule(
                 from_state=phase,
                 on_event=Reject,
-                transition_to="failed",
+                transition_to=PipelineState.FAILED,
                 when=stage_retries_exhausted(name),
                 with_effect=Fail(exhausted_reason),
             )

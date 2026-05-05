@@ -78,8 +78,9 @@ def _normalize_stale_pipeline_statuses(
     for task in tasks_by_id.values():
         if task.id == state.active_task_id:
             continue
-        stage = str(task.pipeline_status)
-        if stage in {"backlog", active_stage}:
+        if task.pipeline_status == PipelineStatus.BACKLOG:
+            continue
+        if active_stage is not None and task.pipeline_status == active_stage:
             continue
         if task.status != TaskStatus.QUEUED:
             continue

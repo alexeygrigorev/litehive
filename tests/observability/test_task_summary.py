@@ -28,6 +28,7 @@ from litehive.observability.status import (
 from litehive.state.records import create_task
 from litehive.tasks.report_storage import record_stage_report
 from litehive.workspace import Workspace
+from litehive.domain.common import PipelineStatus, TaskStatus
 
 
 def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) -> None:
@@ -45,7 +46,7 @@ def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) 
         ),
     )
 
-    task.pipeline_status = "implementing"
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     lines = render_task_summary(task, active=True, workspace=Workspace.from_path(tmp_path))
     combined = "\n".join(lines)
     assert "stage_estimate=" in combined
@@ -56,7 +57,7 @@ def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) 
 def test_render_task_summary_surfaces_semantic_reject_classification(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Semantic reject status")
-    task.status = "flagged"
+    task.status = TaskStatus.FLAGGED
     task.pipeline_status = "flagged"
     task.flag_reason = SEMANTIC_REJECT_CLASSIFICATION
     record_stage_report(Workspace.from_path(tmp_path),
@@ -80,8 +81,8 @@ def test_render_task_summary_surfaces_semantic_reject_classification(tmp_path: P
 def test_render_active_task_detail_lines_prefers_active_subagent_engine(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Active detail task")
-    task.status = "in_progress"
-    task.pipeline_status = "implementing"
+    task.status = TaskStatus.IN_PROGRESS
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.runtime.pipeline.current_stage.stage = "testing"
     task.runtime.execution.active_subagent = RuntimeSubagentState(
         id="sa-1",
@@ -221,13 +222,13 @@ def test_render_runtime_policy_lines_uses_preformatted_retry_label() -> None:
 def test_render_health_task_sections(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     active = create_task(tmp_path, title="Active health task")
-    active.status = "in_progress"
-    active.pipeline_status = "implementing"
+    active.status = TaskStatus.IN_PROGRESS
+    active.pipeline_status = PipelineStatus.IMPLEMENTING
     active.runtime.pipeline.current_stage.stage = "testing"
 
     flagged = create_task(tmp_path, title="Flagged health task")
-    flagged.status = "flagged"
-    flagged.pipeline_status = "testing"
+    flagged.status = TaskStatus.FLAGGED
+    flagged.pipeline_status = PipelineStatus.TESTING
     flagged.flag_reason = "needs review"
     record_stage_report(Workspace.from_path(tmp_path),
         flagged,
@@ -235,7 +236,7 @@ def test_render_health_task_sections(tmp_path: Path) -> None:
     )
 
     done = create_task(tmp_path, title="Done health task")
-    done.status = "done"
+    done.status = TaskStatus.DONE
     done.updated_at = "2026-04-14T10:15:00Z"
     record_stage_report(Workspace.from_path(tmp_path),
         done,

@@ -11,6 +11,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task, get_task, save_task
 
 from tests.support.helpers import _cmd_list, _cmd_recover, _cmd_show, _cmd_update
+from litehive.domain.common import PipelineStatus, TaskStatus
 
 
 def _help_option_names(output: str) -> set[str]:
@@ -33,8 +34,8 @@ def test_list_excludes_done_tasks_by_default(tmp_path: Path, capsys: pytest.Capt
     ensure_workspace(tmp_path)
     active = create_task(tmp_path, title="Active task", auto_commit=False)
     done = create_task(tmp_path, title="Done task", auto_commit=False)
-    done.status = "done"
-    done.pipeline_status = "done"
+    done.status = TaskStatus.DONE
+    done.pipeline_status = PipelineStatus.DONE
     save_task(tmp_path, done)
 
     exit_code = _cmd_list(
@@ -55,8 +56,8 @@ def test_list_all_includes_done_tasks(tmp_path: Path, capsys: pytest.CaptureFixt
     ensure_workspace(tmp_path)
     active = create_task(tmp_path, title="Active task", auto_commit=False)
     done = create_task(tmp_path, title="Done task", auto_commit=False)
-    done.status = "done"
-    done.pipeline_status = "done"
+    done.status = TaskStatus.DONE
+    done.pipeline_status = PipelineStatus.DONE
     save_task(tmp_path, done)
 
     exit_code = _cmd_list(
@@ -161,8 +162,8 @@ def test_show_prints_agent_creation_provenance(
 def test_show_prints_done_history(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Done history task", auto_commit=False)
-    task.status = "done"
-    task.pipeline_status = "done"
+    task.status = TaskStatus.DONE
+    task.pipeline_status = PipelineStatus.DONE
     task.goal = "Keep completed history directly inspectable"
     save_task(tmp_path, task)
 
@@ -184,8 +185,8 @@ def test_recover_done_task_requeues_follow_up_work(
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Done recover task", auto_commit=False)
-    task.status = "done"
-    task.pipeline_status = "done"
+    task.status = TaskStatus.DONE
+    task.pipeline_status = PipelineStatus.DONE
     save_task(tmp_path, task)
 
     exit_code = _cmd_recover(argparse.Namespace(workspace=tmp_path, task_id=task.id))
@@ -240,12 +241,12 @@ def test_task_update_renames_title_in_place(
 def test_show_displays_dependency_statuses(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ensure_workspace(tmp_path)
     live = create_task(tmp_path, title="Live dependency", auto_commit=False)
-    live.status = "flagged"
+    live.status = TaskStatus.FLAGGED
     save_task(tmp_path, live)
 
     done = create_task(tmp_path, title="Done dependency", auto_commit=False)
-    done.status = "done"
-    done.pipeline_status = "done"
+    done.status = TaskStatus.DONE
+    done.pipeline_status = PipelineStatus.DONE
     save_task(tmp_path, done)
 
     task = create_task(tmp_path, title="Depends on multiple states", auto_commit=False)

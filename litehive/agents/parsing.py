@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from litehive.domain.common import cap_feedback, TaskStage
+from litehive.domain.common import cap_feedback
 from litehive.domain.reports import (
     REPORT_VERDICT_KINDS,
     ReportPipelineState,
@@ -19,7 +19,7 @@ from litehive.workspace import Workspace
 
 def stage_report_from_subagent(
     task: TaskRecord,
-    stage: str | TaskStage,
+    stage: ReportPipelineState,
     result: SubagentResult,
     root: Path,
 ) -> StageReport:
@@ -38,7 +38,7 @@ def stage_report_from_subagent(
     latest = latest_task_activity_entry(
         Workspace.from_path(root),
         task,
-        stage=str(pipeline_state),
+        stage=pipeline_state,
         source_subagent_id=result.ref.id,
         verdicts=REPORT_VERDICT_KINDS,
     )

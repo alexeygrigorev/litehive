@@ -16,6 +16,7 @@ from litehive.agents.session_store import load_subagent_session
 from litehive.cli.task_debug_support import render_task_evidence
 from litehive.config.paths import workspace_path
 from litehive.daemon.logs import latest_run_all_log_dir
+from litehive.domain.task import TaskRecord
 from litehive.state.records import get_task_record, list_tasks
 from litehive.tasks.journal import render_task_journal
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
@@ -73,7 +74,7 @@ def list_daemon_sessions(root: Path) -> int:
     return 0
 
 
-def show_task_journal(root: Path, task) -> int:
+def show_task_journal(root: Path, task: TaskRecord) -> int:
     """
     Default ``task logs <id>`` view: the per-task narrative journal.
 
@@ -91,7 +92,7 @@ def show_task_journal(root: Path, task) -> int:
     return 0
 
 
-def show_latest_subagent(root: Path, task) -> int:
+def show_latest_subagent(root: Path, task: TaskRecord) -> int:
     """
     One-screen view of the most recent subagent run for a task.
 
@@ -104,7 +105,7 @@ def show_latest_subagent(root: Path, task) -> int:
     return render_task_evidence(root, task)
 
 
-def list_task_subagents(root: Path, task) -> int:
+def list_task_subagents(root: Path, task: TaskRecord) -> int:
     """
     Tabular summary of every subagent run on a task.
 
@@ -340,7 +341,7 @@ def _artifact_for_kind(base: Path, kind: str, active: bool) -> Path | None:
     raise ValueError(f"Unsupported artifact kind: {kind}")
 
 
-def _pick_value(runtime_state, session: dict[str, object], *keys: str):
+def _pick_value(runtime_state: object, session: dict[str, object], *keys: str) -> object:
     """
     Read a field preferring runtime state over the persisted session.
 
@@ -362,7 +363,7 @@ def _pick_value(runtime_state, session: dict[str, object], *keys: str):
     return None
 
 
-def _format_duration(started_at: str | datetime | None, completed_at: str | datetime | None) -> str:
+def _format_duration(started_at: object, completed_at: object) -> str:
     """
     Render elapsed time between two ISO timestamps as ``Ns``.
 
@@ -373,6 +374,8 @@ def _format_duration(started_at: str | datetime | None, completed_at: str | date
     a misleading negative number.
     """
     if not started_at or not completed_at:
+        return "-"
+    if not isinstance(started_at, (str, datetime)) or not isinstance(completed_at, (str, datetime)):
         return "-"
     try:
         start = _coerce_datetime(started_at)
@@ -385,7 +388,7 @@ def _format_duration(started_at: str | datetime | None, completed_at: str | date
     return "-"
 
 
-def resolve_follow_task(root: Path, task_id: str | None) -> object | None:
+def resolve_follow_task(root: Path, task_id: str | None) -> TaskRecord | None:
     """
     Pick the task whose stdout ``--follow`` should attach to.
 
@@ -404,7 +407,7 @@ def resolve_follow_task(root: Path, task_id: str | None) -> object | None:
     return next((task for task in tasks if task.subagents), None)
 
 
-def load_task_with_runtime(root: Path, task_id: str):
+def load_task_with_runtime(root: Path, task_id: str) -> TaskRecord | None:
     """
     Tolerant task lookup used by ``task logs <id>``.
 

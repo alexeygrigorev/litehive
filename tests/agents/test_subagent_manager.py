@@ -46,7 +46,7 @@ def test_subagent_manager_passes_workspace_root_in_extra_env(tmp_path: Path, mon
     execution_root.mkdir()
     task = create_task(tmp_path, title="Pass workspace root")
     manager = SubagentManager(tmp_path, execution_root=execution_root)
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     class FakeEngine:
         name = "codex"
@@ -219,7 +219,7 @@ def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Consume unified stdout")
     manager = SubagentManager(tmp_path, execution_root=tmp_path)
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     class FakeEngine:
         name = "codex"
@@ -517,7 +517,7 @@ def test_subagent_manager_enforces_300s_inactivity_timeout_for_opencode(
     task = create_task(tmp_path, title="Live inactivity timeout")
     manager = SubagentManager(tmp_path, execution_root=tmp_path)
     manager.config.subagent_inactivity_timeout_seconds = 123.0
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     class FakeEngine:
         name = "opencode"
@@ -573,7 +573,7 @@ def test_subagent_manager_omits_model_override_when_resuming_opencode(
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Resume opencode without model")
     manager = SubagentManager(tmp_path, execution_root=tmp_path)
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     class FakeEngine:
         name = "opencode"
@@ -635,7 +635,7 @@ def test_subagent_manager_preserves_workspace_timeout_for_non_opencode_live_runs
     task = create_task(tmp_path, title="Live inactivity timeout")
     manager = SubagentManager(tmp_path, execution_root=tmp_path)
     manager.config.subagent_inactivity_timeout_seconds = 123.0
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     class FakeEngine:
         name = "codex"

@@ -64,7 +64,7 @@ def engine_command(
             print(line)
         return 0
     if action == "default":
-        if name not in ENGINE_CHOICES:
+        if name is None or name not in ENGINE_CHOICES:
             print(f"engine default: unknown engine '{name}'")
             return 1
         if reason:
@@ -116,7 +116,7 @@ def engine_command(
             updated_label = "no"
         print(f"updated: {updated_label}")
         return 0
-    if name not in ENGINE_CHOICES:
+    if name is None or name not in ENGINE_CHOICES:
         print(f"engine {action}: unknown engine '{name}'")
         return 1
     if action == "freeze":

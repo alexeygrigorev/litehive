@@ -43,7 +43,7 @@ ANY_STAGE_PHASES = tuple(sorted(ANY_STAGE_PHASE))
 
 
 def make_state(
-    stage: str,
+    stage: str | PipelineState,
     *,
     mode: PipelineMode = PipelineMode.FULL,
     stage_retry: dict[str, int] | None = None,
@@ -60,7 +60,7 @@ def make_state(
 ) -> TaskState:
     return TaskState(
         task_id="T-0001",
-        stage=stage,
+        stage=stage,  # type: ignore[arg-type]
         pipeline_mode=mode,
         stage_retry=stage_retry or {},
         rejection_loop=rejection_loop,
@@ -163,14 +163,14 @@ def test_grooming_reject_fails_directly():
 
 
 def test_implementing_reject_retries_with_counter_bump():
-    state = make_state("implementing", stage_retry={"implementing": 0})
+    state = make_state("implementing", stage_retry={PipelineState.IMPLEMENTING: 0})
     trans = step("implementing", Reject(source="agent", reason="x"), state)
     assert trans.next == "implementing"
     assert trans.delta.inc_stage_retry == "implementing"
 
 
 def test_implementing_guard_reject_retries_with_counter_bump() -> None:
-    state = make_state("implementing", stage_retry={"implementing": 0})
+    state = make_state("implementing", stage_retry={PipelineState.IMPLEMENTING: 0})
     trans = step(
         "implementing",
         Reject(
@@ -191,7 +191,7 @@ def test_implementing_guard_reject_retries_with_counter_bump() -> None:
 
 
 def test_implementing_reject_fails_directly_when_exhausted():
-    state = make_state("implementing", stage_retry={"implementing": 3})
+    state = make_state("implementing", stage_retry={PipelineState.IMPLEMENTING: 3})
     trans = step("implementing", Reject(source="agent", reason="x"), state)
     assert trans.next == "failed"
     assert trans.delta.failed_reason == "semantic_reject"
@@ -203,7 +203,7 @@ def test_implementing_reject_fails_directly_when_exhausted():
 
 
 def test_same_hook_reject_loop_fails_directly_before_stage_retry_limit():
-    state = make_state("after_implementing", stage_retry={"implementing": 0})
+    state = make_state("after_implementing", stage_retry={PipelineState.IMPLEMENTING: 0})
     trans = step(
         "after_implementing",
         Reject(
@@ -232,7 +232,7 @@ def test_same_hook_reject_loop_fails_directly_before_stage_retry_limit():
 def test_same_hook_reject_loop_direct_failure_keeps_hook_tracking():
     state = make_state(
         "after_implementing",
-        stage_retry={"implementing": 0},
+        stage_retry={PipelineState.IMPLEMENTING: 0},
         hook_reject_recovery_invoked=True,
     )
     trans = step(
@@ -259,7 +259,7 @@ def test_same_hook_reject_loop_direct_failure_keeps_hook_tracking():
 
 
 def test_testing_reject_routes_back_to_implementing():
-    state = make_state("testing", stage_retry={"testing": 0})
+    state = make_state("testing", stage_retry={PipelineState.TESTING: 0})
     trans = step("testing", Reject(source="agent", reason="x"), state)
     assert trans.next == "implementing"
     assert trans.delta.inc_stage_retry == "testing"
@@ -270,7 +270,7 @@ def test_testing_reject_routes_back_to_implementing():
 
 
 def test_testing_reject_bypasses_to_accepting_after_qa_retries_when_hooks_green():
-    state = make_state("testing", stage_retry={"testing": 2}, stage_retry_limit=2, hook_ok=True)
+    state = make_state("testing", stage_retry={PipelineState.TESTING: 2}, stage_retry_limit=2, hook_ok=True)
 
     qa_reject = step("testing", Reject(source="agent", reason="style nit"), state)
 
@@ -283,14 +283,14 @@ def test_testing_reject_bypasses_to_accepting_after_qa_retries_when_hooks_green(
     assert rejection.reason == "style nit"
     assert rejection.raised_at_phase == "testing"
 
-    accepting_state = make_state("accepting", stage_retry={"testing": 2}, stage_retry_limit=2, hook_ok=True)
+    accepting_state = make_state("accepting", stage_retry={PipelineState.TESTING: 2}, stage_retry_limit=2, hook_ok=True)
     assert step("accepting", Pass(), accepting_state).next == "after_accepting"
-    after_accepting_state = make_state("after_accepting", stage_retry={"testing": 2}, stage_retry_limit=2, hook_ok=True)
+    after_accepting_state = make_state("after_accepting", stage_retry={PipelineState.TESTING: 2}, stage_retry_limit=2, hook_ok=True)
     assert step("after_accepting", HookOk(), after_accepting_state).next == "commit"
 
 
 def test_testing_reject_fails_directly_when_hooks_are_not_green():
-    state = make_state("testing", stage_retry={"testing": 2}, stage_retry_limit=2, hook_ok=False)
+    state = make_state("testing", stage_retry={PipelineState.TESTING: 2}, stage_retry_limit=2, hook_ok=False)
     trans = step("testing", Reject(source="agent", reason="x"), state)
     assert trans.next == "failed"
     assert trans.delta.failed_reason == "semantic_reject"
@@ -300,7 +300,7 @@ def test_testing_reject_fails_directly_when_hooks_are_not_green():
 
 
 def test_accepting_reject_routes_back_to_implementing():
-    state = make_state("accepting", stage_retry={"accepting": 0})
+    state = make_state("accepting", stage_retry={PipelineState.ACCEPTING: 0})
     trans = step("accepting", Reject(source="agent", reason="x"), state)
     assert trans.next == "implementing"
     assert trans.delta.inc_stage_retry == "accepting"
@@ -309,10 +309,10 @@ def test_accepting_reject_routes_back_to_implementing():
 def test_third_testing_reject_hits_rejection_loop_cap() -> None:
     state = make_state(
         "testing",
-        stage_retry={"testing": 0},
+        stage_retry={PipelineState.TESTING: 0},
         rejection_loop=RejectionLoop(
-            rejection_stage="testing",
-            retry_target_stage="implementing",
+            rejection_stage=PipelineState.TESTING,
+            retry_target_stage=PipelineState.IMPLEMENTING,
             count=2,
         ),
     )
@@ -329,8 +329,8 @@ def test_testing_pass_clears_completed_rejection_loop() -> None:
     state = make_state(
         "testing",
         rejection_loop=RejectionLoop(
-            rejection_stage="testing",
-            retry_target_stage="implementing",
+            rejection_stage=PipelineState.TESTING,
+            retry_target_stage=PipelineState.IMPLEMENTING,
             count=2,
         ),
     )
@@ -345,8 +345,8 @@ def test_testing_pass_does_not_clear_accepting_rejection_loop() -> None:
     state = make_state(
         "testing",
         rejection_loop=RejectionLoop(
-            rejection_stage="accepting",
-            retry_target_stage="implementing",
+            rejection_stage=PipelineState.ACCEPTING,
+            retry_target_stage=PipelineState.IMPLEMENTING,
             count=2,
         ),
     )
@@ -486,7 +486,7 @@ def test_recovery_succeeded_resume_origin_stage_name():
             message="boom",
         ),
     )
-    trans = step("recovering", RecoverySucceeded(resume="testing"), state)
+    trans = step("recovering", RecoverySucceeded(resume=PipelineState.TESTING), state)
     assert trans.next == "before_testing"
     assert trans.delta.clear_active_recovery_trigger is True
 
@@ -504,7 +504,7 @@ def test_recovery_succeeded_without_destination_fails_explicitly():
             message="boom",
         ),
     )
-    trans = step("recovering", RecoverySucceeded(resume=""), state)
+    trans = step("recovering", RecoverySucceeded(resume=""), state)  # type: ignore[arg-type]
     assert trans.next == "failed"
     assert trans.delta.failed_reason == "recovery_missing_target_stage"
 
@@ -579,7 +579,7 @@ def test_pre_exec_success_resumes_origin_stage():
     state = make_state("recovering_pre_exec")
     trans = step(
         "recovering_pre_exec",
-        PreExecRecoverySucceeded(resume_stage="implementing"),
+        PreExecRecoverySucceeded(resume_stage=PipelineState.IMPLEMENTING),
         state,
     )
     assert trans.next == "before_implementing"

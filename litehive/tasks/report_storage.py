@@ -80,7 +80,7 @@ def insert_recovery_report(workspace: Workspace, task: TaskRecord, report: Recov
             payload={"recovery_report": report.model_dump(mode="json")},
         )
         connection.commit()
-    return ReportReference(table="recovery_reports", row_id=int(cursor.lastrowid))
+    return ReportReference(table="recovery_reports", row_id=int(cursor.lastrowid or 0))
 
 
 def load_recovery_reports(workspace: Workspace, task: TaskRecord) -> list[RecoveryReport]:
@@ -155,7 +155,7 @@ def record_stage_report(workspace: Workspace, task: TaskRecord, report: StageRep
             payload={"stage_report": report.model_dump(mode="json")},
         )
         connection.commit()
-    return ReportReference(table="stage_reports", row_id=int(cursor.lastrowid))
+    return ReportReference(table="stage_reports", row_id=int(cursor.lastrowid or 0))
 
 
 def rewrite_latest_stage_report(workspace: Workspace, task: TaskRecord, report: StageReport) -> ReportReference:
@@ -327,4 +327,4 @@ def _deserialize_stage_report_payload(payload: dict[str, object]) -> StageReport
         verdict = canonical_stage_report_verdict(str(normalized["verdict"]))
         if verdict is not None:
             normalized["verdict"] = verdict
-    return StageReport(**normalized)
+    return StageReport.model_validate(normalized)

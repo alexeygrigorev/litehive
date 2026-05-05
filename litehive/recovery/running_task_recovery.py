@@ -8,6 +8,7 @@ resumable stage with a recovery report.
 
 from datetime import UTC, datetime
 import sqlite3
+from typing import TypedDict
 
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.recovery import TriggerEventKind
@@ -30,6 +31,15 @@ from litehive.state.locking import (
 )
 from litehive.tasks.recovery_reports import record_recovery_report
 from litehive.workspace import Workspace
+
+
+class RunningTaskRecoveryResult(TypedDict):
+    """Recovery summary returned by :func:`recover_running_tasks` so the caller can route post-mortem state without re-walking the task population."""
+
+    mutated: bool
+    transitioned: list[TaskRecord]
+    journal_messages: dict[str, str]
+    prioritized_ids: list[str]
 
 
 def _stale_pid_warnings(stale_pid: bool) -> list[str]:
@@ -118,7 +128,7 @@ def recover_running_tasks(
     tasks_by_id: dict[str, TaskRecord],
     running_task_ids: list[str],
     summary: WorkspaceRepairSummary | None,
-) -> dict[str, object]:
+) -> RunningTaskRecoveryResult:
     """
     Driver loop over every task whose runtime row says ``running``.
 

@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import signal
 import time
+from typing import TYPE_CHECKING
 
 from heru import extract_engine_continuation
 from heru.base import CLIExecutionResult
@@ -29,6 +30,11 @@ from litehive.domain.task import TaskRecord
 from litehive.observability.events import append_event, append_session_log, ensure_session_log
 from litehive.tasks.runtime import mark_subagent_pid
 
+if TYPE_CHECKING:
+    from litehive.agents.sandbox import SandboxLauncher
+    from litehive.config.model import LitehiveConfig
+    from litehive.workspace import Workspace
+
 _OPENCODE_INACTIVITY_TIMEOUT_SECONDS = 300.0
 _COMPLETED_INACTIVITY_PATTERN = re.compile(
     r"\[litehive\]\s*Process killed after\s+(?P<seconds>\d+(?:\.\d+)?)s of inactivity\.",
@@ -41,6 +47,15 @@ class SessionMixin:
 
     Subclasses must provide: self.root, self.workspace, self.sandbox, self.config, self._stream_offsets.
     """
+
+    # Attributes the concrete SubagentManager subclass is contractually required
+    # to set in __init__ — declared here so type checkers can resolve them on
+    # the mixin without each method having to repeat the pattern.
+    root: Path
+    workspace: "Workspace"
+    sandbox: "SandboxLauncher"
+    config: "LitehiveConfig"
+    _stream_offsets: dict[str, int]
 
     @staticmethod
     def render_execution_trace(

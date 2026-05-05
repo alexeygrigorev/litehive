@@ -7,6 +7,7 @@ import litehive.state.persist as workflow_module
 from litehive.config.workspace import ensure_workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task
+from litehive.domain.common import PipelineStatus, TaskStatus
 
 
 def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
@@ -17,8 +18,8 @@ def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
     ensure_workspace(tmp_path)
 
     task = create_task(tmp_path, title="Atomic save", auto_commit=False)
-    task.status = "flagged"
-    task.pipeline_status = "testing"
+    task.status = TaskStatus.FLAGGED
+    task.pipeline_status = PipelineStatus.TESTING
     task.runtime.pipeline.execution_status = "flagged"
 
     def fail_runtime_transaction(self, *, task_intents=None, task_states=None, workspace_state=None):
@@ -45,8 +46,8 @@ def test_workspace_transition_writes_preserve_task_added_after_state_snapshot(
     queued = create_task(tmp_path, title="Queued task")
     stale_state = load_state(tmp_path)
     create_task(tmp_path, title="Added later")
-    active.status = "done"
-    active.pipeline_status = "done"
+    active.status = TaskStatus.DONE
+    active.pipeline_status = PipelineStatus.DONE
     stale_state.active_task_id = None
     stale_state.queue = [queued.id]
 

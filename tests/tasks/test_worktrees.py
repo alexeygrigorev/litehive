@@ -7,6 +7,7 @@ import pytest
 
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task, save_task
+from litehive.domain.common import TaskStatus
 from litehive.worktree import (
     ensure_worktree_venv_link,
     remove_cleanable_worktrees,
@@ -113,7 +114,7 @@ def test_remove_cleanable_worktrees_includes_closed_tasks(tmp_path: Path) -> Non
     task = create_task(workspace, title="Closed worktree cleanup")
     worktree = task_worktree_path(workspace, task)
     worktree.mkdir(parents=True)
-    task.status = "closed"
+    task.status = TaskStatus.CLOSED
     task.close_reason = "deferred"
     task.runtime.pipeline.git.worktree_path = str(worktree)
     save_task(workspace, task)

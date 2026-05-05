@@ -24,6 +24,7 @@ from litehive.workspace import Workspace
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.lifecycle.types import PipelineMode
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.common import PipelineState
 
 
 @pytest.fixture
@@ -60,24 +61,24 @@ def _seed_journal(workspace: Path, task_id: str) -> None:
             disposition=RecoveryDisposition.RESUMED,
         )
     )
-    state.stage = "recovering"
+    state.stage = PipelineState.RECOVERING
     store.save(state)
 
     journal = SqliteJournal(Workspace.from_path(workspace))
-    journal.task_started(task_id, "ready")
+    journal.task_started(task_id, PipelineState.READY)
     journal.transition(
         task_id=task_id,
-        from_stage="ready",
+        from_stage=PipelineState.READY,
         event=CleanState(),
-        to_stage="worktree_sync",
+        to_stage=PipelineState.WORKTREE_SYNC,
         rule_description="ready → worktree_sync",
         delta=StateDelta(),
     )
     journal.transition(
         task_id=task_id,
-        from_stage="grooming",
+        from_stage=PipelineState.GROOMING,
         event=Reject(source="agent", reason="blank task"),
-        to_stage="recovering",
+        to_stage=PipelineState.RECOVERING,
         rule_description="grooming reject → recovering",
         delta=StateDelta(set_active_recovery_trigger=state.active_recovery_trigger),
     )

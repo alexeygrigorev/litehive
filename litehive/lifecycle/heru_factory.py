@@ -37,7 +37,7 @@ from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.config.loading import load_config
 from litehive.domain.agent import EngineFailure
 from litehive.domain.common import OutcomeReasonCode, PipelineState, TaskStage, Verdict, cap_feedback
-from litehive.domain.reports import StageReport
+from litehive.domain.reports import StageReport, TaskActivityStage, canonical_report_pipeline_state
 from litehive.domain.lifecycle_deltas import recovery_trigger_from_event
 from litehive.git.ops import GitError, is_git_repo, status_porcelain
 from litehive.roles.base import PromptContext
@@ -128,11 +128,11 @@ class _NullSessions:
         del task_id, node_name, engine_name, session
 
 
-def _allowed_verdicts_for_stage(stage: str) -> set[str]:
+def _allowed_verdicts_for_stage(stage: TaskActivityStage) -> set[str]:
     """Verdict vocabularies the journal reader accepts when scanning for the
     agent's submission. Recovery has its own routing verbs (resume/advance/...);
     every other stage only emits pass/reject."""
-    if stage == PipelineState.RECOVERING.value:
+    if stage == "recovering":
         return {"resume", "advance", "done", "budget_hit", "reject"}
     return {"pass", "reject"}
 
@@ -335,7 +335,7 @@ def _extract_test_results(message: str) -> list[str]:
 def latest_verdict_after(
     workspace_root: Path,
     task_id: str,
-    stage: str,
+    stage: TaskActivityStage,
     after_ts: datetime,
     source_subagent_id: str | None = None,
 ) -> AgentVerdict | None:
@@ -368,7 +368,7 @@ def latest_verdict_after(
                 claimed_files=changed_files,
                 checkout=checkout,
             )
-    metadata = {
+    metadata: dict[str, Any] = {
         "files_changed": changed_files,
         "target_stage": latest.target_stage,
         "last_report": {
@@ -448,6 +448,7 @@ class HeruEngineAdapter:
             raise UnrecoverableError(f"task {state.task_id} not found in workspace")
 
         stage = prompt.stage
+        report_stage = canonical_report_pipeline_state(stage.value)
         role = prompt.role
         prompt_text = serialize_prompt(prompt, task_record=task, workspace_root=self.workspace_root)
         execution_root = _agent_execution_root(self.workspace_root, task, role=role)
@@ -488,7 +489,7 @@ class HeruEngineAdapter:
         verdict = latest_verdict_after(
             self.workspace_root,
             state.task_id,
-            stage,
+            report_stage,
             before_turn,
             source_subagent_id=result.ref.id,
         )
@@ -606,8 +607,8 @@ class HeruEngineAdapter:
             previous_recovery = latest_task_activity_entry(
                 Workspace.from_path(self.workspace_root),
                 task,
-                stage=str(PipelineState.RECOVERING),
-                verdicts=_allowed_verdicts_for_stage(str(PipelineState.RECOVERING)),
+                stage="recovering",
+                verdicts=_allowed_verdicts_for_stage("recovering"),
             )
             if previous_recovery is not None:
                 after_ts = previous_recovery.created_at
@@ -623,7 +624,7 @@ class HeruEngineAdapter:
         return latest_verdict_after(
             self.workspace_root,
             state.task_id,
-            str(PipelineState.RECOVERING),
+            "recovering",
             after_ts,
             source_subagent_id=source_subagent_id,
         )

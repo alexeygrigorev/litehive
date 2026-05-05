@@ -14,14 +14,15 @@ from litehive.tasks.runtime import finish_task_run_transition
 from litehive.tasks.status import requeue_task
 
 from tests.support.helpers import _cmd_requeue_task
+from litehive.domain.common import PipelineStatus, TaskStatus
 
 
 def _flag_task(root: Path, task_id: str) -> None:
     """Set a task to flagged and persist via finish_task_run_transition."""
     task = get_task(root, task_id)
     assert task is not None
-    task.status = "flagged"
-    task.pipeline_status = "implementing"
+    task.status = TaskStatus.FLAGGED
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     finish_task_run_transition(root, task, "flagged")
 
 
@@ -83,8 +84,8 @@ def test_requeue_blocked_without_force_after_three_flags(tmp_path: Path) -> None
     for i in range(3):
         t = get_task(tmp_path, task.id)
         assert t is not None
-        t.status = "flagged"
-        t.pipeline_status = "implementing"
+        t.status = TaskStatus.FLAGGED
+        t.pipeline_status = PipelineStatus.IMPLEMENTING
         t.flag_count = i  # simulate prior increments
         save_task(tmp_path, t)
         finish_task_run_transition(tmp_path, t, "flagged")
@@ -101,10 +102,10 @@ def test_requeue_with_force_succeeds_after_three_flags(tmp_path: Path) -> None:
     # Set flag_count to 3 and status to flagged (simulating threshold handling)
     t = get_task(tmp_path, task.id)
     assert t is not None
-    t.status = "flagged"
+    t.status = TaskStatus.FLAGGED
     t.flag_reason = "flagged 3 times - needs human review"
     t.flag_count = 3
-    t.pipeline_status = "implementing"
+    t.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, t)
 
     # Requeue with --force should work
@@ -134,8 +135,8 @@ def test_flag_count_not_reset_by_requeue(tmp_path: Path) -> None:
 def test_requeue_task_resets_sticky_pipeline_failure_state(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Requeue clears failed pipeline state")
-    task.status = "flagged"
-    task.pipeline_status = "implementing"
+    task.status = TaskStatus.FLAGGED
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, task)
 
     persistence = SqlitePersistence(Workspace.from_path(tmp_path))
@@ -156,10 +157,10 @@ def test_cli_requeue_warns_and_fails_without_force(tmp_path: Path, capsys: pytes
     # Set up a flagged task with flag_count >= 3
     t = get_task(tmp_path, task.id)
     assert t is not None
-    t.status = "flagged"
+    t.status = TaskStatus.FLAGGED
     t.flag_reason = "flagged 3 times - needs human review"
     t.flag_count = 3
-    t.pipeline_status = "implementing"
+    t.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, t)
 
     exit_code = _cmd_requeue_task(argparse.Namespace(workspace=tmp_path, task_id=task.id, front=False, force=False))
@@ -174,10 +175,10 @@ def test_cli_requeue_succeeds_with_force(tmp_path: Path, capsys: pytest.CaptureF
 
     t = get_task(tmp_path, task.id)
     assert t is not None
-    t.status = "flagged"
+    t.status = TaskStatus.FLAGGED
     t.flag_reason = "flagged 3 times - needs human review"
     t.flag_count = 3
-    t.pipeline_status = "implementing"
+    t.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, t)
 
     exit_code = _cmd_requeue_task(argparse.Namespace(workspace=tmp_path, task_id=task.id, front=True, force=True))

@@ -13,6 +13,7 @@ from litehive.state.persist import load_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.state.store import runtime_store
 from litehive.tasks.status import close_task, update_task
+from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
 
 
 def _raw_task_state_payload(root: Path, task_id: str) -> dict:
@@ -57,7 +58,7 @@ def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None
     task = create_task(tmp_path, title="Close me")
     persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     state = persistence.initialize(task.id)
-    state.stage = "recovering"
+    state.stage = PipelineState.RECOVERING
     persistence.save(state)
 
     update_task(
@@ -107,13 +108,13 @@ def test_update_task_parks_task_with_structured_action(tmp_path: Path) -> None:
 def test_update_task_requeues_task_with_structured_action(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Retry me")
-    task.status = "flagged"
-    task.pipeline_status = "implementing"
+    task.status = TaskStatus.FLAGGED
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, task)
 
     persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     failed_state = persistence.initialize(task.id)
-    failed_state.stage = "failed"
+    failed_state.stage = PipelineState.FAILED
     persistence.save(failed_state)
 
     update_task(tmp_path, task.id, action="requeue")
@@ -133,10 +134,10 @@ def test_update_task_abandons_task_with_structured_action(tmp_path: Path) -> Non
     task = create_task(tmp_path, title="Stop me")
     persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     state = persistence.initialize(task.id)
-    state.stage = "testing"
+    state.stage = PipelineState.TESTING
     persistence.save(state)
-    task.status = "parked"
-    task.pipeline_status = "testing"
+    task.status = TaskStatus.PARKED
+    task.pipeline_status = PipelineStatus.TESTING
     save_task(tmp_path, task)
 
     update_task(tmp_path, task.id, action="abandon")
@@ -200,7 +201,7 @@ def test_close_task_resets_pipeline_state_row(tmp_path: Path) -> None:
     task = create_task(tmp_path, title="Close and clear pipeline state")
     persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     state = persistence.initialize(task.id)
-    state.stage = "recovering"
+    state.stage = PipelineState.RECOVERING
     persistence.save(state)
 
     close_task(tmp_path, task.id, outcome="duplicate", reason="duplicate umbrella")
