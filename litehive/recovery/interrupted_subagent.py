@@ -57,14 +57,15 @@ def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeS
         if summary:
             return summary
     ref = next((candidate for candidate in reversed(task.subagents) if candidate.id == active.id), None)
-    if ref is not None:
-        trace = load_subagent_execution_trace(root, task, ref, active=True, runtime_state=active)
-        if trace is None:
-            snippet = ""
-        else:
-            snippet = summarize_transcript(trace.text)
-        if snippet:
-            return snippet
+    if ref is None:
+        return active.execution_trace_snippet or "runner interrupted before subagent completion"
+    trace = load_subagent_execution_trace(root, task, ref, active=True, runtime_state=active)
+    if trace is None:
+        snippet = ""
+    else:
+        snippet = summarize_transcript(trace.text)
+    if snippet:
+        return snippet
     return active.execution_trace_snippet or "runner interrupted before subagent completion"
 
 

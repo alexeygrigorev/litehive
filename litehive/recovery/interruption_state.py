@@ -73,16 +73,16 @@ def interruption_journal_message(task: TaskRecord) -> str:
 def stale_interruption_reason(task: TaskRecord, stage: str, stale_pid: bool = False) -> str:
     """Build the ``reason`` string the stale-runner repair attaches to the task; embeds subagent role/engine and (when known) "pid no longer alive" so the recovery report distinguishes "runner died" from "subagent died" failures."""
     active = task.runtime.execution.active_subagent
-    if active is not None:
-        if stale_pid and active.pid:
-            pid_detail = f", pid {active.pid} no longer alive"
-        else:
-            pid_detail = ""
-        return (
-            f"Stale runner detected while subagent `{active.id}` "
-            f"({active.role}/{active.engine}{pid_detail}) was still marked running in `{stage}`."
-        )
-    return f"Stale runner detected while `{stage}` was still marked running."
+    if active is None:
+        return f"Stale runner detected while `{stage}` was still marked running."
+    if stale_pid and active.pid:
+        pid_detail = f", pid {active.pid} no longer alive"
+    else:
+        pid_detail = ""
+    return (
+        f"Stale runner detected while subagent `{active.id}` "
+        f"({active.role}/{active.engine}{pid_detail}) was still marked running in `{stage}`."
+    )
 
 
 def _interruption_timestamps(task: TaskRecord, now: str) -> dict[str, str | None]:

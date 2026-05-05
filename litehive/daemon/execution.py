@@ -379,8 +379,9 @@ def maybe_run_workspace_backup(
     backup module.
     """
     backup = create_scheduled_workspace_backup(workspace, now=now)
-    if backup is not None:
-        _emit(f"backup_created: {backup.timestamp}", stream=stream)
+    if backup is None:
+        return
+    _emit(f"backup_created: {backup.timestamp}", stream=stream)
 
 
 def run_logged_subprocess(

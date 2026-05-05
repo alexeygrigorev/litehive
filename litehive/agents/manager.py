@@ -352,24 +352,22 @@ class SubagentManager(SessionMixin):
                     transcript,
                     exit_code=proc.exit_code,
                 )
+                limit_reason = classify_execution_limit(transcript)
+                retryable_failure = classify_retryable_execution_failure(transcript)
                 if interruption_reason is not None:
                     ref.status = "interrupted"
                     failure = EngineFailure(
                         kind="execution_interrupted",
                         reason=interruption_reason,
                     )
-                else:
-                    limit_reason = classify_execution_limit(transcript)
-                    if limit_reason is not None:
-                        failure = EngineFailure(kind="execution_limit", reason=limit_reason)
-                    else:
-                        retryable_failure = classify_retryable_execution_failure(transcript)
-                        if retryable_failure is not None:
-                            failure = EngineFailure(
-                                kind="retryable_execution_error",
-                                reason=retryable_failure.reason,
-                                classification=retryable_failure.classification,
-                            )
+                elif limit_reason is not None:
+                    failure = EngineFailure(kind="execution_limit", reason=limit_reason)
+                elif retryable_failure is not None:
+                    failure = EngineFailure(
+                        kind="retryable_execution_error",
+                        reason=retryable_failure.reason,
+                        classification=retryable_failure.classification,
+                    )
         except SubagentInactivityTimeout as exc:
             timeout_note = str(exc)
             stderr = exc.execution.stderr

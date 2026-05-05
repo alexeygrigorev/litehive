@@ -122,16 +122,16 @@ def unregister_daemon(workspace: Path, pid: int | None = None) -> None:
     manager = _daemon_lock_manager(workspace)
     with _DAEMON_LOCKS_MUTEX:
         handle = _DAEMON_LOCKS.pop(workspace, None)
-    if handle is not None:
-        try:
-            metadata = manager.read_locked_metadata(handle)
-            if pid is not None and metadata.get("pid") != pid:
-                return
-        finally:
-            manager.lock_manager.release(handle, clear_metadata=True)
-        manager.clear_process_state(workspace)
+    if handle is None:
+        _clear_stale_daemon_metadata(workspace, pid=pid)
         return
-    _clear_stale_daemon_metadata(workspace, pid=pid)
+    try:
+        metadata = manager.read_locked_metadata(handle)
+        if pid is not None and metadata.get("pid") != pid:
+            return
+    finally:
+        manager.lock_manager.release(handle, clear_metadata=True)
+    manager.clear_process_state(workspace)
 
 
 def touch_daemon(workspace: Path, pid: int | None = None) -> bool:
