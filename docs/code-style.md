@@ -108,6 +108,17 @@ from tests.support.helpers import make_workspace, run_cli
   like `root: Path | None = None` a default just because some
   call site doesn't have one — make the missing data the call
   site's problem.
+- Do not write ternary expressions (`a if cond else b`). Use a
+  full `if`/`else` block. The exception is when the ternary is the
+  only readable form inside a larger expression that genuinely must
+  stay one line (rare). For nullable defaults, prefer `value or
+  fallback` over `value if value is not None else fallback`.
+- No nested ternaries. They are hard to read and rewrite-hostile.
+- No bare `*` keyword-only markers in function signatures. Write
+  `def func(a, b, c)` instead of `def func(a, b, *, c)`. Callers
+  can still pass parameters by keyword. Splitting positional from
+  keyword-only adds noise without protecting anything in this
+  codebase.
 
 ## Hoist inline expressions to named locals
 
