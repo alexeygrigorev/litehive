@@ -367,8 +367,10 @@ def runner_pid_is_alive(pid: object) -> bool:
     divergence between callers in the past produced confusing "stale lock
     held by alive process" reports.
     """
+    if not isinstance(pid, (int, str, bytes, float)):
+        return False
     try:
-        candidate = int(pid)  # pyrefly: ignore[bad-argument-type]
+        candidate = int(pid)
     except (TypeError, ValueError):
         return False
     if candidate <= 0:

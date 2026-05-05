@@ -334,11 +334,12 @@ def test_queue_resume_and_requeue_keep_parked_semantics_explicit(
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "testing"
 
-    # pyrefly's pydantic-validate_assignment narrowing collapses these fields
-    # to Never after the equality assertions above; the runtime assignment is
-    # well-typed (TaskStatus / PipelineStatus enum members).
-    refreshed.status = TaskStatus.PARKED  # pyrefly: ignore[bad-assignment]
-    refreshed.pipeline_status = PipelineStatus.TESTING  # pyrefly: ignore[bad-assignment]
+    # Use model_copy(update=...) to bypass pyrefly's pydantic
+    # validate_assignment narrowing (the equality assertions above collapse
+    # the field types to literals, so direct assignment then looks bad).
+    refreshed = refreshed.model_copy(
+        update={"status": TaskStatus.PARKED, "pipeline_status": PipelineStatus.TESTING}
+    )
     save_task(tmp_path, refreshed)
     state = load_state(tmp_path)
     state.queue = []

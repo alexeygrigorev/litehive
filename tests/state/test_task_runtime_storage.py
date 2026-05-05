@@ -250,8 +250,10 @@ def test_task_runtime_outcome_string_mutations_persist_without_pydantic_warnings
     # The string spellings here are valid OutcomeKind / OutcomeReasonCode enum
     # values; this test exercises that pydantic accepts the string form on
     # assignment under validate_assignment=True without emitting warnings.
-    task.runtime.pipeline.last_outcome.kind = kind  # pyrefly: ignore[bad-assignment]
-    task.runtime.pipeline.last_outcome.reason_code = reason_code  # pyrefly: ignore[bad-assignment]
+    # setattr is used so pyrefly does not complain about the str→Enum
+    # assignment (the validate_assignment coercion happens at runtime).
+    setattr(task.runtime.pipeline.last_outcome, "kind", kind)
+    setattr(task.runtime.pipeline.last_outcome, "reason_code", reason_code)
     task.runtime.pipeline.last_outcome.reason = "runtime outcome"
 
     with warnings.catch_warnings():

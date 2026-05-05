@@ -18,7 +18,9 @@ def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:
 def pytest_configure(config: pytest.Config) -> None:
     """Apply a real pytest-timeout guardrail to integration-only runs."""
     config.option.timeout = INTEGRATION_TEST_TIMEOUT_SECONDS
-    config._env_timeout = INTEGRATION_TEST_TIMEOUT_SECONDS  # pyrefly: ignore[missing-attribute]
+    # `_env_timeout` is a private pytest-timeout attribute on Config; setattr
+    # avoids pyrefly's missing-attribute error on the dynamic write.
+    setattr(config, "_env_timeout", INTEGRATION_TEST_TIMEOUT_SECONDS)
 
 
 @pytest.fixture(scope="session", autouse=True)

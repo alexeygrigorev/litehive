@@ -879,7 +879,11 @@ def _optional_int(value: object) -> int | None:
     """
     if value is None:
         return None
-    return int(value)  # pyrefly: ignore[bad-argument-type]
+    if not isinstance(value, (int, str, bytes, float)):
+        raise TypeError(
+            f"_optional_int expected int|str|bytes|float|None, got {type(value).__name__}"
+        )
+    return int(value)
 
 
 def _task_intent_column_values(intent: TaskIntentRecord) -> dict[str, str]:

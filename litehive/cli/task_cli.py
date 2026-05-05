@@ -390,10 +390,10 @@ def abandon(task_id: Annotated[str, typer.Argument(help="Task id")], workspace: 
 @app.command("close", help="Close a task with an explicit close reason")
 def close(
     task_id: Annotated[str, typer.Argument(help="Task id")],
-    workspace: WorkspaceOption = Path.cwd(),
     outcome: Annotated[
         str, typer.Option(click_type=choice(["done", "wont_do", "deferred", "duplicate"]), help="Close reason")
-    ] = ...,  # pyrefly: ignore[bad-function-definition]
+    ],
+    workspace: WorkspaceOption = Path.cwd(),
     reason: Annotated[str | None, typer.Option(help="Optional rationale")] = None,
     follow_up_task: Annotated[str | None, typer.Option(help="Optional follow-up task id")] = None,
 ) -> int:

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 import inspect
 import json
@@ -49,8 +50,12 @@ def test_update_task_rejects_removed_engine_kwarg(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="No engine override")
 
+    # Hide the kwarg behind a callable indirection so the static type
+    # checker cannot see the removed `engine` keyword and still has a
+    # plain Callable to verify; the test asserts the runtime TypeError.
+    callable_update_task: Callable[..., object] = update_task
     with pytest.raises(TypeError, match="engine"):
-        update_task(tmp_path, task.id, **{"engine": "gemini"})  # pyrefly: ignore[unexpected-keyword]
+        callable_update_task(tmp_path, task.id, engine="gemini")
 
 
 def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None:

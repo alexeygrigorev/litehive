@@ -493,7 +493,7 @@ def report_command(
         typer.Option(
             click_type=choice(["advance", "blocked", "budget_hit", "comment", "done", "pass", "reject", "resume"])
         ),
-    ] = ...,  # pyrefly: ignore[bad-function-definition]
+    ],
     message: Annotated[str, typer.Option(help="Detailed explanation (use - for stdin)")] = "",
     message_file: Annotated[Path | None, typer.Option("--message-file", help="Read message from file")] = None,
     role: Annotated[str, typer.Option(help="Role submitting the report")] = "swe",

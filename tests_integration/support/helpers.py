@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -24,6 +25,7 @@ from heru.quota import (
     check_zai_quota,
     usage_limit_block_reason,
 )
+from heru.quota._shared import UsageStatus
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import litehive_root
@@ -82,7 +84,10 @@ def _engine_quota_block_reason(engine_name: str) -> str | None:
         }.get(engine_name)
         if checker is None:
             return None
-        return usage_limit_block_reason(engine_name, checker())  # pyrefly: ignore[bad-argument-type]
+        # heru's per-engine quota status classes are structurally compatible
+        # with UsageStatus (same field shape) but do not inherit from it; cast
+        # so the boundary is explicit rather than suppressed.
+        return usage_limit_block_reason(engine_name, cast(UsageStatus, checker()))
     except Exception:
         pass
     return None

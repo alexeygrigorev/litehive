@@ -112,31 +112,40 @@ def test_stage_report_uses_pipeline_state_without_files_changed() -> None:
 
 
 def test_stage_report_rejects_comment_verdicts_and_legacy_files_changed() -> None:
+    # Use model_validate with dict payloads so the test exercises the
+    # validation API boundary (which accepts arbitrary mappings) instead of
+    # static-typing the bad inputs out at the keyword-argument layer.
     with pytest.raises(ValidationError, match="verdict"):
-        StageReport(
-            task_id="T-0001",
-            pipeline_state="implementing",
-            verdict="comment",  # pyrefly: ignore[bad-argument-type]
-            summary="operator note",
+        StageReport.model_validate(
+            {
+                "task_id": "T-0001",
+                "pipeline_state": "implementing",
+                "verdict": "comment",
+                "summary": "operator note",
+            }
         )
 
     with pytest.raises(ValidationError, match="files_changed"):
-        StageReport(
-            task_id="T-0001",
-            pipeline_state="implementing",
-            verdict="pass",
-            summary="implemented the change",
-            files_changed=["src/app.py"],  # pyrefly: ignore[unexpected-keyword]
+        StageReport.model_validate(
+            {
+                "task_id": "T-0001",
+                "pipeline_state": "implementing",
+                "verdict": "pass",
+                "summary": "implemented the change",
+                "files_changed": ["src/app.py"],
+            }
         )
 
 
 def test_task_activity_entry_rejects_removed_fail_verdict_alias() -> None:
     with pytest.raises(ValidationError, match="verdict"):
-        TaskActivityEntry(
-            role="swe",
-            stage="implementing",
-            verdict="fail",  # pyrefly: ignore[bad-argument-type]
-            message="legacy failure wording",
+        TaskActivityEntry.model_validate(
+            {
+                "role": "swe",
+                "stage": "implementing",
+                "verdict": "fail",
+                "message": "legacy failure wording",
+            }
         )
 
 
