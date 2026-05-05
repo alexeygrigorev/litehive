@@ -8,7 +8,7 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 from collections.abc import Callable
-from typing import TYPE_CHECKING, TextIO
+from typing import TYPE_CHECKING, TextIO, cast
 
 from litehive.config.workspace_files import workspace_dir
 from litehive.domain.common import RunnerStatus, utcnow
@@ -299,7 +299,7 @@ def touch_runner_status(
         lock_state.status.heartbeat_at = utcnow()
         lock_state.status.status = RunnerStatus.RUNNING
         if active_task_id is not MISSING:
-            lock_state.status.active_task_id = active_task_id
+            lock_state.status.active_task_id = cast(str | None, active_task_id)
         write_runner_lock_metadata(lock_state.handle, lock_state.status)
         _save_runner_process_state(root, lock_state.status)
 
@@ -368,7 +368,7 @@ def runner_pid_is_alive(pid: object) -> bool:
     held by alive process" reports.
     """
     try:
-        candidate = int(pid)
+        candidate = int(pid)  # pyrefly: ignore[bad-argument-type]
     except (TypeError, ValueError):
         return False
     if candidate <= 0:
@@ -519,6 +519,7 @@ def workspace_runner_guard(root: Path):
                 _clear_runner_process_state(root)
         return
 
+    handle: TextIO | None = None
     try:
         try:
             handle = manager.lock_manager.acquire(nonblocking=True)
@@ -542,7 +543,7 @@ def workspace_runner_guard(root: Path):
         with RUNNER_LOCKS_MUTEX:
             RUNNER_LOCKS[root] = RunnerLockState(handle=handle, depth=1, status=status, owner_thread_id=owner_thread_id)
     except (OSError, RuntimeError, ValueError):
-        if "handle" in locals() and not handle.closed:
+        if handle is not None and not handle.closed:
             handle.close()
         raise
 

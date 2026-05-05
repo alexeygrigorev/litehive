@@ -14,7 +14,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import typer
 
@@ -23,7 +23,7 @@ from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.workspace import Workspace
 
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
-from litehive.domain.reports import TaskActivityEntry, classify_task_activity_verdict
+from litehive.domain.reports import TaskActivityEntry, TaskActivityVerdict, classify_task_activity_verdict
 from litehive.tasks.status import close_task, update_task
 from litehive.state.records import get_task_record
 from litehive.state.persist import load_state
@@ -313,7 +313,7 @@ def agent_report_command(
         role=agent_role,
         stage=actual_stage,
         target_stage=normalized_target_stage,
-        verdict=normalized_verdict,
+        verdict=cast(TaskActivityVerdict, normalized_verdict),
         verdict_classification=verdict_classification,
         message=message,
         files_changed=list(files_changed or []),

@@ -257,7 +257,7 @@ RULES: list[Rule] = [
         S.IMPLEMENTING,
         S.IMPLEMENTING_EPOCH,
         retry_target=S.IMPLEMENTING,
-        exhausted_reason="semantic_reject",
+        exhausted_reason=FailedReason.SEMANTIC_REJECT,
     ),
     Rule(
         from_state=S.TESTING,
@@ -270,13 +270,13 @@ RULES: list[Rule] = [
         S.TESTING,
         S.TESTING_EPOCH,
         retry_target=S.IMPLEMENTING,
-        exhausted_reason="semantic_reject",
+        exhausted_reason=FailedReason.SEMANTIC_REJECT,
     ),
     *retry_epoch_rules(
         S.ACCEPTING,
         S.ACCEPTING_EPOCH,
         retry_target=S.IMPLEMENTING,
-        exhausted_reason="semantic_reject",
+        exhausted_reason=FailedReason.SEMANTIC_REJECT,
     ),
     # ── rejections: commit (no retry) ─────────────────────────────────────────────
     *[rule for p in S.COMMIT_EPOCH for rule in _terminal_reject_rules(p)],

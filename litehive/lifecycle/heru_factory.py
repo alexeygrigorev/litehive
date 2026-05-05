@@ -36,7 +36,7 @@ from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.config.loading import load_config
 from litehive.domain.agent import EngineFailure
-from litehive.domain.common import OutcomeReasonCode, PipelineState, TaskStage, Verdict, cap_feedback
+from litehive.domain.common import OutcomeReasonCode, PipelineState, TaskStage, cap_feedback
 from litehive.domain.reports import StageReport, TaskActivityStage, canonical_report_pipeline_state
 from litehive.domain.lifecycle_deltas import recovery_trigger_from_event
 from litehive.git.ops import GitError, is_git_repo, status_porcelain
@@ -245,7 +245,7 @@ def _rewrite_hallucinated_implementing_pass(
             continue
         if entry.message != latest.message or list(entry.files_changed) != list(latest.files_changed):
             continue
-        entry.verdict = Verdict.REJECT
+        entry.verdict = "reject"
         if "[retracted - filesystem check shows no changes landed]" not in entry.message:
             entry.message = f"{entry.message.rstrip()}\n[retracted - filesystem check shows no changes landed]"
         entry.message = f"{entry.message.rstrip()}\n{detail}"
@@ -611,7 +611,11 @@ class HeruEngineAdapter:
                 verdicts=_allowed_verdicts_for_stage("recovering"),
             )
             if previous_recovery is not None:
-                after_ts = previous_recovery.created_at
+                created_at = previous_recovery.created_at
+                if isinstance(created_at, datetime):
+                    after_ts = created_at
+                else:
+                    after_ts = datetime.fromisoformat(str(created_at))
         source_subagent_id = "direct-recovery"
         self._run_direct_recovery_turn(
             task_id=state.task_id,
@@ -745,7 +749,7 @@ class HeruEngineAdapter:
         from heru import RetryableExecutionFailure  # noqa: PLC0415
 
         if isinstance(exc, RetryableExecutionFailure):
-            kind = exc.kind
+            kind: str | None = exc.classification
         else:
             kind = None
         message = str(exc)

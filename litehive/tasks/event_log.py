@@ -879,7 +879,7 @@ def _optional_int(value: object) -> int | None:
     """
     if value is None:
         return None
-    return int(value)
+    return int(value)  # pyrefly: ignore[bad-argument-type]
 
 
 def _task_intent_column_values(intent: TaskIntentRecord) -> dict[str, str]:

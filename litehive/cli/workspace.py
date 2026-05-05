@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 import time
 
 import typer
@@ -398,7 +398,7 @@ def quota_health(
     long_remaining = getattr(long_term, "percent_remaining", None)
     if short_remaining is None or long_remaining is None:
         return _QuotaHealth(engine, "unavailable", "unsupported usage shape", problem=True)
-    reset_at = preferred_reset_at(status, include_short_term_fallback=True)
+    reset_at = preferred_reset_at(cast("UsageStatus", status), include_short_term_fallback=True)
     summary = f"hours remaining={float(short_remaining):.1f}% weeks remaining={float(long_remaining):.1f}%"
     if reset_at is not None:
         summary += f" reset={reset_at}"

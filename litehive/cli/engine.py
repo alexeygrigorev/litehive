@@ -36,7 +36,7 @@ def engine_command(
             click_type=choice(["audit", "default", "freeze", "preference", "status", "unfreeze"]),
             help="Subcommand",
         ),
-    ] = ...,
+    ] = ...,  # pyrefly: ignore[bad-function-definition]
     name: Annotated[str | None, typer.Argument(help="Engine name, setting key, or comma-separated engine list")] = None,
     until: Annotated[str | None, typer.Option(help="Freeze until this ISO date (YYYY-MM-DD)")] = None,
     reason: Annotated[str | None, typer.Option(help="Operator note")] = None,

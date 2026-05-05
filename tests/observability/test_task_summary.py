@@ -58,7 +58,7 @@ def test_render_task_summary_surfaces_semantic_reject_classification(tmp_path: P
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Semantic reject status")
     task.status = TaskStatus.FLAGGED
-    task.pipeline_status = "flagged"
+    task.pipeline_status = PipelineStatus.FLAGGED
     task.flag_reason = SEMANTIC_REJECT_CLASSIFICATION
     record_stage_report(Workspace.from_path(tmp_path),
         task,

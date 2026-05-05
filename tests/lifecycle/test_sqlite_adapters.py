@@ -369,7 +369,7 @@ def test_sessions_clear_node_sessions_removes_only_target_task_and_node(workspac
     sessions.persist("T-0001", PipelineState.TESTING, "codex", Session(engine_session_id="qa-1"))
     sessions.persist("T-0002", PipelineState.IMPLEMENTING, "codex", Session(engine_session_id="other-1"))
 
-    sessions.clear_node_sessions("T-0001", "implementing")
+    sessions.clear_node_sessions("T-0001", PipelineState.IMPLEMENTING)
 
     assert sessions.get_or_create("T-0001", PipelineState.IMPLEMENTING, "codex").engine_session_id is None
     assert sessions.get_or_create("T-0001", PipelineState.IMPLEMENTING, "claude").engine_session_id is None

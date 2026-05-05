@@ -134,6 +134,7 @@ def write_atomic_files(writes: dict[Path, str]) -> None:
                 if path.exists():
                     path.unlink()
                 continue
+            assert isinstance(previous, str)
             atomic_write_text(path, previous)
         raise
 
@@ -161,6 +162,7 @@ def write_atomic_files_and_then(writes: dict[Path, str], callback) -> None:
                 if path.exists():
                     path.unlink()
                 continue
+            assert isinstance(previous, str)
             atomic_write_text(path, previous)
         raise
 

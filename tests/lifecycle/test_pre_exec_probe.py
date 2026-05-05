@@ -7,6 +7,7 @@ from litehive.lifecycle.events import (
     PreExecRecoverySucceeded,
 )
 from litehive.lifecycle.nodes.system import PreExecRecoveryNode, ReadyNode
+from litehive.domain.common import PipelineState
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.types import PipelineMode
 
@@ -14,7 +15,7 @@ from litehive.lifecycle.types import PipelineMode
 def _state(**overrides) -> TaskState:
     return TaskState(
         task_id="T-0001",
-        stage="ready",
+        stage=PipelineState.READY,
         pipeline_mode=PipelineMode.FULL,
         **overrides,
     )

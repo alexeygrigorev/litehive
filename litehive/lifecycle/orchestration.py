@@ -77,6 +77,17 @@ __all__ = [
 ]
 
 
+def _sync_back_no_return(state: TaskState, root: Path) -> None:
+    """Adapter around ``_sync_back`` for the StateMachineRunner state_sync hook.
+
+    ``_sync_back`` returns the updated TaskRecord for the orchestration code
+    that calls it after the runner finishes; the runner's ``state_sync``
+    parameter is typed as ``(TaskState) -> None`` because the callback's
+    return value is never consumed.
+    """
+    _sync_back(state, root)
+
+
 @dataclass
 class ExecutionResult:
     """Result of running one task through the pipeline state machine."""
@@ -164,7 +175,7 @@ def run_task(
             registry,
             persistence,
             journal=journal,
-            state_sync=lambda state: _sync_back(state, root),
+            state_sync=lambda state: _sync_back_no_return(state, root),
             transition_observer=lambda state, from_stage, event, trans: _observe_transition(
                 root,
                 state,
@@ -189,12 +200,13 @@ def run_task(
         # 4. Mirror terminal state back to the TaskRecord.
         updated_task = _sync_back(final_state, root) or task
         if final_state.stage in {PipelineState.DONE, PipelineState.FAILED}:
-            updated_task = reconcile_terminal_commit_sha(
+            reconciled_task = reconcile_terminal_commit_sha(
                 root,
                 updated_task,
                 final_state=final_state,
                 persistence=persistence,
             )
+            updated_task = reconciled_task or updated_task
             _clear_terminal_task_from_workspace_state(root, updated_task.id)
             try:
                 _cleanup_terminal_worktree(root, updated_task)

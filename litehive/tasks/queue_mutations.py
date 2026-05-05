@@ -219,8 +219,12 @@ def reset_task_for_recovery(
     task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage=canonical_pipeline_status)
     if clear_last_outcome:
         task.runtime.pipeline.last_outcome = TaskOutcomeState()
-    elif task.runtime.pipeline.last_outcome.kind == "interrupted":
-        task.runtime.pipeline.last_outcome.stage = canonical_pipeline_status
+    else:
+        last_outcome = task.runtime.pipeline.last_outcome
+        if last_outcome.kind == "interrupted":
+            task.runtime.pipeline.last_outcome = last_outcome.model_copy(
+                update={"stage": canonical_pipeline_status}
+            )
 
 
 def enqueue_recovered_task(state: WorkspaceState, task_id: str) -> None:
@@ -294,8 +298,9 @@ def canonicalize_resumable_queue_task(task: TaskRecord, stage: str | None = None
     task.status = TaskStatus.QUEUED
     task.close_reason = None
     task.flag_reason = None
-    task.pipeline_status = target_stage
+    task.pipeline_status = PipelineStatus(target_stage)
     task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage=target_stage)
-    if task.runtime.pipeline.last_outcome.kind == "interrupted":
-        task.runtime.pipeline.last_outcome.stage = target_stage
+    last_outcome = task.runtime.pipeline.last_outcome
+    if last_outcome.kind == "interrupted":
+        task.runtime.pipeline.last_outcome = last_outcome.model_copy(update={"stage": target_stage})
     return target_stage

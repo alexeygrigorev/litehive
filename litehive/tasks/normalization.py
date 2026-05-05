@@ -119,7 +119,7 @@ _ACCEPTANCE_REROUTE_STATUSES = frozenset(
 )
 
 
-def reroute_stage_for_acceptance_criteria(task: TaskRecord) -> str:
+def reroute_stage_for_acceptance_criteria(task: TaskRecord) -> PipelineStatus:
     """
     Reroute a stage-reached task back to grooming when criteria are missing.
 
@@ -132,7 +132,7 @@ def reroute_stage_for_acceptance_criteria(task: TaskRecord) -> str:
         return task.pipeline_status
     if task.pipeline_status in _ACCEPTANCE_REROUTE_STATUSES:
         if missing_acceptance_criteria_reason(task) is not None:
-            return TaskStage.GROOMING.value
+            return PipelineStatus.GROOMING
         return task.pipeline_status
     return task.pipeline_status
 

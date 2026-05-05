@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_report, load_subagent_session
@@ -159,12 +159,12 @@ class RecoveryAgent(RoleAgent):
             target = str(verdict.metadata.get("target_stage") or "").strip()
             if not target:
                 return RecoveryFailed(reason="recovery resume verdict missing target_stage")
-            return RecoverySucceeded(resume=target, disposition_hint="resume")
+            return RecoverySucceeded(resume=cast(PipelineState, target), disposition_hint="resume")
         if outcome == "advance":
             target = str(verdict.metadata.get("target_stage") or "").strip()
             if not target:
                 return RecoveryFailed(reason="recovery advance verdict missing target_stage")
-            return RecoverySucceeded(resume=target, disposition_hint="advance")
+            return RecoverySucceeded(resume=cast(PipelineState, target), disposition_hint="advance")
         if outcome == "done":
             return RecoverySucceeded(resume="done", disposition_hint="done")
         if outcome == "budget_hit":

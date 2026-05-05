@@ -306,14 +306,14 @@ def _failed_run_history_payload(state: TaskState) -> list[dict[str, Any]]:
     ]
 
 
-_IMPLEMENTING_RETRY_ORIGIN_BY_PHASE: dict[str, str] = {
-    f"{prefix}{stage.value}": stage.value
+_IMPLEMENTING_RETRY_ORIGIN_BY_PHASE: dict[str, PipelineState] = {
+    f"{prefix}{stage.value}": PipelineState(stage.value)
     for stage in (TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING)
     for prefix in ("before_", "", "after_")
 }
 
 
-def _latest_reject_stage_for_implementing(root: Path, task_id: str) -> str | None:
+def _latest_reject_stage_for_implementing(root: Path, task_id: str) -> PipelineState | None:
     """Find which stage actually rejected the task and routed it back to implementing this turn.
 
     Implementing can be re-entered from implementing, testing, or accepting,

@@ -1315,6 +1315,7 @@ def test_main_checkout_cleanup_skips_tracked_ignored_task_reports(tmp_path: Path
 
     node = GitCommitNode(main_repo_root=tmp_path, worktree_resolver=lambda state: tmp_path)
     head = node.autocommit_main_checkout_changes(make_state(stage=PipelineState.COMMIT, task_id=seed_task.id))
+    assert head is not None
 
     status = subprocess.run(
         ["git", "status", "--short"],
@@ -1330,8 +1331,6 @@ def test_main_checkout_cleanup_skips_tracked_ignored_task_reports(tmp_path: Path
         text=True,
         check=True,
     )
-
-    assert head is not None
     assert str(report_path.relative_to(tmp_path)) not in changed_files.stdout.splitlines()
     assert "tracked.txt" in changed_files.stdout.splitlines()
     assert status.stdout.strip() == f"M {report_path.relative_to(tmp_path)}"
@@ -1353,6 +1352,7 @@ def test_main_checkout_cleanup_commits_already_staged_deletions(tmp_path: Path) 
 
     node = GitCommitNode(main_repo_root=tmp_path, worktree_resolver=lambda state: tmp_path)
     head = node.autocommit_main_checkout_changes(make_state(stage=PipelineState.COMMIT, task_id="T-0429"))
+    assert head is not None
 
     status = subprocess.run(
         ["git", "status", "--short"],
@@ -1369,7 +1369,6 @@ def test_main_checkout_cleanup_commits_already_staged_deletions(tmp_path: Path) 
         check=True,
     )
 
-    assert head is not None
     assert not probe_file.exists()
     assert f"D\t{probe_file.relative_to(tmp_path)}" in changed_files.stdout.splitlines()
     assert status.stdout.strip() == ""

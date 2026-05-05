@@ -12,10 +12,12 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
 
 from heru import get_engine
 from litehive.domain.common import TaskStage
 from heru.quota import (
+    UsageStatus,
     check_claude_quota,
     check_codex_quota,
     check_copilot_quota,
@@ -302,7 +304,7 @@ def _preferred_quota_reset_at(status: object) -> str | None:
     a "resets …" hint when available.
     """
     try:
-        return preferred_reset_at(status, include_short_term_fallback=True)
+        return preferred_reset_at(cast("UsageStatus", status), include_short_term_fallback=True)
     except AttributeError:
         return None
 

@@ -460,7 +460,7 @@ def test_agent_node_retries_timeout_via_existing_retry_flow(
     assert _TimeoutThenPassManager.last_kwargs[0]["resume_session_id"] is None
     assert _TimeoutThenPassManager.last_kwargs[1]["resume_session_id"] == resume_id
 
-    session = store.get_or_create(task.id, "implementing", engine_name)
+    session = store.get_or_create(task.id, PipelineState.IMPLEMENTING, engine_name)
     assert session.engine_session_id == resume_id
 
 
@@ -505,9 +505,11 @@ def test_agent_node_nudges_timeout_retry_with_existing_codex_thread_id(tmp_path,
     assert _TimeoutThenNudgeThenPassManager.last_kwargs[0]["resume_session_id"] is None
     assert _TimeoutThenNudgeThenPassManager.last_kwargs[1]["resume_session_id"] == "codex-thread-123"
     assert _TimeoutThenNudgeThenPassManager.last_kwargs[2]["resume_session_id"] == "codex-thread-123"
-    assert "IMPORTANT: this is a nudge" in _TimeoutThenNudgeThenPassManager.last_kwargs[2]["prompt"]
+    third_prompt = _TimeoutThenNudgeThenPassManager.last_kwargs[2]["prompt"]
+    assert isinstance(third_prompt, str)
+    assert "IMPORTANT: this is a nudge" in third_prompt
 
-    session = store.get_or_create(task.id, "implementing", "codex")
+    session = store.get_or_create(task.id, PipelineState.IMPLEMENTING, "codex")
     assert session.engine_session_id == "codex-thread-123"
 
 

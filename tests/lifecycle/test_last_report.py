@@ -43,7 +43,7 @@ class _TrivialAgent(AgentNode):
 def test_agent_verdict_metadata_flows_into_pass_event() -> None:
     """Verify AgentNode.verdict_to_event copies metadata onto Pass."""
     agent = _TrivialAgent(
-        "implementing",
+        PipelineState.IMPLEMENTING,
         _FixedSelector(_ReportingEngine()),
         InMemorySessionStore(),
     )

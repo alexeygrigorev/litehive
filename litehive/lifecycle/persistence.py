@@ -279,7 +279,7 @@ class FailedRunRecord:
         else:
             retry_limit_value = int(retry_limit)
         return cls(
-            stage=str(payload.get("stage") or ""),
+            stage=PipelineState(str(payload.get("stage") or "")),
             failure_shape=str(payload.get("failure_shape") or ""),
             count=int(payload.get("count") or 0),
             first_at=payload.get("first_at"),

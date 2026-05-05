@@ -7,6 +7,7 @@ from litehive.agents.session_store import save_subagent_artifacts
 from litehive.cli.agent_cli import agent_app
 from litehive.cli.app import app as root_app
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.common import PipelineState
 from litehive.lifecycle.persistence import SqlitePersistence, TaskState
 from litehive.workspace import Workspace
 from litehive.lifecycle.types import PipelineMode
@@ -333,7 +334,7 @@ def test_agent_report_uses_env_stage_when_runtime_row_is_missing(tmp_path: Path,
 def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path, monkeypatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Prefer env stage")
-    SqlitePersistence(Workspace.from_path(tmp_path)).save(TaskState(task_id=task.id, stage="implementing", pipeline_mode=PipelineMode.FULL))
+    SqlitePersistence(Workspace.from_path(tmp_path)).save(TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL))
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="planner")
     monkeypatch.setenv("LITEHIVE_STAGE", "grooming")
 

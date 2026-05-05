@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import yaml
@@ -26,7 +26,7 @@ from litehive.config.runtime_settings import load_runtime_setting_audit_entries
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import GitError
-from litehive.lifecycle.engines import ConfigBackedEngineSelector
+from litehive.lifecycle.engines import ConfigBackedEngineSelector, EngineFactory
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
@@ -669,7 +669,7 @@ def test_lifecycle_selector_uses_shared_select_engine_when_task_record_missing(
 
     selector = ConfigBackedEngineSelector(
         config,
-        lambda engine_name: _StubLifecycleEngine(engine_name),
+        cast(EngineFactory, lambda engine_name: _StubLifecycleEngine(engine_name)),
         workspace_root=tmp_path,
     )
 

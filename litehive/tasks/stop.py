@@ -163,7 +163,7 @@ def stop_current_task(
             time.sleep(sleep_interval)
             metadata = read_runner_lock_metadata(root)
             pid = metadata.pid
-        if runner_pid_is_alive(pid):
+        if runner_pid_is_alive(pid) and pid is not None:
             runner_pid = int(pid)
             os.kill(runner_pid, signal.SIGINT)
             deadline = time.monotonic() + max(wait_timeout_seconds, 0.0)

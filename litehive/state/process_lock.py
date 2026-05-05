@@ -136,7 +136,7 @@ class ProcessLockManager:
         callers merge ``extra`` on top for process-specific fields.
         """
         now = utcnow()
-        metadata = {
+        metadata: dict[str, object] = {
             "pid": pid,
             "started_at": now,
             "heartbeat_at": now,

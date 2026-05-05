@@ -19,7 +19,7 @@ def _seed_running_task(tmp_path: Path, *, stage: str, active: bool) -> tuple[str
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title=f"{stage} recovery")
     task.status = TaskStatus.IN_PROGRESS
-    task.pipeline_status = stage
+    task.pipeline_status = PipelineStatus(stage)
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.run_started_at = "2026-04-12T10:00:00Z"
     task.runtime.pipeline.current_stage.stage = stage
@@ -211,7 +211,7 @@ def test_recover_stale_runner_state_clears_non_running_active_task_id(tmp_path: 
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Flagged but not running")
     task.status = TaskStatus.FLAGGED
-    task.pipeline_status = "flagged"
+    task.pipeline_status = PipelineStatus.FLAGGED
     task.runtime.pipeline.execution_status = "idle"
     save_task(tmp_path, task)
 

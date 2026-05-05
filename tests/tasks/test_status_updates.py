@@ -50,7 +50,7 @@ def test_update_task_rejects_removed_engine_kwarg(tmp_path: Path) -> None:
     task = create_task(tmp_path, title="No engine override")
 
     with pytest.raises(TypeError, match="engine"):
-        update_task(tmp_path, task.id, **{"engine": "gemini"})
+        update_task(tmp_path, task.id, **{"engine": "gemini"})  # pyrefly: ignore[unexpected-keyword]
 
 
 def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None:

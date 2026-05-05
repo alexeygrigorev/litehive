@@ -9,11 +9,12 @@ from heru.types import SubagentRef
 
 from litehive.agents.session_store import save_subagent_artifacts
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.common import PipelineState
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.lifecycle.persistence import SqlitePersistence
+from litehive.lifecycle.types import FailedReason, PipelineMode
 from litehive.workspace import Workspace
-from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task, save_task
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.tasks.paths import task_dir
@@ -102,8 +103,8 @@ def test_task_evidence_renders_minimal_recovery_routing_state(
         ),
     )
     state = SqlitePersistence(Workspace.from_path(tmp_path)).initialize(task.id, pipeline_mode=PipelineMode.FULL)
-    state.stage = "recovering"
-    state.failed_reason = "recovery_crashed"
+    state.stage = PipelineState.RECOVERING
+    state.failed_reason = FailedReason.RECOVERY_CRASHED
     state.failed_message = "recovery crashed while routing"
     state.active_recovery_trigger = RecoveryTrigger(
         origin_stage="implementing",

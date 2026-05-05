@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 
+from litehive.domain.common import PipelineState
 from litehive.lifecycle.nodes.hook import HookSpec
 from litehive.lifecycle.orchestration import hook_specs_from_config
 
@@ -23,15 +24,15 @@ def test_hook_specs_from_config_copies_known_fields() -> None:
 
     out = hook_specs_from_config(config)
 
-    assert set(out.keys()) == {"before_grooming", "after_implementing"}
-    assert isinstance(out["before_grooming"][0], HookSpec)
-    assert out["before_grooming"][0].command == "echo pre-groom"
-    assert out["before_grooming"][0].timeout_seconds == 30
-    assert out["before_grooming"][0].description is None
-    assert out["after_implementing"][0].command == "pytest -q"
-    assert out["after_implementing"][0].timeout_seconds == 120
-    assert out["after_implementing"][0].description == "full suite"
-    assert out["after_implementing"][0].instructions_on_failure == "fix tests"
+    assert set(out.keys()) == {PipelineState.BEFORE_GROOMING, PipelineState.AFTER_IMPLEMENTING}
+    assert isinstance(out[PipelineState.BEFORE_GROOMING][0], HookSpec)
+    assert out[PipelineState.BEFORE_GROOMING][0].command == "echo pre-groom"
+    assert out[PipelineState.BEFORE_GROOMING][0].timeout_seconds == 30
+    assert out[PipelineState.BEFORE_GROOMING][0].description is None
+    assert out[PipelineState.AFTER_IMPLEMENTING][0].command == "pytest -q"
+    assert out[PipelineState.AFTER_IMPLEMENTING][0].timeout_seconds == 120
+    assert out[PipelineState.AFTER_IMPLEMENTING][0].description == "full suite"
+    assert out[PipelineState.AFTER_IMPLEMENTING][0].instructions_on_failure == "fix tests"
 
 
 def test_hook_specs_from_config_supports_string_commands() -> None:
@@ -39,7 +40,7 @@ def test_hook_specs_from_config_supports_string_commands() -> None:
 
     out = hook_specs_from_config(config)
 
-    assert out["after_implementing"][0] == HookSpec(command="uv run ruff check .")
+    assert out[PipelineState.AFTER_IMPLEMENTING][0] == HookSpec(command="uv run ruff check .")
 
 
 def test_hook_specs_from_config_skips_empty_phases_and_missing_attr() -> None:

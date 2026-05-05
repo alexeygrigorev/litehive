@@ -68,7 +68,7 @@ def _build_hook_spec(spec_data: dict) -> HookSpec:
     )
 
 
-def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
+def hook_specs_from_config(config) -> dict[PipelineState, list[HookSpec]]:
     """
     Translate ``LitehiveConfig.runner_hooks`` into ``HookSpec`` lists.
 
@@ -77,11 +77,11 @@ def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
     registry registers an empty hook list (which immediately returns
     ``HookOk``) only for the phases that actually need one.
     """
-    out: dict[str, list[HookSpec]] = {}
+    out: dict[PipelineState, list[HookSpec]] = {}
     for phase, hooks in (getattr(config, "runner_hooks", None) or {}).items():
         specs = [_build_hook_spec(_normalize_hook_spec_data(hook)) for hook in hooks or []]
         if specs:
-            out[phase] = specs
+            out[PipelineState(phase) if not isinstance(phase, PipelineState) else phase] = specs
     return out
 
 

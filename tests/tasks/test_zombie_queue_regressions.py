@@ -8,7 +8,7 @@ from typer.testing import CliRunner
 from litehive.cli.app import app
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
-from litehive.domain.common import OutcomeKind
+from litehive.domain.common import OutcomeKind, PipelineStatus, TaskStatus
 from litehive.git.ops import has_non_litehive_changes
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
@@ -47,8 +47,8 @@ def _queue_task(
     outcome_kind: OutcomeKind | None = None,
 ) -> None:
     task = require_task(root, task_id)
-    task.status = status
-    task.pipeline_status = pipeline_status
+    task.status = TaskStatus(status)
+    task.pipeline_status = PipelineStatus(pipeline_status)
     task.runtime.pipeline.execution_status = execution_status
     task.runtime.pipeline.last_outcome.kind = outcome_kind
     save_task(root, task)

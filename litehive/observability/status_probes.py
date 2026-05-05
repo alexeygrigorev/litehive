@@ -464,10 +464,10 @@ def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureC
     still flags the failure.
     """
     context = _RecoveryFailureContext()
-    try:
-        from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound  # noqa: PLC0415
-        from litehive.workspace import Workspace  # noqa: PLC0415
+    from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound  # noqa: PLC0415
+    from litehive.workspace import Workspace  # noqa: PLC0415
 
+    try:
         state = SqlitePersistence(Workspace.from_path(root)).load(task.id)
     except TaskNotFound:
         return context

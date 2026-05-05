@@ -90,8 +90,9 @@ def _normalize_stale_pipeline_statuses(
         task.pipeline_status = PipelineStatus.BACKLOG
         task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage="backlog")
         task.runtime.pipeline.updated_at = now
-        if task.runtime.pipeline.last_outcome.kind == "interrupted":
-            task.runtime.pipeline.last_outcome.stage = "backlog"
+        last_outcome = task.runtime.pipeline.last_outcome
+        if last_outcome.kind == "interrupted":
+            task.runtime.pipeline.last_outcome = last_outcome.model_copy(update={"stage": "backlog"})
         mutated.append(task)
     return mutated
 
@@ -446,7 +447,7 @@ def _resolve_next_task_from_snapshot(
         state.active_task_id = None
         mutated = True
 
-    ready_candidates: list[tuple[tuple[int, int, str], TaskRecord]] = []
+    ready_candidates: list[tuple[tuple[int | str, ...], TaskRecord]] = []
     for index, next_id in enumerate(list(state.queue), start=1):
         next_task = tasks_by_id.get(next_id)
         if next_task is None or not is_task_eligible_for_execution(next_task):
@@ -588,8 +589,10 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
         active_task = None
     else:
         active_task = tasks_by_id.get(current_state.active_task_id)
-    if active_task is not None and (
-        is_task_eligible_for_execution(active_task) or active_task.runtime.pipeline.execution_status == "running"
+    if (
+        active_task is not None
+        and current_state.active_task_id is not None
+        and (is_task_eligible_for_execution(active_task) or active_task.runtime.pipeline.execution_status == "running")
     ):
         markers.setdefault(current_state.active_task_id, []).append("workspace.active_task_id")
     for task in tasks:

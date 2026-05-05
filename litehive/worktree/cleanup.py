@@ -11,6 +11,7 @@ to import the full ``WorktreeService`` graph.
 """
 
 from pathlib import Path
+from typing import TypedDict
 
 from litehive.attention import append_attention_log
 from litehive.domain.task import TaskRecord
@@ -100,7 +101,15 @@ def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
     return sorted(worktrees, key=lambda item: item.task_id)
 
 
-def remove_cleanable_worktrees(root: Path, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
+class WorktreeCleanupResult(TypedDict):
+    candidates: list[ManagedWorktree]
+    skipped_active: list[ManagedWorktree]
+    removed: list[ManagedWorktree]
+    deferred: list[ManagedWorktree]
+    failures: list[tuple[ManagedWorktree, str]]
+
+
+def remove_cleanable_worktrees(root: Path, dry_run: bool = False) -> WorktreeCleanupResult:
     """
     Remove worktrees for terminal tasks and report what was touched.
 

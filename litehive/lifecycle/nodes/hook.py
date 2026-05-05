@@ -114,11 +114,13 @@ class SubprocessHookRunner(HookRunner):
                 check=False,
             )
         except subprocess.TimeoutExpired as exc:
+            stdout_text = exc.stdout if isinstance(exc.stdout, str) else ""
+            stderr_text = exc.stderr if isinstance(exc.stderr, str) else ""
             return _failed_process(
                 spec.command,
                 124,
-                stdout=(exc.stdout or "").strip(),
-                stderr=f"[timeout after {spec.timeout_seconds}s]\n{(exc.stderr or '').strip()}".strip(),
+                stdout=stdout_text.strip(),
+                stderr=f"[timeout after {spec.timeout_seconds}s]\n{stderr_text.strip()}".strip(),
             )
         except FileNotFoundError as exc:
             return _failed_process(spec.command, 127, stderr=f"[hook binary missing] {exc}")

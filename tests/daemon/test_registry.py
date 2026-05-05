@@ -156,7 +156,9 @@ def test_start_background_daemon_strips_agent_env(tmp_path: Path, monkeypatch) -
     pid = start_background_daemon(tmp_path)
 
     assert pid == 4321
-    child_env = captured["kwargs"]["env"]
+    kwargs_obj = captured["kwargs"]
+    assert isinstance(kwargs_obj, dict)
+    child_env = kwargs_obj["env"]
     assert "LITEHIVE_AGENT_ROLE" not in child_env
     assert "LITEHIVE_STAGE" not in child_env
     assert "LITEHIVE_TASK_ID" not in child_env
@@ -214,7 +216,7 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
     workspace = tmp_path / "workspace"
     ensure_workspace(workspace)
     lock_path = daemon_lock_path(workspace)
-    sleeper = _spawn_locked_daemon_like_process(workspace, lock_metadata)
+    sleeper = _spawn_locked_daemon_like_process(workspace, dict(lock_metadata))
     try:
         entry = _wait_for_daemon_metadata(workspace)
         assert entry is not None

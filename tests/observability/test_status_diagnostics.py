@@ -502,7 +502,7 @@ def test_full_status_reports_terminal_recovery_failure_from_lifecycle_state(tmp_
     SqlitePersistence(Workspace.from_path(tmp_path)).save(
         TaskState(
             task_id=task.id,
-            stage="failed",
+            stage=PipelineState.FAILED,
             pipeline_mode=PipelineMode.FULL,
             active_recovery_trigger=RecoveryTrigger(
                 origin_stage="implementing",

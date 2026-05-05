@@ -21,12 +21,12 @@ from litehive.workspace import Workspace
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.tasks.report_storage import load_stage_reports
-from heru.types import RuntimeEngineContinuation, SubagentRef
+from heru.types import RuntimeEngineContinuation, SubagentRef, SubagentStatus
 
 
 class _StubManager:
     last_init: tuple[Path, Path] | None = None
-    last_kwargs: dict[str, object] | None = None
+    last_kwargs: Any = None
 
     def __init__(self, workspace_root: Path, *, execution_root: Path | None = None) -> None:
         self.workspace_root = workspace_root
@@ -232,7 +232,7 @@ def _subagent_result(
     engine_name: str,
     *,
     subagent_id: str,
-    status: str,
+    status: SubagentStatus,
     exit_code: int,
     continuation: RuntimeEngineContinuation | None,
     failure: EngineFailure | None = None,
@@ -715,7 +715,9 @@ def test_heru_engine_adapter_skips_crash_resume_without_resume_id(
 
     assert _ScriptedManager.calls == 1
     assert _ScriptedManager.last_kwargs[0]["resume_session_id"] is None
-    assert not _ScriptedManager.last_kwargs[0]["prompt"].startswith(HeruEngineAdapter.CRASH_RESUME_PROMPT_PREFIX)
+    first_prompt = _ScriptedManager.last_kwargs[0]["prompt"]
+    assert isinstance(first_prompt, str)
+    assert not first_prompt.startswith(HeruEngineAdapter.CRASH_RESUME_PROMPT_PREFIX)
     assert session.engine_session_id is None
 
 

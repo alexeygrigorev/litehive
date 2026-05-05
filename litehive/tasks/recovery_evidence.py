@@ -160,7 +160,7 @@ def collect_recovery_evidence(
             else:
                 trace_source_for_key = None
             if key == "execution_trace" and isinstance(trace_source_for_key, Path):
-                path = trace_view.source
+                path = trace_source_for_key
             elif key in structured_artifact_keys or key == "execution_trace":
                 path = None
             else:

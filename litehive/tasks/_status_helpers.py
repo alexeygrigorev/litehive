@@ -165,7 +165,12 @@ def _apply_close_task_state(
         pipeline_status_fallback = PipelineStatus.DONE
     else:
         pipeline_status_fallback = task.pipeline_status
-    task.pipeline_status = pipeline_status or pipeline_status_fallback
+    resolved_pipeline_status = pipeline_status or pipeline_status_fallback
+    task.pipeline_status = (
+        resolved_pipeline_status
+        if isinstance(resolved_pipeline_status, PipelineStatus)
+        else PipelineStatus(resolved_pipeline_status)
+    )
     apply_task_outcome(
         task,
         kind=task.status,

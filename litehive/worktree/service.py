@@ -48,6 +48,7 @@ from litehive.state.records import (
     set_task_worktree_path,
 )
 from litehive.worktree.cleanup import (
+    WorktreeCleanupResult,
     cleanup_terminal_task_worktree,
     collect_managed_worktrees,
     remove_cleanable_worktrees,
@@ -172,7 +173,7 @@ class WorktreeService:
         """
         return collect_managed_worktrees(self.root)
 
-    def remove_cleanable_worktrees(self, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
+    def remove_cleanable_worktrees(self, dry_run: bool = False) -> WorktreeCleanupResult:
         """
         Drop worktrees for completed/abandoned tasks.
 

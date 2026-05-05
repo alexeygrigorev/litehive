@@ -322,7 +322,7 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
     journal_message = _sync_terminal_status(task_record, state)
     _sync_recovery_follow_up(workspace_root, task_record, state)
     audit_entries = []
-    if (
+    if before_task is not None and (
         before_task.status != task_record.status
         or before_task.pipeline_status != task_record.pipeline_status
         or before_last_outcome != task_record.runtime.pipeline.last_outcome
@@ -385,7 +385,7 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
         return
     trigger = _latest_recovery_trigger(state)
     if trigger is not None:
-        trigger_stage = trigger.origin_stage
+        trigger_stage = trigger.origin_stage or PipelineState.RECOVERING.value
         failure_classification = trigger.failure_fingerprint.budget_key()
         diagnostics_origin_stage = trigger.origin_stage
         diagnostics_trigger_event_kind = trigger.trigger_event_kind.value

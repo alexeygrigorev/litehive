@@ -336,7 +336,7 @@ def switch(
     task_id: Annotated[str, typer.Argument(help="Task id to switch")],
     engine: Annotated[str, typer.Argument(click_type=EngineChoice, help="Engine to switch to")],
     workspace: WorkspaceOption = Path.cwd(),
-    reason: Annotated[str, typer.Option(help="Why the engine switch happened")] = ...,
+    reason: Annotated[str, typer.Option(help="Why the engine switch happened")] = ...,  # pyrefly: ignore[bad-function-definition]
 ) -> int:
     """
     Reassign a task's engine, interrupting the active runner when needed.

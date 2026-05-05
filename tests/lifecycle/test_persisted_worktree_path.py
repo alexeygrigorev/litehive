@@ -41,14 +41,15 @@ def _configure_repo(path: Path) -> None:
     _git_ok(path, "config", "user.name", "Test User")
 
 
-def _state(task_id: str, stage: str) -> TaskState:
+def _state(task_id: str, stage: PipelineState) -> TaskState:
     return TaskState(task_id=task_id, stage=stage, pipeline_mode=PipelineMode.FULL)
 
 
 class _StubManager:
     last_init: tuple[Path, Path] | None = None
 
-    def __init__(self, workspace_root, *, execution_root=None):
+    def __init__(self, workspace_root: Path, *, execution_root: Path | None = None) -> None:
+        assert execution_root is not None
         _StubManager.last_init = (Path(workspace_root).resolve(), Path(execution_root).resolve())
 
     def run(self, task, **kwargs) -> SubagentResult:
@@ -86,7 +87,7 @@ def test_worktree_sync_persists_runtime_worktree_path(tmp_path: Path) -> None:
         worktree_resolver=lambda state: worktree,
     )
 
-    changed = node.sync(_state(task.id, "worktree_sync"))
+    changed = node.sync(_state(task.id, PipelineState.WORKTREE_SYNC))
 
     stored = runtime_store(workspace).load_task_runtime(task.id)
     assert changed is True
@@ -117,7 +118,7 @@ def test_agent_and_commit_use_persisted_worktree_path(
         workspace_root=workspace,
         worktree_resolver=lambda state: worktree,
     )
-    assert sync_node.sync(_state(task.id, "worktree_sync")) is True
+    assert sync_node.sync(_state(task.id, PipelineState.WORKTREE_SYNC)) is True
 
     adapter = HeruEngineAdapter("codex", workspace)
     session = Session()
@@ -142,7 +143,7 @@ def test_agent_and_commit_use_persisted_worktree_path(
             failed_run_history=[],
             runner_hooks=[],
         ),
-        _state(task.id, "implementing"),
+        _state(task.id, PipelineState.IMPLEMENTING),
     )
 
     assert verdict.outcome == "pass"
@@ -159,7 +160,7 @@ def test_agent_and_commit_use_persisted_worktree_path(
         return resolved
 
     commit_node = GitCommitNode(workspace, worktree_resolver=_persisted_worktree)
-    event = commit_node.run(_state(task.id, "commit"))
+    event = commit_node.run(_state(task.id, PipelineState.COMMIT))
 
     assert isinstance(event, Pass), event
     assert (workspace / "new.txt").read_text(encoding="utf-8") == "agent wrote this\n"
@@ -185,7 +186,7 @@ def test_commit_ignores_untracked_embedded_git_repos_in_task_worktree(tmp_path: 
         workspace_root=workspace,
         worktree_resolver=lambda state: worktree,
     )
-    assert sync_node.sync(_state(task.id, "worktree_sync")) is True
+    assert sync_node.sync(_state(task.id, PipelineState.WORKTREE_SYNC)) is True
 
     (worktree / "new.txt").write_text("agent wrote this\n", encoding="utf-8")
     scratch_repo = worktree / "$workspace"
@@ -201,7 +202,7 @@ def test_commit_ignores_untracked_embedded_git_repos_in_task_worktree(tmp_path: 
         return resolved
 
     commit_node = GitCommitNode(workspace, worktree_resolver=_persisted_worktree)
-    event = commit_node.run(_state(task.id, "commit"))
+    event = commit_node.run(_state(task.id, PipelineState.COMMIT))
 
     assert isinstance(event, Pass), event
     assert (workspace / "new.txt").read_text(encoding="utf-8") == "agent wrote this\n"

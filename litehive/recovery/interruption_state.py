@@ -7,7 +7,7 @@ which handles the subagent-side snapshot.
 
 from pathlib import Path
 
-from litehive.domain.common import TaskStatus, utcnow
+from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
 from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.domain.task import TaskRecord
 from litehive.recovery.interrupted_subagent import mark_interrupted_subagent
@@ -36,7 +36,7 @@ def prepare_interrupted_task(
     interruption_reason = reason or summary
     timestamps = _interruption_timestamps(task, now)
     task.status = TaskStatus.INTERRUPTED
-    task.pipeline_status = stage
+    task.pipeline_status = stage if isinstance(stage, PipelineStatus) else PipelineStatus(stage)
     task.runtime.pipeline.execution_status = "interrupted"
     task.runtime.pipeline.run_started_at = None
     task.runtime.pipeline.updated_at = now

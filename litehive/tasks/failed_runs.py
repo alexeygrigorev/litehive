@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from litehive.domain.common import utcnow
+from litehive.domain.common import PipelineState, utcnow
 from litehive.domain.runtime import RuntimeFailedRunRecord
 from litehive.domain.task import TaskRecord
 from litehive.lifecycle.persistence import FailedRunRecord, SqlitePersistence, TaskNotFound, failed_run_key
@@ -70,7 +70,7 @@ def mark_failed_run_operator_override(
             state_record = pipeline_state.failed_run_history.get(key)
         if state_record is None and pipeline_state is not None:
             state_record = FailedRunRecord(
-                stage=record.stage,
+                stage=PipelineState(record.stage),
                 failure_shape=record.failure_shape,
                 count=record.count,
                 first_at=record.first_at,

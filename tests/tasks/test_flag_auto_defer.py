@@ -14,7 +14,7 @@ from litehive.tasks.runtime import finish_task_run_transition
 from litehive.tasks.status import requeue_task
 
 from tests.support.helpers import _cmd_requeue_task
-from litehive.domain.common import PipelineStatus, TaskStatus
+from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
 
 
 def _flag_task(root: Path, task_id: str) -> None:
@@ -141,7 +141,7 @@ def test_requeue_task_resets_sticky_pipeline_failure_state(tmp_path: Path) -> No
 
     persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     failed_state = persistence.initialize(task.id)
-    failed_state.stage = "failed"
+    failed_state.stage = PipelineState.FAILED
     persistence.save(failed_state)
 
     requeue_task(tmp_path, task.id)

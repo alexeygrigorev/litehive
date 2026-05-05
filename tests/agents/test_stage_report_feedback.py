@@ -116,7 +116,7 @@ def test_stage_report_rejects_comment_verdicts_and_legacy_files_changed() -> Non
         StageReport(
             task_id="T-0001",
             pipeline_state="implementing",
-            verdict="comment",
+            verdict="comment",  # pyrefly: ignore[bad-argument-type]
             summary="operator note",
         )
 
@@ -126,7 +126,7 @@ def test_stage_report_rejects_comment_verdicts_and_legacy_files_changed() -> Non
             pipeline_state="implementing",
             verdict="pass",
             summary="implemented the change",
-            files_changed=["src/app.py"],
+            files_changed=["src/app.py"],  # pyrefly: ignore[unexpected-keyword]
         )
 
 
@@ -135,7 +135,7 @@ def test_task_activity_entry_rejects_removed_fail_verdict_alias() -> None:
         TaskActivityEntry(
             role="swe",
             stage="implementing",
-            verdict="fail",
+            verdict="fail",  # pyrefly: ignore[bad-argument-type]
             message="legacy failure wording",
         )
 

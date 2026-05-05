@@ -63,7 +63,7 @@ _SITE_PACKAGES = (
 )
 if _SITE_PACKAGES.exists():
     _PYTHONPATH_ENTRIES.append(str(_SITE_PACKAGES.resolve()))
-_HERU_IMPORT_ROOT = Path(_codex_quota_mod.__file__).resolve().parents[2]
+_HERU_IMPORT_ROOT = Path(_codex_quota_mod.__file__ or "").resolve().parents[2]
 _PYTHONPATH_ENTRIES.append(str(_HERU_IMPORT_ROOT))
 for entry in reversed(_PYTHONPATH_ENTRIES):
     if entry not in sys.path:

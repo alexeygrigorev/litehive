@@ -91,9 +91,9 @@ def _print_lifecycle_evidence(root: Path, task) -> None:
     see what the state machine thinks the task is doing without
     opening the database.
     """
-    try:
-        from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound  # noqa: PLC0415
+    from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound  # noqa: PLC0415
 
+    try:
         state = SqlitePersistence(Workspace.from_path(root)).load(task.id)
     except TaskNotFound:
         print("lifecycle_state: not found")
@@ -236,7 +236,7 @@ def _print_latest_subagent(root: Path, task) -> None:
         f"started_at={started_at or '-'} completed_at={completed_at or '-'} "
         f"produced_output={produced_output_label}"
     )
-    if trace is not None:
+    if trace is not None and isinstance(trace.source, Path):
         print(f"latest_subagent_trace_source: {trace.source.relative_to(root)}")
 
 

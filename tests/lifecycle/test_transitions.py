@@ -46,7 +46,7 @@ def make_state(
     stage: str | PipelineState,
     *,
     mode: PipelineMode = PipelineMode.FULL,
-    stage_retry: dict[str, int] | None = None,
+    stage_retry: dict[PipelineState, int] | None = None,
     rejection_loop: RejectionLoop | None = None,
     pre_exec_recovery_attempt: int = 0,
     files_changed: int = 1,
@@ -635,9 +635,9 @@ def test_all_stages_referenced_in_rules():
     refs: set[str] = set()
     for rule in list_transitions():
         if isinstance(rule.from_state, frozenset):
-            refs.update(rule.from_state)
+            refs.update(str(item) for item in rule.from_state)
         else:
-            refs.add(rule.from_state)
+            refs.add(str(rule.from_state))
     for stage in STAGES:
         if stage != "commit":
             assert f"before_{stage}" in refs

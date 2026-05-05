@@ -715,16 +715,7 @@ def test_subagent_manager_survives_nonfatal_start_callback_failure_for_planner(
             extra_env: dict[str, str] | None = None,
             emit_unified: bool = False,
         ) -> CLIExecutionResult:
-            del (
-                prompt,
-                model,
-                max_turns,
-                resume_session_id,
-                on_update,
-                inactivity_timeout_seconds,
-                extra_env,
-                emit_unified,
-            )
+            del prompt, model, max_turns, resume_session_id, on_update, inactivity_timeout_seconds, extra_env, emit_unified
             if on_started is not None:
                 on_started(4242)
             return CLIExecutionResult(
@@ -789,15 +780,7 @@ def test_subagent_manager_survives_nonfatal_progress_callback_failure_for_planne
             extra_env: dict[str, str] | None = None,
             emit_unified: bool = False,
         ) -> CLIExecutionResult:
-            del (
-                prompt,
-                model,
-                max_turns,
-                resume_session_id,
-                inactivity_timeout_seconds,
-                extra_env,
-                emit_unified,
-            )
+            del prompt, model, max_turns, resume_session_id, inactivity_timeout_seconds, extra_env, emit_unified
             if on_started is not None:
                 on_started(4242)
             partial = CLIExecutionResult(

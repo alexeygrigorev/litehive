@@ -14,7 +14,7 @@ from litehive.domain.common import PipelineState
 class _FixedEventNode(Node):
     node_type = NodeType.SYSTEM
 
-    def __init__(self, name: str, event: Event) -> None:
+    def __init__(self, name: PipelineState, event: Event) -> None:
         self.name = name
         self.event = event
 
@@ -99,7 +99,7 @@ class _FakeClock:
 class _TimedPassNode(Node):
     node_type = NodeType.AGENT
 
-    def __init__(self, name: str, clock: _FakeClock, seconds: float) -> None:
+    def __init__(self, name: PipelineState, clock: _FakeClock, seconds: float) -> None:
         self.name = name
         self.clock = clock
         self.seconds = seconds
@@ -118,7 +118,7 @@ def test_task_time_budget_exceeded_fails_before_next_pre_commit_stage() -> None:
         pipeline_mode=PipelineMode.FULL,
     )
     registry = NodeRegistry()
-    registry.register(_TimedPassNode("implementing", clock, seconds=61.0))
+    registry.register(_TimedPassNode(PipelineState.IMPLEMENTING, clock, seconds=61.0))
     persistence = InMemoryPersistence()
     persistence.save(state)
     journal = InMemoryJournal()

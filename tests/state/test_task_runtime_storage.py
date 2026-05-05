@@ -247,8 +247,11 @@ def test_task_runtime_outcome_string_mutations_persist_without_pydantic_warnings
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title=f"{reason_code} outcome")
-    task.runtime.pipeline.last_outcome.kind = kind
-    task.runtime.pipeline.last_outcome.reason_code = reason_code
+    # The string spellings here are valid OutcomeKind / OutcomeReasonCode enum
+    # values; this test exercises that pydantic accepts the string form on
+    # assignment under validate_assignment=True without emitting warnings.
+    task.runtime.pipeline.last_outcome.kind = kind  # pyrefly: ignore[bad-assignment]
+    task.runtime.pipeline.last_outcome.reason_code = reason_code  # pyrefly: ignore[bad-assignment]
     task.runtime.pipeline.last_outcome.reason = "runtime outcome"
 
     with warnings.catch_warnings():

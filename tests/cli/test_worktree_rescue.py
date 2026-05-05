@@ -82,7 +82,7 @@ def _create_merge_failed_worktree_task(workspace: Path):
     _git_ok(worktree_path, "commit", "-m", "feature commit")
 
     task.status = TaskStatus.FLAGGED
-    task.pipeline_status = "flagged"
+    task.pipeline_status = PipelineStatus.FLAGGED
     task.flag_reason = "merge_failed"
     task.runtime.pipeline.git.worktree_path = serialize_worktree_path(worktree_path)
     task.git.worktree_path = None
@@ -96,7 +96,7 @@ def _create_merge_failed_worktree_task(workspace: Path):
 
 def _flag_for_rescue(workspace: Path, task, worktree_path: Path) -> None:
     task.status = TaskStatus.FLAGGED
-    task.pipeline_status = "flagged"
+    task.pipeline_status = PipelineStatus.FLAGGED
     task.flag_reason = "merge_failed"
     task.runtime.pipeline.git.worktree_path = serialize_worktree_path(worktree_path)
     task.git.worktree_path = None

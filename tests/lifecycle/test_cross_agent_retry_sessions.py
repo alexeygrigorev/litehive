@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.common import PipelineState
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.hook import HookRunner, HookSpec
 from litehive.lifecycle.nodes.system import StubCommitNode
@@ -117,7 +118,7 @@ def test_cross_agent_reject_clears_target_stage_sessions(workspace: Path) -> Non
         ("implementing", None),
         ("implementing", None),
     ]
-    persisted = sessions.get_or_create(task.id, "implementing", engine.name)
+    persisted = sessions.get_or_create(task.id, PipelineState.IMPLEMENTING, engine.name)
     assert persisted.engine_session_id == "implementing-2"
     transitions = SqliteJournal(Workspace.from_path(workspace)).load_transitions(task.id)
     implementing_attempts = [
@@ -146,5 +147,5 @@ def test_same_agent_reject_keeps_stage_session_continuity(workspace: Path) -> No
         ("implementing", None),
         ("implementing", "implementing-1"),
     ]
-    persisted = sessions.get_or_create(task.id, "implementing", engine.name)
+    persisted = sessions.get_or_create(task.id, PipelineState.IMPLEMENTING, engine.name)
     assert persisted.engine_session_id == "implementing-2"

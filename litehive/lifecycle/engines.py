@@ -16,7 +16,7 @@ workspace root and session context.
 """
 
 from pathlib import Path
-from typing import Callable
+from typing import Callable, cast
 
 from litehive.config.engine_models import (
     select_engine,
@@ -117,14 +117,25 @@ class ConfigBackedEngineSelector:
         if task is None:
             return None
 
-        selection_kwargs = {
-            "engine_override": self.engine_override,
-            "model_override": self.model_override,
-            "excluded_engine_names": excluded,
-        }
-        if not self.check_quota:
-            selection_kwargs["check_quota"] = False
-        selection = select_engine(self.workspace_root, task, self.config, **selection_kwargs)
+        if self.check_quota:
+            selection = select_engine(
+                self.workspace_root,
+                task,
+                self.config,
+                engine_override=self.engine_override,
+                model_override=self.model_override,
+                excluded_engine_names=excluded,
+            )
+        else:
+            selection = select_engine(
+                self.workspace_root,
+                task,
+                self.config,
+                engine_override=self.engine_override,
+                model_override=self.model_override,
+                excluded_engine_names=excluded,
+                check_quota=False,
+            )
         if selection.engine_name is None:
             return None
 
@@ -133,7 +144,7 @@ class ConfigBackedEngineSelector:
         if callable(with_model):
             configured_engine = with_model(selection.model_name)
             if configured_engine is not None:
-                return configured_engine
+                return cast(Engine, configured_engine)
         return engine
 
 

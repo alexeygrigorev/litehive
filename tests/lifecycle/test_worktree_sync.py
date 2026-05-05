@@ -4,6 +4,7 @@ from pathlib import Path
 
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.common import PipelineState
 from litehive.lifecycle.nodes.system import GitWorktreeSyncNode
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.types import PipelineMode
@@ -33,10 +34,10 @@ def _configure_repo(path: Path) -> None:
     _git_ok(path, "config", "user.name", "Test User")
 
 
-def _state(task_id: str, *, entry_stage: str | None = None) -> TaskState:
+def _state(task_id: str, *, entry_stage: PipelineState | None = None) -> TaskState:
     return TaskState(
         task_id=task_id,
-        stage="worktree_sync",
+        stage=PipelineState.WORKTREE_SYNC,
         pipeline_mode=PipelineMode.SINGLE,
         entry_stage=entry_stage,
     )
@@ -159,7 +160,7 @@ def test_worktree_sync_rebases_existing_task_worktree_onto_local_main(tmp_path: 
         workspace_root=workspace,
         worktree_resolver=lambda state: worktree,
     )
-    changed = node.sync(_state(task.id, entry_stage="implementing"))
+    changed = node.sync(_state(task.id, entry_stage=PipelineState.IMPLEMENTING))
 
     assert changed is True
     assert (worktree / "infra.txt").read_text(encoding="utf-8") == "main advanced\n"
@@ -208,7 +209,7 @@ def test_worktree_sync_rebases_dirty_resumed_worktree_and_preserves_wip(tmp_path
         workspace_root=workspace,
         worktree_resolver=lambda state: worktree,
     )
-    changed = node.sync(_state(task.id, entry_stage="testing"))
+    changed = node.sync(_state(task.id, entry_stage=PipelineState.TESTING))
 
     assert changed is True
     assert (worktree / "infra.txt").read_text(encoding="utf-8") == "main advanced\n"

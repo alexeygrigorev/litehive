@@ -919,6 +919,6 @@ def _optional_int(value: object) -> int | None:
     if value is None:
         return None
     try:
-        return int(value)
+        return int(value)  # pyrefly: ignore[bad-argument-type]
     except (TypeError, ValueError):
         return None

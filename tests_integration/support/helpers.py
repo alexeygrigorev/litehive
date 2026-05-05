@@ -28,6 +28,7 @@ from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import litehive_root
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.common import PipelineStatus
 from litehive.config.model import VALID_ENGINE_NAMES
 from heru.base import CLIExecutionResult
 
@@ -81,7 +82,7 @@ def _engine_quota_block_reason(engine_name: str) -> str | None:
         }.get(engine_name)
         if checker is None:
             return None
-        return usage_limit_block_reason(engine_name, checker())
+        return usage_limit_block_reason(engine_name, checker())  # pyrefly: ignore[bad-argument-type]
     except Exception:
         pass
     return None
@@ -416,11 +417,13 @@ def execute_engine_prompt(
             )
         except subprocess.TimeoutExpired as exc:
             if allow_timeout:
+                stdout_str = exc.stdout if isinstance(exc.stdout, str) else ""
+                stderr_str = exc.stderr if isinstance(exc.stderr, str) else ""
                 completed = subprocess.CompletedProcess(
                     args=argv,
                     returncode=124,
-                    stdout=exc.stdout or "",
-                    stderr=exc.stderr or "",
+                    stdout=stdout_str,
+                    stderr=stderr_str,
                 )
                 break
             stdout_tail = (exc.stdout or "")[-800:]
@@ -495,7 +498,7 @@ def prepare_smoke_session(engine_name: str, *, cwd: Path, sandboxed: bool = Fals
     require_real_engine(engine_name)
     task = create_task(cwd, title=f"{engine_name} nudge task", auto_commit=False)
     task = require_task(cwd, task.id)
-    task.pipeline_status = "implementing"
+    task.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(cwd, task)
     set_active_task(cwd, task.id)
     engine, execution = execute_engine_prompt(
@@ -523,7 +526,11 @@ def prepare_smoke_session(engine_name: str, *, cwd: Path, sandboxed: bool = Fals
 
 
 def assert_successful_smoke_session(session: SmokeSession) -> None:
-    transcript = _assistant_transcript(session.engine.render_transcript(session.execution))
+    render_transcript = getattr(session.engine, "render_transcript", None)
+    assert callable(render_transcript), f"engine for {session.engine_name} cannot render transcripts"
+    rendered = render_transcript(session.execution)
+    assert isinstance(rendered, str)
+    transcript = _assistant_transcript(rendered)
     assert transcript.strip(), f"Expected assistant output from {session.engine_name}"
 
 

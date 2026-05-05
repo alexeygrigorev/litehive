@@ -9,7 +9,7 @@ prior progress they preserve and how they pick the re-entry stage.
 from pathlib import Path
 
 from litehive.git.ops import GitError, current_head, path_differs_at_ref
-from litehive.domain.common import TaskStage, TaskStatus
+from litehive.domain.common import PipelineStatus, TaskStage, TaskStatus
 from litehive.domain.task import TaskRecord
 
 from litehive.tasks.constants import (
@@ -196,7 +196,7 @@ def _resume_task_transition(root: Path, task_id: str, front: bool = False) -> Ta
             raise ValueError(f"Task {task.id} has no resumable stage")
         if resumed_stage in {TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING}:
             original_pipeline_status = task.pipeline_status
-            task.pipeline_status = resumed_stage
+            task.pipeline_status = PipelineStatus(resumed_stage)
             resumed_stage = reroute_stage_for_acceptance_criteria(task)
             task.pipeline_status = original_pipeline_status
         reset_task_for_recovery(

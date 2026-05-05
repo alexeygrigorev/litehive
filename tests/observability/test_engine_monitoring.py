@@ -52,8 +52,14 @@ def test_record_engine_execution_accepts_provider_usage_observation(tmp_path: Pa
 
     class ProviderAdapter(ExternalCLIAdapter):
         def build_command(
-            self, prompt: str, cwd: Path, model: str | None = None, *, max_turns: int | None = None
-        ) -> list[str]:  # type: ignore[override]
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            max_turns: int | None = None,
+            resume_session_id: str | None = None,
+        ) -> list[str]:
             return ["provider-cli", prompt]
 
         def extract_usage_observation(self, execution: CLIExecutionResult) -> EngineUsageObservation | None:

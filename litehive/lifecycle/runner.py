@@ -136,7 +136,7 @@ class StateMachineRunner:
     def _apply_transition(
         self,
         state: TaskState,
-        from_stage: str,
+        from_stage: PipelineState,
         event: Event,
         task_id: str,
     ) -> None:

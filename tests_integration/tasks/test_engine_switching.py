@@ -1,5 +1,6 @@
 import pytest
 
+from litehive.domain.common import OutcomeKind, OutcomeReasonCode, PipelineStatus, TaskStatus
 from litehive.domain.runtime import SubagentRef
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.paths import task_dir
@@ -17,12 +18,12 @@ pytestmark = pytest.mark.integration
 def test_switch_cli_persists_engine_switch_and_requeues_task(integration_root) -> None:
     first = create_task(integration_root, title="Keep first queued", auto_commit=False)
     interrupted = create_task(integration_root, title="Switch interrupted task", auto_commit=False)
-    interrupted.status = "interrupted"
-    interrupted.pipeline_status = "implementing"
+    interrupted.status = TaskStatus.INTERRUPTED
+    interrupted.pipeline_status = PipelineStatus.IMPLEMENTING
     interrupted.runtime.pipeline.execution_status = "interrupted"
-    interrupted.runtime.pipeline.last_outcome.kind = "interrupted"
+    interrupted.runtime.pipeline.last_outcome.kind = OutcomeKind.INTERRUPTED
     interrupted.runtime.pipeline.last_outcome.stage = "implementing"
-    interrupted.runtime.pipeline.last_outcome.reason_code = "execution_interrupted"
+    interrupted.runtime.pipeline.last_outcome.reason_code = OutcomeReasonCode.EXECUTION_INTERRUPTED
     interrupted.subagents = [
         SubagentRef(
             id="SA-0002",

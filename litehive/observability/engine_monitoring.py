@@ -14,6 +14,7 @@ import sqlite3
 
 from litehive.config.paths import workspace_path
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
+from heru.types import EngineLimitKind
 from litehive.domain.common import utcnow
 from litehive.domain.engine import (
     EngineUsageObservation,
@@ -265,7 +266,7 @@ def _apply_engine_observation(
     return monitoring
 
 
-def _limit_kind(reason: str | None) -> str | None:
+def _limit_kind(reason: str | None) -> EngineLimitKind | None:
     """
     Classify a free-form limit/failure reason into a structured kind.
 
