@@ -23,6 +23,7 @@ def _worktree_workspace_dir(root: Path) -> Path | None:
 
 
 def tasks_root(root: Path, bootstrap: bool = True) -> Path:
+    """Resolve the on-disk tasks/ directory for a workspace, transparently redirecting through the per-worktree .litehive/ when called from inside a worktree so artifacts land next to the right checkout."""
     worktree_workspace = _worktree_workspace_dir(root)
     if worktree_workspace is not None:
         return worktree_workspace / "tasks"
@@ -34,12 +35,14 @@ def tasks_root(root: Path, bootstrap: bool = True) -> Path:
 
 
 def runner_lock_path(root: Path) -> Path:
+    """Return the canonical runner lock file path; callers use this to claim or inspect the single-runner-per-workspace invariant."""
     root = normalize_workspace_root(root, source="runner_lock_path")
     ensure_workspace(root)
     return workspace_path(root, "runtime", ".runner.lock")
 
 
 def slugify(value: str, max_length: int = 50) -> str:
+    """Build a stable filesystem-safe slug for a task title; the slug is part of the on-disk task directory name, so the result must be deterministic and never empty."""
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     if not slug:
         return "task"
@@ -50,14 +53,17 @@ def slugify(value: str, max_length: int = 50) -> str:
 
 
 def task_dir(root: Path, task: TaskRecord, bootstrap: bool = True) -> Path:
+    """Return the per-task working directory (subagent transcripts, activity log, recovery evidence); the id-slug naming is the contract every other artifact helper assumes."""
     return tasks_root(root, bootstrap=bootstrap) / f"{task.id}-{task.slug}"
 
 
 def task_recovery_dir(root: Path, task: TaskRecord, bootstrap: bool = True) -> Path:
+    """Return the directory where recovery artifacts (probe outputs, repair plans) are written so recovery and downstream stages share one location."""
     return task_dir(root, task, bootstrap=bootstrap) / "recovery"
 
 
 def latest_path(paths: list[Path]) -> Path | None:
+    """Pick the lexicographically newest existing path from a candidate list; used by artifact lookups where filenames are timestamp-prefixed so sort order matches recency."""
     existing = [path for path in paths if path.exists()]
     if not existing:
         return None
@@ -75,6 +81,7 @@ def _artifact_candidates(base: Path, *names: str) -> list[Path]:
 
 
 def resolve_artifact_path(base: Path, *names: str) -> Path | None:
+    """Find the first existing artifact under base, accepting both plain and .gz variants so callers don't need to know whether the producer compressed the output."""
     for candidate in _artifact_candidates(base, *names):
         if candidate.exists():
             return candidate
@@ -82,6 +89,7 @@ def resolve_artifact_path(base: Path, *names: str) -> Path | None:
 
 
 def read_text_artifact(path: Path) -> str:
+    """Read a text artifact transparently whether or not it was gzipped on disk; pairs with resolve_artifact_path so the .gz format flip stays invisible to callers."""
     if path.suffix == ".gz":
         with gzip.open(path, "rt", encoding="utf-8") as handle:
             return handle.read()
@@ -89,6 +97,7 @@ def read_text_artifact(path: Path) -> str:
 
 
 def latest_run_all_log_path(root: Path) -> Path | None:
+    """Find the most recent run-all log file for the workspace; called by the operator-facing logs CLI to surface the last batch run without making the operator know the timestamped layout."""
     logs_root = workspace_path(root.resolve(), "logs", "run-all")
     if not logs_root.exists():
         return None
@@ -103,6 +112,7 @@ def latest_run_all_log_path(root: Path) -> Path | None:
 
 
 def latest_subagent_base(root: Path, task: TaskRecord) -> Path | None:
+    """Find the most relevant subagent artifact directory for a task, preferring the active subagent and falling back to the newest historical one; used by recovery and engine-switch flows that need the last attempt's transcript."""
     refs = list(task.subagents)
     preferred = []
     if task.runtime.execution.active_subagent is not None:
@@ -122,6 +132,7 @@ def latest_subagent_base(root: Path, task: TaskRecord) -> Path | None:
 
 
 def status_entry_paths(entries: list[str]) -> list[str]:
+    """Extract the path component from `git status --porcelain` lines, handling rename arrows and the leading status code so callers can compare paths to other lists."""
     paths: list[str] = []
     for entry in entries:
         stripped = entry.strip()

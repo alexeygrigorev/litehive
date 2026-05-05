@@ -21,6 +21,7 @@ from litehive.state.persist import persist_task_and_state
 
 
 def idle_stage_state(updated_at: str, stage: str | None = None) -> RuntimeStageState:
+    """Build the between-stages runtime marker used after a stage finishes or a run resets."""
     return RuntimeStageState(stage=stage, updated_at=updated_at)
 
 
@@ -69,6 +70,7 @@ def clear_task_run_activity(
     updated_at: str | None = None,
     clear_interruption: bool = False,
 ) -> str:
+    """Wipe per-run runtime fields so callers can transition a task into a new execution_status without leaving stale subagent or run-start data behind."""
     now = updated_at or utcnow()
     task.runtime.pipeline.execution_status = execution_status
     task.runtime.pipeline.run_started_at = None
@@ -80,6 +82,7 @@ def clear_task_run_activity(
 
 
 def mark_task_run_started(root: Path, task: TaskRecord) -> None:
+    """Record that the runner has just begun executing this task; called by the orchestration loop when a queued task is picked up."""
     now = clear_task_run_activity(task, execution_status="running", clear_interruption=True)
     task.runtime.pipeline.run_started_at = now
     task.runtime.pipeline.retry_count = 0
@@ -90,6 +93,7 @@ def mark_task_run_started(root: Path, task: TaskRecord) -> None:
 
 
 def mark_task_run_finished(root: Path, task: TaskRecord, final_status: str) -> None:
+    """Persist the closing execution_status for a task without touching the workspace queue; called when the orchestration loop only needs to flush runtime fields, not transition queue ownership."""
     clear_task_run_activity(task, execution_status=final_status)
     save_task_runtime(root, task)
 
@@ -104,6 +108,7 @@ def apply_flag_count_auto_defer(task: TaskRecord) -> None:
 
 
 def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) -> TaskRecord:
+    """End-of-run transition that reconciles the task and the workspace queue under the workspace lock; called by the orchestration loop when a run terminates (done, paused, interrupted, queued) so flag auto-defer, queue cleanup, and reinsertion all happen atomically."""
     with workspace_mutation_guard(root), workspace_lock(root):
         apply_flag_count_auto_defer(task)
         clear_task_run_activity(task, execution_status=final_status)
@@ -141,6 +146,7 @@ def set_task_retry_state(
     retry_count: int,
     retry_limit: int,
 ) -> None:
+    """Persist the current per-stage retry counters; called by stage controllers after a retry so the next prompt and the operator-facing status reflect the same numbers."""
     _apply_task_retry_state(
         task,
         retry_count=retry_count,
@@ -150,6 +156,7 @@ def set_task_retry_state(
 
 
 def clear_task_outcome(root: Path, task: TaskRecord) -> None:
+    """Reset the last-outcome record so the next stage prompt is not contaminated by a stale verdict; called when a task is being requeued or recovered into a fresh attempt."""
     _clear_task_outcome(task)
     save_task_runtime(root, task)
 
@@ -182,6 +189,7 @@ def mark_task_outcome(
     failure_classification: str | None = None,
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
 ) -> None:
+    """Record the verdict that ended a stage (rejected, flagged, deferred, etc.) and flush it to disk; called by stage controllers so downstream prompts and the operator status share one source of truth."""
     apply_task_outcome(
         task,
         kind=kind,
@@ -209,6 +217,7 @@ def apply_task_outcome(
     failure_classification: str | None = None,
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
 ) -> None:
+    """In-memory variant of mark_task_outcome; called by transitions (close, abandon, recovery) that already hold the workspace lock and want to bundle the outcome into their own persistence batch."""
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.pipeline.last_outcome = TaskOutcomeState(
@@ -226,6 +235,7 @@ def apply_task_outcome(
 
 
 def mark_stage_started(root: Path, task: TaskRecord, stage: str) -> None:
+    """Record that the runner has just entered a pipeline stage; called by the stage dispatcher so observers (status snapshot, daemons) can see what the task is doing right now."""
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.pipeline.current_stage = _running_stage_state(stage, started_at=now)
@@ -233,17 +243,20 @@ def mark_stage_started(root: Path, task: TaskRecord, stage: str) -> None:
 
 
 def mark_stage_finished(root: Path, task: TaskRecord, report: StageReport) -> None:
+    """Record that a pipeline stage just exited and flush to disk; called by the stage dispatcher so the next stage starts from a clean current_stage marker."""
     apply_stage_finished(task, report)
     save_task_runtime(root, task)
 
 
 def apply_stage_finished(task: TaskRecord, report: StageReport) -> None:
+    """In-memory variant of mark_stage_finished; called by transitions that hold the workspace lock and want to batch the stage-end marker with other writes."""
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now)
 
 
 def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> None:
+    """Attach a freshly launched subagent to the task so observers can see who is running; called when the agent manager spawns a stage subagent."""
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.execution.active_subagent = _runtime_subagent_state(ref, started_at=now, updated_at=now)
@@ -251,6 +264,7 @@ def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> Non
 
 
 def mark_subagent_pid(root: Path, task: TaskRecord, pid: int | None) -> None:
+    """Attach the OS pid to the active subagent record once the engine has spawned its child process so stop/abandon flows can signal it."""
     if (
         pid is None
         or task.runtime.execution.active_subagent is None
@@ -272,6 +286,7 @@ def mark_subagent_progress(
     transcript: str | None = None,
     continuation: RuntimeEngineContinuation | None = None,
 ) -> None:
+    """Refresh the heartbeat fields on the active subagent (pid, transcript snippet, engine continuation) so liveness probes don't kill a working agent and so resumed runs can pick up where the engine left off."""
     if task.runtime.execution.active_subagent is None:
         return
     now = utcnow()
@@ -299,6 +314,7 @@ def mark_subagent_finished(
     interruption_reason: str | None = None,
     continuation: RuntimeEngineContinuation | None = None,
 ) -> None:
+    """Detach the active subagent from the task once its process exits so the next stage starts with a clean slot; called by the agent manager after subagent shutdown."""
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     del ref, transcript, exit_code, pid, interruption_reason, continuation
@@ -314,6 +330,7 @@ def mark_engine_switch(
     to_engine: str,
     reason: str,
 ) -> None:
+    """Stamp the task with the most recent engine swap so operator status and the audit trail can explain why a stage is running on a different model than the one configured."""
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.execution.last_engine_switch = RuntimeEngineSwitch(
@@ -327,6 +344,7 @@ def mark_engine_switch(
 
 
 def summarize_transcript(transcript: str, limit: int = 120) -> str:
+    """Pick a short human-readable line from a subagent transcript for the status snapshot, skipping the structured VERDICT/SUMMARY scaffolding so operators see real progress text."""
     for line in transcript.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("VERDICT:"):
@@ -340,6 +358,7 @@ def summarize_transcript(transcript: str, limit: int = 120) -> str:
 
 
 def duration_seconds(started_at: str | None, ended_at: str | None) -> int:
+    """Compute an integer second delta between two ISO timestamps that tolerates missing or malformed inputs; used by status formatting where a missing duration must not crash the report."""
     if started_at is None or ended_at is None:
         return 0
     try:

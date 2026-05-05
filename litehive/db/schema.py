@@ -79,6 +79,7 @@ class MigrationApplyError(RuntimeError):
 
 
 def _utcnow() -> str:
+    """Format an ``applied_at`` timestamp the way ``schema_migrations`` rows expect (second-precision Z-suffixed)."""
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
@@ -86,6 +87,7 @@ def _task_intent_column_values(
     intent: TaskIntentRecord,
     state: TaskStateRecord | None = None,
 ) -> dict[str, str]:
+    """Project a TaskIntentRecord/TaskStateRecord pair onto the flat column shape used by migration 7's task_intent backfill."""
     return {
         "slug": intent.slug,
         "title": intent.title,
@@ -166,6 +168,7 @@ def _migration_resources():
 
 
 def available_migrations() -> tuple[Migration, ...]:
+    """Discover bundled SQL migrations; called by the migration CLI and by ``apply_pending_migrations`` to compute the apply plan."""
     migrations: list[Migration] = []
     for entry in sorted(_migration_resources().iterdir(), key=lambda item: item.name):
         if not entry.name.endswith(".sql") or "_" not in entry.name:
@@ -184,6 +187,7 @@ def available_migrations() -> tuple[Migration, ...]:
 
 
 def _open_connection(db_path: Path) -> sqlite3.Connection:
+    """Single point that applies the project's connection pragmas (foreign keys, durability tradeoffs) so migration code and ``connect_workspace_db`` cannot diverge."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
@@ -198,6 +202,7 @@ def _open_connection(db_path: Path) -> sqlite3.Connection:
 
 
 def _ensure_schema_migrations_table(connection: sqlite3.Connection) -> None:
+    """Bootstrap the bookkeeping table on a fresh db so the first migration query does not error before migration 1 has run."""
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -211,6 +216,7 @@ def _ensure_schema_migrations_table(connection: sqlite3.Connection) -> None:
 
 
 def _applied_versions(connection: sqlite3.Connection) -> set[int]:
+    """Return the version set used by both ``migration_status`` (status reporting) and ``apply_pending_migrations`` (to skip already-applied migrations)."""
     _ensure_schema_migrations_table(connection)
     rows = connection.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
     return {int(row["version"]) for row in rows}
@@ -246,6 +252,7 @@ def _migration_history_matches_prefix(
 
 
 def _database_requires_rebuild(db_path: Path, migrations: tuple[Migration, ...]) -> bool:
+    """Detect a DB whose history has diverged from the bundled migrations (e.g. a renamed migration) so ``apply_pending_migrations`` can rebuild it instead of trying to patch in place."""
     if not db_path.exists():
         return False
     try:
@@ -262,6 +269,7 @@ def _database_requires_rebuild(db_path: Path, migrations: tuple[Migration, ...])
 
 
 def migration_status(root: Path) -> MigrationStatus:
+    """Read-only view used by the ``litehive db status`` CLI; does not mutate the database."""
     db_path = workspace_path(root, "data.db")
     migrations = available_migrations()
     applied: list[Migration] = []
@@ -285,6 +293,7 @@ def migration_status(root: Path) -> MigrationStatus:
 
 
 def apply_pending_migrations(root: Path, dry_run: bool = False) -> MigrationPlan:
+    """Bring the workspace DB up to the bundled schema; called by the migration CLI and lazily by ``connect_workspace_db`` on first open per-process."""
     db_path = workspace_path(root, "data.db")
     migrations = available_migrations()
     if _database_requires_rebuild(db_path, migrations):
@@ -336,6 +345,7 @@ _DbFingerprint: TypeAlias = tuple[int, int] | None
 
 
 def _db_fingerprint(db_path: Path) -> _DbFingerprint:
+    """Identify the file (dev/inode) so the in-process migration cache invalidates only when the DB is replaced, not on every write."""
     try:
         stat = db_path.stat()
     except OSError:
@@ -354,6 +364,7 @@ def _db_cache_key(db_path: Path) -> str:
 
 
 def consume_rebuilt_database_marker(root: Path) -> bool:
+    """One-shot signal so callers (status/recovery output) can warn the operator exactly once that a rebuild happened this process."""
     key = _db_cache_key(workspace_path(root, "data.db"))
     if key not in REBUILT_DB_PATHS:
         return False
@@ -363,6 +374,7 @@ def consume_rebuilt_database_marker(root: Path) -> bool:
 
 @contextmanager
 def connect_workspace_db(root: Path, migrate: bool = True) -> Iterator[sqlite3.Connection]:
+    """The single entry point every workspace caller uses to talk to SQLite, so pragmas and on-demand migration stay consistent."""
     db_path = workspace_path(root, "data.db")
     if migrate:
         # In-process cache keyed on the absolute db_path (not root), because

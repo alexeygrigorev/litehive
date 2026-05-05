@@ -65,6 +65,7 @@ def _parse_datetime_utc(value: str | None) -> datetime | None:
 
 
 def parse_engine_freeze_until(value: str | None) -> str | None:
+    """Convert a CLI ``--until YYYY-MM-DD`` flag into the ISO-Z form persisted in the freeze map; returns None for any unparseable input so the CLI can surface a single validation error."""
     if value is None:
         return None
     try:
@@ -114,6 +115,7 @@ def persist_engine_freeze_iso(
     source: str = "runtime",
     reason: str | None = None,
 ) -> None:
+    """Write a freeze entry to the audited runtime-settings store; called by the CLI ``engine freeze`` command and by quota-driven freezes inside engine selection so both paths land in the audit log with the same shape."""
     if reason:
         context = {"reason": reason}
     else:
@@ -135,6 +137,7 @@ def clear_persisted_engine_freeze(
     source: str = "runtime",
     reason: str | None = None,
 ) -> bool:
+    """Remove a freeze entry through the audited store and return whether anything actually changed; called by the CLI ``engine unfreeze`` command and by engine selection when a previously-frozen engine's freeze window has expired."""
     if reason:
         context = {"reason": reason}
     else:
@@ -202,6 +205,7 @@ def engine_quota_block(
     root: Path,
     engine_name: str,
 ) -> tuple[str | None, datetime | None]:
+    """Probe the engine's vendor quota and return ``(skip_reason, freeze_until)`` if the limit is currently exhausted; called by the engine-selection loop so that quota-blocked engines are skipped and auto-frozen until the reset time."""
     checker = _quota_checker(engine_name)
     if checker is None:
         return None, None
@@ -221,6 +225,7 @@ def select_engine(
     require_available: bool = False,
     check_quota: bool = True,
 ) -> EngineSelection:
+    """Walk the task's engine plan plus the workspace preference list, skipping frozen, unavailable, and quota-exhausted engines, and return the first usable ``(engine, model)`` along with attempt/skip diagnostics; called by the runtime when a task transitions into an agent-driven stage and by the recovery agent when picking a fallback engine."""
     excluded = set(excluded_engine_names)
     if engine_names is not None:
         order = [engine_name for engine_name in _dedupe_engine_names(engine_names) if engine_name not in excluded]
@@ -301,6 +306,7 @@ def select_engine(
 
 
 def workspace_model_for_engine(config: LitehiveConfig, engine_name: str) -> str | None:
+    """Return the workspace-level default model pinned for the engine, or None if the workspace did not pin one; used as the bottom rung of the model-resolution ladder under task-level and CLI overrides."""
     if engine_name == "codex":
         return config.codex_model
     if engine_name == "opencode":
@@ -322,6 +328,7 @@ def resolve_model(
     engine_name: str,
     model_override: str | None = None,
 ) -> str | None:
+    """Pick the model name for a chosen engine using the precedence ``CLI override > task.model > workspace default``, returning None when the engine does not support model selection at all; called by engine-selection so the runner hands the engine adapter the right model in one place."""
     if not get_engine(engine_name).capabilities.supports_model_override:
         return None
     if model_override is not None:
@@ -336,6 +343,7 @@ def resolve_engine_name(
     config: LitehiveConfig,
     engine_override: str | None = None,
 ) -> str:
+    """Return just the first engine the task would attempt under the current plan; used by status/diagnostic surfaces that want to display the "primary" engine without running the full attempt loop."""
     return resolve_engine_plan(task, config, engine_override=engine_override)[0]
 
 
@@ -344,6 +352,7 @@ def resolve_engine_attempt_order(
     config: LitehiveConfig,
     engine_override: str | None = None,
 ) -> list[str]:
+    """Produce the ordered, frozen-filtered engine attempt sequence a task would walk if no overrides or quota blocks fired; called by the CLI ``engine`` introspection commands so operators can preview the fallback chain without executing a stage."""
     order = _engine_attempt_order(
         resolve_engine_plan(task, config, engine_override=engine_override),
         config.engine_preference,
@@ -358,6 +367,7 @@ def resolve_engine_plan(
     config: LitehiveConfig,
     engine_override: str | None = None,
 ) -> list[str]:
+    """Compute the *initial* engine list before merging with workspace preferences, honoring an explicit override and any in-flight engine switch recorded for the current stage; this is what makes a mid-stage ``engine switch`` decision stick across retries instead of getting overwritten by the workspace default."""
     if engine_override is not None:
         return [engine_override]
     if (
@@ -369,6 +379,7 @@ def resolve_engine_plan(
 
 
 def resolve_task_retry_policy(task: TaskRecord, config: LitehiveConfig) -> int:
+    """Return the per-task retry budget, falling back to the workspace default when the task has not pinned its own; called by the orchestrator to bound automatic retry attempts before a task is marked stuck."""
     if task.retry_policy.max_retries is not None:
         return task.retry_policy.max_retries
     return config.default_retry_limit
@@ -381,6 +392,7 @@ def _resolve_stage_retry_limit(task: TaskRecord, config: LitehiveConfig) -> int:
 
 
 def resolve_task_rejection_loop_limit(task: TaskRecord, config: LitehiveConfig) -> int:
+    """Return how many accept->reject->re-implement loops a task may repeat before the orchestrator escalates instead of bouncing it back to implementation again, falling back to the workspace default when the task has not pinned its own."""
     if task.retry_policy.rejection_loop_limit is not None:
         return task.retry_policy.rejection_loop_limit
     return config.default_rejection_loop_limit

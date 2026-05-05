@@ -24,6 +24,7 @@ CONSECUTIVE_TASK_FAILURE_STOP_REASON = "consecutive_task_failures"
 
 @contextmanager
 def skip_bootstrap_load_state():
+    """Suppress workspace bootstrap inside `load_state`; entered by recovery and inspection paths that must read state without provisioning workspace files on disk."""
     token = _SKIP_BOOTSTRAP_LOAD_STATE.set(True)
     try:
         yield
@@ -32,6 +33,7 @@ def skip_bootstrap_load_state():
 
 
 def load_state(root: Path, bootstrap: bool = True) -> WorkspaceState:
+    """Return the workspace state, materialising an empty state row on first read; the canonical reader used everywhere the runner, CLI, or dashboards need queue/runner pointers."""
     if bootstrap and not _SKIP_BOOTSTRAP_LOAD_STATE.get():
         ensure_workspace(root)
     store = runtime_store(root)
@@ -43,6 +45,7 @@ def load_state(root: Path, bootstrap: bool = True) -> WorkspaceState:
 
 
 def atomic_write_text(path: Path, content: str) -> None:
+    """Write a file via tmp+rename with fsync so partial writes are never visible to readers; fsync is suppressed under LITEHIVE_SKIP_FSYNC to keep the test suite fast."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}")
     try:
@@ -58,6 +61,7 @@ def atomic_write_text(path: Path, content: str) -> None:
 
 
 def atomic_write_gzip_text(path: Path, content: str) -> None:
+    """Atomic-write variant for gzipped artifacts (subagent transcripts, prompt dumps); keeps tmp+rename semantics so half-written .gz files never appear on disk."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}")
     try:
@@ -70,6 +74,7 @@ def atomic_write_gzip_text(path: Path, content: str) -> None:
 
 
 def write_atomic_files(writes: dict[Path, str]) -> None:
+    """Write a batch of files all-or-nothing: if any write fails, rolls back already-applied writes from in-memory snapshots so a partial multi-file update is never observable."""
     snapshots = {path: path.read_text(encoding="utf-8") if path.exists() else _MISSING for path in writes}
     applied: list[Path] = []
     try:
@@ -88,6 +93,7 @@ def write_atomic_files(writes: dict[Path, str]) -> None:
 
 
 def write_atomic_files_and_then(writes: dict[Path, str], callback) -> None:
+    """Same all-or-nothing batch write as `write_atomic_files`, but treats `callback` as part of the transaction — if the callback raises, the file writes are rolled back too. Used when a downstream side effect (e.g. SQLite commit) must be atomic with the file writes."""
     snapshots = {path: path.read_text(encoding="utf-8") if path.exists() else _MISSING for path in writes}
     applied: list[Path] = []
     try:
@@ -107,6 +113,7 @@ def write_atomic_files_and_then(writes: dict[Path, str], callback) -> None:
 
 
 def save_state(root: Path, state: WorkspaceState) -> None:
+    """Persist workspace state under the mutation guard; the path used by CLI commands that change queue/pool settings outside an active runner."""
     with workspace_mutation_guard(root):
         runtime_store(root).save_workspace_state(state)
 
@@ -116,6 +123,7 @@ def save_state_without_runner_guard(
     state: WorkspaceState,
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
+    """Persist workspace state assuming the caller already holds the runner guard (or is running inside it); used on the runner's hot path so nested mutations don't reacquire the same lock."""
     if audit_entries:
         runtime_store(root).save_runtime_transaction(
             workspace_state=state,
@@ -126,6 +134,7 @@ def save_state_without_runner_guard(
 
 
 def record_task_completion(root: Path, final_stage: str | None) -> tuple[int, str | None]:
+    """Update the consecutive-failure counter and trigger pool stop when the limit is hit; called by the runner after each task finishes so a streak of failures halts the pool instead of grinding through every task."""
     with workspace_lock(root):
         state = load_state(root)
         if final_stage == "done":
@@ -139,6 +148,7 @@ def record_task_completion(root: Path, final_stage: str | None) -> tuple[int, st
 
 
 def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
+    """Set or clear the pool's stop reason; clearing the consecutive-failure stop also resets the counter so operators don't have to chase two fields when resuming the pool."""
     with workspace_lock(root):
         state = load_state(root)
         if stop_reason is None and state.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
@@ -154,6 +164,7 @@ def workspace_transition_writes(
     state: WorkspaceState | None = None,
     journal_messages: dict[str, str] | None = None,
 ) -> dict[Path, str]:
+    """Vestigial hook from the file-based era: returns no file writes now that SQLite owns transitions. Kept as the call-site shape so legacy callers continue to compose with the atomic-batch helpers without behaviour change."""
     del root, tasks, state, journal_messages
     return {}
 
@@ -204,6 +215,7 @@ def merged_state_for_runner_owned_write(
     state: WorkspaceState,
     protected_task_ids: list[str] | tuple[str, ...] = (),
 ) -> WorkspaceState:
+    """Rebase the runner's in-memory workspace state onto whatever the persisted state looks like, preserving the runner's edits to protected tasks while picking up concurrent CLI changes (queue reorders, future-task additions). Prevents the runner from clobbering operator edits made while a task was in flight."""
     latest_state = load_state(root)
     merged_state = state.model_copy(deep=True)
     merged_state.queue = _merge_queue_preserving_future_changes(
@@ -223,6 +235,7 @@ def persist_task_and_state(
     protected_task_ids: list[str] | tuple[str, ...] = (),
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
+    """Single-task convenience over `persist_tasks_and_state`; the common case used by stage transitions that mutate exactly one task plus the workspace queue."""
     persist_tasks_and_state(
         root,
         tasks=[task],
@@ -241,6 +254,7 @@ def persist_tasks_and_state(
     protected_task_ids: list[str] | tuple[str, ...] = (),
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
+    """Atomic write of tasks plus workspace state under the mutation guard; the runner-owned write path that picks up concurrent operator edits via `merged_state_for_runner_owned_write` before persisting."""
     # inline: state.records top-level-imports state.persist (would cycle).
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage  # noqa: PLC0415
 
@@ -270,6 +284,7 @@ def persist_tasks_and_state_without_runner_guard(
     protected_task_ids: list[str] | tuple[str, ...] = (),
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
+    """Same atomic write as `persist_tasks_and_state` but assumes the caller already holds the runner guard; used inside the runner's hot loop where the guard is held for the whole task lifetime."""
     # inline: state.records top-level-imports state.persist (would cycle).
     from litehive.state.records import ensure_runtime_ignored, task_state_for_storage  # noqa: PLC0415
 
@@ -298,6 +313,7 @@ def persist_task_and_state_without_runner_guard(
     protected_task_ids: list[str] | tuple[str, ...] = (),
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
+    """Single-task convenience over `persist_tasks_and_state_without_runner_guard`; the common case on the runner's hot path where one task transitions per write."""
     persist_tasks_and_state_without_runner_guard(
         root,
         tasks=[task],

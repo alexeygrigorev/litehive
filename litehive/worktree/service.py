@@ -127,18 +127,23 @@ class WorktreeService:
         return WorktreeSyncResult(changed=main_changed or changed, worktree_path=worktree)
 
     def collect_managed_worktrees(self) -> list[ManagedWorktree]:
+        """Enumerate worktrees the workspace owns so the CLI status path can list them."""
         return collect_managed_worktrees(self.root)
 
     def remove_cleanable_worktrees(self, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
+        """Drop worktrees for completed/abandoned tasks; called by the cleanup CLI and recovery flows."""
         return remove_cleanable_worktrees(self.root, dry_run=dry_run)
 
     def collect_rescue_candidates(self) -> list[RescueCandidate]:
+        """Find worktrees with unmerged work that need operator triage before deletion."""
         return collect_rescue_candidates(self.root)
 
     def apply_rescue_candidate(self, candidate: RescueCandidate) -> RescueResult:
+        """Carry out a single rescue (stash/branch/merge) chosen by the recovery CLI."""
         return apply_rescue_candidate(self.root, candidate)
 
     def inspect_task_worktree(self, task: TaskRecord) -> TaskWorktreeInspection:
+        """Snapshot a task's worktree state (existence, dirty files, ahead-of-main commits) for status/diagnostics readers."""
         worktree_rel = get_task_worktree_path(task)
         worktree_path = resolve_recorded_worktree_path(self.root, worktree_rel)
         if worktree_rel is None or worktree_path is None or not worktree_path.exists():
@@ -160,6 +165,7 @@ class WorktreeService:
         )
 
     def task_has_missing_recorded_worktree(self, task_id: str) -> bool:
+        """Detect a stale DB pointer to a worktree that was deleted out-of-band; recovery uses this to decide whether to re-create."""
         task = get_task(self.root, task_id)
         if task is None:
             return False
@@ -167,6 +173,7 @@ class WorktreeService:
         return inspection.worktree_rel is not None and not inspection.exists
 
     def clear_missing_recorded_worktree(self, task_id: str) -> None:
+        """Forget a recorded worktree path that no longer exists on disk so the next pre-exec creates a fresh one."""
         task = get_task(self.root, task_id)
         if task is None or not self.task_has_missing_recorded_worktree(task_id):
             return
@@ -174,15 +181,19 @@ class WorktreeService:
         save_task(self.root, task)
 
     def cleanup_terminal_task_worktree(self, task: TaskRecord) -> None:
+        """Tear down the worktree once the task reaches a terminal pipeline state; called by the lifecycle finisher."""
         cleanup_terminal_task_worktree(self.root, task)
 
     def require_clean_main_checkout(self) -> None:
+        """Guard merge/rescue flows that assume the main checkout has no uncommitted edits."""
         require_clean_main_checkout(self.root)
 
     def prune_stale_worktrees(self) -> None:
+        """Force git to drop bookkeeping for worktrees whose directories disappeared, so re-create can reuse the branch name."""
         prune_worktrees(self.root, expire_now=True)
 
     def registered_worktree_for_branch(self, branch: str) -> Path | None:
+        """Find an existing on-disk worktree git already tracks for ``branch`` so sync can reuse it instead of creating a duplicate."""
         porcelain = list_worktrees_porcelain(self.root)
 
         current_path: Path | None = None

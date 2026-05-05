@@ -62,6 +62,7 @@ class PipelineJournal(ABC):
     # ── public entry points used by the Runner ───────────────────────
 
     def task_started(self, task_id: str, stage: PipelineState) -> None:
+        """Record that the runner began driving a task; called once per task pickup so replay can find the start."""
         self._append(KIND_TASK_STARTED, task_id, {"stage": str(stage)})
 
     def transition(
@@ -73,6 +74,7 @@ class PipelineJournal(ABC):
         rule_description: str,
         delta: StateDelta,
     ) -> None:
+        """Record one state-machine edge after the runner fires it; the structured row feeds analytics like 'how often does testing reject?'."""
         self._append(
             KIND_TRANSITION,
             task_id,
@@ -87,9 +89,11 @@ class PipelineJournal(ABC):
         )
 
     def stop_requested(self, task_id: str, stage: PipelineState) -> None:
+        """Record an external stop intent (CLI ``stop``, daemon shutdown) so the gap between request and termination is reconstructable."""
         self._append(KIND_STOP_REQUESTED, task_id, {"stage": str(stage)})
 
     def task_finished(self, task_id: str, stage: PipelineState) -> None:
+        """Record that the task reached a terminal state; bookend for ``task_started`` used by replay and post-mortem reporting."""
         self._append(KIND_TASK_FINISHED, task_id, {"stage": str(stage)})
 
     # ── template method ──────────────────────────────────────────────
@@ -262,6 +266,7 @@ class SqliteJournal(PipelineJournal):
         return max_seq + 1
 
     def load_transitions(self, task_id: str) -> list[dict[str, Any]]:
+        """Replay the structured transition rows for one task; used by the diagnostics CLI and the recovery agent to reconstruct pipeline history."""
         with connect_workspace_db(self.workspace_root) as connection:
             rows = connection.execute(
                 """
@@ -288,6 +293,7 @@ class SqliteJournal(PipelineJournal):
         ]
 
     def load_lifecycle(self, task_id: str) -> list[dict[str, Any]]:
+        """Replay non-transition events (started/stop_requested/finished); paired with ``load_transitions`` to render a task's full timeline."""
         with connect_workspace_db(self.workspace_root) as connection:
             rows = connection.execute(
                 """

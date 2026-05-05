@@ -71,6 +71,7 @@ from litehive.worktree import resolve_recorded_worktree_path
 
 
 def _reset_pipeline_state(root: Path, task_id: str, preserve_run_memory: bool = False) -> None:
+    """Wipe the SQLite-side lifecycle/runtime rows for a task before it starts a new attempt; preserve_run_memory keeps recovery evidence so a requeue still has the prior failure context to feed back."""
     SqlitePersistence(root).reset_current_lifecycle_state(task_id, preserve_run_memory=preserve_run_memory)
 
 
@@ -104,6 +105,7 @@ def _persist_transition(
     before_queue: list[str],
     context: dict[str, object] | None = None,
 ) -> None:
+    """Bundle a task/queue mutation with its audit entry so every status transition emits one consistent journal+audit row; shared by every transition in this module to keep the audit shape uniform."""
 
     persist_task_and_state_without_runner_guard(
         root,
@@ -134,6 +136,7 @@ def _requeue_task_transition(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
+    """Reset a flagged/parked/closed task back to the implementation entry stage and put it on the queue; retracts already-merged pass entries so the next implementation attempt does not double-claim work that is already on main."""
 
     def _task_checkout_path(task: TaskRecord) -> Path:
         worktree_path = resolve_recorded_worktree_path(
@@ -211,6 +214,7 @@ def _requeue_task_transition(
 
 
 def _resume_task_transition(root: Path, task_id: str, front: bool = False) -> TaskRecord:
+    """Pick the right pipeline stage to re-enter for an interrupted/parked/flagged task and queue it from there; preserves the prior outcome only when the operator is genuinely resuming, not when they want a clean retry."""
 
     with workspace_lock(root):
         task = require_task(root, task_id)
@@ -276,6 +280,7 @@ def _abandon_task_transition(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
+    """Cancel an in-flight or parked task: signal the live subagent if any, mark the task closed/cancelled, and drop it from the queue; differs from close_task in that abandon is the operator-initiated kill path while close records a deliberate terminal outcome."""
 
     with workspace_lock(root):
         task = require_task(root, task_id)
@@ -319,6 +324,7 @@ _CLOSE_REASON_CODE_LABELS: dict[str, str] = {
 
 
 def _queue_task(state: WorkspaceState, task_id: str, front: bool = False) -> None:
+    """Place a task into the workspace queue without ever creating a duplicate entry; called by requeue and resume so a task that was already queued ends up at exactly one position."""
     state.queue = [item for item in state.queue if item != task_id]
     if front:
         state.queue.insert(0, task_id)
@@ -524,6 +530,7 @@ def _update_task_transition(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
+    """Edit task metadata or route the operator's intent into a terminal transition (close/park/requeue/abandon); uses ``...`` sentinels so callers can distinguish "leave field alone" from "set to None"."""
 
     if outcome is not ... and outcome is not None:
         return close_task(
@@ -665,6 +672,7 @@ def requeue_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
+    """Public CLI/agent entry for sending a flagged, parked, or closed task back to the implementation queue for another pass."""
     return _requeue_task_transition(
         root,
         task_id,
@@ -676,6 +684,7 @@ def requeue_task(
 
 
 def resume_task(root: Path, task_id: str, front: bool = False) -> TaskRecord:
+    """Public CLI/agent entry for putting an interrupted, parked, or stranded task back on the queue at the stage it was last working on."""
     return _resume_task_transition(root, task_id, front=front)
 
 
@@ -686,6 +695,7 @@ def abandon_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
+    """Public CLI/agent entry for the operator-initiated kill path that signals the live subagent and marks the task cancelled."""
     return _abandon_task_transition(
         root,
         task_id,
@@ -704,6 +714,7 @@ def close_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
+    """Public CLI/agent entry for terminating a task with a deliberate verdict (done, wont_do, deferred, duplicate, execution_cancelled) and optional follow-up reference."""
     return _close_task_transition(
         root,
         task_id,
@@ -722,6 +733,7 @@ def park_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
+    """Public CLI/agent entry for taking a task out of the queue without closing it, so the operator can pick it up again later via resume."""
     return _park_task_transition(
         root,
         task_id,
@@ -752,6 +764,7 @@ def update_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
+    """Public CLI/agent entry that either edits task metadata or routes the operator's intent into the matching terminal transition (close/park/requeue/abandon)."""
     return _update_task_transition(
         root,
         task_id,

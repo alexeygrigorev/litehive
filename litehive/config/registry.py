@@ -25,6 +25,7 @@ class WorkspaceRegistryError(RuntimeError):
 
 
 def workspace_registry_path() -> Path:
+    """Resolve the cross-workspace SQLite registry file under the user's litehive root; this is the single shared file that lets ``litehive status`` and discovery list every workspace the operator has ever initialized on this machine."""
     return litehive_root() / "workspaces.db"
 
 
@@ -95,6 +96,7 @@ def _registry_quick_check(connection: sqlite3.Connection) -> None:
 
 
 def workspace_registry_error() -> str | None:
+    """Run ``PRAGMA quick_check`` on the registry and return a short error string when the file is corrupt, or None when it is healthy or absent; consumed by status diagnostics to surface "registry broken" without taking the registry lock for a real query."""
     path = workspace_registry_path()
     if not path.exists():
         return None
@@ -107,6 +109,7 @@ def workspace_registry_error() -> str | None:
 
 
 def quarantine_corrupt_workspace_registry(reason: str) -> Path | None:
+    """Move a corrupt registry file aside under a timestamped ``.corrupt-*`` name and return the new path; called inline by the read/write helpers when SQLite raises ``DatabaseError`` so the next operation can recreate a fresh registry instead of failing forever."""
     path = workspace_registry_path()
     return _backup_corrupt_registry_file(path, reason=reason, label="workspace registry")
 
@@ -169,6 +172,7 @@ def _read_registered_workspace_paths(connection: sqlite3.Connection) -> list[Pat
 
 
 def list_registered_workspace_paths() -> list[Path]:
+    """Return every canonical workspace root the registry knows about, newest-first, after self-healing one round of corruption; called by workspace discovery (``litehive status``, multi-workspace dashboards) which must enumerate every workspace this user has ever initialized."""
     path = workspace_registry_path()
     with _REGISTRY_MUTEX:
         for attempt in range(2):
@@ -195,6 +199,7 @@ def _list_registered_workspace_paths(path: Path) -> list[Path]:
 
 
 def register_workspace_path(root: Path) -> None:
+    """Upsert a workspace root into the registry with the current timestamp, silently dropping unresolvable paths; called once during workspace bootstrap so future cross-workspace discovery can find this root without scanning the filesystem."""
     resolved = _canonical_workspace_root(root)
     if resolved is None:
         return

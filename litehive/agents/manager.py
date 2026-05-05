@@ -68,6 +68,7 @@ def _latest_report_files_changed(
     pipeline_state: str,
     source_subagent_id: str | None = None,
 ) -> list[str]:
+    """Read the most recent activity entry's normalized file list so finish/progress snapshots show *what this subagent actually touched*, not whatever the subagent self-reported."""
     latest = latest_task_activity_entry(
         root,
         task,
@@ -167,6 +168,7 @@ class SubagentManager(SessionMixin):
 
     @staticmethod
     def _agent_stage_for_task(task: TaskRecord, role: str | None = None) -> str:
+        """Pick the stage label exported as ``LITEHIVE_STAGE`` to the subagent and used to choose its report bucket; falls back to a role-default when the task has no current stage yet."""
         current_stage = task.runtime.pipeline.current_stage.stage
         if current_stage:
             return current_stage
@@ -186,6 +188,7 @@ class SubagentManager(SessionMixin):
 
     @classmethod
     def _report_stage_for_task(cls, task: TaskRecord, role: str | None = None) -> str:
+        """Narrow the stage to one ``StageReport`` accepts (reportable stages plus merge-resolving/recovering); guards record_stage_report from non-reporting pseudo-stages."""
         stage = cls._agent_stage_for_task(task, role)
         if stage in _REPORTABLE_STAGES or stage == PipelineState.RECOVERING:
             return stage
@@ -203,6 +206,7 @@ class SubagentManager(SessionMixin):
         max_turns: int | None = None,
         resume_session_id: str | None = None,
     ) -> SubagentResult:
+        """Drive one subagent end-to-end (folder, sandbox, live callbacks, transcript, report); the lifecycle stage handlers call this once per subagent invocation."""
         subagent_id = self._next_subagent_id(task)
         folder_name = f"{subagent_id}-{role}"
         base = task_dir(self.root, task) / "subagents" / folder_name
@@ -540,6 +544,7 @@ class SubagentManager(SessionMixin):
         prompt: str,
         execution: CLIExecutionResult,
     ) -> None:
+        """Live progress snapshot called from the engine's ``on_update`` callback; persists transcript/streams so an operator watching ``litehive status`` sees a running subagent's output before it exits."""
         engine = get_engine(ref.engine)
         transcript = self.render_execution_trace(
             ref.engine,
