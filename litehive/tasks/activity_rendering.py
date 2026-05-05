@@ -18,6 +18,7 @@ def append_activity_entry(root: Path, task: TaskRecord, entry: TaskActivityEntry
 
 
 def normalized_files_changed(paths: Iterable[str]) -> list[str]:
+    """Clean and de-duplicate the agent-reported ``files_changed`` list before it enters the activity feed; agents submit "none"/"-"/"" placeholders that would otherwise pollute downstream filesystem-validation checks."""
     normalized: list[str] = []
     seen: set[str] = set()
     for raw_path in paths:
@@ -32,10 +33,12 @@ def normalized_files_changed(paths: Iterable[str]) -> list[str]:
 
 
 def is_retracted_activity_entry(entry: TaskActivityEntry) -> bool:
+    """Detect entries already marked as retracted so the requeue-time check does not re-mark them; uses the marker string instead of a structured field because the entry shape predates a dedicated retraction flag."""
     return RETRACTED_FILESYSTEM_MARKER in entry.message
 
 
 def is_retractable_pass_entry(entry: TaskActivityEntry) -> bool:
+    """Identify pass-verdicts that the requeue-time filesystem check is allowed to retract; only implement/test/accept stages with claimed file edits qualify, because those are the verdicts whose validity depends on the worktree actually having changes."""
     return (
         entry.verdict == "pass"
         and entry.stage in _RETRACTABLE_STEPS
@@ -44,6 +47,7 @@ def is_retractable_pass_entry(entry: TaskActivityEntry) -> bool:
 
 
 def retract_activity_entry(entry: TaskActivityEntry) -> bool:
+    """Mutate a previously-passed entry in place to record that the filesystem check found no real changes; returns ``False`` when the entry was already retracted so callers don't double-mark or rewrite history."""
     if is_retracted_activity_entry(entry):
         return False
     entry.message = f"{entry.message.rstrip()}\n{RETRACTED_FILESYSTEM_MARKER}"
@@ -51,6 +55,7 @@ def retract_activity_entry(entry: TaskActivityEntry) -> bool:
 
 
 def render_task_activity(root: Path, task: TaskRecord, for_prompt: bool = False) -> str:
+    """Render the activity feed for either operator inspection or prompt context; the ``for_prompt`` branch withholds the body of retracted entries so subagents are not biased by reports the system has already invalidated."""
     activity_entries = load_task_activity(root, task)
     if not activity_entries:
         return ""

@@ -32,6 +32,7 @@ class BrokenVenvExecutable:
 
 
 def discover_workspace_venvs(root: Path) -> list[VenvCheckout]:
+    """Locate every ``.venv`` the workspace might dispatch into — the main checkout plus every per-task worktree — so the health probe walks all of them in one pass instead of leaving worktree venvs to fail at runtime."""
     root = root.resolve()
     checkouts: dict[Path, VenvCheckout] = {}
     main_venv = root / ".venv"
@@ -53,6 +54,7 @@ def discover_workspace_venvs(root: Path) -> list[VenvCheckout]:
 
 
 def probe_broken_venv_executables(root: Path) -> list[BrokenVenvExecutable]:
+    """Run a minimal ``--version`` against every executable in each venv's bin dir to surface the "uv cache clean nuked the symlink target" failure mode before it crashes a subagent launch; daemon startup gates on a clean result."""
     findings: list[BrokenVenvExecutable] = []
     for checkout in discover_workspace_venvs(root):
         bin_dir = _venv_bin_dir(checkout.venv_path)
@@ -73,6 +75,7 @@ def probe_broken_venv_executables(root: Path) -> list[BrokenVenvExecutable]:
 
 
 def broken_venv_issue_message(workspace_root: Path, finding: BrokenVenvExecutable) -> str:
+    """Format an operator-facing fix recipe for one broken venv entrypoint; embeds the concrete ``uv venv --clear`` command for the affected checkout so the operator can copy-paste rather than reconstruct paths."""
     del workspace_root
     checkout_root = finding.checkout.checkout_root
     venv_path = finding.checkout.venv_path
@@ -85,6 +88,7 @@ def broken_venv_issue_message(workspace_root: Path, finding: BrokenVenvExecutabl
 
 
 def daemon_broken_venv_message(workspace_root: Path, findings: list[BrokenVenvExecutable]) -> str:
+    """Aggregate per-finding fix recipes into the single error string the daemon prints when it refuses to start a worker pool over broken venvs."""
     lines = [
         "broken virtualenv entrypoints blocked pool start:",
         *[f"- {broken_venv_issue_message(workspace_root, finding)}" for finding in findings],

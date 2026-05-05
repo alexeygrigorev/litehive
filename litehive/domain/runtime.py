@@ -24,6 +24,7 @@ from .common import (
 
 
 def _json_enum_value(value: object) -> object:
+    """Pydantic JSON-serializer helper: render Enum members as their underlying value so persisted runtime state stays plain JSON instead of carrying ``ClassName.MEMBER`` text."""
     if isinstance(value, Enum):
         return value.value
     return value
@@ -55,6 +56,7 @@ class RuntimeStageState(BaseModel):
     duration_seconds: int = 0  # How long the stage has been running
 
     def model_copy(self, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
+        """Override pydantic's ``model_copy`` to silently drop unknown ``update`` keys; lifecycle code passes generic stage-update dicts and we don't want each new field to break old call sites."""
         if update is not None:
             update = {key: value for key, value in update.items() if key in type(self).model_fields}
         return super().model_copy(update=update, deep=deep)
@@ -190,6 +192,7 @@ class TaskOutcomeState(BaseModel):
 
     @field_serializer("kind", "reason_code", when_used="json")
     def _serialize_runtime_enum_value(self, value: object) -> object:
+        """Pydantic JSON serializer that flattens the OutcomeKind / OutcomeReasonCode enums to their string values; keeps stored runtime JSON portable."""
         return _json_enum_value(value)
 
 
@@ -272,6 +275,7 @@ class TaskRuntime(BaseModel):
         commit_sha: str | None,
         worktree_path: str | None,
     ) -> "TaskRuntime":
+        """Return a deep copy with the current git context stamped in; called right before persistence so the saved runtime always reflects where the task was committed."""
         runtime = self.model_copy(deep=True)
         runtime.pipeline.git.commit_sha = commit_sha
         runtime.pipeline.git.worktree_path = worktree_path
@@ -298,4 +302,5 @@ class RunnerStatusState(BaseModel):
 
     @field_serializer("status", when_used="json")
     def _serialize_status(self, value: object) -> object:
+        """Pydantic JSON serializer for ``RunnerExecutionStatus``; status surfaces and the heartbeat file consume the bare string value rather than ``RunnerExecutionStatus.IDLE``."""
         return _json_enum_value(value)

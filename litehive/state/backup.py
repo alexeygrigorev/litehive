@@ -45,6 +45,7 @@ def _parse_backup_path(path: Path) -> WorkspaceBackup | None:
 
 
 def list_workspace_backups(root: Path) -> list[WorkspaceBackup]:
+    """Enumerate persisted DB snapshots, newest first; consumed by the backup CLI listing, the prune routine, and the restore lookup."""
     backup_dir = workspace_path(root, "backups")
     if not backup_dir.exists():
         return []
@@ -57,6 +58,7 @@ def list_workspace_backups(root: Path) -> list[WorkspaceBackup]:
 
 
 def prune_workspace_backups(root: Path) -> list[Path]:
+    """Apply the daily-then-weekly retention policy: keep one snapshot per day for the most recent week, then one per ISO week up to four weeks. Stops the backups directory from growing without bound when the scheduled-backup helper runs hourly."""
     backups = list_workspace_backups(root)
     keep_paths: set[Path] = set()
     kept_days: set[date] = set()
@@ -87,6 +89,7 @@ def prune_workspace_backups(root: Path) -> list[Path]:
 
 
 def create_workspace_backup(root: Path, when: datetime | None = None) -> WorkspaceBackup:
+    """Take a consistent gzip snapshot of ``data.db`` using SQLite's online-backup API; the temp-file dance keeps a partial write from being mistaken for a finished backup if the runner is killed mid-snapshot."""
     when = when or datetime.now(UTC)
     backup_dir = workspace_path(root, "backups")
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -137,6 +140,7 @@ def create_scheduled_workspace_backup(
     root: Path,
     now: datetime | None = None,
 ) -> WorkspaceBackup | None:
+    """Take a backup at most once per calendar day, called from the daemon's hourly tick; returns ``None`` when today's backup already exists so we don't spam the backups directory with near-duplicates."""
     now = now or datetime.now(UTC)
     backups = list_workspace_backups(root)
     if backups and backups[0].created_at.date() == now.date():
@@ -145,6 +149,7 @@ def create_scheduled_workspace_backup(
 
 
 def restore_workspace_backup(root: Path, timestamp: str) -> WorkspaceBackup:
+    """Replace ``data.db`` with a previously-captured snapshot, then drop ``-wal``/``-shm`` so SQLite cannot replay journal frames from the pre-restore database; called by the operator-facing restore CLI."""
     backup = next((item for item in list_workspace_backups(root) if item.timestamp == timestamp), None)
     if backup is None:
         raise ValueError(f"backup not found for timestamp {timestamp}")

@@ -90,6 +90,8 @@ def sanitize_path_env(raw_path: str) -> str:
 
 
 class SandboxedAdapter(ExternalCLIAdapter):
+    """Wrap a heru engine adapter so every invocation is finalized through the workspace sandbox launcher; isolates "what command does the engine want to run" from "how do we confine that command on this host"."""
+
     def __init__(self, adapter: ExternalCLIAdapter, launcher: SandboxLauncher, engine_name: str, role: str) -> None:
         super().__init__(
             name=adapter.name,

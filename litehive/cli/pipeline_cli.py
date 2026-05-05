@@ -18,6 +18,7 @@ app = make_typer(invoke_without_command=True)
 
 @app.command("rules", help="List pipeline transition rules as readable rows")
 def pipeline_rules_command() -> int:
+    """Dump the in-process pipeline transition table so operators can audit which (stage, event) pairs the state machine accepts without reading source."""
     for rule in list_transitions():
         if isinstance(rule.from_state, frozenset):
             from_state = "|".join(str(stage) for stage in sorted(rule.from_state))
@@ -42,6 +43,7 @@ def pipeline_set_state_command(
     stage: Annotated[str, typer.Argument(help="Target stage")],
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
 ) -> None:
+    """Force a task's pipeline stage to an arbitrary value; an operator escape hatch when the state machine has parked a task in a stage automated transitions cannot exit."""
     store = SqlitePersistence(workspace)
     try:
         state = store.load(task_id)
@@ -60,6 +62,7 @@ def pipeline_reset_command(
     task_id: Annotated[str, typer.Argument(help="Task id")],
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
 ) -> None:
+    """Wipe all persisted pipeline state for one task so the next run starts fresh; used when accumulated retry counters, recovery triggers, or rejection history would otherwise short-circuit the runner."""
     SqlitePersistence(workspace).reset_all(task_id)
     print(f"task: {task_id}")
     print("reset: ok")
@@ -71,6 +74,7 @@ def pipeline_journal_command(
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
     limit: Annotated[int, typer.Option("--limit", "-n", help="Max transitions to show")] = 50,
 ) -> int:
+    """Render every persisted artifact for one task — current state, latest stage/recovery reports, recovery history, retry counters, and the lifecycle/transition log — so a debugger can reconstruct what happened without poking SQLite by hand."""
     journal = SqliteJournal(workspace)
     store = SqlitePersistence(workspace)
     try:

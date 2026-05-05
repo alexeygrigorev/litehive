@@ -53,6 +53,7 @@ from litehive.worktree.inspection import inspect_dirty_worktree_gate
 
 
 def register_root_commands(app: typer.Typer) -> None:
+    """Wire the workspace-level commands (status/health/engine/repair) onto the root typer app from `cli/app.py`."""
     app.command("status", help="Show workspace status")(status_command)
     app.command("health", help="Show workspace health diagnostics")(health_command)
     app.command("engine", help="Manage engine freezes and status")(engine_command)
@@ -60,6 +61,7 @@ def register_root_commands(app: typer.Typer) -> None:
 
 
 def print_status_issues(issues) -> int:
+    """Emit the diagnostics block at the bottom of `status` and return a non-zero exit code when any issue is severe enough to fail the command; tests monkey-patch this to silence diagnostics noise."""
     if not status_has_problems(issues):
         return 0
     print()
@@ -74,6 +76,7 @@ def repair_summary_lines(
     include_empty: bool,
     include_extended_fields: bool,
 ) -> list[str]:
+    """Render the workspace-repair summary as printable lines; `result_label` lets the same formatter serve both `repair` (label='repaired') and the implicit cleanup that runs from other commands."""
     del include_extended_fields
     lines = [
         f"{result_label}: {'yes' if summary.mutated else 'no'}",
@@ -97,6 +100,7 @@ def status_command(
     workspace: WorkspaceOption = Path.cwd(),
     full: Annotated[bool, typer.Option(help="Include the full per-task status dump.")] = False,
 ) -> int:
+    """Render the operator-facing workspace overview (active task, queue, recent activity, engine availability) and surface diagnostics at the bottom; the `--full` mode adds the per-task pipeline dump for debugging."""
     root = workspace.resolve()
     status = collect_task_pipeline_status(root, diagnostics=full)
     if full:
@@ -150,6 +154,7 @@ def status_command(
 
 
 def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
+    """Reconcile workspace state: clear stale active-task pointers, requeue interrupted tasks, and normalize terminal entries; the explicit `repair` command for operators when the daemon is not picking up where it left off."""
     ensure_workspace(workspace)
     start_time = time.perf_counter()
     try:
@@ -189,6 +194,7 @@ class _QuotaHealth:
 
 
 def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
+    """Render the workspace-health report (active/flagged tasks, worktrees, engine quotas, daemon, recent completions) and exit non-zero when something needs operator attention; the dashboard command driven by external monitoring."""
     ensure_workspace(workspace)
     root = workspace.resolve()
     state = load_state(root)
@@ -247,6 +253,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 
 def health_daemon_status(root: Path) -> tuple[str, str]:
+    """Return a (status, pid) pair for the workspace daemon as the health command renders it; tests use this directly to assert the running/stopped surface without invoking the full report."""
     entry = daemon_metadata(root)
     if entry is None or entry.get("status") != "running":
         return ("stopped", "-")
@@ -255,6 +262,7 @@ def health_daemon_status(root: Path) -> tuple[str, str]:
 
 
 def collect_quota_health() -> list[_QuotaHealth]:
+    """Probe each configured engine's quota provider once and return per-engine health rows in `ENGINE_CHOICES` order so `health` always renders the engines in a stable lineup."""
     claude_status = check_claude_quota()
     codex_status = check_codex_quota()
     copilot_status = check_copilot_quota()
@@ -278,6 +286,7 @@ def quota_health(
     engine: str,
     status: UsageStatus | object,
 ) -> _QuotaHealth:
+    """Translate a heru `UsageStatus` (or unsupported sentinel) into the renderable `_QuotaHealth` shape; tolerates engines whose provider returns a different schema by flagging them as `unavailable` with a problem bit so operators see them as failures rather than silent gaps."""
     error = getattr(status, "error", None)
     if error is not None:
         return _QuotaHealth(engine, "unavailable", error)

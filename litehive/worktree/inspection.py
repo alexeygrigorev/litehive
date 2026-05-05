@@ -147,6 +147,7 @@ def worktree_committed_changes(root: Path, worktree_path: Path) -> list[str]:
 
 
 def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
+    """Build the set of paths an interrupted task is allowed to leave dirty: its own metadata directory plus everything its activity log already recorded as changed."""
     paths: set[PurePosixPath] = set()
     paths.add(PurePosixPath(".litehive") / "tasks" / f"{task.id}-{task.slug}")
     for entry in load_task_activity(root, task):
@@ -159,6 +160,7 @@ def _unexpected_dirty_paths(
     dirty_entries: list[str],
     allowed_paths: set[PurePosixPath],
 ) -> list[str]:
+    """Filter status entries to the paths a resuming task did NOT already claim, ignoring tmpdir noise and unowned ``.litehive/`` files."""
     unexpected = []
     for entry in dirty_entries:
         if len(entry) < 3:
@@ -184,6 +186,7 @@ def _task_can_resume_with_owned_dirty_paths(
     task: TaskRecord,
     dirty_entries: list[str],
 ) -> bool:
+    """Return True when an interrupted task can claim ownership of the dirty main checkout — used by ``inspect_dirty_worktree_gate`` to disambiguate which task should resume."""
     if task.status != TaskStatus.INTERRUPTED:
         return False
     if task.pipeline_status in {PipelineStatus.BACKLOG, PipelineStatus.DONE}:

@@ -51,6 +51,11 @@ class MergeAgent(RoleAgent):
     RETRY_ATTEMPT_INSTRUCTIONS = RETRY_ATTEMPT_GUIDANCE
 
     def build_prompt(self, state: TaskState) -> dict[str, Any]:
+        """Add the conflict file list and merge attempt counter to the base prompt so the resolver agent knows what to fix.
+
+        Called by the lifecycle runner when a commit-stage merge conflict
+        routes execution into the merge-resolving node.
+        """
         base = super().build_prompt(state)
         if state.merge_context is not None:
             conflict_files = list(state.merge_context.conflict_files)

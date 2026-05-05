@@ -22,6 +22,7 @@ db_app = make_typer(invoke_without_command=True)
 
 
 def _run_next_task(root: Path):
+    """Pop the next queued task and run it; tests monkey-patch this seam so they can drive the bare-`litehive` entry point without spinning up a real runner."""
     task = dequeue_next_task(root)
     if task is None:
         return None
@@ -30,6 +31,7 @@ def _run_next_task(root: Path):
 
 @app.callback(invoke_without_command=True)
 def root(ctx: typer.Context) -> int | None:
+    """Default action when the user runs bare `litehive`: try to dequeue and run the next task, falling back to the workspace `status` view when the queue is empty."""
     if ctx.invoked_subcommand is not None:
         return None
     result = _run_next_task(Path.cwd())
@@ -54,6 +56,7 @@ app.add_typer(agent_app, name="agent", help="Agent-restricted internal commands"
 
 
 def main() -> int:
+    """Process entry point used by the `litehive` console script; runs the typer app outside click's standalone mode so we can translate exit/abort/click errors into integer exit codes ourselves."""
     try:
         result = app(standalone_mode=False)
     except click.exceptions.Exit as exc:

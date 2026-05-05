@@ -101,6 +101,7 @@ def dispatch_status(argv: list[str]) -> int:
 
 
 def main() -> int:
+    """Cold-start CLI dispatcher: route ``status``, ``agent``, ``task``, and ``pipeline`` to the smallest typer/click sub-app that handles them, falling back to the full CLI app only when needed; the goal is to keep ``litehive status`` (the hot path) sub-100ms by skipping the global Click tree."""
     argv = sys.argv[1:]
 
     agent_role = os.environ.get("LITEHIVE_AGENT_ROLE")

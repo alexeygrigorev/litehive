@@ -25,17 +25,17 @@ logger = logging.getLogger("litehive.worktree.paths")
 
 
 def task_worktree_path(root: Path, task: TaskRecord) -> Path:
-    """Get the expected worktree path for a task."""
+    """Compute the canonical ``<workspace>/worktrees/<id>-<slug>`` location a task's worktree should occupy; used by creation and lookup so both sides agree on placement."""
     return workspace_path(root, "worktrees") / f"{task.id}-{task.slug}"
 
 
 def task_worktree_branch(task: TaskRecord) -> str:
-    """Get the branch name for a task worktree."""
+    """Return the namespaced ``litehive/<id>-<slug>`` git branch a task's worktree commits to; the ``litehive/`` prefix keeps these separate from human-authored branches."""
     return f"litehive/{task.id}-{task.slug}"
 
 
 def is_managed_worktree_path(root: Path, worktree_path: str | None) -> bool:
-    """Check if a worktree path is managed by Litehive."""
+    """Decide whether a recorded path belongs to the litehive worktree tree; rescue and cleanup use this to refuse touching paths the user moved or hand-edited."""
     if not worktree_path:
         return False
     path = Path(worktree_path).expanduser()
@@ -48,7 +48,7 @@ def is_managed_worktree_path(root: Path, worktree_path: str | None) -> bool:
 
 
 def resolve_recorded_worktree_path(root: Path, worktree_path: str | None) -> Path | None:
-    """Resolve a recorded worktree path to an absolute path."""
+    """Turn a stored worktree path string back into an absolute ``Path``, treating relative entries as workspace-relative; returns ``None`` when no path was recorded."""
     if not worktree_path:
         return None
     path = Path(worktree_path).expanduser()
@@ -58,7 +58,7 @@ def resolve_recorded_worktree_path(root: Path, worktree_path: str | None) -> Pat
 
 
 def serialize_worktree_path(path: Path) -> str:
-    """Serialize a worktree path for storage."""
+    """Render a worktree path into the canonical absolute string stored on the task record so reads via ``resolve_recorded_worktree_path`` round-trip cleanly."""
     return str(path.expanduser().resolve())
 
 

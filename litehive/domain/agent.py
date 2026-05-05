@@ -41,6 +41,7 @@ class SubagentInactivityTimeout(RuntimeError):
     """Raised when a live subagent stops producing stdout for too long."""
 
     def __init__(self, execution: CLIExecutionResult, idle_seconds: float, limit_seconds: float) -> None:
+        """Capture the live execution context plus the timing that crossed the inactivity threshold so the runner can attribute the kill reason in its outcome record."""
         self.execution = execution
         self.idle_seconds = idle_seconds
         self.limit_seconds = limit_seconds

@@ -29,6 +29,7 @@ class RebuildSafetyReport:
 
 
 def sqlite_task_ids(db_path: Path) -> set[str]:
+    """Enumerate task ids the live SQLite database still owns; the rebuild-safety check compares this set against what the replay source can reconstruct, so a corrupt DB is treated as "no rows" rather than blocking rebuild forever."""
     if not db_path.exists():
         return set()
     try:
@@ -47,6 +48,7 @@ def sqlite_task_ids(db_path: Path) -> set[str]:
 
 
 def task_artifact_dir_ids(root: Path) -> set[str]:
+    """Discover task ids that have on-disk artifact directories; reported alongside DB and replay coverage so an operator can see when artifacts exist for tasks the DB no longer knows about."""
     tasks_dir = root / ".litehive" / "tasks"
     if not tasks_dir.exists():
         return set()
@@ -66,6 +68,7 @@ def task_artifact_dir_ids(root: Path) -> set[str]:
 
 
 def event_log_replay_task_ids(root: Path) -> set[str]:
+    """Compute which task ids would be reconstructed if we replayed the workspace's append-only task-event log; deletion events shrink the set so a tombstoned task does not trigger a "missing from replay" failure."""
     path = workspace_path(root, TASK_EVENT_LOG_NAME)
     if not path.exists():
         return set()
@@ -101,6 +104,7 @@ def assert_database_rebuild_safe(
     replay_task_ids: Iterable[str] | None = None,
     operation: str,
 ) -> RebuildSafetyReport:
+    """Refuse a destructive DB rebuild when the replay source cannot account for every task row; called by ``litehive rebuild``/migration paths so we never silently drop tasks that have evidence of work."""
     sqlite_ids = sqlite_task_ids(db_path)
     artifact_ids = task_artifact_dir_ids(root)
     replay_ids = set(event_log_replay_task_ids(root) if replay_task_ids is None else replay_task_ids)
@@ -131,6 +135,7 @@ def assert_database_rebuild_safe(
 
 
 def backup_database_before_rebuild(root: Path, db_path: Path, label: str) -> Path | None:
+    """Snapshot the current DB into ``backups/`` before a rebuild touches it; the timestamped filename and operator-supplied label give the operator a known-good rollback target if the rebuild is wrong."""
     if not db_path.exists():
         return None
     backup_dir = workspace_path(root, "backups")

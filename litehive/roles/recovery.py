@@ -77,6 +77,14 @@ class RecoveryAgent(RoleAgent):
     RETRY_ATTEMPT_INSTRUCTIONS = RETRY_ATTEMPT_GUIDANCE
 
     def build_prompt(self, state: TaskState) -> dict[str, Any]:
+        """Augment the base prompt with the recovery-only diagnostic payload.
+
+        Pulls the active trigger, recovery history, repeated-fingerprint
+        signal, failed subagent transcript/report, and worktree scope analysis
+        so the recovery agent can diagnose the failure without re-running
+        the failed stage. Called by the lifecycle runner when entering the
+        recovering node.
+        """
         base = super().build_prompt(state)
         trigger = state.active_recovery_trigger
         task_record = None
@@ -124,6 +132,13 @@ class RecoveryAgent(RoleAgent):
         return base
 
     def verdict_to_event(self, verdict: AgentVerdict) -> Event:
+        """Translate a recovery agent verdict into a recovery lifecycle event.
+
+        Recovery does not emit ``Pass``/``Reject`` like a stage agent — it
+        emits ``RecoverySucceeded`` (with a resume target and disposition),
+        ``RecoveryBudgetHit``, or ``RecoveryFailed``. Called by the agent
+        node when the recovery turn returns to the lifecycle runner.
+        """
         outcome = verdict.outcome.lower()
         if outcome == "resume":
             target = str(verdict.metadata.get("target_stage") or "").strip()
@@ -145,6 +160,7 @@ class RecoveryAgent(RoleAgent):
 
 
 def _recovery_history_key(item: dict[str, Any]) -> tuple[str | None, str, str, str, str | None]:
+    """Identity tuple for de-duplicating runtime and TaskState recovery entries that describe the same attempt."""
     return (
         item.get("origin_stage"),
         str(item.get("fingerprint") or ""),
@@ -155,6 +171,7 @@ def _recovery_history_key(item: dict[str, Any]) -> tuple[str | None, str, str, s
 
 
 def _state_recovery_payload(outcome: Any) -> dict[str, Any]:
+    """Flatten a TaskState recovery outcome into the prompt-history shape so it can be merged with runtime entries."""
     trigger = outcome.trigger
     return {
         "origin_stage": trigger.origin_stage,
@@ -171,10 +188,17 @@ def _state_recovery_payload(outcome: Any) -> dict[str, Any]:
 
 
 def _runtime_recovery_projection_payload(outcome: RuntimeRecoveryOutcome) -> dict[str, Any]:
+    """JSON-shape a runtime recovery projection so it shares the merged-history schema with TaskState entries."""
     return outcome.model_dump(mode="json")
 
 
 def _merged_recovery_history_payload(state: TaskState, task_record: Any) -> list[dict[str, Any]]:
+    """Combine runtime and TaskState recovery histories into a single deduped list for the recovery prompt.
+
+    Both stores can hold partial records of the same attempt depending on
+    when the daemon and task state were updated, so the merge has to dedupe
+    by attempt identity rather than trust either source on its own.
+    """
     merged: list[dict[str, Any]] = []
     seen: set[tuple[str | None, str, str, str, str | None]] = set()
     if task_record is None:
@@ -195,6 +219,12 @@ def _merged_recovery_history_payload(state: TaskState, task_record: Any) -> list
 
 
 def _same_recovery_path(current_trigger: Any, prior: dict[str, Any]) -> bool:
+    """Return True when a prior recovery attempt shares origin stage and failure fingerprint with the current trigger.
+
+    Used to detect that the recovery agent is being asked to fix the same
+    failure twice; an empty fingerprint on either side does not count as
+    a match because we cannot prove repetition without one.
+    """
     current_origin = pipeline_stage_key(current_trigger.origin_stage)
     prior_origin = pipeline_stage_key(prior.get("origin_stage"))
     current_fingerprint = str(current_trigger.failure_fingerprint.fingerprint or "")
@@ -210,6 +240,12 @@ def _repeated_recovery_fingerprint_payload(
     trigger: Any,
     recovery_history: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
+    """Surface a repeated-failure signal to the recovery prompt so the agent can refuse to re-route the same fix.
+
+    When the same origin/fingerprint shows up across non-budget-hit prior
+    attempts, the recovery role guidance tells the agent to file a follow-up
+    task and reject instead of resuming/advancing again.
+    """
     if trigger is None:
         return None
     matches = [
@@ -230,6 +266,13 @@ def _repeated_recovery_fingerprint_payload(
 
 
 def _recovery_source_checkout(root: Path | None) -> tuple[str | None, str | None]:
+    """Resolve the Litehive source checkout the recovery agent should patch in, separate from the task workspace.
+
+    Recovery fixes Litehive infrastructure bugs, not the task code, so it
+    runs against the configured ``litehive_source_path`` checkout when one
+    is set. Returns the raw configured value plus the directory the agent
+    should treat as its execution root.
+    """
     if root is None:
         return None, None
     config = load_config(root)
@@ -251,6 +294,7 @@ def _recovery_source_checkout(root: Path | None) -> tuple[str | None, str | None
 
 
 def _recovery_source_checkout_diagnostic(root: Path, exc: OSError | ValueError) -> dict[str, str]:
+    """Render a config-load failure into a prompt-friendly diagnostic so the recovery agent can see why its source path is missing."""
     return {
         "kind": "workspace_config_load_failed",
         "config_root": str(root),
@@ -260,6 +304,13 @@ def _recovery_source_checkout_diagnostic(root: Path, exc: OSError | ValueError) 
 
 
 def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) -> dict[str, Any] | None:
+    """Collect the failed subagent's session, report, transcript, stdout, stderr, and exit code for the recovery prompt.
+
+    Recovery diagnosis depends on knowing exactly what the prior agent
+    produced (or failed to produce) before it stopped, so this stitches
+    together the runtime state, the persisted SubagentRef, and the
+    on-disk artifacts under the latest subagent base directory.
+    """
     if root is None or task_record is None:
         return None
     subagent_base = latest_subagent_base(root, task_record)
@@ -353,6 +404,7 @@ def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) ->
 
 
 def _read_subagent_artifact(subagent_base: Path, artifact_name: str) -> str:
+    """Best-effort read of a subagent artifact (stdout/stderr) for the recovery diagnostics payload, returning empty on any IO error."""
     artifact_path = resolve_artifact_path(subagent_base, artifact_name)
     if artifact_path is None:
         return ""

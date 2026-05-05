@@ -34,6 +34,7 @@ app = make_typer(invoke_without_command=True)
 
 @app.callback(invoke_without_command=True)
 def queue_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> int | None:
+    """Render the active task, queue, and resumable tasks when `litehive queue` runs without a subcommand."""
     if ctx.invoked_subcommand is not None:
         return None
     config = load_config(workspace)
@@ -79,6 +80,7 @@ def move(
     position: Annotated[int, typer.Argument(help="Target queue position (1-based)")],
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
+    """Reorder a queued task to an explicit slot so operators can hand-prioritize without restarting the queue."""
     ensure_workspace(workspace)
     try:
         state = move_queued_task(workspace, task_id, position)
@@ -94,6 +96,7 @@ def move(
 def promote(
     task_id: Annotated[str, typer.Argument(help="Queued task id")], workspace: WorkspaceOption = Path.cwd()
 ) -> int:
+    """Jump a task to position 1, resuming it from a paused/closed state when needed so the next runner picks it up."""
     ensure_workspace(workspace)
     try:
         task = require_task(workspace, task_id)
@@ -123,6 +126,7 @@ def requeue(
     front: Annotated[bool, typer.Option(help="Insert at the front of the queue")] = False,
     force: Annotated[bool, typer.Option(help="Force requeue after repeated flagging")] = False,
 ) -> int:
+    """Send a parked/flagged/closed task back through the implementation entry stage; for already-done tasks delegates to `recover` so committed code is not reverted."""
     ensure_workspace(workspace)
     task = get_task_record(workspace, task_id)
     if task is not None and (task.pipeline_status == PipelineStatus.DONE or task.status == TaskStatus.DONE):
@@ -150,6 +154,7 @@ def resume(
     workspace: WorkspaceOption = Path.cwd(),
     front: Annotated[bool, typer.Option(help="Insert at the front of the queue")] = False,
 ) -> int:
+    """Re-enqueue a paused/closed task at its saved pipeline stage so it picks up where it left off rather than restarting from grooming."""
     ensure_workspace(workspace)
     try:
         task = resume_task(workspace, task_id, front=front)
@@ -170,6 +175,7 @@ def resume(
 
 @app.command("stop", help="Stop the current active task cleanly")
 def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
+    """Halt the active task cleanly so the runner exits at the next checkpoint and the workspace returns to an idle state."""
     ensure_workspace(workspace)
     try:
         summary = stop_current_task(workspace)
@@ -185,6 +191,7 @@ def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 
 def prioritize(task_ids: list[str], workspace: Path) -> int:
+    """Bulk-move a list of queued ids to the front in the supplied order; shared core for the `prioritize` command and other callers that build the id list themselves."""
     ensure_workspace(workspace)
     try:
         state = prioritize_queued_tasks(workspace, task_ids)
@@ -203,10 +210,12 @@ def prioritize_command(
     task_ids: Annotated[list[str], typer.Argument(help="Queued task ids to move to the front")],
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
+    """Typer wrapper for the `prioritize` command; exists separately so the underlying helper can be reused without typer-bound argument parsing."""
     return prioritize(task_ids, workspace)
 
 
 def recover(task_id: str, workspace: Path) -> int:
+    """Requeue a task that already reached the done/committed state without rolling back any code; called by the `recover` command and by `requeue` when it detects a completed task."""
     ensure_workspace(workspace)
     try:
         task = recover_completed_task(workspace, task_id)
@@ -229,6 +238,7 @@ def recover_command(
     task_id: Annotated[str, typer.Argument(help="Task id to recover")],
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
+    """Typer wrapper for `recover`; exists separately so the helper can be invoked from inside other queue commands (e.g. `requeue` for already-done tasks)."""
     return recover(task_id, workspace)
 
 
@@ -242,6 +252,7 @@ def switch(
     workspace: WorkspaceOption = Path.cwd(),
     reason: Annotated[str, typer.Option(help="Why the engine switch happened")] = ...,
 ) -> int:
+    """Reassign a task's engine, interrupting the current runner if the task is active; the required `--reason` is captured in the journal so engine churn is auditable."""
     ensure_workspace(workspace)
     try:
         summary = switch_task_engine(workspace, task_id, engine=engine, reason=reason)

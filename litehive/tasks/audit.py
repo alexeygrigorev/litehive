@@ -43,12 +43,14 @@ class TaskAuditEntry(BaseModel):
 
 
 def snapshot_task_audit_state(task: TaskRecord | None) -> TaskAuditState | None:
+    """Freeze a task's status fields into the lightweight before/after shape the audit log stores; capturing the snapshot at the call site lets the caller mutate the live record afterwards without losing the original values."""
     if task is None:
         return None
     return TaskAuditState(status=str(task.status), pipeline_status=str(task.pipeline_status))
 
 
 def queue_position(queue: list[str] | tuple[str, ...], task_id: str) -> int | None:
+    """Locate a task within the runtime queue ordering for audit context; returns a 1-indexed position so the audit log reads naturally to operators ("position 3 of 7") rather than as raw list indices."""
     try:
         return list(queue).index(task_id) + 1
     except ValueError:
@@ -67,6 +69,7 @@ def build_task_audit_entry(
     context: dict[str, Any] | None = None,
     created_at: str | None = None,
 ) -> TaskAuditEntry:
+    """Compose a structured audit row from the call-site's before/after snapshots; used by every task-mutation surface (CLI, recovery, lifecycle) so the schema stays uniform and queryable."""
     return TaskAuditEntry(
         task_id=task_id,
         created_at=created_at or utcnow(),
@@ -84,6 +87,7 @@ def build_task_audit_entry(
 
 
 def insert_task_audit_entries(connection: sqlite3.Connection, entries: Iterable[TaskAuditEntry]) -> None:
+    """Bulk-insert audit rows on an open connection; used by the persistence layer so an audit batch lands in the same transaction as the task-state mutation it describes."""
     rows = [
         (
             entry.task_id,
@@ -126,6 +130,7 @@ def insert_task_audit_entries(connection: sqlite3.Connection, entries: Iterable[
 
 
 def append_task_audit_entries(root: Path, entries: Iterable[TaskAuditEntry]) -> None:
+    """Top-level "log these audit entries" call: writes audit rows and the parallel task-event entries in one transaction so external observers see the audit and the event log progress together."""
     entry_list = list(entries)
     if not entry_list:
         return
@@ -147,6 +152,7 @@ def load_task_audit_entries(
     action: str | None = None,
     limit: int = 20,
 ) -> list[TaskAuditEntry]:
+    """Read recent audit rows for the operator-facing audit/diagnostics CLI; returns most-recent-first because the audit UI is a tail view, not a forward replay."""
     query = """
         SELECT
             id,

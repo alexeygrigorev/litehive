@@ -92,6 +92,13 @@ class RoleAgent(AgentNode):
         self.prompt_context = prompt_context or PromptContext()
 
     def build_prompt(self, state: TaskState) -> dict[str, Any]:
+        """Assemble the typed prompt payload every stage agent receives at turn start.
+
+        Bundles the role/stage identity, retry counters, layered instruction
+        text, last report, the rejection that should drive this turn, the
+        failed-run history, and runner hooks. Called by the lifecycle runner
+        (and overridden by stage-specific subclasses to add their extras).
+        """
         last_rejection = self._last_rejection_for_prompt(state)
         instruction_layers, instruction_variant = self._assemble_instruction_layers(last_rejection)
         runner_hooks = self._runner_hooks_for_stage()
@@ -155,6 +162,12 @@ class RoleAgent(AgentNode):
         ]
 
     def _assemble_instruction_layers(self, last_rejection: LastRejection | None) -> tuple[list[tuple[str, str]], str]:
+        """Compose the ordered (label, text) instruction layers and the fresh/retry variant for this turn.
+
+        Layer ordering and the md-overrides-startup precedence are the
+        contract between built-in role guidance, workspace overlays, and
+        process profiles — that contract is what this assembler enforces.
+        """
         layers: list[tuple[str, str]] = []
 
         role_instructions = (self.ROLE_INSTRUCTIONS or self.INSTRUCTIONS).strip()
@@ -183,6 +196,12 @@ class RoleAgent(AgentNode):
         return layers, instruction_variant
 
     def _attempt_instruction_layer(self, last_rejection: LastRejection | None) -> tuple[str, str, str]:
+        """Pick the fresh-attempt or retry-attempt instruction block based on whether a rejection drives this turn.
+
+        Returns the (label, text, variant) triple consumed by
+        ``_assemble_instruction_layers``; variant is also exposed in the
+        prompt so the agent can see whether it is on a fresh or retry pass.
+        """
         if last_rejection is not None:
             retry_text = self.RETRY_ATTEMPT_INSTRUCTIONS.strip()
             if retry_text:
@@ -195,11 +214,13 @@ class RoleAgent(AgentNode):
         return "", "", "fresh"
 
     def _startup_guidance_for(self, key: str) -> list[str]:
+        """Merge built-in startup guidance with workspace-config additions for the given role or ``"all"`` key."""
         merged = list(default_startup_guidance().get(key, []))
         merged.extend(self.prompt_context.startup_guidance.get(key, []))
         return merged
 
     def _load_overlay_md(self, key: str) -> str | None:
+        """Read the per-workspace ``.litehive/agents/{key}.md`` overlay if present; this file fully replaces startup guidance for that key."""
         root = self.prompt_context.workspace_root
         if root is None:
             return None
@@ -211,6 +232,11 @@ class RoleAgent(AgentNode):
 
 
 def _last_rejection_payload(last_rejection: LastRejection) -> dict[str, str]:
+    """Project the persisted rejection record down to the fields the agent prompt is allowed to see.
+
+    Drops storage-only metadata (timestamps, internal ids) so the
+    agent sees only source/reason/phase plus optional classification.
+    """
     payload = {
         "source": last_rejection.source,
         "reason": last_rejection.reason,
@@ -222,6 +248,7 @@ def _last_rejection_payload(last_rejection: LastRejection) -> dict[str, str]:
 
 
 def _failed_run_history_payload(state: TaskState) -> list[dict[str, Any]]:
+    """Flatten the failed-run history map into a stably-ordered list for the agent prompt so retry decisions can use it as context."""
     return [
         {
             "key": key,
@@ -249,6 +276,14 @@ _IMPLEMENTING_RETRY_ORIGIN_BY_PHASE: dict[str, str] = {
 
 
 def _latest_reject_stage_for_implementing(root: Path, task_id: str) -> str | None:
+    """Find which stage actually rejected the task and routed it back to implementing this turn.
+
+    Implementing can be re-entered from implementing, testing, or accepting,
+    so the SWE prompt needs the freshest reject across all three rather than
+    whatever was last stored under the implementing key. Walks the pipeline
+    transition journal in reverse and returns the origin stage of the most
+    recent ``Reject`` event whose source stage is one of those three.
+    """
     try:
         from litehive.lifecycle.journal import SqliteJournal  # noqa: PLC0415
 

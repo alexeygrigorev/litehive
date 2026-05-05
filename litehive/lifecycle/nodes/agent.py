@@ -160,6 +160,7 @@ class AgentNode(Node):
         sleep_fn: Callable[[float], None] | None = None,
         grace_period_seconds: int | None = None,
     ) -> None:
+        """Wire the node to its engine selector, session store, and retry budgets; the lifecycle factory constructs one ``AgentNode`` per role-stage and reuses it across tasks."""
         self.name = name
         self.selector = selector
         self.sessions = session_provider
@@ -177,6 +178,7 @@ class AgentNode(Node):
             self.grace_period_seconds = grace_period_seconds
 
     def build_prompt(self, state: TaskState) -> Any:
+        """Hook subclasses override to assemble the role-specific prompt; the base raises so a misregistered node fails loudly instead of running an empty turn."""
         raise NotImplementedError
 
     def build_nudge_prompt(self, state: TaskState, original_prompt: Any) -> Any:
@@ -198,6 +200,7 @@ class AgentNode(Node):
         return original_prompt
 
     def run(self, state: TaskState) -> Event:
+        """Drive the engine-selection outer loop: build the prompt once, then keep asking the selector for a fresh engine until one resolves to an Event or every engine is excluded."""
         prompt = self.build_prompt(state)
         excluded: set[str] = set()
         last_exc: Exception | None = None
@@ -289,6 +292,7 @@ class AgentNode(Node):
         return EngineBlockedError(f"retry budget ({self.retry_budget}) exhausted on {engine.name}: {last_exc}")
 
     def verdict_to_event(self, verdict: AgentVerdict) -> Event:
+        """Translate the adapter-level ``AgentVerdict`` into the state-machine Event vocabulary so the runner stays oblivious to engine response shapes."""
         outcome = verdict.outcome.lower()
         if outcome == "pass":
             return Pass(metadata=dict(verdict.metadata or {}))
@@ -309,6 +313,7 @@ class AgentNode(Node):
 
 
 def _metadata_classification(metadata: dict[str, Any]) -> str | None:
+    """Recover a verdict classification that adapters tucked into ``metadata`` instead of the dedicated field, so older engine integrations still produce typed Reject events."""
     for key in ("verdict_classification", "classification"):
         value = metadata.get(key)
         if isinstance(value, str) and value.strip():

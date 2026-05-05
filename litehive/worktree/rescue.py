@@ -289,6 +289,7 @@ def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResu
 
 
 def _worktree_commits_ahead_of_main(root: Path, worktree_path: Path) -> list[str]:
+    """Return commit SHAs the worktree carries past its fork point with main, oldest-first."""
     main_head = current_head(root) or "HEAD"
     fork_point = git_stdout_or_none(worktree_path, "merge-base", main_head, "HEAD")
     if not fork_point:
@@ -297,6 +298,7 @@ def _worktree_commits_ahead_of_main(root: Path, worktree_path: Path) -> list[str
 
 
 def _worktree_patch_already_on_main(root: Path, wt_head: str, main_head: str) -> bool:
+    """Detect that the worktree's diff is already represented on main so rescue can short-circuit to ``already_landed`` instead of duplicating commits."""
     lines = cherry_check(root, main_head, wt_head)
     if lines is None:
         return False
@@ -304,11 +306,13 @@ def _worktree_patch_already_on_main(root: Path, wt_head: str, main_head: str) ->
 
 
 def _is_task_metadata_path(path: str, task_id: str) -> bool:
+    """Return True when ``path`` lives under the per-task ``.litehive/tasks/<id>-...`` metadata tree, which rescue treats as droppable noise rather than real source changes."""
     metadata_prefix = f".litehive/tasks/{task_id}-"
     return path.startswith(metadata_prefix)
 
 
 def _resolve_metadata_conflicts(root: Path, paths: list[str]) -> None:
+    """Auto-resolve cherry-pick conflicts that touch only per-task metadata by taking ``ours`` and re-staging, so a metadata-only collision does not stall rescue."""
     if not paths:
         return
     checkout_ours(root, paths)
@@ -321,12 +325,14 @@ def _resolve_metadata_conflicts(root: Path, paths: list[str]) -> None:
 
 
 def _drop_task_metadata_changes(root: Path, task_id: str) -> None:
+    """Strip the task's metadata files out of the staged cherry-pick so the resulting commit only carries real source changes."""
     changed_paths = git_stdout_lines(root, "diff", "--cached", "--name-only")
     metadata_paths = [path for path in changed_paths if _is_task_metadata_path(path, task_id)]
     restore_paths(root, metadata_paths, source="HEAD", staged=True, worktree=True)
 
 
 def _finalize_rescue(root: Path, task: TaskRecord, outcome: str, head_sha: str | None) -> None:
+    """Commit the rescue result to task + workspace state under the workspace lock, refusing if the runner is still pinned to this task."""
     journal_message = "Worktree rescue found no commits ahead of main; cleared pending rescue state."
     if outcome == "rescued" and head_sha:
         journal_message = f"Worktree rescue applied onto main at {head_sha}."
@@ -356,6 +362,7 @@ def _finalize_rescue(root: Path, task: TaskRecord, outcome: str, head_sha: str |
 
 
 def _ensure_unmerged_worktree_state(root: Path, task_id: str, worktree_rel: str) -> None:
+    """Re-record the task in ``state.unmerged_worktrees`` after a manual_conflict so the operator still sees it on the next rescue listing."""
     state = load_state(root)
     for entry in state.unmerged_worktrees:
         if entry.task_id == task_id:
@@ -365,6 +372,7 @@ def _ensure_unmerged_worktree_state(root: Path, task_id: str, worktree_rel: str)
 
 
 def _stash_litehive_changes(root: Path) -> str | None:
+    """Set aside any pending ``.litehive/`` workspace edits so the cherry-pick lands on a clean main, returning the stash ref to restore afterwards."""
     if not git_stdout_lines(root, "status", "--porcelain", "--untracked-files=all", "--", ".litehive"):
         return None
     before = rev_parse_verify(root, "refs/stash") or ""
@@ -381,6 +389,7 @@ def _stash_litehive_changes(root: Path) -> str | None:
 
 
 def _restore_litehive_changes(root: Path, stash_ref: str | None) -> None:
+    """Reapply the ``.litehive/`` stash created by ``_stash_litehive_changes``, falling back to apply+drop when ``stash pop`` reports a conflict."""
     if not stash_ref:
         return
     ok, _ = stash_pop(root, ref=stash_ref, with_index=True)
@@ -391,6 +400,7 @@ def _restore_litehive_changes(root: Path, stash_ref: str | None) -> None:
 
 
 def _worktree_has_non_metadata_changes(root: Path, worktree_path: Path, task_id: str) -> bool:
+    """Return True when the worktree has any real-source diff against main; used to decide whether to mark a no-commit worktree as ``already_landed`` rather than a no-op."""
     main_head = current_head(root) or "HEAD"
     fork_point = git_stdout_or_none(worktree_path, "merge-base", main_head, "HEAD")
     if not fork_point:

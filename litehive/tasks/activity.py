@@ -14,6 +14,7 @@ from litehive.tasks.event_log import append_task_event
 
 
 def load_task_activity(root: Path, task: TaskRecord) -> list[TaskActivityEntry]:
+    """Read the persisted activity feed (agent verdicts and reports) for a task; tolerates malformed rows by skipping them so a single corrupt entry does not blank out the whole feed for the lifecycle code."""
     with connect_workspace_db(root) as connection:
         rows = connection.execute(
             """
@@ -62,10 +63,12 @@ def _save_task_activity_to_db(root: Path, task_id: str, activity: list[TaskActiv
 
 
 def save_task_activity(root: Path, task: TaskRecord, activity: list[TaskActivityEntry]) -> None:
+    """Replace the task's activity feed wholesale; used by the retraction path that needs to rewrite an existing entry's message in place rather than appending a new one."""
     _save_task_activity_to_db(root, task.id, activity)
 
 
 def append_task_activity(root: Path, task: TaskRecord, entry: TaskActivityEntry) -> None:
+    """Append one verdict/report entry, the common write path; takes the load+rewrite cost so the on-disk ordering matches arrival order without requiring callers to track entry indexes."""
     activity = load_task_activity(root, task)
     activity.append(entry)
     save_task_activity(root, task, activity)
@@ -80,6 +83,7 @@ def latest_task_activity_entry(
     verdicts: Iterable[str] | None = None,
     after: datetime | None = None,
 ) -> TaskActivityEntry | None:
+    """Find the most recent activity entry matching the given filter; the stage-report builder uses this to locate the verdict an agent submitted via ``litehive agent report`` for the just-finished subagent run."""
     if verdicts is None:
         allowed_verdicts = None
     else:

@@ -17,6 +17,13 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class HookSpec:
+    """Configured hook command for a state-machine node.
+
+    Loaded from workspace config and passed to ``HookRunner.run``; the optional
+    ``description`` and ``instructions_on_failure`` are surfaced verbatim in the
+    Reject reason so the agent gets actionable feedback when a hook fails.
+    """
+
     command: str
     timeout_seconds: float = 60
     description: str | None = None
@@ -24,25 +31,37 @@ class HookSpec:
 
 
 class HookRunner(Protocol):
-    def run(self, spec: HookSpec, state: TaskState) -> subprocess.CompletedProcess[str] | None: ...
+    def run(self, spec: HookSpec, state: TaskState) -> subprocess.CompletedProcess[str] | None:
+        """Execute the hook and return ``None`` on success or a failed CompletedProcess on failure; ``HookNode`` uses ``None`` as the pass signal."""
+        ...
 
 
 def _failed_process(command: str, code: int, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
+    """Adapter constructor that fakes a ``CompletedProcess`` for non-execution failures (timeout, missing binary) so the rest of the runner sees one consistent result shape."""
     return subprocess.CompletedProcess(command, code, stdout, stderr)
 
 
 class SubprocessHookRunner(HookRunner):
+    """Production HookRunner that shells out under ``workspace_root`` with task identity in the env.
+
+    ``execution_root_resolver`` lets the runner aim a hook at the per-task
+    worktree instead of the main checkout, which is how implementing/testing
+    stages run hooks against the agent's own branch.
+    """
+
     def __init__(
         self,
         workspace_root: Path,
         execution_root_resolver: Callable[[TaskState], Path] | None = None,
         extra_env: dict[str, str] | None = None,
     ) -> None:
+        """Bind the runner to a workspace, optional per-task cwd resolver, and any extra env shared across hooks."""
         self.workspace_root = Path(workspace_root)
         self.execution_root_resolver = execution_root_resolver
         self.extra_env = dict(extra_env or {})
 
     def run(self, spec: HookSpec, state: TaskState) -> subprocess.CompletedProcess[str] | None:
+        """Execute one ``HookSpec`` under the resolved cwd, normalizing timeout / missing-binary failures into the same ``CompletedProcess`` shape the node expects."""
         if self.execution_root_resolver is None:
             execution_root = self.workspace_root
         else:
@@ -82,14 +101,23 @@ class SubprocessHookRunner(HookRunner):
 
 
 class HookNode(Node):
+    """State-machine node that runs configured hooks for a stage and emits ``HookOk`` or ``Reject``.
+
+    Built once per hook-bearing stage by the lifecycle factory; the state
+    machine treats it like any other node so hook failures route through the
+    same Reject path as agent rejections.
+    """
+
     node_type = NodeType.HOOK
 
     def __init__(self, name: PipelineState, hooks: list[HookSpec], runner: HookRunner) -> None:
+        """Bind the node to its stage label, ordered list of hooks, and the runner that actually executes them."""
         self.name = name
         self.hooks = hooks
         self.runner = runner
 
     def run(self, state: TaskState) -> Event:
+        """Run hooks in order and short-circuit on the first failure; passing all hooks yields ``HookOk`` for the state machine."""
         for spec in self.hooks:
             result = self.runner.run(spec, state)
             if result is not None:
@@ -98,6 +126,7 @@ class HookNode(Node):
 
 
 def _reject(point: PipelineState, spec: HookSpec, result: subprocess.CompletedProcess[str], state: TaskState) -> Reject:
+    """Build the Reject event for a failed hook, including a fingerprint so the lifecycle can detect repeated same-hook failures and trigger recovery."""
     description = (spec.description or "").strip()
     hook = {
         "point": point,

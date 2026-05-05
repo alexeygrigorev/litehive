@@ -126,6 +126,7 @@ class LitehiveConfig:
     implementation_mode_name: str = "implementation"
 
     def __post_init__(self) -> None:
+        """Coerce raw mapping/sequence fields into their canonical typed shapes after dataclass init, so callers that build `LitehiveConfig(**dict)` from JSON/TOML get the same invariants as code-built instances."""
         self.engine_freeze = {str(k): str(v) for k, v in self.engine_freeze.items()}
         self.engine_preference = normalize_engine_sequence(
             list(self.engine_preference),
@@ -156,6 +157,7 @@ _VALID_CONFIG_KEYS = frozenset(field.name for field in fields(LitehiveConfig))
 
 
 def validate_config_data(data: Mapping[str, Any]) -> dict[str, Any]:
+    """Reject unknown config keys and bad `process_profile` values before the dict is passed to `LitehiveConfig(**...)`; called by the config loader and by status diagnostics so a typo in the workspace config fails loudly instead of being silently dropped."""
     validated = dict(data)
     profile = validated.get("process_profile")
     if profile in PROCESS_PROFILES or profile is None:
@@ -170,6 +172,7 @@ def validate_config_data(data: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def normalize_engine_sequence(engines: Sequence[str], field_name: str) -> list[str]:
+    """Validate and dedupe an engine list (e.g. `engine_preference`) while preserving caller order; rejects unknown engine names with a `field_name`-tagged error so the message points at the specific config slot rather than `engine_preference` generically."""
     normalized: list[str] = []
     seen: set[str] = set()
     for engine_name in engines:
@@ -186,6 +189,7 @@ def normalize_engine_sequence(engines: Sequence[str], field_name: str) -> list[s
 def normalize_agent_startup_guidance(
     guidance: Mapping[str, Sequence[str]] | None,
 ) -> dict[str, list[str]]:
+    """Lower-case the role keys, strip whitespace from guidance entries, drop empties, and reject role names not in the supported set so a typo like `swee` fails the load instead of silently shipping no guidance to the agent."""
     if guidance is None:
         return {}
 
@@ -209,6 +213,7 @@ def normalize_retry_on(
     retry_on: Sequence[str] | None,
     field_name: str = "retry_on",
 ) -> list[str]:
+    """Validate and dedupe the retry-eligible failure-kind list; case-insensitive on input but the persisted values are lowercase canonical kinds so the runner's retry policy never has to compare strings ad hoc."""
     if retry_on is None:
         return []
 
@@ -232,6 +237,7 @@ def _normalize_runner_hook(
     raw_hook: str | Mapping[str, object],
     field_name: str,
 ) -> dict[str, object]:
+    """Accept the two valid hook-entry shapes (bare command string or full mapping) and return a uniform dict; rejects unknown keys so a typo in a hook-entry field surfaces at config load instead of being dropped on the floor at hook-fire time."""
     if isinstance(raw_hook, str):
         command = raw_hook.strip()
         if not command:
@@ -272,6 +278,7 @@ def _normalize_runner_hook(
 def normalize_runner_hooks(
     raw_hooks: Mapping[str, Sequence[str | Mapping[str, object]]] | None,
 ) -> dict[str, list[dict[str, object]]]:
+    """Validate the hook-points map and normalize each hook entry into its dict form; called from `LitehiveConfig.__post_init__` so config-supplied hooks fail fast (unknown points, missing commands) rather than silently being skipped at runtime."""
     if raw_hooks is None:
         return {}
 
@@ -296,6 +303,7 @@ def _normalize_sandbox_credential_input(
     raw_input: SandboxCredentialInput | Mapping[str, object],
     field_name: str,
 ) -> SandboxCredentialInput:
+    """Coerce raw credential-input data and enforce the env-var/mount-path shape — uppercase env name, absolute container path — so a bad credential entry fails the config load rather than leaking a malformed `docker -e` argument at sandbox launch."""
     if isinstance(raw_input, SandboxCredentialInput):
         credential = raw_input
     else:
@@ -310,6 +318,7 @@ def _normalize_sandbox_credential_input(
 
 
 def _normalize_bind_list(raw_binds: list[str], field_name: str) -> list[str]:
+    """Strip whitespace, drop blanks, and require absolute host paths in a bind-mount list so the docker `-v` flag never receives a relative path that would be silently interpreted as a named volume."""
     normalized: list[str] = []
     for index, raw_path in enumerate(raw_binds):
         host_path = raw_path.strip()
@@ -325,6 +334,7 @@ def _normalize_external_engine_sandbox_policy(
     raw_policy: ExternalEngineSandboxPolicy | Mapping[str, object],
     field_name: str,
 ) -> ExternalEngineSandboxPolicy:
+    """Build a per-engine sandbox policy from raw mapping or typed input and re-validate uppercase env names, allowed network/workspace modes, and absolute bind paths so each engine's sandbox spec is checked independently before docker sees it."""
     if isinstance(raw_policy, ExternalEngineSandboxPolicy):
         policy = raw_policy
     else:
@@ -366,6 +376,7 @@ def _normalize_external_engine_sandbox_policy(
 def normalize_external_engine_sandbox_config(
     raw_config: ExternalEngineSandboxConfig | Mapping[str, object] | None,
 ) -> ExternalEngineSandboxConfig:
+    """Coerce a sandbox-config mapping into the typed `ExternalEngineSandboxConfig`, validating backend/network/workspace modes and absolute mount paths so we cannot ship a half-formed sandbox spec to docker at runtime."""
     if raw_config is None:
         return ExternalEngineSandboxConfig()
     if isinstance(raw_config, ExternalEngineSandboxConfig):

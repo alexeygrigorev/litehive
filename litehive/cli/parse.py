@@ -11,6 +11,7 @@ def parse_dependency_ids(
     task_id=None,
     allow_clear=False,
 ):
+    """Turn comma-separated `--depends-on` values from `task add`/`task update` into a deduplicated list of ids; `allow_clear` lets `update` accept the literal `none` to wipe dependencies, while plain `add` rejects it. Returns the sentinel `...` when the operator did not pass the option, so the caller can distinguish "leave alone" from "clear"."""
     if not raw_values:
         return ...
 
@@ -40,6 +41,7 @@ def parse_dependency_ids(
 
 
 def parse_engine_int_map(raw_values, option_name):
+    """Parse repeated `ENGINE=N` CLI options into `{engine: int}`; rejects unknown engines and negative values so bad operator input fails at parse time rather than producing nonsense limits."""
     if not raw_values:
         return {}
 
@@ -66,6 +68,7 @@ def parse_runner_hooks(
     raw_values,
     option_name,
 ):
+    """Parse repeated `HOOK_POINT=COMMAND` CLI options into a `{point: [command, ...]}` mapping with order preserved so multiple hooks at the same point fire in declaration order."""
     if not raw_values:
         return {}
 
@@ -85,6 +88,7 @@ def parse_acceptance_criteria(
     raw_values,
     allow_clear=False,
 ):
+    """Normalize repeated `--acceptance-criteria` values into a non-empty list; `allow_clear` lets `task update` accept the literal `none` to wipe criteria. Returns `...` when the option was absent so callers can distinguish "unchanged" from "set to empty"."""
     if not raw_values:
         return ...
 
@@ -103,6 +107,7 @@ def parse_text_list_option(
     option_name,
     allow_clear=False,
 ):
+    """Generic version of `parse_acceptance_criteria` for other repeatable text-list options (constraints, plan, …); shares the same `none`-clears-everything semantics so the CLI behaves consistently across mutable list fields."""
     if not raw_values:
         return ...
 
