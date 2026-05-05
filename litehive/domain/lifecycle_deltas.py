@@ -31,12 +31,9 @@ from litehive.lifecycle.events import (
     Event,
     MergeConflictDetected,
     OverallRetryLimitHit,
-    RecoveryBudgetHit,
-    RecoveryFailed,
     RecoverySucceeded,
     Reject,
     StageRetryLimitHit,
-    TaskTimeBudgetExceeded,
     Timeout,
 )
 from litehive.lifecycle.persistence import (
@@ -176,11 +173,9 @@ def _stage_retry_exhausted_record(
     failure_shape = _event_failure_shape(event)
     if isinstance(event, Reject):
         source = event.source
-    else:
-        source = None
-    if isinstance(event, Reject):
         classification = event.classification
     else:
+        source = None
         classification = None
     now = utcnow()
     return FailedRunRecord(
@@ -238,41 +233,43 @@ def _fingerprint_from_event(state: TaskState, event: Event) -> FailureFingerprin
                 "description": hook.description,
             },
         )
-    if isinstance(event, Reject):
-        reason_code = _reason_code_from_event(state, event)
-        return FailureFingerprint(
-            fingerprint=f"{event.source}:{event.reason}",
-            classification=event.classification or reason_code or f"{event.source}_reject",
-            diagnostics={"source": event.source},
-        )
-    if isinstance(event, Crash):
-        return FailureFingerprint(
-            fingerprint=f"{event.exc_type}:{event.message}",
-            classification=event.exc_type,
-            diagnostics={"exc_type": event.exc_type},
-        )
-    if isinstance(event, Blocked):
-        return FailureFingerprint(
-            fingerprint=f"blocked:{event.reason}",
-            classification="blocked",
-        )
-    if isinstance(event, Timeout):
-        return FailureFingerprint(
-            fingerprint="timeout",
-            classification="timeout",
-        )
-    if isinstance(event, StageRetryLimitHit):
-        return FailureFingerprint(
-            fingerprint=f"stage_retry_limit:{event.stage}",
-            classification="stage_retry_limit",
-            diagnostics={"stage": event.stage},
-        )
-    if isinstance(event, OverallRetryLimitHit):
-        return FailureFingerprint(
-            fingerprint="retry_limit",
-            classification="retry_limit",
-        )
-    return FailureFingerprint(fingerprint=type(event).__name__.lower())
+    match event:
+        case Reject():
+            reason_code = _reason_code_from_event(state, event)
+            return FailureFingerprint(
+                fingerprint=f"{event.source}:{event.reason}",
+                classification=event.classification or reason_code or f"{event.source}_reject",
+                diagnostics={"source": event.source},
+            )
+        case Crash():
+            return FailureFingerprint(
+                fingerprint=f"{event.exc_type}:{event.message}",
+                classification=event.exc_type,
+                diagnostics={"exc_type": event.exc_type},
+            )
+        case Blocked():
+            return FailureFingerprint(
+                fingerprint=f"blocked:{event.reason}",
+                classification="blocked",
+            )
+        case Timeout():
+            return FailureFingerprint(
+                fingerprint="timeout",
+                classification="timeout",
+            )
+        case StageRetryLimitHit():
+            return FailureFingerprint(
+                fingerprint=f"stage_retry_limit:{event.stage}",
+                classification="stage_retry_limit",
+                diagnostics={"stage": event.stage},
+            )
+        case OverallRetryLimitHit():
+            return FailureFingerprint(
+                fingerprint="retry_limit",
+                classification="retry_limit",
+            )
+        case _:
+            return FailureFingerprint(fingerprint=type(event).__name__.lower())
 
 
 def recovery_trigger_from_event(state: TaskState, event: Event) -> RecoveryTrigger:
@@ -287,38 +284,14 @@ def recovery_trigger_from_event(state: TaskState, event: Event) -> RecoveryTrigg
     about the cause.
     """
     reason_code = _reason_code_from_event(state, event)
-    if isinstance(event, Reject):
-        message = event.reason
-        source = event.source
-        diagnostics = dict(event.metadata or {})
-    elif isinstance(event, Crash):
-        message = event.message
-        source = None
-        diagnostics = {"exc_type": event.exc_type}
-    elif isinstance(event, Blocked):
-        message = event.reason
-        source = None
-        diagnostics = {}
-    elif isinstance(event, StageRetryLimitHit):
-        message = f"Stage retry limit exhausted for {event.stage}"
-        source = None
-        diagnostics = {"stage": event.stage}
-    elif isinstance(event, OverallRetryLimitHit):
-        message = "Overall retry limit exhausted"
-        source = None
-        diagnostics = {}
-    else:
-        message = ""
-        source = None
-        diagnostics = {}
     return RecoveryTrigger(
         origin_stage=state.stage,
         trigger_event_kind=event.trigger_event_kind,
         failure_fingerprint=_fingerprint_from_event(state, event),
-        source=source,
+        source=event.failure_source,
         reason_code=reason_code,
-        message=message,
-        diagnostics=diagnostics,
+        message=event.failure_message,
+        diagnostics=event.failure_diagnostics,
     )
 
 
@@ -853,23 +826,7 @@ class Fail:
             hook_delta = _hook_reject_delta(state, event)
         else:
             hook_delta = EMPTY_DELTA
-        if isinstance(event, (Reject, Blocked)):
-            message = event.reason
-        elif isinstance(event, Crash):
-            message = event.message
-        elif isinstance(event, RecoveryFailed):
-            message = event.reason
-        elif isinstance(event, StageRetryLimitHit):
-            message = f"Stage retry limit exhausted for {event.stage}"
-        elif isinstance(event, OverallRetryLimitHit):
-            message = "Overall retry limit exhausted"
-        elif isinstance(event, TaskTimeBudgetExceeded):
-            message = (
-                f"Task time budget exceeded before commit: "
-                f"{event.elapsed_seconds:.1f}s elapsed, budget {event.budget_seconds:.1f}s"
-            )
-        else:
-            message = ""
+        message = event.failure_message
         outcome = None
         explanation = None
         if state.stage == PipelineState.RECOVERING:
@@ -945,14 +902,9 @@ def _recovery_verdict_for_terminal_event(event: Event, reason: FailedReason) -> 
     the event class. Defaults to the failed reason's value when no
     more specific label fits.
     """
-    if isinstance(event, RecoveryFailed):
-        return "failed"
-    if isinstance(event, RecoveryBudgetHit):
-        return "budget_hit"
-    if isinstance(event, Timeout):
-        return "timeout"
-    if isinstance(event, Crash):
-        return "crash"
+    verdict = event.terminal_recovery_verdict
+    if verdict is not None:
+        return verdict
     return reason.value
 
 

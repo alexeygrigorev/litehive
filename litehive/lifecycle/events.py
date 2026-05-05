@@ -40,6 +40,58 @@ class Event:
         """
         return TriggerEventKind.UNKNOWN
 
+    @property
+    def failure_message(self) -> str:
+        """
+        Human-readable reason this event terminated or escalated work.
+
+        Read by both the terminal ``Fail`` effect (to populate
+        ``failed_message``) and by ``recovery_trigger_from_event`` (to
+        populate ``RecoveryTrigger.message``). Subclasses override with
+        the field that carries their detail; the base returns ``""`` so
+        non-failure events accidentally reaching either site stay quiet
+        rather than producing a bogus message.
+        """
+        return ""
+
+    @property
+    def failure_source(self) -> str | None:
+        """
+        Source label written onto ``RecoveryTrigger.source`` for failure events.
+
+        Only ``Reject`` carries a non-null source (the agent / hook /
+        guard / system tag). All other failure events leave it ``None``
+        because their cause is the runner itself rather than a verdict-
+        emitting actor.
+        """
+        return None
+
+    @property
+    def failure_diagnostics(self) -> dict[str, Any]:
+        """
+        Per-event diagnostics dict written onto ``RecoveryTrigger.diagnostics``.
+
+        Subclasses override to expose their type-specific context (the
+        crash exception type, the stage that exhausted retries, the
+        reject's metadata). The base returns a fresh empty dict so the
+        caller can mutate without aliasing.
+        """
+        return {}
+
+    @property
+    def terminal_recovery_verdict(self) -> str | None:
+        """
+        Short verdict label persisted on ``RecoveryOutcome`` when this event
+        terminates a task in ``RECOVERING``.
+
+        Read by the terminal ``Fail`` effect so timeline views can tell
+        "the agent reported failure" from "we hit the budget" from
+        "recovery itself crashed" without re-deriving the cause. ``None``
+        means "no event-specific label fits" so the caller falls back to
+        the failed reason's value.
+        """
+        return None
+
 
 @dataclass(frozen=True)
 class Pass(Event):
@@ -140,6 +192,21 @@ class Reject(Event):
             return TriggerEventKind.SEMANTIC_REJECT
         return TriggerEventKind.REJECT
 
+    @property
+    def failure_message(self) -> str:
+        """The reviewer/hook/guard's free-text reject reason."""
+        return self.reason
+
+    @property
+    def failure_source(self) -> str | None:
+        """The actor that produced the reject (``agent``/``hook``/``guard``/``system``)."""
+        return self.source
+
+    @property
+    def failure_diagnostics(self) -> dict[str, Any]:
+        """A copy of the reject metadata so callers can mutate without aliasing."""
+        return dict(self.metadata or {})
+
 
 @dataclass(frozen=True)
 class MergeConflictDetected(Event):
@@ -176,6 +243,11 @@ class Blocked(Event):
     def trigger_event_kind(self) -> TriggerEventKind:
         return TriggerEventKind.BLOCKED
 
+    @property
+    def failure_message(self) -> str:
+        """The blockage description (missing dependency, quota, etc.)."""
+        return self.reason
+
 
 @dataclass(frozen=True)
 class Crash(Event):
@@ -201,6 +273,21 @@ class Crash(Event):
     def trigger_event_kind(self) -> TriggerEventKind:
         return TriggerEventKind.CRASH
 
+    @property
+    def failure_message(self) -> str:
+        """The crash exception's stringified message."""
+        return self.message
+
+    @property
+    def failure_diagnostics(self) -> dict[str, Any]:
+        """Carry the exception class name so the recovery prompt can branch on it."""
+        return {"exc_type": self.exc_type}
+
+    @property
+    def terminal_recovery_verdict(self) -> str | None:
+        """A crash inside ``RECOVERING`` is the agent itself dying, not the work failing."""
+        return "crash"
+
 
 @dataclass(frozen=True)
 class Timeout(Event):
@@ -216,6 +303,11 @@ class Timeout(Event):
     @property
     def trigger_event_kind(self) -> TriggerEventKind:
         return TriggerEventKind.TIMEOUT
+
+    @property
+    def terminal_recovery_verdict(self) -> str | None:
+        """Distinguish "recovery agent timed out" from a generic recovery failure."""
+        return "timeout"
 
 
 @dataclass(frozen=True)
@@ -237,6 +329,16 @@ class StageRetryLimitHit(Event):
     def trigger_event_kind(self) -> TriggerEventKind:
         return TriggerEventKind.STAGE_RETRY_LIMIT
 
+    @property
+    def failure_message(self) -> str:
+        """Render which stage exhausted its retry budget for failure summaries."""
+        return f"Stage retry limit exhausted for {self.stage}"
+
+    @property
+    def failure_diagnostics(self) -> dict[str, Any]:
+        """Carry the exhausted stage so the recovery prompt sees which counter blew."""
+        return {"stage": self.stage}
+
 
 @dataclass(frozen=True)
 class OverallRetryLimitHit(Event):
@@ -253,6 +355,11 @@ class OverallRetryLimitHit(Event):
     def trigger_event_kind(self) -> TriggerEventKind:
         return TriggerEventKind.RETRY_LIMIT
 
+    @property
+    def failure_message(self) -> str:
+        """Static label for the whole-task retry exhaustion case."""
+        return "Overall retry limit exhausted"
+
 
 @dataclass(frozen=True)
 class TaskTimeBudgetExceeded(Event):
@@ -267,6 +374,14 @@ class TaskTimeBudgetExceeded(Event):
 
     elapsed_seconds: float
     budget_seconds: float
+
+    @property
+    def failure_message(self) -> str:
+        """Render the elapsed-vs-budget numbers for the failure summary."""
+        return (
+            f"Task time budget exceeded before commit: "
+            f"{self.elapsed_seconds:.1f}s elapsed, budget {self.budget_seconds:.1f}s"
+        )
 
 
 @dataclass(frozen=True)
@@ -297,6 +412,16 @@ class RecoveryFailed(Event):
 
     reason: str
 
+    @property
+    def failure_message(self) -> str:
+        """The recovery agent's free-text giving-up reason."""
+        return self.reason
+
+    @property
+    def terminal_recovery_verdict(self) -> str | None:
+        """Mark the outcome as the recovery agent itself reporting failure."""
+        return "failed"
+
 
 @dataclass(frozen=True)
 class RecoveryBudgetHit(Event):
@@ -308,6 +433,11 @@ class RecoveryBudgetHit(Event):
     recovery per stage" by construction, this is currently a belt-and-
     suspenders signal — the rule table already prevents a second entry.
     """
+
+    @property
+    def terminal_recovery_verdict(self) -> str | None:
+        """Distinguish "we already gave up" from generic recovery failures."""
+        return "budget_hit"
 
 
 @dataclass(frozen=True)
