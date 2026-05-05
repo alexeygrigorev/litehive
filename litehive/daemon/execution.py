@@ -17,7 +17,7 @@ from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.attention import append_attention_log
 from litehive.db.schema import apply_pending_migrations
-from litehive.git import ops as git_ops
+from litehive.git.ops import fetch, is_ancestor, list_remote_names, rev_parse_verify
 from litehive.observability.status import (
     collect_task_pipeline_status,
     render_runner_status_line,
@@ -63,22 +63,22 @@ def check_origin_divergence(workspace: Path) -> str | None:
     """
     if not (workspace / ".git").exists():
         return None
-    if "origin" not in git_ops.list_remote_names(workspace):
+    if "origin" not in list_remote_names(workspace):
         return None
-    ok, stderr = git_ops.fetch(workspace, "origin", "main")
+    ok, stderr = fetch(workspace, "origin", "main")
     if not ok:
         logger.warning("git fetch origin main failed: %s", stderr)
         return None
-    local_sha = git_ops.rev_parse_verify(workspace, "main")
-    remote_sha = git_ops.rev_parse_verify(workspace, "origin/main")
+    local_sha = rev_parse_verify(workspace, "main")
+    remote_sha = rev_parse_verify(workspace, "origin/main")
     if local_sha is None or remote_sha is None:
         return None
     if local_sha == remote_sha:
         return None
     # Either side being an ancestor of the other is a fast-forward — not diverged.
-    if git_ops.is_ancestor(workspace, local_sha, remote_sha):
+    if is_ancestor(workspace, local_sha, remote_sha):
         return None
-    if git_ops.is_ancestor(workspace, remote_sha, local_sha):
+    if is_ancestor(workspace, remote_sha, local_sha):
         return None
     return (
         f"local main ({local_sha[:8]}) and origin/main ({remote_sha[:8]}) have diverged. "
