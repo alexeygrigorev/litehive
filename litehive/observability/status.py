@@ -229,9 +229,7 @@ def _task_stage_label(task: TaskRecord) -> str:
     return task.runtime.pipeline.current_stage.stage or task.pipeline_status or "-"
 
 
-def _latest_stage_report_for_task(root: Path | None, task: TaskRecord) -> Any | None:
-    if root is None:
-        return None
+def _latest_stage_report_for_task(root: Path, task: TaskRecord) -> Any | None:
     try:
         from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
 
@@ -240,12 +238,12 @@ def _latest_stage_report_for_task(root: Path | None, task: TaskRecord) -> Any | 
         return None
 
 
-def _task_last_verdict_label(task: TaskRecord, root: Path | None = None) -> str:
+def _task_last_verdict_label(task: TaskRecord, root: Path) -> str:
     latest_report = _latest_stage_report_for_task(root, task)
     return (None if latest_report is None else latest_report.verdict) or task.runtime.pipeline.last_outcome.kind or "-"
 
 
-def _task_last_summary_label(task: TaskRecord, root: Path | None = None) -> str:
+def _task_last_summary_label(task: TaskRecord, root: Path) -> str:
     latest_report = _latest_stage_report_for_task(root, task)
     return (
         (None if latest_report is None else latest_report.summary)
@@ -256,9 +254,7 @@ def _task_last_summary_label(task: TaskRecord, root: Path | None = None) -> str:
     )
 
 
-def _latest_stage_failure_classification(root: Path | None, task: TaskRecord) -> str | None:
-    if root is None:
-        return None
+def _latest_stage_failure_classification(root: Path, task: TaskRecord) -> str | None:
     try:
         from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
 
@@ -270,7 +266,7 @@ def _latest_stage_failure_classification(root: Path | None, task: TaskRecord) ->
     return report.failure_classification
 
 
-def render_task_summary(task: TaskRecord, active: bool, root: Path | None = None) -> list[str]:
+def render_task_summary(task: TaskRecord, active: bool, root: Path) -> list[str]:
     if active:
         marker = "*"
     else:
@@ -593,7 +589,7 @@ def find_last_completed_task(tasks: list[TaskRecord]) -> TaskRecord | None:
     return max(done_tasks, key=lambda t: t.updated_at or "")
 
 
-def render_last_completed_section(task: TaskRecord | None) -> list[str]:
+def render_last_completed_section(task: TaskRecord | None, root: Path) -> list[str]:
     """Render the Last Completed dashboard section."""
     lines: list[str] = ["=== Last Completed ==="]
     if task is None:
@@ -601,7 +597,7 @@ def render_last_completed_section(task: TaskRecord | None) -> list[str]:
         return lines
 
     outcome = task.runtime.pipeline.last_outcome
-    verdict = outcome.kind or _task_last_verdict_label(task)
+    verdict = outcome.kind or _task_last_verdict_label(task, root)
     when = outcome.recorded_at or task.updated_at or "-"
     lines.append(f"  {task.id} {task.title} verdict={verdict} at {when}")
     return lines
@@ -619,7 +615,7 @@ def render_health_active_task_lines(task: TaskRecord | None) -> list[str]:
     return lines
 
 
-def render_health_flagged_task_lines(flagged_tasks: list[TaskRecord], root: Path | None = None) -> list[str]:
+def render_health_flagged_task_lines(flagged_tasks: list[TaskRecord], root: Path) -> list[str]:
     lines = ["=== Flagged Tasks ===", f"flagged_count: {len(flagged_tasks)}"]
     if not flagged_tasks:
         lines.append("flagged: none")
@@ -678,7 +674,7 @@ def render_health_daemon_lines(daemon_status: str, daemon_pid: str) -> list[str]
     ]
 
 
-def render_health_recent_completion_lines(completed: list[TaskRecord], root: Path | None = None) -> list[str]:
+def render_health_recent_completion_lines(completed: list[TaskRecord], root: Path) -> list[str]:
     lines = ["=== Recent Completions ==="]
     if not completed:
         lines.append("completed: none")

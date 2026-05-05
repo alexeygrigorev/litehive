@@ -121,7 +121,7 @@ def status_command(
     all_tasks = list_tasks_state_first(workspace, state=status.state)
     last_done = find_last_completed_task(all_tasks)
     print()
-    for line in render_last_completed_section(last_done):
+    for line in render_last_completed_section(last_done, root):
         print(line)
 
     print()
