@@ -72,12 +72,20 @@ logger = logging.getLogger(__name__)
 
 
 class _NullSelector:
+    """Stub engine selector used when constructing a ``RecoveryAgent`` purely
+    to render its prompt during the direct-recovery handoff (no engine pick
+    happens — the adapter shells Codex itself)."""
+
     def select(self, state, node_name, excluded):
         del state, node_name, excluded
         return None
 
 
 class _NullSessions:
+    """Stub session store paired with ``_NullSelector`` for the direct-recovery
+    prompt build: no continuation IDs are persisted because that turn bypasses
+    ``SubagentManager`` entirely."""
+
     def get_or_create(self, task_id, node_name, engine_name):
         del task_id, node_name, engine_name
         return Session()
@@ -87,12 +95,18 @@ class _NullSessions:
 
 
 def _allowed_verdicts_for_stage(stage: str) -> set[str]:
+    """Verdict vocabularies the journal reader accepts when scanning for the
+    agent's submission. Recovery has its own routing verbs (resume/advance/...);
+    every other stage only emits pass/reject."""
     if stage == PipelineState.RECOVERING.value:
         return {"resume", "advance", "done", "budget_hit", "reject"}
     return {"pass", "reject"}
 
 
 def _execution_checkout_path(workspace_root: Path, task) -> Path:
+    """Resolve the working directory the subagent should run in for a task —
+    the per-task worktree if one was recorded, otherwise the workspace root.
+    Falls back to the workspace so engines never see a missing cwd."""
     return (
         resolve_recorded_worktree_path(
             workspace_root,
@@ -103,6 +117,10 @@ def _execution_checkout_path(workspace_root: Path, task) -> Path:
 
 
 def _recovery_execution_root(workspace_root: Path) -> Path:
+    """Recovery agents edit litehive's own source tree, not the user's task
+    worktree. Resolve ``litehive_source_path`` from config and run the recovery
+    turn there; fall back to the workspace if the source path is unset or
+    unreadable."""
     try:
         config = load_config(workspace_root)
     except Exception:
@@ -123,12 +141,19 @@ def _recovery_execution_root(workspace_root: Path) -> Path:
 
 
 def _agent_execution_root(workspace_root: Path, task, role: str) -> Path:
+    """Pick the cwd for the subagent based on role: recovery agents fix
+    litehive itself (source tree), every other role works inside the task's
+    worktree."""
     if role == "recovery":
         return _recovery_execution_root(workspace_root)
     return _execution_checkout_path(workspace_root, task)
 
 
 def execution_checkout_status(workspace_root: Path, task) -> tuple[Path, list[str] | None]:
+    """Return the task's execution checkout and its ``git status --porcelain``
+    lines. Used by the implementing-pass guard to decide whether the SWE
+    actually edited files; ``None`` means no git repo or git refused to answer
+    and the caller should not flag a hallucination on that basis."""
     checkout = _execution_checkout_path(workspace_root, task)
     if not is_git_repo(checkout):
         return checkout, None
@@ -139,6 +164,8 @@ def execution_checkout_status(workspace_root: Path, task) -> tuple[Path, list[st
 
 
 def _display_path(root: Path, path: Path) -> str:
+    """Render a path for human-facing journal/report text relative to the
+    workspace, so messages don't leak the operator's home directory."""
     try:
         relative = path.relative_to(root)
     except ValueError:
@@ -155,6 +182,11 @@ def _rewrite_hallucinated_implementing_pass(
     claimed_files: list[str],
     checkout: Path,
 ) -> AgentVerdict:
+    """Retract a SWE's implementing ``pass`` when the worktree is clean but
+    the agent claimed file edits. Rewrites the activity entry, replaces the
+    stage report with a reject, and journals the hallucination so downstream
+    routing treats it as a real reject. Called by the implementing-pass guard
+    inside ``latest_verdict_after``."""
     checkout_display = _display_path(workspace_root, checkout)
     claimed = ", ".join(claimed_files)
     reason_code = OutcomeReasonCode.HALLUCINATED_COMPLETION.value
@@ -243,6 +275,10 @@ _REPORT_RESULT_HINTS = (
 
 
 def _extract_test_results(message: str) -> list[str]:
+    """Mine the agent's free-form report message for short test/lint result
+    lines (``pytest``, ``ruff``, ``mypy`` evidence) so the next stage's prompt
+    can echo concrete verification signals back to the next agent without
+    re-running the suite."""
     results: list[str] = []
     seen: set[str] = set()
     for raw_line in message.splitlines():
@@ -335,6 +371,9 @@ class HeruEngineAdapter:
         self.model_name = model_name
 
     def with_model(self, model_name: str | None) -> "HeruEngineAdapter":
+        """Return a sibling adapter pinned to a specific model. Used when the
+        selector wants to retry the same engine on a different model without
+        mutating the existing instance."""
         return HeruEngineAdapter(
             self.name,
             self.workspace_root,
@@ -342,6 +381,11 @@ class HeruEngineAdapter:
         )
 
     def run_turn(self, session: Session, prompt: Any, state: TaskState) -> AgentVerdict:
+        """Run one agent turn for the lifecycle pipeline: serialize the role's
+        prompt, hand it to ``SubagentManager``, then read the journal for the
+        verdict the agent submitted via ``litehive agent report``. Raises
+        ``NudgeRequired`` if the agent finished without submitting, and
+        translates engine failures into the ``Engine`` error taxonomy."""
         if not isinstance(prompt, dict):
             raise UnrecoverableError(
                 f"HeruEngineAdapter expects a prompt dict from RoleAgent.build_prompt, got {type(prompt).__name__}"
@@ -409,6 +453,11 @@ class HeruEngineAdapter:
         prompt_text: str,
         session: Session,
     ):
+        """Drive ``SubagentManager.run`` with a single crash-resume retry: if
+        the engine exits non-zero but left a continuation handle, we resume
+        that session once with the crash-resume preamble before giving up.
+        Keeps ``session.engine_session_id`` updated so same-engine nudges and
+        retries continue the same conversation."""
         current_prompt = prompt_text
         resume_session_id = session.engine_session_id
         crash_resume_attempted = False
@@ -458,6 +507,11 @@ class HeruEngineAdapter:
         startup_message: str,
         original_exc: Exception,
     ) -> AgentVerdict:
+        """``SubagentManager`` itself failed to launch — usually because the
+        litehive install is broken. Try a direct Codex shell as the recovery
+        agent so the system can self-heal; if we're not in recovery (or the
+        bypass produced no verdict), re-raise the original exception so the
+        state machine routes through normal recovery."""
         try:
             recovery_verdict = self._attempt_direct_recovery_handoff(
                 state=state,
@@ -479,6 +533,11 @@ class HeruEngineAdapter:
         task,
         startup_message: str,
     ) -> AgentVerdict | None:
+        """Last-resort path when SubagentManager won't start: build the
+        recovery prompt, shell Codex directly against litehive's source tree,
+        and read the journal for whatever verdict the recovery agent
+        submitted. Returns ``None`` if the task isn't actually in recovery so
+        the caller falls back to the original exception."""
         recovery_prompt = self._direct_recovery_prompt(task=task, state=state, startup_message=startup_message)
         recovery_execution_root = _agent_execution_root(self.workspace_root, task, role="recovery")
         after_ts = datetime.min.replace(tzinfo=UTC)
@@ -509,6 +568,9 @@ class HeruEngineAdapter:
         )
 
     def _direct_recovery_prompt(self, task, state: TaskState, startup_message: str) -> str:
+        """Render the recovery role's prompt for the direct-Codex bypass,
+        synthesizing a recovery trigger from the startup failure so the
+        agent sees the same prompt shape it would normally receive."""
         recovery_state = self._direct_recovery_state(state, startup_message)
         recovery_agent = RecoveryAgent(
             _NullSelector(),
@@ -519,6 +581,10 @@ class HeruEngineAdapter:
         return serialize_prompt(prompt, task_record=task, workspace_root=self.workspace_root)
 
     def _direct_recovery_state(self, state: TaskState, startup_message: str) -> TaskState:
+        """Project the live ``TaskState`` into a recovering state so the
+        ``RecoveryAgent`` prompt builder sees a valid trigger and explanation
+        even when the original failure happened before any state machine
+        transition into recovery."""
         trigger = state.active_recovery_trigger
         if trigger is None:
             trigger = recovery_trigger_from_event(
@@ -540,6 +606,10 @@ class HeruEngineAdapter:
 
     @staticmethod
     def _direct_recovery_explanation(existing: str | None, startup_message: str) -> str:
+        """Compose the operator-visible reason that this turn bypassed
+        SubagentManager. Appends the bypass note to any existing explanation
+        so we keep prior recovery context, and dedupes if the note is already
+        present from an earlier bypass."""
         handoff = (
             "Litehive cannot start its own subagents for this task, so this recovery turn bypassed "
             f"SubagentManager and launched Codex directly. Startup failure: {startup_message}"
@@ -557,6 +627,9 @@ class HeruEngineAdapter:
         prompt_text: str,
         source_subagent_id: str,
     ):
+        """Shell Codex directly against litehive's own source tree, registering
+        a synthetic subagent record so the journal entry the recovery agent
+        submits can be attributed back to this bypass turn."""
         from litehive.agents.session_store import save_subagent_artifacts  # noqa: PLC0415
 
         save_subagent_artifacts(
@@ -585,6 +658,10 @@ class HeruEngineAdapter:
 
     @staticmethod
     def extract_continuation_id(result, fallback: str | None) -> str | None:
+        """Pull the engine's resume ID out of a ``SubagentResult`` so the next
+        turn (nudge, retry, or crash-resume) continues the same conversation.
+        Falls back to ``fallback`` when the result didn't include a fresh
+        handle so we don't drop the previously-recorded session."""
         from litehive.domain.agent import SubagentResult  # noqa: PLC0415
 
         if not isinstance(result, SubagentResult):
@@ -624,6 +701,9 @@ class HeruEngineAdapter:
 
     @staticmethod
     def _reraise_failure(failure: EngineFailure) -> None:
+        """Translate a structured ``EngineFailure`` (already classified by the
+        subagent layer) into the ``Engine`` error taxonomy the lifecycle
+        runner reacts to."""
         if failure.kind == "execution_limit":
             raise TransientError(failure.reason, failure_kind="execution_limit")
         if failure.kind == "retryable_execution_error":
@@ -635,6 +715,9 @@ class HeruEngineAdapter:
 
 
 def _is_retryable_failure(exc: Exception) -> bool:
+    """Name-based fallback used by ``_reraise`` when heru's own ``kind`` field
+    is missing — mirrors the transient classes we already know to retry so
+    timeouts and connection drops don't escalate to ``UnrecoverableError``."""
     cls_name = type(exc).__name__
     return cls_name in {"RetryableExecutionFailure", "TimeoutError", "ConnectionError"}
 

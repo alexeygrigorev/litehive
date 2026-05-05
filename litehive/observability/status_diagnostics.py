@@ -136,6 +136,8 @@ def status_has_problems(issues: list[StatusIssue]) -> bool:
 
 
 def render_health_summary(issues: list[StatusIssue]) -> str:
+    """Format the trailing `health: N broken, M warning` line that closes both `litehive status` and
+    `litehive health` issue blocks so operators see severity counts at a glance."""
     broken = sum(1 for issue in issues if issue.severity == "ERROR")
     warning = sum(1 for issue in issues if issue.severity == "WARN")
     return f"health: {broken} broken, {warning} warning"

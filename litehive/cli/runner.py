@@ -44,6 +44,11 @@ from litehive.state.locking import runner_status
 
 
 def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: typer.Typer) -> None:
+    """Wire runner, backup, and db commands onto the top-level Typer app.
+
+    Called once during CLI bootstrap (``litehive.cli.app``); keeps command
+    wiring out of the module top-level so importing the runner has no side effects.
+    """
     app.command("start", help="Start the background Litehive runner")(start)
     app.command("stop", help="Stop the background Litehive runner")(stop)
     app.command("restart", help="Restart the background Litehive runner")(restart)
@@ -65,6 +70,7 @@ def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: ty
 
 
 def start(workspace: WorkspaceOption = Path.cwd()) -> int:
+    """Boot the background daemon for a workspace; the operator entry point for ``litehive start``."""
     foreground = False
     apply_pending_migrations(workspace)
     if foreground:
@@ -81,6 +87,7 @@ def start(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 
 def daemon_status(workspace):
+    """Print daemon liveness lines for a workspace; reused by ``litehive daemon status``."""
     ensure_workspace(workspace)
     for line in daemon_status_lines(workspace):
         print(line)
@@ -88,6 +95,7 @@ def daemon_status(workspace):
 
 
 def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
+    """Halt the workspace daemon and report the previous PID; the operator entry point for ``litehive stop``."""
     ensure_workspace(workspace)
     entry = stop_workspace_daemon(workspace)
     print(f"workspace: {workspace.resolve()}")
@@ -102,6 +110,7 @@ def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 
 def restart(workspace: WorkspaceOption = Path.cwd()) -> int:
+    """Stop and re-launch the workspace daemon, applying any pending DB migrations between cycles."""
     previous = stop_workspace_daemon(workspace)
     apply_pending_migrations(workspace)
     try:
@@ -117,11 +126,14 @@ def restart(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 
 def daemon_worker(workspace):
+    """Run the daemon loop in-process for the foreground/worker entry; reused by ``litehive daemon worker``."""
     return run_daemon_loop(workspace, output_stream=None)
 
 
 @dataclass(slots=True)
 class _RunCommandIteration:
+    """One pass of ``run_once``: carries exit code plus pool-state signals so the drain loop knows whether to keep going."""
+
     exit_code: int
     ran_task: bool
     final_stage: str | None = None
@@ -134,6 +146,11 @@ def run_once(
     engine: str | None = None,
     model: str | None = None,
 ) -> _RunCommandIteration:
+    """Dequeue and execute the next task once, surfacing pool-stop signals to the caller.
+
+    Used by both the single-shot ``litehive run`` path and the drain loop, and exercised
+    directly by the hook-reject circuit-breaker tests.
+    """
     stopped_iteration = _existing_consecutive_task_failure_stop(workspace)
     if stopped_iteration is not None:
         return stopped_iteration
@@ -307,6 +324,11 @@ def run_command(
     max_tasks: Annotated[int | None, typer.Option(help="Stop after this many tasks")] = None,
     stop_on_dirty_git: Annotated[bool | None, typer.Option("--stop-on-dirty-git", flag_value=True)] = None,
 ) -> int:
+    """Run, preview, or drain queued tasks; the operator entry point for ``litehive run``.
+
+    Resolves pool-stop policy from CLI flags falling back to workspace config, then
+    dispatches to single-shot, dry-run preview, or drain-loop execution.
+    """
     ensure_workspace(workspace)
     if dry_run and drain:
         raise click.UsageError("--dry-run cannot be combined with --drain")
@@ -355,6 +377,11 @@ def report_command(
     ] = None,
     files_changed: Annotated[list[str] | None, typer.Option(help="Changed paths; repeat for multiple")] = None,
 ) -> int:
+    """Append a stage verdict (advance/reject/done/...) to the active task's activity log.
+
+    The operator entry point for ``litehive report``; agents are blocked from invoking it.
+    Resolves the target task from ``--task-id``, ``LITEHIVE_TASK_ID``, or the workspace's active task.
+    """
     block_if_agent()
     if message == "-":
         message = sys.stdin.read()
@@ -400,10 +427,12 @@ def report_command(
 
 
 def backup_group(ctx: typer.Context) -> None:
+    """Typer group callback for ``litehive backup``; rejects bare invocation without a subcommand."""
     require_subcommand(ctx)
 
 
 def backup_create(workspace: WorkspaceOption = Path.cwd()) -> int:
+    """Snapshot the workspace runtime database; the operator entry point for ``litehive backup create``."""
     ensure_workspace(workspace)
     try:
         backup = create_workspace_backup(workspace)
@@ -417,6 +446,7 @@ def backup_create(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 
 def backup_list(workspace: WorkspaceOption = Path.cwd()) -> int:
+    """List database backup snapshots so an operator can pick a timestamp for ``backup restore``."""
     ensure_workspace(workspace)
     backups = list_workspace_backups(workspace)
     print(f"backups: {len(backups)}")
@@ -432,6 +462,7 @@ def backup_restore(
     workspace: WorkspaceOption = Path.cwd(),
     yes: Annotated[bool, typer.Option("--yes", help="Skip overwrite confirmation")] = False,
 ) -> int:
+    """Restore a workspace database from a named backup; refuses to run while a daemon or runner is active to avoid clobbering live state."""
     ensure_workspace(workspace)
     daemon = get_workspace_daemon(workspace)
     if daemon is not None:
@@ -462,12 +493,14 @@ def backup_restore(
 
 
 def db_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> None:
+    """Typer group callback for ``litehive db``; passes through to subcommands or errors on bare invocation."""
     if ctx.invoked_subcommand is not None:
         return
     require_subcommand(ctx)
 
 
 def db_status(workspace: WorkspaceOption = Path.cwd()) -> int:
+    """Print schema version and pending migrations so operators know whether ``db migrate`` is needed."""
     workspace = normalize_workspace_root(workspace, source="--workspace")
     status = migration_status(workspace)
     print(f"workspace: {workspace}")
@@ -483,6 +516,7 @@ def db_migrate(
     workspace: WorkspaceOption = Path.cwd(),
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show pending migrations only")] = False,
 ) -> int:
+    """Apply pending workspace database migrations; the operator entry point for ``litehive db migrate``."""
     workspace = normalize_workspace_root(workspace, source="--workspace")
     try:
         plan = apply_pending_migrations(workspace, dry_run=dry_run)
@@ -506,6 +540,7 @@ def db_migrate(
 
 
 def db_rebuild_from_events(workspace: WorkspaceOption = Path.cwd()) -> int:
+    """Replay the append-only task event log to rebuild SQLite tables; the operator recovery path when the runtime DB is corrupted or lost."""
     workspace = normalize_workspace_root(workspace, source="--workspace")
     try:
         summary = rebuild_sqlite_from_task_event_log(workspace)
@@ -532,6 +567,7 @@ def db_audit(
     limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum rows to show")] = 20,
     action: Annotated[str | None, typer.Option("--action", help="Optional action filter")] = None,
 ) -> int:
+    """Print durable task audit log entries (status/queue/pipeline transitions) so operators can trace what happened to a task."""
     workspace = normalize_workspace_root(workspace, source="--workspace")
     entries = load_task_audit_entries(workspace, task_id=task_id, action=action, limit=limit)
     print(f"workspace: {workspace}")
@@ -551,6 +587,7 @@ def db_audit(
 
 
 def db_settings(workspace: WorkspaceOption = Path.cwd()) -> int:
+    """Print the audited runtime settings stored in the workspace database, sorted by key."""
     workspace = normalize_workspace_root(workspace, source="--workspace")
     settings = load_runtime_settings(workspace)
     print(f"workspace: {workspace}")
@@ -564,6 +601,7 @@ def db_settings_audit(
     workspace: WorkspaceOption = Path.cwd(),
     limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum rows to show")] = 20,
 ) -> int:
+    """Print the change history of audited runtime settings (old_value -> new_value with actor and source)."""
     workspace = normalize_workspace_root(workspace, source="--workspace")
     entries = load_runtime_setting_audit_entries(workspace, key=key, limit=limit)
     print(f"workspace: {workspace}")

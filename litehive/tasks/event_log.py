@@ -110,11 +110,13 @@ def task_event_log_path(root: Path) -> Path:
 
 
 def task_event_logging_suppressed() -> bool:
+    """True while replay is rebuilding SQLite, so state mutations skip emitting fresh events."""
     return _SUPPRESS_TASK_EVENT_LOGGING.get()
 
 
 @contextmanager
 def suppress_task_event_logging():
+    """Scope guard used by replay so rebuilding SQLite never re-appends synthetic history to the log."""
     token = _SUPPRESS_TASK_EVENT_LOGGING.set(True)
     try:
         yield
@@ -123,6 +125,7 @@ def suppress_task_event_logging():
 
 
 def task_event_type_for_audit_action(action: str) -> str:
+    """Map an audit-log action to the canonical task event type, so the audit writer and the event log share vocabulary."""
     return _ACTION_EVENT_TYPES.get(action, f"task_{action}")
 
 
@@ -189,6 +192,7 @@ def read_task_events(root: Path) -> tuple[list[dict[str, Any]], int]:
 
 
 def task_event_log_has_events(root: Path) -> bool:
+    """Cheap check used by the state store to decide if a fresh workspace can be rebuilt from the log on first open."""
     path = task_event_log_path(root)
     if not path.exists():
         return False
@@ -240,6 +244,7 @@ def rebuild_sqlite_from_task_event_log(root: Path, clear_existing: bool = True) 
 
 
 def sqlite_task_tables_empty(root: Path) -> bool:
+    """Used by the state store at workspace open to decide whether replay should run (empty SQLite alongside a non-empty event log)."""
     with connect_workspace_db(root) as connection:
         task_intent_count = connection.execute("SELECT COUNT(*) FROM task_intent").fetchone()[0]
         task_state_count = connection.execute("SELECT COUNT(*) FROM task_state").fetchone()[0]
@@ -247,6 +252,7 @@ def sqlite_task_tables_empty(root: Path) -> bool:
 
 
 def _apply_event(replay_state: _ReplayState, event: dict[str, Any]) -> None:
+    """Fold one event's payload slots into the in-memory replay state, so the SQLite write step sees the latest snapshot per task."""
     event_type = str(event.get("event_type") or "")
     task_id = _optional_str(event.get("task_id"))
     payload = dict(event.get("payload") or {})
@@ -369,6 +375,7 @@ def _write_replay_state(connection: sqlite3.Connection, replay_state: _ReplaySta
 
 
 def _workspace_state_payload(replay_state: _ReplayState) -> dict[str, Any]:
+    """Reconcile replayed workspace state with observed task IDs so a missing/stale next_task_number can't collide with rebuilt tasks."""
     payload = dict(replay_state.workspace_state or WorkspaceState().model_dump(mode="json"))
     payload["next_task_number"] = max(int(payload.get("next_task_number") or 0), _highest_task_number(replay_state))
     return payload
