@@ -22,6 +22,7 @@ def daemon_lock_path(workspace: Path) -> Path:
 
 
 def _daemon_lock_is_held_in_process(workspace: Path) -> bool:
+    """True when this Python process already holds the daemon lock for the workspace; lets ``ProcessLockManager.is_active`` distinguish "we own it" from "someone else does" without crashing on flock self-checks."""
     with _DAEMON_LOCKS_MUTEX:
         return workspace in _DAEMON_LOCKS
 
@@ -45,6 +46,7 @@ def daemon_lock_is_active(workspace: Path) -> bool:
 
 
 def _clear_stale_daemon_metadata(workspace: Path, pid: int | None = None) -> None:
+    """Drop a leftover daemon registration that no live process owns; reached by ``unregister_daemon`` and the start-background reclaim path so a dead daemon's row never blocks a new registration."""
     workspace = workspace.resolve()
     manager = _daemon_lock_manager(workspace)
     manager.clear_stale_state(workspace, expected_pid=pid)

@@ -36,6 +36,7 @@ from litehive.tasks.queue import active_task_markers, validate_single_active_tas
 
 
 def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
+    """Resolve which task `litehive queue stop` should target by checking every active-task marker (state pointer, runner lock metadata, runtime row); raises when there is nothing to stop or when the workspace shows multiple actives, since the latter is a bug we want surfaced rather than papered over."""
     markers = active_task_markers(root, state)
     if not markers:
         raise ValueError("No active task to stop")

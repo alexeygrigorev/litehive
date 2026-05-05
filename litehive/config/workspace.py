@@ -210,6 +210,7 @@ def resolve_workspace(
 
 
 def _register_workspace(root: Path) -> None:
+    """Persist the workspace path to the cross-process registry so later CLI calls (especially those driven only by task id) can find it without an explicit ``--workspace`` flag."""
     register_workspace_path(root.resolve())
 
 

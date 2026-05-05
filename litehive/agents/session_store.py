@@ -12,6 +12,7 @@ _EVENT_STREAM_KEY = "event_stream"
 
 
 def _load_subagent_payload(workspace: Workspace, task_id: str, subagent_id: str) -> tuple[dict[str, Any], str | None]:
+    """Read the raw payload row plus its original ``created_at`` so ``save_subagent_artifacts`` can preserve it on UPSERT."""
     with workspace.connect() as connection:
         row = connection.execute(
             """
@@ -32,6 +33,7 @@ def _load_subagent_payload(workspace: Workspace, task_id: str, subagent_id: str)
 
 
 def load_subagent_artifacts(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
+    """Return the full structured payload (session + report + event stream) for a subagent run; consumed by status snapshots and stage prompt builders."""
     payload, _ = _load_subagent_payload(workspace, task_id, subagent_id)
     return payload
 
@@ -87,6 +89,7 @@ def save_subagent_artifacts(
 
 
 def load_subagent_session(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
+    """Return only the engine session metadata slice (resume IDs, transcript pointer); used by stages that resume an existing engine session."""
     payload = load_subagent_artifacts(workspace, task_id, subagent_id)
     session = payload.get("session")
     if isinstance(session, dict):
@@ -95,6 +98,7 @@ def load_subagent_session(workspace: Workspace, task_id: str, subagent_id: str) 
 
 
 def load_subagent_report(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
+    """Return only the structured report slice (verdict, summary, diagnostics); read by downstream stages and operator-facing status."""
     payload = load_subagent_artifacts(workspace, task_id, subagent_id)
     report = payload.get("report")
     if isinstance(report, dict):
@@ -103,6 +107,7 @@ def load_subagent_report(workspace: Workspace, task_id: str, subagent_id: str) -
 
 
 def load_subagent_event_stream(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
+    """Return only the event-stream slice (engine tool calls, stdout chunks); used by ``litehive worktree`` and post-mortem inspection."""
     payload = load_subagent_artifacts(workspace, task_id, subagent_id)
     event_stream = payload.get(_EVENT_STREAM_KEY)
     if isinstance(event_stream, dict):

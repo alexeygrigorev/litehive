@@ -61,6 +61,7 @@ def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssu
 
 
 def _validate_status_config_data(data: Mapping[str, Any]) -> dict[str, Any]:
+    """Thin wrapper that lets ``status`` reuse the standard config validator while keeping a status-only seam tests can monkey-patch to inject malformed payloads without touching production validation."""
     return validate_config_data(data)
 
 

@@ -53,6 +53,7 @@ def _current_role() -> str | None:
 
 
 def _current_subagent_id() -> str | None:
+    """Read the orchestrator-injected subagent id used by ``agent report`` to look up the authoritative role in the subagent_sessions table."""
     subagent_id = os.environ.get("LITEHIVE_SUBAGENT_ID")
     if subagent_id and subagent_id.strip():
         return subagent_id.strip()
@@ -65,6 +66,7 @@ def current_agent_role() -> str | None:
 
 
 def _current_stage() -> str | None:
+    """Read the orchestrator-injected stage label so a verdict can be attributed to the stage that actually launched the subagent, even if the task has since advanced."""
     stage = os.environ.get("LITEHIVE_STAGE")
     if stage:
         return stage.strip()

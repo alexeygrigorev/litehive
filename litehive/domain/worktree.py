@@ -28,6 +28,7 @@ class ManagedWorktree:
 
     @property
     def cleanable(self) -> bool:
+        """True when ``litehive worktree clean`` may safely remove this entry: the task has reached a terminal status and is not the currently-active task."""
         return self.status in _CLEANABLE_STATUSES and not self.active
 
 
@@ -57,6 +58,7 @@ class WorktreeMergeConflict(Exception):
     """Raised when worktree sync leaves unresolved files behind."""
 
     def __init__(self, conflict_files: list[str]) -> None:
+        """Carry the list of unresolved files alongside the formatted message so the merge-resolver lifecycle node can route them into a follow-up stage."""
         super().__init__(f"{len(conflict_files)} unresolved file(s)")
         self.conflict_files = conflict_files
 

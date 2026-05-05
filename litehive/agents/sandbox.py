@@ -20,6 +20,8 @@ from litehive.config.model import ExternalEngineSandboxPolicy
 
 
 class SandboxProfile(str, Enum):
+    """Git wrapper profile applied to a sandboxed engine invocation; selected by ``sandbox_profile_for_role``."""
+
     NO_GIT = "no_git"
     MERGE_RESOLVER = "merge_resolver"
 
@@ -41,6 +43,8 @@ def sandbox_profile_for_role(role: str) -> SandboxProfile:
 
 @dataclass(frozen=True, slots=True)
 class SandboxPolicySummary:
+    """Snapshot of the resolved sandbox policy for one engine/role pair, surfaced to operators in subagent reports."""
+
     enabled: bool
     backend: str | None = None
     runtime: str | None = None
@@ -92,6 +96,7 @@ class SandboxLauncher:
     """Builds docker-run argv that wraps every external engine invocation."""
 
     def __init__(self, root: Path, config: LitehiveConfig) -> None:
+        """Store workspace root (resolved) and config so per-engine policies can be looked up on each invocation."""
         self.root = root.resolve()
         self.config = config
 
@@ -336,6 +341,7 @@ class SandboxLauncher:
         }
 
     def _policy_for_engine(self, engine_name: str) -> ExternalEngineSandboxPolicy | None:
+        """Return the per-engine sandbox policy from workspace config, or ``None`` if the engine has no override."""
         return self.config.external_engine_sandbox.engine_policies.get(engine_name)
 
     @staticmethod
@@ -434,6 +440,7 @@ class SandboxLauncher:
 
     @staticmethod
     def _bind_mount_spec(source: Path, target: PurePosixPath, read_only: bool) -> str:
+        """Format a single ``--mount type=bind,...`` argument for ``docker run``; centralized so the read-only flag and key order stay consistent across every mount we add."""
         if read_only:
             mode = ",readonly"
         else:

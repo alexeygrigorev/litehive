@@ -32,6 +32,7 @@ def terminate_subagent_pid(
     """
 
     def _pid_is_dead() -> bool:
+        """Detect when a subagent pid has actually exited (or become a zombie); checks ``waitpid``, ``/proc/<pid>/status`` State, and the runner-lock liveness probe in turn so flaky single-source signals don't make ``terminate_subagent_pid`` spin."""
         if pid is None:
             return True
         try:
@@ -56,6 +57,7 @@ def terminate_subagent_pid(
     sleep_interval = max(poll_interval_seconds, 0.01)
 
     def _wait_until_dead(timeout_seconds: float) -> bool:
+        """Poll ``_pid_is_dead`` until the process exits or the deadline passes; the SIGTERM/SIGKILL escalation flow needs a bounded wait between signals so a stuck subagent cannot block stop forever."""
         deadline = time.monotonic() + max(timeout_seconds, 0.0)
         while not _pid_is_dead() and time.monotonic() < deadline:
             time.sleep(sleep_interval)

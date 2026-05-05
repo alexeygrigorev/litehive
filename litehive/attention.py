@@ -37,16 +37,21 @@ OPERATOR_NEEDED_POOL_STOP_REASONS = {
 
 @dataclass(frozen=True, slots=True)
 class OperatorNeededState:
+    """Aggregated "is operator action required" snapshot rendered by status surfaces; produced by ``collect_operator_needed_state`` from authoritative SQLite state."""
+
     flagged_tasks: tuple[TaskRecord, ...]
     pool_stop_reason: str | None
 
     @property
     def needed(self) -> bool:
+        """True when the daemon must wait for an operator (any flagged task, or a stop reason in the operator-needed allow list)."""
         return bool(self.flagged_tasks) or self.pool_stop_reason is not None
 
 
 @dataclass(frozen=True, slots=True)
 class AttentionLogEntry:
+    """One row of the attention_log table: a free-form operator diagnostic that doesn't fit the structured task/runner state."""
+
     created_at: str
     message: str
 
@@ -86,6 +91,7 @@ def read_attention_log(workspace: Workspace, limit: int | None = None) -> list[A
 
 
 def collect_operator_needed_state(root: Path) -> OperatorNeededState:
+    """Project the current attention requirement (flagged tasks + operator-needed stop reason) from authoritative SQLite state; called by ``waiting_for_you_lines`` and the daemon's pool gate."""
     root = normalize_workspace_root(root, source="collect_operator_needed_state")
     state = load_state(root, bootstrap=False)
     flagged_tasks = tuple(
@@ -101,6 +107,7 @@ def collect_operator_needed_state(root: Path) -> OperatorNeededState:
 
 
 def waiting_for_you_lines(root: Path, limit: int = 5, reconcile: bool = True) -> list[str]:
+    """Render the "waiting on you" status block consumed by ``litehive status`` and the operator dashboard; degrades to a single error line on database failure rather than crashing the status command."""
     del reconcile
     try:
         state = collect_operator_needed_state(root)

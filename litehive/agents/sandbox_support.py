@@ -23,7 +23,9 @@ class SandboxSummary(Protocol):
 class SandboxLauncher(Protocol):
     """Sandbox-launcher contract used by ``SandboxedAdapter`` to confine engine invocations without depending on a concrete launcher implementation."""
 
-    def policy_summary(self, engine_name: str, role: str = "") -> SandboxSummary: ...
+    def policy_summary(self, engine_name: str, role: str = "") -> SandboxSummary:
+        """Resolve the effective sandbox policy snapshot for an engine/role pair so adapters can advertise it without depending on the concrete launcher."""
+        ...
 
     def wrap_invocation(
         self,
@@ -31,7 +33,9 @@ class SandboxLauncher(Protocol):
         binary_name: str,
         invocation: object,
         role: str = "",
-    ) -> object: ...
+    ) -> object:
+        """Rewrite a ``CLIInvocation`` to run inside the sandbox; called by ``SandboxedAdapter.finalize_invocation`` right before exec."""
+        ...
 
 
 def forced_engine_rw_state_dirs(
@@ -101,6 +105,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
     """Wrap a heru engine adapter so every invocation is finalized through the workspace sandbox launcher; isolates "what command does the engine want to run" from "how do we confine that command on this host"."""
 
     def __init__(self, adapter: ExternalCLIAdapter, launcher: SandboxLauncher, engine_name: str, role: str) -> None:
+        """Wrap an existing engine adapter and resolve its sandbox policy once so every later invocation reuses the same snapshot."""
         super().__init__(
             name=adapter.name,
             binary=adapter.binary,

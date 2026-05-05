@@ -86,6 +86,7 @@ def stale_interruption_reason(task: TaskRecord, stage: str, stale_pid: bool = Fa
 
 
 def _interruption_timestamps(task: TaskRecord, now: str) -> dict[str, str | None]:
+    """Pick the four timestamps an interruption record needs (run/stage start, stage start, started_at, interrupted_at) so the bookkeeping uses subagent timestamps when available and falls back to stage-level ones, keeping duration math meaningful even when the subagent never started."""
     started_at = task.runtime.pipeline.current_stage.started_at or task.runtime.pipeline.run_started_at
     if task.runtime.execution.active_subagent is not None:
         interrupted_at = task.runtime.execution.active_subagent.updated_at

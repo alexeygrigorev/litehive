@@ -32,10 +32,12 @@ class DirtyWorktreeGateReport:
 
     @property
     def is_clean(self) -> bool:
+        """True when the workspace has no dirty-worktree findings; the cheap "may we proceed?" check used by health surfaces and pool gates."""
         return not self.findings
 
     @property
     def blocks_pool(self) -> bool:
+        """True when at least one finding is severe enough to halt the pool (main checkout dirt, ambiguous ownership, or a worktree the registry thinks should exist); task-owned dirt is recorded but doesn't block on its own."""
         return any(
             finding.ownership in {"main-checkout", "ambiguous-ownership", "missing-recorded-worktree"}
             for finding in self.findings

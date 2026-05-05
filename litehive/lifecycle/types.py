@@ -26,10 +26,12 @@ STAGES: tuple[PipelineState, ...] = AGENT_STAGES + SYSTEM_STAGES
 
 
 def before(stage: str | PipelineState) -> PipelineState:
+    """Return the ``before_<stage>`` hook node that runs immediately before ``stage``; the canonical naming convention used by the rule table and prompt builder."""
     return canonical_pipeline_state(f"before_{stage}")
 
 
 def after(stage: str | PipelineState) -> PipelineState:
+    """Return the ``after_<stage>`` hook node that runs immediately after ``stage``; mirror of ``before`` for the post-stage hook half of the lifecycle."""
     return canonical_pipeline_state(f"after_{stage}")
 
 
@@ -66,6 +68,7 @@ _PRIMARY_STAGE_BY_PHASE: dict[PipelineState, PipelineState] = {
 
 
 def pipeline_stage_for_phase(phase: str | PipelineState) -> PipelineState:
+    """Collapse a hook/system phase to its primary agent stage (e.g. ``after_implementing → implementing``); used by reporting and prompt scaffolding to attribute hook activity to the stage that owns it."""
     state = canonical_pipeline_state(phase)
     return _PRIMARY_STAGE_BY_PHASE.get(state, state)
 

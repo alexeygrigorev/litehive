@@ -36,6 +36,7 @@ from litehive.workspace import Workspace
 
 
 def _effective_task_engine(root: Path, task: TaskRecord) -> str:
+    """Determine which engine the task is currently running under by checking the active subagent first, then the most recent subagent reference, then the workspace default; the value is what the audit/activity entries record as the "previous engine" of the switch."""
     if task.runtime.execution.active_subagent is not None:
         return task.runtime.execution.active_subagent.engine
     if task.subagents:
@@ -44,6 +45,7 @@ def _effective_task_engine(root: Path, task: TaskRecord) -> str:
 
 
 def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
+    """Collect the relative subagent artifact directories from prior runs (newest-first, deduplicated, with the latest base directory pinned) so the activity entry tells the new engine exactly where to find the previous engine's output."""
     paths: list[str] = []
     for candidate in (ref.path for ref in reversed(task.subagents)):
         if candidate and candidate not in paths:
@@ -63,6 +65,7 @@ def _switch_activity_entry_message(
     new_engine: str,
     prior_work_paths: list[str],
 ) -> str:
+    """Format the multi-line activity entry that follows an engine switch; the explicit ``prior_work`` block tells the next agent which subagent dirs to read so the switch doesn't lose context."""
     lines = [
         f"Engine switch requested: {reason}",
         f"engine: {previous_engine} -> {new_engine}",

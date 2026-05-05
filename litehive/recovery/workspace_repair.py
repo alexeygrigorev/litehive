@@ -28,6 +28,7 @@ def repair_workspace_state(workspace: Workspace) -> WorkspaceRepairSummary:
 
 
 def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepairSummary | None = None) -> bool:
+    """Promote tasks that have already passed accepting/commit-to-git to ``DONE`` when their runtime row is still queued/in-progress; covers the race where a daemon crash left a successful task pinned in the queue, and the operator-visible repair summary reports each touched task id."""
     mutated = False
     root = workspace.root
     with workspace_lock(root):
@@ -99,6 +100,7 @@ def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepa
 
 
 def _stale_terminal_candidate_ids(workspace: Workspace) -> list[str]:
+    """SQL-side filter that returns only tasks whose latest stage report passed at accepting/commit but whose runtime row hasn't been promoted to ``done``; keeps the Python reconciliation loop short by pre-filtering in the database."""
     with workspace.connect() as connection:
         rows = connection.execute(
             """

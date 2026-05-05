@@ -298,6 +298,7 @@ def collect_quota_health() -> list[_QuotaHealth]:
 
 
 def _unsupported_quota_health(engine: str) -> _QuotaHealth:
+    """Render a placeholder row for engines whose providers don't expose a usage check (e.g. Gemini), so the health command shows them as `unsupported` rather than a hard failure."""
     return _QuotaHealth(engine=engine, status="unsupported", summary="no proactive quota check")
 
 

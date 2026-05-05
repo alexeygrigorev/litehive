@@ -112,6 +112,7 @@ def _halt_for_origin_divergence(
 
 
 def _write_pool_stop_reason(workspace: Path, reason: str) -> None:
+    """Persist a pool stop reason via the canonical state writer; daemon-internal alias kept so divergence/halt branches read uniformly."""
     set_pool_stop_reason(workspace, reason)
 
 
@@ -312,10 +313,12 @@ def _terminate_child_process(process: subprocess.Popen[str]) -> None:
 
 
 def _runner_is_live(status) -> bool:
+    """True when another ``litehive run`` is still active for the workspace (running or late but not declared stale); the daemon loop idles instead of spawning a duplicate runner."""
     return getattr(status, "status", None) in {"running", "late"}
 
 
 def _has_work(state: dict[str, object]) -> bool:
+    """True when the pool still has something to do — an active task or a queued task; the loop exits cleanly when this returns False so an empty queue doesn't keep the daemon busy."""
     return state.get("active_task_id") is not None or bool(state.get("queue", []) or [])
 
 
@@ -458,6 +461,7 @@ def run_daemon_loop(
     heartbeat_thread.start()
 
     def _handle_signal(signum: int, _frame: object) -> None:
+        """SIGTERM/SIGINT handler installed by ``run_daemon_loop``; flips the stop flag and forwards the signal to the live ``litehive run`` child so a Ctrl-C reaches the whole subtree."""
         nonlocal stop_requested
         del signum
         stop_requested = True

@@ -25,6 +25,7 @@ def blocking_failed_run_records(task: TaskRecord) -> list[RuntimeFailedRunRecord
 
 
 def has_blocking_failed_run_history(task: TaskRecord) -> bool:
+    """True when at least one failed-run record needs operator acknowledgement; the requeue/reset CLI uses this to refuse work that has already exhausted retries on the same failure shape."""
     return bool(blocking_failed_run_records(task))
 
 
@@ -95,6 +96,7 @@ def mark_failed_run_operator_override(
 
 
 def failed_run_block_message(task: TaskRecord, records: list[RuntimeFailedRunRecord]) -> str:
+    """Format the operator-facing refusal text that the requeue/reset commands print when a task has been failing the same way repeatedly; tells the operator how to override (`--force`) instead of leaving them to guess at the gate."""
     details = "; ".join(
         (f"{record.stage} shape={record.failure_shape} count={record.count} latest_at={record.latest_at or '-'}")
         for record in records

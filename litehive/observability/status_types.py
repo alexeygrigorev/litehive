@@ -38,6 +38,7 @@ class StatusIssue:
     message: str
 
     def render(self) -> str:
+        """Format an issue as a single ``key: message`` line for the status diagnostics block; concentrating the wire format here so every consumer renders issues identically."""
         return f"{self.key}: {self.message}"
 
 

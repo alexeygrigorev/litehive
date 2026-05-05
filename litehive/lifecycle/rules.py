@@ -51,6 +51,7 @@ from .transitions import Rule, entry_from_worktree_sync, resume_from_origin, res
 
 
 def _recovery_rules(from_state, on_event, when=None) -> list[Rule]:
+    """Expand one (state, event) pair into the two-rule budget-aware recovery routing the rule table needs everywhere; one rule fails when the recovery budget is exhausted, the other enters RECOVERING when budget remains."""
     if when is None:
         exhausted_when = recovery_budget_exhausted()
         available_when = recovery_budget_available()
@@ -76,6 +77,7 @@ def _recovery_rules(from_state, on_event, when=None) -> list[Rule]:
 
 
 def _terminal_reject_rules(from_state, when=None, reason="semantic_reject") -> list[Rule]:
+    """Build the "Reject from this state goes straight to FAILED" rule for stages where rejection is non-retryable (grooming, commit, merge-resolving)."""
     return [
         Rule(
             from_state=from_state,

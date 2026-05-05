@@ -24,6 +24,7 @@ class TransientError(Exception):
     """
 
     def __init__(self, message: str, failure_kind: str | None = None) -> None:
+        """Carry a normalized ``failure_kind`` (``execution_limit``, ``timeout``, …) so the AgentNode can match it against the configured ``retry_on`` set rather than parsing the message string."""
         super().__init__(message)
         self.failure_kind = failure_kind
 
@@ -83,7 +84,9 @@ class AgentVerdict:
 class Engine(Protocol):
     name: str
 
-    def run_turn(self, session: Any, prompt: Any, state: TaskState) -> AgentVerdict: ...
+    def run_turn(self, session: Any, prompt: Any, state: TaskState) -> AgentVerdict:
+        """Execute one engine turn and return the resolved verdict; the AgentNode wraps each call in retry/nudge/exclusion bookkeeping so the protocol stays minimal."""
+        ...
 
 
 class EngineSelector(Protocol):
@@ -100,13 +103,21 @@ class EngineSelector(Protocol):
         state: TaskState,
         node_name: PipelineState,
         excluded: frozenset[str],
-    ) -> Engine | None: ...
+    ) -> Engine | None:
+        """Return the next engine to try for this node visit, honouring the AgentNode's ``excluded`` set so we never re-pick an engine that has already crashed in this run."""
+        ...
 
 
 class SessionProvider(Protocol):
-    def get_or_create(self, task_id: str, node_name: PipelineState, engine_name: str) -> Any: ...
+    """Per-(task, node, engine) session store the AgentNode uses so retries can resume the engine via ``--continue``."""
 
-    def persist(self, task_id: str, node_name: PipelineState, engine_name: str, session: Any) -> None: ...
+    def get_or_create(self, task_id: str, node_name: PipelineState, engine_name: str) -> Any:
+        """Return the session id for a task/node/engine triple, creating it on first use; the AgentNode calls this once per outer-loop engine selection."""
+        ...
+
+    def persist(self, task_id: str, node_name: PipelineState, engine_name: str, session: Any) -> None:
+        """Save the session id after a successful turn so the next visit (or retry) can resume the same engine session."""
+        ...
 
 
 class AgentNode(Node):

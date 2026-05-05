@@ -13,11 +13,13 @@ app = make_typer(invoke_without_command=True)
 
 @app.callback()
 def worktree_group(ctx: typer.Context) -> None:
+    """Top-level callback for the ``litehive worktree`` group; refuses calls without a subcommand so the user sees help instead of a no-op."""
     require_subcommand(ctx)
 
 
 @app.command("ls", help="List Litehive-managed task worktrees")
 def ls(workspace: WorkspaceOption = Path.cwd()) -> int:
+    """Operator inventory of the worktrees Litehive currently owns; the typical first step when a task seems stuck or a worktree is suspected of dirt."""
     ensure_workspace(workspace)
     service = WorktreeService(workspace)
     worktrees = service.collect_managed_worktrees()
@@ -45,6 +47,7 @@ def clean(
     workspace: WorkspaceOption = Path.cwd(),
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show planned removals only")] = False,
 ) -> int:
+    """Operator-driven worktree cleanup for tasks that have already left the active set; ``--dry-run`` lets the operator preview before deleting on disk."""
     ensure_workspace(workspace)
     service = WorktreeService(workspace)
     results = service.remove_cleanable_worktrees(dry_run=dry_run)
@@ -90,6 +93,7 @@ def rescue(
     workspace: WorkspaceOption = Path.cwd(),
     apply: Annotated[bool, typer.Option(help="Cherry-pick eligible commits onto main")] = False,
 ) -> int:
+    """Salvage commits stranded in a flagged worktree by cherry-picking them onto main; the recovery tool of last resort when the merge-resolver could not finish on its own."""
     ensure_workspace(workspace)
     service = WorktreeService(workspace)
     candidates = service.collect_rescue_candidates()

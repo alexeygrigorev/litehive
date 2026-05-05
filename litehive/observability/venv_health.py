@@ -28,6 +28,7 @@ class BrokenVenvExecutable:
 
     @property
     def binary_name(self) -> str:
+        """Bare filename of the broken executable for the operator-facing diagnostic line; reading the full path is noisy when only the binary name identifies the problem."""
         return self.binary_path.name
 
 
@@ -97,6 +98,7 @@ def daemon_broken_venv_message(workspace_root: Path, findings: list[BrokenVenvEx
 
 
 def _venv_bin_dir(venv_path: Path) -> Path:
+    """Return the platform-specific scripts directory inside a venv (``Scripts`` on Windows, ``bin`` elsewhere); centralized so probe and discovery agree on a single layout assumption."""
     if os.name == "nt":
         bin_name = "Scripts"
     else:
@@ -105,6 +107,7 @@ def _venv_bin_dir(venv_path: Path) -> Path:
 
 
 def _iter_probe_candidates(bin_dir: Path) -> list[Path]:
+    """List entries in a venv bin dir that are worth probing — executable regular files plus symlinks (which are the ones ``uv cache clean`` typically breaks); skips directories and unstattable entries."""
     candidates: list[Path] = []
     for entry in sorted(bin_dir.iterdir()):
         try:
@@ -119,6 +122,7 @@ def _iter_probe_candidates(bin_dir: Path) -> list[Path]:
 
 
 def _probe_executable(binary_path: Path) -> str | None:
+    """Try to ``exec`` an entrypoint just long enough to confirm its symlink target still exists; returns an error detail string on the specific ENOENT/ENOTDIR failure mode the broken-venv check cares about, ``None`` for everything else (including timeouts) so unrelated runtime errors don't get reported as broken venvs."""
     try:
         process = subprocess.Popen(
             [str(binary_path), "--version"],

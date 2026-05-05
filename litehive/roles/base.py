@@ -32,6 +32,7 @@ class PromptContext:
 
 
 def _bulletize(lines: list[str]) -> str:
+    """Render a list of guidance lines as a Markdown bullet block; centralised so every layer that emits "startup guidance" produces the same shape and the agent prompt remains diff-friendly."""
     return "\n".join(f"- {line}" for line in lines)
 
 
@@ -79,6 +80,7 @@ class RoleAgent(AgentNode):
         retry_backoff_multiplier: float = 2.0,
         grace_period_seconds: int | None = None,
     ) -> None:
+        """Verify the subclass declared its NODE_NAME/ROLE and forward the rest of the wiring to ``AgentNode``; the prompt context is captured here so ``build_prompt`` can layer workspace overlays without re-reading config every turn."""
         if not self.NODE_NAME or not self.ROLE:
             raise TypeError(f"{type(self).__name__} must set NODE_NAME and ROLE class attributes")
         super().__init__(

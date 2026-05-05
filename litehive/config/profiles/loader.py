@@ -20,10 +20,12 @@ PROCESS_PROFILES = PROCESS_PROFILE_OVERLAYS
 
 
 def available_process_profiles() -> list[str]:
+    """Return the sorted list of process-profile names for `litehive workspace init` selection and tab-completion."""
     return sorted(PROCESS_PROFILES)
 
 
 def resolve_process_profile(name: str | None) -> ProcessProfile:
+    """Materialize the requested process profile by overlaying its diff onto the shared base; raises ``ValueError`` for unknown names so config loading fails loudly instead of silently returning an empty profile."""
     profile: dict[str, Any] = deepcopy(SHARED_PROCESS_PROFILE)
     if name is None:
         overlay: dict[str, Any] = {}

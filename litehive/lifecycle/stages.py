@@ -24,9 +24,11 @@ class Stage:
     node: type
 
     def __post_init__(self) -> None:
+        """Coerce ``name`` to a real ``PipelineState`` enum even when callers pass the string spelling, so equality and ordering are always between typed values."""
         object.__setattr__(self, "name", canonical_pipeline_state(self.name))
 
     def __eq__(self, other):
+        """Treat a ``Stage`` as equal to either another Stage with the same name or the raw string spelling of that name; lets the rule table mix ``Stages.GROOMING`` and ``"grooming"`` keys."""
         if isinstance(other, str):
             return self.name == other
         if isinstance(other, Stage):
@@ -34,9 +36,11 @@ class Stage:
         return NotImplemented
 
     def __hash__(self):
+        """Hash by the underlying state name so ``Stage`` and the matching string spelling collide in the same dict bucket; required for the equality contract above."""
         return hash(self.name)
 
     def __lt__(self, other):
+        """Order stages by their state-name string so ``sorted(stages)`` gives a deterministic display ordering for status surfaces."""
         if isinstance(other, Stage):
             return self.name < other.name
         if isinstance(other, str):
@@ -44,6 +48,7 @@ class Stage:
         return NotImplemented
 
     def __repr__(self):
+        """Render as the bare state name so debug logs and pytest diffs read like ``grooming`` instead of ``Stage(name=PipelineState.GROOMING, ...)``."""
         return str(self.name)
 
 

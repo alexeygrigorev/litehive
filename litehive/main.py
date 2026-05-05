@@ -46,6 +46,7 @@ def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
 
 
 def _agent_blocked_command_message() -> str:
+    """Single source of truth for the operator-only refusal text shared between ``main.py`` and the agent CLI; keeps the wording identical so logs and operators see one message regardless of which guard fires."""
     return (
         "You are not authorized to perform this command. "
         "PM agents may shape only the active task via "
@@ -55,6 +56,7 @@ def _agent_blocked_command_message() -> str:
 
 
 def _workspace_override_from_argv(argv: list[str]) -> Path | None:
+    """Pre-parse ``--workspace`` from raw argv before Typer is loaded; needed by the fast status path which must resolve a workspace without paying the Click cold-start cost."""
     for index, arg in enumerate(argv):
         if arg == "--workspace" and index + 1 < len(argv):
             return Path(argv[index + 1])
@@ -64,6 +66,7 @@ def _workspace_override_from_argv(argv: list[str]) -> Path | None:
 
 
 def _requests_help(argv: list[str]) -> bool:
+    """Detect ``--help``/``-h`` in raw argv so the dispatcher can route help requests through the full Typer app (which prints rich help) instead of the fast paths."""
     return any(arg in {"--help", "-h"} for arg in argv)
 
 

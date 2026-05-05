@@ -34,6 +34,7 @@ def _stale_pid_warnings(stale_pid: bool) -> list[str]:
 
 
 def running_task_ids(workspace: Workspace) -> list[str]:
+    """Pull every task_id whose runtime row says ``execution_status='running'`` straight from SQLite; the cheap probe the recovery loop uses to decide whether the workspace looks wedged."""
     with workspace.connect() as connection:
         try:
             rows = connection.execute(
@@ -50,6 +51,7 @@ def running_task_ids(workspace: Workspace) -> list[str]:
 
 
 def should_requeue_commit_stage_task(task: TaskRecord) -> bool:
+    """True when a task that's parked at the commit-to-git stage must be re-prioritised by repair; the commit stage is the only mid-pipeline stage where requeueing is safe even if the task wasn't the workspace's active task at the time of the crash."""
     return task.pipeline_status == PipelineStatus.COMMIT_TO_GIT and task.status in {
         TaskStatus.QUEUED,
         TaskStatus.IN_PROGRESS,
@@ -249,6 +251,7 @@ def _recover_stale_running_task(
 
 
 def _task_state_row_exists(workspace: Workspace, task_id: str) -> bool:
+    """Existence probe that distinguishes "task was deleted entirely" from "task is in a bad state"; lets the active-task reconciliation safely clear ``state.active_task_id`` only when there's no row to point at anymore."""
     with workspace.connect() as connection:
         try:
             row = connection.execute(

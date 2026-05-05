@@ -6,6 +6,7 @@ import shutil
 
 
 def remove_tree_logged(path: Path, logger: logging.Logger, target_label: str) -> None:
+    """Delete a file/symlink/tree on disk with structured logging on either side; the only sanctioned filesystem-removal helper so worktree-cleanup, log-pruning, and recovery all surface failures the same way."""
     logger.info("Deleting %s %s", target_label, path)
     try:
         if path.is_symlink() or path.is_file():

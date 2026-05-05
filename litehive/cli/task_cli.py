@@ -38,18 +38,21 @@ app = make_typer(invoke_without_command=True)
 
 
 def _display_flag_reason(task) -> str:
+    """Render the flag-reason cell for `task list`/`task show`; collapses non-flagged rows to ``-`` so the column reads cleanly."""
     if task.status != TaskStatus.FLAGGED:
         return "-"
     return task.flag_reason or "unknown"
 
 
 def _display_close_reason(task) -> str:
+    """Render the close-reason cell with a layered fallback (explicit close_reason > pipeline last_outcome > unknown) so closed tasks always carry a reason in operator output."""
     if task.status not in {TaskStatus.CLOSED, TaskStatus.DONE}:
         return "-"
     return task.close_reason or task.runtime.pipeline.last_outcome.reason_code or "unknown"
 
 
 def _show_dependency_label(root, task) -> str:
+    """Render the depends_on cell with each dependency's current status (or ``missing``) inline so an operator can spot a broken prerequisite without an extra `task show`."""
     if not task.depends_on:
         return "-"
 
@@ -64,6 +67,7 @@ def _show_dependency_label(root, task) -> str:
 
 
 def _print_creation_provenance(task) -> None:
+    """Print the ``created_from`` block on `task show` so operators can trace whether a task was created by a human, a planner subagent, or a follow-up edge from another stage."""
     created_from = task.created_from
     if created_from is None:
         print("created_from: -")

@@ -60,6 +60,7 @@ class ConfigBackedEngineSelector:
         model_override: str | None = None,
         check_quota: bool = True,
     ) -> None:
+        """Bind the selector to a workspace and capture caller overrides so each ``select`` call only needs the AgentNode's per-turn context (state, node, excluded set)."""
         self.config = config
         self.engine_factory = engine_factory
         self.workspace_root = workspace_root.resolve()
@@ -68,6 +69,7 @@ class ConfigBackedEngineSelector:
         self.check_quota = check_quota
 
     def _selection_task(self, state: TaskState, node_name: PipelineState) -> TaskRecord | None:
+        """Return the persisted task or a synthetic stand-in so engine selection always has a record to score; needed because some lifecycle nodes run before a real task row exists (e.g. workspace-level recovery)."""
         if getattr(state, "task_id", None):
             task = get_task(self.workspace_root, state.task_id)
             if task is not None:

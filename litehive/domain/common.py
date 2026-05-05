@@ -20,14 +20,17 @@ class StringEnum(str, Enum):
     """Base class for string-valued enums used across persisted models."""
 
     def __str__(self) -> str:
+        """Render the enum as its string ``value`` so f-strings and JSON serialization match the persisted spelling instead of the ``Class.NAME`` repr."""
         return self.value
 
 
 def utcnow() -> str:
+    """Workspace-wide source of "now" as a microsecond-trimmed UTC ISO string; used for every persisted timestamp so SQLite ordering and diffs stay text-comparable."""
     return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 def cap_feedback(text: str, limit: int = FEEDBACK_CAP) -> str:
+    """Truncate long subagent feedback to ``FEEDBACK_CAP`` chars with a stable marker so prompts stay under engine context limits while still pointing the reader to the full transcript."""
     if len(text) <= limit:
         return text
     return text[: limit - len(TRUNCATION_MARKER)] + TRUNCATION_MARKER
@@ -165,6 +168,7 @@ _STAGE_OWNER_ROLES: dict["TaskStage", str] = {}
 
 
 def _populate_stage_owners() -> None:
+    """Fill the stage→owner role lookup after ``TaskStage`` is fully defined; kept as a function rather than a literal so the table can reference enum members directly without forward-reference ceremony."""
     # Populated after the enum is defined to avoid forward-reference
     # ceremony with the enum members.
     _STAGE_OWNER_ROLES.update(

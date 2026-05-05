@@ -29,6 +29,7 @@ class ReportReference:
         return self.display()
 
     def __str__(self) -> str:
+        """Render the reference using the canonical display token so log lines and f-strings always emit the same form."""
         return self.display()
 
 
@@ -189,6 +190,7 @@ def _load_stage_reports(
     task_id: str | None = None,
     pipeline_state: str | None = None,
 ) -> list[StageReport]:
+    """Single SQL query backing every stage-report loader (per-task, per-state, workspace-wide); returns rows in insertion order and silently drops payloads that fail JSON or pydantic validation so a single corrupt row can't break the whole list."""
     query = """
         SELECT payload
         FROM stage_reports
@@ -223,6 +225,7 @@ def _load_stage_reports(
 
 
 def _deserialize_stage_report_payload(payload: dict[str, object]) -> StageReport:
+    """Coerce a stored stage-report payload into the current ``StageReport`` shape; absorbs the legacy ``stage``/``files_changed`` fields and canonicalises the verdict so older rows keep validating after schema renames."""
     normalized = dict(payload)
     if "pipeline_state" not in normalized and "stage" in normalized:
         normalized["pipeline_state"] = normalized["stage"]

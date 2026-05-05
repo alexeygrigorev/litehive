@@ -11,6 +11,7 @@ from litehive.domain.task import TaskRecord
 
 
 def _worktree_workspace_dir(root: Path) -> Path | None:
+    """Resolve the canonical ``.litehive`` directory when ``root`` actually points inside a managed worktree; lets task-artifact helpers redirect writes back to the per-worktree workspace instead of polluting the main checkout."""
     resolved = root.resolve()
     parts = resolved.parts
     for i, part in enumerate(parts):
@@ -71,6 +72,7 @@ def latest_path(paths: list[Path]) -> Path | None:
 
 
 def _artifact_candidates(base: Path, *names: str) -> list[Path]:
+    """Expand each candidate name into both its plain and ``.gz`` form so artifact lookups don't have to know whether the producer compressed the file; the order matters because ``resolve_artifact_path`` returns the first hit."""
     candidates: list[Path] = []
     for name in names:
         path = base / name

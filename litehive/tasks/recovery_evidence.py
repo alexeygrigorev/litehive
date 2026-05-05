@@ -252,4 +252,5 @@ def collect_recovery_evidence(
 
 
 def stage_report_context(report: StageReport) -> str:
+    """Render the one-line summary the recovery prompt embeds for the latest stage report; the recovery agent uses this to decide whether to advance, retry, or rewind without expanding the full report payload."""
     return f"{report.pipeline_state}/{report.verdict} source={report.source} summary={report.summary}"

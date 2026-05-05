@@ -15,8 +15,10 @@ class TerminalNode(Node):
     node_type = NodeType.TERMINAL
 
     def __init__(self, name: PipelineState) -> None:
+        """Bind the terminal to the resting state it represents (DONE / FAILED) so the runner can identify it without a separate registry."""
         self.name = name
 
     def run(self, state: TaskState) -> Event:
+        """No-op required by the ``Node`` protocol; the runner short-circuits on terminal nodes via ``state.stage in TERMINAL_NODES`` and never reaches this body in production."""
         del state
         return Pass()

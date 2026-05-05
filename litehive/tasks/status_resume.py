@@ -65,6 +65,7 @@ def _requeue_task_transition(
     """Reset a flagged/parked/closed task back to the implementation entry stage and put it on the queue; retracts already-merged pass entries so the next implementation attempt does not double-claim work that is already on main."""
 
     def _task_checkout_path(task: TaskRecord) -> Path:
+        """Pick the checkout the path-divergence probe should look at — the recorded task worktree if it still exists on disk, otherwise the main checkout — so requeue's pass-retraction logic compares the right tree against main."""
         worktree_path = resolve_recorded_worktree_path(
             root, task.runtime.pipeline.git.worktree_path or task.git.worktree_path
         )
@@ -73,6 +74,7 @@ def _requeue_task_transition(
         return root
 
     def _path_differs_from_main(checkout_path: Path, main_ref: str, relative_path: str) -> bool:
+        """Convert ``GitError`` into ``ValueError`` so requeue surfaces the failure in the same domain shape as its other validation errors instead of leaking a git-specific exception class."""
         try:
             return path_differs_at_ref(checkout_path, main_ref, relative_path)
         except GitError as exc:

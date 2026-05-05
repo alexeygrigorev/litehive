@@ -83,6 +83,7 @@ class WorkspaceRepairSummary:
 
     @property
     def repaired(self) -> bool:
+        """Alias for ``mutated`` used by the operator-facing repair summary; reads more naturally in the CLI ``repaired: yes/no`` output line."""
         return self.mutated
 
 
