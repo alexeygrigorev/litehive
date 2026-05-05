@@ -419,7 +419,7 @@ def report_command(
         message=message,
         files_changed=list(files_changed or []),
     )
-    append_task_activity(root, task, entry)
+    append_task_activity(Workspace.from_path(root), task, entry)
     print(f"task: {task.id}")
     print(f"stage: {stage}")
     print(f"verdict: {verdict}")

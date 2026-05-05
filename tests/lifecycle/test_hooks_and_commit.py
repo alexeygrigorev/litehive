@@ -1001,7 +1001,7 @@ def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path
     assert (tmp_path / "after_commit_branch.txt").read_text().strip() == "main"
     assert not worktree.exists()
 
-    activity_entries = load_task_activity(tmp_path, refreshed)
+    activity_entries = load_task_activity(Workspace.from_path(tmp_path), refreshed)
     assert activity_entries[-1].role == "hook"
     assert activity_entries[-1].stage == "commit_to_git"
     assert activity_entries[-1].verdict == "reject"
@@ -1102,7 +1102,7 @@ def test_run_task_before_accepting_hook_retries_and_continues(
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
 
-    activity_entries = load_task_activity(tmp_path, refreshed)
+    activity_entries = load_task_activity(Workspace.from_path(tmp_path), refreshed)
     hook_entries = [entry for entry in activity_entries if entry.role == "hook"]
     assert hook_entries
     assert hook_entries[-1].stage == "accepting"

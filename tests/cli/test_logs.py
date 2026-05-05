@@ -14,6 +14,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.domain.runtime import RuntimeSubagentState
 from litehive.state.records import create_task, save_task, save_task_runtime
 from litehive.tasks.paths import task_dir
+from litehive.workspace import Workspace
 
 from tests.support.helpers import _cmd_logs
 
@@ -60,8 +61,7 @@ def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
             updated_at="2026-04-09T10:00:01Z",
         )
     else:
-        save_subagent_artifacts(
-            tmp_path,
+        save_subagent_artifacts(Workspace.from_path(tmp_path),
             task.id,
             "SA-0001",
             session={
@@ -239,8 +239,7 @@ def test_logs_agent_all_lists_all_subagents_with_duration(tmp_path: Path, capsys
 
     planner_dir = task_dir(tmp_path, task) / "subagents" / "SA-0001-planner"
     planner_dir.mkdir(parents=True, exist_ok=True)
-    save_subagent_artifacts(
-        tmp_path,
+    save_subagent_artifacts(Workspace.from_path(tmp_path),
         task.id,
         "SA-0001",
         session={
@@ -251,8 +250,7 @@ def test_logs_agent_all_lists_all_subagents_with_duration(tmp_path: Path, capsys
     )
     swe_dir = task_dir(tmp_path, task) / "subagents" / "SA-0002-swe"
     swe_dir.mkdir(parents=True, exist_ok=True)
-    save_subagent_artifacts(
-        tmp_path,
+    save_subagent_artifacts(Workspace.from_path(tmp_path),
         task.id,
         "SA-0002",
         session={

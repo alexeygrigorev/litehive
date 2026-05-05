@@ -44,7 +44,7 @@ def record_recovery_report(
     ref = insert_recovery_report(workspace, task, report)
     latest_report = latest_stage_report(workspace, task)
     append_task_activity(
-        root,
+        workspace,
         task,
         TaskActivityEntry(
             role="recovery",

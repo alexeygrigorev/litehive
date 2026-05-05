@@ -53,6 +53,7 @@ from litehive.lifecycle.prompt_sections import (
 from litehive.lifecycle.prompt_types import AgentPrompt, RecoveryPrompt
 from litehive.state.records import get_task
 from litehive.tasks.activity import load_task_activity
+from litehive.workspace import Workspace
 
 
 SECTION_SEP = "\n"
@@ -149,7 +150,7 @@ def serialize_prompt(
 def _load_task_activity_history(workspace_root: Path, task_record: TaskRecord) -> list[dict[str, Any]]:
     """Read the task's persisted activity entries."""
     try:
-        activity_entries = load_task_activity(workspace_root, task_record)
+        activity_entries = load_task_activity(Workspace.from_path(workspace_root), task_record)
     except (OSError, ValidationError, yaml.YAMLError):
         return []
     return [

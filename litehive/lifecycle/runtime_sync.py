@@ -28,6 +28,7 @@ from litehive.state.records import get_task, set_task_commit_sha
 from litehive.tasks.activity import latest_task_activity_entry
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.runtime import apply_task_outcome
+from litehive.workspace import Workspace
 
 from .persistence import FailedRunRecord, TaskState
 
@@ -323,7 +324,7 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
     if failed_reason != "recovery_exhausted":
         return
     latest = latest_task_activity_entry(
-        root,
+        Workspace.from_path(root),
         task_record,
         role="recovery",
         stage=PipelineState.RECOVERING.value,

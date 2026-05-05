@@ -22,6 +22,7 @@ from litehive.git.ops import (
 from litehive.state.records import get_task_worktree_path, list_tasks
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.activity_rendering import normalized_files_changed
+from litehive.workspace import Workspace
 from litehive.worktree.paths import resolve_recorded_worktree_path
 
 
@@ -150,7 +151,7 @@ def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
     """Build the set of paths an interrupted task is allowed to leave dirty: its own metadata directory plus everything its activity log already recorded as changed."""
     paths: set[PurePosixPath] = set()
     paths.add(PurePosixPath(".litehive") / "tasks" / f"{task.id}-{task.slug}")
-    for entry in load_task_activity(root, task):
+    for entry in load_task_activity(Workspace.from_path(root), task):
         for changed_file in normalized_files_changed(entry.files_changed):
             paths.add(PurePosixPath(changed_file))
     return paths

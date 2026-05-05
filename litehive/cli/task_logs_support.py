@@ -75,9 +75,10 @@ def list_task_subagents(root: Path, task) -> int:
     if task.runtime.execution.active_subagent is not None:
         runtime_by_id[task.runtime.execution.active_subagent.id] = task.runtime.execution.active_subagent
 
+    workspace = Workspace.from_path(root)
     for ref in reversed(task.subagents):
         runtime_state = runtime_by_id.get(ref.id)
-        session = load_subagent_session(root, task.id, ref.id)
+        session = load_subagent_session(workspace, task.id, ref.id)
         exit_code = _pick_value(runtime_state, session, "exit_code")
         started_at = _pick_value(runtime_state, session, "started_at", "created_at")
         completed_at = _pick_value(runtime_state, session, "completed_at", "updated_at")

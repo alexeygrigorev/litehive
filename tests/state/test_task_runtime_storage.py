@@ -182,8 +182,7 @@ def test_current_storage_contract_uses_sqlite_without_workspace_yaml(tmp_path: P
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.current_stage.stage = "implementing"
     save_task_runtime(tmp_path, task)
-    save_subagent_artifacts(
-        tmp_path,
+    save_subagent_artifacts(Workspace.from_path(tmp_path),
         task.id,
         "SA-0001",
         session={"id": "SA-0001", "role": "swe", "status": "completed"},

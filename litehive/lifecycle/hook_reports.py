@@ -99,7 +99,7 @@ def _record_hook_warnings(
     report_path = record_stage_report(workspace, task, report)
     message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(root)}"
     append_task_activity(
-        root,
+        workspace,
         task,
         TaskActivityEntry(
             role="hook",
@@ -157,7 +157,7 @@ def _record_hook_reject(
     report_path = record_stage_report(workspace, task, report)
     message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(root)}"
     append_task_activity(
-        root,
+        workspace,
         task,
         TaskActivityEntry(
             role="hook",

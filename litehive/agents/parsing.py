@@ -14,6 +14,7 @@ from litehive.domain.task import TaskRecord
 
 from litehive.domain.agent import SubagentResult
 from litehive.tasks.activity import latest_task_activity_entry
+from litehive.workspace import Workspace
 
 
 def stage_report_from_subagent(
@@ -33,7 +34,7 @@ def stage_report_from_subagent(
     """
     pipeline_state: ReportPipelineState = canonical_report_pipeline_state(stage)
     latest = latest_task_activity_entry(
-        root,
+        Workspace.from_path(root),
         task,
         stage=str(pipeline_state),
         source_subagent_id=result.ref.id,

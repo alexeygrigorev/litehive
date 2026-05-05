@@ -344,8 +344,7 @@ def test_connect_workspace_db_rebuilds_replaced_cached_db(tmp_path: Path) -> Non
     ensure_workspace(tmp_path)
     db_path = workspace_path(tmp_path, "data.db")
 
-    save_subagent_artifacts(
-        tmp_path,
+    save_subagent_artifacts(Workspace.from_path(tmp_path),
         "T-0001",
         "SA-0001",
         session={"status": "running"},
@@ -355,14 +354,13 @@ def test_connect_workspace_db_rebuilds_replaced_cached_db(tmp_path: Path) -> Non
     with sqlite3.connect(db_path):
         pass
 
-    save_subagent_artifacts(
-        tmp_path,
+    save_subagent_artifacts(Workspace.from_path(tmp_path),
         "T-0001",
         "SA-0001",
         report={"summary": "recovered"},
     )
 
-    report = load_subagent_report(tmp_path, "T-0001", "SA-0001")
+    report = load_subagent_report(Workspace.from_path(tmp_path), "T-0001", "SA-0001")
     assert report["summary"] == "recovered"
 
     with sqlite3.connect(db_path) as connection:

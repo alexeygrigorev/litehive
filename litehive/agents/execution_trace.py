@@ -13,6 +13,7 @@ from litehive.agents.session_store import load_subagent_event_stream
 from litehive.domain.runtime import RuntimeSubagentState, SubagentRef
 from litehive.domain.task import TaskRecord
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
+from litehive.workspace import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +152,7 @@ def load_subagent_execution_trace(
             )
 
     stderr = _read_stream_artifact(base, "stderr", active=active)
-    event_stream = load_subagent_event_stream(root, task.id, ref.id)
+    event_stream = load_subagent_event_stream(Workspace.from_path(root), task.id, ref.id)
     event_trace = render_execution_trace_from_event_stream_payload(
         event_stream,
         stderr="" if stderr is None else stderr.text,

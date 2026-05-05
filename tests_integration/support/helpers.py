@@ -541,6 +541,7 @@ def assert_nudge_verdict_submission(
     from litehive.agents.session_store import save_subagent_artifacts
     from litehive.state.records import require_task
     from litehive.tasks.activity import load_task_activity
+    from litehive.workspace import Workspace
 
     session = smoke_session
     if session is None:
@@ -550,8 +551,7 @@ def assert_nudge_verdict_submission(
         assert session.engine_name == engine_name, (session.engine_name, engine_name)
 
     subagent_id = "SI-nudge-swe"
-    save_subagent_artifacts(
-        session.cwd,
+    save_subagent_artifacts(Workspace.from_path(session.cwd),
         session.task_id,
         subagent_id,
         session={"id": subagent_id, "role": "swe", "engine": engine_name, "status": "running"},
@@ -568,7 +568,7 @@ def assert_nudge_verdict_submission(
     )
 
     def verdict_persisted() -> bool:
-        thread = load_task_activity(session.cwd, require_task(session.cwd, session.task_id))
+        thread = load_task_activity(Workspace.from_path(session.cwd), require_task(session.cwd, session.task_id))
         verdicts = [c for c in thread if c.verdict != "comment"]
         return bool(
             verdicts
@@ -597,7 +597,7 @@ def assert_nudge_verdict_submission(
     # Step 3: verify verdict persisted
     deadline = time.monotonic() + 3.0
     while True:
-        thread = load_task_activity(session.cwd, require_task(session.cwd, session.task_id))
+        thread = load_task_activity(Workspace.from_path(session.cwd), require_task(session.cwd, session.task_id))
         verdicts = [c for c in thread if c.verdict != "comment"]
         if verdicts:
             assert verdicts[-1].verdict == "pass"

@@ -46,8 +46,7 @@ def _make_task_with_subagent(tmp_path, *, engine="codex", role="swe", sa_id="SA-
 def _write_session_record(
     root: Path, task_id: str, *, sa_id="SA-implementing", role="swe", engine="codex", status="completed", exit_code=0
 ):
-    save_subagent_artifacts(
-        root,
+    save_subagent_artifacts(Workspace.from_path(root),
         task_id,
         sa_id,
         session={

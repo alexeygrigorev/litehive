@@ -156,11 +156,11 @@ class SessionMixin:
         """
         created_at = utcnow()
         resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
-        existing = load_subagent_session(self.root, task.id, ref.id)
+        existing = load_subagent_session(self.workspace, task.id, ref.id)
         if isinstance(existing.get("created_at"), str):
             created_at = existing["created_at"]
         save_subagent_artifacts(
-            self.root,
+            self.workspace,
             task.id,
             ref.id,
             session={
@@ -286,7 +286,7 @@ class SessionMixin:
         if event_stream is None:
             return
         save_subagent_artifacts(
-            self.root,
+            self.workspace,
             task.id,
             ref.id,
             event_stream=event_stream.model_dump(mode="python"),
@@ -315,11 +315,11 @@ class SessionMixin:
         """
         created_at = utcnow()
         resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
-        existing = load_subagent_session(self.root, task.id, ref.id)
+        existing = load_subagent_session(self.workspace, task.id, ref.id)
         if isinstance(existing.get("created_at"), str):
             created_at = existing["created_at"]
         save_subagent_artifacts(
-            self.root,
+            self.workspace,
             task.id,
             ref.id,
             session={

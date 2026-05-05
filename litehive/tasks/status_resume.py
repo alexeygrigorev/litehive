@@ -26,6 +26,7 @@ from litehive.tasks.activity import (
     load_task_activity,
     save_task_activity,
 )
+from litehive.workspace import Workspace
 from litehive.tasks.activity_rendering import (
     is_retractable_pass_entry,
     normalized_files_changed,
@@ -99,7 +100,8 @@ def _requeue_task_transition(
         main_ref = current_head(root)
         if main_ref is not None:
             checkout_path = _task_checkout_path(task)
-            activity_entries = load_task_activity(root, task)
+            workspace = Workspace.from_path(root)
+            activity_entries = load_task_activity(workspace, task)
             changed = False
             for entry in activity_entries:
                 if not is_retractable_pass_entry(entry):
@@ -109,7 +111,7 @@ def _requeue_task_transition(
                     continue
                 changed = retract_activity_entry(entry) or changed
             if changed:
-                save_task_activity(root, task, activity_entries)
+                save_task_activity(workspace, task, activity_entries)
         reset_task_for_recovery(
             task,
             status="queued",

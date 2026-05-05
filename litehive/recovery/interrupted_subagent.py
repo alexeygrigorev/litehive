@@ -12,6 +12,7 @@ from litehive.domain.common import utcnow
 from litehive.domain.runtime import RuntimeSubagentState
 from litehive.domain.task import TaskRecord
 from litehive.tasks.runtime import summarize_transcript
+from litehive.workspace import Workspace
 
 
 def mark_interrupted_subagent(root: Path, task: TaskRecord, reason: str, stage: str) -> RuntimeSubagentState | None:
@@ -51,7 +52,7 @@ def mark_interrupted_subagent(root: Path, task: TaskRecord, reason: str, stage: 
 
 def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeSubagentState) -> str:
     """Pick the best available transcript snippet to attach to the interrupted-subagent record — preferring a saved report summary, then a freshly summarised execution trace, falling back to a fixed string so the journal entry is never empty."""
-    report = load_subagent_report(root, task.id, active.id)
+    report = load_subagent_report(Workspace.from_path(root), task.id, active.id)
     if report:
         summary = str(report.get("summary") or "").strip()
         if summary:
@@ -94,8 +95,9 @@ def _write_interrupted_subagent_artifacts(
 ) -> None:
     """Persist the interrupted subagent's session+report files in-place so disk artifacts and the in-memory task record agree; the resume flow reads these to decide whether to continue or re-run the subagent."""
     now = utcnow()
-    session_payload = load_subagent_session(root, task.id, subagent.id)
-    report_payload = load_subagent_report(root, task.id, subagent.id)
+    workspace = Workspace.from_path(root)
+    session_payload = load_subagent_session(workspace, task.id, subagent.id)
+    report_payload = load_subagent_report(workspace, task.id, subagent.id)
     session_payload.update(
         {
             "id": subagent.id,
@@ -120,7 +122,7 @@ def _write_interrupted_subagent_artifacts(
     if subagent.continuation is not None:
         report_payload["continuation"] = subagent.continuation.model_dump(mode="python")
     save_subagent_artifacts(
-        root,
+        workspace,
         task.id,
         subagent.id,
         session=session_payload,

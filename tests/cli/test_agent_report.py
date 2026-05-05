@@ -47,8 +47,7 @@ def _bind_report_identity(
     role: str,
     subagent_id: str = "SA-0001",
 ) -> None:
-    save_subagent_artifacts(
-        root,
+    save_subagent_artifacts(Workspace.from_path(root),
         task_id,
         subagent_id,
         session={
@@ -109,7 +108,7 @@ def test_agent_report_derives_role_from_subagent_session_and_records_source(
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
     _assert_activity_entries(
-        load_task_activity(tmp_path, updated),
+        load_task_activity(Workspace.from_path(tmp_path), updated),
         [
             TaskActivityEntry(
                 role="qa",
@@ -152,7 +151,7 @@ def test_agent_report_rejects_removed_role_override(
     assert "No such option: --role" in str(result.exception)
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    assert load_task_activity(tmp_path, updated) == []
+    assert load_task_activity(Workspace.from_path(tmp_path), updated) == []
 
 
 def test_agent_report_help_does_not_advertise_role_flag() -> None:
@@ -204,7 +203,7 @@ def test_agent_report_uses_intent_record_when_runtime_row_is_missing(
     assert result.exit_code == 0, result.output
     task = get_task_record(tmp_path, "T-0001")
     assert task is not None
-    activity_entries = load_task_activity(tmp_path, task)
+    activity_entries = load_task_activity(Workspace.from_path(tmp_path), task)
     _assert_activity_entries(
         activity_entries,
         [
@@ -249,7 +248,7 @@ def test_agent_report_persists_hidden_recovery_target_stage(
     assert result.exit_code == 0, result.output
     task = get_task_record(tmp_path, task.id)
     assert task is not None
-    activity_entries = load_task_activity(tmp_path, task)
+    activity_entries = load_task_activity(Workspace.from_path(tmp_path), task)
     _assert_activity_entries(
         activity_entries,
         [
@@ -316,7 +315,7 @@ def test_agent_report_uses_env_stage_when_runtime_row_is_missing(tmp_path: Path,
     assert result.exit_code == 0, result.output
     task = get_task_record(tmp_path, "T-0001")
     assert task is not None
-    activity_entries = load_task_activity(tmp_path, task)
+    activity_entries = load_task_activity(Workspace.from_path(tmp_path), task)
     _assert_activity_entries(
         activity_entries,
         [
@@ -355,7 +354,7 @@ def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path
     assert result.exit_code == 0, result.output
     task = get_task_record(tmp_path, task.id)
     assert task is not None
-    activity_entries = load_task_activity(tmp_path, task)
+    activity_entries = load_task_activity(Workspace.from_path(tmp_path), task)
     _assert_activity_entries(
         activity_entries,
         [
@@ -407,7 +406,7 @@ def test_agent_report_classifies_qa_reviewer_rejects_as_semantic(
     assert f"verdict_classification: {SEMANTIC_REJECT_CLASSIFICATION}" in result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    activity_entries = load_task_activity(tmp_path, updated)
+    activity_entries = load_task_activity(Workspace.from_path(tmp_path), updated)
     assert len(activity_entries) == 1
     assert activity_entries[0].verdict == "reject"
     assert activity_entries[0].verdict_classification == SEMANTIC_REJECT_CLASSIFICATION
@@ -469,7 +468,7 @@ def test_agent_report_rejects_removed_fail_verdict_alias(
     assert "not authorized" in result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    activity_entries = load_task_activity(tmp_path, updated)
+    activity_entries = load_task_activity(Workspace.from_path(tmp_path), updated)
     assert activity_entries == []
 
 
@@ -808,7 +807,7 @@ def test_agent_report_accepts_recovery_resume_verdict(
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
     _assert_activity_entries(
-        load_task_activity(tmp_path, updated),
+        load_task_activity(Workspace.from_path(tmp_path), updated),
         [
             TaskActivityEntry(
                 role="recovery",
@@ -851,7 +850,7 @@ def test_agent_report_rejects_removed_step_alias(
     assert "No such option: --step" in str(result.exception)
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    assert load_task_activity(tmp_path, updated) == []
+    assert load_task_activity(Workspace.from_path(tmp_path), updated) == []
 
 
 def test_root_report_rejects_removed_step_alias(tmp_path: Path, monkeypatch) -> None:
@@ -881,7 +880,7 @@ def test_root_report_rejects_removed_step_alias(tmp_path: Path, monkeypatch) -> 
     assert "No such option: --step" in str(result.exception)
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    assert load_task_activity(tmp_path, updated) == []
+    assert load_task_activity(Workspace.from_path(tmp_path), updated) == []
 
 
 def test_root_report_rejects_removed_fail_verdict_alias(tmp_path: Path, monkeypatch) -> None:
@@ -911,7 +910,7 @@ def test_root_report_rejects_removed_fail_verdict_alias(tmp_path: Path, monkeypa
     assert "'fail' is not one of" in str(result.exception)
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    assert load_task_activity(tmp_path, updated) == []
+    assert load_task_activity(Workspace.from_path(tmp_path), updated) == []
 
 
 def test_root_report_defaults_to_litehive_task_id_env(tmp_path: Path, monkeypatch) -> None:
@@ -936,7 +935,7 @@ def test_root_report_defaults_to_litehive_task_id_env(tmp_path: Path, monkeypatc
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    activity_entries = load_task_activity(tmp_path, updated)
+    activity_entries = load_task_activity(Workspace.from_path(tmp_path), updated)
     assert len(activity_entries) == 1
     assert activity_entries[0].message == "root env task id"
 
@@ -972,7 +971,7 @@ def test_root_report_accepts_workspace_override(tmp_path: Path, monkeypatch) -> 
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    activity_entries = load_task_activity(tmp_path, updated)
+    activity_entries = load_task_activity(Workspace.from_path(tmp_path), updated)
     assert len(activity_entries) == 1
     assert activity_entries[0].message == "root workspace override"
 
@@ -1029,6 +1028,6 @@ def test_agent_report_accepts_workspace_override(tmp_path: Path, monkeypatch) ->
     assert result.exit_code == 0, result.output
     updated = get_task_record(tmp_path, task.id)
     assert updated is not None
-    activity_entries = load_task_activity(tmp_path, updated)
+    activity_entries = load_task_activity(Workspace.from_path(tmp_path), updated)
     assert len(activity_entries) == 1
     assert activity_entries[0].message == "agent workspace override"

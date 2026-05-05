@@ -204,7 +204,8 @@ def _rewrite_hallucinated_implementing_pass(
         f"claimed_files_changed: {claimed}"
     )
 
-    activity_entries = load_task_activity(workspace_root, task)
+    workspace = Workspace.from_path(workspace_root)
+    activity_entries = load_task_activity(workspace, task)
     for entry in reversed(activity_entries):
         if entry.created_at != latest.created_at:
             continue
@@ -217,7 +218,7 @@ def _rewrite_hallucinated_implementing_pass(
             entry.message = f"{entry.message.rstrip()}\n[retracted - filesystem check shows no changes landed]"
         entry.message = f"{entry.message.rstrip()}\n{detail}"
         break
-    save_task_activity(workspace_root, task, activity_entries)
+    save_task_activity(workspace, task, activity_entries)
 
     report = StageReport(
         task_id=task.id,
@@ -236,7 +237,6 @@ def _rewrite_hallucinated_implementing_pass(
             "claimed_files_changed": claimed_files,
         },
     )
-    workspace = Workspace.from_path(workspace_root)
     report_path = rewrite_latest_stage_report(workspace, task, report)
     append_journal(
         workspace,
@@ -316,7 +316,7 @@ def latest_verdict_after(
     if task is None:
         return None
     latest = latest_task_activity_entry(
-        workspace_root,
+        Workspace.from_path(workspace_root),
         task,
         stage=stage,
         source_subagent_id=source_subagent_id,
@@ -546,7 +546,7 @@ class HeruEngineAdapter:
         after_ts = datetime.min.replace(tzinfo=UTC)
         if state.stage == PipelineState.RECOVERING:
             previous_recovery = latest_task_activity_entry(
-                self.workspace_root,
+                Workspace.from_path(self.workspace_root),
                 task,
                 stage=str(PipelineState.RECOVERING),
                 verdicts=_allowed_verdicts_for_stage(str(PipelineState.RECOVERING)),
@@ -636,7 +636,7 @@ class HeruEngineAdapter:
         from litehive.agents.session_store import save_subagent_artifacts  # noqa: PLC0415
 
         save_subagent_artifacts(
-            self.workspace_root,
+            Workspace.from_path(self.workspace_root),
             task_id,
             source_subagent_id,
             session={

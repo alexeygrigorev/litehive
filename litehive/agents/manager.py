@@ -64,14 +64,14 @@ logger = logging.getLogger(__name__)
 
 
 def _latest_report_files_changed(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     pipeline_state: str,
     source_subagent_id: str | None = None,
 ) -> list[str]:
     """Read the most recent activity entry's normalized file list so finish/progress snapshots show *what this subagent actually touched*, not whatever the subagent self-reported."""
     latest = latest_task_activity_entry(
-        root,
+        workspace,
         task,
         stage=pipeline_state,
         source_subagent_id=source_subagent_id,
@@ -487,7 +487,7 @@ class SubagentManager(SessionMixin):
         )
         report = report.model_copy(update={"warnings": self._merged_warnings(report.warnings, extra_warnings)})
         files_changed = _latest_report_files_changed(
-            self.root,
+            self.workspace,
             task,
             str(report.pipeline_state),
             source_subagent_id=ref.id,
@@ -611,7 +611,7 @@ class SubagentManager(SessionMixin):
                 "status": ref.status,
                 "summary": report.summary,
                 "files_changed": _latest_report_files_changed(
-                    self.root,
+                    self.workspace,
                     task,
                     str(report.pipeline_state),
                     source_subagent_id=ref.id,

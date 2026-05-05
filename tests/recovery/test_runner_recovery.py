@@ -11,6 +11,7 @@ from litehive.domain.runtime import RuntimeStageState, RuntimeSubagentState
 from litehive.recovery.execution_recovery import prepare_interrupted_task, recover_stale_runner_state
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, save_task
+from litehive.workspace import Workspace
 
 
 def _seed_running_task(tmp_path: Path, *, stage: str, active: bool) -> tuple[str, str]:
@@ -227,8 +228,7 @@ def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> N
     task = create_task(tmp_path, title="Interrupted run")
     subagent_path = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "subagents" / "SA-1234-swe"
     subagent_path.mkdir(parents=True)
-    save_subagent_artifacts(
-        tmp_path,
+    save_subagent_artifacts(Workspace.from_path(tmp_path),
         task.id,
         "SA-1234",
         session={"status": "running"},
@@ -270,8 +270,8 @@ def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> N
     assert task.runtime.execution.interruption.subagent.status == "interrupted"
     _assert_runtime_stage_has_no_removed_fields(task.runtime.pipeline.current_stage)
 
-    session = load_subagent_session(tmp_path, task.id, "SA-1234")
-    report = load_subagent_report(tmp_path, task.id, "SA-1234")
+    session = load_subagent_session(Workspace.from_path(tmp_path), task.id, "SA-1234")
+    report = load_subagent_report(Workspace.from_path(tmp_path), task.id, "SA-1234")
     assert session["status"] == report["status"] == "interrupted"
     assert session["resume_stage"] == report["resume_stage"] == "implementing"
     assert session["interruption_reason"] == report["interruption_reason"] == "received ctrl-c"

@@ -1,19 +1,18 @@
 """SQLite-backed storage for structured subagent session artifacts."""
 
 import json
-from pathlib import Path
 from typing import Any
 
-from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
+from litehive.workspace import Workspace
 
 
 _UNSET = object()
 _EVENT_STREAM_KEY = "event_stream"
 
 
-def _load_subagent_payload(root: Path, task_id: str, subagent_id: str) -> tuple[dict[str, Any], str | None]:
-    with connect_workspace_db(root) as connection:
+def _load_subagent_payload(workspace: Workspace, task_id: str, subagent_id: str) -> tuple[dict[str, Any], str | None]:
+    with workspace.connect() as connection:
         row = connection.execute(
             """
             SELECT created_at, payload
@@ -28,13 +27,13 @@ def _load_subagent_payload(root: Path, task_id: str, subagent_id: str) -> tuple[
     return payload if isinstance(payload, dict) else {}, row["created_at"]
 
 
-def load_subagent_artifacts(root: Path, task_id: str, subagent_id: str) -> dict[str, Any]:
-    payload, _ = _load_subagent_payload(root, task_id, subagent_id)
+def load_subagent_artifacts(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
+    payload, _ = _load_subagent_payload(workspace, task_id, subagent_id)
     return payload
 
 
 def save_subagent_artifacts(
-    root: Path,
+    workspace: Workspace,
     task_id: str,
     subagent_id: str,
     session: dict[str, Any] | object = _UNSET,
@@ -47,7 +46,7 @@ def save_subagent_artifacts(
     one slice of the artifact bundle (e.g. metadata-only) without clobbering
     the others. ``event_stream=None`` is the explicit "remove the key" signal.
     """
-    payload, created_at = _load_subagent_payload(root, task_id, subagent_id)
+    payload, created_at = _load_subagent_payload(workspace, task_id, subagent_id)
     if session is not _UNSET:
         payload["session"] = session
     if report is not _UNSET:
@@ -59,7 +58,7 @@ def save_subagent_artifacts(
             payload[_EVENT_STREAM_KEY] = event_stream
     now = utcnow()
     created_at = created_at or now
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         connection.execute(
             """
             INSERT INTO subagent_sessions (
@@ -83,24 +82,24 @@ def save_subagent_artifacts(
         )
 
 
-def load_subagent_session(root: Path, task_id: str, subagent_id: str) -> dict[str, Any]:
-    payload = load_subagent_artifacts(root, task_id, subagent_id)
+def load_subagent_session(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
+    payload = load_subagent_artifacts(workspace, task_id, subagent_id)
     session = payload.get("session")
     if isinstance(session, dict):
         return session
     return {}
 
 
-def load_subagent_report(root: Path, task_id: str, subagent_id: str) -> dict[str, Any]:
-    payload = load_subagent_artifacts(root, task_id, subagent_id)
+def load_subagent_report(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
+    payload = load_subagent_artifacts(workspace, task_id, subagent_id)
     report = payload.get("report")
     if isinstance(report, dict):
         return report
     return {}
 
 
-def load_subagent_event_stream(root: Path, task_id: str, subagent_id: str) -> dict[str, Any]:
-    payload = load_subagent_artifacts(root, task_id, subagent_id)
+def load_subagent_event_stream(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
+    payload = load_subagent_artifacts(workspace, task_id, subagent_id)
     event_stream = payload.get(_EVENT_STREAM_KEY)
     if isinstance(event_stream, dict):
         return event_stream

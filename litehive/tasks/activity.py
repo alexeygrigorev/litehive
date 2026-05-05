@@ -2,21 +2,19 @@
 
 from datetime import UTC, datetime
 import json
-from pathlib import Path
 from typing import Iterable
 
 from pydantic import ValidationError
 
-from litehive.db.schema import connect_workspace_db
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.tasks.event_log import append_task_event
 from litehive.workspace import Workspace
 
 
-def load_task_activity(root: Path, task: TaskRecord) -> list[TaskActivityEntry]:
+def load_task_activity(workspace: Workspace, task: TaskRecord) -> list[TaskActivityEntry]:
     """Read the persisted activity feed (agent verdicts and reports) for a task; tolerates malformed rows by skipping them so a single corrupt entry does not blank out the whole feed for the lifecycle code."""
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         rows = connection.execute(
             """
             SELECT payload
@@ -42,8 +40,8 @@ def load_task_activity(root: Path, task: TaskRecord) -> list[TaskActivityEntry]:
     return activity
 
 
-def _save_task_activity_to_db(root: Path, task_id: str, activity: list[TaskActivityEntry]) -> None:
-    with connect_workspace_db(root) as connection:
+def _save_task_activity_to_db(workspace: Workspace, task_id: str, activity: list[TaskActivityEntry]) -> None:
+    with workspace.connect() as connection:
         connection.execute("DELETE FROM task_activity WHERE task_id = ?", (task_id,))
         for entry_index, entry in enumerate(activity):
             payload = json.dumps(entry.model_dump(mode="json"))
@@ -55,7 +53,7 @@ def _save_task_activity_to_db(root: Path, task_id: str, activity: list[TaskActiv
                 (task_id, entry_index, entry.created_at, payload),
             )
         append_task_event(
-            Workspace.from_path(root),
+            workspace,
             event_type="task_reported",
             task_id=task_id,
             payload={"activity": [entry.model_dump(mode="json") for entry in activity]},
@@ -63,20 +61,20 @@ def _save_task_activity_to_db(root: Path, task_id: str, activity: list[TaskActiv
         connection.commit()
 
 
-def save_task_activity(root: Path, task: TaskRecord, activity: list[TaskActivityEntry]) -> None:
+def save_task_activity(workspace: Workspace, task: TaskRecord, activity: list[TaskActivityEntry]) -> None:
     """Replace the task's activity feed wholesale; used by the retraction path that needs to rewrite an existing entry's message in place rather than appending a new one."""
-    _save_task_activity_to_db(root, task.id, activity)
+    _save_task_activity_to_db(workspace, task.id, activity)
 
 
-def append_task_activity(root: Path, task: TaskRecord, entry: TaskActivityEntry) -> None:
+def append_task_activity(workspace: Workspace, task: TaskRecord, entry: TaskActivityEntry) -> None:
     """Append one verdict/report entry, the common write path; takes the load+rewrite cost so the on-disk ordering matches arrival order without requiring callers to track entry indexes."""
-    activity = load_task_activity(root, task)
+    activity = load_task_activity(workspace, task)
     activity.append(entry)
-    save_task_activity(root, task, activity)
+    save_task_activity(workspace, task, activity)
 
 
 def latest_task_activity_entry(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     role: str | None = None,
     stage: str | None = None,
@@ -89,7 +87,7 @@ def latest_task_activity_entry(
         allowed_verdicts = None
     else:
         allowed_verdicts = set(verdicts)
-    for entry in reversed(load_task_activity(root, task)):
+    for entry in reversed(load_task_activity(workspace, task)):
         if role is not None and entry.role != role:
             continue
         if stage is not None and entry.stage != stage:

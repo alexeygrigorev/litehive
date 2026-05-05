@@ -139,8 +139,9 @@ def switch_task_engine(
 
     prior_work_paths = _switch_prior_work_paths(root, task)
 
+    workspace = Workspace.from_path(root)
     append_task_activity(
-        root,
+        workspace,
         task,
         TaskActivityEntry(
             role="operator",
@@ -156,7 +157,7 @@ def switch_task_engine(
         ),
     )
     append_task_audit_entries(
-        Workspace.from_path(root),
+        workspace,
         [
             build_task_audit_entry(
                 task_id=task.id,

@@ -109,7 +109,7 @@ def _print_latest_report(root: Path, task) -> None:
 
 
 def _print_latest_activity(root: Path, task) -> None:
-    activity = load_task_activity(root, task)
+    activity = load_task_activity(Workspace.from_path(root), task)
     if not activity:
         print("latest_activity: none")
         return
@@ -140,7 +140,7 @@ def _print_latest_subagent(root: Path, task) -> None:
         started_at = runtime_sa.started_at
         completed_at = runtime_sa.completed_at
     else:
-        session_data = load_subagent_session(root, task.id, ref.id)
+        session_data = load_subagent_session(Workspace.from_path(root), task.id, ref.id)
         if session_data:
             exit_code = session_data.get("exit_code")
             started_at = session_data.get("created_at")
@@ -198,7 +198,7 @@ def _print_worktree_evidence(root: Path, task) -> None:
 
 def _read_exit_code(root: Path, task_id: str, subagent_id: str) -> int | None:
     """Read exit_code from runtime/session storage for a subagent."""
-    session = load_subagent_session(root, task_id, subagent_id)
+    session = load_subagent_session(Workspace.from_path(root), task_id, subagent_id)
     value = session.get("exit_code")
     if isinstance(value, int):
         return value

@@ -7,6 +7,7 @@ from litehive.domain.common import TaskStage
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.tasks.activity import append_task_activity, load_task_activity
+from litehive.workspace import Workspace
 
 RETRACTED_FILESYSTEM_MARKER = "[retracted - filesystem check shows no changes landed]"
 _RETRACTABLE_STEPS: frozenset[TaskStage] = frozenset({TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING})
@@ -14,7 +15,7 @@ _FILES_CHANGED_PLACEHOLDERS = {"none", "n/a", "-", ""}
 
 
 def append_activity_entry(root: Path, task: TaskRecord, entry: TaskActivityEntry) -> None:
-    append_task_activity(root, task, entry)
+    append_task_activity(Workspace.from_path(root), task, entry)
 
 
 def normalized_files_changed(paths: Iterable[str]) -> list[str]:
@@ -56,7 +57,7 @@ def retract_activity_entry(entry: TaskActivityEntry) -> bool:
 
 def render_task_activity(root: Path, task: TaskRecord, for_prompt: bool = False) -> str:
     """Render the activity feed for either operator inspection or prompt context; the ``for_prompt`` branch withholds the body of retracted entries so subagents are not biased by reports the system has already invalidated."""
-    activity_entries = load_task_activity(root, task)
+    activity_entries = load_task_activity(Workspace.from_path(root), task)
     if not activity_entries:
         return ""
     lines = ["Task activity:"]

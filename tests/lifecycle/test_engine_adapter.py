@@ -909,7 +909,7 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
     assert verdict.source == "guard"
     assert verdict.metadata["reason_code"] == "hallucinated_completion"
 
-    activity_entries = load_task_activity(tmp_path, task)
+    activity_entries = load_task_activity(Workspace.from_path(tmp_path), task)
     assert len(activity_entries) == 1
     assert activity_entries[0].verdict == "reject"
     assert "[retracted - filesystem check shows no changes landed]" in activity_entries[0].message

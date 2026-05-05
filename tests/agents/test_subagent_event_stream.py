@@ -15,6 +15,7 @@ from litehive.recovery.execution_recovery import mark_interrupted_subagent
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.paths import task_dir
 from litehive.tasks.runtime import mark_subagent_started
+from litehive.workspace import Workspace
 
 
 def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_snippet(
@@ -56,7 +57,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
 
     manager.write_session_progress(task, base, ref, "stream partial Claude output", execution)
 
-    report = load_subagent_report(tmp_path, task.id, "SA-0001")
+    report = load_subagent_report(Workspace.from_path(tmp_path), task.id, "SA-0001")
     assert report["status"] == "running"
     assert "did not submit verdict" in report["summary"]
     assert report["files_changed"] == []
@@ -73,7 +74,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
     assert interrupted is not None
     assert "did not submit verdict" in interrupted.execution_trace_snippet
 
-    resumed_report = load_subagent_report(tmp_path, task.id, "SA-0001")
+    resumed_report = load_subagent_report(Workspace.from_path(tmp_path), task.id, "SA-0001")
     assert resumed_report["status"] == "interrupted"
     assert resumed_report["resume_stage"] == "implementing"
 
@@ -120,7 +121,7 @@ def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monke
             if on_update is not None:
                 on_update(first)
 
-            event_stream_data = load_subagent_event_stream(tmp_path, task.id, "SA-0001")
+            event_stream_data = load_subagent_event_stream(Workspace.from_path(tmp_path), task.id, "SA-0001")
             assert event_stream_data["engine"] == "opencode"
             assert event_stream_data["task_id"] == task.id
             assert len(event_stream_data["events"]) == 1
@@ -147,7 +148,7 @@ def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monke
     result = manager.run(task, role="swe", engine_name="opencode", prompt="stream it")
     assert result.ref.status == "completed"
 
-    event_stream_data = load_subagent_event_stream(tmp_path, task.id, "SA-0001")
+    event_stream_data = load_subagent_event_stream(Workspace.from_path(tmp_path), task.id, "SA-0001")
     assert len(event_stream_data["events"]) == 2
     assert event_stream_data["event_counts"] == {"message": 1, "usage": 1}
 
@@ -183,7 +184,7 @@ def test_subagent_skips_event_stream_when_no_events(tmp_path: Path, monkeypatch:
     result = manager.run(task, role="swe", engine_name="codex", prompt="no events")
     assert result.ref.status == "completed"
 
-    assert load_subagent_event_stream(tmp_path, task.id, "SA-0001") == {}
+    assert load_subagent_event_stream(Workspace.from_path(tmp_path), task.id, "SA-0001") == {}
 
 
 def test_subagent_event_stream_ignores_removed_timeline_payload_key(tmp_path: Path) -> None:
@@ -209,4 +210,4 @@ def test_subagent_event_stream_ignores_removed_timeline_payload_key(tmp_path: Pa
             ),
         )
 
-    assert load_subagent_event_stream(tmp_path, task.id, "SA-0001") == {}
+    assert load_subagent_event_stream(Workspace.from_path(tmp_path), task.id, "SA-0001") == {}

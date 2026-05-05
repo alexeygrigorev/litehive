@@ -8,6 +8,7 @@ from litehive.state.records import create_task
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.paths import task_dir
 from litehive.tasks.activity_rendering import append_activity_entry
+from litehive.workspace import Workspace
 
 
 def _activity_rows(root: Path, task_id: str) -> list[dict]:
@@ -34,7 +35,7 @@ def test_append_activity_entry_persists_to_sqlite(tmp_path: Path) -> None:
         TaskActivityEntry(role="swe", stage="implementing", verdict="pass", message="new"),
     )
 
-    assert [entry.message for entry in load_task_activity(tmp_path, task)] == ["new"]
+    assert [entry.message for entry in load_task_activity(Workspace.from_path(tmp_path), task)] == ["new"]
     rows = _activity_rows(tmp_path, task.id)
     assert len(rows) == 1
     assert rows[0]["entry_index"] == 0
@@ -58,4 +59,4 @@ def test_load_task_activity_ignores_stale_filesystem_activity(tmp_path: Path) ->
         TaskActivityEntry(role="qa", stage="testing", verdict="comment", message="canonical db entry"),
     )
 
-    assert [entry.message for entry in load_task_activity(tmp_path, task)] == ["canonical db entry"]
+    assert [entry.message for entry in load_task_activity(Workspace.from_path(tmp_path), task)] == ["canonical db entry"]

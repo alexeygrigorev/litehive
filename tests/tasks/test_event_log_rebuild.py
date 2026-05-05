@@ -186,7 +186,7 @@ def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_
     assert rebuilt_queued is not None
     assert rebuilt_queued.status == "queued"
     assert rebuilt_state.queue == [queued.id]
-    assert [entry.message for entry in load_task_activity(tmp_path, rebuilt_done)] == ["ready to close"]
+    assert [entry.message for entry in load_task_activity(Workspace.from_path(tmp_path), rebuilt_done)] == ["ready to close"]
     replayed_stage_reports = load_stage_reports(Workspace.from_path(tmp_path), rebuilt_done)
     assert len(replayed_stage_reports) == 1
     assert replayed_stage_reports[0].summary == "stage report replay"

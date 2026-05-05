@@ -10,6 +10,7 @@ from litehive.lifecycle.orchestration import run_task as run_pipeline_task
 from litehive.state.records import create_task, get_task
 from litehive.tasks.activity import append_task_activity
 from litehive.tasks.status import requeue_task
+from litehive.workspace import Workspace
 
 pytestmark = pytest.mark.integration
 
@@ -42,7 +43,7 @@ class _RepeatRecoveryEscalationEngine:
         assert task is not None
         message = f"Repeated recovery fingerprint `{repeated['fingerprint']}`. Filed follow-up task {follow_up.id}."
         append_task_activity(
-            self.workspace,
+            Workspace.from_path(self.workspace),
             task,
             TaskActivityEntry(
                 role="recovery",

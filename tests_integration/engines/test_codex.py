@@ -4,6 +4,7 @@ from litehive.agents.session_store import save_subagent_artifacts
 from litehive.state.records import create_task, require_task
 from litehive.tasks.queue import set_active_task
 from litehive.tasks.activity import load_task_activity
+from litehive.workspace import Workspace
 
 from tests_integration.support.helpers import (
     assert_nudge_verdict_submission,
@@ -32,8 +33,7 @@ def test_codex_can_invoke_litehive_report_and_persist_thread_comment(integration
     task = create_task(integration_root, title="Integration report task", auto_commit=False)
     set_active_task(integration_root, task.id)
     subagent_id = "SI-codex-report"
-    save_subagent_artifacts(
-        integration_root,
+    save_subagent_artifacts(Workspace.from_path(integration_root),
         task.id,
         subagent_id,
         session={"id": subagent_id, "role": "swe", "engine": "codex", "status": "running"},
@@ -54,7 +54,7 @@ def test_codex_can_invoke_litehive_report_and_persist_thread_comment(integration
         },
     )
     assert execution.exit_code == 0, execution.transcript
-    thread = load_task_activity(integration_root, require_task(integration_root, task.id))
+    thread = load_task_activity(Workspace.from_path(integration_root), require_task(integration_root, task.id))
     assert thread[-1].role == "swe"
     assert thread[-1].stage == "implementing"
     assert thread[-1].verdict == "pass"

@@ -250,7 +250,7 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
     )
     (subagent_base / "stderr.txt").write_text("report failed: unable to resolve workspace\n", encoding="utf-8")
     save_subagent_artifacts(
-        workspace,
+        Workspace.from_path(workspace),
         task.id,
         "SA-0001",
         session={"id": "SA-0001", "status": "failed", "exit_code": 17},
@@ -431,10 +431,10 @@ def test_serialize_ignores_corrupt_task_activity_payload(workspace: Path) -> Non
 def test_serialize_reads_activity_through_boundary(workspace: Path, monkeypatch) -> None:
     task = create_task(workspace, title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace_root=workspace))
-    calls: list[tuple[Path, str]] = []
+    calls: list[tuple[Workspace, str]] = []
 
-    def fake_load_activity(root: Path, task_record) -> list[TaskActivityEntry]:
-        calls.append((root, task_record.id))
+    def fake_load_activity(workspace_arg: Workspace, task_record) -> list[TaskActivityEntry]:
+        calls.append((workspace_arg, task_record.id))
         return [
             TaskActivityEntry(
                 role="planner",
@@ -455,7 +455,7 @@ def test_serialize_reads_activity_through_boundary(workspace: Path, monkeypatch)
         workspace_root=workspace,
     )
 
-    assert calls == [(workspace, task.id)]
+    assert calls == [(Workspace.from_path(workspace), task.id)]
     assert "[grooming] planner (pass): scope ready" in text
 
 
