@@ -23,8 +23,6 @@ This is an *incremental* migration: only ported feature areas take
 moves over as ergonomics warrant.
 """
 
-from __future__ import annotations
-
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass, field

@@ -20,7 +20,7 @@ from pydantic import ValidationError
 from litehive.config.paths import workspace_path
 from litehive.config.registry import workspace_registry_error, workspace_registry_path
 from litehive.daemon.logs import latest_run_all_log_dir
-from litehive.daemon.registry import daemon_metadata, pid_is_alive
+from litehive.daemon.registry import daemon_metadata
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
@@ -135,7 +135,7 @@ def _probe_daemon_status(root: Path) -> list[StatusIssue]:
     if entry is None or entry.get("status") != "stale":
         return []
     pid = entry.get("pid")
-    if isinstance(pid, int) and not pid_is_alive(pid):
+    if isinstance(pid, int) and not runner_pid_is_alive(pid):
         return [
             StatusIssue(
                 key="daemon_status",

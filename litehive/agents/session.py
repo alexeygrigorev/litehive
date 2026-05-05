@@ -8,7 +8,7 @@ import time
 
 from heru import extract_engine_continuation
 from heru.base import CLIExecutionResult
-from heru.types import LiveTimeline as LiveEventStream, RuntimeEngineContinuation, SubagentRef
+from heru.types import LiveTimeline, RuntimeEngineContinuation, SubagentRef
 from litehive.agents.execution_trace import (
     event_stream_from_events,
     parse_unified_events,
@@ -79,7 +79,7 @@ class SessionMixin:
         stdout: str,
         task_id: str | None = None,
         subagent_id: str | None = None,
-    ) -> LiveEventStream | None:
+    ) -> LiveTimeline | None:
         """Parse stdout into the live event timeline persisted as the subagent's ``event_stream`` artifact, so the status UI can replay tool calls without re-parsing raw stdout each time."""
         return event_stream_from_events(
             parse_unified_events(stdout),

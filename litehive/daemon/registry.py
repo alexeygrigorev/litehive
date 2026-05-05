@@ -19,7 +19,7 @@ from typing import TextIO
 
 from litehive.config.paths import workspace_path
 from litehive.state.process_lock import ProcessLockManager
-from litehive.state.locking import runner_pid_is_alive as pid_is_alive
+from litehive.state.locking import runner_pid_is_alive
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ def _daemon_lock_manager(workspace: Path) -> ProcessLockManager:
     return ProcessLockManager(
         lock_path=daemon_lock_path(workspace),
         process_name="daemon",
-        pid_is_alive=pid_is_alive,
+        pid_is_alive=runner_pid_is_alive,
         held_in_process=lambda: _daemon_lock_is_held_in_process(workspace),
         fsync_writes=True,
     )
@@ -166,7 +166,7 @@ def register_daemon(workspace: Path, pid: int, log_dir: Path) -> None:
         except BlockingIOError:
             existing = manager.read_locked_metadata(handle)
             existing_pid = existing.get("pid")
-            if isinstance(existing_pid, int) and pid_is_alive(existing_pid):
+            if isinstance(existing_pid, int) and runner_pid_is_alive(existing_pid):
                 raise RuntimeError(f"daemon already running for {workspace}: pid={existing_pid}") from None
             raise RuntimeError(f"daemon already running for {workspace}: pid={existing_pid}") from None
         payload = manager.create_base_metadata(

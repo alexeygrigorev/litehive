@@ -385,8 +385,8 @@ def test_status_reports_dead_daemon_pid(tmp_path: Path, capsys, monkeypatch) -> 
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr("litehive.daemon.registry.pid_is_alive", lambda pid: False)
-    monkeypatch.setattr("litehive.observability.status_probes.pid_is_alive", lambda pid: False)
+    monkeypatch.setattr("litehive.daemon.registry.runner_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr("litehive.observability.status_probes.runner_pid_is_alive", lambda pid: False)
 
     exit_code, output = _run_dispatch_status(tmp_path, capsys)
 

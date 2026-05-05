@@ -70,8 +70,11 @@ class RoleAgent(AgentNode):
     6. An optional process-profile overlay keyed by stage name.
     """
 
-    NODE_NAME: PipelineState = ""
-    ROLE: str = ""
+    # Subclasses override these. ``NODE_NAME``/``ROLE`` are required and
+    # enforced in ``__init__``; the instruction blocks default to empty so
+    # subclasses can declare only the layers they actually use.
+    NODE_NAME: PipelineState
+    ROLE: str
     ROLE_INSTRUCTIONS: str = ""
     INSTRUCTIONS: str = ""
     FRESH_ATTEMPT_INSTRUCTIONS: str = ""

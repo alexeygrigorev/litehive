@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from heru.types import LiveEvent, LiveTimeline as LiveEventStream, UnifiedEvent
+from heru.types import LiveEvent, LiveTimeline, UnifiedEvent
 from pydantic import ValidationError
 
 from litehive.agents.session_store import load_subagent_event_stream
@@ -109,18 +109,18 @@ def event_stream_from_events(
     engine_name: str,
     task_id: str | None = None,
     subagent_id: str | None = None,
-) -> LiveEventStream | None:
+) -> LiveTimeline | None:
     """
-    Wrap parsed unified events into a heru ``LiveEventStream``.
+    Wrap parsed unified events into a heru ``LiveTimeline``.
 
     Lets the timeline-renderer paths treat reconstructed-from-stdout
     traces (this function's input) and live captures uniformly — the
-    renderer only knows how to read ``LiveEventStream``, so the
+    renderer only knows how to read ``LiveTimeline``, so the
     fallback path has to lift its parsed events into that shape.
     """
     if not events:
         return None
-    event_stream = LiveEventStream(engine=engine_name, task_id=task_id, subagent_id=subagent_id)
+    event_stream = LiveTimeline(engine=engine_name, task_id=task_id, subagent_id=subagent_id)
     event_stream.events = [LiveEvent.model_validate(event.model_dump(mode="python")) for event in events]
     event_stream.recompute_counts()
     return event_stream

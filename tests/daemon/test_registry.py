@@ -117,7 +117,7 @@ def test_unregister_daemon_clears_stale_metadata_without_daemon_registry_yaml(tm
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr("litehive.daemon.registry.pid_is_alive", lambda pid: False)
+    monkeypatch.setattr("litehive.daemon.registry.runner_pid_is_alive", lambda pid: False)
 
     unregister_daemon(workspace, pid=424242)
 

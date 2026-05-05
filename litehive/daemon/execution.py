@@ -38,12 +38,12 @@ from litehive.observability.status import (
 from litehive.observability.venv_health import daemon_broken_venv_message, probe_broken_venv_executables
 from litehive.state.backup import create_scheduled_workspace_backup
 from litehive.state.persist import load_state, set_pool_stop_reason
-from litehive.state.locking import runner_status
+from litehive.state.locking import runner_pid_is_alive, runner_status
 
 from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir
+
 from .registry import (
     daemon_metadata,
-    pid_is_alive,
     get_workspace_daemon,
     register_daemon,
     touch_daemon,
@@ -278,12 +278,12 @@ def _wait_for_pid_exit(pid: int, timeout_seconds: float) -> bool:
 
     The stop sequence owns the registry row, not the ``Popen`` handle
     — so ``process.wait`` is unavailable and we have to poll
-    ``pid_is_alive`` instead. Used by the SIGTERM/SIGKILL escalation
+    ``runner_pid_is_alive`` instead. Used by the SIGTERM/SIGKILL escalation
     in ``_terminate_recorded_daemon`` and ``_force_kill_recorded_daemon``.
     """
     deadline = time.monotonic() + max(timeout_seconds, 0.0)
     while True:
-        if not pid_is_alive(pid):
+        if not runner_pid_is_alive(pid):
             return True
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -313,7 +313,7 @@ def _force_kill_recorded_daemon(workspace: Path, pid: int) -> None:
     refuses to die so the caller does not falsely conclude the
     workspace is free for a new daemon to register.
     """
-    if not pid_is_alive(pid):
+    if not runner_pid_is_alive(pid):
         _clear_recorded_daemon(workspace, pid=pid)
         return
     try:
@@ -339,7 +339,7 @@ def _terminate_recorded_daemon(workspace: Path, pid: int) -> None:
     ``stop_workspace_daemon`` (and the ``litehive stop`` shortcut)
     when the operator asks the workspace's daemon to stop.
     """
-    if not pid_is_alive(pid):
+    if not runner_pid_is_alive(pid):
         _clear_recorded_daemon(workspace, pid=pid)
         return
     try:
