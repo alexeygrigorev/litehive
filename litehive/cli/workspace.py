@@ -102,7 +102,8 @@ def status_command(
     full: Annotated[bool, typer.Option(help="Include the full per-task status dump.")] = False,
 ) -> int:
     """Render the operator-facing workspace overview (active task, queue, recent activity, engine availability) and surface diagnostics at the bottom; the `--full` mode adds the per-task pipeline dump for debugging."""
-    root = workspace.resolve()
+    ws = Workspace.from_path(workspace)
+    root = ws.root
     status = collect_task_pipeline_status(root, diagnostics=full)
     if full:
         for line in render_task_pipeline_status_lines(
@@ -116,7 +117,7 @@ def status_command(
         if tasks:
             print()
             for task in tasks:
-                for line in render_task_summary(task, active=task.id == status.active_task_id, root=root):
+                for line in render_task_summary(task, active=task.id == status.active_task_id, workspace=ws):
                     print(line)
         return print_status_issues(status.issues)
 
@@ -126,7 +127,7 @@ def status_command(
     all_tasks = list_tasks_state_first(workspace, state=status.state)
     last_done = find_last_completed_task(all_tasks)
     print()
-    for line in render_last_completed_section(last_done, root):
+    for line in render_last_completed_section(last_done, ws):
         print(line)
 
     print()
@@ -197,7 +198,8 @@ class _QuotaHealth:
 def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     """Render the workspace-health report (active/flagged tasks, worktrees, engine quotas, daemon, recent completions) and exit non-zero when something needs operator attention; the dashboard command driven by external monitoring."""
     ensure_workspace(workspace)
-    root = workspace.resolve()
+    ws = Workspace.from_path(workspace)
+    root = ws.root
     state = load_state(root)
     tasks = list_tasks_state_first(root, state=state, include_runtime=True)
     if state.active_task_id:
@@ -222,7 +224,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(line)
 
     print()
-    for line in render_health_flagged_task_lines(flagged_tasks, root=root):
+    for line in render_health_flagged_task_lines(flagged_tasks, workspace=ws):
         print(line)
 
     print()
@@ -243,7 +245,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(line)
 
     print()
-    for line in render_health_recent_completion_lines(completed, root=root):
+    for line in render_health_recent_completion_lines(completed, workspace=ws):
         print(line)
 
     has_quota_problem = any(item.problem for item in quota_health)

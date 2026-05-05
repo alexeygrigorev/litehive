@@ -18,6 +18,7 @@ from litehive.observability.status_summary import (
     _task_last_verdict_label,
     _task_stage_label,
 )
+from litehive.workspace import Workspace
 
 
 def render_active_task_section(task: TaskRecord | None, default_engine: str) -> list[str]:
@@ -78,7 +79,7 @@ def find_last_completed_task(tasks: list[TaskRecord]) -> TaskRecord | None:
     return max(done_tasks, key=lambda t: t.updated_at or "")
 
 
-def render_last_completed_section(task: TaskRecord | None, root: Path) -> list[str]:
+def render_last_completed_section(task: TaskRecord | None, workspace: Workspace) -> list[str]:
     """Render the Last Completed dashboard section."""
     lines: list[str] = ["=== Last Completed ==="]
     if task is None:
@@ -86,7 +87,7 @@ def render_last_completed_section(task: TaskRecord | None, root: Path) -> list[s
         return lines
 
     outcome = task.runtime.pipeline.last_outcome
-    verdict = outcome.kind or _task_last_verdict_label(task, root)
+    verdict = outcome.kind or _task_last_verdict_label(task, workspace)
     when = outcome.recorded_at or task.updated_at or "-"
     lines.append(f"  {task.id} {task.title} verdict={verdict} at {when}")
     return lines

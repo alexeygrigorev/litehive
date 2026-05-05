@@ -27,6 +27,7 @@ from litehive.observability.status import (
 )
 from litehive.state.records import create_task
 from litehive.tasks.report_storage import record_stage_report
+from litehive.workspace import Workspace
 
 
 def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) -> None:
@@ -46,7 +47,7 @@ def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) 
     )
 
     task.pipeline_status = "implementing"
-    lines = render_task_summary(task, active=True, root=tmp_path)
+    lines = render_task_summary(task, active=True, workspace=Workspace.from_path(tmp_path))
     combined = "\n".join(lines)
     assert "stage_estimate=" in combined
     assert "velocity=" in combined
@@ -71,7 +72,7 @@ def test_render_task_summary_surfaces_semantic_reject_classification(tmp_path: P
         ),
     )
 
-    lines = render_task_summary(task, active=False, root=tmp_path)
+    lines = render_task_summary(task, active=False, workspace=Workspace.from_path(tmp_path))
     combined = "\n".join(lines)
 
     assert "flag_reason=semantic_reject" in combined
@@ -245,9 +246,10 @@ def test_render_health_task_sections(tmp_path: Path) -> None:
         StageReport(task_id=done.id, pipeline_state="accepting", verdict="pass", summary="all checks passed"),
     )
 
+    workspace = Workspace.from_path(tmp_path)
     active_lines = render_health_active_task_lines(active)
-    flagged_lines = render_health_flagged_task_lines([flagged], root=tmp_path)
-    completion_lines = render_health_recent_completion_lines([done], root=tmp_path)
+    flagged_lines = render_health_flagged_task_lines([flagged], workspace=workspace)
+    completion_lines = render_health_recent_completion_lines([done], workspace=workspace)
 
     assert active_lines == [
         "=== Active Task ===",

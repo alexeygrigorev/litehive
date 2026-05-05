@@ -8,13 +8,13 @@ read-only report storage.
 
 import sqlite3
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from litehive.domain.common import TaskStage, TaskStatus
 from litehive.domain.reports import ExecutionEstimate
 from litehive.domain.task import TaskRecord
 from litehive.tasks.report_storage import load_workspace_stage_reports
+from litehive.workspace import Workspace
 
 # Ordered pipeline stages for remaining-time estimation.
 _PIPELINE_STAGES: list[TaskStage] = [
@@ -26,9 +26,9 @@ _PIPELINE_STAGES: list[TaskStage] = [
 ]
 
 
-def estimate_task_execution(root: Path, task: TaskRecord) -> ExecutionEstimate:
+def estimate_task_execution(workspace: Workspace, task: TaskRecord) -> ExecutionEstimate:
     """Return velocity and ETA estimate based on workspace report history."""
-    durations = _collect_report_durations(root)
+    durations = _collect_report_durations(workspace)
     if not durations:
         return ExecutionEstimate()
 
@@ -53,10 +53,12 @@ def estimate_task_execution(root: Path, task: TaskRecord) -> ExecutionEstimate:
     )
 
 
-def _collect_report_durations(root: Path) -> list[float]:
+def _collect_report_durations(workspace: Workspace) -> list[float]:
     """Collect positive stage report durations from workspace runtime storage."""
     return [
-        float(report.duration_seconds) for report in load_workspace_stage_reports(root) if report.duration_seconds > 0
+        float(report.duration_seconds)
+        for report in load_workspace_stage_reports(workspace.root)
+        if report.duration_seconds > 0
     ]
 
 
@@ -85,7 +87,7 @@ def _task_stage_label(task: TaskRecord) -> str:
     return task.runtime.pipeline.current_stage.stage or task.pipeline_status or "-"
 
 
-def _latest_stage_report_for_task(root: Path, task: TaskRecord) -> Any | None:
+def _latest_stage_report_for_task(workspace: Workspace, task: TaskRecord) -> Any | None:
     """Fetch the most recent stage report for a task, swallowing storage errors so status never raises.
 
     Status output is best-effort: a missing or corrupt report row must not break the CLI
@@ -95,23 +97,23 @@ def _latest_stage_report_for_task(root: Path, task: TaskRecord) -> Any | None:
     try:
         from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
 
-        return latest_stage_report(root, task)
+        return latest_stage_report(workspace.root, task)
     except (OSError, sqlite3.DatabaseError, ValueError):
         return None
 
 
-def _task_last_verdict_label(task: TaskRecord, root: Path) -> str:
+def _task_last_verdict_label(task: TaskRecord, workspace: Workspace) -> str:
     """Resolve the verdict to display by preferring the persisted stage report over the in-memory outcome.
 
     The stage report is the durable record; the runtime ``last_outcome`` may lag or be
     cleared on certain transitions. Falling back through both keeps the health/flagged
     sections honest when one of the two has been pruned.
     """
-    latest_report = _latest_stage_report_for_task(root, task)
+    latest_report = _latest_stage_report_for_task(workspace, task)
     return (None if latest_report is None else latest_report.verdict) or task.runtime.pipeline.last_outcome.kind or "-"
 
 
-def _task_last_summary_label(task: TaskRecord, root: Path) -> str:
+def _task_last_summary_label(task: TaskRecord, workspace: Workspace) -> str:
     """Pick the most descriptive human-readable reason text available across reports, outcomes, and flags.
 
     Different tasks die in different ways: a stage report has a summary, a runtime outcome
@@ -119,7 +121,7 @@ def _task_last_summary_label(task: TaskRecord, root: Path) -> str:
     health and recent-completion renderers want one column for "why", so the fallback chain
     walks each source in priority order.
     """
-    latest_report = _latest_stage_report_for_task(root, task)
+    latest_report = _latest_stage_report_for_task(workspace, task)
     return (
         (None if latest_report is None else latest_report.summary)
         or task.runtime.pipeline.last_outcome.reason
@@ -129,7 +131,7 @@ def _task_last_summary_label(task: TaskRecord, root: Path) -> str:
     )
 
 
-def _latest_stage_failure_classification(root: Path, task: TaskRecord) -> str | None:
+def _latest_stage_failure_classification(workspace: Workspace, task: TaskRecord) -> str | None:
     """Surface the persisted-report failure classification for the task summary, or ``None`` if unavailable.
 
     The runtime outcome carries its own ``failure_classification``; the report row keeps an
@@ -140,7 +142,7 @@ def _latest_stage_failure_classification(root: Path, task: TaskRecord) -> str | 
     try:
         from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
 
-        report = latest_stage_report(root, task)
+        report = latest_stage_report(workspace.root, task)
     except (OSError, sqlite3.DatabaseError, ValueError):
         return None
     if report is None:
@@ -148,7 +150,7 @@ def _latest_stage_failure_classification(root: Path, task: TaskRecord) -> str | 
     return report.failure_classification
 
 
-def render_task_summary(task: TaskRecord, active: bool, root: Path) -> list[str]:
+def render_task_summary(task: TaskRecord, active: bool, workspace: Workspace) -> list[str]:
     """Build the multi-line per-task block used by ``litehive task list`` and ``litehive task show``.
 
     Called by the CLI task-listing handlers in ``litehive/cli/workspace.py``. The ``active``
@@ -180,7 +182,7 @@ def render_task_summary(task: TaskRecord, active: bool, root: Path) -> list[str]
         lines.append(f"  close_reason={task.close_reason or 'unknown'}")
 
     runtime = task.runtime
-    latest_report = _latest_stage_report_for_task(root, task)
+    latest_report = _latest_stage_report_for_task(workspace, task)
     if retry_policy is not None:
         configured_limit = retry_policy
     else:
@@ -251,7 +253,7 @@ def render_task_summary(task: TaskRecord, active: bool, root: Path) -> list[str]
                 f"duration={_seconds_label(latest_report.duration_seconds)} summary={summary}"
             )
         )
-    report_classification = _latest_stage_failure_classification(root, task)
+    report_classification = _latest_stage_failure_classification(workspace, task)
     if report_classification is not None:
         lines.append(f"  last_report_failure_classification={report_classification}")
 
@@ -303,14 +305,13 @@ def render_task_summary(task: TaskRecord, active: bool, root: Path) -> list[str]
     if task.git.commit_sha:
         lines.append(f"  commit={task.git.commit_sha}")
 
-    if root is not None:
-        estimate = estimate_task_execution(root, task)
-        if estimate.stage_duration_seconds > 0:
-            lines.append(
-                f"  stage_estimate={_seconds_label(int(estimate.stage_duration_seconds))} "
-                f"velocity={estimate.velocity_stages_per_hour:.1f}stages/h "
-                f"eta={_seconds_label(int(estimate.remaining_seconds))}"
-            )
+    estimate = estimate_task_execution(workspace, task)
+    if estimate.stage_duration_seconds > 0:
+        lines.append(
+            f"  stage_estimate={_seconds_label(int(estimate.stage_duration_seconds))} "
+            f"velocity={estimate.velocity_stages_per_hour:.1f}stages/h "
+            f"eta={_seconds_label(int(estimate.remaining_seconds))}"
+        )
 
     return lines
 

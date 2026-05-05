@@ -5,7 +5,6 @@ grammar the health command commits to so downstream scripts can grep the output
 without re-parsing two formats.
 """
 
-from pathlib import Path
 from typing import Any
 
 from litehive.domain.task import TaskRecord
@@ -14,6 +13,7 @@ from litehive.observability.status_summary import (
     _task_last_verdict_label,
     _task_stage_label,
 )
+from litehive.workspace import Workspace
 
 
 def render_health_active_task_lines(task: TaskRecord | None) -> list[str]:
@@ -34,7 +34,7 @@ def render_health_active_task_lines(task: TaskRecord | None) -> list[str]:
     return lines
 
 
-def render_health_flagged_task_lines(flagged_tasks: list[TaskRecord], root: Path) -> list[str]:
+def render_health_flagged_task_lines(flagged_tasks: list[TaskRecord], workspace: Workspace) -> list[str]:
     """Render the Flagged Tasks block for ``litehive workspace health``, surfacing reason and last verdict per task.
 
     Operators triaging a stuck workspace need both the flag reason (why the runner gave up)
@@ -49,8 +49,8 @@ def render_health_flagged_task_lines(flagged_tasks: list[TaskRecord], root: Path
         lines.append(
             f"flagged: {task.id} stage={_task_stage_label(task)} "
             f"reason={task.flag_reason or 'unknown'} "
-            f"last_verdict={_task_last_verdict_label(task, root=root)} "
-            f"summary={_task_last_summary_label(task, root=root)}"
+            f"last_verdict={_task_last_verdict_label(task, workspace=workspace)} "
+            f"summary={_task_last_summary_label(task, workspace=workspace)}"
         )
     return lines
 
@@ -123,7 +123,7 @@ def render_health_daemon_lines(daemon_status: str, daemon_pid: str) -> list[str]
     ]
 
 
-def render_health_recent_completion_lines(completed: list[TaskRecord], root: Path) -> list[str]:
+def render_health_recent_completion_lines(completed: list[TaskRecord], workspace: Workspace) -> list[str]:
     """Render Recent Completions for workspace health, summarizing each finished task with its last summary line.
 
     Used by the workspace-health CLI to give operators a "what just happened" snapshot
@@ -137,6 +137,6 @@ def render_health_recent_completion_lines(completed: list[TaskRecord], root: Pat
     for task in completed:
         lines.append(
             f"completed: {task.id} title={task.title} when={task.updated_at or '-'} "
-            f"summary={_task_last_summary_label(task, root=root)}"
+            f"summary={_task_last_summary_label(task, workspace=workspace)}"
         )
     return lines
