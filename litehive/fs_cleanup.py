@@ -5,7 +5,7 @@ from pathlib import Path
 import shutil
 
 
-def remove_tree_logged(path: Path, *, logger: logging.Logger, target_label: str) -> None:
+def remove_tree_logged(path: Path, logger: logging.Logger, target_label: str) -> None:
     logger.info("Deleting %s %s", target_label, path)
     try:
         if path.is_symlink() or path.is_file():

@@ -37,7 +37,6 @@ def save_subagent_artifacts(
     root: Path,
     task_id: str,
     subagent_id: str,
-    *,
     session: dict[str, Any] | object = _UNSET,
     report: dict[str, Any] | object = _UNSET,
     event_stream: dict[str, Any] | None | object = _UNSET,

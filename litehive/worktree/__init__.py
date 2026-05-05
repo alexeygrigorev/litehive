@@ -73,7 +73,6 @@ logger = logging.getLogger(__name__)
 def resolve_task_execution_root(
     root: Path,
     task: TaskRecord,
-    *,
     config: LitehiveConfig | None = None,
 ) -> Path:
     """Resolve or create the execution root for a task.

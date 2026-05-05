@@ -120,7 +120,7 @@ def _recovery_execution_root(workspace_root: Path) -> Path:
     return resolved if resolved.is_dir() else workspace_root
 
 
-def _agent_execution_root(workspace_root: Path, task, *, role: str) -> Path:
+def _agent_execution_root(workspace_root: Path, task, role: str) -> Path:
     if role == "recovery":
         return _recovery_execution_root(workspace_root)
     return _execution_checkout_path(workspace_root, task)
@@ -147,7 +147,6 @@ def _display_path(root: Path, path: Path) -> str:
 def _rewrite_hallucinated_implementing_pass(
     workspace_root: Path,
     task,
-    *,
     latest,
     claimed_files: list[str],
     checkout: Path,
@@ -263,7 +262,6 @@ def latest_verdict_after(
     task_id: str,
     stage: str,
     after_ts: datetime,
-    *,
     source_subagent_id: str | None = None,
 ) -> AgentVerdict | None:
     """Return the most recent activity entry for ``(task_id, stage)`` whose
@@ -323,7 +321,6 @@ class HeruEngineAdapter:
         self,
         engine_name: str,
         workspace_root: Path,
-        *,
         model_name: str | None = None,
     ) -> None:
         self.name = engine_name
@@ -401,7 +398,6 @@ class HeruEngineAdapter:
         self,
         manager: SubagentManager,
         task,
-        *,
         role: str,
         prompt_text: str,
         session: Session,
@@ -449,7 +445,6 @@ class HeruEngineAdapter:
 
     def _handle_startup_failure(
         self,
-        *,
         state: TaskState,
         task,
         role: str,
@@ -473,7 +468,6 @@ class HeruEngineAdapter:
 
     def _attempt_direct_recovery_handoff(
         self,
-        *,
         state: TaskState,
         task,
         startup_message: str,
@@ -507,7 +501,7 @@ class HeruEngineAdapter:
             source_subagent_id=source_subagent_id,
         )
 
-    def _direct_recovery_prompt(self, *, task, state: TaskState, startup_message: str) -> str:
+    def _direct_recovery_prompt(self, task, state: TaskState, startup_message: str) -> str:
         recovery_state = self._direct_recovery_state(state, startup_message)
         recovery_agent = RecoveryAgent(
             _NullSelector(),
@@ -551,7 +545,6 @@ class HeruEngineAdapter:
 
     def _run_direct_recovery_turn(
         self,
-        *,
         task_id: str,
         execution_root: Path,
         prompt_text: str,

@@ -56,7 +56,6 @@ def queue_position(queue: list[str] | tuple[str, ...], task_id: str) -> int | No
 
 
 def build_task_audit_entry(
-    *,
     task_id: str,
     action: str,
     actor: str,
@@ -144,7 +143,6 @@ def append_task_audit_entries(root: Path, entries: Iterable[TaskAuditEntry]) -> 
 
 def load_task_audit_entries(
     root: Path,
-    *,
     task_id: str | None = None,
     action: str | None = None,
     limit: int = 20,

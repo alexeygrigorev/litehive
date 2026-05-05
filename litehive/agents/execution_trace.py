@@ -75,7 +75,7 @@ def render_event_for_execution_trace(event: UnifiedEvent) -> str:
     return "\n".join(lines)
 
 
-def render_execution_trace_from_events(events: tuple[UnifiedEvent, ...], *, stderr: str) -> str:
+def render_execution_trace_from_events(events: tuple[UnifiedEvent, ...], stderr: str) -> str:
     parts = [rendered for event in events if (rendered := render_event_for_execution_trace(event))]
     if not parts:
         return f"[stderr]\n{stderr.strip()}" if stderr.strip() else ""
@@ -86,7 +86,6 @@ def render_execution_trace_from_events(events: tuple[UnifiedEvent, ...], *, stde
 
 def event_stream_from_events(
     events: tuple[UnifiedEvent, ...],
-    *,
     engine_name: str,
     task_id: str | None = None,
     subagent_id: str | None = None,
@@ -99,7 +98,7 @@ def event_stream_from_events(
     return event_stream
 
 
-def render_execution_trace_from_streams(engine_name: str, *, stdout: str, stderr: str) -> str:
+def render_execution_trace_from_streams(engine_name: str, stdout: str, stderr: str) -> str:
     events = parse_unified_events(stdout)
     if events:
         return render_execution_trace_from_events(events, stderr=stderr)
@@ -109,7 +108,7 @@ def render_execution_trace_from_streams(engine_name: str, *, stdout: str, stderr
     return "\n\n".join(part for part in parts if part).strip()
 
 
-def render_execution_trace_from_event_stream_payload(payload: dict[str, Any], *, stderr: str) -> str:
+def render_execution_trace_from_event_stream_payload(payload: dict[str, Any], stderr: str) -> str:
     raw_events = payload.get("events")
     if not isinstance(raw_events, list):
         return ""
@@ -128,7 +127,6 @@ def load_subagent_execution_trace(
     root: Path,
     task: TaskRecord,
     ref: SubagentRef | RuntimeSubagentState,
-    *,
     active: bool,
     runtime_state: RuntimeSubagentState | None = None,
 ) -> ExecutionTraceView | None:
@@ -171,7 +169,7 @@ def load_subagent_execution_trace(
     return None
 
 
-def _read_stream_artifact(base: Path, stream: str, *, active: bool) -> ExecutionTraceView | None:
+def _read_stream_artifact(base: Path, stream: str, active: bool) -> ExecutionTraceView | None:
     if stream not in {"stdout", "stderr"}:
         raise ValueError(f"Unsupported stream artifact: {stream}")
     names = (f"{stream}.log", f"{stream}.txt") if active else (f"{stream}.txt", f"{stream}.log")

@@ -27,7 +27,7 @@ def utcnow() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
-def cap_feedback(text: str, *, limit: int = FEEDBACK_CAP) -> str:
+def cap_feedback(text: str, limit: int = FEEDBACK_CAP) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - len(TRUNCATION_MARKER)] + TRUNCATION_MARKER

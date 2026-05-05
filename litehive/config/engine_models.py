@@ -108,7 +108,6 @@ def active_engine_freezes(config: LitehiveConfig) -> dict[str, datetime]:
 
 def persist_engine_freeze_iso(
     root: Path,
-    *,
     engine_name: str,
     freeze_iso: str,
     actor: str = "system",
@@ -128,7 +127,6 @@ def persist_engine_freeze_iso(
 
 def clear_persisted_engine_freeze(
     root: Path,
-    *,
     engine_name: str,
     actor: str = "system",
     source: str = "runtime",
@@ -141,7 +139,6 @@ def clear_persisted_engine_freeze(
 def _persist_engine_freeze(
     root: Path,
     config: LitehiveConfig,
-    *,
     engine_name: str,
     freeze_until: datetime,
 ) -> None:
@@ -152,7 +149,7 @@ def _persist_engine_freeze(
     config.engine_freeze[engine_name] = freeze_iso
 
 
-def _clear_engine_freeze(root: Path, config: LitehiveConfig, *, engine_name: str) -> None:
+def _clear_engine_freeze(root: Path, config: LitehiveConfig, engine_name: str) -> None:
     clear_persisted_engine_freeze(root, engine_name=engine_name, actor="system", source="quota")
     config.engine_freeze.pop(engine_name, None)
 
@@ -208,7 +205,6 @@ def select_engine(
     root: Path,
     task: TaskRecord,
     config: LitehiveConfig,
-    *,
     engine_override: str | None = None,
     model_override: str | None = None,
     engine_names: list[str] | None = None,
@@ -308,7 +304,6 @@ def workspace_model_for_engine(config: LitehiveConfig, engine_name: str) -> str 
 def resolve_model(
     task: TaskRecord,
     config: LitehiveConfig,
-    *,
     engine_name: str,
     model_override: str | None = None,
 ) -> str | None:
@@ -324,7 +319,6 @@ def resolve_model(
 def resolve_engine_name(
     task: TaskRecord,
     config: LitehiveConfig,
-    *,
     engine_override: str | None = None,
 ) -> str:
     return resolve_engine_plan(task, config, engine_override=engine_override)[0]
@@ -333,7 +327,6 @@ def resolve_engine_name(
 def resolve_engine_attempt_order(
     task: TaskRecord,
     config: LitehiveConfig,
-    *,
     engine_override: str | None = None,
 ) -> list[str]:
     order = _engine_attempt_order(
@@ -348,7 +341,6 @@ def resolve_engine_attempt_order(
 def resolve_engine_plan(
     task: TaskRecord,
     config: LitehiveConfig,
-    *,
     engine_override: str | None = None,
 ) -> list[str]:
     if engine_override is not None:

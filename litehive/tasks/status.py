@@ -70,7 +70,7 @@ from litehive.worktree import resolve_recorded_worktree_path
 # module.
 
 
-def _reset_pipeline_state(root: Path, task_id: str, *, preserve_run_memory: bool = False) -> None:
+def _reset_pipeline_state(root: Path, task_id: str, preserve_run_memory: bool = False) -> None:
     SqlitePersistence(root).reset_current_lifecycle_state(task_id, preserve_run_memory=preserve_run_memory)
 
 
@@ -94,7 +94,6 @@ from litehive.tasks.switch_engine import switch_task_engine  # noqa: F401, E402
 
 def _persist_transition(
     root: Path,
-    *,
     task: TaskRecord,
     state: WorkspaceState,
     journal_message: str,
@@ -130,7 +129,6 @@ def _persist_transition(
 def _requeue_task_transition(
     root: Path,
     task_id: str,
-    *,
     front: bool = False,
     force: bool = False,
     audit_actor: str = "operator",
@@ -212,7 +210,7 @@ def _requeue_task_transition(
         return task
 
 
-def _resume_task_transition(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
+def _resume_task_transition(root: Path, task_id: str, front: bool = False) -> TaskRecord:
 
     with workspace_lock(root):
         task = require_task(root, task_id)
@@ -274,7 +272,6 @@ def _resume_task_transition(root: Path, task_id: str, *, front: bool = False) ->
 def _abandon_task_transition(
     root: Path,
     task_id: str,
-    *,
     reason: str = "Task abandoned via CLI.",
     audit_actor: str = "operator",
     audit_source: str = "cli",
@@ -321,7 +318,7 @@ _CLOSE_REASON_CODE_LABELS: dict[str, str] = {
 }
 
 
-def _queue_task(state: WorkspaceState, task_id: str, *, front: bool = False) -> None:
+def _queue_task(state: WorkspaceState, task_id: str, front: bool = False) -> None:
     state.queue = [item for item in state.queue if item != task_id]
     if front:
         state.queue.insert(0, task_id)
@@ -329,7 +326,7 @@ def _queue_task(state: WorkspaceState, task_id: str, *, front: bool = False) -> 
         state.queue.append(task_id)
 
 
-def _apply_cancelled_task_state(task: TaskRecord, *, reason: str) -> None:
+def _apply_cancelled_task_state(task: TaskRecord, reason: str) -> None:
     clear_task_run_activity(task, execution_status="cancelled")
     task.status = TaskStatus.CLOSED
     task.close_reason = "execution_cancelled"
@@ -347,7 +344,6 @@ def _apply_cancelled_task_state(task: TaskRecord, *, reason: str) -> None:
 
 def _apply_close_task_state(
     task: TaskRecord,
-    *,
     outcome: str,
     reason: str | None,
     follow_up_task_id: str | None = None,
@@ -385,7 +381,6 @@ def _apply_parked_task_state(task: TaskRecord) -> None:
 def _close_task_transition(
     root: Path,
     task_id: str,
-    *,
     outcome: str,
     reason: str | None = None,
     follow_up_task_id: str | None = None,
@@ -463,7 +458,6 @@ def _close_task_transition(
 def _park_task_transition(
     root: Path,
     task_id: str,
-    *,
     reason: str = "Task parked via CLI.",
     audit_actor: str = "operator",
     audit_source: str = "cli",
@@ -501,7 +495,6 @@ def _park_task_transition(
 def _update_task_transition(
     root: Path,
     task_id: str,
-    *,
     title: str | object = ...,
     depends_on: list[str] | object = ...,
     model: str | None | object = ...,
@@ -656,7 +649,6 @@ def _update_task_transition(
 def requeue_task(
     root: Path,
     task_id: str,
-    *,
     front: bool = False,
     force: bool = False,
     audit_actor: str = "operator",
@@ -672,14 +664,13 @@ def requeue_task(
     )
 
 
-def resume_task(root: Path, task_id: str, *, front: bool = False) -> TaskRecord:
+def resume_task(root: Path, task_id: str, front: bool = False) -> TaskRecord:
     return _resume_task_transition(root, task_id, front=front)
 
 
 def abandon_task(
     root: Path,
     task_id: str,
-    *,
     reason: str = "Task abandoned via CLI.",
     audit_actor: str = "operator",
     audit_source: str = "cli",
@@ -696,7 +687,6 @@ def abandon_task(
 def close_task(
     root: Path,
     task_id: str,
-    *,
     outcome: str,
     reason: str | None = None,
     follow_up_task_id: str | None = None,
@@ -717,7 +707,6 @@ def close_task(
 def park_task(
     root: Path,
     task_id: str,
-    *,
     reason: str = "Task parked via CLI.",
     audit_actor: str = "operator",
     audit_source: str = "cli",
@@ -734,7 +723,6 @@ def park_task(
 def update_task(
     root: Path,
     task_id: str,
-    *,
     title: str | object = ...,
     depends_on: list[str] | object = ...,
     model: str | None | object = ...,

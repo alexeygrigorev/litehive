@@ -140,7 +140,7 @@ def entry_from_worktree_sync(state: TaskState, event: Event) -> PipelineState:
 # ── rule generators (used by rules.py) ──────────────────────────────────
 
 
-def retry_epoch_rules(counter_stage, phases, retry_target, *, exhausted_reason: FailedReason | str) -> list[Rule]:
+def retry_epoch_rules(counter_stage, phases, retry_target, exhausted_reason: FailedReason | str) -> list[Rule]:
     """Generate retry + fail rule pairs for a retryable epoch.
 
     ``counter_stage`` — the stage whose retry counter is checked/bumped.

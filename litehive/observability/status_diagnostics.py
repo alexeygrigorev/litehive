@@ -627,7 +627,6 @@ def _task_issue_stage(task: TaskRecord, preferred_stage: str | None = None) -> s
 
 def _backlog_damage_issue(
     task: TaskRecord,
-    *,
     queued_ids: set[str],
     active_task_id: str | None,
     active_stage: str | None,
@@ -698,7 +697,6 @@ def _task_has_resume_marker(task: TaskRecord) -> bool:
 
 def _safe_yaml_mapping(
     path: Path,
-    *,
     key: str,
     remediation: str,
 ) -> tuple[dict[str, Any] | None, StatusIssue | None]:
@@ -718,7 +716,6 @@ def _safe_yaml_mapping(
 
 def _safe_yaml_document(
     path: Path,
-    *,
     key: str,
     remediation: str,
 ) -> tuple[object | None, StatusIssue | None]:
@@ -772,7 +769,6 @@ def _load_runner_status_for_status(root: Path) -> tuple[RunnerStatusState, Statu
 
 def _safe_json_mapping(
     path: Path,
-    *,
     key: str,
     remediation: str,
 ) -> tuple[dict[str, Any] | None, StatusIssue | None]:

@@ -136,7 +136,7 @@ def _engine_list_label(value: object) -> str:
     return str(value)
 
 
-def _render_engine_audit_lines(root: Path, *, key: str | None, limit: int) -> list[str]:
+def _render_engine_audit_lines(root: Path, key: str | None, limit: int) -> list[str]:
     entries = load_runtime_setting_audit_entries(root, key=key, limit=limit)
     lines = [f"setting_audit_entries: {len(entries)}"]
     for entry in entries:

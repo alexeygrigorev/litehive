@@ -90,7 +90,6 @@ def check_origin_divergence(workspace: Path) -> str | None:
 
 def _halt_for_origin_divergence(
     workspace: Path,
-    *,
     output_stream: TextIO | None,
 ) -> bool:
     divergence_reason = check_origin_divergence(workspace)
@@ -110,7 +109,7 @@ def _write_pool_stop_reason(workspace: Path, reason: str) -> None:
     set_pool_stop_reason(workspace, reason)
 
 
-def sleep_with_stop(seconds: float, *, stop_requested_fn) -> None:
+def sleep_with_stop(seconds: float, stop_requested_fn) -> None:
     """Sleep up to ``seconds``, returning early if a stop is requested."""
     deadline = time.monotonic() + seconds
     while True:
@@ -151,7 +150,7 @@ def default_command_prefix() -> list[str]:
     return [sys.executable, "-m", "litehive.main"]
 
 
-def _emit(message: str, *, stream: TextIO | None) -> None:
+def _emit(message: str, stream: TextIO | None) -> None:
     if stream is None:
         return
     stream.write(message)
@@ -177,7 +176,7 @@ def _daemon_healthcheck_failed(entry: dict[str, object]) -> bool:
     return heartbeat_age is None or heartbeat_age > _DAEMON_HEALTH_TIMEOUT_SECONDS
 
 
-def _wait_for_pid_exit(pid: int, *, timeout_seconds: float) -> bool:
+def _wait_for_pid_exit(pid: int, timeout_seconds: float) -> bool:
     deadline = time.monotonic() + max(timeout_seconds, 0.0)
     while True:
         if not pid_is_alive(pid):
@@ -188,11 +187,11 @@ def _wait_for_pid_exit(pid: int, *, timeout_seconds: float) -> bool:
         time.sleep(min(remaining, DAEMON_EXIT_POLL_INTERVAL_SECONDS))
 
 
-def _clear_recorded_daemon(workspace: Path, *, pid: int) -> None:
+def _clear_recorded_daemon(workspace: Path, pid: int) -> None:
     unregister_daemon(workspace, pid=pid)
 
 
-def _force_kill_recorded_daemon(workspace: Path, *, pid: int) -> None:
+def _force_kill_recorded_daemon(workspace: Path, pid: int) -> None:
     if not pid_is_alive(pid):
         _clear_recorded_daemon(workspace, pid=pid)
         return
@@ -208,7 +207,7 @@ def _force_kill_recorded_daemon(workspace: Path, *, pid: int) -> None:
     _clear_recorded_daemon(workspace, pid=pid)
 
 
-def _terminate_recorded_daemon(workspace: Path, *, pid: int) -> None:
+def _terminate_recorded_daemon(workspace: Path, pid: int) -> None:
     if not pid_is_alive(pid):
         _clear_recorded_daemon(workspace, pid=pid)
         return
@@ -250,7 +249,7 @@ def _should_continue_for_stop_reason(reason: object) -> bool:
     return str(reason) in _CONTINUE_STOP_REASONS
 
 
-def _emit_runner_wait(status, *, stream: TextIO | None) -> None:
+def _emit_runner_wait(status, stream: TextIO | None) -> None:
     pid = "-" if getattr(status, "pid", None) is None else str(status.pid)
     task_id = getattr(status, "active_task_id", None) or "-"
     heartbeat = getattr(status, "heartbeat_at", None) or "-"
@@ -263,7 +262,6 @@ def _emit_runner_wait(status, *, stream: TextIO | None) -> None:
 
 def ensure_workspace_venvs_ready(
     workspace: Path,
-    *,
     output_stream: TextIO | None,
 ) -> None:
     findings = probe_broken_venv_executables(workspace)
@@ -284,7 +282,6 @@ def maybe_run_workspace_backup(
 
 def run_logged_subprocess(
     command: list[str],
-    *,
     cwd: Path,
     log_path: Path,
     output_stream: TextIO | None,
@@ -315,7 +312,6 @@ def run_logged_subprocess(
 
 def run_daemon_loop(
     workspace: Path,
-    *,
     output_stream: TextIO | None = None,
     session_dir: Path | None = None,
 ) -> int:

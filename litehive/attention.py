@@ -68,7 +68,7 @@ def append_attention_log(workspace: Path, message: str) -> None:
         connection.commit()
 
 
-def read_attention_log(workspace: Path, *, limit: int | None = None) -> list[AttentionLogEntry]:
+def read_attention_log(workspace: Path, limit: int | None = None) -> list[AttentionLogEntry]:
     """Return attention-log entries newest-first, optionally limited.
 
     Reading is best-effort: if the table does not yet exist (e.g.
@@ -102,7 +102,7 @@ def collect_operator_needed_state(root: Path) -> OperatorNeededState:
     return OperatorNeededState(flagged_tasks=flagged_tasks, pool_stop_reason=pool_stop_reason)
 
 
-def waiting_for_you_lines(root: Path, *, limit: int = 5, reconcile: bool = True) -> list[str]:
+def waiting_for_you_lines(root: Path, limit: int = 5, reconcile: bool = True) -> list[str]:
     del reconcile
     try:
         state = collect_operator_needed_state(root)

@@ -55,7 +55,6 @@ class ConfigBackedEngineSelector:
         self,
         config: LitehiveConfig,
         engine_factory: EngineFactory,
-        *,
         workspace_root: Path | None = None,
         engine_override: str | None = None,
         model_override: str | None = None,

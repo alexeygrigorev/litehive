@@ -64,7 +64,7 @@ def _current_stage() -> str | None:
     return stage.strip() if stage else None
 
 
-def _resolve_report_stage(*, explicit_stage: str | None, task, pipeline_stage: str | None) -> str:
+def _resolve_report_stage(explicit_stage: str | None, task, pipeline_stage: str | None) -> str:
     if explicit_stage:
         return explicit_stage
     env_stage = _current_stage()
@@ -262,7 +262,6 @@ class AgentTaskMutationTarget:
 
 def resolve_active_agent_task_mutation_target(
     requested_task_id: str | None,
-    *,
     allowed_roles: set[str],
 ) -> AgentTaskMutationTarget:
     """Authorize and resolve a PM mutation target through the source workspace."""

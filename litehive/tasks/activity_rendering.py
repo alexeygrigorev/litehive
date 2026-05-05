@@ -50,7 +50,7 @@ def retract_activity_entry(entry: TaskActivityEntry) -> bool:
     return True
 
 
-def render_task_activity(root: Path, task: TaskRecord, *, for_prompt: bool = False) -> str:
+def render_task_activity(root: Path, task: TaskRecord, for_prompt: bool = False) -> str:
     activity_entries = load_task_activity(root, task)
     if not activity_entries:
         return ""

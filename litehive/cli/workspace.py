@@ -71,7 +71,6 @@ def print_status_issues(issues) -> int:
 
 def repair_summary_lines(
     summary: WorkspaceRepairSummary,
-    *,
     result_label: str,
     include_empty: bool,
     include_extended_fields: bool,

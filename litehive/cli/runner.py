@@ -131,7 +131,6 @@ class _RunCommandIteration:
 
 def run_once(
     workspace: Path,
-    *,
     engine: str | None = None,
     model: str | None = None,
 ) -> _RunCommandIteration:
@@ -211,7 +210,6 @@ def _emit_consecutive_task_failure_stop(consecutive_task_failures: int) -> None:
 
 def _run_single(
     workspace: Path,
-    *,
     engine: str | None = None,
     model: str | None = None,
 ) -> int:
@@ -226,7 +224,6 @@ def _run_single(
 
 def _preview_single(
     workspace: Path,
-    *,
     engine: str | None = None,
     model: str | None = None,
 ) -> int:
@@ -264,7 +261,6 @@ def _workspace_has_dirty_non_litehive_changes(workspace: Path) -> bool:
 
 def _run_drain(
     workspace: Path,
-    *,
     engine: str | None,
     model: str | None,
     stop_on_failure: bool,

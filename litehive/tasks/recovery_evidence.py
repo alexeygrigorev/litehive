@@ -25,7 +25,6 @@ from litehive.worktree import resolve_recorded_worktree_path
 def collect_recovery_evidence(
     root: Path,
     task: TaskRecord,
-    *,
     stage: str | None = None,
 ) -> list[RecoveryEvidenceItem]:
     evidence: list[RecoveryEvidenceItem] = []

@@ -10,7 +10,6 @@ def task_stage_outcomes(root, task_id, slug):
 
 def _pool_task_report_entry(
     root,
-    *,
     task_id,
     title,
     status,
@@ -98,7 +97,6 @@ def _closed_pool_tasks(root):
 
 
 def _format_pool_task_report_line(
-    *,
     label,
     entry,
 ):
@@ -179,7 +177,6 @@ def _pool_no_useful_progress_report(stop_reason):
 
 
 def _print_pool_summary_report(
-    *,
     report,
 ):
     report = _ensure_pool_summary_report_fields(report)
@@ -189,7 +186,6 @@ def _print_pool_summary_report(
 
 def _pool_summary_report_data(
     root,
-    *,
     completed,
     flagged,
     stop_reason,
@@ -222,7 +218,6 @@ def _pool_summary_report_data(
 
 
 def _pool_summary_report_lines(
-    *,
     report,
 ):
     report = _ensure_pool_summary_report_fields(report)
@@ -306,7 +301,6 @@ def _ensure_pool_summary_report_fields(report):
 
 
 def _write_pool_summary_report(
-    *,
     root,
     report,
 ):

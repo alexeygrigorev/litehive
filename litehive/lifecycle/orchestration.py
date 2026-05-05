@@ -99,7 +99,6 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
     )
 
     def _fresh_state(
-        *,
         failed_run_history: dict[str, FailedRunRecord] | None = None,
         recovery_history: list | None = None,
         recovery_budget_history_start: int = 0,
@@ -176,7 +175,6 @@ def _launch_requires_fresh_pipeline_state(task_record: TaskRecord) -> bool:
 def _stale_launch_state_requires_reset(
     task_record: TaskRecord,
     state: TaskState,
-    *,
     pipeline_mode: PipelineMode,
     entry_stage: PipelineState,
 ) -> bool:
@@ -583,7 +581,6 @@ def _cleanup_terminal_worktree(root: Path, task: TaskRecord | None) -> None:
 def reconcile_terminal_commit_sha(
     root: Path,
     task: TaskRecord | None,
-    *,
     final_state: TaskState,
     persistence: SqlitePersistence,
 ) -> TaskRecord | None:
@@ -658,7 +655,6 @@ def _report_stage_for_phase(phase: str | PipelineState) -> ReportPipelineState:
 def _record_hook_warnings(
     root: Path,
     task: TaskRecord,
-    *,
     phase: str,
     warnings: list[str],
 ) -> None:
@@ -700,7 +696,6 @@ def _record_hook_warnings(
 def _record_hook_reject(
     root: Path,
     task: TaskRecord,
-    *,
     phase: str,
     reason: str,
     warnings: list[str],
@@ -758,7 +753,6 @@ def _record_hook_reject(
 def run_task(
     root: Path,
     task: TaskRecord,
-    *,
     engine_factory: EngineFactory | None = None,
     engine_override: str | None = None,
     model_override: str | None = None,

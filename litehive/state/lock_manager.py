@@ -20,7 +20,7 @@ class WorkspaceLockManager:
     def _is_held_in_process(self) -> bool:
         return False if self.held_in_process is None else self.held_in_process()
 
-    def _parse_metadata_text(self, text: str, *, strict: bool) -> dict[str, object] | None:
+    def _parse_metadata_text(self, text: str, strict: bool) -> dict[str, object] | None:
         if not text.strip():
             return {}
         try:
@@ -35,7 +35,7 @@ class WorkspaceLockManager:
             return None
         return dict(document)
 
-    def read_metadata(self, *, strict: bool = False) -> dict[str, object] | None:
+    def read_metadata(self, strict: bool = False) -> dict[str, object] | None:
         if not self.path.exists():
             return None
         try:
@@ -71,14 +71,14 @@ class WorkspaceLockManager:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         return self.path.open("a+", encoding="utf-8")
 
-    def lock(self, handle: TextIO, *, nonblocking: bool) -> None:
+    def lock(self, handle: TextIO, nonblocking: bool) -> None:
         mode = fcntl.LOCK_EX | (fcntl.LOCK_NB if nonblocking else 0)
         fcntl.flock(handle.fileno(), mode)
 
     def unlock(self, handle: TextIO) -> None:
         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
-    def acquire(self, *, nonblocking: bool, cleanup_stale_inode: bool = False) -> TextIO:
+    def acquire(self, nonblocking: bool, cleanup_stale_inode: bool = False) -> TextIO:
         if cleanup_stale_inode:
             self.remove_stale_lockfile()
         handle = self.open()
@@ -89,7 +89,7 @@ class WorkspaceLockManager:
             raise
         return handle
 
-    def release(self, handle: TextIO, *, clear_metadata: bool) -> None:
+    def release(self, handle: TextIO, clear_metadata: bool) -> None:
         try:
             if clear_metadata:
                 self.clear_locked_metadata(handle)
@@ -138,7 +138,6 @@ class WorkspaceLockManager:
 
     def clear_metadata_if_unlocked(
         self,
-        *,
         expected_pid: int | None = None,
         require_stale_pid: bool = False,
     ) -> bool:

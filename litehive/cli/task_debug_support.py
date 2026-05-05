@@ -205,14 +205,14 @@ def _enum_value(value) -> str | None:
     return value.value if hasattr(value, "value") else str(value)
 
 
-def _first_line(value: str, *, limit: int = 180) -> str:
+def _first_line(value: str, limit: int = 180) -> str:
     text = value.strip().splitlines()[0] if value.strip() else "-"
     if len(text) <= limit:
         return text
     return text[: limit - 3] + "..."
 
 
-def _compact_paths(paths: list[str], *, limit: int = 6) -> str:
+def _compact_paths(paths: list[str], limit: int = 6) -> str:
     shown = paths[:limit]
     suffix = "" if len(paths) <= limit else f", ... (+{len(paths) - limit})"
     return ", ".join(shown) + suffix

@@ -169,7 +169,7 @@ def validate_config_data(data: Mapping[str, Any]) -> dict[str, Any]:
     return validated
 
 
-def normalize_engine_sequence(engines: Sequence[str], *, field_name: str) -> list[str]:
+def normalize_engine_sequence(engines: Sequence[str], field_name: str) -> list[str]:
     normalized: list[str] = []
     seen: set[str] = set()
     for engine_name in engines:
@@ -207,7 +207,6 @@ def normalize_agent_startup_guidance(
 
 def normalize_retry_on(
     retry_on: Sequence[str] | None,
-    *,
     field_name: str = "retry_on",
 ) -> list[str]:
     if retry_on is None:
@@ -231,7 +230,6 @@ def normalize_retry_on(
 
 def _normalize_runner_hook(
     raw_hook: str | Mapping[str, object],
-    *,
     field_name: str,
 ) -> dict[str, object]:
     if isinstance(raw_hook, str):
@@ -296,7 +294,6 @@ def normalize_runner_hooks(
 
 def _normalize_sandbox_credential_input(
     raw_input: SandboxCredentialInput | Mapping[str, object],
-    *,
     field_name: str,
 ) -> SandboxCredentialInput:
     if isinstance(raw_input, SandboxCredentialInput):
@@ -312,7 +309,7 @@ def _normalize_sandbox_credential_input(
     return credential
 
 
-def _normalize_bind_list(raw_binds: list[str], *, field_name: str) -> list[str]:
+def _normalize_bind_list(raw_binds: list[str], field_name: str) -> list[str]:
     normalized: list[str] = []
     for index, raw_path in enumerate(raw_binds):
         host_path = raw_path.strip()
@@ -326,7 +323,6 @@ def _normalize_bind_list(raw_binds: list[str], *, field_name: str) -> list[str]:
 
 def _normalize_external_engine_sandbox_policy(
     raw_policy: ExternalEngineSandboxPolicy | Mapping[str, object],
-    *,
     field_name: str,
 ) -> ExternalEngineSandboxPolicy:
     if isinstance(raw_policy, ExternalEngineSandboxPolicy):

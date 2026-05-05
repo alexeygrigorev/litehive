@@ -166,7 +166,6 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
 
     def __init__(
         self,
-        *,
         workspace_root: Path,
         worktree_resolver: "WorktreeResolver",
         main_ref: str = "origin/main",
@@ -370,7 +369,6 @@ class GitCommitNode(CommitNode):
     def __init__(
         self,
         main_repo_root: Path,
-        *,
         worktree_resolver: WorktreeResolver,
         task_resolver: TaskResolver | None = None,
     ) -> None:
@@ -519,7 +517,7 @@ class GitCommitNode(CommitNode):
             raise GitError("main cleanup commit completed but main HEAD could not be resolved")
         return head
 
-    def _generated_commit_message(self, state: TaskState, *, detail: str) -> str:
+    def _generated_commit_message(self, state: TaskState, detail: str) -> str:
         if self.task_resolver is not None:
             task = self.task_resolver(state)
             if task is not None:
@@ -550,7 +548,6 @@ class GitCommitNode(CommitNode):
     def _git_status_entries_with_options(
         self,
         repo_root: Path,
-        *,
         include_ignored: bool = False,
     ) -> list[tuple[str, str]]:
         entries: list[tuple[str, str]] = []

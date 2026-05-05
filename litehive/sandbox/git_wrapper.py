@@ -10,7 +10,7 @@ from litehive.attention import append_attention_log
 _PROTECTED_REFS = {"main", "master", "origin/main", "origin/master"}
 
 
-def main(argv: list[str], *, real_git_path: str, workspace_root: str) -> int:
+def main(argv: list[str], real_git_path: str, workspace_root: str) -> int:
     reason = rejection_reason(argv)
     if reason is not None:
         append_attention_log(
@@ -23,7 +23,7 @@ def main(argv: list[str], *, real_git_path: str, workspace_root: str) -> int:
     return 1
 
 
-def rejection_reason(argv: list[str], *, cwd: Path | None = None) -> str | None:
+def rejection_reason(argv: list[str], cwd: Path | None = None) -> str | None:
     if not argv:
         return None
     command = argv[0]

@@ -70,7 +70,6 @@ class RoleAgent(AgentNode):
         self,
         selector: EngineSelector,
         session_provider: SessionProvider,
-        *,
         prompt_context: PromptContext | None = None,
         retry_budget: int = 3,
         retry_on: tuple[str, ...] = ("execution_limit", "timeout"),

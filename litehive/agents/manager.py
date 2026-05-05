@@ -66,7 +66,6 @@ def _latest_report_files_changed(
     root: Path,
     task: TaskRecord,
     pipeline_state: str,
-    *,
     source_subagent_id: str | None = None,
 ) -> list[str]:
     latest = latest_task_activity_entry(
@@ -135,7 +134,7 @@ class SubagentStartupError(RuntimeError):
 class SubagentManager(SessionMixin):
     """Run external CLI subagents inside a task-scoped folder."""
 
-    def __init__(self, root: Path, *, execution_root: Path | None = None) -> None:
+    def __init__(self, root: Path, execution_root: Path | None = None) -> None:
         self.root = root.resolve()
         self.execution_root = (execution_root or root).resolve()
         self.config = load_config(self.root)
@@ -152,7 +151,6 @@ class SubagentManager(SessionMixin):
 
     def _record_live_callback_failure(
         self,
-        *,
         ref: SubagentRef,
         phase: str,
         exc: Exception,
@@ -195,7 +193,6 @@ class SubagentManager(SessionMixin):
     def run(
         self,
         task: TaskRecord,
-        *,
         role: str,
         engine_name: str,
         prompt: str,
@@ -630,7 +627,6 @@ class SubagentManager(SessionMixin):
 
     def _parse_execution_report(
         self,
-        *,
         task: TaskRecord,
         stage: str,
         ref: SubagentRef,

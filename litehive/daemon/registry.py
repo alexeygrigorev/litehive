@@ -41,7 +41,7 @@ def daemon_lock_is_active(workspace: Path) -> bool:
     return _daemon_lock_manager(workspace).is_active()
 
 
-def _clear_stale_daemon_metadata(workspace: Path, *, pid: int | None = None) -> None:
+def _clear_stale_daemon_metadata(workspace: Path, pid: int | None = None) -> None:
     workspace = workspace.resolve()
     manager = _daemon_lock_manager(workspace)
     manager.clear_stale_state(workspace, expected_pid=pid)
@@ -66,7 +66,7 @@ def get_workspace_daemon(workspace: Path) -> dict[str, object] | None:
     return metadata if metadata.get("status") == "running" else None
 
 
-def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
+def register_daemon(workspace: Path, pid: int, log_dir: Path) -> None:
     workspace = workspace.resolve()
     manager = _daemon_lock_manager(workspace)
     # Remove stale lock file before opening — inherited FDs from dead
@@ -105,7 +105,7 @@ def register_daemon(workspace: Path, *, pid: int, log_dir: Path) -> None:
         raise
 
 
-def unregister_daemon(workspace: Path, *, pid: int | None = None) -> None:
+def unregister_daemon(workspace: Path, pid: int | None = None) -> None:
     workspace = workspace.resolve()
     manager = _daemon_lock_manager(workspace)
     with _DAEMON_LOCKS_MUTEX:
@@ -122,7 +122,7 @@ def unregister_daemon(workspace: Path, *, pid: int | None = None) -> None:
     _clear_stale_daemon_metadata(workspace, pid=pid)
 
 
-def touch_daemon(workspace: Path, *, pid: int | None = None) -> bool:
+def touch_daemon(workspace: Path, pid: int | None = None) -> bool:
     workspace = workspace.resolve()
     manager = _daemon_lock_manager(workspace)
     with _DAEMON_LOCKS_MUTEX:

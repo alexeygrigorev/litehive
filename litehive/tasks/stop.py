@@ -116,7 +116,6 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
 
 def stop_current_task(
     root: Path,
-    *,
     wait_timeout_seconds: float = 5.0,
     poll_interval_seconds: float = 0.1,
 ) -> StopTaskSummary:

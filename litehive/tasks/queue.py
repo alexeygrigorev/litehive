@@ -64,7 +64,7 @@ def enqueue_task_front(root: Path, task_id: str) -> WorkspaceState:
     return _enqueue_task(root, task_id, front=True)
 
 
-def _enqueue_task(root: Path, task_id: str, *, front: bool) -> WorkspaceState:
+def _enqueue_task(root: Path, task_id: str, front: bool) -> WorkspaceState:
 
     with workspace_lock(root):
         state = load_state(root)
@@ -182,7 +182,6 @@ def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
 
 def reset_task_for_recovery(
     task: TaskRecord,
-    *,
     status: str,
     pipeline_status: str,
     clear_last_outcome: bool = True,
@@ -224,7 +223,7 @@ def drop_task_from_workspace_state(state: WorkspaceState, task_id: str) -> bool:
     return changed or len(state.unmerged_worktrees) != original_unmerged
 
 
-def prepare_completed_task_for_recovery(task: TaskRecord, *, recovery_stage: str) -> None:
+def prepare_completed_task_for_recovery(task: TaskRecord, recovery_stage: str) -> None:
     reset_task_for_recovery(
         task,
         status="queued",
@@ -268,7 +267,7 @@ def resumable_running_stage(task: TaskRecord) -> str | None:
     return resumable_queue_stage(task)
 
 
-def canonicalize_resumable_queue_task(task: TaskRecord, *, stage: str | None = None) -> str | None:
+def canonicalize_resumable_queue_task(task: TaskRecord, stage: str | None = None) -> str | None:
     target_stage = _normalize_resumable_stage_name(stage) if stage is not None else resumable_queue_stage(task)
     if target_stage is None:
         return None
@@ -573,7 +572,7 @@ def _task_blockers(task: TaskRecord, tasks_by_id: dict[str, TaskRecord]) -> list
     return blockers
 
 
-def validate_task_dependencies(root: Path, *, task_id: str, depends_on: list[str]) -> None:
+def validate_task_dependencies(root: Path, task_id: str, depends_on: list[str]) -> None:
 
     tasks_by_id = {task.id: task for task in list_tasks(root, strict=False)}
     seen: set[str] = set()
@@ -640,7 +639,6 @@ def _is_interrupted_task(task: TaskRecord) -> bool:
 
 def _task_selection_key(
     task: TaskRecord,
-    *,
     queue_index: int,
     queue: list[str],
     tasks_by_id: dict[str, TaskRecord],

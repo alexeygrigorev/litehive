@@ -23,7 +23,7 @@ class TransientError(Exception):
     the agent just needs another shot with the same state.
     """
 
-    def __init__(self, message: str, *, failure_kind: str | None = None) -> None:
+    def __init__(self, message: str, failure_kind: str | None = None) -> None:
         super().__init__(message)
         self.failure_kind = failure_kind
 
@@ -152,7 +152,6 @@ class AgentNode(Node):
         name: PipelineState,
         selector: EngineSelector,
         session_provider: SessionProvider,
-        *,
         retry_budget: int = 3,
         retry_on: tuple[str, ...] = ("execution_limit", "timeout"),
         retry_backoff_seconds: float = 0.0,

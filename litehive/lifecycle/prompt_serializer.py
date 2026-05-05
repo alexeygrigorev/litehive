@@ -33,7 +33,6 @@ SECTION_SEP = "\n"
 
 def serialize_prompt(
     prompt: dict[str, Any],
-    *,
     task_record: TaskRecord | None,
     workspace_root: Path | None = None,
 ) -> str:
@@ -314,7 +313,7 @@ def _compact_failure_signal(*texts: str) -> str:
     return ""
 
 
-def _single_line(value: str, *, limit: int) -> str:
+def _single_line(value: str, limit: int) -> str:
     text = " ".join(value.split())
     if len(text) <= limit:
         return text
@@ -475,7 +474,7 @@ def _string_list(value: Any) -> list[str]:
     return normalized
 
 
-def _compact_list(items: list[str], *, limit: int, separator: str = ", ") -> str:
+def _compact_list(items: list[str], limit: int, separator: str = ", ") -> str:
     if len(items) <= limit:
         return separator.join(items)
     shown = separator.join(items[:limit])

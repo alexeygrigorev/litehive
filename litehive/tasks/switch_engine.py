@@ -57,7 +57,6 @@ def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
 
 def _switch_activity_entry_message(
     task: TaskRecord,
-    *,
     reason: str,
     previous_engine: str,
     new_engine: str,
@@ -79,7 +78,6 @@ def _switch_activity_entry_message(
 def switch_task_engine(
     root: Path,
     task_id: str,
-    *,
     engine: str,
     reason: str,
     audit_actor: str = "operator",

@@ -347,7 +347,6 @@ class SandboxLauncher:
     @staticmethod
     def _translate_container_argv(
         argv: tuple[str, ...],
-        *,
         host_root: Path,
         container_root: PurePosixPath,
     ) -> list[str]:
@@ -365,6 +364,6 @@ class SandboxLauncher:
         return translated
 
     @staticmethod
-    def _bind_mount_spec(source: Path, target: PurePosixPath, *, read_only: bool) -> str:
+    def _bind_mount_spec(source: Path, target: PurePosixPath, read_only: bool) -> str:
         mode = ",readonly" if read_only else ""
         return f"type=bind,src={source},dst={target}{mode}"

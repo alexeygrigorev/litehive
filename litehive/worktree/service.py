@@ -78,7 +78,6 @@ class WorktreeService:
     def sync_task_worktree(
         self,
         task_id: str,
-        *,
         entry_stage: str | None,
         worktree_resolver: "Callable[[object], Path] | None" = None,
         resolver_state: object | None = None,
@@ -130,7 +129,7 @@ class WorktreeService:
     def collect_managed_worktrees(self) -> list[ManagedWorktree]:
         return collect_managed_worktrees(self.root)
 
-    def remove_cleanable_worktrees(self, *, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
+    def remove_cleanable_worktrees(self, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
         return remove_cleanable_worktrees(self.root, dry_run=dry_run)
 
     def collect_rescue_candidates(self) -> list[RescueCandidate]:

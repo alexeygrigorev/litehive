@@ -28,7 +28,7 @@ def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
     return summary
 
 
-def _normalize_stale_terminal_tasks(root: Path, *, summary: WorkspaceRepairSummary | None = None) -> bool:
+def _normalize_stale_terminal_tasks(root: Path, summary: WorkspaceRepairSummary | None = None) -> bool:
     mutated = False
     with workspace_lock(root):
         state = load_state(root, bootstrap=False)

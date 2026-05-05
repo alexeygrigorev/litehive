@@ -74,7 +74,6 @@ def append_task_activity(root: Path, task: TaskRecord, entry: TaskActivityEntry)
 def latest_task_activity_entry(
     root: Path,
     task: TaskRecord,
-    *,
     role: str | None = None,
     stage: str | None = None,
     source_subagent_id: str | None = None,

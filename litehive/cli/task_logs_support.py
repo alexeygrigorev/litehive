@@ -84,7 +84,7 @@ def list_task_subagents(root: Path, task) -> int:
     return 0
 
 
-def follow_active_subagent(root: Path, *, task_id: str | None = None) -> int:
+def follow_active_subagent(root: Path, task_id: str | None = None) -> int:
     task = resolve_follow_task(root, task_id=task_id)
     ref = None if task is None else _latest_subagent_ref(task)
     is_active = bool(
@@ -138,7 +138,7 @@ def _latest_daemon_log_path(latest_dir: Path | None) -> Path | None:
     return candidates[-1] if candidates else None
 
 
-def _tail_text(text: str, *, lines: int = _DEFAULT_TAIL_LINES) -> str:
+def _tail_text(text: str, lines: int = _DEFAULT_TAIL_LINES) -> str:
     text = text.rstrip("\n")
     if not text:
         return ""
@@ -191,7 +191,7 @@ def _latest_subagent_ref(task):
     return task.subagents[-1] if task.subagents else None
 
 
-def _artifact_for_kind(base: Path, kind: str, *, active: bool) -> Path | None:
+def _artifact_for_kind(base: Path, kind: str, active: bool) -> Path | None:
     if kind == "stdout":
         if active:
             live = resolve_artifact_path(base, "stdout.log")
@@ -229,7 +229,7 @@ def _format_duration(started_at: str | datetime | None, completed_at: str | date
     return f"{total_seconds}s" if total_seconds >= 0 else "-"
 
 
-def resolve_follow_task(root: Path, *, task_id: str | None) -> object | None:
+def resolve_follow_task(root: Path, task_id: str | None) -> object | None:
     if task_id is not None:
         return get_task_record(root, task_id)
     tasks = list_tasks(root, strict=False)

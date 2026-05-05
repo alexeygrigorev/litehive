@@ -71,7 +71,6 @@ def _save_engine_monitoring_to_db(root: Path, monitoring: WorkspaceEngineMonitor
 
 def record_engine_execution(
     root: Path,
-    *,
     task_id: str,
     engine_name: str,
     adapter: ExternalCLIAdapter,
@@ -100,7 +99,6 @@ def record_engine_execution(
 
 def record_engine_observation(
     root: Path,
-    *,
     task_id: str,
     engine_name: str,
     adapter: ExternalCLIAdapter,
@@ -134,7 +132,6 @@ def record_engine_observation(
 
 def _apply_engine_observation(
     monitoring: WorkspaceEngineMonitoring,
-    *,
     engine_name: str,
     task_id: str,
     execution: CLIExecutionResult,

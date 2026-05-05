@@ -86,7 +86,7 @@ def prune_workspace_backups(root: Path) -> list[Path]:
     return deleted
 
 
-def create_workspace_backup(root: Path, *, when: datetime | None = None) -> WorkspaceBackup:
+def create_workspace_backup(root: Path, when: datetime | None = None) -> WorkspaceBackup:
     when = when or datetime.now(UTC)
     backup_dir = workspace_path(root, "backups")
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -135,7 +135,6 @@ def create_workspace_backup(root: Path, *, when: datetime | None = None) -> Work
 
 def create_scheduled_workspace_backup(
     root: Path,
-    *,
     now: datetime | None = None,
 ) -> WorkspaceBackup | None:
     now = now or datetime.now(UTC)

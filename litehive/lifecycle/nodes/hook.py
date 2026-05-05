@@ -27,7 +27,7 @@ class HookRunner(Protocol):
     def run(self, spec: HookSpec, state: TaskState) -> subprocess.CompletedProcess[str] | None: ...
 
 
-def _failed_process(command: str, code: int, *, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
+def _failed_process(command: str, code: int, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(command, code, stdout, stderr)
 
 
@@ -35,7 +35,6 @@ class SubprocessHookRunner(HookRunner):
     def __init__(
         self,
         workspace_root: Path,
-        *,
         execution_root_resolver: Callable[[TaskState], Path] | None = None,
         extra_env: dict[str, str] | None = None,
     ) -> None:

@@ -14,7 +14,6 @@ def append_event(
     root: Path,
     task: TaskRecord,
     kind: str,
-    *,
     data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Append a single event to the task's JSONL event stream.

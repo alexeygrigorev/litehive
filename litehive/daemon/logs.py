@@ -20,7 +20,7 @@ def latest_run_all_log_dir(workspace: Path) -> Path | None:
     return candidates[-1] if candidates else None
 
 
-def prune_run_all_log_dirs(log_base: Path, *, keep: int = _RUN_ALL_SESSION_RETENTION) -> None:
+def prune_run_all_log_dirs(log_base: Path, keep: int = _RUN_ALL_SESSION_RETENTION) -> None:
     if not log_base.exists():
         return
     directories = sorted(path for path in log_base.iterdir() if path.is_dir())

@@ -44,7 +44,7 @@ def registered_workspace_root(path: Path) -> Path | None:
     return None
 
 
-def _reject_invalid_workspace_path(path: Path | str, *, source: str) -> None:
+def _reject_invalid_workspace_path(path: Path | str, source: str) -> None:
     """Reject workspace paths containing unresolved shell variables."""
     raw = str(path).strip()
     match = _UNRESOLVED_SHELL_VAR_RE.search(raw)
@@ -69,7 +69,7 @@ def _task_matches(root: Path, task_id: str | None) -> bool:
     return task_id is None or _task_exists(root, task_id)
 
 
-def _reject_litehive_control_paths(path: Path, *, source: str) -> None:
+def _reject_litehive_control_paths(path: Path, source: str) -> None:
     """Reject workspace paths inside .litehive control directories or managed worktrees."""
     resolved_path = path.resolve()
 
@@ -100,7 +100,7 @@ def _reject_litehive_control_paths(path: Path, *, source: str) -> None:
         )
 
 
-def normalize_workspace_root(root: Path, *, source: str) -> Path:
+def normalize_workspace_root(root: Path, source: str) -> Path:
     _reject_invalid_workspace_path(root, source=source)
     resolved_input = Path(root).expanduser().resolve()
     _reject_litehive_control_paths(resolved_input, source=source)
@@ -115,7 +115,7 @@ def normalize_workspace_root(root: Path, *, source: str) -> Path:
     return resolved_root
 
 
-def _reject_nested_workspace_bootstrap(root: Path, *, source: str) -> None:
+def _reject_nested_workspace_bootstrap(root: Path, source: str) -> None:
     """Reject workspace creation inside existing Litehive workspace directories."""
     parent_workspace = _workspace_parent_root(root)
     if parent_workspace is None:
@@ -133,7 +133,6 @@ def _task_exists(root: Path, task_id: str) -> bool:
 
 def _resolve_workspace_from_search_root(
     search_root: Path,
-    *,
     effective_task_id: str | None,
     register: bool,
 ) -> Path | None:
@@ -157,7 +156,6 @@ def _resolve_workspace_from_search_root(
 
 def resolve_workspace(
     task_id: str | None,
-    *,
     cwd: Path | None = None,
     register: bool = True,
 ) -> Path:

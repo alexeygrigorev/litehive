@@ -47,7 +47,6 @@ class StateMachineRunner:
         self,
         registry: NodeRegistry,
         persistence: Persistence,
-        *,
         rules: list[Rule] = RULES,
         journal: PipelineJournal | None = None,
         session_store=None,
@@ -108,7 +107,6 @@ class StateMachineRunner:
     def _apply_transition(
         self,
         state: TaskState,
-        *,
         from_stage: str,
         event: Event,
         task_id: str,
@@ -199,7 +197,6 @@ class StateMachineRunner:
     @staticmethod
     def _clear_hook_reject_tracking(
         state: TaskState,
-        *,
         clear_recovery_invoked: bool,
     ) -> None:
         state.consecutive_same_hook_rejects = 0
@@ -275,7 +272,6 @@ class StateMachineRunner:
 
     def _reset_cross_agent_retry_sessions(
         self,
-        *,
         task_id: str,
         from_stage: str,
         to_stage: str,

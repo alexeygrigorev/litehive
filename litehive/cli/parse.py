@@ -8,7 +8,6 @@ from litehive.tasks.normalization import (
 
 def parse_dependency_ids(
     raw_values,
-    *,
     task_id=None,
     allow_clear=False,
 ):
@@ -40,7 +39,7 @@ def parse_dependency_ids(
     return normalized
 
 
-def parse_engine_int_map(raw_values, *, option_name):
+def parse_engine_int_map(raw_values, option_name):
     if not raw_values:
         return {}
 
@@ -65,7 +64,6 @@ def parse_engine_int_map(raw_values, *, option_name):
 
 def parse_runner_hooks(
     raw_values,
-    *,
     option_name,
 ):
     if not raw_values:
@@ -85,7 +83,6 @@ def parse_runner_hooks(
 
 def parse_acceptance_criteria(
     raw_values,
-    *,
     allow_clear=False,
 ):
     if not raw_values:
@@ -103,7 +100,6 @@ def parse_acceptance_criteria(
 
 def parse_text_list_option(
     raw_values,
-    *,
     option_name,
     allow_clear=False,
 ):

@@ -20,11 +20,11 @@ from litehive.state.persist import load_state
 from litehive.state.persist import persist_task_and_state
 
 
-def idle_stage_state(*, updated_at: str, stage: str | None = None) -> RuntimeStageState:
+def idle_stage_state(updated_at: str, stage: str | None = None) -> RuntimeStageState:
     return RuntimeStageState(stage=stage, updated_at=updated_at)
 
 
-def _running_stage_state(stage: str, *, started_at: str) -> RuntimeStageState:
+def _running_stage_state(stage: str, started_at: str) -> RuntimeStageState:
     return RuntimeStageState(
         stage=stage,
         status="running",
@@ -35,7 +35,6 @@ def _running_stage_state(stage: str, *, started_at: str) -> RuntimeStageState:
 
 def _runtime_subagent_state(
     ref: SubagentRef,
-    *,
     started_at: str,
     updated_at: str,
     pid: int | None = None,
@@ -66,7 +65,6 @@ def _runtime_subagent_state(
 
 def clear_task_run_activity(
     task: TaskRecord,
-    *,
     execution_status: str,
     updated_at: str | None = None,
     clear_interruption: bool = False,
@@ -140,7 +138,6 @@ def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) 
 def set_task_retry_state(
     root: Path,
     task: TaskRecord,
-    *,
     retry_count: int,
     retry_limit: int,
 ) -> None:
@@ -159,7 +156,6 @@ def clear_task_outcome(root: Path, task: TaskRecord) -> None:
 
 def _apply_task_retry_state(
     task: TaskRecord,
-    *,
     retry_count: int,
     retry_limit: int,
 ) -> None:
@@ -176,7 +172,6 @@ def _clear_task_outcome(task: TaskRecord) -> None:
 def mark_task_outcome(
     root: Path,
     task: TaskRecord,
-    *,
     kind: str,
     stage: str,
     reason_code: str,
@@ -204,7 +199,6 @@ def mark_task_outcome(
 
 def apply_task_outcome(
     task: TaskRecord,
-    *,
     kind: str,
     stage: str,
     reason_code: str,
@@ -274,7 +268,6 @@ def mark_subagent_pid(root: Path, task: TaskRecord, pid: int | None) -> None:
 def mark_subagent_progress(
     root: Path,
     task: TaskRecord,
-    *,
     pid: int | None = None,
     transcript: str | None = None,
     continuation: RuntimeEngineContinuation | None = None,
@@ -316,7 +309,6 @@ def mark_subagent_finished(
 def mark_engine_switch(
     root: Path,
     task: TaskRecord,
-    *,
     stage: str,
     from_engine: str,
     to_engine: str,

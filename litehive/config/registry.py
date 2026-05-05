@@ -111,7 +111,7 @@ def quarantine_corrupt_workspace_registry(reason: str) -> Path | None:
     return _backup_corrupt_registry_file(path, reason=reason, label="workspace registry")
 
 
-def _backup_corrupt_registry_file(path: Path, *, reason: str, label: str) -> Path | None:
+def _backup_corrupt_registry_file(path: Path, reason: str, label: str) -> Path | None:
     if not path.exists():
         return None
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -132,7 +132,7 @@ def _canonical_workspace_root(root: Path | str) -> Path | None:
         return None
 
 
-def _locked_registry_operation(operation, *, path: Path):
+def _locked_registry_operation(operation, path: Path):
     retries_remaining = _registry_lock_retries()
     retry_delay_seconds = _registry_lock_retry_delay_seconds()
     while True:

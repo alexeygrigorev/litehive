@@ -475,7 +475,7 @@ class SqlitePersistence:
     constructor argument on every load — it never hits the db.
     """
 
-    def __init__(self, workspace_root: Path, *, limits: Limits | None = None) -> None:
+    def __init__(self, workspace_root: Path, limits: Limits | None = None) -> None:
         self.workspace_root = workspace_root
         self.limits = limits or Limits()
 
@@ -534,7 +534,7 @@ class SqlitePersistence:
             limits=self.limits,
         )
 
-    def reset_current_lifecycle_state(self, task_id: str, *, preserve_run_memory: bool = False) -> None:
+    def reset_current_lifecycle_state(self, task_id: str, preserve_run_memory: bool = False) -> None:
         """Reset the current lifecycle cursor for a task.
 
         This deletes or rewrites only the mutable ``pipeline_task_state`` row
@@ -609,7 +609,6 @@ class SqlitePersistence:
     def initialize(
         self,
         task_id: str,
-        *,
         pipeline_mode: PipelineMode = PipelineMode.FULL,
         stage: PipelineState = PipelineState.READY,
         entry_stage: PipelineState | None = None,

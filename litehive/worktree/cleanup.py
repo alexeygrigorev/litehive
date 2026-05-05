@@ -80,7 +80,7 @@ def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
     return sorted(worktrees, key=lambda item: item.task_id)
 
 
-def remove_cleanable_worktrees(root: Path, *, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
+def remove_cleanable_worktrees(root: Path, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
     """Remove worktrees for terminal tasks and report what was touched.
 
     Bulk operation backing ``WorktreeService.remove_cleanable_worktrees`` and

@@ -45,7 +45,7 @@ from litehive.tasks.runtime import (
 )
 
 
-def mark_interrupted_subagent(root: Path, task: TaskRecord, *, reason: str, stage: str) -> RuntimeSubagentState | None:
+def mark_interrupted_subagent(root: Path, task: TaskRecord, reason: str, stage: str) -> RuntimeSubagentState | None:
     active = task.runtime.execution.active_subagent
     interruption = task.runtime.execution.interruption
     existing = None if interruption is None else interruption.subagent
@@ -79,7 +79,6 @@ def mark_interrupted_subagent(root: Path, task: TaskRecord, *, reason: str, stag
 def prepare_interrupted_task(
     root: Path,
     task: TaskRecord,
-    *,
     stage: str,
     summary: str,
     reason: str | None = None,
@@ -130,7 +129,7 @@ def interruption_journal_message(task: TaskRecord) -> str:
     return " ".join(parts)
 
 
-def stale_interruption_reason(task: TaskRecord, stage: str, *, stale_pid: bool = False) -> str:
+def stale_interruption_reason(task: TaskRecord, stage: str, stale_pid: bool = False) -> str:
     active = task.runtime.execution.active_subagent
     if active is not None:
         pid_detail = f", pid {active.pid} no longer alive" if stale_pid and active.pid else ""
@@ -143,7 +142,6 @@ def stale_interruption_reason(task: TaskRecord, stage: str, *, stale_pid: bool =
 
 def recover_stale_runner_state(
     root: Path,
-    *,
     summary: WorkspaceRepairSummary | None = None,
 ) -> bool:
     root = root.resolve()
@@ -289,7 +287,6 @@ def _write_interrupted_subagent_artifacts(
     root: Path,
     task: TaskRecord,
     subagent: RuntimeSubagentState,
-    *,
     resume_stage: str,
 ) -> None:
     now = utcnow()
@@ -344,7 +341,6 @@ def _interruption_timestamps(task: TaskRecord, now: str) -> dict[str, str | None
 
 def _set_interruption_metadata(
     task: TaskRecord,
-    *,
     root: Path,
     stage: str,
     summary: str,
@@ -409,7 +405,6 @@ def _can_attempt_stale_runner_recovery(
 def _record_stale_recovery(
     root: Path,
     task: TaskRecord,
-    *,
     stage: str,
     journal_message: str,
     summary: WorkspaceRepairSummary | None,
@@ -440,7 +435,6 @@ def _record_stale_recovery(
 def _recover_stale_running_task(
     root: Path,
     task: TaskRecord,
-    *,
     summary: WorkspaceRepairSummary | None,
 ) -> tuple[bool, str | None, bool]:
     # inline: tasks.queue top-level-imports execution_recovery (would cycle).
@@ -479,7 +473,6 @@ def _can_skip_recovery_scan(
     root: Path,
     active_task_id: str | None,
     running_task_ids: list[str],
-    *,
     current_thread_owns_runner_guard: bool,
     runner_lock_held: bool,
     has_repair_candidates: bool,
@@ -499,7 +492,6 @@ def _recover_running_tasks(
     state,
     tasks_by_id: dict[str, TaskRecord],
     running_task_ids: list[str],
-    *,
     summary: WorkspaceRepairSummary | None,
 ) -> dict[str, object]:
     mutated = False
@@ -534,7 +526,6 @@ def _recover_running_tasks(
 
 def _normalize_nonrunning_resumable_tasks(
     state,
-    *,
     tasks_by_id: dict[str, TaskRecord],
     summary: WorkspaceRepairSummary | None,
 ) -> dict[str, object]:
@@ -669,7 +660,6 @@ def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
 def _update_active_task_after_recovery(
     root: Path,
     state,
-    *,
     tasks_by_id: dict[str, TaskRecord],
     prioritized_ids: list[str],
     running_task_ids: list[str],

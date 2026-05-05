@@ -20,7 +20,7 @@ def _worktree_workspace_dir(root: Path) -> Path | None:
     return None if registered_root is None else workspace_dir(registered_root)
 
 
-def tasks_root(root: Path, *, bootstrap: bool = True) -> Path:
+def tasks_root(root: Path, bootstrap: bool = True) -> Path:
     worktree_workspace = _worktree_workspace_dir(root)
     if worktree_workspace is not None:
         return worktree_workspace / "tasks"
@@ -47,11 +47,11 @@ def slugify(value: str, max_length: int = 50) -> str:
     return truncated.strip("-") or slug[:max_length].strip("-")
 
 
-def task_dir(root: Path, task: TaskRecord, *, bootstrap: bool = True) -> Path:
+def task_dir(root: Path, task: TaskRecord, bootstrap: bool = True) -> Path:
     return tasks_root(root, bootstrap=bootstrap) / f"{task.id}-{task.slug}"
 
 
-def task_recovery_dir(root: Path, task: TaskRecord, *, bootstrap: bool = True) -> Path:
+def task_recovery_dir(root: Path, task: TaskRecord, bootstrap: bool = True) -> Path:
     return task_dir(root, task, bootstrap=bootstrap) / "recovery"
 
 

@@ -40,7 +40,7 @@ class SubagentResult:
 class SubagentInactivityTimeout(RuntimeError):
     """Raised when a live subagent stops producing stdout for too long."""
 
-    def __init__(self, execution: CLIExecutionResult, *, idle_seconds: float, limit_seconds: float) -> None:
+    def __init__(self, execution: CLIExecutionResult, idle_seconds: float, limit_seconds: float) -> None:
         self.execution = execution
         self.idle_seconds = idle_seconds
         self.limit_seconds = limit_seconds

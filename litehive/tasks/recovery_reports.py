@@ -17,7 +17,6 @@ RecoveryRunnableState = Literal["runnable", "parked", "blocked"]
 def record_recovery_report(
     root: Path,
     task: TaskRecord,
-    *,
     trigger_event_kind: TriggerEventKind,
     origin_stage: str | None,
     summary: str,

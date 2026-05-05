@@ -54,7 +54,7 @@ class RuntimeStageState(BaseModel):
     updated_at: str | None = None  # Last status update timestamp
     duration_seconds: int = 0  # How long the stage has been running
 
-    def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
+    def model_copy(self, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
         if update is not None:
             update = {key: value for key, value in update.items() if key in type(self).model_fields}
         return super().model_copy(update=update, deep=deep)
@@ -269,7 +269,6 @@ class TaskRuntime(BaseModel):
 
     def for_storage(
         self,
-        *,
         commit_sha: str | None,
         worktree_path: str | None,
     ) -> "TaskRuntime":

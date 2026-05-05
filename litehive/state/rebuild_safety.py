@@ -127,7 +127,7 @@ def assert_database_rebuild_safe(
     return report
 
 
-def backup_database_before_rebuild(root: Path, db_path: Path, *, label: str) -> Path | None:
+def backup_database_before_rebuild(root: Path, db_path: Path, label: str) -> Path | None:
     if not db_path.exists():
         return None
     backup_dir = workspace_path(root, "backups")

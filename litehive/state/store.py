@@ -158,7 +158,6 @@ class RuntimeStore:
 
     def save_runtime_transaction(
         self,
-        *,
         task_intents: dict[str, TaskIntentRecord] | None = None,
         task_states: dict[str, TaskStateRecord] | None = None,
         workspace_state: WorkspaceState | None = None,
@@ -189,7 +188,6 @@ class RuntimeStore:
     def delete_task_records(
         self,
         task_id: str,
-        *,
         audit_entries: list[TaskAuditEntry] | None = None,
     ) -> None:
         with connect_workspace_db(self.root) as connection:
@@ -223,7 +221,6 @@ class RuntimeStore:
 
     def _append_runtime_transaction_events(
         self,
-        *,
         task_intents: dict[str, TaskIntentRecord],
         task_states: dict[str, TaskStateRecord],
         workspace_state: WorkspaceState | None,
@@ -451,7 +448,6 @@ class RuntimeStore:
     def save_process_state(
         self,
         process_key: str,
-        *,
         status: str,
         payload: dict[str, object],
     ) -> None:

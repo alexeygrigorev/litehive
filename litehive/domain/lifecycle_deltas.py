@@ -112,7 +112,6 @@ def _event_failure_shape(event: Event) -> str:
 def _stage_retry_exhausted_record(
     state: TaskState,
     event: Event,
-    *,
     failed_reason: FailedReason,
     message: str,
 ) -> FailedRunRecord | None:
@@ -281,7 +280,7 @@ def _hook_reject_loop_detected(state: TaskState, event: Event) -> bool:
     return isinstance(count, int) and count >= state.limits.same_hook_reject_limit
 
 
-def _hook_reject_delta(state: TaskState, event: Event, *, recovery_invoked: bool | None = None) -> StateDelta:
+def _hook_reject_delta(state: TaskState, event: Event, recovery_invoked: bool | None = None) -> StateDelta:
     fingerprint = _hook_fingerprint_from_event(event)
     if fingerprint is None:
         return StateDelta(
@@ -303,7 +302,7 @@ def _hook_reject_delta(state: TaskState, event: Event, *, recovery_invoked: bool
 
 
 def _next_rejection_loop(
-    state: TaskState, event: Event, *, retry_target_stage: PipelineState | None
+    state: TaskState, event: Event, retry_target_stage: PipelineState | None
 ) -> RejectionLoop | None:
     if not isinstance(event, Reject) or event.source != "agent":
         return None
@@ -331,12 +330,12 @@ def _next_rejection_loop(
     )
 
 
-def rejection_loop_detected(state: TaskState, event: Event, *, retry_target_stage: PipelineState | None) -> bool:
+def rejection_loop_detected(state: TaskState, event: Event, retry_target_stage: PipelineState | None) -> bool:
     loop = _next_rejection_loop(state, event, retry_target_stage=retry_target_stage)
     return loop is not None and loop.count >= state.limits.rejection_loop_limit
 
 
-def _rejection_loop_delta(state: TaskState, event: Event, *, retry_target_stage: PipelineState | None) -> StateDelta:
+def _rejection_loop_delta(state: TaskState, event: Event, retry_target_stage: PipelineState | None) -> StateDelta:
     loop = _next_rejection_loop(state, event, retry_target_stage=retry_target_stage)
     if loop is None:
         return StateDelta(clear_rejection_loop=True)
@@ -423,7 +422,7 @@ def record_recovery_success(state: TaskState, event: Event) -> StateDelta:
     )
 
 
-def inc_stage_retry(stage: PipelineState, *, retry_target_stage: PipelineState | None = None) -> EffectFn:
+def inc_stage_retry(stage: PipelineState, retry_target_stage: PipelineState | None = None) -> EffectFn:
     """Effect for reject-retry rules.
 
     Bumps the stage's retry counter AND captures the rejection so the next
@@ -442,7 +441,7 @@ def inc_stage_retry(stage: PipelineState, *, retry_target_stage: PipelineState |
     return _effect
 
 
-def remember_rejection(stage: PipelineState, *, retry_target_stage: PipelineState | None = None) -> EffectFn:
+def remember_rejection(stage: PipelineState, retry_target_stage: PipelineState | None = None) -> EffectFn:
     """Capture a rejection for a downstream prompt without bumping retries."""
 
     def _effect(state: TaskState, event: Event) -> StateDelta:
@@ -460,7 +459,6 @@ def remember_rejection(stage: PipelineState, *, retry_target_stage: PipelineStat
 def _rejection_tracking_delta(
     state: TaskState,
     event: Event,
-    *,
     stage: PipelineState,
     increment_retry: bool,
     retry_target_stage: PipelineState | None = None,
@@ -481,7 +479,7 @@ def _rejection_tracking_delta(
     )
 
 
-def fail_rejection_loop(stage: PipelineState, *, retry_target_stage: PipelineState) -> EffectFn:
+def fail_rejection_loop(stage: PipelineState, retry_target_stage: PipelineState) -> EffectFn:
     def _effect(state: TaskState, event: Event) -> StateDelta:
         rejection = _rejection_from_event(state, event)
         set_rej = (stage, rejection) if rejection is not None else None

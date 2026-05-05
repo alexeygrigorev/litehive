@@ -281,7 +281,7 @@ def migration_status(root: Path) -> MigrationStatus:
     )
 
 
-def apply_pending_migrations(root: Path, *, dry_run: bool = False) -> MigrationPlan:
+def apply_pending_migrations(root: Path, dry_run: bool = False) -> MigrationPlan:
     db_path = workspace_path(root, "data.db")
     migrations = available_migrations()
     if _database_requires_rebuild(db_path, migrations):
@@ -359,7 +359,7 @@ def consume_rebuilt_database_marker(root: Path) -> bool:
 
 
 @contextmanager
-def connect_workspace_db(root: Path, *, migrate: bool = True) -> Iterator[sqlite3.Connection]:
+def connect_workspace_db(root: Path, migrate: bool = True) -> Iterator[sqlite3.Connection]:
     db_path = workspace_path(root, "data.db")
     if migrate:
         # In-process cache keyed on the absolute db_path (not root), because

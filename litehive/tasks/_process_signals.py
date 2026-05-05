@@ -19,7 +19,6 @@ from litehive.state.locking import runner_pid_is_alive
 def terminate_subagent_pid(
     task_id: str,
     pid: int | None,
-    *,
     wait_timeout_seconds: float = 5.0,
     poll_interval_seconds: float = 0.1,
 ) -> bool:

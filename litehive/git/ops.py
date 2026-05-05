@@ -219,7 +219,7 @@ def cherry_check(cwd: Path, upstream_sha: str, head_sha: str) -> list[str] | Non
     return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
 
 
-def status_porcelain_with_options(cwd: Path, *, include_ignored: bool = False) -> list[str]:
+def status_porcelain_with_options(cwd: Path, include_ignored: bool = False) -> list[str]:
     """``git status --porcelain`` with optional ``--ignored --untracked-files=all``.
 
     Used by the runner's auto-commit code to enumerate dirty entries.
@@ -234,7 +234,7 @@ def status_porcelain_with_options(cwd: Path, *, include_ignored: bool = False) -
     return [line for line in proc.stdout.splitlines() if line.strip()]
 
 
-def add_paths(cwd: Path, paths: list[str], *, all_flag: bool = False) -> None:
+def add_paths(cwd: Path, paths: list[str], all_flag: bool = False) -> None:
     """Run ``git add [--all] -- <paths>`` in ``cwd``.
 
     Raises :class:`GitError` if the add fails. ``all_flag`` controls
@@ -356,7 +356,7 @@ def path_differs_at_ref(cwd: Path, ref: str, path: str) -> bool:
     raise GitError(proc.stderr.strip() or f"git diff --quiet failed for {path}")
 
 
-def add_worktree(root: Path, path: Path, *, ref: str = "HEAD") -> None:
+def add_worktree(root: Path, path: Path, ref: str = "HEAD") -> None:
     proc = _run_git(root, "worktree", "add", "--detach", str(path), ref)
     if proc.returncode != 0:
         raise GitError(proc.stderr.strip() or "git worktree add failed")
@@ -368,7 +368,7 @@ def move_worktree(root: Path, source: Path, destination: Path) -> None:
         raise GitError(proc.stderr.strip() or "git worktree move failed")
 
 
-def prune_worktrees(root: Path, *, expire_now: bool = False) -> None:
+def prune_worktrees(root: Path, expire_now: bool = False) -> None:
     """Run ``git worktree prune``, optionally with ``--expire now``.
 
     ``expire_now=True`` forces git to garbage-collect stale worktree
@@ -384,7 +384,7 @@ def prune_worktrees(root: Path, *, expire_now: bool = False) -> None:
         raise GitError(proc.stderr.strip() or "git worktree prune failed")
 
 
-def add_worktree_branch(root: Path, branch: str, path: Path, *, ref: str = "HEAD", force: bool = False) -> None:
+def add_worktree_branch(root: Path, branch: str, path: Path, ref: str = "HEAD", force: bool = False) -> None:
     """Create a new worktree for ``branch`` at ``path``.
 
     Wraps ``git worktree add [-f] -B <branch> <path> <ref>``. ``-B``
@@ -479,7 +479,6 @@ def checkout_ref(cwd: Path, ref: str) -> bool:
 def stash_push(
     cwd: Path,
     message: str,
-    *,
     include_untracked: bool = False,
     paths: list[str] | None = None,
 ) -> tuple[bool, str]:
@@ -531,7 +530,6 @@ def checkout_ours(cwd: Path, paths: list[str]) -> None:
 def restore_paths(
     cwd: Path,
     paths: list[str],
-    *,
     source: str = "HEAD",
     staged: bool = True,
     worktree: bool = True,
@@ -554,7 +552,7 @@ def restore_paths(
     _run_git(cwd, *args)
 
 
-def stash_pop(cwd: Path, *, ref: str | None = None, with_index: bool = False) -> tuple[bool, str]:
+def stash_pop(cwd: Path, ref: str | None = None, with_index: bool = False) -> tuple[bool, str]:
     """Run ``git stash pop [--index] [<ref>]``.
 
     Returns ``(success, stderr_or_stdout)``. ``with_index`` restores
@@ -615,7 +613,7 @@ def is_ancestor(root: Path, ancestor_sha: str, descendant_sha: str) -> bool:
     raise GitError(proc.stderr.strip() or "git merge-base --is-ancestor failed")
 
 
-def remove_worktree(root: Path, path: Path, *, force: bool = False) -> None:
+def remove_worktree(root: Path, path: Path, force: bool = False) -> None:
     args = ["worktree", "remove"]
     if force:
         args.append("--force")
@@ -694,7 +692,7 @@ def _metadata_body(task: TaskRecord) -> list[str]:
     return lines
 
 
-def generated_completion_commit_message(task: TaskRecord, *, detail: str | None = None) -> str:
+def generated_completion_commit_message(task: TaskRecord, detail: str | None = None) -> str:
     """Return LiteHive's generated completion commit message for a task.
 
     The subject stays compact for ``git log --oneline`` while the body carries
@@ -748,7 +746,7 @@ def find_commit_by_subject(root: Path, subject: str) -> str | None:
     return None
 
 
-def commit_task(root: Path, message: str, *, paths: list[str] | None = None) -> CommitCheckpoint | None:
+def commit_task(root: Path, message: str, paths: list[str] | None = None) -> CommitCheckpoint | None:
     if not is_git_repo(root):
         return None
 

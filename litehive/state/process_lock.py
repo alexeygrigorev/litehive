@@ -33,7 +33,7 @@ class ProcessLockManager:
         """Check if the lock is currently active."""
         return self.lock_manager.is_active()
 
-    def read_metadata(self, *, strict: bool = False) -> dict[str, object] | None:
+    def read_metadata(self, strict: bool = False) -> dict[str, object] | None:
         """Read lock metadata from file."""
         return self.lock_manager.read_metadata(strict=strict)
 
@@ -47,7 +47,6 @@ class ProcessLockManager:
 
     def clear_metadata_if_unlocked(
         self,
-        *,
         expected_pid: int | None = None,
         require_stale_pid: bool = False,
     ) -> bool:
@@ -66,7 +65,7 @@ class ProcessLockManager:
         return self.lock_manager.remove_stale_lockfile()
 
     @contextmanager
-    def open_locked(self, *, nonblocking: bool = True):
+    def open_locked(self, nonblocking: bool = True):
         """Context manager for acquiring and releasing a lock."""
         handle = self.lock_manager.acquire(nonblocking=nonblocking)
         try:
@@ -74,7 +73,7 @@ class ProcessLockManager:
         finally:
             self.lock_manager.release(handle, clear_metadata=False)
 
-    def acquire_with_metadata(self, metadata: dict[str, object], *, nonblocking: bool = True) -> TextIO:
+    def acquire_with_metadata(self, metadata: dict[str, object], nonblocking: bool = True) -> TextIO:
         """Acquire lock and write initial metadata."""
         handle = self.lock_manager.acquire(nonblocking=nonblocking)
         try:
@@ -84,7 +83,7 @@ class ProcessLockManager:
             self.lock_manager.release(handle, clear_metadata=True)
             raise
 
-    def release_with_cleanup(self, handle: TextIO, *, clear_metadata: bool = True) -> None:
+    def release_with_cleanup(self, handle: TextIO, clear_metadata: bool = True) -> None:
         """Release lock and optionally clear metadata."""
         self.lock_manager.release(handle, clear_metadata=clear_metadata)
 
@@ -108,7 +107,7 @@ class ProcessLockManager:
             metadata.update(extra_updates)
         self.write_locked_metadata(handle, metadata)
 
-    def save_process_state(self, workspace: Path, payload: dict[str, object], *, status: str = "running") -> None:
+    def save_process_state(self, workspace: Path, payload: dict[str, object], status: str = "running") -> None:
         """Save process state to runtime store."""
         from litehive.state.store import runtime_store  # noqa: PLC0415
 
@@ -124,7 +123,7 @@ class ProcessLockManager:
 
         runtime_store(workspace).clear_process_state(self.process_name)
 
-    def clear_stale_state(self, workspace: Path, *, expected_pid: int | None = None) -> bool:
+    def clear_stale_state(self, workspace: Path, expected_pid: int | None = None) -> bool:
         """Clear stale lock metadata and process state if conditions are met."""
         cleared = self.clear_metadata_if_unlocked(
             expected_pid=expected_pid,

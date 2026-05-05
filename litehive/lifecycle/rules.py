@@ -50,7 +50,7 @@ from .stages import Stages as S
 from .transitions import Rule, entry_from_worktree_sync, resume_from_origin, resume_from_pre_exec, retry_epoch_rules
 
 
-def _recovery_rules(from_state, on_event, *, when=None) -> list[Rule]:
+def _recovery_rules(from_state, on_event, when=None) -> list[Rule]:
     return [
         Rule(
             from_state=from_state,
@@ -69,7 +69,7 @@ def _recovery_rules(from_state, on_event, *, when=None) -> list[Rule]:
     ]
 
 
-def _terminal_reject_rules(from_state, *, when=None, reason="semantic_reject") -> list[Rule]:
+def _terminal_reject_rules(from_state, when=None, reason="semantic_reject") -> list[Rule]:
     return [
         Rule(
             from_state=from_state,

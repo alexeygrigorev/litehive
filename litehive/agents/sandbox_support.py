@@ -105,7 +105,6 @@ class SandboxedAdapter(ExternalCLIAdapter):
         prompt: str,
         cwd: Path,
         model: str | None = None,
-        *,
         max_turns: int | None = None,
         resume_session_id: str | None = None,
     ) -> list[str]:
@@ -136,7 +135,6 @@ class SandboxedAdapter(ExternalCLIAdapter):
         prompt: str,
         cwd: Path,
         model: str | None = None,
-        *,
         max_turns: int | None = None,
         resume_session_id: str | None = None,
         on_started=None,
@@ -174,7 +172,6 @@ class SandboxedAdapter(ExternalCLIAdapter):
         prompt: str,
         cwd: Path,
         model: str | None = None,
-        *,
         max_turns: int | None = None,
         resume_session_id: str | None = None,
         on_started=None,

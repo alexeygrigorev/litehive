@@ -35,7 +35,6 @@ def run_worktree_merge_agent(
     worktree_path: Path,
     task: TaskRecord,
     main_head: str,
-    *,
     config: LitehiveConfig | None = None,
 ) -> None:
     """Try to merge ``main_head`` into ``worktree_path``; if conflicts, run the resolver agent.

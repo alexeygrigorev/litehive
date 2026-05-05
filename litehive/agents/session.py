@@ -66,7 +66,6 @@ class SessionMixin:
     def extract_execution_event_stream(
         engine_name: str,
         stdout: str,
-        *,
         task_id: str | None = None,
         subagent_id: str | None = None,
     ) -> LiveEventStream | None:
@@ -131,7 +130,6 @@ class SessionMixin:
         task: TaskRecord,
         base: Path,
         ref: SubagentRef,
-        *,
         exit_code: int | None,
         pid: int | None,
         interruption_reason: str | None = None,
@@ -258,7 +256,6 @@ class SessionMixin:
         task: TaskRecord,
         base: Path,
         ref: SubagentRef,
-        *,
         prompt: str,
         transcript: str,
         stdout: str,

@@ -23,7 +23,7 @@ _COMPRESS_STREAM_ARTIFACT_MIN_BYTES = 4096
 _COMPRESS_TEXT_ARTIFACT_MIN_BYTES = 4096
 
 
-def write_stream_artifact(base: Path, name: str, content: str, *, compress: bool) -> None:
+def write_stream_artifact(base: Path, name: str, content: str, compress: bool) -> None:
     """Persist a streaming log artifact (stdout / stderr) for a subagent.
 
     The artifact lives at either ``<base>/<name>.txt`` or
@@ -70,7 +70,6 @@ def write_text_artifact(
     name: str,
     suffix: str,
     content: str,
-    *,
     compress: bool,
 ) -> Path:
     """Persist a non-streaming text artifact (prompt, execution trace, …).

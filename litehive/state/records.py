@@ -48,7 +48,7 @@ def _highest_task_number_in_store(root: Path) -> int:
     return runtime_store(root).highest_task_number()
 
 
-def _reserve_next_task_numbers(root, state, *, count: int = 1) -> list[int]:
+def _reserve_next_task_numbers(root, state, count: int = 1) -> list[int]:
     if count < 1:
         raise ValueError("count must be 1 or greater")
     if state.next_task_number <= 0:
@@ -58,7 +58,7 @@ def _reserve_next_task_numbers(root, state, *, count: int = 1) -> list[int]:
     return list(range(start, start + count))
 
 
-def _task_creation_stage(root: Path, *, current_task_id: str | None) -> str | None:
+def _task_creation_stage(root: Path, current_task_id: str | None) -> str | None:
     env_stage = (os.environ.get("LITEHIVE_STAGE") or "").strip()
     if env_stage:
         return env_stage
@@ -233,7 +233,6 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
 
 def create_task(
     root: Path,
-    *,
     title: str,
     depends_on: list[str] | None = None,
     pipeline_mode: str = "full",
@@ -324,7 +323,6 @@ def create_task(
 
 def create_follow_up_tasks(
     root: Path,
-    *,
     parent_task: TaskRecord,
     stage: str,
     follow_ups: list[FollowUpTaskSpec],
@@ -442,7 +440,6 @@ def discard_created_task(root: Path, task_id: str) -> None:
 
 def _load_tasks_from_store(
     root: Path,
-    *,
     include_runtime: bool,
     strict: bool,
 ) -> list[TaskRecord]:
@@ -468,7 +465,6 @@ def _load_tasks_from_store(
 
 def list_tasks(
     root: Path,
-    *,
     include_runtime: bool = True,
     strict: bool = True,
 ) -> list[TaskRecord]:
@@ -481,7 +477,6 @@ def list_tasks(
 
 def list_tasks_state_first(
     root: Path,
-    *,
     state: WorkspaceState | None = None,
     include_runtime: bool = False,
 ) -> list[TaskRecord]:

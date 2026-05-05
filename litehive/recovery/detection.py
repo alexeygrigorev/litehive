@@ -17,7 +17,6 @@ class TaskLaunchFailure(RuntimeError):
 
     def __init__(
         self,
-        *,
         context: LaunchFailureContext,
         summary: str,
         diagnostics: LaunchDiagnostics | None = None,

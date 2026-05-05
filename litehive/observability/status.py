@@ -54,7 +54,6 @@ class TaskPipelineStatusData:
 
 def collect_task_pipeline_status(
     root: Path,
-    *,
     read_only: bool = False,
     diagnostics: bool = False,
 ) -> TaskPipelineStatusData:
@@ -88,7 +87,6 @@ def collect_task_pipeline_status(
 
 def render_task_pipeline_status_lines(
     status: TaskPipelineStatusData,
-    *,
     workspace: Path,
     mode: StatusRenderMode,
     retry_on_label: str | None = None,
@@ -229,12 +227,12 @@ def _latest_stage_report_for_task(root: Path | None, task: TaskRecord) -> Any | 
         return None
 
 
-def _task_last_verdict_label(task: TaskRecord, *, root: Path | None = None) -> str:
+def _task_last_verdict_label(task: TaskRecord, root: Path | None = None) -> str:
     latest_report = _latest_stage_report_for_task(root, task)
     return (None if latest_report is None else latest_report.verdict) or task.runtime.pipeline.last_outcome.kind or "-"
 
 
-def _task_last_summary_label(task: TaskRecord, *, root: Path | None = None) -> str:
+def _task_last_summary_label(task: TaskRecord, root: Path | None = None) -> str:
     latest_report = _latest_stage_report_for_task(root, task)
     return (
         (None if latest_report is None else latest_report.summary)
@@ -259,7 +257,7 @@ def _latest_stage_failure_classification(root: Path | None, task: TaskRecord) ->
     return report.failure_classification
 
 
-def render_task_summary(task: TaskRecord, *, active: bool, root: Path | None = None) -> list[str]:
+def render_task_summary(task: TaskRecord, active: bool, root: Path | None = None) -> list[str]:
     marker = "*" if active else " "
     retry_policy = task.retry_policy.max_retries
     retry_label = "default" if retry_policy is None else str(retry_policy)
@@ -592,7 +590,7 @@ def render_health_active_task_lines(task: TaskRecord | None) -> list[str]:
     return lines
 
 
-def render_health_flagged_task_lines(flagged_tasks: list[TaskRecord], *, root: Path | None = None) -> list[str]:
+def render_health_flagged_task_lines(flagged_tasks: list[TaskRecord], root: Path | None = None) -> list[str]:
     lines = ["=== Flagged Tasks ===", f"flagged_count: {len(flagged_tasks)}"]
     if not flagged_tasks:
         lines.append("flagged: none")
@@ -651,7 +649,7 @@ def render_health_daemon_lines(daemon_status: str, daemon_pid: str) -> list[str]
     ]
 
 
-def render_health_recent_completion_lines(completed: list[TaskRecord], *, root: Path | None = None) -> list[str]:
+def render_health_recent_completion_lines(completed: list[TaskRecord], root: Path | None = None) -> list[str]:
     lines = ["=== Recent Completions ==="]
     if not completed:
         lines.append("completed: none")
@@ -705,7 +703,7 @@ def render_engine_availability_lines(
     return lines
 
 
-def collect_recent_activity(root: Path, *, limit: int = 5) -> list[dict[str, Any]]:
+def collect_recent_activity(root: Path, limit: int = 5) -> list[dict[str, Any]]:
     """Return recent task events from SQLite."""
     with connect_workspace_db(root) as connection:
         rows = connection.execute(

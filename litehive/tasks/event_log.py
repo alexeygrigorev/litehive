@@ -128,7 +128,6 @@ def task_event_type_for_audit_action(action: str) -> str:
 
 def append_task_event(
     root: Path,
-    *,
     event_type: str,
     task_id: str | None,
     payload: dict[str, Any] | None = None,
@@ -207,7 +206,7 @@ def task_event_log_has_events(root: Path) -> bool:
     return False
 
 
-def rebuild_sqlite_from_task_event_log(root: Path, *, clear_existing: bool = True) -> TaskEventLogReplaySummary:
+def rebuild_sqlite_from_task_event_log(root: Path, clear_existing: bool = True) -> TaskEventLogReplaySummary:
     """Replay the append-only task event log into the workspace SQLite DB."""
 
     events, invalid = read_task_events(root)

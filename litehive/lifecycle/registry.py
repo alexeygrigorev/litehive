@@ -55,7 +55,6 @@ def _phase_hook_node(name: PipelineState, hooks: list[HookSpec], runner: HookRun
 
 
 def build_registry(
-    *,
     selector: EngineSelector,
     session_store: SessionProvider,
     hook_runner: HookRunner,

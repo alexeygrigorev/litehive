@@ -10,7 +10,7 @@ WorkspaceOption = Annotated[
 ]
 
 
-def make_typer(*, invoke_without_command: bool = False) -> typer.Typer:
+def make_typer(invoke_without_command: bool = False) -> typer.Typer:
     return typer.Typer(
         add_completion=False,
         context_settings={"help_option_names": ["-h", "--help"]},

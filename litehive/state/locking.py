@@ -44,7 +44,6 @@ def _pid_is_zombie(pid: int) -> bool:
 
 def _runner_lock_manager(
     root: Path,
-    *,
     held_in_process: Callable[[], bool] | None = None,
 ) -> ProcessLockManager:
     return ProcessLockManager(
@@ -183,7 +182,6 @@ def runner_status_readonly(root: Path) -> RunnerStatusState:
 
 def touch_runner_status(
     root: Path,
-    *,
     active_task_id: str | None | object = MISSING,
 ) -> None:
     root = root.resolve()
@@ -202,7 +200,6 @@ def touch_runner_status(
 @contextmanager
 def runner_heartbeat(
     root: Path,
-    *,
     active_task_id: str | None = None,
     interval_seconds: float = 1.0,
 ):
@@ -395,7 +392,6 @@ def workspace_mutation_guard(root: Path):
 def ensure_future_task_mutation_allowed(
     root: Path,
     task_ids: list[str],
-    *,
     state: WorkspaceState | None = None,
 ) -> None:
     # inline: state.records / tasks.queue top-level-import state.locking (would cycle).
@@ -433,7 +429,6 @@ def ensure_future_task_mutation_allowed(
 def persist_future_task_update(
     root: Path,
     task: TaskRecord,
-    *,
     journal_message: str | None = None,
     audit_entries: list["TaskAuditEntry"] | None = None,
 ) -> None:

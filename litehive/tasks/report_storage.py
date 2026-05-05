@@ -138,7 +138,6 @@ def rewrite_latest_stage_report(root: Path, task: TaskRecord, report: StageRepor
 def load_stage_reports_for_task_id(
     root: Path,
     task_id: str,
-    *,
     pipeline_state: str | None = None,
 ) -> list[StageReport]:
     return _load_stage_reports(root, task_id=task_id, pipeline_state=pipeline_state)
@@ -151,7 +150,6 @@ def load_workspace_stage_reports(root: Path) -> list[StageReport]:
 def load_stage_reports(
     root: Path,
     task: TaskRecord,
-    *,
     pipeline_state: str | None = None,
     stage: str | None = None,
 ) -> list[StageReport]:
@@ -159,7 +157,7 @@ def load_stage_reports(
     return _load_stage_reports(root, task_id=task.id, pipeline_state=selected_pipeline_state)
 
 
-def latest_stage_report(root: Path, task: TaskRecord, *, source: str | None = None) -> StageReport | None:
+def latest_stage_report(root: Path, task: TaskRecord, source: str | None = None) -> StageReport | None:
     reports = load_stage_reports(root, task)
     for report in reversed(reports):
         if source is not None and report.source != source:
@@ -170,7 +168,6 @@ def latest_stage_report(root: Path, task: TaskRecord, *, source: str | None = No
 
 def _load_stage_reports(
     root: Path,
-    *,
     task_id: str | None = None,
     pipeline_state: str | None = None,
 ) -> list[StageReport]:

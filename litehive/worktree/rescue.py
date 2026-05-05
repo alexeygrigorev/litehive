@@ -323,7 +323,7 @@ def _drop_task_metadata_changes(root: Path, task_id: str) -> None:
     restore_paths(root, metadata_paths, source="HEAD", staged=True, worktree=True)
 
 
-def _finalize_rescue(root: Path, task: TaskRecord, *, outcome: str, head_sha: str | None) -> None:
+def _finalize_rescue(root: Path, task: TaskRecord, outcome: str, head_sha: str | None) -> None:
     journal_message = "Worktree rescue found no commits ahead of main; cleared pending rescue state."
     if outcome == "rescued" and head_sha:
         journal_message = f"Worktree rescue applied onto main at {head_sha}."

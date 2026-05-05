@@ -31,7 +31,7 @@ def skip_bootstrap_load_state():
         _SKIP_BOOTSTRAP_LOAD_STATE.reset(token)
 
 
-def load_state(root: Path, *, bootstrap: bool = True) -> WorkspaceState:
+def load_state(root: Path, bootstrap: bool = True) -> WorkspaceState:
     if bootstrap and not _SKIP_BOOTSTRAP_LOAD_STATE.get():
         ensure_workspace(root)
     store = runtime_store(root)
@@ -114,7 +114,6 @@ def save_state(root: Path, state: WorkspaceState) -> None:
 def save_state_without_runner_guard(
     root: Path,
     state: WorkspaceState,
-    *,
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     if audit_entries:
@@ -126,7 +125,7 @@ def save_state_without_runner_guard(
     runtime_store(root).save_workspace_state(state)
 
 
-def record_task_completion(root: Path, *, final_stage: str | None) -> tuple[int, str | None]:
+def record_task_completion(root: Path, final_stage: str | None) -> tuple[int, str | None]:
     with workspace_lock(root):
         state = load_state(root)
         if final_stage == "done":
@@ -151,7 +150,6 @@ def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
 
 def workspace_transition_writes(
     root: Path,
-    *,
     tasks: list[TaskRecord] | tuple[TaskRecord, ...] = (),
     state: WorkspaceState | None = None,
     journal_messages: dict[str, str] | None = None,
@@ -161,7 +159,6 @@ def workspace_transition_writes(
 
 
 def _merge_queue_preserving_future_changes(
-    *,
     desired_queue: list[str],
     latest_queue: list[str],
     protected_task_ids: list[str] | tuple[str, ...],
@@ -204,7 +201,6 @@ def _merge_queue_preserving_future_changes(
 
 def merged_state_for_runner_owned_write(
     root: Path,
-    *,
     state: WorkspaceState,
     protected_task_ids: list[str] | tuple[str, ...] = (),
 ) -> WorkspaceState:
@@ -221,7 +217,6 @@ def merged_state_for_runner_owned_write(
 
 def persist_task_and_state(
     root: Path,
-    *,
     task: TaskRecord,
     state: WorkspaceState,
     journal_message: str | None = None,
@@ -240,7 +235,6 @@ def persist_task_and_state(
 
 def persist_tasks_and_state(
     root: Path,
-    *,
     tasks: list[TaskRecord] | tuple[TaskRecord, ...],
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
@@ -270,7 +264,6 @@ def persist_tasks_and_state(
 
 def persist_tasks_and_state_without_runner_guard(
     root: Path,
-    *,
     tasks: list[TaskRecord] | tuple[TaskRecord, ...],
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
@@ -299,7 +292,6 @@ def persist_tasks_and_state_without_runner_guard(
 
 def persist_task_and_state_without_runner_guard(
     root: Path,
-    *,
     task: TaskRecord,
     state: WorkspaceState,
     journal_message: str | None = None,

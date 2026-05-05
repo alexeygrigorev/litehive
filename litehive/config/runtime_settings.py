@@ -77,7 +77,7 @@ def _json_loads(raw: str | None) -> Any:
         return None
 
 
-def _sequence_value(raw_value: Any, *, field_name: str) -> list[str]:
+def _sequence_value(raw_value: Any, field_name: str) -> list[str]:
     if raw_value is None:
         return []
     if isinstance(raw_value, str) or not isinstance(raw_value, Sequence):
@@ -162,7 +162,6 @@ def apply_runtime_settings_to_config_data(root: Path, config_data: Mapping[str, 
 
 def set_runtime_setting(
     root: Path,
-    *,
     key: str,
     value: Any,
     actor: str,
@@ -222,7 +221,6 @@ def set_runtime_setting(
 def set_default_engine(
     root: Path,
     engine_name: str,
-    *,
     actor: str = "operator",
     source: str = "cli",
     context: Mapping[str, Any] | None = None,
@@ -240,7 +238,6 @@ def set_default_engine(
 def set_engine_preference(
     root: Path,
     engines: Sequence[str],
-    *,
     actor: str = "operator",
     source: str = "cli",
     context: Mapping[str, Any] | None = None,
@@ -257,7 +254,6 @@ def set_engine_preference(
 
 def set_engine_freeze(
     root: Path,
-    *,
     engine_name: str,
     freeze_iso: str,
     actor: str = "operator",
@@ -285,7 +281,6 @@ def set_engine_freeze(
 
 def clear_engine_freeze(
     root: Path,
-    *,
     engine_name: str,
     actor: str = "operator",
     source: str = "cli",
@@ -319,7 +314,6 @@ def clear_engine_freeze(
 
 def load_runtime_setting_audit_entries(
     root: Path,
-    *,
     key: str | None = None,
     limit: int = 20,
 ) -> list[RuntimeSettingAuditEntry]:

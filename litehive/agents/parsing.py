@@ -20,7 +20,6 @@ def stage_report_from_subagent(
     task: TaskRecord,
     stage: str | TaskStage,
     result: SubagentResult,
-    *,
     root: Path,
 ) -> StageReport:
     """Build a :class:`StageReport` for a single subagent run.
