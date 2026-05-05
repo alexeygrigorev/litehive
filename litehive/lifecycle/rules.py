@@ -12,7 +12,7 @@ from litehive.domain.lifecycle_deltas import (
     enter_pre_exec_recovery,
     enter_recovery,
     exhaust_recovery_budget,
-    fail,
+    Fail,
     RememberRejection,
     record_recovery_success,
     stash_conflict_files,
@@ -84,7 +84,7 @@ def _terminal_reject_rules(from_state, when=None, reason="semantic_reject") -> l
             on_event=Reject,
             transition_to=S.FAILED,
             when=when,
-            with_effect=fail(reason),
+            with_effect=Fail(reason),
         )
     ]
 
@@ -121,25 +121,25 @@ RULES: list[Rule] = [
         from_state=S.PRE_EXEC_RECOVERY,
         on_event=PreExecRecoveryFailed,
         transition_to=S.FAILED,
-        with_effect=fail("pre_exec_recovery_failed"),
+        with_effect=Fail("pre_exec_recovery_failed"),
     ),
     Rule(
         from_state=S.PRE_EXEC_RECOVERY,
         on_event=PreExecRecoveryBudgetHit,
         transition_to=S.FAILED,
-        with_effect=fail("pre_exec_recovery_failed"),
+        with_effect=Fail("pre_exec_recovery_failed"),
     ),
     Rule(
         from_state=S.PRE_EXEC_RECOVERY,
         on_event=Crash,
         transition_to=S.FAILED,
-        with_effect=fail("recovery_crashed"),
+        with_effect=Fail("recovery_crashed"),
     ),
     Rule(
         from_state=S.PRE_EXEC_RECOVERY,
         on_event=Timeout,
         transition_to=S.FAILED,
-        with_effect=fail("recovery_crashed"),
+        with_effect=Fail("recovery_crashed"),
     ),
     # ── grooming ─────────────────────────────────────────────
     Rule(
@@ -289,25 +289,25 @@ RULES: list[Rule] = [
         from_state=S.ALL_STAGE_PHASES,
         on_event=StageRetryLimitHit,
         transition_to=S.FAILED,
-        with_effect=fail("unrecoverable_error"),
+        with_effect=Fail("unrecoverable_error"),
     ),
     Rule(
         from_state=S.ALL_STAGE_PHASES,
         on_event=OverallRetryLimitHit,
         transition_to=S.FAILED,
-        with_effect=fail("unrecoverable_error"),
+        with_effect=Fail("unrecoverable_error"),
     ),
     Rule(
         from_state=S.ALL_STAGE_PHASES,
         on_event=TaskTimeBudgetExceeded,
         transition_to=S.FAILED,
-        with_effect=fail("time_budget_exceeded"),
+        with_effect=Fail("time_budget_exceeded"),
     ),
     Rule(
         from_state=S.RECOVERING,
         on_event=TaskTimeBudgetExceeded,
         transition_to=S.FAILED,
-        with_effect=fail("time_budget_exceeded"),
+        with_effect=Fail("time_budget_exceeded"),
     ),
     # ── recovering ─────────────────────────────────────────────
     Rule(
@@ -321,31 +321,31 @@ RULES: list[Rule] = [
         from_state=S.RECOVERING,
         on_event=RecoverySucceeded,
         transition_to=S.FAILED,
-        with_effect=fail("recovery_missing_target_stage"),
+        with_effect=Fail("recovery_missing_target_stage"),
     ),
     Rule(
         from_state=S.RECOVERING,
         on_event=RecoveryFailed,
         transition_to=S.FAILED,
-        with_effect=fail("recovery_exhausted"),
+        with_effect=Fail("recovery_exhausted"),
     ),
     Rule(
         from_state=S.RECOVERING,
         on_event=RecoveryBudgetHit,
         transition_to=S.FAILED,
-        with_effect=fail("recovery_budget_hit"),
+        with_effect=Fail("recovery_budget_hit"),
     ),
     Rule(
         from_state=S.RECOVERING,
         on_event=Crash,
         transition_to=S.FAILED,
-        with_effect=fail("recovery_crashed"),
+        with_effect=Fail("recovery_crashed"),
     ),
     Rule(
         from_state=S.RECOVERING,
         on_event=Timeout,
         transition_to=S.FAILED,
-        with_effect=fail("recovery_crashed"),
+        with_effect=Fail("recovery_crashed"),
     ),
     # ── wildcards (must be last) ─────────────────────────────────────────────
     *_recovery_rules(S.ALL_STAGE_PHASES, Crash),

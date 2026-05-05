@@ -647,7 +647,7 @@ def stash_conflict_files(state: TaskState, event: Event) -> StateDelta:
 
 
 @dataclass(frozen=True)
-class fail:
+class Fail:
     """Drive the task into ``FAILED`` and record the cause; used for terminal rejects, retry exhaustion, time-budget hits, and recovery-agent failures."""
 
     reason: FailedReason

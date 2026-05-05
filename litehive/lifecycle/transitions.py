@@ -14,7 +14,7 @@ from litehive.domain.lifecycle_deltas import (
     EMPTY_DELTA,
     EffectFn,
     StateDelta,
-    fail,
+    Fail,
     FailRejectionLoop,
     IncStageRetry,
 )
@@ -211,7 +211,7 @@ def retry_epoch_rules(counter_stage, phases, retry_target, exhausted_reason: Fai
                 on_event=Reject,
                 transition_to="failed",
                 when=hook_reject_loop_detected(),
-                with_effect=fail(FailedReason.HOOK_REJECT_LOOP),
+                with_effect=Fail(FailedReason.HOOK_REJECT_LOOP),
             )
         )
         rules.append(
@@ -232,7 +232,7 @@ def retry_epoch_rules(counter_stage, phases, retry_target, exhausted_reason: Fai
                 on_event=Reject,
                 transition_to="failed",
                 when=stage_retries_exhausted(name),
-                with_effect=fail(exhausted_reason),
+                with_effect=Fail(exhausted_reason),
             )
         )
     return rules
