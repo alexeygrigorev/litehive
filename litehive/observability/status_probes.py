@@ -371,8 +371,9 @@ def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureC
     context = _RecoveryFailureContext()
     try:
         from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound  # noqa: PLC0415
+        from litehive.workspace import Workspace  # noqa: PLC0415
 
-        state = SqlitePersistence(root).load(task.id)
+        state = SqlitePersistence(Workspace.from_path(root)).load(task.id)
     except TaskNotFound:
         return context
     except (OSError, sqlite3.DatabaseError, ValueError, ValidationError) as exc:

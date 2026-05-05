@@ -108,10 +108,11 @@ def run_task(
     """
     root = root.resolve()
     config = load_config(root)
+    workspace = Workspace.from_path(root)
 
     with workspace_runner_guard(root):
         persistence = SqlitePersistence(
-            root,
+            workspace,
             limits=replace(
                 Limits(),
                 rejection_loop_limit=resolve_task_rejection_loop_limit(task, config),
@@ -128,8 +129,8 @@ def run_task(
             model_override=model_override,
             check_quota=engine_factory is None,
         )
-        sessions = SqliteSessionStore(Workspace.from_path(root))
-        journal = SqliteJournal(root)
+        sessions = SqliteSessionStore(workspace)
+        journal = SqliteJournal(workspace)
         hook_runner = SubprocessHookRunner(
             root,
             execution_root_resolver=lambda state: _resolve_hook_execution_root(root, state),

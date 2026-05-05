@@ -24,6 +24,7 @@ from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.report_storage import record_stage_report
+from litehive.workspace import Workspace
 
 _RUNNER = CliRunner()
 
@@ -220,8 +221,7 @@ def test_repair_normalizes_stale_queued_terminal_task(tmp_path: Path) -> None:
     task.runtime.pipeline.current_stage.stage = "backlog"
     task.runtime.pipeline.current_stage.status = "idle"
     save_task(tmp_path, task)
-    record_stage_report(
-        tmp_path,
+    record_stage_report(Workspace.from_path(tmp_path),
         task,
         StageReport(
             task_id=task.id,

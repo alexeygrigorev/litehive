@@ -13,6 +13,7 @@ from litehive.domain.recovery import TriggerEventKind
 from litehive.lifecycle.nodes.agent import AgentVerdict, UnrecoverableError
 from litehive.lifecycle.orchestration import run_task as run_pipeline_task
 from litehive.lifecycle.persistence import SqlitePersistence
+from litehive.workspace import Workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, get_task_worktree_path
 from litehive.worktree import resolve_recorded_worktree_path, task_worktree_path
@@ -161,7 +162,7 @@ def test_crash_routes_to_recovery_and_resumes(tmp_path: Path) -> None:
         ),
     )
     refreshed = get_task(tmp_path, task.id)
-    pipeline_state = SqlitePersistence(tmp_path).load(task.id)
+    pipeline_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
 
     assert result.final_stage == "done"
     assert recovery_calls == [task.id]
@@ -194,7 +195,7 @@ def test_recovery_fix_retries_failed_stage_automatically(tmp_path: Path) -> None
         ),
     )
     refreshed = get_task(workspace, task.id)
-    pipeline_state = SqlitePersistence(workspace).load(task.id)
+    pipeline_state = SqlitePersistence(Workspace.from_path(workspace)).load(task.id)
 
     assert result.final_stage == "done"
     assert recovery_calls == [task.id]
@@ -241,7 +242,7 @@ def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_p
 
     first = run_once(tmp_path)
     broken_refreshed = get_task(tmp_path, broken.id)
-    pipeline_state = SqlitePersistence(tmp_path).load(broken.id)
+    pipeline_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(broken.id)
     state_after_first = load_state(tmp_path)
 
     assert first.exit_code == 0
@@ -302,7 +303,7 @@ def test_successful_stage_progress_resets_same_hook_reject_tracking(tmp_path: Pa
         ),
     )
     refreshed = get_task(tmp_path, task.id)
-    pipeline_state = SqlitePersistence(tmp_path).load(task.id)
+    pipeline_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
 
     assert result.final_stage == "done"
     assert refreshed is not None

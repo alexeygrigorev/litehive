@@ -11,6 +11,7 @@ from litehive.db.schema import connect_workspace_db
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.tasks.event_log import append_task_event
+from litehive.workspace import Workspace
 
 
 def load_task_activity(root: Path, task: TaskRecord) -> list[TaskActivityEntry]:
@@ -54,7 +55,7 @@ def _save_task_activity_to_db(root: Path, task_id: str, activity: list[TaskActiv
                 (task_id, entry_index, entry.created_at, payload),
             )
         append_task_event(
-            root,
+            Workspace.from_path(root),
             event_type="task_reported",
             task_id=task_id,
             payload={"activity": [entry.model_dump(mode="json") for entry in activity]},

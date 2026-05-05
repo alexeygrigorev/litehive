@@ -24,6 +24,7 @@ from litehive.domain.lifecycle_deltas import StateDelta
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, TaskActivityEntry
 from litehive.lifecycle.events import HookOk, Pass, Reject
 from litehive.lifecycle.journal import SqliteJournal
+from litehive.workspace import Workspace
 from litehive.lifecycle.persistence import FailedRunRecord, LastRejection, LastReport, TaskState
 from litehive.lifecycle.prompt_serializer import serialize_prompt
 from litehive.lifecycle.prompt_types import AgentPrompt
@@ -835,7 +836,7 @@ def test_prompt_surfaces_semantic_reject_classification(workspace: Path) -> None
 
 def test_implementing_prompt_uses_latest_testing_reject_that_sent_work_back(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
-    journal = SqliteJournal(workspace)
+    journal = SqliteJournal(Workspace.from_path(workspace))
     journal.task_started(task.id, "ready")
     journal.transition(
         task.id,
@@ -881,7 +882,7 @@ def test_implementing_prompt_uses_latest_testing_reject_that_sent_work_back(work
 
 def test_implementing_prompt_keeps_latest_hook_reject_when_it_is_newest(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
-    journal = SqliteJournal(workspace)
+    journal = SqliteJournal(Workspace.from_path(workspace))
     journal.task_started(task.id, "ready")
     journal.transition(
         task.id,

@@ -22,6 +22,7 @@ from litehive.state.records import (
 )
 from litehive.state.store import runtime_store
 from litehive.tasks.report_storage import record_stage_report
+from litehive.workspace import Workspace
 
 
 def _task_intent_payload(root: Path, task_id: str) -> dict:
@@ -189,8 +190,7 @@ def test_current_storage_contract_uses_sqlite_without_workspace_yaml(tmp_path: P
         report={"verdict": "pass", "summary": "stored in sqlite"},
         event_stream={"events": [{"type": "message", "text": "ok"}]},
     )
-    report_ref = record_stage_report(
-        tmp_path,
+    report_ref = record_stage_report(Workspace.from_path(tmp_path),
         task,
         StageReport(
             task_id=task.id,

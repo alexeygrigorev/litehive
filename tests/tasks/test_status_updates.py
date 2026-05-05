@@ -8,6 +8,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.task import TaskRecord
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
+from litehive.workspace import Workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.state.store import runtime_store
@@ -54,7 +55,7 @@ def test_update_task_rejects_removed_engine_kwarg(tmp_path: Path) -> None:
 def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Close me")
-    persistence = SqlitePersistence(tmp_path)
+    persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     state = persistence.initialize(task.id)
     state.stage = "recovering"
     persistence.save(state)
@@ -110,7 +111,7 @@ def test_update_task_requeues_task_with_structured_action(tmp_path: Path) -> Non
     task.pipeline_status = "implementing"
     save_task(tmp_path, task)
 
-    persistence = SqlitePersistence(tmp_path)
+    persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     failed_state = persistence.initialize(task.id)
     failed_state.stage = "failed"
     persistence.save(failed_state)
@@ -130,7 +131,7 @@ def test_update_task_requeues_task_with_structured_action(tmp_path: Path) -> Non
 def test_update_task_abandons_task_with_structured_action(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Stop me")
-    persistence = SqlitePersistence(tmp_path)
+    persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     state = persistence.initialize(task.id)
     state.stage = "testing"
     persistence.save(state)
@@ -197,7 +198,7 @@ def test_close_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path)
 def test_close_task_resets_pipeline_state_row(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Close and clear pipeline state")
-    persistence = SqlitePersistence(tmp_path)
+    persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     state = persistence.initialize(task.id)
     state.stage = "recovering"
     persistence.save(state)

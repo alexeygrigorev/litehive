@@ -148,7 +148,7 @@ def status_command(
         print("  (no configured engines)")
 
     print()
-    events = collect_recent_activity(root)
+    events = collect_recent_activity(ws)
     for line in render_recent_activity_section(events):
         print(line)
 

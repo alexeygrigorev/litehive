@@ -24,6 +24,7 @@ from litehive.db.schema import (
 )
 from litehive.state.rebuild_safety import RebuildSafetyError
 from litehive.tasks.event_log import task_event_log_path
+from litehive.workspace import Workspace
 
 
 def _install_workspace_db_schema(root: Path, *, through_version: int) -> None:
@@ -320,7 +321,7 @@ def test_legacy_workspace_db_rebuild_replays_task_event_log_without_task_yaml_re
 def test_migration_rebuild_refuses_to_drop_tasks_missing_from_event_log(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Historical task before event log")
-    task_event_log_path(tmp_path).unlink()
+    task_event_log_path(Workspace.from_path(tmp_path)).unlink()
     db_path = workspace_path(tmp_path, "data.db")
 
     with sqlite3.connect(db_path) as connection:

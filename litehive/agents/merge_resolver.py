@@ -15,6 +15,7 @@ from litehive.domain.task import TaskRecord
 from litehive.git.ops import GitError, merge_abort, merge_no_edit, unmerged_files
 from litehive.tasks.journal import append_journal
 from litehive.tasks.recovery_engine import resolve_recovery_engine
+from litehive.workspace import Workspace
 
 
 _MERGE_RESOLVER_ROLE = "merge-resolver"
@@ -44,23 +45,24 @@ def run_worktree_merge_agent(
     If the agent does not clear all conflicts, the merge is aborted so
     the worktree is left in its pre-merge state.
     """
+    workspace = Workspace.from_path(root)
     merged, message = merge_no_edit(worktree_path, main_head)
     if merged:
-        append_journal(root, task, "[worktree] Merged main into worktree.")
+        append_journal(workspace, task, "[worktree] Merged main into worktree.")
         return
 
     conflicts = unmerged_files(worktree_path)
     if not conflicts:
         merge_abort(worktree_path)
         append_journal(
-            root,
+            workspace,
             task,
             f"[worktree] Merge failed (no conflict files detected): {message}",
         )
         return
 
     append_journal(
-        root,
+        workspace,
         task,
         f"[worktree] Merge conflict on {len(conflicts)} file(s). Launching merge agent.",
     )
@@ -68,7 +70,7 @@ def run_worktree_merge_agent(
     try:
         engine_name, model = resolve_recovery_engine(root, task, cfg)
     except GitError as exc:
-        append_journal(root, task, f"[worktree] Merge agent unavailable: {exc}")
+        append_journal(workspace, task, f"[worktree] Merge agent unavailable: {exc}")
         return
 
     subagents = SubagentManager(root, execution_root=worktree_path)
@@ -81,7 +83,7 @@ def run_worktree_merge_agent(
     )
 
     if not unmerged_files(worktree_path):
-        append_journal(root, task, "[worktree] Merge agent resolved conflicts.")
+        append_journal(workspace, task, "[worktree] Merge agent resolved conflicts.")
         return
     merge_abort(worktree_path)
-    append_journal(root, task, "[worktree] Merge agent could not resolve. Worktree kept as-is.")
+    append_journal(workspace, task, "[worktree] Merge agent could not resolve. Worktree kept as-is.")

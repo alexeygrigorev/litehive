@@ -12,6 +12,7 @@ from litehive.tasks.paths import (
 )
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.report_storage import latest_stage_report
+from litehive.workspace import Workspace
 from litehive.worktree import WorktreeService
 
 
@@ -56,7 +57,7 @@ def _print_lifecycle_evidence(root: Path, task) -> None:
     try:
         from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound  # noqa: PLC0415
 
-        state = SqlitePersistence(root).load(task.id)
+        state = SqlitePersistence(Workspace.from_path(root)).load(task.id)
     except TaskNotFound:
         print("lifecycle_state: not found")
         return
@@ -96,7 +97,7 @@ def _print_lifecycle_evidence(root: Path, task) -> None:
 
 
 def _print_latest_report(root: Path, task) -> None:
-    report = latest_stage_report(root, task)
+    report = latest_stage_report(Workspace.from_path(root), task)
     if report is None:
         print("latest_stage_report: none")
         return

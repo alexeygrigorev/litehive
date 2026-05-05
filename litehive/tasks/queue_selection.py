@@ -244,8 +244,11 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                 # and looping forever. Transition/journal history remains the
                 # source for prior-attempt metrics.
                 from litehive.lifecycle.persistence import SqlitePersistence  # noqa: PLC0415
+                from litehive.workspace import Workspace  # noqa: PLC0415
 
-                SqlitePersistence(root).reset_current_lifecycle_state(next_task.id, preserve_run_memory=True)
+                SqlitePersistence(Workspace.from_path(root)).reset_current_lifecycle_state(
+                    next_task.id, preserve_run_memory=True
+                )
             if next_task.status in {TaskStatus.QUEUED, TaskStatus.INTERRUPTED}:
                 next_task.status = TaskStatus.IN_PROGRESS
             queue_additions = [task_id for task_id in state.queue if task_id not in original_queue]

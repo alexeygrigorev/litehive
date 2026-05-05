@@ -12,6 +12,7 @@ from litehive.config.workspace import ensure_workspace
 from heru.types import SubagentRef
 from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.journal import render_task_journal
+from litehive.workspace import Workspace
 from litehive.tasks.paths import runner_lock_path
 from litehive.state.persist import load_state
 from litehive.tasks.queue import set_active_task
@@ -140,7 +141,7 @@ with workspace_runner_guard(root):
         assert state.active_task_id is None
         assert task.id not in state.queue
 
-        journal = render_task_journal(tmp_path, refreshed)
+        journal = render_task_journal(Workspace.from_path(tmp_path), refreshed)
         assert "Task closed: wont_do. bad direction" in journal
     finally:
         if proc.poll() is None:

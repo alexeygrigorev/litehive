@@ -20,6 +20,7 @@ from litehive.domain.recovery import (
 from litehive.domain.lifecycle_deltas import StateDelta
 from litehive.lifecycle.events import CleanState, Reject
 from litehive.lifecycle.journal import SqliteJournal
+from litehive.workspace import Workspace
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.lifecycle.types import PipelineMode
 from litehive.config.workspace import ensure_workspace
@@ -32,7 +33,7 @@ def workspace(tmp_path: Path) -> Path:
 
 
 def _seed_journal(workspace: Path, task_id: str) -> None:
-    store = SqlitePersistence(workspace)
+    store = SqlitePersistence(Workspace.from_path(workspace))
     state = store.initialize(task_id, pipeline_mode=PipelineMode.FULL)
     state.active_recovery_trigger = RecoveryTrigger(
         origin_stage="grooming",
@@ -62,7 +63,7 @@ def _seed_journal(workspace: Path, task_id: str) -> None:
     state.stage = "recovering"
     store.save(state)
 
-    journal = SqliteJournal(workspace)
+    journal = SqliteJournal(Workspace.from_path(workspace))
     journal.task_started(task_id, "ready")
     journal.transition(
         task_id=task_id,

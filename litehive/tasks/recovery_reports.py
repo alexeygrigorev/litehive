@@ -9,6 +9,7 @@ from litehive.domain.task import TaskRecord
 from litehive.tasks.activity import append_task_activity
 from litehive.tasks.recovery_evidence import collect_recovery_evidence, stage_report_context
 from litehive.tasks.report_storage import ReportReference, insert_recovery_report, latest_stage_report
+from litehive.workspace import Workspace
 
 
 RecoveryRunnableState = Literal["runnable", "parked", "blocked"]
@@ -39,8 +40,9 @@ def record_recovery_report(
         actions=list(actions or []),
         warnings=list(warnings or []),
     )
-    ref = insert_recovery_report(root, task, report)
-    latest_report = latest_stage_report(root, task)
+    workspace = Workspace.from_path(root)
+    ref = insert_recovery_report(workspace, task, report)
+    latest_report = latest_stage_report(workspace, task)
     append_task_activity(
         root,
         task,

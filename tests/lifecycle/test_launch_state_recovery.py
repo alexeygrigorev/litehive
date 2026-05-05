@@ -4,6 +4,7 @@ from pathlib import Path
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.runtime import RuntimeFailedRunRecord, RuntimeStageState
 from litehive.lifecycle.journal import SqliteJournal
+from litehive.workspace import Workspace
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.system import StubCommitNode
 from litehive.lifecycle.orchestration import _load_or_initialize, _sync_back, run_task
@@ -42,7 +43,7 @@ def _init_workspace_git_repo(root: Path) -> None:
 
 
 def _seed_terminal_pipeline_state(root: Path, task_id: str, *, entry_stage: str, stage: str = "failed") -> None:
-    SqlitePersistence(root).save(
+    SqlitePersistence(Workspace.from_path(root)).save(
         TaskState(task_id=task_id, stage=stage, pipeline_mode=PipelineMode.FULL, entry_stage=entry_stage)
     )
 
@@ -53,7 +54,7 @@ def _run_recovered_task(tmp_path: Path, monkeypatch, task_id: str) -> tuple[obje
     monkeypatch.setattr("litehive.lifecycle.orchestration.build_commit_node", lambda root: StubCommitNode())
     engine = _PassEngine("stub")
     result = run_task(tmp_path, queued, engine_factory=lambda _: engine)
-    routes = [row["to_stage"] for row in SqliteJournal(tmp_path).load_transitions(task_id)]
+    routes = [row["to_stage"] for row in SqliteJournal(Workspace.from_path(tmp_path)).load_transitions(task_id)]
     return result, engine.calls, routes
 
 
@@ -198,7 +199,7 @@ def test_runtime_failed_run_projection_does_not_seed_fresh_lifecycle_state(tmp_p
     )
     save_task(tmp_path, task)
 
-    state = _load_or_initialize(task.id, tmp_path, SqlitePersistence(tmp_path))
+    state = _load_or_initialize(task.id, tmp_path, SqlitePersistence(Workspace.from_path(tmp_path)))
 
     assert state.entry_stage == "implementing"
     assert state.failed_run_history == {}

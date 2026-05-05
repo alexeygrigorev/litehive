@@ -12,6 +12,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.lifecycle.persistence import SqlitePersistence
+from litehive.workspace import Workspace
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task, save_task
 from litehive.tasks.activity_rendering import append_activity_entry
@@ -91,8 +92,7 @@ def test_task_evidence_renders_minimal_recovery_routing_state(
         task,
         TaskActivityEntry(role="swe", stage="implementing", verdict="reject", message="agent report failed"),
     )
-    record_stage_report(
-        tmp_path,
+    record_stage_report(Workspace.from_path(tmp_path),
         task,
         StageReport(
             task_id=task.id,
@@ -102,7 +102,7 @@ def test_task_evidence_renders_minimal_recovery_routing_state(
             summary="implementing rejected: report CLI failed",
         ),
     )
-    state = SqlitePersistence(tmp_path).initialize(task.id, pipeline_mode=PipelineMode.FULL)
+    state = SqlitePersistence(Workspace.from_path(tmp_path)).initialize(task.id, pipeline_mode=PipelineMode.FULL)
     state.stage = "recovering"
     state.failed_reason = "recovery_crashed"
     state.failed_message = "recovery crashed while routing"
@@ -116,7 +116,7 @@ def test_task_evidence_renders_minimal_recovery_routing_state(
         reason_code="stage_exception",
         message="agent crashed before report",
     )
-    SqlitePersistence(tmp_path).save(state)
+    SqlitePersistence(Workspace.from_path(tmp_path)).save(state)
 
     exit_code = _cmd_evidence(_ns(tmp_path, task.id))
     output = capsys.readouterr().out

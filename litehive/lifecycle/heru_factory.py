@@ -47,6 +47,7 @@ from litehive.tasks.activity import latest_task_activity_entry, load_task_activi
 from litehive.tasks.journal import append_journal
 from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.tasks.report_storage import rewrite_latest_stage_report
+from litehive.workspace import Workspace
 from litehive.worktree import resolve_recorded_worktree_path
 
 from .events import Crash
@@ -235,9 +236,10 @@ def _rewrite_hallucinated_implementing_pass(
             "claimed_files_changed": claimed_files,
         },
     )
-    report_path = rewrite_latest_stage_report(workspace_root, task, report)
+    workspace = Workspace.from_path(workspace_root)
+    report_path = rewrite_latest_stage_report(workspace, task, report)
     append_journal(
-        workspace_root,
+        workspace,
         task,
         (
             "Rejected implementing pass as hallucinated completion.\n"

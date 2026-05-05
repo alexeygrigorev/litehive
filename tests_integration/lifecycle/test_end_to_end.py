@@ -24,6 +24,7 @@ import pytest
 
 import litehive.lifecycle.orchestration as orchestration
 from litehive.lifecycle.journal import SqliteJournal
+from litehive.workspace import Workspace
 from litehive.lifecycle.registry import build_registry
 from litehive.lifecycle.runner import StateMachineRunner
 from litehive.roles.base import PromptContext
@@ -109,8 +110,8 @@ def workspace(tmp_path: Path) -> Path:
 
 
 def test_full_mode_task_runs_end_to_end_to_done(workspace: Path) -> None:
-    persistence = SqlitePersistence(workspace)
-    journal = SqliteJournal(workspace)
+    persistence = SqlitePersistence(Workspace.from_path(workspace))
+    journal = SqliteJournal(Workspace.from_path(workspace))
     sessions = InMemorySessionStore()
     selector = _FixedSelector(_PassEngine())
     hook_runner = _NoopHookRunner()
@@ -157,8 +158,8 @@ def test_full_mode_task_runs_end_to_end_to_done(workspace: Path) -> None:
 
 def test_single_mode_zero_change_shortcut_goes_straight_to_done(workspace: Path) -> None:
     """Single mode + no diff → skip commit and land directly on done."""
-    persistence = SqlitePersistence(workspace)
-    journal = SqliteJournal(workspace)
+    persistence = SqlitePersistence(Workspace.from_path(workspace))
+    journal = SqliteJournal(Workspace.from_path(workspace))
     sessions = InMemorySessionStore()
 
     registry = build_registry(
@@ -187,8 +188,8 @@ def test_single_mode_zero_change_shortcut_goes_straight_to_done(workspace: Path)
 
 def test_single_mode_with_changes_routes_through_commit(workspace: Path) -> None:
     """Single mode + non-empty diff → implementing → commit → done."""
-    persistence = SqlitePersistence(workspace)
-    journal = SqliteJournal(workspace)
+    persistence = SqlitePersistence(Workspace.from_path(workspace))
+    journal = SqliteJournal(Workspace.from_path(workspace))
     sessions = InMemorySessionStore()
 
     registry = build_registry(
@@ -216,8 +217,8 @@ def test_single_mode_with_changes_routes_through_commit(workspace: Path) -> None
 
 
 def test_persistence_state_survives_load_after_run(workspace: Path) -> None:
-    persistence = SqlitePersistence(workspace)
-    journal = SqliteJournal(workspace)
+    persistence = SqlitePersistence(Workspace.from_path(workspace))
+    journal = SqliteJournal(Workspace.from_path(workspace))
     sessions = InMemorySessionStore()
 
     registry = build_registry(
@@ -384,7 +385,7 @@ def test_run_task_records_already_landed_commit_reconciliation(tmp_path: Path, m
         LitehiveConfig(default_engine="codex", engine_preference=["codex"]),
     )
     task = create_task(tmp_path, title="Already landed reconcile", pipeline_mode="single")
-    persistence = SqlitePersistence(tmp_path)
+    persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     state = persistence.initialize(task.id, pipeline_mode=PipelineMode.SINGLE)
     state.last_report.files_changed = 1
     persistence.save(state)
@@ -400,7 +401,7 @@ def test_run_task_records_already_landed_commit_reconciliation(tmp_path: Path, m
     assert refreshed.pipeline_status == "done"
     assert refreshed.git.commit_sha == "deadbeefcafebabe"
 
-    journal = render_task_journal(tmp_path, refreshed)
+    journal = render_task_journal(Workspace.from_path(tmp_path), refreshed)
     assert "patch already landed on main at deadbeefcafebabe" in journal
 
 
@@ -449,8 +450,8 @@ def test_merge_conflict_routes_to_merge_agent_then_back_to_after_commit(
     workspace: Path,
 ) -> None:
     """commit → MergeConflictDetected → merge_resolving (MergeAgent Pass) → after_commit → done."""
-    persistence = SqlitePersistence(workspace)
-    journal = SqliteJournal(workspace)
+    persistence = SqlitePersistence(Workspace.from_path(workspace))
+    journal = SqliteJournal(Workspace.from_path(workspace))
 
     commit_node = _OneShotConflictCommit()
     registry = build_registry(
@@ -482,10 +483,10 @@ def test_merge_conflict_routes_to_merge_agent_then_back_to_after_commit(
 def test_reject_from_implementing_retries_then_fails(workspace: Path) -> None:
     """Implementing rejects until its retry budget is exhausted, then fails terminally."""
     persistence = SqlitePersistence(
-        workspace,
+        Workspace.from_path(workspace),
         limits=Limits(stage_retry_limit=2),
     )
-    journal = SqliteJournal(workspace)
+    journal = SqliteJournal(Workspace.from_path(workspace))
     sessions = InMemorySessionStore()
 
     plan = {"implementing": "reject"}  # always reject; retries will exhaust

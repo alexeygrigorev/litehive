@@ -20,6 +20,7 @@ from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.paths import task_dir
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.tasks.report_storage import load_stage_reports
+from litehive.workspace import Workspace
 
 
 def _fresh_codex_engine(
@@ -143,7 +144,7 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
     result = manager.run(task, role="planner", engine_name="codex", prompt="groom it")
 
     report = load_subagent_report(tmp_path, task.id, result.ref.id)
-    stage_reports = load_stage_reports(tmp_path, task)
+    stage_reports = load_stage_reports(Workspace.from_path(tmp_path), task)
 
     assert report["summary"] == "REJECT"
     assert report["warnings"] == []

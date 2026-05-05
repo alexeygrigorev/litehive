@@ -498,7 +498,7 @@ def test_full_status_reports_terminal_recovery_failure_from_lifecycle_state(tmp_
     task.pipeline_status = "flagged"
     task.flag_reason = "needs_operator_review"
     save_task(tmp_path, task)
-    SqlitePersistence(tmp_path).save(
+    SqlitePersistence(Workspace.from_path(tmp_path)).save(
         TaskState(
             task_id=task.id,
             stage="failed",

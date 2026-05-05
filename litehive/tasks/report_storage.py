@@ -6,10 +6,10 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from litehive.db.schema import connect_workspace_db
 from litehive.domain.reports import RecoveryReport, StageReport, canonical_stage_report_verdict
 from litehive.domain.task import TaskRecord
 from litehive.tasks.event_log import append_task_event
+from litehive.workspace import Workspace
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,10 +32,10 @@ class ReportReference:
         return self.display()
 
 
-def insert_recovery_report(root: Path, task: TaskRecord, report: RecoveryReport) -> ReportReference:
+def insert_recovery_report(workspace: Workspace, task: TaskRecord, report: RecoveryReport) -> ReportReference:
     """Persist a recovery report and emit the matching task event so the recovery audit trail and the workspace event stream stay in lockstep."""
     payload = json.dumps(report.model_dump(mode="json"), sort_keys=True)
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         cursor = connection.execute(
             """
             INSERT INTO recovery_reports (task_id, origin_stage, trigger_event_kind, created_at, payload)
@@ -44,7 +44,7 @@ def insert_recovery_report(root: Path, task: TaskRecord, report: RecoveryReport)
             (task.id, report.origin_stage, report.trigger_event_kind.value, report.created_at, payload),
         )
         append_task_event(
-            root,
+            workspace,
             event_type="recovery_report_recorded",
             task_id=task.id,
             payload={"recovery_report": report.model_dump(mode="json")},
@@ -53,9 +53,9 @@ def insert_recovery_report(root: Path, task: TaskRecord, report: RecoveryReport)
     return ReportReference(table="recovery_reports", row_id=int(cursor.lastrowid))
 
 
-def load_recovery_reports(root: Path, task: TaskRecord) -> list[RecoveryReport]:
+def load_recovery_reports(workspace: Workspace, task: TaskRecord) -> list[RecoveryReport]:
     """Return every recovery report for a task in insertion order, skipping rows that fail to validate so a single bad payload cannot block the whole history view."""
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         rows = connection.execute(
             """
             SELECT payload
@@ -81,18 +81,18 @@ def load_recovery_reports(root: Path, task: TaskRecord) -> list[RecoveryReport]:
     return reports
 
 
-def latest_recovery_report(root: Path, task: TaskRecord) -> RecoveryReport | None:
+def latest_recovery_report(workspace: Workspace, task: TaskRecord) -> RecoveryReport | None:
     """Return the most recent recovery report for a task; called by recovery flows and the operator pipeline view that only care about the current attempt."""
-    reports = load_recovery_reports(root, task)
+    reports = load_recovery_reports(workspace, task)
     if reports:
         return reports[-1]
     return None
 
 
-def record_stage_report(root: Path, task: TaskRecord, report: StageReport) -> ReportReference:
+def record_stage_report(workspace: Workspace, task: TaskRecord, report: StageReport) -> ReportReference:
     """Append a stage report row and emit the matching event; called at the end of every stage so observers, audits, and downstream stages share one source of truth for the verdict."""
     payload = json.dumps(report.model_dump(mode="json"), sort_keys=True)
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         cursor = connection.execute(
             """
             INSERT INTO stage_reports (task_id, pipeline_state, created_at, payload)
@@ -101,7 +101,7 @@ def record_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Re
             (task.id, report.pipeline_state, report.created_at, payload),
         )
         append_task_event(
-            root,
+            workspace,
             event_type="stage_report_recorded",
             task_id=task.id,
             payload={"stage_report": report.model_dump(mode="json")},
@@ -110,10 +110,10 @@ def record_stage_report(root: Path, task: TaskRecord, report: StageReport) -> Re
     return ReportReference(table="stage_reports", row_id=int(cursor.lastrowid))
 
 
-def rewrite_latest_stage_report(root: Path, task: TaskRecord, report: StageReport) -> ReportReference:
+def rewrite_latest_stage_report(workspace: Workspace, task: TaskRecord, report: StageReport) -> ReportReference:
     """Update the most recent stage report for a pipeline state in place instead of appending a new row; called when a stage adapter wants to refine its own previous verdict without polluting the history with duplicate entries."""
     payload = json.dumps(report.model_dump(mode="json"), sort_keys=True)
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         row = connection.execute(
             """
             SELECT id
@@ -126,7 +126,7 @@ def rewrite_latest_stage_report(root: Path, task: TaskRecord, report: StageRepor
         ).fetchone()
         if row is None:
             connection.commit()
-            return record_stage_report(root, task, report)
+            return record_stage_report(workspace, task, report)
         report_id = int(row["id"])
         connection.execute(
             """
@@ -137,7 +137,7 @@ def rewrite_latest_stage_report(root: Path, task: TaskRecord, report: StageRepor
             (report.created_at, payload, report_id),
         )
         append_task_event(
-            root,
+            workspace,
             event_type="stage_report_rewritten",
             task_id=task.id,
             payload={"rewritten_stage_report": report.model_dump(mode="json")},
@@ -147,21 +147,21 @@ def rewrite_latest_stage_report(root: Path, task: TaskRecord, report: StageRepor
 
 
 def load_stage_reports_for_task_id(
-    root: Path,
+    workspace: Workspace,
     task_id: str,
     pipeline_state: str | None = None,
 ) -> list[StageReport]:
     """Load stage reports when the caller has only the task id (e.g., pool views) and not a hydrated TaskRecord."""
-    return _load_stage_reports(root, task_id=task_id, pipeline_state=pipeline_state)
+    return _load_stage_reports(workspace, task_id=task_id, pipeline_state=pipeline_state)
 
 
-def load_workspace_stage_reports(root: Path) -> list[StageReport]:
+def load_workspace_stage_reports(workspace: Workspace) -> list[StageReport]:
     """Load every stage report across the workspace; used by the workspace status snapshot to count and aggregate without iterating one task at a time."""
-    return _load_stage_reports(root)
+    return _load_stage_reports(workspace)
 
 
 def load_stage_reports(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     pipeline_state: str | None = None,
     stage: str | None = None,
@@ -171,12 +171,12 @@ def load_stage_reports(
         selected_pipeline_state = pipeline_state
     else:
         selected_pipeline_state = stage
-    return _load_stage_reports(root, task_id=task.id, pipeline_state=selected_pipeline_state)
+    return _load_stage_reports(workspace, task_id=task.id, pipeline_state=selected_pipeline_state)
 
 
-def latest_stage_report(root: Path, task: TaskRecord, source: str | None = None) -> StageReport | None:
+def latest_stage_report(workspace: Workspace, task: TaskRecord, source: str | None = None) -> StageReport | None:
     """Return the most recent stage report for a task, optionally restricted to reports authored by a specific source role; called by recovery and acceptance flows that only trust certain authors."""
-    reports = load_stage_reports(root, task)
+    reports = load_stage_reports(workspace, task)
     for report in reversed(reports):
         if source is not None and report.source != source:
             continue
@@ -185,7 +185,7 @@ def latest_stage_report(root: Path, task: TaskRecord, source: str | None = None)
 
 
 def _load_stage_reports(
-    root: Path,
+    workspace: Workspace,
     task_id: str | None = None,
     pipeline_state: str | None = None,
 ) -> list[StageReport]:
@@ -204,7 +204,7 @@ def _load_stage_reports(
     if clauses:
         query += " WHERE " + " AND ".join(clauses)
     query += " ORDER BY id ASC"
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         rows = connection.execute(query, tuple(params)).fetchall()
 
     reports: list[StageReport] = []

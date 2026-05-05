@@ -1,12 +1,16 @@
 from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
 from litehive.state.records import list_tasks
 from litehive.tasks.report_storage import load_stage_reports_for_task_id
+from litehive.workspace import Workspace
 
 
 def task_stage_outcomes(root, task_id, slug):
     """Flatten a task's stored stage reports into the `state=verdict` strings the pool summary embeds per task so operators can see each pipeline stage's outcome without opening the report files."""
     del slug
-    return [f"{report.pipeline_state}={report.verdict}" for report in load_stage_reports_for_task_id(root, task_id)]
+    return [
+        f"{report.pipeline_state}={report.verdict}"
+        for report in load_stage_reports_for_task_id(Workspace.from_path(root), task_id)
+    ]
 
 
 def _pool_task_report_entry(

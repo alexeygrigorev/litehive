@@ -8,6 +8,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.lifecycle.journal import SqliteJournal
+from litehive.workspace import Workspace
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.system import StubCommitNode
 from litehive.lifecycle.orchestration import run_task
@@ -215,7 +216,7 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
         queued,
         engine_factory=lambda name: _PassEngine(name),
     )
-    routed_stages = [row["to_stage"] for row in SqliteJournal(tmp_path).load_transitions(task.id)]
+    routed_stages = [row["to_stage"] for row in SqliteJournal(Workspace.from_path(tmp_path)).load_transitions(task.id)]
 
     assert result.final_stage == "done"
     assert routed_stages[:2] == ["worktree_sync", "before_testing"]

@@ -11,6 +11,7 @@ from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.state.records import get_task_record, list_tasks
 from litehive.tasks.journal import render_task_journal
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
+from litehive.workspace import Workspace
 
 _DEFAULT_TAIL_LINES = 40
 FOLLOW_POLL_SECONDS = 0.1
@@ -51,7 +52,7 @@ def list_daemon_sessions(root: Path) -> int:
 
 def show_task_journal(root: Path, task) -> int:
     """Default `task logs <id>` view that renders the per-task narrative journal (stage transitions, verdicts) instead of raw subagent stdout."""
-    journal = render_task_journal(root, task)
+    journal = render_task_journal(Workspace.from_path(root), task)
     if not journal:
         print(f"{task.id}: journal not found")
         return 0

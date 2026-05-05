@@ -14,6 +14,7 @@ from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.state.persist import persist_task_and_state_without_runner_guard
 from litehive.tasks._process_signals import terminate_subagent_pid
+from litehive.workspace import Workspace
 from litehive.tasks.audit import (
     TaskAuditState,
     build_task_audit_entry,
@@ -40,7 +41,9 @@ _CLOSE_REASON_CODE_LABELS: dict[str, str] = {
 
 def _reset_pipeline_state(root: Path, task_id: str, preserve_run_memory: bool = False) -> None:
     """Wipe the SQLite-side lifecycle/runtime rows for a task before it starts a new attempt; preserve_run_memory keeps recovery evidence so a requeue still has the prior failure context to feed back."""
-    SqlitePersistence(root).reset_current_lifecycle_state(task_id, preserve_run_memory=preserve_run_memory)
+    SqlitePersistence(Workspace.from_path(root)).reset_current_lifecycle_state(
+        task_id, preserve_run_memory=preserve_run_memory
+    )
 
 
 def _persist_transition(

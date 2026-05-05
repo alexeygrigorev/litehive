@@ -492,7 +492,7 @@ class SubagentManager(SessionMixin):
             str(report.pipeline_state),
             source_subagent_id=ref.id,
         )
-        record_stage_report(self.root, task, report)
+        record_stage_report(self.workspace, task, report)
         self.write_session_snapshot(
             task,
             base,

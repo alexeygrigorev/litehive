@@ -34,8 +34,7 @@ def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) 
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Estimate demo task")
 
-    record_stage_report(
-        tmp_path,
+    record_stage_report(Workspace.from_path(tmp_path),
         task,
         StageReport(
             task_id=task.id,
@@ -60,8 +59,7 @@ def test_render_task_summary_surfaces_semantic_reject_classification(tmp_path: P
     task.status = "flagged"
     task.pipeline_status = "flagged"
     task.flag_reason = SEMANTIC_REJECT_CLASSIFICATION
-    record_stage_report(
-        tmp_path,
+    record_stage_report(Workspace.from_path(tmp_path),
         task,
         StageReport(
             task_id=task.id,
@@ -231,8 +229,7 @@ def test_render_health_task_sections(tmp_path: Path) -> None:
     flagged.status = "flagged"
     flagged.pipeline_status = "testing"
     flagged.flag_reason = "needs review"
-    record_stage_report(
-        tmp_path,
+    record_stage_report(Workspace.from_path(tmp_path),
         flagged,
         StageReport(task_id=flagged.id, pipeline_state="testing", verdict="reject", summary="missing evidence"),
     )
@@ -240,8 +237,7 @@ def test_render_health_task_sections(tmp_path: Path) -> None:
     done = create_task(tmp_path, title="Done health task")
     done.status = "done"
     done.updated_at = "2026-04-14T10:15:00Z"
-    record_stage_report(
-        tmp_path,
+    record_stage_report(Workspace.from_path(tmp_path),
         done,
         StageReport(task_id=done.id, pipeline_state="accepting", verdict="pass", summary="all checks passed"),
     )

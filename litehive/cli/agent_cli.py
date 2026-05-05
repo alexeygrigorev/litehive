@@ -20,6 +20,7 @@ import typer
 
 from litehive.agents.session_store import load_subagent_session
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
+from litehive.workspace import Workspace
 
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
 from litehive.domain.reports import TaskActivityEntry, classify_task_activity_verdict
@@ -223,7 +224,7 @@ def agent_report_command(
             raise SystemExit(1)
 
     try:
-        pipeline_state = SqlitePersistence(root).load(tid)
+        pipeline_state = SqlitePersistence(Workspace.from_path(root)).load(tid)
         pipeline_stage = pipeline_state.stage
     except TaskNotFound:
         pipeline_stage = None

@@ -6,10 +6,8 @@ command prints to operators. Health-mode renderers live in ``status_health``.
 """
 
 import json
-from pathlib import Path
 from typing import Any
 
-from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.observability.status_summary import (
@@ -112,9 +110,9 @@ def render_queue_section(queue: list[str], tasks: list[TaskRecord]) -> list[str]
     return lines
 
 
-def collect_recent_activity(root: Path, limit: int = 5) -> list[dict[str, Any]]:
+def collect_recent_activity(workspace: Workspace, limit: int = 5) -> list[dict[str, Any]]:
     """Return recent task events from SQLite."""
-    with connect_workspace_db(root) as connection:
+    with workspace.connect() as connection:
         rows = connection.execute(
             """
             SELECT payload

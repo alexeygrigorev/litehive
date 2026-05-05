@@ -12,6 +12,7 @@ from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.lifecycle.transitions import list_transitions
 from litehive.state.records import get_task_record
 from litehive.tasks.report_storage import latest_recovery_report, latest_stage_report
+from litehive.workspace import Workspace
 
 app = make_typer(invoke_without_command=True)
 
@@ -44,7 +45,7 @@ def pipeline_set_state_command(
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
 ) -> None:
     """Force a task's pipeline stage to an arbitrary value; an operator escape hatch when the state machine has parked a task in a stage automated transitions cannot exit."""
-    store = SqlitePersistence(workspace)
+    store = SqlitePersistence(Workspace.from_path(workspace))
     try:
         state = store.load(task_id)
     except TaskNotFound:
@@ -63,7 +64,7 @@ def pipeline_reset_command(
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
 ) -> None:
     """Wipe all persisted pipeline state for one task so the next run starts fresh; used when accumulated retry counters, recovery triggers, or rejection history would otherwise short-circuit the runner."""
-    SqlitePersistence(workspace).reset_all(task_id)
+    SqlitePersistence(Workspace.from_path(workspace)).reset_all(task_id)
     print(f"task: {task_id}")
     print("reset: ok")
 
@@ -75,8 +76,9 @@ def pipeline_journal_command(
     limit: Annotated[int, typer.Option("--limit", "-n", help="Max transitions to show")] = 50,
 ) -> int:
     """Render every persisted artifact for one task — current state, latest stage/recovery reports, recovery history, retry counters, and the lifecycle/transition log — so a debugger can reconstruct what happened without poking SQLite by hand."""
-    journal = SqliteJournal(workspace)
-    store = SqlitePersistence(workspace)
+    workspace_obj = Workspace.from_path(workspace)
+    journal = SqliteJournal(workspace_obj)
+    store = SqlitePersistence(workspace_obj)
     try:
         state = store.load(task_id)
     except TaskNotFound:
@@ -87,7 +89,7 @@ def pipeline_journal_command(
     print(f"stage: {state.stage}")
     task = get_task_record(workspace, task_id)
     if task is not None:
-        stage_report = latest_stage_report(workspace, task)
+        stage_report = latest_stage_report(workspace_obj, task)
         if stage_report is not None:
             print(
                 "latest_stage_report: "
@@ -95,7 +97,7 @@ def pipeline_journal_command(
                 f"source={stage_report.source} "
                 f"summary={stage_report.summary}"
             )
-        recovery_report = latest_recovery_report(workspace, task)
+        recovery_report = latest_recovery_report(workspace_obj, task)
         if recovery_report is not None:
             print(
                 "latest_recovery_report: "

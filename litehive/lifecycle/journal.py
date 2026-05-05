@@ -11,12 +11,11 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import asdict, is_dataclass
-from pathlib import Path
 from typing import Any
 
-from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import utcnow
 from litehive.tasks.event_log import append_task_event
+from litehive.workspace import Workspace
 
 from litehive.domain.common import PipelineState
 from litehive.domain.lifecycle_deltas import StateDelta
@@ -159,10 +158,10 @@ class SqliteJournal(PipelineJournal):
     match the rest of the codebase.
     """
 
-    def __init__(self, workspace_root: Path) -> None:
-        """Bind the journal to a workspace; ``workspace_root`` selects which SQLite db ``connect_workspace_db`` opens for every write."""
+    def __init__(self, workspace: Workspace) -> None:
+        """Bind the journal to a workspace; the ``Workspace`` selects which SQLite db is opened for every write via ``workspace.connect()``."""
         super().__init__()
-        self.workspace_root = workspace_root
+        self.workspace = workspace
 
     def _store(
         self,
@@ -186,7 +185,7 @@ class SqliteJournal(PipelineJournal):
         payload: dict[str, Any],
     ) -> None:
         """Write one transition row plus its mirrored task-event so analytics and operator activity feeds see the same edge."""
-        with connect_workspace_db(self.workspace_root) as connection:
+        with self.workspace.connect() as connection:
             connection.execute(
                 """
                 INSERT INTO pipeline_transitions (
@@ -208,7 +207,7 @@ class SqliteJournal(PipelineJournal):
                 ),
             )
             append_task_event(
-                self.workspace_root,
+                self.workspace,
                 event_type="pipeline_transition_recorded",
                 task_id=task_id,
                 payload={
@@ -236,7 +235,7 @@ class SqliteJournal(PipelineJournal):
         payload: dict[str, Any],
     ) -> None:
         """Write a non-transition lifecycle row (started / stop_requested / finished) and mirror it onto the task event log for activity replay."""
-        with connect_workspace_db(self.workspace_root) as connection:
+        with self.workspace.connect() as connection:
             connection.execute(
                 """
                 INSERT INTO pipeline_journal (task_id, seq, created_at, kind, payload)
@@ -245,7 +244,7 @@ class SqliteJournal(PipelineJournal):
                 (task_id, seq, created_at, kind, json.dumps(payload, sort_keys=True)),
             )
             append_task_event(
-                self.workspace_root,
+                self.workspace,
                 event_type="pipeline_journal_recorded",
                 task_id=task_id,
                 payload={
@@ -262,7 +261,7 @@ class SqliteJournal(PipelineJournal):
 
     def _load_starting_seq(self, task_id: str) -> int:
         """Resume per-task seq numbering across runner restarts by querying ``MAX(seq)`` across both journal tables; without this, restarts would collide on existing rows."""
-        with connect_workspace_db(self.workspace_root) as connection:
+        with self.workspace.connect() as connection:
             row = connection.execute(
                 """
                 SELECT MAX(seq) AS max_seq FROM (
@@ -281,7 +280,7 @@ class SqliteJournal(PipelineJournal):
 
     def load_transitions(self, task_id: str) -> list[dict[str, Any]]:
         """Replay the structured transition rows for one task; used by the diagnostics CLI and the recovery agent to reconstruct pipeline history."""
-        with connect_workspace_db(self.workspace_root) as connection:
+        with self.workspace.connect() as connection:
             rows = connection.execute(
                 """
                 SELECT seq, created_at, from_stage, event_type, event_payload,
@@ -308,7 +307,7 @@ class SqliteJournal(PipelineJournal):
 
     def load_lifecycle(self, task_id: str) -> list[dict[str, Any]]:
         """Replay non-transition events (started/stop_requested/finished); paired with ``load_transitions`` to render a task's full timeline."""
-        with connect_workspace_db(self.workspace_root) as connection:
+        with self.workspace.connect() as connection:
             rows = connection.execute(
                 """
                 SELECT seq, created_at, kind, payload

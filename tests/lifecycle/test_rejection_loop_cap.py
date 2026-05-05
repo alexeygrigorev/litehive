@@ -12,6 +12,7 @@ from litehive.config.workspace_files import config_path
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.orchestration import run_task as run_pipeline_task
 from litehive.lifecycle.persistence import SqlitePersistence
+from litehive.workspace import Workspace
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.status import requeue_task
 from litehive.worktree import resolve_recorded_worktree_path, task_worktree_branch
@@ -57,7 +58,7 @@ def test_rejection_loop_flags_task_preserves_worktree_and_branch(tmp_path: Path)
 
     result = run_pipeline_task(tmp_path, task, engine_factory=lambda _: engine)
     refreshed = get_task(tmp_path, task.id)
-    pipeline_state = SqlitePersistence(tmp_path).load(task.id)
+    pipeline_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
 
     assert result.final_stage == "failed"
     assert refreshed is not None
@@ -111,7 +112,7 @@ def test_task_rejection_loop_limit_overrides_workspace_default(tmp_path: Path) -
 
     result = run_pipeline_task(tmp_path, task, engine_factory=lambda _: engine)
     refreshed = get_task(tmp_path, task.id)
-    pipeline_state = SqlitePersistence(tmp_path).load(task.id)
+    pipeline_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
 
     assert result.final_stage == "failed"
     assert refreshed is not None
@@ -131,7 +132,7 @@ def test_repeated_stage_retry_exhaustion_survives_requeue_and_blocks_blind_reque
 
     first = run_pipeline_task(tmp_path, task, engine_factory=lambda _: first_engine)
     first_refreshed = get_task(tmp_path, task.id)
-    first_state = SqlitePersistence(tmp_path).load(task.id)
+    first_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
 
     assert first.final_stage == "failed"
     assert first_refreshed is not None
@@ -147,7 +148,7 @@ def test_repeated_stage_retry_exhaustion_survives_requeue_and_blocks_blind_reque
     second_engine = _StageScriptEngine({"implementing": ["reject", "reject", "reject", "reject"]})
     second = run_pipeline_task(tmp_path, requeued, engine_factory=lambda _: second_engine)
     second_refreshed = get_task(tmp_path, task.id)
-    second_state = SqlitePersistence(tmp_path).load(task.id)
+    second_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
 
     assert second.final_stage == "failed"
     assert second_refreshed is not None

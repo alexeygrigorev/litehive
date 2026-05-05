@@ -1,12 +1,11 @@
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Protocol
 
-from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import PipelineState, canonical_pipeline_state, utcnow
 from litehive.domain.recovery import RecoveryOutcome, RecoveryTrigger
 from litehive.tasks.event_log import append_task_event
+from litehive.workspace import Workspace
 
 from .types import FailedReason, PipelineMode
 
@@ -495,8 +494,8 @@ class SqlitePersistence:
     constructor argument on every load — it never hits the db.
     """
 
-    def __init__(self, workspace_root: Path, limits: Limits | None = None) -> None:
-        self.workspace_root = workspace_root
+    def __init__(self, workspace: Workspace, limits: Limits | None = None) -> None:
+        self.workspace = workspace
         self.limits = limits or Limits()
 
     def save(self, state: TaskState) -> None:
@@ -504,7 +503,7 @@ class SqlitePersistence:
         payload = _state_payload(state)
         payload_json = json.dumps(payload, sort_keys=True)
         updated_at = utcnow()
-        with connect_workspace_db(self.workspace_root) as connection:
+        with self.workspace.connect() as connection:
             connection.execute(
                 """
                 INSERT INTO pipeline_task_state (task_id, stage, pipeline_mode, payload, updated_at)
@@ -524,7 +523,7 @@ class SqlitePersistence:
                 ),
             )
             append_task_event(
-                self.workspace_root,
+                self.workspace,
                 event_type="pipeline_task_state_saved",
                 task_id=state.task_id,
                 payload={
@@ -541,7 +540,7 @@ class SqlitePersistence:
 
     def load(self, task_id: str) -> TaskState:
         """Return the last persisted ``TaskState`` for the task; raises ``TaskNotFound`` for tasks that never reached the runner. Called by the runner on launch and by status/debug/diagnostics readers."""
-        with connect_workspace_db(self.workspace_root) as connection:
+        with self.workspace.connect() as connection:
             row = connection.execute(
                 "SELECT stage, pipeline_mode, payload FROM pipeline_task_state WHERE task_id = ?",
                 (task_id,),
@@ -573,7 +572,7 @@ class SqlitePersistence:
             previous = self.load(task_id)
         except TaskNotFound:
             previous = None
-        with connect_workspace_db(self.workspace_root) as connection:
+        with self.workspace.connect() as connection:
             if previous is None:
                 preserved_failed_runs = {}
             else:
@@ -614,7 +613,7 @@ class SqlitePersistence:
                     ),
                 )
             append_task_event(
-                self.workspace_root,
+                self.workspace,
                 event_type="pipeline_task_state_reset",
                 task_id=task_id,
                 payload={},
@@ -623,11 +622,11 @@ class SqlitePersistence:
 
     def reset_all(self, task_id: str) -> None:
         """Remove all lifecycle-owned runtime rows for a task."""
-        with connect_workspace_db(self.workspace_root) as connection:
+        with self.workspace.connect() as connection:
             for table_name in ("pipeline_task_state", "pipeline_sessions", "pipeline_transitions", "pipeline_journal"):
                 connection.execute(f"DELETE FROM {table_name} WHERE task_id = ?", (task_id,))
             append_task_event(
-                self.workspace_root,
+                self.workspace,
                 event_type="pipeline_task_state_reset",
                 task_id=task_id,
                 payload={},

@@ -423,10 +423,11 @@ def test_ensure_workspace_rebuilds_fresh_database_from_task_event_log(tmp_path: 
     from litehive.db.schema import connect_workspace_db
     from litehive.state.records import create_task
     from litehive.tasks.event_log import task_event_log_path
+    from litehive.workspace import Workspace
 
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovered from event log")
-    assert task_event_log_path(tmp_path).exists()
+    assert task_event_log_path(Workspace.from_path(tmp_path)).exists()
 
     db_path = workspace_path(tmp_path, "data.db")
     for path in (db_path, db_path.with_name(db_path.name + "-wal"), db_path.with_name(db_path.name + "-shm")):

@@ -13,6 +13,7 @@ from litehive.domain.runtime import TaskRuntime
 from litehive.domain.task import TaskIntentRecord, TaskStateRecord, WorkspaceState
 from litehive.tasks.audit import TaskAuditEntry, insert_task_audit_entries
 from litehive.tasks.event_log import append_task_event, task_event_type_for_audit_action
+from litehive.workspace import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class RuntimeStore:
 
     def __init__(self, root: Path) -> None:
         self.root = root
+        self.workspace = Workspace.from_path(root)
 
     def bootstrap(self) -> None:
         """Initialize workspace rows and replay the task event log after DB loss."""
@@ -51,12 +53,12 @@ class RuntimeStore:
         if self._should_rebuild_from_task_event_log():
             from litehive.tasks.event_log import rebuild_sqlite_from_task_event_log  # noqa: PLC0415
 
-            rebuild_sqlite_from_task_event_log(self.root)
+            rebuild_sqlite_from_task_event_log(self.workspace)
 
     def _should_rebuild_from_task_event_log(self) -> bool:
         from litehive.tasks.event_log import sqlite_task_tables_empty, task_event_log_has_events  # noqa: PLC0415
 
-        return task_event_log_has_events(self.root) and sqlite_task_tables_empty(self.root)
+        return task_event_log_has_events(self.workspace) and sqlite_task_tables_empty(self.workspace)
 
     def load_workspace_state(self) -> WorkspaceState | None:
         """Reassemble pool + queue rows into a single WorkspaceState for the queue and persist layers.
@@ -160,7 +162,7 @@ class RuntimeStore:
         with connect_workspace_db(self.root) as connection:
             self._save_task_intent(connection, task_id, intent)
             append_task_event(
-                self.root,
+                self.workspace,
                 event_type="task_intent_saved",
                 task_id=task_id,
                 payload={"task_intent": intent.model_dump(mode="json")},
@@ -176,7 +178,7 @@ class RuntimeStore:
         with connect_workspace_db(self.root) as connection:
             self._save_task_state(connection, task_id, state)
             append_task_event(
-                self.root,
+                self.workspace,
                 event_type="task_state_saved",
                 task_id=task_id,
                 payload={"task_state": state.model_dump(mode="json")},
@@ -235,14 +237,14 @@ class RuntimeStore:
             if audit_entries:
                 for entry in audit_entries:
                     append_task_event(
-                        self.root,
+                        self.workspace,
                         event_type=task_event_type_for_audit_action(entry.action),
                         task_id=entry.task_id,
                         payload={"audit_entry": entry.model_dump(mode="json")},
                     )
             else:
                 append_task_event(
-                    self.root,
+                    self.workspace,
                     event_type="task_deleted",
                     task_id=task_id,
                     payload={},
@@ -252,7 +254,7 @@ class RuntimeStore:
     def _append_workspace_state_event(self, state: WorkspaceState) -> None:
         """Emit a workspace_state_saved event so the task_event_log can replay the queue/pool snapshot."""
         append_task_event(
-            self.root,
+            self.workspace,
             event_type="workspace_state_saved",
             task_id=None,
             payload={"workspace_state": state.model_dump(mode="json")},
@@ -288,7 +290,7 @@ class RuntimeStore:
             payload = payload_for_task(entry.task_id)
             payload["audit_entry"] = entry.model_dump(mode="json")
             append_task_event(
-                self.root,
+                self.workspace,
                 event_type=task_event_type_for_audit_action(entry.action),
                 task_id=entry.task_id,
                 payload=payload,
@@ -297,7 +299,7 @@ class RuntimeStore:
 
         for task_id in sorted((set(task_intents) | set(task_states)) - logged_task_ids):
             append_task_event(
-                self.root,
+                self.workspace,
                 event_type="task_state_saved",
                 task_id=task_id,
                 payload=payload_for_task(task_id),
@@ -306,7 +308,7 @@ class RuntimeStore:
 
         for task_id in sorted(set(task_journal_entries) - logged_task_ids):
             append_task_event(
-                self.root,
+                self.workspace,
                 event_type="task_journal_recorded",
                 task_id=task_id,
                 payload=payload_for_task(task_id),
@@ -478,7 +480,7 @@ class RuntimeStore:
         with connect_workspace_db(self.root) as connection:
             entry = self._append_task_journal(connection, task_id, message)
             append_task_event(
-                self.root,
+                self.workspace,
                 event_type="task_journal_recorded",
                 task_id=task_id,
                 payload={"task_journal": [entry]},

@@ -20,6 +20,7 @@ from litehive.lifecycle.nodes.hook import HookNode, HookRunner, HookSpec, Subpro
 from litehive.lifecycle.nodes.system import GitCommitNode, StubCommitNode
 from litehive.lifecycle.orchestration import reconcile_terminal_commit_sha, run_task
 from litehive.lifecycle.persistence import CommitResult, SqlitePersistence, TaskState
+from litehive.workspace import Workspace
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task, set_task_worktree_path
@@ -731,7 +732,7 @@ def test_run_task_single_mode_executes_only_implementing_then_finishes(tmp_path:
         engine_factory=lambda engine_name: _RecordingPassEngine(engine_name, calls),
     )
     refreshed = get_task(tmp_path, task.id)
-    pipeline_state = SqlitePersistence(tmp_path).load(task.id)
+    pipeline_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
     workspace_state = load_state(tmp_path)
 
     assert len(calls) == 1
@@ -912,10 +913,10 @@ def test_run_task_reconciles_noop_commit_stage_and_records_main_head(tmp_path: P
         check=True,
     ).stdout.strip()
     refreshed = get_task(tmp_path, task.id)
-    pipeline_state = SqlitePersistence(tmp_path).load(task.id)
+    pipeline_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
 
     assert refreshed is not None
-    journal = render_task_journal(tmp_path, refreshed)
+    journal = render_task_journal(Workspace.from_path(tmp_path), refreshed)
 
     assert result.final_stage == "done"
     assert refreshed.status == "done"
@@ -935,7 +936,7 @@ def test_run_task_reconciles_noop_commit_stage_and_records_main_head(tmp_path: P
 def test_reconcile_terminal_commit_sha_recovers_missing_sha_from_persisted_commit_result(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path)
     task = create_task(tmp_path, title="Repair missing terminal commit sha")
-    persistence = SqlitePersistence(tmp_path)
+    persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     state = persistence.initialize(task.id, stage="done", pipeline_mode=PipelineMode.FULL)
     head_sha = subprocess.run(
         ["git", "rev-parse", "HEAD"],
@@ -1007,7 +1008,7 @@ def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path
     assert "Runner hook at `after_commit` rejected the stage." in activity_entries[-1].message
     assert "echo fail && exit 1" in activity_entries[-1].message
 
-    reports = load_stage_reports(tmp_path, refreshed)
+    reports = load_stage_reports(Workspace.from_path(tmp_path), refreshed)
     hook_reports = [report for report in reports if report.source == "hook"]
     assert hook_reports
     assert hook_reports[-1].pipeline_state == "commit_to_git"
@@ -1048,7 +1049,7 @@ def test_run_task_merge_conflict_failure_journal_stays_distinct_from_noop_reconc
     refreshed = get_task(tmp_path, task.id)
 
     assert refreshed is not None
-    journal = render_task_journal(tmp_path, refreshed)
+    journal = render_task_journal(Workspace.from_path(tmp_path), refreshed)
 
     assert result.final_stage == "failed"
     assert refreshed.status == "flagged"
@@ -1108,7 +1109,7 @@ def test_run_task_before_accepting_hook_retries_and_continues(
     assert hook_entries[-1].verdict == "reject"
     assert "lint failed" in hook_entries[-1].message
 
-    reports = load_stage_reports(tmp_path, refreshed)
+    reports = load_stage_reports(Workspace.from_path(tmp_path), refreshed)
     hook_reports = [report for report in reports if report.source == "hook"]
     assert hook_reports
     report = hook_reports[-1]
@@ -1120,7 +1121,7 @@ def test_run_task_before_accepting_hook_retries_and_continues(
     assert report.warnings
     assert "lint failed" in report.feedback
 
-    journal = render_task_journal(tmp_path, refreshed)
+    journal = render_task_journal(Workspace.from_path(tmp_path), refreshed)
     assert "Runner hook at `before_accepting` rejected the stage." in journal
 
 
@@ -1169,7 +1170,7 @@ def test_run_task_retries_sequential_hooks_one_failure_at_a_time(tmp_path: Path)
     assert refreshed.pipeline_status == "done"
     assert (tmp_path / ".hook_calls").read_text(encoding="utf-8") == "first\nfirst\nsecond\nfirst\nsecond\n"
 
-    reports = load_stage_reports(tmp_path, refreshed)
+    reports = load_stage_reports(Workspace.from_path(tmp_path), refreshed)
     hook_reports = [report for report in reports if report.source == "hook"]
     assert len(hook_reports) == 2
     first_report, second_report = hook_reports

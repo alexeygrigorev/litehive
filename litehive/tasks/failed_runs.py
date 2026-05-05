@@ -6,6 +6,7 @@ from litehive.domain.common import utcnow
 from litehive.domain.runtime import RuntimeFailedRunRecord
 from litehive.domain.task import TaskRecord
 from litehive.lifecycle.persistence import FailedRunRecord, SqlitePersistence, TaskNotFound, failed_run_key
+from litehive.workspace import Workspace
 
 FAILED_RUN_REQUEUE_BUDGET = 1
 
@@ -42,8 +43,9 @@ def mark_failed_run_operator_override(
     now = utcnow()
     acknowledged: list[dict[str, object]] = []
     pipeline_state = None
+    workspace = Workspace.from_path(root)
     try:
-        pipeline_state = SqlitePersistence(root).load(task.id)
+        pipeline_state = SqlitePersistence(workspace).load(task.id)
     except TaskNotFound:
         pipeline_state = None
     for record in records or blocking_failed_run_records(task):
@@ -88,7 +90,7 @@ def mark_failed_run_operator_override(
             }
         )
     if pipeline_state is not None and acknowledged:
-        SqlitePersistence(root).save(pipeline_state)
+        SqlitePersistence(workspace).save(pipeline_state)
     return acknowledged
 
 

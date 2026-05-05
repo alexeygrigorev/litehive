@@ -28,6 +28,7 @@ from litehive.state.records import (
     set_task_worktree_path,
 )
 from litehive.tasks.journal import append_journal
+from litehive.workspace import Workspace
 from litehive.worktree.cleanup import (
     cleanup_terminal_task_worktree,
     collect_managed_worktrees,
@@ -96,7 +97,7 @@ def resolve_task_execution_root(
                 rebased = rebase_worktree_onto(worktree_path, main_head)
                 if not rebased:
                     append_journal(
-                        root,
+                        Workspace.from_path(root),
                         task,
                         f"[worktree] Rebase onto {main_head[:8]} failed. Launching merge agent.",
                     )
@@ -115,5 +116,5 @@ def resolve_task_execution_root(
     ensure_worktree_venv_link(root, worktree_path)
     set_task_worktree_path(task, serialize_worktree_path(worktree_path))
     save_task(root, task)
-    append_journal(root, task, f"Created task worktree at `{get_task_worktree_path(task)}`.")
+    append_journal(Workspace.from_path(root), task, f"Created task worktree at `{get_task_worktree_path(task)}`.")
     return worktree_path

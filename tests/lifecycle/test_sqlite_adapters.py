@@ -51,13 +51,13 @@ def workspace(tmp_path: Path) -> Path:
 
 
 def test_persistence_load_missing_raises_task_not_found(workspace: Path) -> None:
-    store = SqlitePersistence(workspace)
+    store = SqlitePersistence(Workspace.from_path(workspace))
     with pytest.raises(TaskNotFound):
         store.load("T-9999")
 
 
 def test_persistence_initialize_is_idempotent(workspace: Path) -> None:
-    store = SqlitePersistence(workspace)
+    store = SqlitePersistence(Workspace.from_path(workspace))
     first = store.initialize("T-0001", pipeline_mode=PipelineMode.SINGLE)
     second = store.initialize("T-0001", pipeline_mode=PipelineMode.FULL)
     assert first.task_id == second.task_id == "T-0001"
@@ -67,7 +67,7 @@ def test_persistence_initialize_is_idempotent(workspace: Path) -> None:
 
 
 def test_persistence_roundtrip_uses_canonical_pipeline_state(workspace: Path) -> None:
-    store = SqlitePersistence(workspace)
+    store = SqlitePersistence(Workspace.from_path(workspace))
     store.save(TaskState(task_id="T-0002", stage="after_implementing", pipeline_mode=PipelineMode.FULL))
 
     loaded = store.load("T-0002")
@@ -79,7 +79,7 @@ def test_persistence_roundtrip_uses_canonical_pipeline_state(workspace: Path) ->
 
 
 def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
-    store = SqlitePersistence(workspace, limits=Limits(stage_retry_limit=5))
+    store = SqlitePersistence(Workspace.from_path(workspace), limits=Limits(stage_retry_limit=5))
 
     original = TaskState(
         task_id="T-0042",
@@ -230,7 +230,7 @@ def test_persistence_roundtrip_preserves_full_state(workspace: Path) -> None:
 
 
 def test_persistence_upsert_overwrites_on_second_save(workspace: Path) -> None:
-    store = SqlitePersistence(workspace)
+    store = SqlitePersistence(Workspace.from_path(workspace))
     state = TaskState(task_id="T-0100", stage="grooming", pipeline_mode=PipelineMode.FULL)
     store.save(state)
 
@@ -244,7 +244,7 @@ def test_persistence_upsert_overwrites_on_second_save(workspace: Path) -> None:
 
 
 def test_persistence_failed_reason_and_message_roundtrip(workspace: Path) -> None:
-    store = SqlitePersistence(workspace)
+    store = SqlitePersistence(Workspace.from_path(workspace))
     state = TaskState(
         task_id="T-0200",
         stage="failed",
@@ -260,14 +260,14 @@ def test_persistence_failed_reason_and_message_roundtrip(workspace: Path) -> Non
 
 
 def test_reset_current_lifecycle_state_preserves_journal_history(workspace: Path) -> None:
-    store = SqlitePersistence(workspace)
+    store = SqlitePersistence(Workspace.from_path(workspace))
     task_id = "T-0300"
     state = store.initialize(task_id, pipeline_mode=PipelineMode.FULL)
     state.stage = "implementing"
     state.stage_retry["implementing"] = 1
     store.save(state)
 
-    journal = SqliteJournal(workspace)
+    journal = SqliteJournal(Workspace.from_path(workspace))
     journal.task_started(task_id, "ready")
     journal.transition(
         task_id=task_id,

@@ -16,6 +16,7 @@ from litehive.lifecycle.prompt_types import AgentPrompt
 from litehive.lifecycle.sessions import Session
 from litehive.lifecycle.types import PipelineMode
 from litehive.tasks.journal import render_task_journal
+from litehive.workspace import Workspace
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.tasks.report_storage import load_stage_reports
@@ -890,7 +891,7 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
     )
     from litehive.tasks.report_storage import record_stage_report
 
-    record_stage_report(tmp_path, task, record)
+    record_stage_report(Workspace.from_path(tmp_path), task, record)
     monkeypatch.setattr(
         "litehive.lifecycle.heru_factory.execution_checkout_status",
         lambda workspace_root, task: (tmp_path, []),
@@ -915,14 +916,14 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
     assert "reason_code: hallucinated_completion" in activity_entries[0].message
     assert "git_status_porcelain: clean" in activity_entries[0].message
 
-    reports = load_stage_reports(tmp_path, task, pipeline_state="implementing")
+    reports = load_stage_reports(Workspace.from_path(tmp_path), task, pipeline_state="implementing")
     assert len(reports) == 1
     assert reports[0].verdict == "reject"
     assert reports[0].failure_classification == "hallucinated_completion"
     assert reports[0].outcome_reason_code == "hallucinated_completion"
     assert reports[0].failure_diagnostics["claimed_files_changed"] == ["foo.py"]
 
-    journal = render_task_journal(tmp_path, task)
+    journal = render_task_journal(Workspace.from_path(tmp_path), task)
     assert "Rejected implementing pass as hallucinated completion." in journal
     assert "`git status --porcelain`" in journal
 

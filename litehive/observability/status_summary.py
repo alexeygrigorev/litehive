@@ -57,7 +57,7 @@ def _collect_report_durations(workspace: Workspace) -> list[float]:
     """Collect positive stage report durations from workspace runtime storage."""
     return [
         float(report.duration_seconds)
-        for report in load_workspace_stage_reports(workspace.root)
+        for report in load_workspace_stage_reports(workspace)
         if report.duration_seconds > 0
     ]
 
@@ -97,7 +97,7 @@ def _latest_stage_report_for_task(workspace: Workspace, task: TaskRecord) -> Any
     try:
         from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
 
-        return latest_stage_report(workspace.root, task)
+        return latest_stage_report(workspace, task)
     except (OSError, sqlite3.DatabaseError, ValueError):
         return None
 
@@ -142,7 +142,7 @@ def _latest_stage_failure_classification(workspace: Workspace, task: TaskRecord)
     try:
         from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
 
-        report = latest_stage_report(workspace.root, task)
+        report = latest_stage_report(workspace, task)
     except (OSError, sqlite3.DatabaseError, ValueError):
         return None
     if report is None:

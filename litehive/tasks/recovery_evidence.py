@@ -30,11 +30,12 @@ def collect_recovery_evidence(
 ) -> list[RecoveryEvidenceItem]:
     """Gather every signal the recovery agent needs into a single evidence list — task record, runtime state, sqlite activity/events, the latest stage report, the latest subagent's artifacts, the wrapper log, engine monitoring, and the dirty-path snapshot for both the main checkout and the task worktree — so the recovery prompt sees the same facts the operator would when triaging by hand."""
     evidence: list[RecoveryEvidenceItem] = []
+    workspace = Workspace.from_path(root)
     activity_entries = load_task_activity(root, task)
-    task_events = read_events(Workspace.from_path(root), task)
-    latest_report = latest_stage_report(root, task)
+    task_events = read_events(workspace, task)
+    latest_report = latest_stage_report(workspace, task)
     latest_run_log = latest_run_all_log_path(root)
-    monitoring = load_engine_monitoring(Workspace.from_path(root))
+    monitoring = load_engine_monitoring(workspace)
     engine_name = None
     if task.runtime.execution.active_subagent is not None:
         engine_name = task.runtime.execution.active_subagent.engine

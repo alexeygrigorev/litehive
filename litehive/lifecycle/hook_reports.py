@@ -23,6 +23,7 @@ from litehive.domain.task import TaskRecord
 from litehive.tasks.activity import append_task_activity
 from litehive.tasks.journal import append_journal
 from litehive.tasks.report_storage import record_stage_report
+from litehive.workspace import Workspace
 
 from .nodes.hook import HookSpec
 
@@ -94,7 +95,8 @@ def _record_hook_warnings(
             "source": "hook",
         },
     )
-    report_path = record_stage_report(root, task, report)
+    workspace = Workspace.from_path(root)
+    report_path = record_stage_report(workspace, task, report)
     message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(root)}"
     append_task_activity(
         root,
@@ -107,7 +109,7 @@ def _record_hook_warnings(
         ),
     )
     append_journal(
-        root,
+        workspace,
         task,
         (f"Runner hooks at `{phase}` reported warnings.\nreport: `{report_path.relative_to(root)}`"),
     )
@@ -151,7 +153,8 @@ def _record_hook_reject(
         failure_classification="hook_reject",
         failure_diagnostics=failure_diagnostics,
     )
-    report_path = record_stage_report(root, task, report)
+    workspace = Workspace.from_path(root)
+    report_path = record_stage_report(workspace, task, report)
     message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(root)}"
     append_task_activity(
         root,
@@ -164,7 +167,7 @@ def _record_hook_reject(
         ),
     )
     append_journal(
-        root,
+        workspace,
         task,
         (f"Runner hook at `{phase}` rejected the stage.\nreport: `{report_path.relative_to(root)}`"),
     )

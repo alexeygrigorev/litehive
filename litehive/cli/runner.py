@@ -544,7 +544,7 @@ def db_rebuild_from_events(workspace: WorkspaceOption = Path.cwd()) -> int:
     """Replay the append-only task event log to rebuild SQLite tables; the operator recovery path when the runtime DB is corrupted or lost."""
     workspace = normalize_workspace_root(workspace, source="--workspace")
     try:
-        summary = rebuild_sqlite_from_task_event_log(workspace)
+        summary = rebuild_sqlite_from_task_event_log(Workspace.from_path(workspace))
     except Exception as exc:
         print(f"db rebuild-from-events failed: {exc}")
         return 1

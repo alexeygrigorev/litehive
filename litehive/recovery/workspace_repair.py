@@ -39,7 +39,7 @@ def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepa
             task = get_task_record(root, task_id)
             if task is None:
                 continue
-            report = latest_stage_report(root, task)
+            report = latest_stage_report(workspace, task)
             if report is None or report.verdict != "pass" or report.pipeline_state not in _TERMINAL_REPAIR_STAGES:
                 continue
             before_task = snapshot_task_audit_state(task)

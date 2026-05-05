@@ -2,11 +2,10 @@
 
 from dataclasses import dataclass
 import json
-from pathlib import Path
 
-from litehive.db.schema import connect_workspace_db
 from litehive.domain.task import TaskRecord
 from litehive.state.store import runtime_store
+from litehive.workspace import Workspace
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,12 +17,12 @@ class TaskJournalEntry:
     metadata: dict[str, object]
 
 
-def append_journal(root: Path, task: TaskRecord, message: str) -> None:
-    runtime_store(root).append_task_journal(task.id, message)
+def append_journal(workspace: Workspace, task: TaskRecord, message: str) -> None:
+    runtime_store(workspace.root).append_task_journal(task.id, message)
 
 
-def load_task_journal(root: Path, task_id: str) -> list[TaskJournalEntry]:
-    with connect_workspace_db(root) as connection:
+def load_task_journal(workspace: Workspace, task_id: str) -> list[TaskJournalEntry]:
+    with workspace.connect() as connection:
         rows = connection.execute(
             """
             SELECT task_id, entry_index, created_at, message, metadata
@@ -51,8 +50,8 @@ def load_task_journal(root: Path, task_id: str) -> list[TaskJournalEntry]:
     return entries
 
 
-def render_task_journal(root: Path, task: TaskRecord) -> str:
-    entries = load_task_journal(root, task.id)
+def render_task_journal(workspace: Workspace, task: TaskRecord) -> str:
+    entries = load_task_journal(workspace, task.id)
     if not entries:
         return ""
     lines = [f"# {task.id} {task.title}"]

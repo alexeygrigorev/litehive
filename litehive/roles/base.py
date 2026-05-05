@@ -282,8 +282,9 @@ def _latest_reject_stage_for_implementing(root: Path, task_id: str) -> str | Non
     """
     try:
         from litehive.lifecycle.journal import SqliteJournal  # noqa: PLC0415
+        from litehive.workspace import Workspace  # noqa: PLC0415
 
-        transitions = SqliteJournal(root).load_transitions(task_id)
+        transitions = SqliteJournal(Workspace.from_path(root)).load_transitions(task_id)
     except Exception:
         return None
 

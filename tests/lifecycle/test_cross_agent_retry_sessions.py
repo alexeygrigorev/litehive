@@ -84,7 +84,7 @@ def _build_runner(
     *,
     engine,
 ) -> tuple[StateMachineRunner, SqliteSessionStore]:
-    persistence = SqlitePersistence(workspace)
+    persistence = SqlitePersistence(Workspace.from_path(workspace))
     sessions = SqliteSessionStore(Workspace.from_path(workspace))
     registry = build_registry(
         selector=_FixedSelector(engine),
@@ -94,14 +94,14 @@ def _build_runner(
         prompt_context=PromptContext(workspace_root=workspace),
     )
     return (
-        StateMachineRunner(registry, persistence, journal=SqliteJournal(workspace), session_store=sessions),
+        StateMachineRunner(registry, persistence, journal=SqliteJournal(Workspace.from_path(workspace)), session_store=sessions),
         sessions,
     )
 
 
 def test_cross_agent_reject_clears_target_stage_sessions(workspace: Path) -> None:
     task = create_task(workspace, title="QA sends SWE back", pipeline_mode="full")
-    persistence = SqlitePersistence(workspace)
+    persistence = SqlitePersistence(Workspace.from_path(workspace))
     persistence.initialize(task.id, pipeline_mode=PipelineMode.FULL)
     engine = _CrossAgentRetryEngine()
     runner, sessions = _build_runner(
@@ -119,7 +119,7 @@ def test_cross_agent_reject_clears_target_stage_sessions(workspace: Path) -> Non
     ]
     persisted = sessions.get_or_create(task.id, "implementing", engine.name)
     assert persisted.engine_session_id == "implementing-2"
-    transitions = SqliteJournal(workspace).load_transitions(task.id)
+    transitions = SqliteJournal(Workspace.from_path(workspace)).load_transitions(task.id)
     implementing_attempts = [
         transition
         for transition in transitions
@@ -130,7 +130,7 @@ def test_cross_agent_reject_clears_target_stage_sessions(workspace: Path) -> Non
 
 def test_same_agent_reject_keeps_stage_session_continuity(workspace: Path) -> None:
     task = create_task(workspace, title="SWE retries in place", pipeline_mode="single")
-    persistence = SqlitePersistence(workspace)
+    persistence = SqlitePersistence(Workspace.from_path(workspace))
     persistence.initialize(task.id, pipeline_mode=PipelineMode.SINGLE)
     engine = _SameAgentRetryEngine()
     runner, sessions = _build_runner(

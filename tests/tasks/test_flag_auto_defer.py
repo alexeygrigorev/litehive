@@ -7,6 +7,7 @@ import pytest
 
 from litehive.config.workspace import ensure_workspace
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
+from litehive.workspace import Workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.runtime import finish_task_run_transition
@@ -137,7 +138,7 @@ def test_requeue_task_resets_sticky_pipeline_failure_state(tmp_path: Path) -> No
     task.pipeline_status = "implementing"
     save_task(tmp_path, task)
 
-    persistence = SqlitePersistence(tmp_path)
+    persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     failed_state = persistence.initialize(task.id)
     failed_state.stage = "failed"
     persistence.save(failed_state)
