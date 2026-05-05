@@ -92,6 +92,11 @@ def _halt_for_origin_divergence(
     workspace: Path,
     output_stream: TextIO | None,
 ) -> bool:
+    """Stop the pool and raise an attention flag when local main has diverged from origin.
+
+    Returns True when the daemon loop should exit; merging or rebasing
+    a diverged main is a human decision, not a daemon decision.
+    """
     divergence_reason = check_origin_divergence(workspace)
     if divergence_reason is None:
         return False
@@ -131,6 +136,12 @@ def _append_attention_log(workspace: Path, message: str) -> None:
 
 
 def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
+    """Capture pool state plus a renderable status block in one read-only pass.
+
+    The daemon loop logs the snapshot before and after each ``litehive run``
+    invocation; using ``read_only=True`` keeps the snapshot from racing the
+    runner's own writes.
+    """
     status = collect_task_pipeline_status(workspace, read_only=True)
     state = status.state.model_dump(mode="python")
     lines = render_task_pipeline_status_lines(status, workspace=workspace, mode="fast")
@@ -138,6 +149,14 @@ def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
 
 
 def default_command_prefix() -> list[str]:
+    """Pick the argv prefix the daemon uses to launch a child ``litehive run``.
+
+    Honors ``LITEHIVE_DAEMON_EXECUTABLE`` for tests/operators that need a
+    pinned executable, then prefers ``uv run`` for development workspaces,
+    falls back to an installed ``litehive`` binary, and finally re-enters
+    ``python -m litehive.main`` so the daemon still works when neither
+    launcher is on PATH.
+    """
     override = os.environ.get("LITEHIVE_DAEMON_EXECUTABLE")
     if override:
         return shlex.split(override)
@@ -151,6 +170,13 @@ def default_command_prefix() -> list[str]:
 
 
 def _emit(message: str, stream: TextIO | None) -> None:
+    """Write a daemon-loop status line that survives interleaving with subprocess output.
+
+    The trailing newline + flush is load-bearing: log readers tail the
+    file while ``litehive run`` writes to it, so partial lines confuse
+    readers. ``stream is None`` keeps non-interactive daemon mode silent
+    without forcing every call site to branch.
+    """
     if stream is None:
         return
     stream.write(message)
@@ -160,6 +186,13 @@ def _emit(message: str, stream: TextIO | None) -> None:
 
 
 def _heartbeat_age_seconds(heartbeat_at: object) -> float | None:
+    """Compute how stale a recorded daemon heartbeat is, tolerating bad input.
+
+    Returns None for missing/non-string/unparseable timestamps so the
+    healthcheck treats them as "no recent heartbeat" rather than crashing
+    the start-background path; naive timestamps are interpreted as UTC
+    because old daemon registrations didn't store tzinfo.
+    """
     if not isinstance(heartbeat_at, str) or not heartbeat_at:
         return None
     try:
@@ -172,11 +205,24 @@ def _heartbeat_age_seconds(heartbeat_at: object) -> float | None:
 
 
 def _daemon_healthcheck_failed(entry: dict[str, object]) -> bool:
+    """Decide whether a registered daemon is wedged and should be SIGKILLed before restart.
+
+    A daemon row that says ``status=running`` but has not heartbeat in
+    ``_DAEMON_HEALTH_TIMEOUT_SECONDS`` is treated as dead so the
+    start-background path can reclaim the workspace instead of refusing
+    to start.
+    """
     heartbeat_age = _heartbeat_age_seconds(entry.get("heartbeat_at"))
     return heartbeat_age is None or heartbeat_age > _DAEMON_HEALTH_TIMEOUT_SECONDS
 
 
 def _wait_for_pid_exit(pid: int, timeout_seconds: float) -> bool:
+    """Block until a foreign pid is gone or the deadline passes, polling cheaply.
+
+    Used by the SIGTERM/SIGKILL stop sequence: we own the registration
+    row, not the process handle, so ``Popen.wait`` is unavailable and
+    we have to poll ``pid_is_alive`` instead.
+    """
     deadline = time.monotonic() + max(timeout_seconds, 0.0)
     while True:
         if not pid_is_alive(pid):
@@ -188,10 +234,23 @@ def _wait_for_pid_exit(pid: int, timeout_seconds: float) -> bool:
 
 
 def _clear_recorded_daemon(workspace: Path, pid: int) -> None:
+    """Drop the daemon registration row after we have confirmed the process is gone.
+
+    Pinning the unregister to ``pid=`` prevents stop sequences from
+    accidentally clearing a newer daemon that registered for the same
+    workspace while we were waiting for the previous one to die.
+    """
     unregister_daemon(workspace, pid=pid)
 
 
 def _force_kill_recorded_daemon(workspace: Path, pid: int) -> None:
+    """SIGKILL a daemon that ignored SIGTERM, then clear its registration.
+
+    Reached either as the second step of the graceful stop sequence or
+    directly from ``start_background_daemon`` when an existing record
+    fails its heartbeat check. Raises if the process refuses to die so
+    the caller doesn't think the workspace is free.
+    """
     if not pid_is_alive(pid):
         _clear_recorded_daemon(workspace, pid=pid)
         return
@@ -208,6 +267,14 @@ def _force_kill_recorded_daemon(workspace: Path, pid: int) -> None:
 
 
 def _terminate_recorded_daemon(workspace: Path, pid: int) -> None:
+    """Run the graceful-then-forceful stop sequence against a registered daemon.
+
+    SIGTERM first so the daemon can flush its heartbeat thread and
+    unregister cleanly; if that doesn't land within the grace period we
+    escalate to SIGKILL via ``_force_kill_recorded_daemon``. Called by
+    ``stop_workspace_daemon`` when the operator (or a CLI command)
+    asks the workspace's daemon to stop.
+    """
     if not pid_is_alive(pid):
         _clear_recorded_daemon(workspace, pid=pid)
         return
@@ -225,6 +292,14 @@ def _terminate_recorded_daemon(workspace: Path, pid: int) -> None:
 
 
 def _terminate_child_process(process: subprocess.Popen[str]) -> None:
+    """Forward stop signals from the daemon to the entire ``litehive run`` process group.
+
+    The child runs in its own session (``start_new_session=True``) so it
+    can spawn agents that themselves spawn subprocesses; killing only
+    the immediate child would orphan that subtree. ``killpg`` covers the
+    whole group, with ``process.terminate`` as a fallback when we can't
+    address the group (e.g., on platforms without ``killpg``).
+    """
     if process.poll() is not None:
         return
     try:
@@ -244,12 +319,25 @@ def _has_work(state: dict[str, object]) -> bool:
 
 
 def _should_continue_for_stop_reason(reason: object) -> bool:
+    """Distinguish "the previous run paused for a transient reason" from "the pool is halted".
+
+    The daemon loop should keep iterating after ``queue_exhausted`` or
+    ``task_requeued`` (those clear themselves once new work arrives) but
+    must stop on every other reason — operator halts, divergence, etc.
+    """
     if reason is None:
         return True
     return str(reason) in _CONTINUE_STOP_REASONS
 
 
 def _emit_runner_wait(status, stream: TextIO | None) -> None:
+    """Log enough about the live runner that an operator can tell why the daemon is idling.
+
+    The daemon loop hits this branch when another ``litehive run`` is
+    still active for the workspace; surfacing pid + active task + last
+    heartbeat lets the operator decide whether to wait or intervene
+    instead of seeing a silent loop.
+    """
     if getattr(status, "pid", None) is None:
         pid = "-"
     else:
@@ -267,6 +355,12 @@ def ensure_workspace_venvs_ready(
     workspace: Path,
     output_stream: TextIO | None,
 ) -> None:
+    """Refuse to start the daemon when the workspace has a broken Python venv.
+
+    A broken venv would surface as cryptic agent-side import failures;
+    catching it at daemon-start time produces one clear error per
+    workspace instead of a wave of failed tasks.
+    """
     findings = probe_broken_venv_executables(workspace)
     if findings:
         raise RuntimeError(daemon_broken_venv_message(workspace, findings))
@@ -278,6 +372,13 @@ def maybe_run_workspace_backup(
     now: datetime | None = None,
     stream: TextIO | None,
 ) -> None:
+    """Trigger the scheduled workspace backup once per daemon iteration if it is due.
+
+    The backup policy lives in ``state.backup``; this hook is the only
+    place the daemon loop calls into it, so the cadence of "at most one
+    backup per loop turn" is enforced here rather than inside the
+    backup module.
+    """
     backup = create_scheduled_workspace_backup(workspace, now=now)
     if backup is not None:
         _emit(f"backup_created: {backup.timestamp}", stream=stream)
@@ -290,6 +391,14 @@ def run_logged_subprocess(
     output_stream: TextIO | None,
     current_child: dict[str, subprocess.Popen[str] | None],
 ) -> int:
+    """Spawn a child ``litehive run`` and tee its output to a per-iteration log file.
+
+    The child is started in its own process group so the daemon's
+    SIGTERM handler can kill the whole subtree, and the live ``Popen``
+    is published to ``current_child`` for that handler to reach. Each
+    line is flushed twice (log + optional operator stream) so a tail
+    of the iteration log stays current while the run is in progress.
+    """
     with log_path.open("w", encoding="utf-8") as log_handle:
         process = subprocess.Popen(
             command,
@@ -318,6 +427,14 @@ def run_daemon_loop(
     output_stream: TextIO | None = None,
     session_dir: Path | None = None,
 ) -> int:
+    """Drive a workspace's pool by repeatedly spawning ``litehive run`` until work runs out.
+
+    This is the daemon worker body — invoked by ``daemon worker`` (the
+    detached child of ``start_background_daemon``) and by foreground
+    ``daemon run`` for development. Owns the heartbeat thread,
+    iteration logs, signal forwarding, and the stop-reason policy that
+    decides when the pool is genuinely done versus paused.
+    """
     workspace = workspace.resolve()
     ensure_workspace(workspace)
     apply_pending_migrations(workspace)
@@ -436,11 +553,25 @@ def run_daemon_loop(
 
 
 def _daemon_heartbeat_loop(workspace: Path, pid: int, stop_event: threading.Event) -> None:
+    """Refresh the daemon registration's heartbeat row while the worker is alive.
+
+    Runs in a background thread so a long ``litehive run`` iteration
+    doesn't make the daemon look dead to ``_daemon_healthcheck_failed``;
+    exits as soon as the run-loop sets ``stop_event`` during shutdown.
+    """
     while not stop_event.wait(_DAEMON_HEARTBEAT_INTERVAL_SECONDS):
         touch_daemon(workspace, pid=pid)
 
 
 def start_background_daemon(workspace: Path) -> int:
+    """Detach a daemon worker for ``workspace`` and return once it has registered.
+
+    Reclaims a wedged registration (running but missed its heartbeat)
+    so an operator who Ctrl-C'd a previous daemon can re-run
+    ``litehive daemon start`` without manual cleanup, and waits for the
+    child to write its row before returning so callers can rely on the
+    registry being current.
+    """
     workspace = workspace.resolve()
     existing = daemon_metadata(workspace)
     if existing is not None and existing.get("status") == "running":
@@ -486,6 +617,14 @@ def start_background_daemon(workspace: Path) -> int:
 
 
 def stop_workspace_daemon(workspace: Path) -> dict[str, object] | None:
+    """Stop the daemon registered for ``workspace``, returning the prior registration entry.
+
+    Called by ``litehive daemon stop`` and the ``litehive stop`` shortcut.
+    Returns ``None`` when there was no daemon to stop so the CLI can
+    distinguish "nothing to do" from "stopped a running daemon" without
+    a second registry round-trip; also drops stale registrations as a
+    side effect.
+    """
     workspace = workspace.resolve()
     entry = daemon_metadata(workspace)
     if entry is None:
@@ -502,6 +641,13 @@ def stop_workspace_daemon(workspace: Path) -> dict[str, object] | None:
 
 
 def daemon_status_lines(workspace: Path) -> list[str]:
+    """Render the daemon-side block of ``litehive status`` / ``litehive daemon status``.
+
+    Combines the daemon registration row with the runner liveness line
+    and a pointer to the latest run-all log dir so an operator can land
+    on the right log file from one command without scraping the
+    workspace tree.
+    """
     workspace = workspace.resolve()
     entry = daemon_metadata(workspace)
     lines = [f"workspace: {workspace}"]

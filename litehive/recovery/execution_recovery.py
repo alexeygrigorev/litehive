@@ -46,6 +46,7 @@ from litehive.tasks.runtime import (
 
 
 def mark_interrupted_subagent(root: Path, task: TaskRecord, reason: str, stage: str) -> RuntimeSubagentState | None:
+    """Promote the task's currently-running subagent to ``interrupted`` and persist the snapshot artifacts so a later resume sees a frozen subagent record instead of a half-running one. Returns ``None`` if there is nothing to interrupt — repair callers use that to decide whether the interruption originated in the runner or in a subagent."""
     active = task.runtime.execution.active_subagent
     interruption = task.runtime.execution.interruption
     if interruption is None:
@@ -86,6 +87,7 @@ def prepare_interrupted_task(
     summary: str,
     reason: str | None = None,
 ) -> None:
+    """Stamp a task as ``INTERRUPTED`` at ``stage`` so the next dequeue resumes from a known recovery point; called by the queue's stop/recovery flows when a runner crash or stale-runner detection requires the in-flight stage to be requeued."""
     now = utcnow()
     interruption_reason = reason or summary
     timestamps = _interruption_timestamps(task, now)
@@ -109,6 +111,7 @@ def prepare_interrupted_task(
 
 
 def interruption_journal_message(task: TaskRecord) -> str:
+    """Render the human-readable journal line that the queue/stop flows persist when an interruption is recorded; pulls subagent details (pid, role, snippet) out of runtime state so the operator-visible journal explains *why* the task is paused."""
     interruption = task.runtime.execution.interruption
     if interruption is None:
         return f"Interrupted run recorded. Resume from `{task.pipeline_status}`."
@@ -136,6 +139,7 @@ def interruption_journal_message(task: TaskRecord) -> str:
 
 
 def stale_interruption_reason(task: TaskRecord, stage: str, stale_pid: bool = False) -> str:
+    """Build the ``reason`` string the stale-runner repair attaches to the task; embeds subagent role/engine and (when known) "pid no longer alive" so the recovery report distinguishes "runner died" from "subagent died" failures."""
     active = task.runtime.execution.active_subagent
     if active is not None:
         if stale_pid and active.pid:
@@ -153,6 +157,7 @@ def recover_stale_runner_state(
     root: Path,
     summary: WorkspaceRepairSummary | None = None,
 ) -> bool:
+    """Top-level entry point for "is the workspace stuck because a previous runner died?" — invoked by the queue, daemon, ``litehive stop``, and CLI repair flows. Returns whether anything was mutated; takes the workspace lock and only acts when no live runner owns the lock."""
     root = root.resolve()
     with workspace_lock(root):
         state = load_workspace_state(root)
@@ -247,6 +252,7 @@ def _has_inactive_running_tasks(
     tasks_by_id: dict[str, TaskRecord],
     timeout_seconds: float,
 ) -> bool:
+    """Decide whether any "running" task has gone silent past the inactivity threshold; lets the recovery scan act on a frozen runner whose lockfile pid is still alive but whose event stream has stopped."""
     for task in tasks_by_id.values():
         if task.runtime.pipeline.execution_status != "running":
             continue
@@ -265,6 +271,7 @@ def _has_inactive_running_tasks(
 
 
 def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeSubagentState) -> str:
+    """Pick the best available transcript snippet to attach to the interrupted-subagent record — preferring a saved report summary, then a freshly summarised execution trace, falling back to a fixed string so the journal entry is never empty."""
     report = load_subagent_report(root, task.id, active.id)
     if report:
         summary = str(report.get("summary") or "").strip()
@@ -283,6 +290,7 @@ def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeS
 
 
 def _interrupted_subagent_reason(task: TaskRecord, reason: str) -> str:
+    """Preserve a previously-recorded interruption reason on re-interruption of the same subagent so a second repair pass doesn't overwrite the original cause with a generic "stale runner" label."""
     active = task.runtime.execution.active_subagent
     interruption = task.runtime.execution.interruption
     if interruption is None:
@@ -304,6 +312,7 @@ def _write_interrupted_subagent_artifacts(
     subagent: RuntimeSubagentState,
     resume_stage: str,
 ) -> None:
+    """Persist the interrupted subagent's session+report files in-place so disk artifacts and the in-memory task record agree; the resume flow reads these to decide whether to continue or re-run the subagent."""
     now = utcnow()
     session_payload = load_subagent_session(root, task.id, subagent.id)
     report_payload = load_subagent_report(root, task.id, subagent.id)
@@ -365,6 +374,7 @@ def _set_interruption_metadata(
     stage_started_at: str | None,
     interrupted_at: str | None,
 ) -> None:
+    """One-shot mutation that wires together the interruption record, the apply-outcome bookkeeping, and the current-stage snapshot; centralised here so the three layers (task outcome, interruption state, current stage) stay consistent in time."""
     interrupted_subagent = mark_interrupted_subagent(root, task, reason=reason, stage=stage)
     apply_task_outcome(
         task,
@@ -404,6 +414,7 @@ def _can_attempt_stale_runner_recovery(
     tasks_by_id: dict[str, TaskRecord],
     running_task_ids: list[str],
 ) -> bool:
+    """Gate that prevents the stale-runner repair from racing a live runner; we only intervene when the lock is unowned, the lock pid is dead, or the inactivity timeout proves the live runner is frozen."""
     if len(running_task_ids) > 1:
         return False
     if not current_thread_owns_runner_guard(root) and runner_lock_is_held(root):
@@ -424,6 +435,7 @@ def _record_stale_recovery(
     summary: WorkspaceRepairSummary | None,
     stale_pid: bool,
 ) -> None:
+    """Emit the operator-facing recovery report and update the workspace repair summary so a single repair pass is reflected both in the per-task report and in the aggregate "what did repair do?" view shown by the CLI."""
     record_recovery_report(
         root,
         task,
@@ -451,6 +463,7 @@ def _recover_stale_running_task(
     task: TaskRecord,
     summary: WorkspaceRepairSummary | None,
 ) -> tuple[bool, str | None, bool]:
+    """Run the per-task repair on one task that's still flagged ``running``: re-canonicalise it onto its resumable stage, emit the recovery report, and return ``(mutated, journal_message, prioritize)`` so the caller can update the queue order."""
     # inline: tasks.queue top-level-imports execution_recovery (would cycle).
     from litehive.tasks.queue import (  # noqa: PLC0415
         canonicalize_resumable_queue_task,
@@ -491,6 +504,7 @@ def _can_skip_recovery_scan(
     runner_lock_held: bool,
     has_repair_candidates: bool,
 ) -> bool:
+    """Cheap fast-path that bypasses the full repair scan when the workspace is already quiet; protects the hot start-of-runner path from doing expensive SQL work on every launch."""
     del root
     return (
         not running_task_ids
@@ -508,6 +522,7 @@ def _recover_running_tasks(
     running_task_ids: list[str],
     summary: WorkspaceRepairSummary | None,
 ) -> dict[str, object]:
+    """Driver loop over every task whose runtime row says ``running``; skips tasks that are not the workspace's active task unless the runner lock metadata is missing (in which case the row is by definition stale)."""
     mutated = False
     transitioned: list[TaskRecord] = []
     journal_messages: dict[str, str] = {}
@@ -543,6 +558,7 @@ def _normalize_nonrunning_resumable_tasks(
     tasks_by_id: dict[str, TaskRecord],
     summary: WorkspaceRepairSummary | None,
 ) -> dict[str, object]:
+    """Second pass that catches tasks left in a wedged shape after a crash — queued/in-progress with stale stage status — and re-canonicalises them so a normal dequeue can pick them up. Preserves the original queue position when one existed; otherwise inserts at the front so previously-active work resumes first."""
     # inline: tasks.queue top-level-imports execution_recovery (would cycle).
     from litehive.tasks.queue import (  # noqa: PLC0415
         canonicalize_resumable_queue_task,
@@ -622,6 +638,7 @@ def _normalize_nonrunning_resumable_tasks(
 
 
 def _has_nonrunning_resumable_repair_candidates(root: Path) -> bool:
+    """SQLite-side existence probe used by the fast-path skip check; encodes the same "is this task wedged at a resumable stage?" predicate as :func:`_normalize_nonrunning_resumable_tasks` so we don't load every task into Python just to learn there's nothing to repair."""
     with connect_workspace_db(root) as connection:
         try:
             row = connection.execute(
@@ -682,6 +699,7 @@ def _update_active_task_after_recovery(
     running_task_ids: list[str],
     summary: WorkspaceRepairSummary | None,
 ) -> bool:
+    """Reconcile ``state.active_task_id`` and the queue ordering with the just-repaired tasks; clears ``active_task_id`` when the previously-active task is gone or has been requeued, so the next runner doesn't latch onto a task it can no longer run."""
     mutated = False
     if prioritized_ids:
         state.queue = [task_id for task_id in state.queue if task_id not in running_task_ids]

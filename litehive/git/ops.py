@@ -44,16 +44,19 @@ def _run_git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 def is_git_repo(root: Path) -> bool:
+    """Cheap probe used at every git-touching entry point to short-circuit when the workspace isn't a checkout yet."""
     proc = _run_git(root, "rev-parse", "--is-inside-work-tree")
     return proc.returncode == 0 and proc.stdout.strip() == "true"
 
 
 def has_changes(root: Path) -> bool:
+    """Quick "is the worktree dirty at all?" check used by the rebase helper before stashing."""
     proc = _run_git(root, "status", "--porcelain")
     return proc.returncode == 0 and bool(proc.stdout.strip())
 
 
 def status_porcelain(root: Path) -> list[str]:
+    """Full porcelain listing including all untracked files; raises so callers see the workspace truthfully rather than a silent empty list."""
     proc = _run_git(root, "status", "--porcelain", "--untracked-files=all")
     if proc.returncode != 0:
         raise GitError(proc.stderr.strip() or "git status failed")
@@ -61,6 +64,7 @@ def status_porcelain(root: Path) -> list[str]:
 
 
 def has_non_litehive_changes(root: Path) -> bool:
+    """Tells the runner/rollback path whether the user has unrelated edits in the worktree that we must not steamroll, ignoring our own ``.litehive/`` metadata churn."""
     for line in status_porcelain(root):
         if len(line) > 3:
             path = line[3:]
@@ -72,6 +76,7 @@ def has_non_litehive_changes(root: Path) -> bool:
 
 
 def current_head(root: Path) -> str | None:
+    """Soft HEAD lookup that returns ``None`` for an unborn repo; the strict counterpart :func:`head_sha_strict` raises instead."""
     proc = _run_git(root, "rev-parse", "--verify", "HEAD")
     if proc.returncode != 0:
         return None
@@ -360,12 +365,14 @@ def path_differs_at_ref(cwd: Path, ref: str, path: str) -> bool:
 
 
 def add_worktree(root: Path, path: Path, ref: str = "HEAD") -> None:
+    """Create a detached-HEAD worktree at ``path`` for the worktree pool used by the runner; ``--detach`` is deliberate so the parent branch isn't moved when the runner experiments."""
     proc = _run_git(root, "worktree", "add", "--detach", str(path), ref)
     if proc.returncode != 0:
         raise GitError(proc.stderr.strip() or "git worktree add failed")
 
 
 def move_worktree(root: Path, source: Path, destination: Path) -> None:
+    """Relocate a worktree directory atomically via git so the worktree registry stays consistent with the new path."""
     proc = _run_git(root, "worktree", "move", str(source), str(destination))
     if proc.returncode != 0:
         raise GitError(proc.stderr.strip() or "git worktree move failed")
@@ -417,6 +424,7 @@ def list_worktrees_porcelain(root: Path) -> str:
 
 
 def merge_commit(root: Path, commit_sha: str) -> str:
+    """Fast-forward main onto ``commit_sha``; ``--ff-only`` enforces the invariant that worktree commits always replay linearly onto main."""
     proc = _run_git(root, "merge", "--ff-only", commit_sha)
     if proc.returncode != 0:
         raise GitError(proc.stderr.strip() or "git merge --ff-only failed")
@@ -608,6 +616,7 @@ def unmerged_files(cwd: Path) -> list[str]:
 
 
 def is_ancestor(root: Path, ancestor_sha: str, descendant_sha: str) -> bool:
+    """Used by the daemon's origin-divergence check to classify local vs origin/main as fast-forward, behind, or genuinely diverged."""
     proc = _run_git(root, "merge-base", "--is-ancestor", ancestor_sha, descendant_sha)
     if proc.returncode == 0:
         return True
@@ -617,6 +626,7 @@ def is_ancestor(root: Path, ancestor_sha: str, descendant_sha: str) -> bool:
 
 
 def remove_worktree(root: Path, path: Path, force: bool = False) -> None:
+    """Drop a managed worktree from the registry; the worktree-cleanup flow passes ``force=True`` because the directory may already be partially gone."""
     args = ["worktree", "remove"]
     if force:
         args.append("--force")
@@ -657,6 +667,7 @@ def rebase_worktree_onto(worktree: Path, target_ref: str) -> bool:
 
 
 def cherry_pick_commit(root: Path, commit_sha: str) -> str:
+    """Atomic cherry-pick: on conflict it auto-aborts so the workspace doesn't stay mid-pick, then re-raises so the caller treats the apply as failed."""
     proc = _run_git(root, "cherry-pick", commit_sha)
     if proc.returncode != 0:
         abort = _run_git(root, "cherry-pick", "--abort")
@@ -673,6 +684,7 @@ def cherry_pick_commit(root: Path, commit_sha: str) -> str:
 
 
 def default_commit_message(task_id: str, slug: str) -> str:
+    """Stable subject string used to seed ``TaskRecord.git.commit_message`` so the rest of the system can detect "still on the generated message" via equality compare."""
     return DEFAULT_CHECKPOINT_SUBJECT_TEMPLATE.format(task_id=task_id, slug=slug)
 
 
@@ -734,10 +746,12 @@ def checkpoint_message(task: TaskRecord, attempt: int | None = None) -> str:
 
 
 def rollback_message(task: TaskRecord, attempt: int) -> str:
+    """Deterministic subject for rollback commits so :func:`find_commit_by_subject` can locate the right one when a task is rolled back twice."""
     return ROLLBACK_SUBJECT_TEMPLATE.format(task_id=task.id, slug=task.slug, attempt=attempt)
 
 
 def find_commit_by_subject(root: Path, subject: str) -> str | None:
+    """Locate a commit by exact subject match — the rollback path uses this to find the checkpoint commit it needs to revert without trusting in-memory state to still hold the sha."""
     proc = _run_git(root, "log", "--format=%H%x00%s")
     if proc.returncode != 0:
         raise GitError(proc.stderr.strip() or "git log failed")
@@ -750,6 +764,7 @@ def find_commit_by_subject(root: Path, subject: str) -> str | None:
 
 
 def commit_task(root: Path, message: str, paths: list[str] | None = None) -> CommitCheckpoint | None:
+    """Stage-and-commit helper for a task checkpoint: returns ``None`` (not an error) when there's nothing to commit so callers don't need to pre-check; ``paths`` scopes the add when only specific paths should land."""
     if not is_git_repo(root):
         return None
 
@@ -780,6 +795,7 @@ def commit_task(root: Path, message: str, paths: list[str] | None = None) -> Com
 
 
 def rollback_task(root: Path, task: TaskRecord) -> RollbackCheckpoint:
+    """Stage a ``git revert --no-commit`` of the task's last checkpoint; refuses to run if the worktree has user edits because reverting on top of dirty paths would entangle them with the rollback diff."""
     if has_non_litehive_changes(root):
         raise GitError("Workspace has uncommitted changes; rollback requires a clean worktree")
     if task.git.checkpoint_attempts < 1:
@@ -806,6 +822,7 @@ def rollback_task(root: Path, task: TaskRecord) -> RollbackCheckpoint:
 
 
 def abort_revert(root: Path) -> None:
+    """Cancel an in-progress revert and clear out untracked-file conflicts that would otherwise leave the workspace stuck in MERGING; loops because removing one conflict path can expose the next one git complains about."""
     proc = _run_git(root, "revert", "--abort")
     if proc.returncode == 0:
         return

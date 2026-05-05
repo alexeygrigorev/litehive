@@ -148,6 +148,7 @@ def _load_task_activity_history(workspace_root: Path, task_record: TaskRecord) -
 
 
 def _header_section(prompt: dict[str, Any], task_record: TaskRecord | None) -> str:
+    """Identify the task and pipeline coordinates so the agent knows which run it is on."""
     lines = [
         f"Task: {prompt['task_id']}" + (f" — {task_record.title}" if task_record is not None else ""),
         f"Stage: {prompt['stage']}",
@@ -161,6 +162,7 @@ def _header_section(prompt: dict[str, Any], task_record: TaskRecord | None) -> s
 
 
 def _instructions_section(prompt: dict[str, Any]) -> str:
+    """Render the role/profile/attempt instruction layers the prompt builder selected for this stage."""
     layers = prompt.get("instruction_layers") or []
     if not layers:
         return ""
@@ -175,12 +177,14 @@ def _instructions_section(prompt: dict[str, Any]) -> str:
 
 
 def _goal_section(task_record: TaskRecord | None) -> str:
+    """State the task goal; falls back to the title when no goal is defined so the section is never empty."""
     if task_record is None:
         return "Goal:\n(task record not loaded)"
     return f"Goal:\n{task_record.goal or task_record.title}"
 
 
 def _acceptance_criteria_section(task_record: TaskRecord | None) -> str:
+    """Render the acceptance bullets the accepting stage will check this work against."""
     if task_record is None or not task_record.acceptance_criteria:
         return "Acceptance criteria:\n- (none defined)"
     bullets = "\n".join(f"- {c}" for c in task_record.acceptance_criteria)
@@ -188,6 +192,7 @@ def _acceptance_criteria_section(task_record: TaskRecord | None) -> str:
 
 
 def _plan_section(task_record: TaskRecord | None) -> str:
+    """Render the plan steps grooming committed to so later stages execute against the same plan."""
     if task_record is None or not task_record.plan:
         return "Plan:\n- (no plan)"
     bullets = "\n".join(f"- {step}" for step in task_record.plan)
@@ -195,6 +200,7 @@ def _plan_section(task_record: TaskRecord | None) -> str:
 
 
 def _constraints_section(task_record: TaskRecord | None) -> str:
+    """Render task-level constraints; supplies a default scope reminder when none are recorded."""
     if task_record is None or not task_record.constraints:
         return "Constraints:\n- Keep changes scoped to the task."
     bullets = "\n".join(f"- {c}" for c in task_record.constraints)
@@ -202,6 +208,7 @@ def _constraints_section(task_record: TaskRecord | None) -> str:
 
 
 def _last_rejection_section(rejection: dict[str, Any]) -> str:
+    """Surface the prior reject verdict as first-class context so the retry agent answers it directly."""
     lines = [
         "Last rejection (context from the previous attempt at this stage):",
         f"- Source: {rejection.get('source')}",
@@ -215,6 +222,10 @@ def _last_rejection_section(rejection: dict[str, Any]) -> str:
 
 
 def _prior_work_section(last_report: dict[str, Any], last_rejection: dict[str, Any] | None = None) -> str:
+    """Summarize what the previous retry actually changed so the next attempt builds on it instead of redoing it.
+
+    Test results that quote the rejection reason are dropped to avoid echoing the reject section.
+    """
     changed_files = _string_list(last_report.get("changed_files"))
     test_results = _string_list(last_report.get("test_results"))
     rejection_reason = str((last_rejection or {}).get("reason") or "").strip()
@@ -238,6 +249,7 @@ def _prior_work_section(last_report: dict[str, Any], last_rejection: dict[str, A
 
 
 def _recovery_trigger_section(recovery_trigger: dict[str, Any], prompt: dict[str, Any]) -> str:
+    """Tell the recovery agent which failure shape kicked the task out of the normal pipeline."""
     lines = ["Recovery trigger (what sent the task into recovery):"]
     for key, value in recovery_trigger.items():
         lines.append(f"- {key}: {value}")
@@ -248,6 +260,11 @@ def _recovery_trigger_section(recovery_trigger: dict[str, Any], prompt: dict[str
 
 
 def _recovery_execution_root_section(prompt: dict[str, Any]) -> str:
+    """Point the recovery agent at the Litehive source checkout to patch, not the task worktree.
+
+    Recovery exists to fix Litehive infrastructure bugs; without this redirect the agent edits
+    the wrong tree.
+    """
     lines = ["Recovery execution repo (this recovery turn should patch Litehive here):"]
     lines.append(f"- recovery_execution_root: {prompt.get('recovery_execution_root')}")
     source_path = str(prompt.get("litehive_source_path") or "").strip()
@@ -267,6 +284,7 @@ def _recovery_execution_root_section(prompt: dict[str, Any]) -> str:
 
 
 def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
+    """Hand the recovery agent persisted evidence of the failed subagent run instead of asking it to dig."""
     lines = [
         "Failed subagent evidence (DB-backed recovery state):",
         f"- subagent_id: {diagnostics.get('subagent_id') or '-'}",
@@ -304,6 +322,7 @@ def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
 
 
 def _compact_failure_signal(*texts: str) -> str:
+    """Pick the first failure-flavored line from stdout/stderr/transcript so diagnostics stay one-liner sized."""
     keywords = ("litehive agent report", "traceback", "error", "failed", "exception")
     for text in texts:
         for line in text.splitlines():
@@ -314,6 +333,7 @@ def _compact_failure_signal(*texts: str) -> str:
 
 
 def _single_line(value: str, limit: int) -> str:
+    """Collapse whitespace and truncate so multi-line evidence fits one prompt bullet."""
     text = " ".join(value.split())
     if len(text) <= limit:
         return text
@@ -321,6 +341,7 @@ def _single_line(value: str, limit: int) -> str:
 
 
 def _recovery_history_section(recovery_history: list[dict[str, Any]]) -> str:
+    """Show the recovery agent prior recoveries on this task so it can spot loops instead of re-trying the same fix."""
     lines = ["Recovery history (persisted prior recovery attempts for this task):"]
     recent = recovery_history[-5:]
     if len(recovery_history) > len(recent):
@@ -344,6 +365,7 @@ def _recovery_history_section(recovery_history: list[dict[str, Any]]) -> str:
 
 
 def _failed_run_history_section(failed_run_history: list[dict[str, Any]]) -> str:
+    """Carry forward stage-failure shape counts that persist across requeue/reset, so retry budgets are visible to the agent."""
     lines = ["Failed-run history (survives requeue/reset for this task):"]
     recent = failed_run_history[-5:]
     if len(failed_run_history) > len(recent):
@@ -370,6 +392,7 @@ def _failed_run_history_section(failed_run_history: list[dict[str, Any]]) -> str
 
 
 def _repeated_recovery_fingerprint_section(repeated_recovery_fingerprint: dict[str, Any]) -> str:
+    """Force the recovery agent to escalate (file a bug, reject) when the same failure fingerprint recurs."""
     lines = [
         "Repeated recovery fingerprint detected:",
         f"- count_including_current: {repeated_recovery_fingerprint.get('count')}",
@@ -383,7 +406,7 @@ def _repeated_recovery_fingerprint_section(repeated_recovery_fingerprint: dict[s
 
 
 def _scope_analysis_section(scope_analysis: dict[str, Any]) -> str:
-    """Build scope analysis section for recovery agent prompts."""
+    """Tell the recovery agent whether deleted files look like scope creep or legitimate operator cleanup."""
     lines = ["Scope analysis (operator cleanup vs SWE scope creep):"]
 
     is_operator_cleanup = scope_analysis.get("is_operator_cleanup", False)
@@ -414,6 +437,7 @@ def _scope_analysis_section(scope_analysis: dict[str, Any]) -> str:
 
 
 def _test_failure_attribution_section(attribution: dict[str, Any]) -> str:
+    """Tell the recovery agent whether failing tests touch this task's surface or look pre-existing, so it doesn't blame the SWE for unrelated breakage."""
     classification = str(attribution.get("classification") or "unknown").replace("_", " ").upper()
     lines = ["Test failure attribution (current recovery trigger):", f"- Classification: {classification}"]
     reasoning = str(attribution.get("reasoning") or "").strip()
@@ -432,6 +456,7 @@ def _test_failure_attribution_section(attribution: dict[str, Any]) -> str:
 
 
 def _merge_conflict_section(conflict_files: list[str], merge_attempt: int | None) -> str:
+    """List the files the merge stage couldn't auto-resolve so the next agent fixes the conflicts before re-merging."""
     bullets = "\n".join(f"- {f}" for f in conflict_files)
     if merge_attempt is not None:
         extra = f"\nMerge attempt: {merge_attempt}"
@@ -441,6 +466,7 @@ def _merge_conflict_section(conflict_files: list[str], merge_attempt: int | None
 
 
 def _nudge_section(prompt: dict[str, Any]) -> str:
+    """Re-prompt the agent to actually submit a verdict when its prior turn ended without one."""
     message = str(prompt.get("nudge_message") or "").strip()
     lines = [
         "IMPORTANT: this is a nudge because your prior turn ended without a verdict submission.",
@@ -458,7 +484,10 @@ _TRUNCATION_MARKER = "…(truncated)"
 
 
 def _cap_message(entry: dict[str, Any]) -> dict[str, Any]:
-    """Return a shallow copy with message capped to _MESSAGE_CAP chars total."""
+    """Cap an activity entry's message so one verbose verdict can't blow up the prompt size.
+
+    Returns a shallow copy with the message truncated; callers keep the original entry intact.
+    """
     msg = entry.get("message", "")
     if len(msg) <= _MESSAGE_CAP:
         return entry
@@ -467,6 +496,7 @@ def _cap_message(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def _string_list(value: Any) -> list[str]:
+    """Coerce report payload values into a deduplicated string list; tolerates the loose typing of subagent JSON."""
     if not isinstance(value, list):
         return []
     normalized: list[str] = []
@@ -481,6 +511,7 @@ def _string_list(value: Any) -> list[str]:
 
 
 def _compact_list(items: list[str], limit: int, separator: str = ", ") -> str:
+    """Render a long list as `a, b, c, +N more` so prior-work bullets stay one prompt line."""
     if len(items) <= limit:
         return separator.join(items)
     shown = separator.join(items[:limit])
@@ -490,6 +521,11 @@ def _compact_list(items: list[str], limit: int, separator: str = ", ") -> str:
 
 
 def _entry_sources(entry: dict[str, Any]) -> set[str]:
+    """Expand an activity entry's role into the set of source labels last_rejection might use to point at it.
+
+    The activity log records role (`grooming`, `hook`, `recovery`, ...) while last_rejection records
+    a `source` field that may be either the role or the generic `agent`/`hook`. This bridges the two.
+    """
     sources: set[str] = set()
     explicit_source = str(entry.get("source") or "").strip()
     if explicit_source:
@@ -506,6 +542,7 @@ def _entry_sources(entry: dict[str, Any]) -> set[str]:
 
 
 def _matches_last_rejection(entry: dict[str, Any], last_rejection: dict[str, Any]) -> bool:
+    """Detect activity entries that already get rendered in the dedicated last-rejection section, so we don't double-render them."""
     if entry.get("verdict") != "reject":
         return False
 
@@ -627,6 +664,7 @@ def _activity_section(
     current_stage: str | None = None,
     last_rejection: dict[str, Any] | None = None,
 ) -> str:
+    """Render the trimmed cross-stage activity log so the current agent sees what earlier stages decided."""
     trimmed = _trim_activity_for_prompt(activity, current_stage, last_rejection)
     if not trimmed:
         return ""
@@ -646,6 +684,7 @@ def _activity_section(
 
 
 def _runner_hooks_section(stage: str | None, hooks: list[dict[str, Any]]) -> str:
+    """Warn the agent which post-stage hooks will gate the verdict, so it runs them locally before submitting."""
     stage_label = _human_stage_label(stage)
     lines = [f"After {stage_label}, these checks will run:"]
     for hook in hooks:
@@ -660,6 +699,10 @@ def _runner_hooks_section(stage: str | None, hooks: list[dict[str, Any]]) -> str
 
 
 def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
+    """Always-final section that tells the agent the exact CLI invocation and verdict vocabulary for its role.
+
+    The role determines the allowed verdict set; recovery has a wider menu than the regular pipeline roles.
+    """
     if prompt.get("role") == "recovery":
         verdicts = "<resume|advance|done|budget_hit|reject>"
     else:
@@ -679,6 +722,7 @@ def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
 
 
 def _label_to_heading(label: str) -> str:
+    """Map prompt-builder layer keys (`role`, `attempt:fresh`, `swe:md`, ...) to human headings the agent reads."""
     mapping = {
         "role": "Role guidance",
         "attempt:fresh": "Fresh attempt guidance",
@@ -697,6 +741,7 @@ def _label_to_heading(label: str) -> str:
 
 
 def _human_stage_label(stage: str | None) -> str:
+    """De-snake stage names for the runner-hooks heading; stays generic if no stage is set."""
     if not stage:
         return "this stage"
     return stage.replace("_", " ")

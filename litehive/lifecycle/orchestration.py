@@ -155,6 +155,12 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
 
 
 def _entry_stage_for_task(task_record: TaskRecord) -> PipelineState | None:
+    """Pick the pipeline stage a resumed task should re-enter on, or ``None`` if there's nothing to resume.
+
+    Terminal/queue statuses (backlog, done, flagged) deliberately collapse to
+    ``None`` so the caller starts a fresh pipeline rather than re-running a
+    stage on a task that has already left the pipeline.
+    """
     stage = (
         task_record.runtime.pipeline.current_stage.stage
         or (
@@ -172,6 +178,11 @@ def _entry_stage_for_task(task_record: TaskRecord) -> PipelineState | None:
 
 
 def _launch_requires_fresh_pipeline_state(task_record: TaskRecord) -> bool:
+    """Detect a queued resume of a previously-paused task so its sqlite state can be rebuilt before launch.
+
+    Skips tasks already mid-flight (``running``); those keep their existing
+    pipeline state.
+    """
     return _entry_stage_for_task(task_record) is not None and task_record.runtime.pipeline.execution_status != "running"
 
 
@@ -181,6 +192,11 @@ def _stale_launch_state_requires_reset(
     pipeline_mode: PipelineMode,
     entry_stage: PipelineState,
 ) -> bool:
+    """Decide whether a resumed task's persisted ``TaskState`` is incoherent with the launch request and must be reset.
+
+    A row whose mode/entry_stage drifted from the resume request would
+    otherwise re-enter the wrong stage; treat that as stale and rebuild.
+    """
     if not _launch_requires_fresh_pipeline_state(task_record):
         return False
     if state.pipeline_mode != pipeline_mode:
@@ -196,6 +212,7 @@ _MANUAL_REVIEW_FLAG_REASONS = {
 
 
 def _runtime_hook_reject_fingerprint(state: TaskState) -> RuntimeHookRejectFingerprint | None:
+    """Project the lifecycle-side hook-reject fingerprint into the runtime-domain shape stored on TaskRecord."""
     fingerprint = state.last_hook_reject_fingerprint
     if fingerprint is None:
         return None
@@ -208,6 +225,7 @@ def _runtime_hook_reject_fingerprint(state: TaskState) -> RuntimeHookRejectFinge
 
 
 def _runtime_recovery_outcome(outcome) -> RuntimeRecoveryOutcome:
+    """Flatten a lifecycle ``RecoveryOutcome`` (with a nested trigger) into the flat runtime record stored on TaskRecord."""
     trigger = outcome.trigger
     return RuntimeRecoveryOutcome(
         origin_stage=trigger.origin_stage,
@@ -224,6 +242,7 @@ def _runtime_recovery_outcome(outcome) -> RuntimeRecoveryOutcome:
 
 
 def _runtime_recovery_key(outcome: RuntimeRecoveryOutcome) -> tuple[str | None, str, str, str, str | None]:
+    """Build the dedup key used to collapse repeated recovery outcomes when projecting history into the runtime record."""
     return (
         outcome.origin_stage,
         outcome.fingerprint,
@@ -234,6 +253,7 @@ def _runtime_recovery_key(outcome: RuntimeRecoveryOutcome) -> tuple[str | None, 
 
 
 def _runtime_recovery_history_projection(current_state: TaskState) -> list[RuntimeRecoveryOutcome]:
+    """Materialize a deduped recovery history for the TaskRecord so ``litehive status`` shows each outcome once."""
     projected: list[RuntimeRecoveryOutcome] = []
     seen: set[tuple[str | None, str, str, str, str | None]] = set()
     for item in [_runtime_recovery_outcome(outcome) for outcome in current_state.recovery_history]:
@@ -246,6 +266,7 @@ def _runtime_recovery_history_projection(current_state: TaskState) -> list[Runti
 
 
 def _runtime_failed_run_record(record: FailedRunRecord) -> RuntimeFailedRunRecord:
+    """Project a lifecycle ``FailedRunRecord`` to the runtime-domain shape exposed on TaskRecord for status views."""
     return RuntimeFailedRunRecord(
         stage=record.stage,
         failure_shape=record.failure_shape,
@@ -263,10 +284,17 @@ def _runtime_failed_run_record(record: FailedRunRecord) -> RuntimeFailedRunRecor
 
 
 def _runtime_failed_run_history_projection(current_state: TaskState) -> dict[str, RuntimeFailedRunRecord]:
+    """Stringify the failed-run history keys so the runtime record stays JSON-friendly for status snapshots."""
     return {str(key): _runtime_failed_run_record(record) for key, record in current_state.failed_run_history.items()}
 
 
 def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
+    """Mirror the runner's pipeline state onto ``task_record.runtime`` so observability surfaces (status, queue) stay coherent.
+
+    Terminal stages (DONE/FAILED) clear ``current_stage`` and freeze
+    ``execution_status``; non-terminal stages refresh ``started_at`` only on
+    actual stage transitions.
+    """
     now = utcnow()
     task_record.runtime.pipeline.consecutive_same_hook_rejects = state.consecutive_same_hook_rejects
     task_record.runtime.pipeline.last_hook_reject_fingerprint = _runtime_hook_reject_fingerprint(state)
@@ -305,6 +333,7 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
 
 
 def _latest_recovery_trigger(state: TaskState):
+    """Return whichever recovery trigger best describes ``state``: the active one, or the most recent historical one."""
     if state.active_recovery_trigger is not None:
         return state.active_recovery_trigger
     if state.recovery_history:
@@ -313,6 +342,7 @@ def _latest_recovery_trigger(state: TaskState):
 
 
 def _recovery_origin_stage(origin_stage: str | None) -> str | None:
+    """Translate a pipeline-state origin into its task-stage label for operator-facing surfaces, leaving unknown values intact."""
     if origin_stage is None:
         return None
     try:
@@ -325,6 +355,13 @@ def _recovery_origin_stage(origin_stage: str | None) -> str | None:
 
 
 def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | None:
+    """Translate a terminal pipeline outcome into the ``TaskStatus``/``flag_reason`` the queue and CLI rely on.
+
+    Splits FAILED across flag-reason categories (hook-reject loop, semantic
+    reject, time budget, recovery exhaustion, merge failure, crash budget) so
+    operator-facing tools can route follow-up actions correctly. Returns an
+    optional journal note about reconciled commits.
+    """
     journal_message: str | None = None
     commit_result = state.commit_result
     if state.stage == PipelineState.DONE:
@@ -444,6 +481,11 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
 
 
 def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskState) -> None:
+    """When recovery exhausts and escalates to a follow-up task, mirror that escalation onto the original task's last_outcome.
+
+    Only fires for the recovery-exhausted exit path; other failure shapes are
+    handled by ``_sync_terminal_status``.
+    """
     if hasattr(state.failed_reason, "value"):
         failed_reason = state.failed_reason.value
     else:
@@ -482,6 +524,7 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
 
 
 def _clear_terminal_task_from_workspace_state(root: Path, task_id: str) -> None:
+    """Drop a finished task from the active slot and queue so the next runner tick selects a different task."""
     state = load_state(root)
     if state.active_task_id == task_id:
         state.active_task_id = None
@@ -520,6 +563,7 @@ def _resolve_hook_execution_root(root: Path, state: TaskState) -> Path:
 
 
 def _task_recorded_worktree(root: Path, task_id: str) -> tuple[TaskRecord | None, Path | None]:
+    """Look up a task and its on-disk worktree path together so commit/sync nodes can resolve both in one go without a second db hit."""
     task = get_task(root, task_id)
     if task is None:
         return None, None
@@ -589,6 +633,7 @@ def _mark_task_interrupted_on_crash(root: Path, task: TaskRecord, persistence: o
 
 
 def _cleanup_terminal_worktree(root: Path, task: TaskRecord | None) -> None:
+    """Tear down a finished task's worktree, but preserve worktrees for tasks flagged for manual review so an operator can inspect them."""
     if task is None:
         return
     fresh = get_task(root, task.id)
@@ -605,6 +650,12 @@ def reconcile_terminal_commit_sha(
     final_state: TaskState,
     persistence: SqlitePersistence,
 ) -> TaskRecord | None:
+    """Backfill the integration commit SHA on a DONE task when the runner path didn't already record one.
+
+    Falls back to reloading the commit_result from sqlite, then to ``git
+    rev-parse HEAD``, so terminal status views never display a DONE task with
+    an empty commit_sha.
+    """
     if task is None or final_state.stage != PipelineState.DONE:
         return task
     if task.git.commit_sha and task.runtime.pipeline.git.commit_sha:
@@ -897,6 +948,11 @@ def _observe_transition(
     event: object,
     trans: Transition,
 ) -> None:
+    """State-machine transition hook that turns hook outcomes into stage reports and journal/activity entries.
+
+    Only hook events produce reports here; engine events are reported by the
+    nodes themselves. The runner invokes this on every transition.
+    """
     del trans
     task = get_task(root, state.task_id)
     if task is None:
