@@ -36,6 +36,7 @@ ToSpec = PipelineState | str | ToFn | Stage
 
 
 def _entry_phase(stage: str | PipelineState) -> PipelineState:
+    """Translate a logical stage into the phase the runner actually re-enters when resuming — every agent stage has a `before_*` pre-hook phase, but COMMIT has no `before_commit`, so it returns to itself."""
     pipeline_state = canonical_pipeline_state(stage)
     if pipeline_state == PipelineState.COMMIT:
         return PipelineState.COMMIT
@@ -109,6 +110,7 @@ def evaluate(rules: list[Rule], current: str | PipelineState, event: Event, stat
 
 
 def resume_from_origin(state: TaskState, event: Event) -> PipelineState:
+    """Pick the phase the task should re-enter after the recovery agent reports success — used as a `transition_to` callable from the global RULES table when leaving the `recovering` node, since the destination depends on what triggered recovery (event hint, active trigger, or a forced `done`)."""
     if not isinstance(event, RecoverySucceeded):
         raise TypeError(f"resume_from_origin expects RecoverySucceeded, got {type(event).__name__}")
     e = event
@@ -125,6 +127,7 @@ def resume_from_origin(state: TaskState, event: Event) -> PipelineState:
 
 
 def resume_from_pre_exec(state: TaskState, event: Event) -> PipelineState:
+    """Pick where to enter the pipeline after the pre-exec probe self-heals; wired into the RULES table as the `transition_to` for `PreExecRecoverySucceeded` so the runner respects whatever phase the probe asked us to resume at."""
     if not isinstance(event, PreExecRecoverySucceeded):
         raise TypeError(f"resume_from_pre_exec expects PreExecRecoverySucceeded, got {type(event).__name__}")
     e = event
@@ -134,6 +137,7 @@ def resume_from_pre_exec(state: TaskState, event: Event) -> PipelineState:
 
 
 def entry_from_worktree_sync(state: TaskState, event: Event) -> PipelineState:
+    """Pick the first agent phase a freshly-synced worktree should enter — honours an explicit `entry_stage` saved on the task and otherwise falls back to the pipeline-mode default; used as the `transition_to` after the worktree-sync node passes."""
     del event
     if state.entry_stage in STAGES:
         return _entry_phase(state.entry_stage)

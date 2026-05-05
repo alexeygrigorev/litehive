@@ -41,6 +41,12 @@ def save_subagent_artifacts(
     report: dict[str, Any] | object = _UNSET,
     event_stream: dict[str, Any] | None | object = _UNSET,
 ) -> None:
+    """Merge-write the per-subagent payload row, leaving unspecified fields untouched.
+
+    The ``_UNSET`` sentinel lets the SubagentManager's session helpers update
+    one slice of the artifact bundle (e.g. metadata-only) without clobbering
+    the others. ``event_stream=None`` is the explicit "remove the key" signal.
+    """
     payload, created_at = _load_subagent_payload(root, task_id, subagent_id)
     if session is not _UNSET:
         payload["session"] = session

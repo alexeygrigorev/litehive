@@ -92,6 +92,7 @@ class ConfigBackedEngineSelector:
         node_name: PipelineState,
         excluded: frozenset[str],
     ) -> Engine | None:
+        """Implement the `EngineSelector` protocol — invoked by every AgentNode before each turn to obtain the next engine instance, honouring CLI overrides, freezes, quota, and the AgentNode's `excluded` set of engines that have already crashed this run."""
         task = self._selection_task(state, node_name)
         if task is None:
             return None

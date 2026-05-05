@@ -92,6 +92,7 @@ def add(
         str | None, typer.Option(click_type=choice(VALID_TASK_PRIORITIES), help="Task priority")
     ] = None,
 ) -> int:
+    """Operator entry point for queueing new work; warns when acceptance criteria are missing so the planner is not handed an underspecified goal."""
     ensure_workspace(workspace)
     try:
         depends_on = parse_dependency_ids(depends_on)
@@ -125,7 +126,7 @@ def evidence(
     task_id: Annotated[str, typer.Argument(help="Task ID (e.g. T-0001)")],
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-
+    """Operator triage view that surfaces only the routing/recovery signal needed to decide what to do with a stuck task."""
     ensure_workspace(workspace)
     try:
         task = require_task(workspace, task_id)
@@ -142,7 +143,7 @@ def debug(
     all_: Annotated[bool, typer.Option("--all", help="List all subagents")] = False,
     worktree: Annotated[bool, typer.Option(help="Show worktree details")] = False,
 ) -> int:
-
+    """Compatibility alias kept so muscle-memory `task debug` invocations still resolve; routes to evidence/worktree/all-subagents views depending on flags."""
     ensure_workspace(workspace)
     try:
         task = require_task(workspace, task_id)
@@ -165,7 +166,7 @@ def logs(
     all_: Annotated[bool, typer.Option("--all", help="List all subagent runs")] = False,
     follow: Annotated[bool, typer.Option(help="Follow live stdout")] = False,
 ) -> int:
-
+    """Single operator-facing entry point that dispatches across daemon sessions, the task journal, subagent evidence, or live stdout follow so the operator does not need to remember per-artifact paths."""
     ensure_workspace(workspace)
     if follow:
         return follow_active_subagent(workspace, task_id=task_id)
@@ -189,6 +190,7 @@ def list_tasks_command(
     workspace: WorkspaceOption = Path.cwd(),
     show_all: Annotated[bool, typer.Option("--all", help="Include done tasks")] = False,
 ) -> int:
+    """Operator queue overview that hides DONE tasks by default so the live work surface stays scannable."""
     ensure_workspace(workspace)
     tasks = list_tasks(workspace, strict=False)
     filtered = []
@@ -211,6 +213,7 @@ def list_tasks_command(
 
 @app.command("show", help="Print full details for a single task")
 def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: WorkspaceOption = Path.cwd()) -> int:
+    """Full single-task dump for operators who need every field (criteria, plan, runtime stage, last outcome) on one screen before deciding to retry, abandon, or edit."""
     ensure_workspace(workspace)
     task = get_task(workspace, task_id)
     if task is None:
@@ -260,6 +263,7 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
 
 @app.command("abandon", help="Cancel a flagged or closed task and remove it from the queue")
 def abandon(task_id: Annotated[str, typer.Argument(help="Task id")], workspace: WorkspaceOption = Path.cwd()) -> int:
+    """Operator escape hatch for tasks the pipeline cannot finish; intentionally distinct from `close` because abandoned work yields no follow-up reasoning."""
     ensure_workspace(workspace)
     try:
         task = abandon_task(workspace, task_id)
@@ -283,7 +287,7 @@ def close(
     reason: Annotated[str | None, typer.Option(help="Optional rationale")] = None,
     follow_up_task: Annotated[str | None, typer.Option(help="Optional follow-up task id")] = None,
 ) -> int:
-
+    """Closes a task with an explicit outcome; reused by planner/reviewer subagents (via env-detected role) so the same surface serves operators and in-pipeline agents under different audit attribution."""
     agent_role = current_agent_role()
     close_kwargs: dict[str, str] = {}
     mutation_workspace = workspace
@@ -329,7 +333,7 @@ def update(
     constraints: Annotated[list[str] | None, typer.Option("--constraint", help="Replace task constraints")] = None,
     plan: Annotated[list[str] | None, typer.Option("--plan-step", help="Replace task plan steps")] = None,
 ) -> int:
-
+    """Edits task fields after creation; shared with planner/reviewer subagents so they can shape the active task while still routing every mutation through the workspace audit log."""
     agent_role = current_agent_role()
     update_kwargs: dict[str, object] = {}
     mutation_workspace = workspace

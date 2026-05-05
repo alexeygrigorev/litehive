@@ -47,6 +47,7 @@ agent_app = typer.Typer(
 
 
 def _current_role() -> str | None:
+    """Read the orchestrator-injected role marker so commands can tell whether they are running inside a subagent shell vs an operator shell."""
     return os.environ.get("LITEHIVE_AGENT_ROLE")
 
 
@@ -58,6 +59,7 @@ def _current_subagent_id() -> str | None:
 
 
 def current_agent_role() -> str | None:
+    """Public read-only accessor for the active agent role; used by operator commands (e.g. task close/update) to decide whether to attribute mutations to the agent or the operator."""
     return _current_role()
 
 
@@ -69,6 +71,7 @@ def _current_stage() -> str | None:
 
 
 def _resolve_report_stage(explicit_stage: str | None, task, pipeline_stage: str | None) -> str:
+    """Pick the stage label attached to a verdict via the precedence CLI flag > LITEHIVE_STAGE env > pipeline persistence > task runtime > task pipeline_status, so a stale env var never overrides an explicit operator/orchestrator override."""
     if explicit_stage:
         return explicit_stage
     env_stage = _current_stage()
@@ -83,6 +86,7 @@ def _resolve_report_stage(explicit_stage: str | None, task, pipeline_stage: str 
 
 
 def _allowed_verdicts_for_role(role: str) -> set[str]:
+    """Source of the per-role verdict gate enforced by `agent report`; the conservative default of {pass, reject} matches the four standard pipeline roles and only recovery widens the set."""
     return VERDICT_ALLOWLIST.get(role, {"pass", "reject"})
 
 
@@ -93,6 +97,7 @@ class AgentReportIdentity:
 
 
 def _resolve_report_identity(root: Path, task) -> AgentReportIdentity:
+    """Resolve the role from the orchestrator-recorded subagent session rather than trusting LITEHIVE_AGENT_ROLE alone, so a subagent cannot escalate its role by editing its own env."""
     subagent_id = _current_subagent_id()
     if subagent_id is None:
         print("report failed: LITEHIVE_SUBAGENT_ID not set")
@@ -130,6 +135,7 @@ def block_if_agent() -> None:
 
 
 def _agent_unauthorized_message() -> str:
+    """Single source of truth for the operator-only refusal text so every guarded surface refuses subagents with the same wording."""
     return (
         "You are not authorized to perform this command. "
         "PM agents may shape only the active task via "
@@ -159,6 +165,7 @@ def agent_report_command(
         typer.Option("--follow-up-task", help="Optional follow-up task id", hidden=True),
     ] = None,
 ) -> None:
+    """Sole channel by which a pipeline subagent submits its stage verdict; verdict allow-list and identity are resolved from the orchestrator-created session, not the CLI flags, so a misbehaving agent cannot invent verdicts outside its role."""
     if message == "-":
         message = sys.stdin.read()
     elif message_file is not None:
@@ -261,6 +268,7 @@ def _require_role(allowed: set[str]) -> str:
 
 
 def require_agent_role(allowed: set[str]) -> str:
+    """Public re-export of the role gate so callers outside this module can authorize agent-restricted entry points; currently no external callers (candidate for removal)."""
     return _require_role(allowed)
 
 
@@ -320,6 +328,7 @@ def agent_update_command(
     constraints: Annotated[list[str] | None, typer.Option("--constraint")] = None,
     priority: Annotated[str | None, typer.Option("--priority")] = None,
 ) -> None:
+    """Restricted shape-the-task surface for planner/reviewer subagents; mutations are forced through the active-task gate so an agent cannot quietly rewrite an unrelated queued task."""
     target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
 
     sentinel = ...
@@ -347,6 +356,7 @@ def agent_close_command(
     ] = "duplicate",
     reason: Annotated[str, typer.Option("--reason")] = "",
 ) -> None:
+    """Lets a planner/reviewer subagent close the active task in flight (e.g. duplicate detection) without exiting through the operator close path."""
     target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
 
     task = close_task(

@@ -20,6 +20,7 @@ _TERMINAL_REPAIR_STAGES = frozenset({TaskStage.ACCEPTING, TaskStage.COMMIT_TO_GI
 
 
 def repair_workspace_state(root: Path) -> WorkspaceRepairSummary:
+    """Reconcile workspace runtime state after a daemon crash or a forgotten terminal task; called by the daemon startup path and the `litehive repair` CLI."""
     summary = WorkspaceRepairSummary()
     summary.stale_runner_recovered = recover_stale_runner_state(root, summary=summary)
     summary.mutated = summary.stale_runner_recovered

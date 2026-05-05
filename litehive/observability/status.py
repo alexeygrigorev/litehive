@@ -57,6 +57,13 @@ def collect_task_pipeline_status(
     read_only: bool = False,
     diagnostics: bool = False,
 ) -> TaskPipelineStatusData:
+    """Bundle the workspace snapshot the CLI status commands and daemon health line need in one read.
+
+    Called by the CLI status entry points and by the daemon when emitting periodic health
+    summaries. ``read_only=True`` opens SQLite in URI read-only mode so concurrent runners
+    cannot be blocked by a status read; ``diagnostics=True`` widens the snapshot to include
+    issue collection that the operational fast-path skips.
+    """
     resolved_root = root.resolve()
     if diagnostics:
         snapshot = collect_status_snapshot(resolved_root)
@@ -98,6 +105,14 @@ def render_task_pipeline_status_lines(
     mode: StatusRenderMode,
     retry_on_label: str | None = None,
 ) -> list[str]:
+    """Format a collected pipeline snapshot into the flat key/value lines the CLI prints.
+
+    Called by the ``litehive status`` CLI handler and by the daemon's periodic status writer;
+    the ``mode`` switch keeps both surfaces sharing one renderer instead of two parallel
+    formatters. ``retry_on_label`` is required in ``full`` mode because the runtime-policy
+    block needs the caller's preformatted label and refusing to default it makes the missing
+    data the call site's problem.
+    """
     if mode == "full":
         lines = render_full_status_header_lines(workspace, status.config, status.state, status.runner)
     else:
@@ -135,6 +150,12 @@ def render_task_pipeline_status_lines(
 
 
 def _fast_runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
+    """Distinguish never-started workspaces from stopped/dead runners for the fast status output.
+
+    The full status path reads liveness from the runner record alone; the fast path also
+    needs to tell operators "you have not run litehive yet here" apart from "the runner died",
+    which requires probing the on-disk lockfile.
+    """
     if runner.status in {"running", "late"}:
         return "running"
     if not workspace_path(workspace, "runtime", ".runner.lock").exists():
@@ -145,6 +166,13 @@ def _fast_runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
 
 
 def _load_task_read_only(root: Path, task_id: str) -> TaskRecord | None:
+    """Load a task without taking a writer lock, so concurrent ``status`` reads cannot stall a live runner.
+
+    The standard ``get_task`` path opens the workspace DB read-write and would contend with
+    an active writer; status output must never block runtime work, so this opens SQLite in
+    URI read-only mode and swallows OS/DB errors back to ``None`` (status is allowed to be
+    incomplete, never to raise).
+    """
     db_path = workspace_path(root, "data.db")
     if not db_path.exists():
         return None
@@ -173,6 +201,12 @@ def _load_task_read_only(root: Path, task_id: str) -> TaskRecord | None:
 
 
 def _operational_attention_lines(lines: list[str]) -> list[str]:
+    """Trim attention output to the ``operator_needed:*`` lines the operational status surfaces.
+
+    Diagnostics mode emits the full attention list; the operational mode only wants the
+    subset that signals "a human must act", so this drops everything else before the lines
+    reach the CLI status renderer.
+    """
     if not lines:
         return []
     return [
@@ -217,6 +251,12 @@ def _collect_report_durations(root: Path) -> list[float]:
 
 
 def _task_engine_label(task: TaskRecord, default_engine: str) -> str:
+    """Resolve which engine name to display for a task, preferring live execution over historical record.
+
+    Status surfaces want the engine *currently doing the work* — the live subagent if one
+    is running, otherwise the most recent historical subagent, otherwise the workspace
+    default. The fallback chain keeps display honest across idle/active/never-run states.
+    """
     if task.runtime.execution.active_subagent is not None:
         return task.runtime.execution.active_subagent.engine
     subagents = getattr(task, "subagents", [])
@@ -226,10 +266,22 @@ def _task_engine_label(task: TaskRecord, default_engine: str) -> str:
 
 
 def _task_stage_label(task: TaskRecord) -> str:
+    """Pick a non-empty stage label for status output, falling back to pipeline status then ``-``.
+
+    Tasks transitioning between stages can have an empty ``current_stage.stage`` for a brief
+    window; the fallback to ``pipeline_status`` keeps the dashboard from rendering blank
+    cells during that window without lying about the state.
+    """
     return task.runtime.pipeline.current_stage.stage or task.pipeline_status or "-"
 
 
 def _latest_stage_report_for_task(root: Path, task: TaskRecord) -> Any | None:
+    """Fetch the most recent stage report for a task, swallowing storage errors so status never raises.
+
+    Status output is best-effort: a missing or corrupt report row must not break the CLI
+    render. Callers that want hard failures should go through ``report_storage`` directly;
+    this wrapper exists specifically so the dashboard renderers can ignore IO/parse errors.
+    """
     try:
         from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
 
@@ -239,11 +291,24 @@ def _latest_stage_report_for_task(root: Path, task: TaskRecord) -> Any | None:
 
 
 def _task_last_verdict_label(task: TaskRecord, root: Path) -> str:
+    """Resolve the verdict to display by preferring the persisted stage report over the in-memory outcome.
+
+    The stage report is the durable record; the runtime ``last_outcome`` may lag or be
+    cleared on certain transitions. Falling back through both keeps the health/flagged
+    sections honest when one of the two has been pruned.
+    """
     latest_report = _latest_stage_report_for_task(root, task)
     return (None if latest_report is None else latest_report.verdict) or task.runtime.pipeline.last_outcome.kind or "-"
 
 
 def _task_last_summary_label(task: TaskRecord, root: Path) -> str:
+    """Pick the most descriptive human-readable reason text available across reports, outcomes, and flags.
+
+    Different tasks die in different ways: a stage report has a summary, a runtime outcome
+    has a reason, a flagged task has a flag_reason, a closed task has a close_reason. The
+    health and recent-completion renderers want one column for "why", so the fallback chain
+    walks each source in priority order.
+    """
     latest_report = _latest_stage_report_for_task(root, task)
     return (
         (None if latest_report is None else latest_report.summary)
@@ -255,6 +320,13 @@ def _task_last_summary_label(task: TaskRecord, root: Path) -> str:
 
 
 def _latest_stage_failure_classification(root: Path, task: TaskRecord) -> str | None:
+    """Surface the persisted-report failure classification for the task summary, or ``None`` if unavailable.
+
+    The runtime outcome carries its own ``failure_classification``; the report row keeps an
+    independent value so post-hoc reclassification (e.g. recovery agents) doesn't have to
+    rewrite runtime state. Status prints both side-by-side, so the report-side accessor
+    lives separately and tolerates missing rows.
+    """
     try:
         from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
 
@@ -267,6 +339,13 @@ def _latest_stage_failure_classification(root: Path, task: TaskRecord) -> str | 
 
 
 def render_task_summary(task: TaskRecord, active: bool, root: Path) -> list[str]:
+    """Build the multi-line per-task block used by ``litehive task list`` and ``litehive task show``.
+
+    Called by the CLI task-listing handlers in ``litehive/cli/workspace.py``. The ``active``
+    flag controls only the leading marker (``*`` vs blank); the rest of the output is a
+    deterministic dump of pipeline state, retry policy, last outcome, failure history, and
+    execution estimate so operators can read one block per task without cross-referencing.
+    """
     if active:
         marker = "*"
     else:
@@ -427,6 +506,13 @@ def render_task_summary(task: TaskRecord, active: bool, root: Path) -> list[str]
 
 
 def _duration_label(started_at: str | None, fallback_seconds: int) -> str:
+    """Compute elapsed seconds from an ISO timestamp and format it, falling back when no start time exists.
+
+    Status is rendered from frozen records that may predate the current process by hours;
+    the live elapsed value is the useful one. When the start timestamp is missing or
+    unparseable we fall back to the persisted ``duration_seconds`` rather than printing 0,
+    so brief stages whose start time was never captured still show non-zero time.
+    """
     if started_at is None:
         return _seconds_label(fallback_seconds)
     try:
@@ -438,6 +524,7 @@ def _duration_label(started_at: str | None, fallback_seconds: int) -> str:
 
 
 def _seconds_label(seconds: int) -> str:
+    """Format a duration as the compact ``Ns`` / ``NmMMs`` / ``NhMMm`` form used everywhere in status output."""
     if seconds < 60:
         return f"{seconds}s"
     minutes, remaining_seconds = divmod(seconds, 60)
@@ -448,12 +535,14 @@ def _seconds_label(seconds: int) -> str:
 
 
 def _pid_label(pid: int | None) -> str:
+    """Render ``pid=<n>`` for present PIDs and ``pid=-`` for missing ones, matching the rest of the status grammar."""
     if pid is not None:
         return f"pid={pid}"
     return "pid=-"
 
 
 def _sandbox_label(sandboxed: bool, sandbox_summary: str) -> str:
+    """Format the subagent sandbox column so operators can tell ``host`` from sandboxed runs at a glance."""
     if sandboxed:
         return f"sandbox={sandbox_summary or 'enabled'}"
     return "sandbox=host"
@@ -506,6 +595,13 @@ def render_active_task_detail_lines(task: TaskRecord | None, default_engine: str
 
 
 def render_runner_status_line(runner: RunnerStatusState, state: WorkspaceState | None = None) -> str:
+    """Format the one-line ``runner_status: ...`` summary embedded in both CLI status output and daemon health logs.
+
+    Called by the ``full`` status header and by the daemon's heartbeat logger. ``state`` is
+    accepted but ignored; it remains in the signature so the daemon caller can pass it
+    without a conditional, and so future renderers can read workspace state without a
+    breaking API change.
+    """
     del state
     base_status = (
         f"runner_status: {runner.status} pid={runner.pid or '-'} "
@@ -521,6 +617,12 @@ def render_full_status_header_lines(
     state: WorkspaceState,
     runner: RunnerStatusState,
 ) -> list[str]:
+    """Emit the workspace/engine/runner/queue header that ``full``-mode status output starts with.
+
+    Called by ``render_task_pipeline_status_lines`` for the full path; kept as a separate
+    function so tests can exercise the header independently and so the daemon can render
+    just the header for shorter health snapshots without the rest of the status body.
+    """
     active_task_id = runner.active_task_id or state.active_task_id
     lines = [
         f"workspace: {workspace}",
@@ -546,6 +648,12 @@ def render_full_status_header_lines(
 
 
 def render_runtime_policy_lines(config: LitehiveConfig, retry_on_label: str) -> list[str]:
+    """Render the retry/pool/process-profile policy block so operators can see effective settings without reading config.
+
+    ``retry_on_label`` is preformatted by the caller (the CLI) because the human-readable
+    spelling depends on which retry-on enum members are active and the formatting helper
+    lives next to the CLI parsing — this renderer just stitches it in.
+    """
     return [
         f"default_retry_limit: {config.default_retry_limit}",
         f"retry_on: {retry_on_label}",
@@ -604,6 +712,12 @@ def render_last_completed_section(task: TaskRecord | None, root: Path) -> list[s
 
 
 def render_health_active_task_lines(task: TaskRecord | None) -> list[str]:
+    """Render the Active Task block for the ``litehive workspace health`` machine-readable output.
+
+    The dashboard variant in ``render_active_task_section`` uses indented prose; this one
+    uses the ``key: value`` grammar the health command commits to so downstream scripts can
+    grep the output without re-parsing two formats.
+    """
     lines = ["=== Active Task ==="]
     if task is None:
         lines.append("active_task: none")
@@ -616,6 +730,12 @@ def render_health_active_task_lines(task: TaskRecord | None) -> list[str]:
 
 
 def render_health_flagged_task_lines(flagged_tasks: list[TaskRecord], root: Path) -> list[str]:
+    """Render the Flagged Tasks block for ``litehive workspace health``, surfacing reason and last verdict per task.
+
+    Operators triaging a stuck workspace need both the flag reason (why the runner gave up)
+    and the last verdict/summary (what the agent said before that) on one line per task,
+    which is why this resolves both via the report-side helpers.
+    """
     lines = ["=== Flagged Tasks ===", f"flagged_count: {len(flagged_tasks)}"]
     if not flagged_tasks:
         lines.append("flagged: none")
@@ -631,6 +751,12 @@ def render_health_flagged_task_lines(flagged_tasks: list[TaskRecord], root: Path
 
 
 def render_health_worktree_lines(worktrees: list[Any]) -> list[str]:
+    """Render the Worktrees block for ``litehive workspace health``: one line per worktree with status and dirty count.
+
+    Called by the CLI workspace-health command after it has already collected the worktree
+    inventory; this helper just formats it. ``worktrees`` is typed ``Any`` to avoid a
+    cross-module import cycle with the worktree package.
+    """
     lines = ["=== Worktrees ===", f"worktree_count: {len(worktrees)}"]
     if not worktrees:
         lines.append("worktree: none")
@@ -644,6 +770,12 @@ def render_health_worktree_lines(worktrees: list[Any]) -> list[str]:
 
 
 def render_health_worktree_finding_lines(report: Any) -> list[str]:
+    """Render the Worktree Findings block: per-finding details that explain *why* a worktree is dirty.
+
+    Distinct from ``render_health_worktree_lines``, which is per-worktree summary; this is
+    per-finding (orphan files, unowned paths, foreign locations) so the operator can see
+    the actionable diff between the inventory and what's actually on disk.
+    """
     lines = ["=== Worktree Findings ==="]
     if report.is_clean:
         lines.append("worktree_findings: clean")
@@ -660,6 +792,12 @@ def render_health_worktree_finding_lines(report: Any) -> list[str]:
 
 
 def render_health_quota_lines(quota_health: list[Any]) -> list[str]:
+    """Render the Engine Quotas block so operators can see which engines are throttled before a run starts.
+
+    Called by the workspace-health CLI command. The list is allowed to be empty (no quota
+    pressure observed); callers rely on the section header existing unconditionally so the
+    output shape is stable for grep-based scripts.
+    """
     lines = ["=== Engine Quotas ==="]
     for quota in quota_health:
         lines.append(f"quota: {quota.engine} status={quota.status} summary={quota.summary}")
@@ -667,6 +805,12 @@ def render_health_quota_lines(quota_health: list[Any]) -> list[str]:
 
 
 def render_health_daemon_lines(daemon_status: str, daemon_pid: str) -> list[str]:
+    """Render the Daemon block for workspace health, kept as a helper so the daemon and CLI use one shape.
+
+    Both arguments are pre-stringified by the CLI caller (``daemon_pid`` is a string so
+    missing PIDs render as ``-`` without a conditional here), which is why this looks
+    trivial: the policy lives in the caller and this function only owns the output shape.
+    """
     return [
         "=== Daemon ===",
         f"daemon_status: {daemon_status}",
@@ -675,6 +819,12 @@ def render_health_daemon_lines(daemon_status: str, daemon_pid: str) -> list[str]
 
 
 def render_health_recent_completion_lines(completed: list[TaskRecord], root: Path) -> list[str]:
+    """Render Recent Completions for workspace health, summarizing each finished task with its last summary line.
+
+    Used by the workspace-health CLI to give operators a "what just happened" snapshot
+    without having to grep events. Each task is run through ``_task_last_summary_label`` so
+    the verdict text matches what other status surfaces show for the same task.
+    """
     lines = ["=== Recent Completions ==="]
     if not completed:
         lines.append("completed: none")
@@ -710,6 +860,13 @@ def render_engine_availability_lines(
     config: LitehiveConfig,
     monitoring: WorkspaceEngineMonitoring,
 ) -> list[str]:
+    """Emit one ``engine_available:`` line per engine the workspace knows about, marking quota/freeze pressure.
+
+    Operators want to see frozen, quota-limited, and rate-limited engines before kicking
+    off a run. This unions every engine the workspace touches (default, preference list,
+    freeze list, and live monitoring), then annotates each with its current status so the
+    CLI status output and the workspace-health command share one source of truth.
+    """
     engine_names = {config.default_engine, *config.engine_preference, *config.engine_freeze}
     engine_names.update(monitoring.engines)
     if not engine_names:

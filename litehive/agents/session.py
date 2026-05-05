@@ -47,6 +47,12 @@ class SessionMixin:
         engine_name: str,
         execution: CLIExecutionResult | None,
     ) -> str:
+        """Produce the human-readable transcript saved alongside each subagent run.
+
+        Falls back to the engine's raw transcript when the unified-event parse
+        yields nothing, so the SubagentManager always has something to write to
+        execution_trace.md after a run completes.
+        """
         del engine_name
         if execution is None:
             return ""
@@ -60,6 +66,7 @@ class SessionMixin:
         engine_name: str,
         execution: CLIExecutionResult | None,
     ) -> RuntimeEngineContinuation | None:
+        """Pull the engine-specific resume token used by retry and continuation flows."""
         return extract_engine_continuation(engine_name, execution)
 
     @staticmethod
@@ -69,6 +76,7 @@ class SessionMixin:
         task_id: str | None = None,
         subagent_id: str | None = None,
     ) -> LiveEventStream | None:
+        """Parse the live event timeline persisted as the subagent's event_stream artifact."""
         return event_stream_from_events(
             parse_unified_events(stdout),
             engine_name=engine_name,
@@ -91,6 +99,12 @@ class SessionMixin:
         ref: SubagentRef,
         prompt: str,
     ) -> None:
+        """Lay down the empty stdout/stderr logs and the initial running snapshot.
+
+        Called by SubagentManager just before launching the engine process so
+        that observers (status snapshots, recovery) can see a `running` session
+        even if the launch crashes before any output arrives.
+        """
         ensure_session_log(base, "stdout")
         ensure_session_log(base, "stderr")
         append_event(
@@ -135,6 +149,12 @@ class SessionMixin:
         interruption_reason: str | None = None,
         continuation=None,
     ) -> None:
+        """Update the session row without touching the report or stream artifacts.
+
+        Used by SubagentManager for metadata-only events (PID assignment,
+        interruption reason) where rewriting the report payload would clobber
+        the last good values from the engine's own output.
+        """
         created_at = utcnow()
         resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
         existing = load_subagent_session(self.root, task.id, ref.id)
@@ -162,6 +182,12 @@ class SessionMixin:
         )
 
     def record_subagent_pid(self, task: TaskRecord, base: Path, ref: SubagentRef, pid: int | None) -> None:
+        """Pin the engine PID into the runtime row, the session metadata, and the event log.
+
+        The recovery flow keys off this PID to decide whether a crashed
+        subagent's process is still alive, so it must land in all three places
+        before the engine starts producing real output.
+        """
         if pid is None:
             return
         mark_subagent_pid(self.root, task, pid)
@@ -182,6 +208,12 @@ class SessionMixin:
         )
 
     def subagent_inactivity_timeout_seconds(self, engine_name: str) -> float:
+        """Return the engine-specific stdout idle budget enforced by the watchdog.
+
+        Opencode legitimately stalls for long stretches between tool calls and
+        needs a wider window than the global default; this lookup keeps that
+        engine-specific exception in one place.
+        """
         if engine_name == "opencode":
             return _OPENCODE_INACTIVITY_TIMEOUT_SECONDS
         return self.config.subagent_inactivity_timeout_seconds
@@ -191,6 +223,12 @@ class SessionMixin:
         engine_name: str,
         execution: CLIExecutionResult,
     ) -> SubagentInactivityTimeout | None:
+        """Detect a watchdog-killed run from its stderr marker after the process has already exited.
+
+        When the inline watchdog ends a stalled engine the process returns
+        normally; this scrape lets the SubagentManager re-raise the timeout as
+        the verdict rather than treat the truncated transcript as a clean run.
+        """
         match = _COMPLETED_INACTIVITY_PATTERN.search(execution.stderr or "")
         if match is None:
             return None
@@ -207,6 +245,11 @@ class SessionMixin:
         engine_name: str,
         execution: CLIExecutionResult,
     ) -> None:
+        """Kill an engine that has stopped producing stdout, then surface the timeout to the caller.
+
+        Runs after each streaming poll in SubagentManager so a hung engine
+        can't quietly burn the whole task budget while emitting no output.
+        """
         if execution.pid is None:
             return
         stdout_path = base / "stdout.txt"
@@ -224,6 +267,7 @@ class SessionMixin:
         )
 
     def terminate_stale_pid(self, pid: int) -> None:
+        """Best-effort SIGTERM that swallows the race when the engine already exited."""
         try:
             os.kill(pid, signal.SIGTERM)
         except ProcessLookupError:
@@ -236,6 +280,7 @@ class SessionMixin:
         task: TaskRecord,
         stdout: str,
     ) -> None:
+        """Persist the parsed timeline so live status views can replay tool calls without re-parsing stdout."""
         event_stream = self.extract_execution_event_stream(
             ref.engine,
             stdout,
@@ -266,6 +311,12 @@ class SessionMixin:
         interruption_reason: str | None,
         continuation=None,
     ) -> None:
+        """Write a complete subagent snapshot: session row, report, prompt, transcript, and streams.
+
+        This is the single fan-out point used after a run finishes (success or
+        failure) so that all observer surfaces (CLI, recovery, retrospective
+        debugging) see a consistent set of artifacts.
+        """
         created_at = utcnow()
         resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
         existing = load_subagent_session(self.root, task.id, ref.id)

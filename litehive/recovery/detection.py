@@ -21,6 +21,7 @@ class TaskLaunchFailure(RuntimeError):
         summary: str,
         diagnostics: LaunchDiagnostics | None = None,
     ) -> None:
+        """Carry a structured failure context plus diagnostics so the daemon can log the root cause and the recovery agent can see why launch was aborted."""
         super().__init__(summary)
         self.context = context
         self.summary = summary

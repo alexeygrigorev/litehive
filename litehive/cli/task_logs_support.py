@@ -17,6 +17,7 @@ FOLLOW_POLL_SECONDS = 0.1
 
 
 def show_latest_daemon_log(root: Path) -> int:
+    """Operator default for `task logs` with no task id; tails the most recent daemon run so the operator sees what the pool just did without specifying a session."""
     latest_dir = latest_run_all_log_dir(root)
     log_path = _latest_daemon_log_path(latest_dir)
     if log_path is None:
@@ -29,6 +30,7 @@ def show_latest_daemon_log(root: Path) -> int:
 
 
 def list_daemon_sessions(root: Path) -> int:
+    """Operator overview of recent pool sessions with their stop reasons; capped at five so the listing stays scannable when many runs accumulate."""
     logs_root = workspace_path(root.resolve(), "logs", "run-all")
     if not logs_root.exists():
         print("No daemon run logs found.")
@@ -48,6 +50,7 @@ def list_daemon_sessions(root: Path) -> int:
 
 
 def show_task_journal(root: Path, task) -> int:
+    """Default `task logs <id>` view that renders the per-task narrative journal (stage transitions, verdicts) instead of raw subagent stdout."""
     journal = render_task_journal(root, task)
     if not journal:
         print(f"{task.id}: journal not found")
@@ -57,10 +60,12 @@ def show_task_journal(root: Path, task) -> int:
 
 
 def show_latest_subagent(root: Path, task) -> int:
+    """Compact one-screen view of the most recent subagent run for a task; routes to the same evidence renderer as `task evidence` to keep both surfaces consistent."""
     return render_task_evidence(root, task)
 
 
 def list_task_subagents(root: Path, task) -> int:
+    """Tabular summary of every subagent run on a task with status, exit code, and duration; reverse-chronological so the most recent (usually the one the operator wants) is on top."""
     if not task.subagents:
         print(f"{task.id}: no subagents")
         return 0
@@ -88,6 +93,7 @@ def list_task_subagents(root: Path, task) -> int:
 
 
 def follow_active_subagent(root: Path, task_id: str | None = None) -> int:
+    """`tail -f` analogue for the live subagent stdout so the operator can watch a running stage without leaving the CLI; returns immediately if nothing is currently active."""
     task = resolve_follow_task(root, task_id=task_id)
     if task is None:
         ref = None
@@ -164,6 +170,7 @@ def _print_follow_chunk(stdout_path: Path, position: int) -> int:
 
 
 def _session_outcome(directory: Path) -> str:
+    """Recover the pool stop reason for a recorded session by preferring the post-status log (authoritative) and falling back to the run log so older sessions without post-status still surface a useful label."""
     post_status = sorted(directory.glob("*-post-status.log"))
     for path in reversed(post_status):
         for line in read_text_artifact(path).splitlines():
@@ -202,6 +209,7 @@ def _latest_subagent_ref(task):
 
 
 def _artifact_for_kind(base: Path, kind: str, active: bool) -> Path | None:
+    """Resolve the on-disk path of a subagent artifact, preferring the live `.log` for active runs but falling back to the legacy `.txt` so historic runs remain followable."""
     if kind == "stdout":
         if active:
             live = resolve_artifact_path(base, "stdout.log")
@@ -215,6 +223,7 @@ def _artifact_for_kind(base: Path, kind: str, active: bool) -> Path | None:
 
 
 def _pick_value(runtime_state, session: dict[str, object], *keys: str):
+    """Prefer the in-memory runtime field over the persisted session payload so live values (e.g. exit code on a just-finished run) win over stale on-disk snapshots."""
     if runtime_state is not None:
         for key in keys:
             value = getattr(runtime_state, key, None)
@@ -242,6 +251,7 @@ def _format_duration(started_at: str | datetime | None, completed_at: str | date
 
 
 def resolve_follow_task(root: Path, task_id: str | None) -> object | None:
+    """Pick the task whose stdout `--follow` should attach to: explicit id wins, then the task with an active subagent, then the most recent task that ever had subagents, so the operator can run `task logs --follow` with no arguments mid-run."""
     if task_id is not None:
         return get_task_record(root, task_id)
     tasks = list_tasks(root, strict=False)
@@ -252,6 +262,7 @@ def resolve_follow_task(root: Path, task_id: str | None) -> object | None:
 
 
 def load_task_with_runtime(root: Path, task_id: str):
+    """Tolerant task lookup used by `task logs <id>`; deliberately returns None on missing-runtime/missing-task instead of raising so the CLI can print a clean `task not found` rather than a traceback."""
     return get_task_record(root, task_id)
 
 

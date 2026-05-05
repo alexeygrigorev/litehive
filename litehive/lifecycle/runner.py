@@ -56,6 +56,7 @@ class StateMachineRunner:
         task_time_budget_seconds: float | None = None,
         clock: Clock | None = None,
     ) -> None:
+        """Wire the runner with everything it cannot resolve on its own — node registry, persistence, journal, and operator-controlled knobs (stop predicate, time budget, observability hooks)."""
         self.registry = registry
         self.persistence = persistence
         self.rules = rules
@@ -68,6 +69,7 @@ class StateMachineRunner:
         self._clock = clock or time.monotonic
 
     def run_task(self, task_id: str) -> TaskState:
+        """Drive a single task through the state machine until it reaches a terminal node, the operator stops the daemon, or the task time budget is exceeded; called by the daemon's per-task worker loop."""
         state = self.persistence.load(task_id)
         self.journal.task_started(task_id, state.stage)
         while state.stage not in TERMINAL_NODES:
@@ -95,6 +97,7 @@ class StateMachineRunner:
         self,
         state: TaskState,
     ) -> TaskTimeBudgetExceeded | None:
+        """Synthesize a budget-exceeded event when the task has burned its agent-time allowance, but only before commit — once the task has reached commit/after_commit/merge_resolving we let it finish rather than abandon real progress."""
         budget = self._task_time_budget_seconds
         if budget is None:
             return None
@@ -114,6 +117,7 @@ class StateMachineRunner:
         event: Event,
         task_id: str,
     ) -> None:
+        """Run one rule evaluation and commit its consequences — apply the StateDelta, walk event side-effects, persist, notify observers, and record the transition in the journal — keeping the run loop a thin orchestrator."""
         trans = evaluate(self.rules, from_stage, event, state)
         self._apply_delta(state, trans.delta)
         self.apply_event_side_effects(state, event)
@@ -190,6 +194,7 @@ class StateMachineRunner:
         to_stage: str,
         event: Event,
     ) -> None:
+        """Clear the hook-reject circuit-breaker counters once the task has actually moved forward, so a later rejection at a different agent stage starts from zero instead of inheriting a stale streak from the previous stage."""
         if not isinstance(event, (Pass, HookOk)):
             return
         if pipeline_stage_for_phase(from_stage) == pipeline_stage_for_phase(to_stage):
@@ -202,6 +207,7 @@ class StateMachineRunner:
         state: TaskState,
         clear_recovery_invoked: bool,
     ) -> None:
+        """Reset the hook-reject streak counters; the `clear_recovery_invoked` flag distinguishes "real progress" (clear everything, including the recovery-was-tried bit) from "delta-driven clear" (the rule asked for a reset but recovery may still be in flight)."""
         state.consecutive_same_hook_rejects = 0
         state.last_hook_reject_fingerprint = None
         if clear_recovery_invoked:
@@ -209,6 +215,7 @@ class StateMachineRunner:
 
     @staticmethod
     def _apply_delta(state: TaskState, delta: StateDelta) -> None:
+        """Translate the rule-produced StateDelta into concrete TaskState mutations; this is the only place fields like retry counters, recovery triggers, rejection-loop tracking, and failure metadata are written, so rules can stay declarative."""
         if delta.inc_stage_retry is not None:
             stage = delta.inc_stage_retry
             state.stage_retry[stage] = state.stage_retry.get(stage, 0) + 1
