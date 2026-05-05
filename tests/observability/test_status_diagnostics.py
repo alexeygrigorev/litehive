@@ -228,7 +228,8 @@ def test_status_reports_stale_runner_lock(tmp_path: Path, capsys, monkeypatch) -
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr("litehive.observability.status_diagnostics.runner_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr("litehive.observability.status_loaders.runner_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr("litehive.observability.status_probes.runner_pid_is_alive", lambda pid: False)
 
     exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
@@ -333,7 +334,7 @@ def test_runner_status_diagnostic_copies_serialize_without_pydantic_warnings(
             encoding="utf-8",
         )
         monkeypatch.setattr(
-            "litehive.observability.status_diagnostics.runner_pid_is_alive",
+            "litehive.observability.status_loaders.runner_pid_is_alive",
             lambda pid, alive=pid_is_alive: alive,
         )
 
@@ -384,7 +385,7 @@ def test_status_reports_dead_daemon_pid(tmp_path: Path, capsys, monkeypatch) -> 
         encoding="utf-8",
     )
     monkeypatch.setattr("litehive.daemon.registry.pid_is_alive", lambda pid: False)
-    monkeypatch.setattr("litehive.observability.status_diagnostics.pid_is_alive", lambda pid: False)
+    monkeypatch.setattr("litehive.observability.status_probes.pid_is_alive", lambda pid: False)
 
     exit_code, output = _run_dispatch_status(tmp_path, capsys)
 

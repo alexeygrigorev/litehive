@@ -105,7 +105,15 @@ def test_role_prompt_code_does_not_mutate_tasks() -> None:
 
 
 def test_status_rendering_and_diagnostics_do_not_repair_or_mutate() -> None:
-    status_files = _python_files("observability", "status.py") + _python_files("observability", "status_diagnostics.py")
+    status_files = (
+        _python_files("observability", "status.py")
+        + _python_files("observability", "status_diagnostics.py")
+        + _python_files("observability", "status_io.py")
+        + _python_files("observability", "status_loaders.py")
+        + _python_files("observability", "status_probes.py")
+        + _python_files("observability", "status_rendering.py")
+        + _python_files("observability", "status_types.py")
+    )
     forbidden_modules = {
         "litehive.recovery.execution_recovery",
         "litehive.recovery.workspace_repair",
@@ -142,7 +150,7 @@ def test_status_rendering_and_diagnostics_do_not_repair_or_mutate() -> None:
 
 
 def test_status_state_loading_uses_read_only_store_api() -> None:
-    tree = _tree(PACKAGE_ROOT / "observability" / "status_diagnostics.py")
+    tree = _tree(PACKAGE_ROOT / "observability" / "status_loaders.py")
     calls = _call_names(tree)
 
     assert "load_workspace_state_read_only" in calls

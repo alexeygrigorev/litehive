@@ -2065,11 +2065,11 @@
       "severity": "error"
     },
     {
-      "line": 648,
+      "line": 376,
       "column": 12,
-      "stop_line": 648,
+      "stop_line": 376,
       "stop_column": 24,
-      "path": "litehive/observability/status_diagnostics.py",
+      "path": "litehive/observability/status_probes.py",
       "code": -2,
       "name": "unbound-name",
       "description": "`TaskNotFound` is uninitialized",
@@ -5989,9 +5989,9 @@
       "severity": "error"
     },
     {
-      "line": 476,
+      "line": 477,
       "column": 19,
-      "stop_line": 476,
+      "stop_line": 477,
       "stop_column": 28,
       "path": "tests/observability/test_status_diagnostics.py",
       "code": -2,
@@ -6001,33 +6001,33 @@
       "severity": "error"
     },
     {
-      "line": 477,
+      "line": 478,
       "column": 28,
-      "stop_line": 477,
+      "stop_line": 478,
       "stop_column": 37,
       "path": "tests/observability/test_status_diagnostics.py",
       "code": -2,
       "name": "bad-assignment",
       "description": "`Literal['flagged']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
       "concise_description": "`Literal['flagged']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 495,
-      "column": 19,
-      "stop_line": 495,
-      "stop_column": 28,
-      "path": "tests/observability/test_status_diagnostics.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['flagged']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['flagged']` is not assignable to attribute `status` with type `TaskStatus`",
       "severity": "error"
     },
     {
       "line": 496,
-      "column": 28,
+      "column": 19,
       "stop_line": 496,
+      "stop_column": 28,
+      "path": "tests/observability/test_status_diagnostics.py",
+      "code": -2,
+      "name": "bad-assignment",
+      "description": "`Literal['flagged']` is not assignable to attribute `status` with type `TaskStatus`",
+      "concise_description": "`Literal['flagged']` is not assignable to attribute `status` with type `TaskStatus`",
+      "severity": "error"
+    },
+    {
+      "line": 497,
+      "column": 28,
+      "stop_line": 497,
       "stop_column": 37,
       "path": "tests/observability/test_status_diagnostics.py",
       "code": -2,
@@ -6037,9 +6037,9 @@
       "severity": "error"
     },
     {
-      "line": 502,
+      "line": 503,
       "column": 19,
-      "stop_line": 502,
+      "stop_line": 503,
       "stop_column": 27,
       "path": "tests/observability/test_status_diagnostics.py",
       "code": -2,
@@ -6049,9 +6049,9 @@
       "severity": "error"
     },
     {
-      "line": 514,
+      "line": 515,
       "column": 27,
-      "stop_line": 514,
+      "stop_line": 515,
       "stop_column": 58,
       "path": "tests/observability/test_status_diagnostics.py",
       "code": -2,
@@ -6061,9 +6061,9 @@
       "severity": "error"
     },
     {
-      "line": 533,
+      "line": 534,
       "column": 19,
-      "stop_line": 533,
+      "stop_line": 534,
       "stop_column": 27,
       "path": "tests/observability/test_status_diagnostics.py",
       "code": -2,
@@ -6073,45 +6073,21 @@
       "severity": "error"
     },
     {
-      "line": 534,
+      "line": 535,
       "column": 28,
-      "stop_line": 534,
+      "stop_line": 535,
       "stop_column": 37,
       "path": "tests/observability/test_status_diagnostics.py",
       "code": -2,
       "name": "bad-assignment",
       "description": "`Literal['backlog']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
       "concise_description": "`Literal['backlog']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 551,
-      "column": 19,
-      "stop_line": 551,
-      "stop_column": 27,
-      "path": "tests/observability/test_status_diagnostics.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
-      "concise_description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
       "severity": "error"
     },
     {
       "line": 552,
-      "column": 28,
-      "stop_line": 552,
-      "stop_column": 37,
-      "path": "tests/observability/test_status_diagnostics.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`Literal['backlog']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "concise_description": "`Literal['backlog']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
-      "severity": "error"
-    },
-    {
-      "line": 571,
       "column": 19,
-      "stop_line": 571,
+      "stop_line": 552,
       "stop_column": 27,
       "path": "tests/observability/test_status_diagnostics.py",
       "code": -2,
@@ -6121,9 +6097,33 @@
       "severity": "error"
     },
     {
-      "line": 572,
+      "line": 553,
       "column": 28,
+      "stop_line": 553,
+      "stop_column": 37,
+      "path": "tests/observability/test_status_diagnostics.py",
+      "code": -2,
+      "name": "bad-assignment",
+      "description": "`Literal['backlog']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
+      "concise_description": "`Literal['backlog']` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
+      "severity": "error"
+    },
+    {
+      "line": 572,
+      "column": 19,
       "stop_line": 572,
+      "stop_column": 27,
+      "path": "tests/observability/test_status_diagnostics.py",
+      "code": -2,
+      "name": "bad-assignment",
+      "description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
+      "concise_description": "`Literal['queued']` is not assignable to attribute `status` with type `TaskStatus`",
+      "severity": "error"
+    },
+    {
+      "line": 573,
+      "column": 28,
+      "stop_line": 573,
       "stop_column": 42,
       "path": "tests/observability/test_status_diagnostics.py",
       "code": -2,
