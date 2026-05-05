@@ -1,0 +1,265 @@
+"""Workspace-state mutations for the queue: enqueue, move, prioritize, and
+recovery-related lifecycle resets.
+
+These helpers all take or return ``WorkspaceState`` (or mutate ``TaskRecord``
+in place) and persist via ``state.persist`` / ``workspace_lock``. Selection
+logic lives in ``queue_selection``; pure predicates live in
+``queue_eligibility``.
+"""
+
+from pathlib import Path
+
+from litehive.domain.common import TaskStatus, utcnow
+from litehive.domain.runtime import TaskOutcomeState
+from litehive.domain.task import TaskRecord, WorkspaceState
+from litehive.state.locking import (
+    ensure_future_task_mutation_allowed,
+    workspace_lock,
+)
+from litehive.state.persist import (
+    load_state,
+    save_state_without_runner_guard,
+)
+from litehive.state.records import (
+    require_task,
+    set_task_commit_sha,
+)
+from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
+from litehive.tasks.queue_eligibility import (
+    _normalize_resumable_stage_name,
+    resumable_queue_stage,
+)
+from litehive.tasks.runtime import clear_task_run_activity, idle_stage_state
+
+
+def enqueue_task(root: Path, task_id: str) -> WorkspaceState:
+    """Append a task to the back of the workspace queue.
+
+    No production or test callers remain — candidate for removal alongside
+    ``enqueue_task_front``; queue inserts now go through ``move_queued_task``
+    and ``prioritize_queued_tasks`` from the queue CLI.
+    """
+    return _enqueue_task(root, task_id, front=False)
+
+
+def enqueue_task_front(root: Path, task_id: str) -> WorkspaceState:
+    """Insert a task at the head of the workspace queue.
+
+    No callers — see ``enqueue_task``; both wrappers look like dead weight.
+    """
+    return _enqueue_task(root, task_id, front=True)
+
+
+def _enqueue_task(root: Path, task_id: str, front: bool) -> WorkspaceState:
+
+    with workspace_lock(root):
+        state = load_state(root)
+        ensure_future_task_mutation_allowed(root, [task_id], state=state)
+        task = require_task(root, task_id)
+        before_task = snapshot_task_audit_state(task)
+        queue_before = list(state.queue)
+        state.queue = [item for item in state.queue if item != task_id]
+        if front:
+            state.queue.insert(0, task_id)
+        else:
+            state.queue.append(task_id)
+        save_state_without_runner_guard(
+            root,
+            state,
+            audit_entries=[
+                build_task_audit_entry(
+                    task_id=task_id,
+                    action="queue_enqueued",
+                    actor="operator",
+                    source="queue",
+                    before_task=before_task,
+                    after_task=task,
+                    before_queue=queue_before,
+                    after_queue=state.queue,
+                    context={"front": front},
+                )
+            ],
+        )
+        return state
+
+
+def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
+    """Reorder a queued task to a 1-based position, recording an audit entry.
+
+    The ``litehive queue move`` CLI calls this when an operator hand-curates the
+    queue; the engine switch flow also re-positions the active task here when
+    the user swaps engines mid-run.
+    """
+    if position < 1:
+        raise ValueError("Queue position must be 1 or greater")
+    with workspace_lock(root):
+        state = load_state(root)
+        ensure_future_task_mutation_allowed(root, [task_id], state=state)
+        task = require_task(root, task_id)
+        before_task = snapshot_task_audit_state(task)
+        queue_before = list(state.queue)
+        if task_id not in state.queue:
+            raise ValueError(f"Task {task_id} is not queued")
+        queue = [item for item in state.queue if item != task_id]
+        target_index = min(position - 1, len(queue))
+        queue.insert(target_index, task_id)
+        state.queue = queue
+        save_state_without_runner_guard(
+            root,
+            state,
+            audit_entries=[
+                build_task_audit_entry(
+                    task_id=task_id,
+                    action="queue_moved",
+                    actor="operator",
+                    source="queue",
+                    before_task=before_task,
+                    after_task=task,
+                    before_queue=queue_before,
+                    after_queue=state.queue,
+                    context={"requested_position": position},
+                )
+            ],
+        )
+        return state
+
+
+def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
+    """Hoist the given queued tasks to the front of the queue, in order.
+
+    Called by the ``litehive queue prioritize`` CLI when an operator wants a
+    specific batch run next without manually moving each task one at a time.
+    """
+    if not task_ids:
+        raise ValueError("At least one task id is required")
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for task_id in task_ids:
+        if task_id in seen:
+            duplicates.add(task_id)
+            continue
+        seen.add(task_id)
+    if duplicates:
+        joined = ", ".join(sorted(duplicates))
+        raise ValueError(f"Task ids must be unique: {joined}")
+    with workspace_lock(root):
+        state = load_state(root)
+        ensure_future_task_mutation_allowed(root, task_ids, state=state)
+        queue_before = list(state.queue)
+        missing = [task_id for task_id in task_ids if task_id not in state.queue]
+        if missing:
+            joined = ", ".join(missing)
+            raise ValueError(f"Tasks are not queued: {joined}")
+        queued_tasks = {task_id: require_task(root, task_id) for task_id in task_ids}
+        before_tasks = {task_id: snapshot_task_audit_state(task) for task_id, task in queued_tasks.items()}
+        remaining = [queued_id for queued_id in state.queue if queued_id not in task_ids]
+        state.queue = [*task_ids, *remaining]
+        save_state_without_runner_guard(
+            root,
+            state,
+            audit_entries=[
+                build_task_audit_entry(
+                    task_id=task_id,
+                    action="queue_prioritized",
+                    actor="operator",
+                    source="queue",
+                    before_task=before_tasks[task_id],
+                    after_task=queued_tasks[task_id],
+                    before_queue=queue_before,
+                    after_queue=state.queue,
+                    context={"requested_order": list(task_ids)},
+                )
+                for task_id in task_ids
+            ],
+        )
+        return state
+
+
+def reset_task_for_recovery(
+    task: TaskRecord,
+    status: str,
+    pipeline_status: str,
+    clear_last_outcome: bool = True,
+) -> None:
+    """Rewind a task's lifecycle cursor and clear runtime activity for a fresh attempt.
+
+    The status-mutation flows (``requeue_task``, flagged-task auto-recovery,
+    and the dequeue path that revives flagged tasks) call this so the runner
+    sees a clean ``idle`` stage marker and zeroed retry counters instead of
+    leftover ``running``/``failed`` state from the previous attempt.
+    """
+    now = utcnow()
+    task.status = status
+    task.close_reason = None
+    task.flag_reason = None
+    task.pipeline_status = pipeline_status
+    clear_task_run_activity(task, execution_status="idle", updated_at=now, clear_interruption=True)
+    task.runtime.pipeline.retry_count = 0
+    task.runtime.pipeline.retry_limit = 0
+    task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage=pipeline_status)
+    if clear_last_outcome:
+        task.runtime.pipeline.last_outcome = TaskOutcomeState()
+    elif task.runtime.pipeline.last_outcome.kind == "interrupted":
+        task.runtime.pipeline.last_outcome.stage = pipeline_status
+
+
+def enqueue_recovered_task(state: WorkspaceState, task_id: str) -> None:
+    state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
+    state.queue.append(task_id)
+
+
+def drop_task_from_workspace_state(state: WorkspaceState, task_id: str) -> bool:
+    """Remove a task from workspace state (queue, active_task_id, unmerged_worktrees).
+
+    Returns True if any state was modified, False otherwise.
+    """
+    changed = False
+    if state.active_task_id == task_id:
+        state.active_task_id = None
+        changed = True
+    if task_id in state.queue:
+        state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
+        changed = True
+    original_unmerged = len(state.unmerged_worktrees)
+    state.unmerged_worktrees = [item for item in state.unmerged_worktrees if item.task_id != task_id]
+    return changed or len(state.unmerged_worktrees) != original_unmerged
+
+
+def prepare_completed_task_for_recovery(task: TaskRecord, recovery_stage: str) -> None:
+    """Reopen a finished task at the chosen stage by resetting its lifecycle and dropping the merge SHA.
+
+    The completed-task recovery flow (``litehive task recover`` after a task is
+    already ``done``) calls this so the merge commit reference is cleared and
+    the runner re-picks the task from the chosen pipeline stage.
+    """
+    reset_task_for_recovery(
+        task,
+        status="queued",
+        pipeline_status=recovery_stage,
+    )
+    set_task_commit_sha(task, None)
+
+
+def canonicalize_resumable_queue_task(task: TaskRecord, stage: str | None = None) -> str | None:
+    """Force a resumable task into a clean ``queued`` shape at the chosen pipeline stage.
+
+    Workspace-repair and stale-runner recovery call this once they have decided
+    a task is recoverable: it strips ``flag_reason``/``close_reason``, plants an
+    ``idle`` stage marker, and re-points any sticky ``interrupted`` outcome at
+    the resume stage so the runner can pick the task up cleanly.
+    """
+    if stage is not None:
+        target_stage = _normalize_resumable_stage_name(stage)
+    else:
+        target_stage = resumable_queue_stage(task)
+    if target_stage is None:
+        return None
+    now = clear_task_run_activity(task, execution_status="idle")
+    task.status = TaskStatus.QUEUED
+    task.close_reason = None
+    task.flag_reason = None
+    task.pipeline_status = target_stage
+    task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage=target_stage)
+    if task.runtime.pipeline.last_outcome.kind == "interrupted":
+        task.runtime.pipeline.last_outcome.stage = target_stage
+    return target_stage

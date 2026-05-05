@@ -2425,11 +2425,11 @@
       "severity": "error"
     },
     {
-      "line": 216,
+      "line": 192,
       "column": 19,
-      "stop_line": 216,
+      "stop_line": 192,
       "stop_column": 25,
-      "path": "litehive/tasks/queue.py",
+      "path": "litehive/tasks/queue_mutations.py",
       "code": -2,
       "name": "bad-assignment",
       "description": "`str` is not assignable to attribute `status` with type `TaskStatus`",
@@ -2437,11 +2437,11 @@
       "severity": "error"
     },
     {
-      "line": 219,
+      "line": 195,
       "column": 28,
-      "stop_line": 219,
+      "stop_line": 195,
       "stop_column": 43,
-      "path": "litehive/tasks/queue.py",
+      "path": "litehive/tasks/queue_mutations.py",
       "code": -2,
       "name": "bad-assignment",
       "description": "`str` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
@@ -2449,11 +2449,11 @@
       "severity": "error"
     },
     {
-      "line": 227,
+      "line": 203,
       "column": 52,
-      "stop_line": 227,
+      "stop_line": 203,
       "stop_column": 67,
-      "path": "litehive/tasks/queue.py",
+      "path": "litehive/tasks/queue_mutations.py",
       "code": -2,
       "name": "bad-assignment",
       "description": "`str` is not assignable to attribute `stage` with type `Never`",
@@ -2461,11 +2461,11 @@
       "severity": "error"
     },
     {
-      "line": 332,
+      "line": 261,
       "column": 28,
-      "stop_line": 332,
+      "stop_line": 261,
       "stop_column": 40,
-      "path": "litehive/tasks/queue.py",
+      "path": "litehive/tasks/queue_mutations.py",
       "code": -2,
       "name": "bad-assignment",
       "description": "`str` is not assignable to attribute `pipeline_status` with type `PipelineStatus`",
@@ -2473,11 +2473,11 @@
       "severity": "error"
     },
     {
-      "line": 335,
+      "line": 264,
       "column": 52,
-      "stop_line": 335,
+      "stop_line": 264,
       "stop_column": 64,
-      "path": "litehive/tasks/queue.py",
+      "path": "litehive/tasks/queue_mutations.py",
       "code": -2,
       "name": "bad-assignment",
       "description": "`str` is not assignable to attribute `stage` with type `Never`",
@@ -2485,11 +2485,11 @@
       "severity": "error"
     },
     {
-      "line": 432,
+      "line": 85,
       "column": 56,
-      "stop_line": 432,
+      "stop_line": 85,
       "stop_column": 65,
-      "path": "litehive/tasks/queue.py",
+      "path": "litehive/tasks/queue_selection.py",
       "code": -2,
       "name": "bad-assignment",
       "description": "`Literal['backlog']` is not assignable to attribute `stage` with type `Never`",
@@ -2497,11 +2497,11 @@
       "severity": "error"
     },
     {
-      "line": 855,
+      "line": 407,
       "column": 13,
-      "stop_line": 863,
+      "stop_line": 415,
       "stop_column": 14,
-      "path": "litehive/tasks/queue.py",
+      "path": "litehive/tasks/queue_selection.py",
       "code": -2,
       "name": "bad-argument-type",
       "description": "Argument `tuple[tuple[int | str, ...], TaskRecord]` is not assignable to parameter `object` with type `tuple[tuple[int, int, str], TaskRecord]` in function `list.append`",
@@ -2509,11 +2509,11 @@
       "severity": "error"
     },
     {
-      "line": 976,
+      "line": 528,
       "column": 27,
-      "stop_line": 976,
+      "stop_line": 528,
       "stop_column": 61,
-      "path": "litehive/tasks/queue.py",
+      "path": "litehive/tasks/queue_selection.py",
       "code": -2,
       "name": "no-matching-overload",
       "description": "No matching overload found for function `typing.MutableMapping.setdefault` called with arguments: (str | None, list[@_])\n  Possible overloads:\n  (key: str, default: None = None, /) -> _T | None\n  (key: str, default: list[str], /) -> list[str] [closest match]",
