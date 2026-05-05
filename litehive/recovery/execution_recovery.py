@@ -51,7 +51,7 @@ def recover_stale_runner_state(
     workspace = Workspace.from_path(root)
     with workspace_lock(root):
         state = load_workspace_state(root)
-        running_task_ids = _running_task_ids(root)
+        running_task_ids = _running_task_ids(workspace)
         if _can_skip_recovery_scan(
             root,
             state.active_task_id,
@@ -65,11 +65,11 @@ def recover_stale_runner_state(
         # rows so one stale record does not block runner recovery.
         tasks = list_tasks(root, strict=False)
         tasks_by_id = {task.id: task for task in tasks}
-        if not can_attempt_stale_runner_recovery(root, tasks_by_id, running_task_ids):
+        if not can_attempt_stale_runner_recovery(workspace, tasks_by_id, running_task_ids):
             return False
 
         recovery = recover_running_tasks(
-            root,
+            workspace,
             state,
             tasks_by_id,
             running_task_ids,
@@ -93,7 +93,7 @@ def recover_stale_runner_state(
             journal_messages.update(normalized["journal_messages"])
 
         if update_active_task_after_recovery(
-            root,
+            workspace,
             state,
             tasks_by_id=tasks_by_id,
             prioritized_ids=prioritized_ids,

@@ -3,7 +3,6 @@ from typing import Any
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_report, load_subagent_session
-from litehive.config.loading import load_config
 from litehive.domain.common import PipelineState, pipeline_stage_key
 from litehive.domain.runtime import RuntimeRecoveryOutcome
 from litehive.workspace import Workspace
@@ -99,20 +98,21 @@ class RecoveryAgent(RoleAgent):
         scope_analysis: dict[str, Any] | None = None
 
         root = self.prompt_context.workspace_root
+        workspace = Workspace.from_path(root)
         if task_record is None:
             task_record = get_task_record(root, state.task_id)
         try:
-            litehive_source_path, recovery_execution_root = _recovery_source_checkout(root)
+            litehive_source_path, recovery_execution_root = _recovery_source_checkout(workspace)
         except (OSError, ValueError) as exc:
             recovery_execution_root = str(root)
             recovery_config_diagnostic = _recovery_source_checkout_diagnostic(root, exc)
         if task_record is not None:
-            failed_subagent_diagnostics = _failed_subagent_diagnostics_payload(root, task_record)
+            failed_subagent_diagnostics = _failed_subagent_diagnostics_payload(workspace, task_record)
         recovery_history = _merged_recovery_history_payload(state, task_record)
         repeated_recovery_fingerprint = _repeated_recovery_fingerprint_payload(trigger, recovery_history)
 
         # Analyze scope changes to distinguish operator cleanup from SWE scope creep
-        scope_analysis = analyze_scope_changes(Workspace.from_path(root))
+        scope_analysis = analyze_scope_changes(workspace)
 
         return RecoveryPrompt(
             role=base.role,
@@ -276,7 +276,7 @@ def _repeated_recovery_fingerprint_payload(
     }
 
 
-def _recovery_source_checkout(root: Path) -> tuple[str | None, str | None]:
+def _recovery_source_checkout(workspace: Workspace) -> tuple[str | None, str | None]:
     """Resolve the Litehive source checkout the recovery agent should patch in, separate from the task workspace.
 
     Recovery fixes Litehive infrastructure bugs, not the task code, so it
@@ -284,7 +284,8 @@ def _recovery_source_checkout(root: Path) -> tuple[str | None, str | None]:
     is set. Returns the raw configured value plus the directory the agent
     should treat as its execution root.
     """
-    config = load_config(root)
+    config = workspace.config()
+    root = workspace.root
     raw_source = str(config.litehive_source_path or "").strip() or None
     if raw_source is None:
         return None, str(root)
@@ -312,7 +313,7 @@ def _recovery_source_checkout_diagnostic(root: Path, exc: OSError | ValueError) 
     }
 
 
-def _failed_subagent_diagnostics_payload(root: Path, task_record: Any) -> dict[str, Any] | None:
+def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any) -> dict[str, Any] | None:
     """Collect the failed subagent's session, report, transcript, stdout, stderr, and exit code for the recovery prompt.
 
     Recovery diagnosis depends on knowing exactly what the prior agent
@@ -320,6 +321,7 @@ def _failed_subagent_diagnostics_payload(root: Path, task_record: Any) -> dict[s
     together the runtime state, the persisted SubagentRef, and the
     on-disk artifacts under the latest subagent base directory.
     """
+    root = workspace.root
     subagent_base = latest_subagent_base(root, task_record)
     if subagent_base is None or not subagent_base.exists():
         return None

@@ -1,16 +1,13 @@
 """Per-task repair for tasks the workspace still believes are ``running`` after a runner died — the bulk of the stale-runner recovery loop."""
 
 from datetime import UTC, datetime
-from pathlib import Path
 import sqlite3
 
-from litehive.config.loading import load_config
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import WorkspaceRepairSummary
-from litehive.db.schema import connect_workspace_db
 from litehive.observability.events import last_event_timestamp
 from litehive.recovery.interruption_state import (
     interruption_journal_message,
@@ -26,10 +23,11 @@ from litehive.state.locking import (
     subagent_process_is_stale,
 )
 from litehive.tasks.recovery_reports import record_recovery_report
+from litehive.workspace import Workspace
 
 
-def running_task_ids(root: Path) -> list[str]:
-    with connect_workspace_db(root) as connection:
+def running_task_ids(workspace: Workspace) -> list[str]:
+    with workspace.connect() as connection:
         try:
             rows = connection.execute(
                 """
@@ -53,25 +51,26 @@ def should_requeue_commit_stage_task(task: TaskRecord) -> bool:
 
 
 def can_attempt_stale_runner_recovery(
-    root: Path,
+    workspace: Workspace,
     tasks_by_id: dict[str, TaskRecord],
     running_task_ids: list[str],
 ) -> bool:
     """Gate that prevents the stale-runner repair from racing a live runner; we only intervene when the lock is unowned, the lock pid is dead, or the inactivity timeout proves the live runner is frozen."""
     if len(running_task_ids) > 1:
         return False
+    root = workspace.root
     if not current_thread_owns_runner_guard(root) and runner_lock_is_held(root):
         if not runner_lock_pid_is_stale(root):
-            config = load_config(root)
+            config = workspace.config()
             if config.inactivity_timeout_seconds is None:
                 return False
-            if not _has_inactive_running_tasks(root, tasks_by_id, config.inactivity_timeout_seconds):
+            if not _has_inactive_running_tasks(workspace, tasks_by_id, config.inactivity_timeout_seconds):
                 return False
     return True
 
 
 def recover_running_tasks(
-    root: Path,
+    workspace: Workspace,
     state,
     tasks_by_id: dict[str, TaskRecord],
     running_task_ids: list[str],
@@ -88,10 +87,10 @@ def recover_running_tasks(
             continue
         if task_id != state.active_task_id and not should_requeue_commit_stage_task(task):
             if state.active_task_id is not None:
-                metadata = read_runner_lock_metadata(root)
+                metadata = read_runner_lock_metadata(workspace.root)
                 if not runner_metadata_present(metadata):
                     continue
-        task_mutated, journal_message, prioritize = _recover_stale_running_task(root, task, summary=summary)
+        task_mutated, journal_message, prioritize = _recover_stale_running_task(workspace, task, summary=summary)
         if not task_mutated:
             continue
         transitioned.append(task)
@@ -109,7 +108,7 @@ def recover_running_tasks(
 
 
 def update_active_task_after_recovery(
-    root: Path,
+    workspace: Workspace,
     state,
     tasks_by_id: dict[str, TaskRecord],
     prioritized_ids: list[str],
@@ -126,7 +125,7 @@ def update_active_task_after_recovery(
         return mutated
     active_task = tasks_by_id.get(state.active_task_id)
     active_task_missing = state.active_task_id not in tasks_by_id and not _task_state_row_exists(
-        root, state.active_task_id
+        workspace, state.active_task_id
     )
     should_clear_active_task_id = (
         active_task_missing
@@ -151,7 +150,7 @@ def update_active_task_after_recovery(
 
 
 def _has_inactive_running_tasks(
-    root: Path,
+    workspace: Workspace,
     tasks_by_id: dict[str, TaskRecord],
     timeout_seconds: float,
 ) -> bool:
@@ -159,7 +158,7 @@ def _has_inactive_running_tasks(
     for task in tasks_by_id.values():
         if task.runtime.pipeline.execution_status != "running":
             continue
-        ts_str = last_event_timestamp(root, task)
+        ts_str = last_event_timestamp(workspace.root, task)
         if ts_str is None:
             continue
         try:
@@ -174,7 +173,7 @@ def _has_inactive_running_tasks(
 
 
 def _record_stale_recovery(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     stage: str,
     journal_message: str,
@@ -183,7 +182,7 @@ def _record_stale_recovery(
 ) -> None:
     """Emit the operator-facing recovery report and update the workspace repair summary so a single repair pass is reflected both in the per-task report and in the aggregate "what did repair do?" view shown by the CLI."""
     record_recovery_report(
-        root,
+        workspace.root,
         task,
         trigger_event_kind=TriggerEventKind.STALE_RUNNER_RECOVERY,
         origin_stage=stage,
@@ -205,7 +204,7 @@ def _record_stale_recovery(
 
 
 def _recover_stale_running_task(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     summary: WorkspaceRepairSummary | None,
 ) -> tuple[bool, str | None, bool]:
@@ -224,7 +223,7 @@ def _recover_stale_running_task(
     if stage is None:
         return False, None, False
     prepare_interrupted_task(
-        root,
+        workspace.root,
         task,
         stage=stage,
         summary=f"Interrupted run recovered after stale runner detection. Resume from `{stage}`.",
@@ -232,7 +231,7 @@ def _recover_stale_running_task(
     )
     canonicalize_resumable_queue_task(task, stage=stage)
     _record_stale_recovery(
-        root,
+        workspace,
         task,
         stage=stage,
         journal_message=f"Recovered stale runner state and returned the task to `{stage}`.",
@@ -242,8 +241,8 @@ def _recover_stale_running_task(
     return True, interruption_journal_message(task), True
 
 
-def _task_state_row_exists(root: Path, task_id: str) -> bool:
-    with connect_workspace_db(root) as connection:
+def _task_state_row_exists(workspace: Workspace, task_id: str) -> bool:
+    with workspace.connect() as connection:
         try:
             row = connection.execute(
                 "SELECT 1 FROM task_state WHERE task_id = ? LIMIT 1",
