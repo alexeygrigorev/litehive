@@ -6,6 +6,7 @@ from litehive.agents.session_store import load_subagent_report, load_subagent_se
 from litehive.config.loading import load_config
 from litehive.domain.common import PipelineState, pipeline_stage_key
 from litehive.domain.runtime import RuntimeRecoveryOutcome
+from litehive.workspace import Workspace
 from litehive.lifecycle.events import Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.persistence import TaskState
@@ -111,7 +112,7 @@ class RecoveryAgent(RoleAgent):
         repeated_recovery_fingerprint = _repeated_recovery_fingerprint_payload(trigger, recovery_history)
 
         # Analyze scope changes to distinguish operator cleanup from SWE scope creep
-        scope_analysis = analyze_scope_changes(root)
+        scope_analysis = analyze_scope_changes(Workspace.from_path(root))
 
         return RecoveryPrompt(
             role=base.role,

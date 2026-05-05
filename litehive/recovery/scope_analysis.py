@@ -13,17 +13,19 @@ from litehive.git.ops import (
     stash_pop,
     stash_push,
 )
+from litehive.workspace import Workspace
 
 
 class ScopeAnalysisError(RuntimeError):
     """Raised when scope analysis cannot inspect the current worktree."""
 
 
-def analyze_scope_changes(workspace_root: Path) -> dict[str, Any]:
+def analyze_scope_changes(workspace: Workspace) -> dict[str, Any]:
     """Analyze worktree changes to distinguish operator cleanup from SWE scope creep.
 
     Args:
-        workspace_root: Root directory of the workspace
+        workspace: Workspace to inspect; ``workspace.root`` is the worktree root
+            whose changes are being classified.
 
     Returns:
         Dict containing scope analysis with:
@@ -33,8 +35,14 @@ def analyze_scope_changes(workspace_root: Path) -> dict[str, Any]:
         - broken_on_main: list of files that are broken/failing on main
         - healthy_on_main: list of files that are healthy/passing on main
     """
+    workspace_root = workspace.root
     try:
-        deleted_files = _get_deleted_files(workspace_root)
+        try:
+            entries = diff_name_status(workspace_root, "main...HEAD")
+        except GitError as exc:
+            raise ScopeAnalysisError(str(exc)) from exc
+        deleted_files = [path for status, path in entries if status == "D"]
+
         if not deleted_files:
             return {
                 "is_operator_cleanup": True,
@@ -44,7 +52,14 @@ def analyze_scope_changes(workspace_root: Path) -> dict[str, Any]:
                 "healthy_on_main": [],
             }
 
-        broken_on_main, healthy_on_main = _classify_deleted_files(workspace_root, deleted_files)
+        broken_on_main: list[str] = []
+        healthy_on_main: list[str] = []
+        for file_path in deleted_files:
+            if _is_file_broken_on_main(workspace_root, file_path):
+                broken_on_main.append(file_path)
+            else:
+                healthy_on_main.append(file_path)
+
         is_operator_cleanup, reasoning = _classify_changes(deleted_files, broken_on_main, healthy_on_main)
         return {
             "is_operator_cleanup": is_operator_cleanup,
@@ -62,33 +77,6 @@ def analyze_scope_changes(workspace_root: Path) -> dict[str, Any]:
             "healthy_on_main": [],
             "diagnostic": {"kind": type(exc).__name__, "message": str(exc)},
         }
-
-
-def _get_deleted_files(workspace_root: Path) -> list[str]:
-    """Get list of files deleted in the worktree compared to main."""
-    try:
-        entries = diff_name_status(workspace_root, "main...HEAD")
-    except GitError as exc:
-        raise ScopeAnalysisError(str(exc)) from exc
-    return [path for status, path in entries if status == "D"]
-
-
-def _classify_deleted_files(workspace_root: Path, deleted_files: list[str]) -> tuple[list[str], list[str]]:
-    """Classify deleted files as broken vs healthy on main branch.
-
-    Returns:
-        Tuple of (broken_on_main, healthy_on_main) file lists
-    """
-    broken_on_main = []
-    healthy_on_main = []
-
-    for file_path in deleted_files:
-        if _is_file_broken_on_main(workspace_root, file_path):
-            broken_on_main.append(file_path)
-        else:
-            healthy_on_main.append(file_path)
-
-    return broken_on_main, healthy_on_main
 
 
 def _is_file_broken_on_main(workspace_root: Path, file_path: str) -> bool:
