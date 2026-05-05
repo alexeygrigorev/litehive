@@ -57,10 +57,20 @@ _RESUMABLE_PIPELINE_STAGES: frozenset[TaskStage] = frozenset(
 
 
 def enqueue_task(root: Path, task_id: str) -> WorkspaceState:
+    """Append a task to the back of the workspace queue.
+
+    No production or test callers remain — candidate for removal alongside
+    ``enqueue_task_front``; queue inserts now go through ``move_queued_task``
+    and ``prioritize_queued_tasks`` from the queue CLI.
+    """
     return _enqueue_task(root, task_id, front=False)
 
 
 def enqueue_task_front(root: Path, task_id: str) -> WorkspaceState:
+    """Insert a task at the head of the workspace queue.
+
+    No callers — see ``enqueue_task``; both wrappers look like dead weight.
+    """
     return _enqueue_task(root, task_id, front=True)
 
 
@@ -98,7 +108,12 @@ def _enqueue_task(root: Path, task_id: str, front: bool) -> WorkspaceState:
 
 
 def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
+    """Reorder a queued task to a 1-based position, recording an audit entry.
 
+    The ``litehive queue move`` CLI calls this when an operator hand-curates the
+    queue; the engine switch flow also re-positions the active task here when
+    the user swaps engines mid-run.
+    """
     if position < 1:
         raise ValueError("Queue position must be 1 or greater")
     with workspace_lock(root):
@@ -134,7 +149,11 @@ def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
 
 
 def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
+    """Hoist the given queued tasks to the front of the queue, in order.
 
+    Called by the ``litehive queue prioritize`` CLI when an operator wants a
+    specific batch run next without manually moving each task one at a time.
+    """
     if not task_ids:
         raise ValueError("At least one task id is required")
     seen: set[str] = set()
@@ -186,6 +205,13 @@ def reset_task_for_recovery(
     pipeline_status: str,
     clear_last_outcome: bool = True,
 ) -> None:
+    """Rewind a task's lifecycle cursor and clear runtime activity for a fresh attempt.
+
+    The status-mutation flows (``requeue_task``, flagged-task auto-recovery,
+    and the dequeue path that revives flagged tasks) call this so the runner
+    sees a clean ``idle`` stage marker and zeroed retry counters instead of
+    leftover ``running``/``failed`` state from the previous attempt.
+    """
     now = utcnow()
     task.status = status
     task.close_reason = None
@@ -224,6 +250,12 @@ def drop_task_from_workspace_state(state: WorkspaceState, task_id: str) -> bool:
 
 
 def prepare_completed_task_for_recovery(task: TaskRecord, recovery_stage: str) -> None:
+    """Reopen a finished task at the chosen stage by resetting its lifecycle and dropping the merge SHA.
+
+    The completed-task recovery flow (``litehive task recover`` after a task is
+    already ``done``) calls this so the merge commit reference is cleared and
+    the runner re-picks the task from the chosen pipeline stage.
+    """
     reset_task_for_recovery(
         task,
         status="queued",
@@ -242,6 +274,12 @@ def _normalize_resumable_stage_name(stage: str | None) -> str | None:
 
 
 def resumable_queue_stage(task: TaskRecord) -> str | None:
+    """Pick the pipeline stage a queued/idle task should resume at, or ``None`` if it must restart.
+
+    Used by execution recovery and the ``resume`` lifecycle command to decide
+    whether an interrupted task can pick up mid-pipeline (grooming through
+    commit) instead of going back to ``backlog``.
+    """
     interruption = task.runtime.execution.interruption
     current_stage = task.runtime.pipeline.current_stage
     candidates = [
@@ -259,6 +297,12 @@ def resumable_queue_stage(task: TaskRecord) -> str | None:
 
 
 def resumable_running_stage(task: TaskRecord) -> str | None:
+    """Pick the resume stage for a task whose runtime still claims to be ``running``.
+
+    Stale-runner recovery calls this when it has just decided a "running" task
+    is actually orphaned (subagent PID dead): it trusts the live current-stage
+    marker first, then falls back to the queued-stage heuristics.
+    """
     current_stage = task.runtime.pipeline.current_stage
     if current_stage.status == "running":
         normalized = _normalize_resumable_stage_name(None if current_stage.stage is None else str(current_stage.stage))
@@ -268,6 +312,13 @@ def resumable_running_stage(task: TaskRecord) -> str | None:
 
 
 def canonicalize_resumable_queue_task(task: TaskRecord, stage: str | None = None) -> str | None:
+    """Force a resumable task into a clean ``queued`` shape at the chosen pipeline stage.
+
+    Workspace-repair and stale-runner recovery call this once they have decided
+    a task is recoverable: it strips ``flag_reason``/``close_reason``, plants an
+    ``idle`` stage marker, and re-points any sticky ``interrupted`` outcome at
+    the resume stage so the runner can pick the task up cleanly.
+    """
     if stage is not None:
         target_stage = _normalize_resumable_stage_name(stage)
     else:
@@ -340,6 +391,13 @@ def _live_active_pipeline_stage(state: WorkspaceState, tasks_by_id: dict[str, Ta
 
 
 def task_has_resume_marker(task: TaskRecord) -> bool:
+    """Tell whether a task's runtime still vouches for its declared pipeline stage.
+
+    The stale-pipeline normalizer (and the workspace-repair pass that mirrors
+    it) calls this before demoting a queued task back to ``backlog`` — a task
+    with a trustworthy stage marker or a matching interruption record must be
+    left alone so it can resume in place.
+    """
     stage = str(task.pipeline_status)
     current_stage = task.runtime.pipeline.current_stage
     if current_stage.stage == stage and current_stage.status in _TRUSTED_STAGE_MARKER_STATUSES:
@@ -377,7 +435,12 @@ def _normalize_stale_pipeline_statuses(
 
 
 def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
+    """Pin a specific task as the workspace's active task, bypassing the queue selector.
 
+    Integration tests and helper fixtures use this to put a known task in the
+    runner's slot directly; production code reaches active state through
+    ``dequeue_next_task_selection`` instead.
+    """
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
         state.active_task_id = task_id
@@ -395,11 +458,22 @@ def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
 
 
 def peek_next_task(root: Path) -> TaskRecord | None:
+    """Return the next runnable task without dequeuing it; only test code calls this.
+
+    Production status surfaces use ``peek_next_task_selection`` so they can
+    surface blocked tasks too — this thin wrapper drops that information and
+    is a candidate for inlining at the one test caller.
+    """
     return peek_next_task_selection(root).task
 
 
 def peek_next_task_selection(root: Path) -> TaskSelection:
+    """Return the next runnable task plus blocked-task diagnostics, leaving the queue intact.
 
+    Currently exercised only by queue-invariant tests; the public status
+    surfaces use the dequeue path. If no production caller appears, fold it
+    back into the dequeue helper.
+    """
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
@@ -414,7 +488,11 @@ def peek_next_task_selection(root: Path) -> TaskSelection:
 
 
 def plan_task_selections(root: Path) -> TaskPlan:
+    """Simulate dequeue iterations against a copy of state to preview the runner's plan.
 
+    No callers — the ``litehive plan`` CLI surface this was written for never
+    landed; safe to remove unless that surface is being revived.
+    """
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
@@ -440,11 +518,23 @@ def plan_task_selections(root: Path) -> TaskPlan:
 
 
 def dequeue_next_task(root: Path) -> TaskRecord | None:
+    """Pick the next runnable task and promote it to active; the runner's main entry point.
+
+    The CLI runner loop and the one-shot ``litehive run`` command call this to
+    advance the queue; callers that also need to render blocked-task reasons
+    use ``dequeue_next_task_selection`` directly.
+    """
     return dequeue_next_task_selection(root).task
 
 
 def dequeue_next_task_selection(root: Path) -> TaskSelection:
+    """Pick the next runnable task, promote it to active, and report blocked siblings.
 
+    Drives the runner's task pickup: resolves the next eligible candidate,
+    auto-recovers flagged tasks that still have budget, transitions the task
+    from ``queued``/``interrupted`` to ``in_progress``, and persists the
+    workspace mutation so the runner can begin executing.
+    """
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
@@ -530,6 +620,13 @@ def _is_parked_task(task: TaskRecord) -> bool:
 
 
 def is_task_eligible_for_execution(task: TaskRecord) -> bool:
+    """Decide whether a task is allowed to be dequeued or kept active right now.
+
+    The single source of truth for "is this task runnable?" — the queue
+    selector, workspace-repair flows, status diagnostics, and the
+    single-active-task invariant in the workspace lock all consult this so
+    they share the same view of terminal/blocked statuses.
+    """
     if has_blocking_failed_run_history(task):
         return False
     if _has_terminal_execution_status(task):
@@ -576,7 +673,12 @@ def _task_blockers(task: TaskRecord, tasks_by_id: dict[str, TaskRecord]) -> list
 
 
 def validate_task_dependencies(root: Path, task_id: str, depends_on: list[str]) -> None:
+    """Reject a task whose ``depends_on`` list is self-referential, missing, or cyclic.
 
+    Called when persisting a new task and when ``litehive update`` rewrites a
+    task's dependency list — refuses the mutation before it can corrupt the
+    queue selector's blocked-task graph.
+    """
     tasks_by_id = {task.id: task for task in list_tasks(root, strict=False)}
     seen: set[str] = set()
     for dependency_id in depends_on:
@@ -769,11 +871,22 @@ def _resolve_next_task_from_snapshot(
 
 
 def clear_active_task(root: Path) -> WorkspaceState:
+    """Detach whichever task currently sits in the active slot.
+
+    No callers — operators clear the active task via stop/close/abandon flows
+    that already null out ``state.active_task_id`` themselves. Candidate for
+    removal.
+    """
     return set_active_task(root, None)
 
 
 def restore_untouched_active_task(root: Path) -> WorkspaceState:
+    """Push the active task back onto the queue if it was never actually started.
 
+    No callers — duplicates the resume/recovery logic in
+    ``recovery.execution_recovery`` and ``restore_missing_queued_tasks``. Looks
+    like a leftover from before workspace-repair owned this concern.
+    """
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
         validate_single_active_task(root, state)
@@ -842,7 +955,13 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
 
 
 def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict[str, list[str]]:
+    """Collect every signal that says "this task is active", keyed by task id.
 
+    Underpins the single-active-task invariant: the workspace lock and the
+    task-stop flow call this to prove no two tasks claim ``in_progress`` /
+    ``running`` at the same time, and to spell out which signal disagrees when
+    they do.
+    """
     markers: dict[str, list[str]] = {}
     current_state = state or load_state(root)
     tasks = list_tasks(root, strict=False)
@@ -868,6 +987,12 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
 
 
 def validate_single_active_task(root: Path, state: WorkspaceState | None = None) -> None:
+    """Raise ``WorkspaceConflictError`` if more than one task is currently active.
+
+    Hot-path guard: every queue mutation, runner pickup, and stop flow calls
+    this before touching state so a corrupted workspace fails loudly instead
+    of silently launching two runners against the same worktree.
+    """
     markers = active_task_markers(root, state)
     if len(markers) <= 1:
         return

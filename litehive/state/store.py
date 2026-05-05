@@ -59,6 +59,11 @@ class RuntimeStore:
         return task_event_log_has_events(self.root) and sqlite_task_tables_empty(self.root)
 
     def load_workspace_state(self) -> WorkspaceState | None:
+        """Reassemble pool + queue rows into a single WorkspaceState for the queue and persist layers.
+
+        Stitches the two-table split (pool_state for non-queue fields, queue for the ordered task list)
+        back into one object. Returns None when the workspace has never been bootstrapped.
+        """
         with connect_workspace_db(self.root) as connection:
             self.ensure_workspace_state_rows(connection)
             state_row = connection.execute(
@@ -76,6 +81,11 @@ class RuntimeStore:
         return WorkspaceState(**payload)
 
     def load_workspace_state_read_only(self) -> WorkspaceState | None:
+        """Read workspace state without acquiring the writer lock — used by status snapshot rendering.
+
+        The status diagnostics path runs concurrently with the daemon and must not contend for the
+        workspace DB. Opens SQLite in ?mode=ro and returns None when the DB file does not yet exist.
+        """
         db_path = workspace_path(self.root, "data.db")
         if not db_path.exists():
             return None
@@ -96,12 +106,18 @@ class RuntimeStore:
         return WorkspaceState(**payload)
 
     def save_workspace_state(self, state: WorkspaceState) -> None:
+        """Persist the workspace pool/queue snapshot and append a replay event in one transaction.
+
+        Used by the persist layer when only workspace-level fields (counters, queue) changed and no
+        per-task records need to be written. Multi-record writes go through save_runtime_transaction.
+        """
         with connect_workspace_db(self.root) as connection:
             self._save_workspace_state(connection, state)
             self._append_workspace_state_event(state)
             connection.commit()
 
     def load_task_state(self, task_id: str) -> TaskStateRecord | None:
+        """Hydrate a task's mutable runtime/lifecycle record — the half that changes as the task runs."""
         with connect_workspace_db(self.root) as connection:
             row = connection.execute(
                 "SELECT payload FROM task_state WHERE task_id = ?",
@@ -113,6 +129,7 @@ class RuntimeStore:
         return TaskStateRecord(**payload)
 
     def load_task_intent(self, task_id: str) -> TaskIntentRecord | None:
+        """Read the immutable task definition (goal, criteria, plan) — the half set at creation time."""
         with connect_workspace_db(self.root) as connection:
             row = connection.execute(
                 "SELECT payload FROM task_intent WHERE task_id = ?",
@@ -124,6 +141,7 @@ class RuntimeStore:
         return TaskIntentRecord.model_validate(payload)
 
     def list_task_intents(self) -> list[TaskIntentRecord]:
+        """Enumerate all known task intents in id order — feeds list/status surfaces and the queue rebuilder."""
         with connect_workspace_db(self.root) as connection:
             rows = connection.execute(
                 "SELECT payload FROM task_intent ORDER BY task_id ASC",
@@ -135,6 +153,10 @@ class RuntimeStore:
         return intents
 
     def save_task_intent(self, task_id: str, intent: TaskIntentRecord) -> None:
+        """Persist the task definition row plus a replay event when only the intent (not state) changes.
+
+        Used on task creation and on `litehive update` — anywhere a multi-record transaction is overkill.
+        """
         with connect_workspace_db(self.root) as connection:
             self._save_task_intent(connection, task_id, intent)
             append_task_event(
@@ -146,6 +168,11 @@ class RuntimeStore:
             connection.commit()
 
     def save_task_state(self, task_id: str, state: TaskStateRecord) -> None:
+        """Persist a task's runtime/lifecycle row plus a replay event — single-record convenience write.
+
+        Multi-record stage transitions go through save_runtime_transaction so workspace, intent, state,
+        and audit entries land atomically.
+        """
         with connect_workspace_db(self.root) as connection:
             self._save_task_state(connection, task_id, state)
             append_task_event(
@@ -164,6 +191,12 @@ class RuntimeStore:
         task_journal_messages: dict[str, str] | None = None,
         audit_entries: list[TaskAuditEntry] | None = None,
     ) -> None:
+        """Atomically commit a stage transition: workspace + per-task records + journal + audit in one tx.
+
+        This is the single write entry point for the queue mutation path and the locking layer when a
+        task moves between stages — every record either lands together or none do, so a crash mid-write
+        cannot leave queue and task_state disagreeing about who owns what.
+        """
         with connect_workspace_db(self.root) as connection:
             if workspace_state is not None:
                 self._save_workspace_state(connection, workspace_state)
@@ -190,6 +223,11 @@ class RuntimeStore:
         task_id: str,
         audit_entries: list[TaskAuditEntry] | None = None,
     ) -> None:
+        """Purge every per-task row across all task-scoped tables when a task is deleted from the workspace.
+
+        Called by the records layer when an operator deletes a task; the audit entries (if any) are the
+        only trace of why the rows are gone, so they are written in the same transaction.
+        """
         with connect_workspace_db(self.root) as connection:
             for table_name in _TASK_SCOPED_TABLES:
                 connection.execute(f"DELETE FROM {table_name} WHERE task_id = ?", (task_id,))
@@ -212,6 +250,7 @@ class RuntimeStore:
             connection.commit()
 
     def _append_workspace_state_event(self, state: WorkspaceState) -> None:
+        """Emit a workspace_state_saved event so the task_event_log can replay the queue/pool snapshot."""
         append_task_event(
             self.root,
             event_type="workspace_state_saved",
@@ -278,6 +317,11 @@ class RuntimeStore:
             self._append_workspace_state_event(workspace_state)
 
     def _save_workspace_state(self, connection: sqlite3.Connection, state: WorkspaceState) -> None:
+        """Write the pool_state and queue rows from a WorkspaceState — the inverse of load_workspace_state.
+
+        Splits the queue out of the payload because pool_state and queue are stored as separate rows so
+        a hot queue update does not have to rewrite the (larger) workspace pool blob.
+        """
         now = utcnow()
         payload = state.model_dump(mode="json")
         queue_payload = json.dumps(payload.pop("queue"), sort_keys=True)
@@ -303,12 +347,18 @@ class RuntimeStore:
         )
 
     def load_task_runtime(self, task_id: str) -> TaskRuntime | None:
+        """Project just the TaskRuntime sub-object out of the task_state row — convenience for runtime callers."""
         state = self.load_task_state(task_id)
         if state is None:
             return None
         return state.runtime
 
     def save_task_runtime(self, task_id: str, runtime: TaskRuntime) -> None:
+        """Replace just the runtime block on an existing task_state row, preserving lifecycle/status fields.
+
+        The pipeline-runner call sites only have a TaskRuntime in hand; this helper fuses it with the
+        existing TaskStateRecord (or a fresh one if the task is new) so callers don't have to reload.
+        """
         state = self.load_task_state(task_id) or TaskStateRecord()
         state.runtime = runtime.model_copy(deep=True)
         state.updated_at = runtime.pipeline.updated_at or state.updated_at or utcnow()
@@ -320,6 +370,11 @@ class RuntimeStore:
         task_id: str,
         state: TaskStateRecord,
     ) -> None:
+        """Upsert task_state and mirror lifecycle/pipeline status onto the task_intent index columns.
+
+        The mirrored columns let queries filter by status without parsing the JSON blob; they MUST be
+        rewritten on every state change or the queue will see stale status during selection.
+        """
         now = state.updated_at or state.runtime.pipeline.updated_at or utcnow()
         state = state.model_copy(deep=True)
         state.updated_at = now
@@ -352,6 +407,12 @@ class RuntimeStore:
         task_id: str,
         intent: TaskIntentRecord,
     ) -> None:
+        """Upsert task_intent, denormalizing fields into searchable columns alongside the JSON payload.
+
+        The denormalized columns (slug, title, priority, plan_json, ...) exist so list/filter queries
+        avoid full JSON parsing; on conflict the payload and columns are rewritten while lifecycle and
+        pipeline status come from the live task_state row to avoid clobbering in-flight transitions.
+        """
         now = utcnow()
         payload = intent.model_dump(mode="json")
         existing_state = _load_task_state_for_intent_columns(connection, task_id)
@@ -410,6 +471,10 @@ class RuntimeStore:
         )
 
     def append_task_journal(self, task_id: str, message: str) -> None:
+        """Append a free-form journal line to a task — used by `litehive journal` and stage commentary.
+
+        Each entry is auto-numbered so concurrent appends don't collide on entry_index.
+        """
         with connect_workspace_db(self.root) as connection:
             entry = self._append_task_journal(connection, task_id, message)
             append_task_event(
@@ -426,6 +491,11 @@ class RuntimeStore:
         task_id: str,
         message: str,
     ) -> dict[str, object]:
+        """Insert one task_journal row inside an existing transaction, returning the entry for replay events.
+
+        Shared by append_task_journal (single-record write) and save_runtime_transaction (bulk transition);
+        the returned dict is the canonical event-log shape so both paths emit identical replay payloads.
+        """
         created_at = utcnow()
         row = connection.execute(
             "SELECT COALESCE(MAX(entry_index) + 1, 0) AS next_index FROM task_journal WHERE task_id = ?",
@@ -457,6 +527,11 @@ class RuntimeStore:
         status: str,
         payload: dict[str, object],
     ) -> None:
+        """Record a long-lived process (daemon, runner) with its PID and heartbeat for liveness checks.
+
+        Called by the process-lock layer when a daemon claims its slot, and by daemon registry to
+        publish heartbeats. The denormalized pid/heartbeat columns let liveness probes avoid JSON parsing.
+        """
         now = utcnow()
         with connect_workspace_db(self.root) as connection:
             connection.execute(
@@ -504,11 +579,17 @@ class RuntimeStore:
             connection.commit()
 
     def clear_process_state(self, process_key: str) -> None:
+        """Remove the process registry row when a daemon shuts down cleanly — frees the named slot."""
         with connect_workspace_db(self.root) as connection:
             connection.execute("DELETE FROM runtime_process_state WHERE process_key = ?", (process_key,))
             connection.commit()
 
     def load_process_state(self, process_key: str) -> dict[str, object] | None:
+        """Return the registered process row merged with its JSON payload — used by liveness checks.
+
+        The merge fills any missing JSON keys from the denormalized columns so older payloads written
+        before a column was added still surface PID/heartbeat to the caller.
+        """
         with connect_workspace_db(self.root) as connection:
             row = connection.execute(
                 """
@@ -549,6 +630,11 @@ class RuntimeStore:
         return payload
 
     def highest_task_number(self) -> int:
+        """Scan task_intent and task_state for the largest T-NNNN- numeric prefix to seed next_task_number.
+
+        Called by the records layer when a workspace is rebooted: WorkspaceState.next_task_number must
+        not collide with an existing T-id, so it is recomputed from the actual rows rather than trusted.
+        """
         task_ids: set[str] = set()
         with connect_workspace_db(self.root) as connection:
             for table_name in ("task_intent", "task_state"):
@@ -564,6 +650,11 @@ class RuntimeStore:
 
     @staticmethod
     def ensure_workspace_state_rows(connection: sqlite3.Connection) -> None:
+        """Seed the singleton pool_state and queue rows on first connect so subsequent loads don't return None.
+
+        INSERT OR IGNORE means it is safe to call on every connect — the bootstrap path and load_workspace_state
+        both invoke this so a freshly created DB behaves the same as one that has been running for weeks.
+        """
         now = utcnow()
         connection.execute(
             """
@@ -590,6 +681,7 @@ class RuntimeStore:
 
 
 def runtime_store(root: Path) -> RuntimeStore:
+    """Module-level factory used everywhere instead of `RuntimeStore(root)` so tests can monkey-patch one symbol."""
     return RuntimeStore(root)
 
 
