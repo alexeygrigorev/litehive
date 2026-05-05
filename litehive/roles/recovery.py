@@ -9,6 +9,7 @@ from litehive.domain.runtime import RuntimeRecoveryOutcome
 from litehive.lifecycle.events import Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.prompt_types import RecoveryPrompt
 from litehive.recovery.scope_analysis import analyze_scope_changes
 from litehive.state.records import get_task_record
 from litehive.tasks.paths import latest_subagent_base, read_text_artifact, resolve_artifact_path, task_dir
@@ -76,7 +77,7 @@ class RecoveryAgent(RoleAgent):
     FRESH_ATTEMPT_INSTRUCTIONS = FRESH_ATTEMPT_GUIDANCE
     RETRY_ATTEMPT_INSTRUCTIONS = RETRY_ATTEMPT_GUIDANCE
 
-    def build_prompt(self, state: TaskState) -> dict[str, Any]:
+    def build_prompt(self, state: TaskState) -> RecoveryPrompt:
         """Augment the base prompt with the recovery-only diagnostic payload.
 
         Pulls the active trigger, recovery history, repeated-fingerprint
@@ -90,11 +91,11 @@ class RecoveryAgent(RoleAgent):
         task_record = None
         recovery_history: list[dict[str, Any]] = []
         repeated_recovery_fingerprint = None
-        recovery_execution_root = None
-        litehive_source_path = None
-        recovery_config_diagnostic = None
-        failed_subagent_diagnostics = None
-        scope_analysis = None
+        recovery_execution_root: str | None = None
+        litehive_source_path: str | None = None
+        recovery_config_diagnostic: dict[str, str] | None = None
+        failed_subagent_diagnostics: dict[str, Any] | None = None
+        scope_analysis: dict[str, Any] | None = None
 
         if task_record is None and self.prompt_context and self.prompt_context.workspace_root:
             task_record = get_task_record(self.prompt_context.workspace_root, state.task_id)
@@ -116,20 +117,33 @@ class RecoveryAgent(RoleAgent):
         if root is not None:
             scope_analysis = analyze_scope_changes(root, state.task_id)
 
-        base.update(
-            {
-                "litehive_source_path": litehive_source_path,
-                "recovery_execution_root": recovery_execution_root,
-                "recovery_config_diagnostic": recovery_config_diagnostic,
-                "recovery_trigger": trigger.to_payload() if trigger is not None else None,
-                "recovery_history": recovery_history,
-                "repeated_recovery_fingerprint": repeated_recovery_fingerprint,
-                "recovery_failure_explanation": state.recovery_failure_explanation,
-                "failed_subagent_diagnostics": failed_subagent_diagnostics,
-                "scope_analysis": scope_analysis,
-            }
+        return RecoveryPrompt(
+            role=base.role,
+            stage=base.stage,
+            task_id=base.task_id,
+            pipeline_mode=base.pipeline_mode,
+            stage_retry=base.stage_retry,
+            instruction_variant=base.instruction_variant,
+            instruction_layers=base.instruction_layers,
+            last_report=base.last_report,
+            last_rejection=base.last_rejection,
+            failed_run_history=base.failed_run_history,
+            runner_hooks=base.runner_hooks,
+            activity=base.activity,
+            nudge=base.nudge,
+            nudge_message=base.nudge_message,
+            conflict_files=base.conflict_files,
+            merge_attempt=base.merge_attempt,
+            litehive_source_path=litehive_source_path,
+            recovery_execution_root=recovery_execution_root,
+            recovery_config_diagnostic=recovery_config_diagnostic,
+            recovery_trigger=trigger.to_payload() if trigger is not None else None,
+            recovery_history=recovery_history,
+            repeated_recovery_fingerprint=repeated_recovery_fingerprint,
+            recovery_failure_explanation=state.recovery_failure_explanation,
+            failed_subagent_diagnostics=failed_subagent_diagnostics,
+            scope_analysis=scope_analysis,
         )
-        return base
 
     def verdict_to_event(self, verdict: AgentVerdict) -> Event:
         """Translate a recovery agent verdict into a recovery lifecycle event.

@@ -20,7 +20,9 @@ from litehive.lifecycle.nodes.agent import (
     TransientError,
     UnrecoverableError,
 )
+from litehive.domain.common import PipelineState
 from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.prompt_types import AgentPrompt
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task
 from tests.support.lifecycle_fakes import InMemorySessionStore
@@ -70,14 +72,20 @@ class _TrivialAgent(AgentNode):
 class _HeruPromptAgent(AgentNode):
     """AgentNode that emits the prompt shape expected by HeruEngineAdapter."""
 
-    def build_prompt(self, state: TaskState) -> dict:
-        return {
-            "task_id": state.task_id,
-            "stage": self.name,
-            "role": "swe",
-            "pipeline_mode": "full",
-            "instructions": [],
-        }
+    def build_prompt(self, state: TaskState) -> AgentPrompt:
+        return AgentPrompt(
+            role="swe",
+            stage=PipelineState(self.name),
+            task_id=state.task_id,
+            pipeline_mode=PipelineMode.FULL,
+            stage_retry=0,
+            instruction_variant="fresh",
+            instruction_layers=[],
+            last_report={},
+            last_rejection=None,
+            failed_run_history=[],
+            runner_hooks=[],
+        )
 
 
 def make_state(**overrides) -> TaskState:

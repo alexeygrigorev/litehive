@@ -648,7 +648,7 @@ class _RejectRecoveryEngine:
 
     def run_turn(self, session, prompt, state) -> AgentVerdict:
         del session, state
-        if prompt["role"] == "recovery":
+        if prompt.role == "recovery":
             return AgentVerdict(outcome="reject", reason="recovery could not fix the hook failure")
         return AgentVerdict(outcome="pass")
 
@@ -660,7 +660,7 @@ class _RejectMergeResolverEngine:
 
     def run_turn(self, session, prompt, state) -> AgentVerdict:
         del session
-        if state.stage == "merge_resolving" or prompt["role"] == "merge-resolver":
+        if state.stage == "merge_resolving" or prompt.role == "merge-resolver":
             return AgentVerdict(outcome="reject", reason=self.reason)
         return AgentVerdict(outcome="pass")
 
@@ -676,9 +676,9 @@ class _RecordingPassEngine:
             {
                 "engine": self.name,
                 "stage": state.stage,
-                "role": prompt["role"],
-                "pipeline_mode": prompt["pipeline_mode"],
-                "task_id": prompt["task_id"],
+                "role": prompt.role,
+                "pipeline_mode": prompt.pipeline_mode.value,
+                "task_id": prompt.task_id,
             }
         )
         return AgentVerdict(outcome="pass")

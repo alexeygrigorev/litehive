@@ -1,7 +1,8 @@
-from typing import Any
+from dataclasses import replace
 
 from litehive.domain.common import PipelineState
 from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.prompt_types import AgentPrompt
 from .base import RoleAgent
 
 ROLE_GUIDANCE = """\
@@ -50,7 +51,7 @@ class MergeAgent(RoleAgent):
     FRESH_ATTEMPT_INSTRUCTIONS = FRESH_ATTEMPT_GUIDANCE
     RETRY_ATTEMPT_INSTRUCTIONS = RETRY_ATTEMPT_GUIDANCE
 
-    def build_prompt(self, state: TaskState) -> dict[str, Any]:
+    def build_prompt(self, state: TaskState) -> AgentPrompt:
         """Add the conflict file list and merge attempt counter to the base prompt so the resolver agent knows what to fix.
 
         Called by the lifecycle runner when a commit-stage merge conflict
@@ -65,10 +66,4 @@ class MergeAgent(RoleAgent):
             merge_attempt = state.merge_context.merge_attempt
         else:
             merge_attempt = 1
-        base.update(
-            {
-                "conflict_files": conflict_files,
-                "merge_attempt": merge_attempt,
-            }
-        )
-        return base
+        return replace(base, conflict_files=conflict_files, merge_attempt=merge_attempt)

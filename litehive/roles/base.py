@@ -8,6 +8,7 @@ import yaml
 from litehive.domain.common import PipelineState, TaskStage
 from litehive.lifecycle.nodes.agent import AgentNode, EngineSelector, SessionProvider
 from litehive.lifecycle.persistence import LastRejection, TaskState
+from litehive.lifecycle.prompt_types import AgentPrompt
 from .guidance import default_startup_guidance
 
 
@@ -91,7 +92,7 @@ class RoleAgent(AgentNode):
         )
         self.prompt_context = prompt_context or PromptContext()
 
-    def build_prompt(self, state: TaskState) -> dict[str, Any]:
+    def build_prompt(self, state: TaskState) -> AgentPrompt:
         """Assemble the typed prompt payload every stage agent receives at turn start.
 
         Bundles the role/stage identity, retry counters, layered instruction
@@ -102,19 +103,19 @@ class RoleAgent(AgentNode):
         last_rejection = self._last_rejection_for_prompt(state)
         instruction_layers, instruction_variant = self._assemble_instruction_layers(last_rejection)
         runner_hooks = self._runner_hooks_for_stage()
-        return {
-            "role": self.ROLE,
-            "stage": self.NODE_NAME,
-            "task_id": state.task_id,
-            "pipeline_mode": state.pipeline_mode.value,
-            "stage_retry": state.stage_retry.get(self.NODE_NAME, 0),
-            "instruction_variant": instruction_variant,
-            "instruction_layers": instruction_layers,
-            "last_report": state.last_report.to_payload(),
-            "last_rejection": _last_rejection_payload(last_rejection) if last_rejection is not None else None,
-            "failed_run_history": _failed_run_history_payload(state),
-            "runner_hooks": runner_hooks,
-        }
+        return AgentPrompt(
+            role=self.ROLE,
+            stage=self.NODE_NAME,
+            task_id=state.task_id,
+            pipeline_mode=state.pipeline_mode,
+            stage_retry=state.stage_retry.get(self.NODE_NAME, 0),
+            instruction_variant=instruction_variant,
+            instruction_layers=instruction_layers,
+            last_report=state.last_report.to_payload(),
+            last_rejection=_last_rejection_payload(last_rejection) if last_rejection is not None else None,
+            failed_run_history=_failed_run_history_payload(state),
+            runner_hooks=runner_hooks,
+        )
 
     def _last_rejection_for_prompt(self, state: TaskState) -> LastRejection | None:
         """Return the rejection context the next agent turn should actually see.

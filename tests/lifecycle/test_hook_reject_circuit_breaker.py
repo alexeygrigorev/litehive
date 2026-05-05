@@ -36,7 +36,7 @@ class _RecoveryScenarioEngine:
 
     def run_turn(self, session, prompt, state) -> AgentVerdict:
         del session
-        if prompt["role"] != "recovery":
+        if prompt.role != "recovery":
             return AgentVerdict(outcome="pass")
         self.recovery_calls.append(state.task_id)
         if self.recovery_mode == "fix":
@@ -56,7 +56,7 @@ class _CrashThenRecoveryEngine:
 
     def run_turn(self, session, prompt, state) -> AgentVerdict:
         del session
-        if prompt["role"] == "recovery":
+        if prompt.role == "recovery":
             self.recovery_calls.append(state.task_id)
             return AgentVerdict(outcome="resume", metadata={"target_stage": "implementing"})
         if state.stage == "implementing" and state.task_id not in self.crashed_tasks:
@@ -82,7 +82,7 @@ class _CrashUntilLitehiveFixEngine:
     def run_turn(self, session, prompt, state) -> AgentVerdict:
         del session
         fix_marker = self.source_repo / ".litehive-recovery-fix"
-        if prompt["role"] == "recovery":
+        if prompt.role == "recovery":
             self.recovery_calls.append(state.task_id)
             fix_marker.write_text("fixed\n", encoding="utf-8")
             return AgentVerdict(outcome="resume", metadata={"target_stage": "implementing"})

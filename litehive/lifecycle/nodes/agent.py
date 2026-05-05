@@ -1,5 +1,5 @@
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Literal, Protocol
 
 from litehive.domain.common import PipelineState
@@ -184,10 +184,24 @@ class AgentNode(Node):
     def build_nudge_prompt(self, state: TaskState, original_prompt: Any) -> Any:
         """Return a variant of the original prompt that reminds the agent to report.
 
-        The default implementation works for dict-shaped prompts produced by
-        ``RoleAgent.build_prompt``: it sets a ``nudge`` flag the serializer
-        can surface. Subclasses with non-dict prompts must override.
+        The default implementation works for typed ``AgentPrompt`` payloads
+        produced by ``RoleAgent.build_prompt`` and the legacy dict-shaped
+        prompts emitted by test stubs: in both cases it sets a ``nudge``
+        flag the serializer can surface. Subclasses with non-dict prompts
+        must override.
         """
+        from .. import prompt_types  # noqa: PLC0415  (avoid cycle)
+
+        if isinstance(original_prompt, prompt_types.AgentPrompt):
+            return replace(
+                original_prompt,
+                nudge=True,
+                nudge_message=(
+                    "You finished your last turn without submitting a verdict via "
+                    "`litehive agent report --verdict <pass|reject>`. Please "
+                    "review your work and submit your verdict now."
+                ),
+            )
         if isinstance(original_prompt, dict):
             nudged = dict(original_prompt)
             nudged["nudge"] = True

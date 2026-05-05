@@ -8,7 +8,9 @@ from litehive.domain.agent import SubagentResult
 from litehive.lifecycle.heru_factory import HeruEngineAdapter
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.system import GitCommitNode, GitWorktreeSyncNode
+from litehive.domain.common import PipelineState
 from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.prompt_types import AgentPrompt
 from litehive.lifecycle.sessions import Session
 from litehive.lifecycle.types import PipelineMode
 from litehive.lifecycle.events import Pass
@@ -127,13 +129,19 @@ def test_agent_and_commit_use_persisted_worktree_path(
 
     verdict = adapter.run_turn(
         session,
-        {
-            "task_id": task.id,
-            "stage": "implementing",
-            "role": "swe",
-            "pipeline_mode": "full",
-            "instructions": [],
-        },
+        AgentPrompt(
+            role="swe",
+            stage=PipelineState.IMPLEMENTING,
+            task_id=task.id,
+            pipeline_mode=PipelineMode.FULL,
+            stage_retry=0,
+            instruction_variant="fresh",
+            instruction_layers=[],
+            last_report={},
+            last_rejection=None,
+            failed_run_history=[],
+            runner_hooks=[],
+        ),
         _state(task.id, "implementing"),
     )
 

@@ -8,9 +8,11 @@ from litehive.domain.agent import EngineFailure, SubagentResult
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport, TaskActivityEntry
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.agents.manager import SubagentStartupError
+from litehive.domain.common import PipelineState
 from litehive.lifecycle.heru_factory import HeruEngineAdapter, latest_verdict_after
 from litehive.lifecycle.nodes.agent import AgentVerdict, NudgeRequired, TransientError, UnrecoverableError
 from litehive.lifecycle.persistence import TaskState
+from litehive.lifecycle.prompt_types import AgentPrompt
 from litehive.lifecycle.sessions import Session
 from litehive.lifecycle.types import PipelineMode
 from litehive.tasks.journal import render_task_journal
@@ -61,17 +63,7 @@ def test_heru_engine_adapter_updates_session_from_subagent_result_continuation(t
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
-    verdict = adapter.run_turn(
-        session,
-        {
-            "task_id": task.id,
-            "stage": "implementing",
-            "role": "swe",
-            "pipeline_mode": "full",
-            "instructions": [],
-        },
-        state,
-    )
+    verdict = adapter.run_turn(session, _heru_prompt(task.id), state)
 
     assert verdict.outcome == "pass"
     assert session.engine_session_id == "codex-thread-123"
@@ -92,17 +84,7 @@ def test_heru_engine_adapter_passes_resume_session_id_to_subagent_manager(tmp_pa
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
-    adapter.run_turn(
-        session,
-        {
-            "task_id": task.id,
-            "stage": "implementing",
-            "role": "swe",
-            "pipeline_mode": "full",
-            "instructions": [],
-        },
-        state,
-    )
+    adapter.run_turn(session, _heru_prompt(task.id), state)
 
     assert _StubManager.last_kwargs is not None
     assert _StubManager.last_kwargs["resume_session_id"] == "codex-thread-123"
@@ -227,14 +209,20 @@ class _StartupFailureManager(_StubManager):
         raise SubagentStartupError(AttributeError("clobbered heru stub"))
 
 
-def _heru_prompt(task_id: str) -> dict[str, object]:
-    return {
-        "task_id": task_id,
-        "stage": "implementing",
-        "role": "swe",
-        "pipeline_mode": "full",
-        "instructions": [],
-    }
+def _heru_prompt(task_id: str) -> AgentPrompt:
+    return AgentPrompt(
+        role="swe",
+        stage=PipelineState.IMPLEMENTING,
+        task_id=task_id,
+        pipeline_mode=PipelineMode.FULL,
+        stage_retry=0,
+        instruction_variant="fresh",
+        instruction_layers=[],
+        last_report={},
+        last_rejection=None,
+        failed_run_history=[],
+        runner_hooks=[],
+    )
 
 
 def _subagent_result(
@@ -262,14 +250,20 @@ def _subagent_result(
     )
 
 
-def _recovery_prompt(task_id: str) -> dict[str, object]:
-    return {
-        "task_id": task_id,
-        "stage": "recovering",
-        "role": "recovery",
-        "pipeline_mode": "full",
-        "instructions": [],
-    }
+def _recovery_prompt(task_id: str) -> AgentPrompt:
+    return AgentPrompt(
+        role="recovery",
+        stage=PipelineState.RECOVERING,
+        task_id=task_id,
+        pipeline_mode=PipelineMode.FULL,
+        stage_retry=0,
+        instruction_variant="fresh",
+        instruction_layers=[],
+        last_report={},
+        last_rejection=None,
+        failed_run_history=[],
+        runner_hooks=[],
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -615,31 +609,11 @@ def test_heru_engine_adapter_reuses_failed_turn_continuation_on_retry(tmp_path, 
     )
 
     with pytest.raises(TransientError, match="transient timeout"):
-        adapter.run_turn(
-            session,
-            {
-                "task_id": task.id,
-                "stage": "implementing",
-                "role": "swe",
-                "pipeline_mode": "full",
-                "instructions": [],
-            },
-            state,
-        )
+        adapter.run_turn(session, _heru_prompt(task.id), state)
 
     assert session.engine_session_id == "codex-thread-123"
 
-    verdict = adapter.run_turn(
-        session,
-        {
-            "task_id": task.id,
-            "stage": "implementing",
-            "role": "swe",
-            "pipeline_mode": "full",
-            "instructions": [],
-        },
-        state,
-    )
+    verdict = adapter.run_turn(session, _heru_prompt(task.id), state)
 
     assert verdict.outcome == "pass"
     assert _StubManager.last_kwargs is not None
@@ -830,17 +804,7 @@ def test_heru_engine_adapter_runs_subagent_in_task_worktree(tmp_path, monkeypatc
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
-    adapter.run_turn(
-        session,
-        {
-            "task_id": task.id,
-            "stage": "implementing",
-            "role": "swe",
-            "pipeline_mode": "full",
-            "instructions": [],
-        },
-        state,
-    )
+    adapter.run_turn(session, _heru_prompt(task.id), state)
 
     assert _StubManager.last_init == (tmp_path.resolve(), worktree.resolve())
 
@@ -863,17 +827,7 @@ def test_heru_engine_adapter_passes_selected_model_to_subagent_manager(
         lambda *args, **kwargs: AgentVerdict(outcome="pass", reason="ok"),
     )
 
-    adapter.run_turn(
-        session,
-        {
-            "task_id": task.id,
-            "stage": "implementing",
-            "role": "swe",
-            "pipeline_mode": "full",
-            "instructions": [],
-        },
-        state,
-    )
+    adapter.run_turn(session, _heru_prompt(task.id), state)
 
     assert _StubManager.last_kwargs is not None
     assert _StubManager.last_kwargs["model"] == "goz-preview-model"

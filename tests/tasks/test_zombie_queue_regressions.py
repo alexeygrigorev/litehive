@@ -301,7 +301,7 @@ def test_task_with_hook_rejection_and_recovery_has_terminal_execution_status(tmp
 
         def run_turn(self, session, prompt, state) -> AgentVerdict:
             del session  # unused
-            role = prompt.get("role", "unknown")
+            role = getattr(prompt, "role", "unknown")
 
             if role == "swe":
                 # SWE agent implementation - create some change and pass

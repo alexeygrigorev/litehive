@@ -1,6 +1,7 @@
 """Tests for the prompt serializer."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,7 @@ from litehive.lifecycle.events import HookOk, Pass, Reject
 from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.persistence import FailedRunRecord, LastRejection, LastReport, TaskState
 from litehive.lifecycle.prompt_serializer import serialize_prompt
+from litehive.lifecycle.prompt_types import AgentPrompt
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task, save_task
 from litehive.tasks.paths import task_dir
@@ -58,6 +60,36 @@ def make_state(task_id: str, stage: str = "implementing", **overrides) -> TaskSt
     )
 
 
+def make_prompt(
+    task_id: str,
+    *,
+    stage: str = "custom",
+    role: str = "swe",
+    pipeline_mode: PipelineMode = PipelineMode.FULL,
+    instruction_layers=None,
+    last_rejection=None,
+    activity=None,
+    last_report=None,
+    failed_run_history=None,
+    runner_hooks=None,
+) -> AgentPrompt:
+    """Build an ``AgentPrompt`` from the trimmed dict shape these tests historically used."""
+    return AgentPrompt(
+        role=role,
+        stage=stage,
+        task_id=task_id,
+        pipeline_mode=pipeline_mode,
+        stage_retry=0,
+        instruction_variant="fresh",
+        instruction_layers=list(instruction_layers or []),
+        last_report=last_report or {},
+        last_rejection=last_rejection,
+        failed_run_history=list(failed_run_history or []),
+        runner_hooks=list(runner_hooks or []),
+        activity=activity,
+    )
+
+
 def _activity_lines(text: str) -> list[str]:
     marker = "Task activity:\n"
     if marker not in text:
@@ -75,8 +107,8 @@ def _activity_lines(text: str) -> list[str]:
     return [line for line in tail[:end].splitlines() if line.strip()]
 
 
-def _instruction_layer(prompt: dict[str, object], label: str) -> str | None:
-    for current_label, text in prompt.get("instruction_layers", []):
+def _instruction_layer(prompt, label: str) -> str | None:
+    for current_label, text in prompt.instruction_layers or []:
         if current_label == label:
             return text
     return None
@@ -97,7 +129,7 @@ def test_serialize_includes_header_goal_acceptance_plan(workspace: Path) -> None
     prompt = agent.build_prompt(state)
     text = serialize_prompt(prompt, task_record=task)
 
-    assert prompt["stage"] is PipelineState.IMPLEMENTING
+    assert prompt.stage is PipelineState.IMPLEMENTING
     assert f"Task: {task.id}" in text
     assert "Add prompt serializer" in text
     assert "Stage: implementing" in text
@@ -114,7 +146,7 @@ def test_serialize_includes_role_instructions(workspace: Path) -> None:
     prompt = agent.build_prompt(make_state(task.id))
     text = serialize_prompt(prompt, task_record=task)
 
-    assert prompt["instruction_variant"] == "fresh"
+    assert prompt.instruction_variant == "fresh"
     assert "Instructions:" in text
     assert "## Role guidance" in text
     assert "## Fresh attempt guidance" in text
@@ -144,7 +176,8 @@ def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
     )
     text = serialize_prompt(agent.build_prompt(state), task_record=task)
 
-    trigger = agent.build_prompt(state)["recovery_trigger"]
+    trigger = agent.build_prompt(state).recovery_trigger
+    assert trigger is not None
     assert trigger["origin_stage"] == "implementing"
     assert trigger["trigger_event_kind"] == "crash"
     assert trigger["failure_fingerprint"] == {
@@ -187,9 +220,9 @@ def test_serialize_recovery_diagnoses_invalid_current_config(workspace: Path) ->
     prompt = agent.build_prompt(state)
     text = serialize_prompt(prompt, task_record=task, workspace_root=workspace)
 
-    assert prompt["litehive_source_path"] is None
-    assert prompt["recovery_execution_root"] == str(workspace)
-    assert prompt["recovery_config_diagnostic"] == {
+    assert prompt.litehive_source_path is None
+    assert prompt.recovery_execution_root == str(workspace)
+    assert prompt.recovery_config_diagnostic == {
         "kind": "workspace_config_load_failed",
         "config_root": str(workspace),
         "exception_type": "ValueError",
@@ -243,7 +276,7 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
     )
 
     prompt = agent.build_prompt(state)
-    diagnostics = prompt["failed_subagent_diagnostics"]
+    diagnostics = prompt.failed_subagent_diagnostics
     text = serialize_prompt(prompt, task_record=task, workspace_root=workspace)
 
     assert diagnostics is not None
@@ -304,8 +337,8 @@ def test_serialize_recovery_includes_repeated_fingerprint_escalation(workspace: 
     prompt = agent.build_prompt(state)
     text = serialize_prompt(prompt, task_record=task, workspace_root=workspace)
 
-    assert prompt["repeated_recovery_fingerprint"] is not None
-    assert prompt["repeated_recovery_fingerprint"]["count"] == 2
+    assert prompt.repeated_recovery_fingerprint is not None
+    assert prompt.repeated_recovery_fingerprint["count"] == 2
     assert "Recovery history" in text
     assert "RuntimeError:boom" in text
     assert "RecoveryContext" not in text
@@ -349,7 +382,7 @@ def test_serialize_recovery_ignores_same_budget_key_with_different_fingerprint(w
     prompt = agent.build_prompt(state)
     text = serialize_prompt(prompt, task_record=task, workspace_root=workspace)
 
-    assert prompt["repeated_recovery_fingerprint"] is None
+    assert prompt.repeated_recovery_fingerprint is None
     assert "Repeated recovery fingerprint detected" not in text
 
 
@@ -460,8 +493,8 @@ def test_planner_prompt_surfaces_failed_run_history(workspace: Path) -> None:
     prompt = agent.build_prompt(state)
     text = serialize_prompt(prompt, task_record=task)
 
-    assert prompt["failed_run_history"][0]["stage"] == "implementing"
-    assert prompt["failed_run_history"][0]["count"] == 2
+    assert prompt.failed_run_history[0]["stage"] == "implementing"
+    assert prompt.failed_run_history[0]["count"] == 2
     assert "Failed-run history (survives requeue/reset for this task):" in text
     assert "stage=implementing shape=agent:tests fail count=2" in text
     assert "reason=tests fail" in text
@@ -562,7 +595,7 @@ def test_swe_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> Non
     prompt = agent.build_prompt(state)
     text = serialize_prompt(prompt, task_record=task)
 
-    assert prompt["instruction_variant"] == "retry"
+    assert prompt.instruction_variant == "retry"
     assert _instruction_layer(prompt, "attempt:retry") is not None
     assert _instruction_layer(prompt, "attempt:fresh") is None
     assert "## Retry attempt guidance" in text
@@ -576,7 +609,7 @@ def test_qa_prompt_includes_default_vs_opt_in_verification_guidance(workspace: P
     prompt = agent.build_prompt(make_state(task.id, stage="testing"))
     text = serialize_prompt(prompt, task_record=task)
 
-    assert prompt["instruction_variant"] == "fresh"
+    assert prompt.instruction_variant == "fresh"
     assert "## Fresh attempt guidance" in text
     assert "## Qa startup guidance" in text
 
@@ -594,7 +627,7 @@ def test_qa_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> None
     prompt = agent.build_prompt(state)
     text = serialize_prompt(prompt, task_record=task)
 
-    assert prompt["instruction_variant"] == "retry"
+    assert prompt.instruction_variant == "retry"
     assert _instruction_layer(prompt, "attempt:retry") is not None
     assert _instruction_layer(prompt, "attempt:fresh") is None
     assert "## Retry attempt guidance" in text
@@ -614,7 +647,7 @@ def test_reviewer_prompt_calls_out_qa_override_with_last_testing_rejection(works
     prompt = agent.build_prompt(state)
     text = serialize_prompt(prompt, task_record=task)
 
-    assert prompt["last_rejection"] == {
+    assert prompt.last_rejection == {
         "source": "agent",
         "reason": "qa asked for style-only cleanup",
         "raised_at_phase": "testing",
@@ -634,8 +667,8 @@ def test_build_prompt_ignores_corrupt_hook_config(workspace: Path) -> None:
     )
     prompt = agent.build_prompt(make_state(task.id))
 
-    assert prompt["runner_hooks"] == []
-    assert "rejecting_hooks" not in prompt
+    assert prompt.runner_hooks == []
+    assert not hasattr(prompt, "rejecting_hooks")
 
 
 def test_swe_prompt_lists_after_stage_hooks_with_descriptions(workspace: Path) -> None:
@@ -669,7 +702,7 @@ def test_swe_prompt_lists_after_stage_hooks_with_descriptions(workspace: Path) -
     prompt = agent.build_prompt(make_state(task.id))
     text = serialize_prompt(prompt, task_record=task)
 
-    assert "rejecting_hooks" not in prompt
+    assert not hasattr(prompt, "rejecting_hooks")
     assert "After implementing, these checks will run:" in text
     assert "- ruff check --select E402,F401 (ensures no unused imports or wrong import order)" in text
     assert (
@@ -746,14 +779,16 @@ def test_implementing_retry_activity_keeps_only_grooming_and_dedups_last_rejecti
         reason="tests fail",
         raised_at_phase="testing",
     )
-    prompt = agent.build_prompt(state)
-    prompt["activity"] = [
-        {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope " + ("x" * 600)},
-        {"role": "recovery", "stage": "recovering", "verdict": "comment", "message": "bookkeeping"},
-        {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "old swe pass"},
-        {"role": "qa", "stage": "testing", "verdict": "reject", "message": "older reject"},
-        {"role": "qa", "stage": "testing", "verdict": "reject", "message": "tests fail"},
-    ]
+    prompt = replace(
+        agent.build_prompt(state),
+        activity=[
+            {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope " + ("x" * 600)},
+            {"role": "recovery", "stage": "recovering", "verdict": "comment", "message": "bookkeeping"},
+            {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "old swe pass"},
+            {"role": "qa", "stage": "testing", "verdict": "reject", "message": "older reject"},
+            {"role": "qa", "stage": "testing", "verdict": "reject", "message": "tests fail"},
+        ],
+    )
 
     text = serialize_prompt(prompt, task_record=task)
 
@@ -778,17 +813,19 @@ def test_prompt_surfaces_semantic_reject_classification(workspace: Path) -> None
         raised_at_phase="accepting",
         classification=SEMANTIC_REJECT_CLASSIFICATION,
     )
-    prompt = agent.build_prompt(state)
-    prompt["stage"] = "custom"
-    prompt["activity"] = [
-        {
-            "role": "reviewer",
-            "stage": "accepting",
-            "verdict": "reject",
-            "verdict_classification": SEMANTIC_REJECT_CLASSIFICATION,
-            "message": "reviewer rejected on AC2",
-        }
-    ]
+    prompt = replace(
+        agent.build_prompt(state),
+        stage="custom",
+        activity=[
+            {
+                "role": "reviewer",
+                "stage": "accepting",
+                "verdict": "reject",
+                "verdict_classification": SEMANTIC_REJECT_CLASSIFICATION,
+                "message": "reviewer rejected on AC2",
+            }
+        ],
+    )
 
     text = serialize_prompt(prompt, task_record=task)
 
@@ -835,7 +872,7 @@ def test_implementing_prompt_uses_latest_testing_reject_that_sent_work_back(work
 
     prompt = agent.build_prompt(state)
 
-    assert prompt["last_rejection"] == {
+    assert prompt.last_rejection == {
         "source": "agent",
         "reason": "latest qa failure",
         "raised_at_phase": "testing",
@@ -879,7 +916,7 @@ def test_implementing_prompt_keeps_latest_hook_reject_when_it_is_newest(workspac
 
     prompt = agent.build_prompt(state)
 
-    assert prompt["last_rejection"] == {
+    assert prompt.last_rejection == {
         "source": "hook",
         "reason": "newest hook failure",
         "raised_at_phase": "after_implementing",
@@ -888,22 +925,18 @@ def test_implementing_prompt_keeps_latest_hook_reject_when_it_is_newest(workspac
 
 def test_activity_does_not_dedup_reject_when_source_differs(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
-    prompt = {
-        "task_id": task.id,
-        "stage": "custom",
-        "role": "swe",
-        "pipeline_mode": PipelineMode.FULL.value,
-        "instruction_layers": [],
-        "last_rejection": {
+    prompt = make_prompt(
+        task.id,
+        last_rejection={
             "source": "qa",
             "reason": "same reason",
             "raised_at_phase": "testing",
         },
-        "activity": [
+        activity=[
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
             {"role": "reviewer", "stage": "accepting", "verdict": "reject", "message": "same reason"},
         ],
-    }
+    )
 
     text = serialize_prompt(prompt, task_record=task)
 
@@ -915,22 +948,18 @@ def test_activity_does_not_dedup_reject_when_source_differs(workspace: Path) -> 
 
 def test_activity_dedups_agent_reject_when_last_rejection_uses_generic_agent_source(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
-    prompt = {
-        "task_id": task.id,
-        "stage": "custom",
-        "role": "swe",
-        "pipeline_mode": PipelineMode.FULL.value,
-        "instruction_layers": [],
-        "last_rejection": {
+    prompt = make_prompt(
+        task.id,
+        last_rejection={
             "source": "agent",
             "reason": "same reason",
             "raised_at_phase": "testing",
         },
-        "activity": [
+        activity=[
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
             {"role": "qa", "stage": "testing", "verdict": "reject", "message": "same reason"},
         ],
-    }
+    )
 
     text = serialize_prompt(prompt, task_record=task)
 
@@ -941,22 +970,18 @@ def test_activity_dedups_agent_reject_when_last_rejection_uses_generic_agent_sou
 
 def test_activity_does_not_dedup_generic_agent_reject_when_stage_differs(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
-    prompt = {
-        "task_id": task.id,
-        "stage": "custom",
-        "role": "swe",
-        "pipeline_mode": PipelineMode.FULL.value,
-        "instruction_layers": [],
-        "last_rejection": {
+    prompt = make_prompt(
+        task.id,
+        last_rejection={
             "source": "agent",
             "reason": "same reason",
             "raised_at_phase": "testing",
         },
-        "activity": [
+        activity=[
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
             {"role": "reviewer", "stage": "accepting", "verdict": "reject", "message": "same reason"},
         ],
-    }
+    )
 
     text = serialize_prompt(prompt, task_record=task)
 
@@ -968,18 +993,14 @@ def test_activity_does_not_dedup_generic_agent_reject_when_stage_differs(workspa
 
 def test_activity_dedups_hook_reject_when_reason_is_embedded_in_activity_message(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
-    prompt = {
-        "task_id": task.id,
-        "stage": "custom",
-        "role": "swe",
-        "pipeline_mode": PipelineMode.FULL.value,
-        "instruction_layers": [],
-        "last_rejection": {
+    prompt = make_prompt(
+        task.id,
+        last_rejection={
             "source": "hook",
             "reason": "command failed",
             "raised_at_phase": "after_implementing",
         },
-        "activity": [
+        activity=[
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
             {
                 "role": "hook",
@@ -992,7 +1013,7 @@ def test_activity_dedups_hook_reject_when_reason_is_embedded_in_activity_message
                 ),
             },
         ],
-    }
+    )
 
     text = serialize_prompt(prompt, task_record=task)
 
@@ -1003,16 +1024,14 @@ def test_activity_dedups_hook_reject_when_reason_is_embedded_in_activity_message
 
 def test_activity_section_is_omitted_when_filtering_removes_all_entries(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
-    prompt = {
-        "task_id": task.id,
-        "stage": "testing",
-        "role": "qa",
-        "pipeline_mode": PipelineMode.FULL.value,
-        "instruction_layers": [],
-        "activity": [
+    prompt = make_prompt(
+        task.id,
+        stage="testing",
+        role="qa",
+        activity=[
             {"role": "recovery", "stage": "recovering", "verdict": "comment", "message": "bookkeeping"},
         ],
-    }
+    )
 
     text = serialize_prompt(prompt, task_record=task)
 
@@ -1021,19 +1040,17 @@ def test_activity_section_is_omitted_when_filtering_removes_all_entries(workspac
 
 def test_testing_activity_keeps_only_last_implementing_pass(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
-    prompt = {
-        "task_id": task.id,
-        "stage": "testing",
-        "role": "qa",
-        "pipeline_mode": PipelineMode.FULL.value,
-        "instruction_layers": [],
-        "activity": [
+    prompt = make_prompt(
+        task.id,
+        stage="testing",
+        role="qa",
+        activity=[
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
             {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "first impl"},
             {"role": "qa", "stage": "testing", "verdict": "reject", "message": "old reject"},
             {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "latest impl"},
         ],
-    }
+    )
 
     text = serialize_prompt(prompt, task_record=task)
 
@@ -1044,13 +1061,11 @@ def test_testing_activity_keeps_only_last_implementing_pass(workspace: Path) -> 
 
 def test_accepting_activity_keeps_only_last_implementing_and_testing_passes(workspace: Path) -> None:
     task = create_task(workspace, title="t", goal="g")
-    prompt = {
-        "task_id": task.id,
-        "stage": "accepting",
-        "role": "reviewer",
-        "pipeline_mode": PipelineMode.FULL.value,
-        "instruction_layers": [],
-        "activity": [
+    prompt = make_prompt(
+        task.id,
+        stage="accepting",
+        role="reviewer",
+        activity=[
             {"role": "planner", "stage": "grooming", "verdict": "pass", "message": "scope"},
             {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "first impl"},
             {"role": "qa", "stage": "testing", "verdict": "pass", "message": "first qa"},
@@ -1058,7 +1073,7 @@ def test_accepting_activity_keeps_only_last_implementing_and_testing_passes(work
             {"role": "swe", "stage": "implementing", "verdict": "pass", "message": "latest impl"},
             {"role": "qa", "stage": "testing", "verdict": "pass", "message": "latest qa"},
         ],
-    }
+    )
 
     text = serialize_prompt(prompt, task_record=task)
 

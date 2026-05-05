@@ -11,28 +11,31 @@ Small formatting helpers (``_compact_list``, ``_string_list``,
 builders.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from litehive.domain.task import TaskRecord
 
+if TYPE_CHECKING:
+    from .prompt_types import AgentPrompt, RecoveryPrompt
 
-def _header_section(prompt: dict[str, Any], task_record: TaskRecord | None) -> str:
+
+def _header_section(prompt: "AgentPrompt", task_record: TaskRecord | None) -> str:
     """Identify the task and pipeline coordinates so the agent knows which run it is on."""
     lines = [
-        f"Task: {prompt['task_id']}" + (f" — {task_record.title}" if task_record is not None else ""),
-        f"Stage: {prompt['stage']}",
-        f"Role: {prompt['role']}",
-        f"Pipeline mode: {prompt['pipeline_mode']}",
+        f"Task: {prompt.task_id}" + (f" — {task_record.title}" if task_record is not None else ""),
+        f"Stage: {prompt.stage}",
+        f"Role: {prompt.role}",
+        f"Pipeline mode: {prompt.pipeline_mode.value}",
     ]
-    retry = prompt.get("stage_retry") or 0
+    retry = prompt.stage_retry or 0
     if retry:
         lines.append(f"Stage retry attempt: {retry}")
     return "\n".join(lines)
 
 
-def _instructions_section(prompt: dict[str, Any]) -> str:
+def _instructions_section(prompt: "AgentPrompt") -> str:
     """Render the role/profile/attempt instruction layers the prompt builder selected for this stage."""
-    layers = prompt.get("instruction_layers") or []
+    layers = prompt.instruction_layers or []
     if not layers:
         return ""
     blocks: list[str] = []
@@ -117,29 +120,29 @@ def _prior_work_section(last_report: dict[str, Any], last_rejection: dict[str, A
     return "Prior work (last attempt):\n" + "\n".join(lines)
 
 
-def _recovery_trigger_section(recovery_trigger: dict[str, Any], prompt: dict[str, Any]) -> str:
+def _recovery_trigger_section(recovery_trigger: dict[str, Any], prompt: "RecoveryPrompt") -> str:
     """Tell the recovery agent which failure shape kicked the task out of the normal pipeline."""
     lines = ["Recovery trigger (what sent the task into recovery):"]
     for key, value in recovery_trigger.items():
         lines.append(f"- {key}: {value}")
-    explanation = prompt.get("recovery_failure_explanation")
+    explanation = prompt.recovery_failure_explanation
     if explanation:
         lines.append(f"- recovery_failure_explanation: {explanation}")
     return "\n".join(lines)
 
 
-def _recovery_execution_root_section(prompt: dict[str, Any]) -> str:
+def _recovery_execution_root_section(prompt: "RecoveryPrompt") -> str:
     """Point the recovery agent at the Litehive source checkout to patch, not the task worktree.
 
     Recovery exists to fix Litehive infrastructure bugs; without this redirect the agent edits
     the wrong tree.
     """
     lines = ["Recovery execution repo (this recovery turn should patch Litehive here):"]
-    lines.append(f"- recovery_execution_root: {prompt.get('recovery_execution_root')}")
-    source_path = str(prompt.get("litehive_source_path") or "").strip()
+    lines.append(f"- recovery_execution_root: {prompt.recovery_execution_root}")
+    source_path = str(prompt.litehive_source_path or "").strip()
     if source_path:
         lines.append(f"- configured_litehive_source_path: {source_path}")
-    config_diagnostic = prompt.get("recovery_config_diagnostic")
+    config_diagnostic = prompt.recovery_config_diagnostic
     if isinstance(config_diagnostic, dict):
         lines.append("- config_diagnostic:")
         for key in ("kind", "config_root", "exception_type", "message"):
@@ -334,9 +337,9 @@ def _merge_conflict_section(conflict_files: list[str], merge_attempt: int | None
     return f"Merge conflict files (resolve all of these):\n{bullets}{extra}"
 
 
-def _nudge_section(prompt: dict[str, Any]) -> str:
+def _nudge_section(prompt: "AgentPrompt") -> str:
     """Re-prompt the agent to actually submit a verdict when its prior turn ended without one."""
-    message = str(prompt.get("nudge_message") or "").strip()
+    message = str(prompt.nudge_message or "").strip()
     lines = [
         "IMPORTANT: this is a nudge because your prior turn ended without a verdict submission.",
     ]
@@ -386,16 +389,16 @@ def _runner_hooks_section(stage: str | None, hooks: list[dict[str, Any]]) -> str
     return "\n".join(lines)
 
 
-def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
+def _verdict_instructions_section(prompt: "AgentPrompt") -> str:
     """Always-final section that tells the agent the exact CLI invocation and verdict vocabulary for its role.
 
     The role determines the allowed verdict set; recovery has a wider menu than the regular pipeline roles.
     """
-    if prompt.get("role") == "recovery":
+    if prompt.role == "recovery":
         verdicts = "<resume|advance|done|budget_hit|reject>"
     else:
         verdicts = "<pass|reject>"
-    if prompt.get("role") == "recovery":
+    if prompt.role == "recovery":
         example_verdict = "resume"
     else:
         example_verdict = "pass"

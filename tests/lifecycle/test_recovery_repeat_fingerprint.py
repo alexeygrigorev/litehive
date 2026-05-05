@@ -22,9 +22,9 @@ class _RepeatRecoveryEscalationEngine:
 
     def run_turn(self, session, prompt, state) -> AgentVerdict:
         del session
-        if prompt["role"] != "recovery":
+        if prompt.role != "recovery":
             raise UnrecoverableError("repeatable infra crash")
-        repeated = prompt.get("repeated_recovery_fingerprint")
+        repeated = getattr(prompt, "repeated_recovery_fingerprint", None)
         if not repeated:
             return AgentVerdict(outcome="resume", metadata={"target_stage": "implementing"})
 

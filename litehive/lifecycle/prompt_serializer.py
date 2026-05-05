@@ -1,15 +1,16 @@
-"""Serialize a ``RoleAgent.build_prompt()`` dict into a string for engines.
+"""Serialize an :class:`AgentPrompt` into a string for engines.
 
-``RoleAgent`` returns a structured dict so the test layer can inspect
-it and the engine adapter layer can format it however its CLI expects.
-``serialize_prompt()`` produces the canonical text representation: a
-section-based document an engine adapter can pipe to ``codex run`` or
-``claude run`` etc.
+``RoleAgent`` returns a typed :class:`AgentPrompt` (or
+:class:`RecoveryPrompt` for the recovery role) so the test layer can
+inspect it and the engine adapter layer can format it however its CLI
+expects. ``serialize_prompt()`` produces the canonical text
+representation: a section-based document an engine adapter can pipe to
+``codex run`` or ``claude run`` etc.
 
 The serializer:
   - reads the SQLite-backed ``TaskRecord`` for goal / acceptance / plan / constraints
-    (the dict only carries task_id; the rest comes from the task store)
-  - composes the selected instruction layers from the dict
+    (the prompt only carries task_id; the rest comes from the task store)
+  - composes the selected instruction layers from the prompt
   - surfaces ``last_rejection`` as context for retry prompts
   - surfaces ``recovery_trigger`` for recovery agents
   - finishes with the ``litehive agent report`` verdict instructions
@@ -49,6 +50,7 @@ from litehive.lifecycle.prompt_sections import (
     _test_failure_attribution_section,
     _verdict_instructions_section,
 )
+from litehive.lifecycle.prompt_types import AgentPrompt, RecoveryPrompt
 from litehive.state.records import get_task
 from litehive.tasks.activity import load_task_activity
 
@@ -57,11 +59,11 @@ SECTION_SEP = "\n"
 
 
 def serialize_prompt(
-    prompt: dict[str, Any],
+    prompt: AgentPrompt,
     task_record: TaskRecord | None,
     workspace_root: Path | None = None,
 ) -> str:
-    """Render the prompt dict + task record into the engine-facing string.
+    """Render the typed prompt + task record into the engine-facing string.
 
     ``task_record`` is optional so tests don't need to construct one;
     if ``None``, the goal/acceptance/plan/constraints sections are
@@ -72,9 +74,9 @@ def serialize_prompt(
     verdicts.
     """
     if task_record is None and workspace_root is not None:
-        task_record = get_task(workspace_root, prompt["task_id"])
+        task_record = get_task(workspace_root, prompt.task_id)
 
-    activity = prompt.get("activity") or []
+    activity = prompt.activity or []
     if not activity and workspace_root is not None and task_record is not None:
         activity = _load_task_activity_history(workspace_root, task_record)
 
@@ -86,66 +88,59 @@ def serialize_prompt(
     sections.append(_plan_section(task_record))
     sections.append(_constraints_section(task_record))
 
-    last_rejection = prompt.get("last_rejection")
+    last_rejection = prompt.last_rejection
     if last_rejection:
         sections.append(_last_rejection_section(last_rejection))
 
-    if (prompt.get("stage_retry") or 0) > 0:
-        prior_work = _prior_work_section(prompt.get("last_report") or {}, last_rejection)
+    if (prompt.stage_retry or 0) > 0:
+        prior_work = _prior_work_section(prompt.last_report or {}, last_rejection)
         if prior_work:
             sections.append(prior_work)
 
-    recovery_trigger = prompt.get("recovery_trigger")
-    if recovery_trigger:
-        sections.append(_recovery_trigger_section(recovery_trigger, prompt))
+    if isinstance(prompt, RecoveryPrompt):
+        if prompt.recovery_trigger:
+            sections.append(_recovery_trigger_section(prompt.recovery_trigger, prompt))
 
-    recovery_execution_root = prompt.get("recovery_execution_root")
-    if recovery_execution_root:
-        sections.append(_recovery_execution_root_section(prompt))
+        if prompt.recovery_execution_root:
+            sections.append(_recovery_execution_root_section(prompt))
 
-    failed_subagent_diagnostics = prompt.get("failed_subagent_diagnostics")
-    if failed_subagent_diagnostics:
-        sections.append(_failed_subagent_diagnostics_section(failed_subagent_diagnostics))
+        if prompt.failed_subagent_diagnostics:
+            sections.append(_failed_subagent_diagnostics_section(prompt.failed_subagent_diagnostics))
 
-    recovery_history = prompt.get("recovery_history")
-    if recovery_history:
-        sections.append(_recovery_history_section(recovery_history))
+        if prompt.recovery_history:
+            sections.append(_recovery_history_section(prompt.recovery_history))
 
-    failed_run_history = prompt.get("failed_run_history")
-    if failed_run_history:
-        sections.append(_failed_run_history_section(failed_run_history))
+    if prompt.failed_run_history:
+        sections.append(_failed_run_history_section(prompt.failed_run_history))
 
-    repeated_recovery_fingerprint = prompt.get("repeated_recovery_fingerprint")
-    if repeated_recovery_fingerprint:
-        sections.append(_repeated_recovery_fingerprint_section(repeated_recovery_fingerprint))
+    if isinstance(prompt, RecoveryPrompt):
+        if prompt.repeated_recovery_fingerprint:
+            sections.append(_repeated_recovery_fingerprint_section(prompt.repeated_recovery_fingerprint))
 
-    scope_analysis = prompt.get("scope_analysis")
-    if scope_analysis:
-        sections.append(_scope_analysis_section(scope_analysis))
+        if prompt.scope_analysis:
+            sections.append(_scope_analysis_section(prompt.scope_analysis))
 
-    test_failure_attribution = prompt.get("test_failure_attribution")
-    if test_failure_attribution:
-        sections.append(_test_failure_attribution_section(test_failure_attribution))
+        if prompt.test_failure_attribution:
+            sections.append(_test_failure_attribution_section(prompt.test_failure_attribution))
 
-    conflict_files = prompt.get("conflict_files")
-    if conflict_files:
-        sections.append(_merge_conflict_section(conflict_files, prompt.get("merge_attempt")))
+    if prompt.conflict_files:
+        sections.append(_merge_conflict_section(prompt.conflict_files, prompt.merge_attempt))
 
-    if prompt.get("nudge"):
+    if prompt.nudge:
         sections.append(_nudge_section(prompt))
 
     if activity:
         sections.append(
             _activity_section(
                 activity,
-                current_stage=prompt.get("stage"),
+                current_stage=prompt.stage,
                 last_rejection=last_rejection,
             )
         )
 
-    runner_hooks = prompt.get("runner_hooks") or []
+    runner_hooks = prompt.runner_hooks or []
     if runner_hooks:
-        sections.append(_runner_hooks_section(prompt.get("stage"), runner_hooks))
+        sections.append(_runner_hooks_section(prompt.stage, runner_hooks))
 
     sections.append(_verdict_instructions_section(prompt))
     return (SECTION_SEP * 2).join(s for s in sections if s).strip() + "\n"
@@ -353,3 +348,5 @@ def _activity_section(
         message = entry.get("message", "")
         blocks.append(f"[{stage}] {role} ({verdict_label}): {message}")
     return "Task activity:\n" + "\n".join(blocks)
+
+

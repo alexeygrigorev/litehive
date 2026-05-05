@@ -61,6 +61,7 @@ from .nodes.agent import (
 )
 from .persistence import TaskState
 from .prompt_serializer import serialize_prompt
+from .prompt_types import AgentPrompt
 from .sessions import Session
 
 
@@ -386,17 +387,17 @@ class HeruEngineAdapter:
         verdict the agent submitted via ``litehive agent report``. Raises
         ``NudgeRequired`` if the agent finished without submitting, and
         translates engine failures into the ``Engine`` error taxonomy."""
-        if not isinstance(prompt, dict):
+        if not isinstance(prompt, AgentPrompt):
             raise UnrecoverableError(
-                f"HeruEngineAdapter expects a prompt dict from RoleAgent.build_prompt, got {type(prompt).__name__}"
+                f"HeruEngineAdapter expects an AgentPrompt from RoleAgent.build_prompt, got {type(prompt).__name__}"
             )
 
         task = get_task(self.workspace_root, state.task_id)
         if task is None:
             raise UnrecoverableError(f"task {state.task_id} not found in workspace")
 
-        stage = prompt["stage"]
-        role = prompt["role"]
+        stage = prompt.stage
+        role = prompt.role
         prompt_text = serialize_prompt(prompt, task_record=task, workspace_root=self.workspace_root)
         execution_root = _agent_execution_root(self.workspace_root, task, role=role)
 
