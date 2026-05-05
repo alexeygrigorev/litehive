@@ -13,7 +13,7 @@ from litehive.domain.lifecycle_deltas import (
     enter_recovery,
     exhaust_recovery_budget,
     fail,
-    remember_rejection,
+    RememberRejection,
     record_recovery_success,
     stash_conflict_files,
 )
@@ -263,7 +263,7 @@ RULES: list[Rule] = [
         on_event=Reject,
         transition_to=S.ACCEPTING,
         when=stage_retries_exhausted(PipelineState.TESTING) & last_hook_ok(),
-        with_effect=remember_rejection(PipelineState.ACCEPTING),
+        with_effect=RememberRejection(PipelineState.ACCEPTING),
     ),
     *retry_epoch_rules(
         S.TESTING,

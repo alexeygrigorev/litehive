@@ -15,8 +15,8 @@ from litehive.domain.lifecycle_deltas import (
     EffectFn,
     StateDelta,
     fail,
-    fail_rejection_loop,
-    inc_stage_retry,
+    FailRejectionLoop,
+    IncStageRetry,
 )
 from litehive.domain.common import PipelineState, canonical_pipeline_state
 from .events import Event, PreExecRecoverySucceeded, RecoverySucceeded, Reject
@@ -199,7 +199,7 @@ def retry_epoch_rules(counter_stage, phases, retry_target, exhausted_reason: Fai
                 on_event=Reject,
                 transition_to="failed",
                 when=rejection_loop_detected(retry_target_name),
-                with_effect=fail_rejection_loop(
+                with_effect=FailRejectionLoop(
                     name,
                     retry_target_stage=retry_target_name,
                 ),
@@ -220,7 +220,7 @@ def retry_epoch_rules(counter_stage, phases, retry_target, exhausted_reason: Fai
                 on_event=Reject,
                 transition_to=retry_target,
                 when=stage_retries_remaining(name),
-                with_effect=inc_stage_retry(
+                with_effect=IncStageRetry(
                     name,
                     retry_target_stage=retry_target_name,
                 ),

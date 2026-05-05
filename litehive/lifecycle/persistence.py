@@ -86,7 +86,7 @@ class HookRejectFingerprint:
 class LastRejection:
     """Most recent reject against a retry-eligible stage.
 
-    Populated by the ``inc_stage_retry`` effect whenever a Reject event is
+    Populated by the ``IncStageRetry`` effect whenever a Reject event is
     being routed back into a retry. Read by ``RoleAgent.build_prompt`` so the
     next agent visit can see exactly what the previous attempt (or hook) was
     unhappy about.

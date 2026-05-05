@@ -183,7 +183,7 @@ class StageRetryLimitHit(Event):
     Emitted by the runner (or by a future effect) when a stage has been
     retried more than ``Limits.stage_retry_limit`` times. Routes that
     stage to ``failed``. Currently not fired directly — the
-    ``inc_stage_retry`` / ``stage_retries_exhausted`` guard combo
+    ``IncStageRetry`` / ``stage_retries_exhausted`` guard combo
     accomplishes the same routing by picking between two rules. Kept in
     the vocabulary so the runner can emit it explicitly if we ever
     consolidate the two-rule pattern.

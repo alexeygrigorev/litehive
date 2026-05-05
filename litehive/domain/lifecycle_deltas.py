@@ -390,7 +390,7 @@ def rejection_loop_detected(state: TaskState, event: Event, retry_target_stage: 
 def _rejection_loop_delta(state: TaskState, event: Event, retry_target_stage: PipelineState | None) -> StateDelta:
     """State patch that either advances or clears the rejection-loop
     counter for this event. Folded into the retry/remember effects and the
-    terminal `fail_rejection_loop` effect so the persisted counter always
+    terminal `FailRejectionLoop` effect so the persisted counter always
     matches what the loop guard saw."""
     loop = _next_rejection_loop(state, event, retry_target_stage=retry_target_stage)
     if loop is None:
@@ -511,7 +511,7 @@ def record_recovery_success(state: TaskState, event: Event) -> StateDelta:
 
 
 @dataclass(frozen=True)
-class inc_stage_retry:
+class IncStageRetry:
     """Bump the stage's retry counter AND capture the rejection so the next agent visit can surface it in its prompt."""
 
     stage: PipelineState
@@ -529,7 +529,7 @@ class inc_stage_retry:
 
 
 @dataclass(frozen=True)
-class remember_rejection:
+class RememberRejection:
     """Capture a rejection for a downstream prompt without bumping retries."""
 
     stage: PipelineState
@@ -553,7 +553,7 @@ def _rejection_tracking_delta(
     increment_retry: bool,
     retry_target_stage: PipelineState | None = None,
 ) -> StateDelta:
-    """Shared body for the `inc_stage_retry` and `remember_rejection`
+    """Shared body for the `IncStageRetry` and `RememberRejection`
     effects: capture the reviewer's reject for the next prompt, update
     hook-reject and rejection-loop counters, and optionally bump the
     stage retry counter. The `increment_retry` flag is what tells the
@@ -582,7 +582,7 @@ def _rejection_tracking_delta(
 
 
 @dataclass(frozen=True)
-class fail_rejection_loop:
+class FailRejectionLoop:
     """Mark the task failed when reviewer rejects keep bouncing it back without progress; wired in by ``retry_epoch_rules`` for testing/accepting."""
 
     stage: PipelineState
