@@ -17,23 +17,25 @@ from litehive.workspace import Workspace
 
 
 class ScopeAnalysisError(RuntimeError):
-    """Raised when scope analysis cannot inspect the current worktree."""
+    """
+    Raised when scope analysis cannot inspect the current worktree.
+
+    The recovery agent treats this as a soft failure: scope analysis
+    is best-effort context, not a gate, so the agent still proceeds
+    but the classification falls back to "scope analysis unavailable"
+    rather than letting the inability to classify block recovery.
+    """
 
 
 def analyze_scope_changes(workspace: Workspace) -> dict[str, Any]:
-    """Analyze worktree changes to distinguish operator cleanup from SWE scope creep.
+    """
+    Classify worktree changes as operator cleanup vs SWE scope creep.
 
-    Args:
-        workspace: Workspace to inspect; ``workspace.root`` is the worktree root
-            whose changes are being classified.
-
-    Returns:
-        Dict containing scope analysis with:
-        - is_operator_cleanup: bool, True if changes are operator cleanup
-        - reasoning: str, explanation of the classification
-        - deleted_files: list of deleted file paths
-        - broken_on_main: list of files that are broken/failing on main
-        - healthy_on_main: list of files that are healthy/passing on main
+    Used by the recovery agent when triaging deletions: a worktree
+    that removed only files already broken on main is operator cleanup,
+    one that removed healthy files is scope creep that the agent must
+    flag. Returns a dict with the classification, reasoning, and the
+    deleted/broken/healthy file lists for the recovery report.
     """
     workspace_root = workspace.root
     try:
@@ -80,12 +82,13 @@ def analyze_scope_changes(workspace: Workspace) -> dict[str, Any]:
 
 
 def _is_file_broken_on_main(workspace_root: Path, file_path: str) -> bool:
-    """Check if a file is broken/failing on the main branch.
+    """
+    Decide whether a file is broken or failing on the main branch.
 
-    A file is considered broken if:
-    1. It doesn't exist on main
-    2. It's a test file that fails when run on main
-    3. It has syntax errors or import errors on main
+    A file is considered broken when (a) it doesn't exist on main,
+    (b) it's a test file that fails when run on main, or (c) it has
+    syntax errors on main. The "already broken" classification is
+    what licenses operator cleanup deletions during scope analysis.
     """
     if not path_exists_in_ref(workspace_root, "main", file_path):
         return True
@@ -95,7 +98,14 @@ def _is_file_broken_on_main(workspace_root: Path, file_path: str) -> bool:
 
 
 def _is_test_file(file_path: str) -> bool:
-    """Check if a file is a test file based on its path and name."""
+    """
+    Decide whether a path looks like a test file.
+
+    Used to gate the more expensive "run pytest on main" check; the
+    pattern set (``test_*.py``, ``*_test.py``, ``conftest.py``,
+    paths under ``test``/``tests``) is the convention this codebase
+    follows so it's safe to use as the routing predicate.
+    """
     path_parts = file_path.lower().split("/")
     filename = Path(file_path).name.lower()
 
@@ -109,7 +119,14 @@ def _is_test_file(file_path: str) -> bool:
 
 
 def _is_test_broken_on_main(workspace_root: Path, test_file: str) -> bool:
-    """Check if a test file is broken (failing) on main branch."""
+    """
+    True when a test file fails when run on main.
+
+    Stash-then-checkout-main is what makes the probe safe against
+    uncommitted worktree changes: the worktree's edits are tucked
+    away while the test runs, then restored regardless of the test
+    outcome so the probe never leaves the worktree dirty.
+    """
     try:
         stash_push(workspace_root, "temp-stash-for-scope-analysis")
 
@@ -138,7 +155,14 @@ def _is_test_broken_on_main(workspace_root: Path, test_file: str) -> bool:
 
 
 def _has_syntax_errors_on_main(workspace_root: Path, file_path: str) -> bool:
-    """Check if a file has syntax errors on main branch."""
+    """
+    True when the file is Python and parses with a SyntaxError on main.
+
+    Cheaper than the test-runner probe; used as the broken-on-main
+    signal for non-test files where actually executing the file is
+    not safe. Non-Python files always come back ``False`` because the
+    syntax check has nothing to say about them.
+    """
     try:
         contents = show_at_ref(workspace_root, "main", file_path)
     except GitError as exc:
@@ -156,10 +180,13 @@ def _has_syntax_errors_on_main(workspace_root: Path, file_path: str) -> bool:
 def _classify_changes(
     deleted_files: list[str], broken_on_main: list[str], healthy_on_main: list[str]
 ) -> tuple[bool, str]:
-    """Classify the changes as operator cleanup vs SWE scope creep.
+    """
+    Classify deletions as operator cleanup or SWE scope creep.
 
-    Returns:
-        Tuple of (is_operator_cleanup, reasoning)
+    Returns ``(is_operator_cleanup, reasoning)``: cleanup when every
+    deletion was already broken on main (or the broken set dominates),
+    scope creep when healthy files were deleted; the reasoning string
+    is rendered into the recovery report so the operator can audit.
     """
     total_deleted = len(deleted_files)
 

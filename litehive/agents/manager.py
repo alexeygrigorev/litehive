@@ -69,7 +69,15 @@ def _latest_report_files_changed(
     pipeline_state: str,
     source_subagent_id: str | None = None,
 ) -> list[str]:
-    """Read the most recent activity entry's normalized file list so finish/progress snapshots show *what this subagent actually touched*, not whatever the subagent self-reported."""
+    """
+    Read the most recent activity entry's normalized file list.
+
+    Used by the finish/progress snapshots so they show *what this
+    subagent actually touched*, not whatever the subagent
+    self-reported in free-form text — agents sometimes hallucinate
+    files they did not edit, and the activity entry is the
+    canonical post-verdict record.
+    """
     latest = latest_task_activity_entry(
         workspace,
         task,
@@ -83,19 +91,14 @@ def _latest_report_files_changed(
 
 
 def _check_engine_availability_with_retry(engine, max_retries: int = 2, delay: float = 0.5) -> bool:
-    """Check engine availability with retry logic for transient failures.
+    """
+    Probe engine availability with a small retry loop.
 
-    Some engine availability checks can fail transiently due to filesystem
-    or PATH issues during subprocess execution. This adds retry logic to
-    avoid task failures due to temporary environmental problems.
-
-    Args:
-        engine: The engine instance to check
-        max_retries: Maximum number of retry attempts
-        delay: Delay between retries in seconds
-
-    Returns:
-        True if engine is available, False otherwise
+    Engine availability checks shell out and can flake on transient
+    filesystem or PATH issues during subprocess execution; without
+    the retry, a single hiccup would fail the task even though the
+    engine is fine. The retry budget is kept small because real
+    unavailability should fail quickly.
     """
     for attempt in range(max_retries + 1):
         try:
@@ -128,7 +131,15 @@ class SubagentStartupError(RuntimeError):
     """Unexpected failure before the engine subprocess started."""
 
     def __init__(self, exc: Exception) -> None:
-        """Wrap the original launch-time exception so the caller (``HeruEngineAdapter._handle_startup_failure``) can both inspect the underlying cause and read a pre-formatted ``startup_message`` for the recovery prompt."""
+        """
+        Wrap the original launch-time exception.
+
+        The caller (``HeruEngineAdapter._handle_startup_failure``)
+        needs both the underlying cause (to re-raise on the
+        no-recovery path) and a pre-formatted ``startup_message`` for
+        the recovery prompt — carrying both on the exception means it
+        cannot lose either piece of information mid-handoff.
+        """
         self.original = exc
         self.startup_message = f"{type(exc).__name__}: {exc}"
         super().__init__(self.startup_message)
@@ -138,7 +149,14 @@ class SubagentManager(SessionMixin):
     """Run external CLI subagents inside a task-scoped folder."""
 
     def __init__(self, root: Path, execution_root: Path) -> None:
-        """Bind the manager to a workspace plus an execution cwd; ``HeruEngineAdapter.run_turn`` constructs one fresh per agent turn so the cwd reflects the role-appropriate checkout (worktree for SWE/QA, litehive source for recovery)."""
+        """
+        Bind the manager to a workspace plus an execution cwd.
+
+        ``HeruEngineAdapter.run_turn`` constructs one ``SubagentManager``
+        per agent turn so the cwd reflects the role-appropriate
+        checkout — task worktree for SWE/QA, litehive source tree for
+        recovery — without needing to mutate a shared instance.
+        """
         self.root = root.resolve()
         self.execution_root = execution_root.resolve()
         self.workspace = Workspace.from_path(self.root)
@@ -148,7 +166,15 @@ class SubagentManager(SessionMixin):
 
     @staticmethod
     def _merged_warnings(base: list[str], extra: list[str]) -> list[str]:
-        """Stable-merge two warning lists deduping by string equality; ``_write_session_finish`` uses it so callback warnings (live-update bookkeeping failures) are appended onto the parsed StageReport's own warnings without duplicating identical lines."""
+        """
+        Append ``extra`` warnings onto ``base`` while deduping by
+        string equality.
+
+        ``_write_session_finish`` uses this so callback warnings
+        (live-update bookkeeping failures) are appended onto the
+        parsed StageReport's own warnings without duplicating
+        identical lines from a previous progress snapshot.
+        """
         merged = list(base)
         for warning in extra:
             if warning not in merged:
@@ -162,7 +188,16 @@ class SubagentManager(SessionMixin):
         exc: Exception,
         warnings: list[str],
     ) -> None:
-        """Trap an exception from the engine's ``on_started``/``on_update`` callbacks and turn it into a non-fatal warning so a transient bookkeeping error (e.g. SQLite write race) cannot kill the running subagent process."""
+        """
+        Trap an exception from the engine's ``on_started`` /
+        ``on_update`` callbacks.
+
+        Turns it into a non-fatal warning carried on the eventual
+        StageReport so a transient bookkeeping error (SQLite write
+        race, filesystem hiccup) cannot kill the running subagent
+        process — the engine is still doing real work, we just lost
+        a snapshot.
+        """
         warning = f"runner {phase} bookkeeping failed: {type(exc).__name__}: {exc}"
         if warning not in warnings:
             warnings.append(warning)
@@ -174,7 +209,15 @@ class SubagentManager(SessionMixin):
 
     @staticmethod
     def _agent_stage_for_task(task: TaskRecord, role: str | None = None) -> str:
-        """Pick the stage label exported as ``LITEHIVE_STAGE`` to the subagent and used to choose its report bucket; falls back to a role-default when the task has no current stage yet."""
+        """
+        Pick the stage label exported to the subagent.
+
+        The label is what shows up as ``LITEHIVE_STAGE`` in the
+        subagent's environment and what the activity-feed reader uses
+        to bucket the agent's report; falls back to a role-default
+        when the task has no current stage yet so an agent invoked
+        before the runtime was wired still sees a sensible stage.
+        """
         current_stage = task.runtime.pipeline.current_stage.stage
         if current_stage:
             return current_stage
@@ -194,7 +237,14 @@ class SubagentManager(SessionMixin):
 
     @classmethod
     def _report_stage_for_task(cls, task: TaskRecord, role: str | None = None) -> str:
-        """Narrow the stage to one ``StageReport`` accepts (reportable stages plus merge-resolving/recovering); guards record_stage_report from non-reporting pseudo-stages."""
+        """
+        Narrow the agent stage to one ``StageReport`` accepts.
+
+        ``StageReport`` only stores reportable stages plus
+        merge-resolving and recovering; this guards ``record_stage_report``
+        from non-reporting pseudo-stages so a hook phase or worktree
+        sync stage cannot accidentally land in the report storage.
+        """
         stage = cls._agent_stage_for_task(task, role)
         if stage in _REPORTABLE_STAGES or stage == PipelineState.RECOVERING:
             return stage
@@ -212,7 +262,15 @@ class SubagentManager(SessionMixin):
         max_turns: int | None = None,
         resume_session_id: str | None = None,
     ) -> SubagentResult:
-        """Drive one subagent end-to-end (folder, sandbox, live callbacks, transcript, report); the lifecycle stage handlers call this once per subagent invocation."""
+        """
+        Drive one subagent invocation end-to-end.
+
+        Allocates the subagent folder, applies the sandbox, wires the
+        live callbacks, runs the engine, then renders the transcript
+        and StageReport. Called once per subagent invocation by the
+        lifecycle stage handlers; everything observability-related
+        (events, snapshots, runtime state) flows through this method.
+        """
         subagent_id = self._next_subagent_id(task)
         folder_name = f"{subagent_id}-{role}"
         base = task_dir(self.root, task) / "subagents" / folder_name
@@ -239,7 +297,15 @@ class SubagentManager(SessionMixin):
         engine_started = False
 
         def _safe_on_started(pid: int) -> None:
-            """Engine ``on_started`` callback: record the subagent pid (so the runner can kill it on abort) and mark ``engine_started`` so a later failure is no longer treated as a startup error."""
+            """
+            Engine ``on_started`` callback.
+
+            Records the subagent pid so the runner can kill it on
+            abort, and flips ``engine_started`` so a later failure is
+            no longer treated as a startup error — once the engine
+            is running, an exception is the engine's fault, not the
+            launch's.
+            """
             nonlocal engine_started
             engine_started = True
             try:
@@ -253,7 +319,14 @@ class SubagentManager(SessionMixin):
                 )
 
         def _safe_on_update(execution: CLIExecutionResult) -> None:
-            """Engine ``on_update`` callback: persist a live progress snapshot so an operator watching ``litehive status`` sees the running subagent's transcript before the process exits."""
+            """
+            Engine ``on_update`` callback.
+
+            Persists a live progress snapshot so an operator watching
+            ``litehive status`` sees the running subagent's transcript
+            before the process exits — without these snapshots, the
+            CLI would only show output once the engine finished.
+            """
             nonlocal engine_started
             if execution.pid is not None:
                 engine_started = True
@@ -465,7 +538,16 @@ class SubagentManager(SessionMixin):
         )
 
     def _next_subagent_id(self, task: TaskRecord) -> str:
-        """Allocate the next ``SA-NNNN`` id by max-ing the existing in-memory refs against on-disk subagent folders so a previously-aborted run that left a directory behind cannot collide with the new id."""
+        """
+        Allocate the next ``SA-NNNN`` id for this task.
+
+        Maxes existing in-memory refs against on-disk subagent
+        folders so a previously-aborted run that left a directory
+        behind without updating the task record cannot collide with
+        the new id; without the disk-side max, a crashed launch could
+        produce two subagents with the same id and overwrite each
+        other's artifacts.
+        """
         next_number = 1
         for ref in task.subagents:
             match = re.match(r"^SA-(\d{4})$", ref.id)
@@ -496,7 +578,15 @@ class SubagentManager(SessionMixin):
         continuation,
         extra_warnings: list[str],
     ) -> None:
-        """End-of-run snapshot writer called once from ``run`` after the engine exits; persists the parsed StageReport, snapshot files, stream artifacts, and the ``subagent_finished`` event so downstream readers (lifecycle verdict reader, status display) see a single consistent terminal record for this subagent."""
+        """
+        End-of-run snapshot writer called once from ``run``.
+
+        Persists the parsed StageReport, snapshot files, stream
+        artifacts, and the ``subagent_finished`` event in one
+        sweep so downstream readers — the lifecycle verdict reader,
+        the status display, recovery diagnostics — all see a single
+        consistent terminal record for this subagent.
+        """
         report_stage = self._report_stage_for_task(task, ref.role)
         report = self._parse_execution_report(
             task=task,
@@ -576,7 +666,14 @@ class SubagentManager(SessionMixin):
         prompt: str,
         execution: CLIExecutionResult,
     ) -> None:
-        """Live progress snapshot called from the engine's ``on_update`` callback; persists transcript/streams so an operator watching ``litehive status`` sees a running subagent's output before it exits."""
+        """
+        Live progress snapshot called from ``on_update``.
+
+        Persists transcript and stream artifacts so an operator
+        watching ``litehive status`` sees a running subagent's output
+        before it exits; without this path, the CLI only ever sees
+        output after the engine finishes.
+        """
         engine = get_engine(ref.engine)
         transcript = self.render_execution_trace(
             ref.engine,
@@ -682,7 +779,15 @@ class SubagentManager(SessionMixin):
         execution: CLIExecutionResult | None,
         transcript: str,
     ) -> StageReport:
-        """Single helper that ``_write_session_finish`` and ``write_session_progress`` route through to construct a ``StageReport`` from the engine's transcript so the live-progress and finish paths produce reports of the same shape."""
+        """
+        Construct a ``StageReport`` from the engine's transcript.
+
+        Both ``_write_session_finish`` and ``write_session_progress``
+        route through this single helper so the live-progress and
+        finish paths produce reports of the same shape — without one
+        helper, the live snapshot and the final snapshot could drift
+        apart on field naming.
+        """
         if execution is None:
             execution_exit_code = 0
         else:

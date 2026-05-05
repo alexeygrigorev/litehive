@@ -13,13 +13,20 @@ app = make_typer(invoke_without_command=True)
 
 @app.callback()
 def worktree_group(ctx: typer.Context) -> None:
-    """Top-level callback for the ``litehive worktree`` group; refuses calls without a subcommand so the user sees help instead of a no-op."""
+    """Force the ``worktree`` group to require a subcommand instead of acting bare."""
     require_subcommand(ctx)
 
 
 @app.command("ls", help="List Litehive-managed task worktrees")
 def ls(workspace: WorkspaceOption = Path.cwd()) -> int:
-    """Operator inventory of the worktrees Litehive currently owns; the typical first step when a task seems stuck or a worktree is suspected of dirt."""
+    """
+    Operator inventory of the worktrees Litehive currently owns.
+
+    Typical first step when a task seems stuck or a worktree is
+    suspected of carrying uncommitted work; the per-row
+    ``change_count`` lets the operator spot dirty trees without
+    diving into git.
+    """
     ensure_workspace(workspace)
     service = WorktreeService(workspace)
     worktrees = service.collect_managed_worktrees()
@@ -47,7 +54,15 @@ def clean(
     workspace: WorkspaceOption = Path.cwd(),
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show planned removals only")] = False,
 ) -> int:
-    """Operator-driven worktree cleanup for tasks that have already left the active set; ``--dry-run`` lets the operator preview before deleting on disk."""
+    """
+    Operator-driven worktree cleanup for closed-task worktrees.
+
+    Removes worktrees whose tasks have already left the active
+    set so disk accumulation does not grow unbounded. ``--dry-run``
+    previews the planned removals before deleting on disk
+    because the operator wants confirmation before destroying
+    on-disk evidence.
+    """
     ensure_workspace(workspace)
     service = WorktreeService(workspace)
     results = service.remove_cleanable_worktrees(dry_run=dry_run)
@@ -93,7 +108,16 @@ def rescue(
     workspace: WorkspaceOption = Path.cwd(),
     apply: Annotated[bool, typer.Option(help="Cherry-pick eligible commits onto main")] = False,
 ) -> int:
-    """Salvage commits stranded in a flagged worktree by cherry-picking them onto main; the recovery tool of last resort when the merge-resolver could not finish on its own."""
+    """
+    Salvage commits stranded in a flagged worktree.
+
+    Cherry-picks eligible commits onto main when the merge-resolver
+    could not finish on its own — the recovery tool of last
+    resort, since this is the only way work that landed only on a
+    task branch makes it back to the operator's main line.
+    Without ``--apply``, prints the candidates so the operator can
+    audit before mutating main.
+    """
     ensure_workspace(workspace)
     service = WorktreeService(workspace)
     candidates = service.collect_rescue_candidates()

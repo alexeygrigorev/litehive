@@ -175,7 +175,15 @@ class RecoveryAgent(RoleAgent):
 
 
 def _recovery_history_key(item: dict[str, Any]) -> tuple[str | None, str, str, str, str | None]:
-    """Identity tuple for de-duplicating runtime and TaskState recovery entries that describe the same attempt."""
+    """
+    Identity tuple for de-duplicating recovery entries.
+
+    Used by the merge below: runtime and TaskState may both carry
+    the same recovery attempt with slightly different timestamps
+    rounded differently, so the key has to capture origin /
+    fingerprint / budget / verdict / created_at to recognise them as
+    one record.
+    """
     return (
         item.get("origin_stage"),
         str(item.get("fingerprint") or ""),
@@ -186,7 +194,7 @@ def _recovery_history_key(item: dict[str, Any]) -> tuple[str | None, str, str, s
 
 
 def _state_recovery_payload(outcome: Any) -> dict[str, Any]:
-    """Flatten a TaskState recovery outcome into the prompt-history shape so it can be merged with runtime entries."""
+    """Flatten a TaskState recovery outcome (with a nested trigger) into the prompt-history shape so it can be merged with runtime-side entries that already use the flat shape."""
     trigger = outcome.trigger
     return {
         "origin_stage": trigger.origin_stage,
@@ -203,7 +211,7 @@ def _state_recovery_payload(outcome: Any) -> dict[str, Any]:
 
 
 def _runtime_recovery_projection_payload(outcome: RuntimeRecoveryOutcome) -> dict[str, Any]:
-    """JSON-shape a runtime recovery projection so it shares the merged-history schema with TaskState entries."""
+    """JSON-shape a runtime recovery projection so it shares the merged-history schema with TaskState entries — both sides have to look the same before the merge dedupes them."""
     return outcome.model_dump(mode="json")
 
 
@@ -415,7 +423,14 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
 
 
 def _read_subagent_artifact(subagent_base: Path, artifact_name: str) -> str:
-    """Best-effort read of a subagent artifact (stdout/stderr) for the recovery diagnostics payload, returning empty on any IO error."""
+    """
+    Best-effort read of a subagent artifact for recovery diagnostics.
+
+    Returns an empty string on any IO error so a missing/locked
+    stdout or stderr file does not abort the entire diagnostics
+    payload — the recovery agent prefers partial evidence over no
+    evidence at all.
+    """
     artifact_path = resolve_artifact_path(subagent_base, artifact_name)
     if artifact_path is None:
         return ""

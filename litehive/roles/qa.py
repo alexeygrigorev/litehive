@@ -25,7 +25,14 @@ RETRY_ATTEMPT_GUIDANCE = """\
 
 
 class QAAgent(RoleAgent):
-    """Testing stage: verify the implementation against its acceptance criteria."""
+    """
+    Testing-stage agent.
+
+    Independently verifies that the SWE's implementation satisfies
+    the acceptance criteria; rejects only after collecting *every*
+    failure so the SWE can fix everything in one pass instead of
+    being whip-sawed across multiple reject cycles.
+    """
 
     NODE_NAME = PipelineState.TESTING
     ROLE = "qa"

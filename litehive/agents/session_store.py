@@ -12,7 +12,14 @@ _EVENT_STREAM_KEY = "event_stream"
 
 
 def _load_subagent_payload(workspace: Workspace, task_id: str, subagent_id: str) -> tuple[dict[str, Any], str | None]:
-    """Read the raw payload row plus its original ``created_at`` so ``save_subagent_artifacts`` can preserve it on UPSERT."""
+    """
+    Read the raw payload row plus its original ``created_at``.
+
+    ``save_subagent_artifacts`` upserts this row repeatedly during a
+    subagent's life; preserving the original created_at on every
+    update means the row keeps a stable creation timestamp even
+    though the payload churns on every progress callback.
+    """
     with workspace.connect() as connection:
         row = connection.execute(
             """
@@ -33,7 +40,7 @@ def _load_subagent_payload(workspace: Workspace, task_id: str, subagent_id: str)
 
 
 def load_subagent_artifacts(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
-    """Return the full structured payload (session + report + event stream) for a subagent run; consumed by status snapshots and stage prompt builders."""
+    """Return the full structured payload (session + report + event stream) for a subagent run — consumed by status snapshots and stage prompt builders that need every slice at once."""
     payload, _ = _load_subagent_payload(workspace, task_id, subagent_id)
     return payload
 
@@ -46,11 +53,14 @@ def save_subagent_artifacts(
     report: dict[str, Any] | object = _UNSET,
     event_stream: dict[str, Any] | None | object = _UNSET,
 ) -> None:
-    """Merge-write the per-subagent payload row, leaving unspecified fields untouched.
+    """
+    Merge-write the per-subagent payload row.
 
-    The ``_UNSET`` sentinel lets the SubagentManager's session helpers update
-    one slice of the artifact bundle (e.g. metadata-only) without clobbering
-    the others. ``event_stream=None`` is the explicit "remove the key" signal.
+    The ``_UNSET`` sentinel lets the SubagentManager's session
+    helpers update one slice of the artifact bundle (metadata only,
+    or report only, or event-stream only) without clobbering the
+    others. ``event_stream=None`` is the explicit "remove the key"
+    signal — distinct from "leave it alone".
     """
     payload, created_at = _load_subagent_payload(workspace, task_id, subagent_id)
     if session is not _UNSET:
@@ -89,7 +99,7 @@ def save_subagent_artifacts(
 
 
 def load_subagent_session(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
-    """Return only the engine session metadata slice (resume IDs, transcript pointer); used by stages that resume an existing engine session."""
+    """Return only the engine session metadata slice (resume IDs, transcript pointer) — used by stages that need to resume an existing engine session without paying for the report and event-stream slices."""
     payload = load_subagent_artifacts(workspace, task_id, subagent_id)
     session = payload.get("session")
     if isinstance(session, dict):
@@ -98,7 +108,7 @@ def load_subagent_session(workspace: Workspace, task_id: str, subagent_id: str) 
 
 
 def load_subagent_report(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
-    """Return only the structured report slice (verdict, summary, diagnostics); read by downstream stages and operator-facing status."""
+    """Return only the structured report slice (verdict, summary, diagnostics) — read by downstream stages and operator-facing status."""
     payload = load_subagent_artifacts(workspace, task_id, subagent_id)
     report = payload.get("report")
     if isinstance(report, dict):
@@ -107,7 +117,7 @@ def load_subagent_report(workspace: Workspace, task_id: str, subagent_id: str) -
 
 
 def load_subagent_event_stream(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
-    """Return only the event-stream slice (engine tool calls, stdout chunks); used by ``litehive worktree`` and post-mortem inspection."""
+    """Return only the event-stream slice (engine tool calls, stdout chunks) — used by ``litehive worktree`` and post-mortem inspection where the timeline is what matters."""
     payload = load_subagent_artifacts(workspace, task_id, subagent_id)
     event_stream = payload.get(_EVENT_STREAM_KEY)
     if isinstance(event_stream, dict):

@@ -1,9 +1,13 @@
-"""Read-only inspection of dirty worktree state and task ownership.
+"""
+Read-only diagnosis of dirty worktree state and task ownership.
 
-Diagnoses whether the main checkout or any task worktree has uncommitted
-changes, and decides which task (if any) owns those paths. Used by the pool
-gate, the ``litehive workspace status`` CLI, and ``WorktreeService`` for
-per-task inspection.
+Walks the main checkout and every task worktree, classifying findings
+by ownership (main-checkout dirt, task-owned, ambiguous,
+missing-recorded). The pool gate refuses to proceed on certain
+ownership classes; ``litehive workspace status`` and
+``WorktreeService.inspect_task_worktree`` render the same data for
+the operator. Read-only by design — repair flows live elsewhere so
+status code never accidentally mutates state.
 """
 
 from pathlib import Path, PurePosixPath
@@ -27,11 +31,15 @@ from litehive.worktree.paths import resolve_recorded_worktree_path
 
 
 def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
-    """Build the operator-facing dirty-worktree report.
+    """
+    Build the operator-facing dirty-worktree report.
 
-    Walks the main checkout and every task worktree, classifying each
-    finding by ownership. Used by ``litehive workspace status``, the pool
-    gate, and lifecycle tests asserting interrupted-task resumption.
+    The pool gate consults ``DirtyWorktreeGateReport.blocks_pool``
+    before letting a new task claim the workspace, so "what's dirty
+    and who owns it" must be a single read-only snapshot. Same data
+    drives ``litehive workspace status`` and the lifecycle tests for
+    interrupted-task resumption — three call sites means one helper
+    instead of three.
     """
     if not is_git_repo(root):
         return DirtyWorktreeGateReport()
@@ -102,11 +110,14 @@ def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
 
 
 def dirty_entry_paths(dirty_entries: list[str]) -> list[str]:
-    """Strip status codes off ``git status --porcelain`` lines and return paths.
+    """
+    Strip status codes off ``git status --porcelain`` lines and return paths.
 
-    Shared by ``inspect_dirty_worktree_gate`` and
-    ``worktree_uncommitted_changes``. Handles renamed (``->``) and quoted
-    entries.
+    Centralized so the porcelain-parsing rules (status code prefix,
+    quoted paths with embedded escapes, rename arrows) live in one
+    place — ``inspect_dirty_worktree_gate`` and
+    ``worktree_uncommitted_changes`` both rely on the same parsing
+    or they would disagree about which paths count as dirty.
     """
     paths: list[str] = []
     for entry in dirty_entries:
@@ -123,10 +134,14 @@ def dirty_entry_paths(dirty_entries: list[str]) -> list[str]:
 
 
 def worktree_uncommitted_changes(worktree_path: Path) -> list[str]:
-    """Sorted unique uncommitted paths in the worktree, or [] if git fails.
+    """
+    Return sorted unique uncommitted paths in the worktree.
 
-    Called by ``WorktreeService.inspect_task_worktree`` when building a
-    ``TaskWorktreeInspection`` for the operator.
+    Returns ``[]`` when git fails, so a transient git error doesn't
+    crash the status code path. Called by
+    ``WorktreeService.inspect_task_worktree`` when building a
+    ``TaskWorktreeInspection`` — the sort + dedupe means the
+    operator output is stable across reruns.
     """
     try:
         return sorted(set(dirty_entry_paths(status_porcelain(worktree_path))))
@@ -135,10 +150,14 @@ def worktree_uncommitted_changes(worktree_path: Path) -> list[str]:
 
 
 def worktree_committed_changes(root: Path, worktree_path: Path) -> list[str]:
-    """Sorted unique paths committed on the worktree branch beyond main.
+    """
+    Return sorted unique paths committed past main on the worktree branch.
 
-    Called by ``WorktreeService.inspect_task_worktree``. Returns ``[]`` if
-    the worktree has no fork point with main.
+    Pairs with :func:`worktree_uncommitted_changes`: together they
+    form the "what has this task changed?" view rendered by
+    ``TaskWorktreeInspection``. Returns ``[]`` when there's no
+    fork-point with main (a fresh worktree that never diverged
+    has nothing committed past main).
     """
     main_head = current_head(root) or "HEAD"
     fork_point = git_stdout_or_none(worktree_path, "merge-base", main_head, "HEAD")
@@ -148,7 +167,15 @@ def worktree_committed_changes(root: Path, worktree_path: Path) -> list[str]:
 
 
 def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
-    """Build the set of paths an interrupted task is allowed to leave dirty: its own metadata directory plus everything its activity log already recorded as changed."""
+    """
+    Compute the paths an interrupted task may legitimately leave dirty.
+
+    A resumable interruption can only "own" dirt the task already
+    declared: its per-task metadata directory plus every path its
+    activity log has previously listed as changed. Anything else on
+    disk belongs to a different task or to the operator, so the
+    gate refuses to attribute it to this task.
+    """
     paths: set[PurePosixPath] = set()
     paths.add(PurePosixPath(".litehive") / "tasks" / f"{task.id}-{task.slug}")
     for entry in load_task_activity(Workspace.from_path(root), task):
@@ -161,7 +188,15 @@ def _unexpected_dirty_paths(
     dirty_entries: list[str],
     allowed_paths: set[PurePosixPath],
 ) -> list[str]:
-    """Filter status entries to the paths a resuming task did NOT already claim, ignoring tmpdir noise and unowned ``.litehive/`` files."""
+    """
+    Return the paths a resuming task didn't already claim ownership of.
+
+    Called by ``_task_can_resume_with_owned_dirty_paths`` to decide
+    whether an interrupted task is the legitimate owner of the dirty
+    main checkout. Ignores ``$tmpdir`` and ``/tmp/`` noise from
+    pytest, and ignores ``.litehive/`` paths the task didn't list —
+    those belong to other tasks and shouldn't disqualify this one.
+    """
     unexpected = []
     for entry in dirty_entries:
         if len(entry) < 3:
@@ -187,7 +222,15 @@ def _task_can_resume_with_owned_dirty_paths(
     task: TaskRecord,
     dirty_entries: list[str],
 ) -> bool:
-    """Return True when an interrupted task can claim ownership of the dirty main checkout — used by ``inspect_dirty_worktree_gate`` to disambiguate which task should resume."""
+    """
+    True when an interrupted task can plausibly own the dirty main checkout.
+
+    Used by ``inspect_dirty_worktree_gate`` to disambiguate which
+    task should resume when the main checkout has uncommitted
+    changes. The task must be ``INTERRUPTED`` (terminal tasks
+    obviously can't resume), out of the backlog/done buckets, and
+    every dirty path must be inside its declared scope.
+    """
     if task.status != TaskStatus.INTERRUPTED:
         return False
     if task.pipeline_status in {PipelineStatus.BACKLOG, PipelineStatus.DONE}:

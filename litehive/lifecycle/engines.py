@@ -60,7 +60,14 @@ class ConfigBackedEngineSelector:
         model_override: str | None = None,
         check_quota: bool = True,
     ) -> None:
-        """Bind the selector to a workspace and capture caller overrides so each ``select`` call only needs the AgentNode's per-turn context (state, node, excluded set)."""
+        """
+        Bind the selector to a workspace plus the caller's overrides.
+
+        Captured here so each ``select`` call only needs the AgentNode's
+        per-turn context (state, node, excluded set); the workspace
+        config and CLI overrides do not change between turns and
+        re-resolving them every turn would just be repeated work.
+        """
         self.config = config
         self.engine_factory = engine_factory
         self.workspace_root = workspace_root.resolve()
@@ -69,7 +76,15 @@ class ConfigBackedEngineSelector:
         self.check_quota = check_quota
 
     def _selection_task(self, state: TaskState, node_name: PipelineState) -> TaskRecord | None:
-        """Return the persisted task or a synthetic stand-in so engine selection always has a record to score; needed because some lifecycle nodes run before a real task row exists (e.g. workspace-level recovery)."""
+        """
+        Return the persisted task or a synthetic stand-in.
+
+        Engine selection scores the candidate engines against the
+        task; some lifecycle nodes run before a real task row exists
+        (workspace-level recovery, for example), so we mint a synthetic
+        ``TaskRecord`` rather than skip selection entirely on those
+        paths.
+        """
         if getattr(state, "task_id", None):
             task = get_task(self.workspace_root, state.task_id)
             if task is not None:
@@ -89,7 +104,15 @@ class ConfigBackedEngineSelector:
         node_name: PipelineState,
         excluded: frozenset[str],
     ) -> Engine | None:
-        """Implement the `EngineSelector` protocol — invoked by every AgentNode before each turn to obtain the next engine instance, honouring CLI overrides, freezes, quota, and the AgentNode's `excluded` set of engines that have already crashed this run."""
+        """
+        Pick the next engine to run this turn on, or ``None`` when no
+        engine is eligible.
+
+        Implements the ``EngineSelector`` protocol; AgentNode calls
+        this before every turn so each pick honours CLI overrides,
+        freezes, quota, and the AgentNode's ``excluded`` set of engines
+        that have already crashed this run.
+        """
         task = self._selection_task(state, node_name)
         if task is None:
             return None

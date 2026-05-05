@@ -1,7 +1,20 @@
-"""Runtime and execution state models.
+"""
+Per-task runtime state slices persisted alongside ``TaskRecord``.
 
-RuntimeEngineContinuation now lives in heru.types. This module re-exports it
-and keeps the litehive-only runtime state models authoritative here.
+``TaskRuntime`` splits the mutable execution data into two halves so
+storage stays atomic per task while ownership is explicit:
+
+- ``PipelineRuntime`` — projection of state-machine progress
+  (state, retries, hook tracking, recovery and failed-run histories,
+  last outcome). Owned by the lifecycle layer; lifecycle overwrites
+  this slice after each transition. Non-lifecycle code may write
+  closure/interruption outcomes but should not touch the rest.
+- ``ExecutionRuntime`` — owned by the runner: which subagent is live,
+  any interruption context, the most recent engine switch.
+
+``RuntimeEngineContinuation`` itself lives in ``heru.types`` so the
+runner and the engine client share one shape; we re-export it here for
+convenience.
 """
 
 from enum import Enum
@@ -24,17 +37,28 @@ from .common import (
 
 
 def _json_enum_value(value: object) -> object:
-    """Pydantic JSON-serializer helper: render Enum members as their underlying value so persisted runtime state stays plain JSON instead of carrying ``ClassName.MEMBER`` text."""
+    """
+    Pydantic JSON-serializer helper for enum-valued fields.
+
+    Renders ``Enum`` members as their underlying value so persisted
+    runtime JSON stays portable across renames; without this, a row
+    written as ``RunnerStatus.IDLE`` would read back as the literal
+    string ``"RunnerStatus.IDLE"`` and trip every consumer that
+    expects ``"idle"``.
+    """
     if isinstance(value, Enum):
         return value.value
     return value
 
 
 class RuntimeGitState(BaseModel):
-    """Git state tracking for runtime execution.
+    """
+    Per-task git context (commit + worktree) the runner is operating in.
 
-    Tracks the current git context where the task is executing.
-    Updated by PipelineRunner as git operations occur.
+    Updated by ``PipelineRunner`` as commits land and the worktree is
+    sync'd. Persisted on ``PipelineRuntime`` so status output and the
+    daemon's worktree gate can answer "where is this task right now?"
+    without re-reading git on every status call.
     """
 
     commit_sha: str | None = None  # Current git commit SHA being worked on
@@ -42,11 +66,13 @@ class RuntimeGitState(BaseModel):
 
 
 class RuntimeStageState(BaseModel):
-    """Runtime state for a specific pipeline stage execution.
+    """
+    Snapshot of which stage is running and for how long.
 
-    Tracks the current stage execution details.
-    Used by PipelineRunner to record stage progress and by CLI/reporting
-    for displaying current stage status.
+    The runner overwrites this after every stage transition so status
+    output and the operator's CLI can render "currently in
+    implementing for 42s" without consulting the lifecycle log. Stored
+    on ``PipelineRuntime.current_stage``.
     """
 
     stage: str | None = None  # Pipeline stage being executed
@@ -56,22 +82,30 @@ class RuntimeStageState(BaseModel):
     duration_seconds: int = 0  # How long the stage has been running
 
     def model_copy(self, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
-        """Override pydantic's ``model_copy`` to silently drop unknown ``update`` keys; lifecycle code passes generic stage-update dicts and we don't want each new field to break old call sites."""
+        """
+        Override pydantic's ``model_copy`` to drop unknown ``update`` keys.
+
+        Lifecycle code passes generic stage-update dicts assembled from
+        events; without this filter, every newly-introduced field on
+        the event side would have to be added here too or break
+        existing callers. Filtering at the model boundary keeps the
+        receiver tolerant to forward-rev callers.
+        """
         if update is not None:
             update = {key: value for key, value in update.items() if key in type(self).model_fields}
         return super().model_copy(update=update, deep=deep)
 
 
 class RuntimeSubagentState(BaseModel):
-    """Runtime state for a subagent execution.
+    """
+    Subagent execution snapshot stored on the active task.
 
-    Tracks the lifecycle and current status of an individual subagent.
-    Created when a subagent starts, updated during execution, and finalized
-    when the subagent completes or is interrupted.
-
-    Used by PipelineRunner for subagent lifecycle management and by
-    CLI/reporting for displaying active subagent status. Note that detailed
-    logs and traces belong in artifacts, not in this runtime state.
+    Carries the live identifiers (``id``, ``role``, ``engine``, ``pid``)
+    plus a short ``execution_trace_snippet`` so status output can name
+    the running agent without paging in the full transcript artifact.
+    Created when the runner spawns a subagent, finalized when it
+    completes or is interrupted; full logs and traces stay in the
+    artifact directory, not on this object.
     """
 
     id: str  # Unique subagent identifier
@@ -95,11 +129,14 @@ SubagentRef = HeruSubagentRef
 
 
 class RuntimeEngineSwitch(BaseModel):
-    """Record of an engine switch during task execution.
+    """
+    Bookkeeping for the most recent engine switch on a task.
 
-    Tracks when and why the execution engine was changed during a task.
-    Used for debugging engine routing decisions and understanding task
-    execution patterns across different AI engines.
+    Recovery and routing logic occasionally swap the engine mid-task
+    (e.g. fall back to a smaller engine after a budget hit); this
+    record explains *what* changed and *why* so the operator's
+    timeline can show the switch alongside the rest of the run.
+    Persisted on ``ExecutionRuntime.last_engine_switch``.
     """
 
     stage: str  # Pipeline stage where switch occurred
@@ -110,11 +147,14 @@ class RuntimeEngineSwitch(BaseModel):
 
 
 class RuntimeHookRejectFingerprint(BaseModel):
-    """Fingerprint of a hook rejection for detecting rejection loops.
+    """
+    Persisted shape of a hook rejection used for loop detection.
 
-    Used to track patterns of consecutive hook rejections and trigger
-    recovery when the same type of hook failure happens repeatedly.
-    Helps prevent infinite retry loops on persistent hook failures.
+    Compared against the next hook reject to decide whether the same
+    hook is firing repeatedly; once the consecutive count crosses
+    ``state.limits.same_hook_reject_limit`` the lifecycle layer
+    escalates to recovery instead of retrying. Mirrors
+    ``HookRejectFingerprint`` on lifecycle state.
     """
 
     point: str  # Hook point where rejection occurred (before_*, after_*)
@@ -124,11 +164,15 @@ class RuntimeHookRejectFingerprint(BaseModel):
 
 
 class RuntimeRecoveryOutcome(BaseModel):
-    """Read-only storage projection of a ``RecoveryOutcome``.
+    """
+    Compact projection of ``RecoveryOutcome`` stored on runtime for display.
 
-    ``TaskState.recovery_history`` owns full ``RecoveryOutcome`` objects.
-    Runtime stores this compact copy only for status/debug/prompt surfaces and
-    must only be updated from the lifecycle projection path.
+    ``TaskState.recovery_history`` owns the authoritative
+    ``RecoveryOutcome`` list; this flat copy exists so status and
+    prompt surfaces can render recovery history without joining
+    through the lifecycle store. Mutated only via the lifecycle
+    projection path — direct writes here would let runtime drift from
+    history.
     """
 
     origin_stage: str | None = None
@@ -144,11 +188,14 @@ class RuntimeRecoveryOutcome(BaseModel):
 
 
 class RuntimeFailedRunRecord(BaseModel):
-    """Read-only storage projection for terminal retry exhaustion.
+    """
+    Compact projection of ``FailedRunRecord`` exposed on runtime.
 
-    ``TaskState.failed_run_history`` owns the mutable records. Runtime stores
-    this copy only for queue/status surfaces and must only be updated from the
-    lifecycle projection path or explicit operator-ack projection.
+    ``TaskState.failed_run_history`` owns the mutable record; this
+    runtime copy backs the queue's "this task already exhausted its
+    budget on this shape" check and the operator's status view.
+    Updated only by the lifecycle projection path or by an explicit
+    operator-ack — never by hot-path runner code.
     """
 
     stage: str
@@ -166,15 +213,15 @@ class RuntimeFailedRunRecord(BaseModel):
 
 
 class TaskOutcomeState(BaseModel):
-    """Final outcome state when a task completes or terminates.
+    """
+    Terminal outcome record stored on runtime when a task ends.
 
-    Captures the terminal result of task execution, including success,
-    failure details, and context for follow-up actions. Used by
-    reporting and recovery logic to understand task completion patterns.
-
-    ``failure_diagnostics`` is report evidence copied into the terminal
-    outcome for operator/debug visibility. Recovery identity and budget
-    tracking belong to ``FailureFingerprint`` on ``RecoveryTrigger``.
+    Captures the kind of outcome, where it happened, and a
+    human-readable reason so post-mortem and reporting code can render
+    a consistent end-of-run summary without consulting the lifecycle
+    log. ``failure_diagnostics`` here is report evidence copied for
+    visibility; recovery identity (fingerprint, classification, budget
+    key) lives on ``RecoveryTrigger`` in the recovery domain.
     """
 
     model_config = ConfigDict(validate_assignment=True)
@@ -192,16 +239,27 @@ class TaskOutcomeState(BaseModel):
 
     @field_serializer("kind", "reason_code", when_used="json")
     def _serialize_runtime_enum_value(self, value: object) -> object:
-        """Pydantic JSON serializer that flattens the OutcomeKind / OutcomeReasonCode enums to their string values; keeps stored runtime JSON portable."""
+        """
+        Flatten ``OutcomeKind`` / ``OutcomeReasonCode`` enums to their string values.
+
+        Without this, persisted runtime JSON would carry
+        ``OutcomeKind.DONE`` literal text and break every consumer
+        that filters by the canonical string. Same shape as
+        ``_json_enum_value`` above; declared here so pydantic wires it
+        as the field serializer for these specific fields.
+        """
         return _json_enum_value(value)
 
 
 class RuntimeInterruptionState(BaseModel):
-    """State tracking for task execution interruptions.
+    """
+    Interruption context the runner persists when a task pauses.
 
-    Records when and why a task was interrupted, along with context
-    needed for potential resumption. Used by PipelineRunner to handle
-    graceful interruption and by resume logic to restore execution state.
+    Captures both *what* was interrupted (stage, pipeline status,
+    optional active subagent) and *what to resume* (``resume_stage``,
+    timestamps for "how long was it stalled"). Without this snapshot
+    the recovery layer cannot tell a resumable interruption from a
+    crash that needs full re-entry.
     """
 
     source: Literal["runner", "subagent"] = "runner"  # What initiated the interruption
@@ -218,15 +276,15 @@ class RuntimeInterruptionState(BaseModel):
 
 
 class PipelineRuntime(BaseModel):
-    """Projected pipeline execution state stored with ``TaskRecord``.
+    """
+    Lifecycle projection persisted alongside the task.
 
-    Lifecycle-owned fields here are not authoritative. ``TaskState`` owns the
-    state-machine position, retry/recovery/failed-run memory, and hook tracking;
-    lifecycle orchestration overwrites this projection after each transition.
-    Non-lifecycle task operations may still write closure/interruption outcomes.
-
-    This slice deliberately excludes subagent and engine-switch bookkeeping,
-    which belongs to ExecutionRuntime.
+    Authoritative state-machine data lives on ``TaskState``; this slice
+    is the read-friendly mirror for status, queue filtering, and
+    prompt context. Lifecycle orchestration overwrites it after every
+    transition. Non-lifecycle task operations may still write
+    closure/interruption outcomes here, which is why those fields are
+    on this slice rather than on ``ExecutionRuntime``.
     """
 
     git: RuntimeGitState = Field(default_factory=RuntimeGitState)
@@ -245,10 +303,15 @@ class PipelineRuntime(BaseModel):
 
 
 class ExecutionRuntime(BaseModel):
-    """Mutable runtime state owned by subagent execution.
+    """
+    Subagent-execution slice of the task runtime.
 
-    This slice tracks active subagent state plus interruption and engine-switch
-    context used to resume or redirect work.
+    Owned by the runner: which subagent is currently live, the most
+    recent interruption context (so resume can restore stage and
+    started-at timestamps), and the latest engine-switch record.
+    Splitting this off ``PipelineRuntime`` keeps lifecycle and runner
+    writes from stepping on each other's slice during concurrent
+    updates.
     """
 
     active_subagent: RuntimeSubagentState | None = None
@@ -257,12 +320,14 @@ class ExecutionRuntime(BaseModel):
 
 
 class TaskRuntime(BaseModel):
-    """Task-scoped runtime container split by ownership boundary.
+    """
+    Task-scoped runtime split by ownership: pipeline + execution.
 
-    TaskRuntime keeps persistence atomic for a task while separating mutable
-    runtime state into:
-    - pipeline: run status, stage progress, retries, outcomes, and recovery
-    - execution: active subagent, interruption, and engine-switch state
+    Keeping the persistence boundary atomic per task (one ``TaskRuntime``
+    per row) while letting lifecycle and runner each own their slice
+    avoids the bridge-code pattern where two modules sync the same
+    fields back and forth — see code-style "State And Ownership". The
+    two slices serialize together but are written independently.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -275,7 +340,15 @@ class TaskRuntime(BaseModel):
         commit_sha: str | None,
         worktree_path: str | None,
     ) -> "TaskRuntime":
-        """Return a deep copy with the current git context stamped in; called right before persistence so the saved runtime always reflects where the task was committed."""
+        """
+        Return a deep copy with the current git context stamped in.
+
+        Called right before persistence so the saved runtime row
+        always carries the commit/worktree the task was at, even when
+        the live in-memory ``TaskRuntime`` has not yet seen the commit
+        propagate. Without this, status output could read back the
+        stale git context for a freshly-committed task.
+        """
         runtime = self.model_copy(deep=True)
         runtime.pipeline.git.commit_sha = commit_sha
         runtime.pipeline.git.worktree_path = worktree_path
@@ -283,11 +356,14 @@ class TaskRuntime(BaseModel):
 
 
 class RunnerStatusState(BaseModel):
-    """Status tracking for the top-level task runner process.
+    """
+    Heartbeat-driven snapshot of the workspace's runner process.
 
-    Provides monitoring information about the runner itself, independent
-    of individual task state. Used by monitoring systems and operator
-    interfaces to track runner health and current activity.
+    Independent of any single task: tracks the runner's PID, current
+    workspace, last heartbeat, and currently-active task id. The
+    daemon's pre-spawn check reads this to refuse starting a second
+    runner; ``litehive status`` reads it to render the runner-health
+    line.
     """
 
     model_config = ConfigDict(validate_assignment=True)
@@ -302,5 +378,13 @@ class RunnerStatusState(BaseModel):
 
     @field_serializer("status", when_used="json")
     def _serialize_status(self, value: object) -> object:
-        """Pydantic JSON serializer for ``RunnerExecutionStatus``; status surfaces and the heartbeat file consume the bare string value rather than ``RunnerExecutionStatus.IDLE``."""
+        """
+        JSON serializer for ``RunnerExecutionStatus``.
+
+        Status surfaces and the on-disk heartbeat row consume the bare
+        string ``"idle"`` rather than ``RunnerExecutionStatus.IDLE``;
+        without this serializer the daemon would write the latter and
+        the status reader would compare strings against the wrong
+        spelling.
+        """
         return _json_enum_value(value)

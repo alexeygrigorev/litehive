@@ -29,7 +29,7 @@ class LastReport:
     hook_ok: bool = False
 
     def to_payload(self) -> dict[str, int | list[str] | bool]:
-        """Serialize the SWE/agent report into the json payload column so the next runner launch can read it back."""
+        """Serialize the report so the next runner launch can read it back from the json column."""
         return {
             "files_changed": self.files_changed,
             "tests_added": self.tests_added,
@@ -40,7 +40,14 @@ class LastReport:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "LastReport":
-        """Rebuild a report from the persisted json payload, tolerating old shapes where ``files_changed`` was stored as a list rather than a count."""
+        """
+        Rebuild a report from the persisted json payload.
+
+        Tolerates legacy shapes where ``files_changed`` was stored as a
+        list of paths rather than an integer count, so a workspace
+        upgraded across that schema change does not lose its in-flight
+        report on first reload.
+        """
         files_changed = payload.get("files_changed", 0)
         if isinstance(files_changed, list):
             files_changed_count = len(files_changed)
@@ -63,7 +70,14 @@ class HookRejectFingerprint:
     fingerprint: str = ""
 
     def to_payload(self) -> dict[str, str]:
-        """Serialize the hook fingerprint so the same-hook-reject circuit breaker survives across runner launches."""
+        """
+        Serialize the hook fingerprint to json.
+
+        The same-hook-reject circuit breaker compares fingerprints
+        across launches, so persisting this is what lets the breaker
+        survive a runner restart instead of resetting its streak count
+        on every process boot.
+        """
         return {
             "point": self.point,
             "command": self.command,
@@ -73,7 +87,7 @@ class HookRejectFingerprint:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "HookRejectFingerprint":
-        """Rebuild a hook-reject fingerprint from json so the next launch can compare against the latest hook reject and detect repeats."""
+        """Rebuild a hook-reject fingerprint from json so the next launch can detect repeats of the latest hook reject."""
         return cls(
             point=canonical_pipeline_state(payload["point"]),
             command=payload["command"],
@@ -110,7 +124,7 @@ class LastRejection:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "LastRejection":
-        """Rebuild the per-stage rejection memo from json; read by ``RoleAgent.build_prompt`` on retry."""
+        """Rebuild the per-stage rejection memo from json so ``RoleAgent.build_prompt`` can render it on retry."""
         return cls(
             source=payload["source"],
             reason=payload["reason"],
@@ -125,7 +139,13 @@ class MergeContext:
     merge_attempt: int = 1
 
     def to_payload(self) -> dict[str, Any]:
-        """Serialize merge state so a runner that resumes mid-merge knows the conflict files and which attempt it is on."""
+        """
+        Serialize merge state to json.
+
+        A runner that resumes mid-merge needs to know which files were
+        conflicting and which attempt it is on so it does not start the
+        retry counter from zero or forget which files to re-resolve.
+        """
         return {
             "conflict_files": list(self.conflict_files),
             "merge_attempt": self.merge_attempt,
@@ -133,7 +153,7 @@ class MergeContext:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "MergeContext":
-        """Rebuild merge state from json; relied on by the merge stage to resume an interrupted conflict resolution."""
+        """Rebuild merge state from json so the merge stage can resume an interrupted conflict resolution."""
         files = payload.get("conflict_files") or []
         return cls(
             conflict_files=tuple(str(path) for path in files),
@@ -147,7 +167,7 @@ class CommitResult:
     reason: str | None = None
 
     def to_payload(self) -> dict[str, Any]:
-        """Serialize the commit-stage outcome (head sha and skip reason) so downstream stages can reference what the commit step produced."""
+        """Serialize the commit-stage outcome (head sha plus optional skip reason) so downstream stages can reference what landed."""
         return {
             "head_sha": self.head_sha,
             "reason": self.reason,
@@ -169,7 +189,14 @@ class RejectionLoop:
     count: int = 0
 
     def to_payload(self) -> dict[str, Any]:
-        """Serialize loop counters so the rejection-loop cap survives across runs and can fail the task once the same reject keeps bouncing back."""
+        """
+        Serialize the rejection-loop counter to json.
+
+        Persisting this is what lets the rejection-loop cap survive a
+        runner restart so a task that has been bouncing the same reject
+        back and forth does not get a fresh retry budget on every
+        relaunch.
+        """
         return {
             "rejection_stage": self.rejection_stage,
             "retry_target_stage": self.retry_target_stage,
@@ -210,11 +237,17 @@ class FailedRunRecord:
 
     @property
     def key(self) -> str:
-        """Stable lookup key for this record inside ``failed_run_history``; used by the runner's retry-exhaustion bookkeeping to find or upsert the matching row."""
+        """Stable lookup key inside ``failed_run_history`` so the runner's retry-exhaustion bookkeeping can find or upsert this row."""
         return failed_run_key(self.stage, self.failure_shape)
 
     def to_payload(self) -> dict[str, Any]:
-        """Serialize the failed-run record so cross-run retry-exhaustion memory survives a task restart and is mirrored into TaskRuntime."""
+        """
+        Serialize the failed-run record to json.
+
+        Cross-run retry-exhaustion memory is stored on the runtime
+        TaskRecord *and* in lifecycle ``TaskState`` so a requeue cannot
+        wipe it; this method produces the shape both stores agree on.
+        """
         return {
             "stage": self.stage,
             "failure_shape": self.failure_shape,
@@ -232,7 +265,14 @@ class FailedRunRecord:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "FailedRunRecord":
-        """Rebuild a failed-run record from json so the runner can refuse to re-enter a stage that has already exhausted its retry budget for this failure shape."""
+        """
+        Rebuild a failed-run record from json.
+
+        Without this, a relaunched runner would re-enter a stage whose
+        retry budget had already been exhausted for this exact failure
+        shape; the rebuild is what enforces "do not retry the same
+        failure forever".
+        """
         retry_limit = payload.get("retry_limit")
         if retry_limit in (None, ""):
             retry_limit_value = None
@@ -255,7 +295,14 @@ class FailedRunRecord:
 
 
 def failed_run_key(stage: str, failure_shape: str) -> str:
-    """Canonical ``failed_run_history`` key shared between persistence and ``litehive.tasks.failed_runs`` so both sides agree how stage + failure shape compose into one slot."""
+    """
+    Canonical key under which a failed-run record lives.
+
+    Shared between persistence and ``litehive.tasks.failed_runs`` so
+    both sides agree how stage + failure shape compose into one slot;
+    if the two sides ever disagreed, runtime and lifecycle would carry
+    parallel records of the same failure under different keys.
+    """
     return f"{stage}:{failure_shape}"
 
 
@@ -335,7 +382,14 @@ class TaskState:
     limits: Limits = field(default_factory=Limits)
 
     def __post_init__(self) -> None:
-        """Canonicalize all PipelineState fields right after construction so guards/effects/persistence comparing stage names by equality never see a raw string side-by-side with an enum member."""
+        """
+        Canonicalize all PipelineState fields right after construction.
+
+        Guards, effects, and persistence compare stage names by equality;
+        without this, a stage loaded from json as a raw string could sit
+        side-by-side with an enum-typed stage from a freshly-built state
+        and equality checks would silently miss.
+        """
         self.stage = canonical_pipeline_state(self.stage)
         if self.entry_stage is not None:
             self.entry_stage = canonical_pipeline_state(self.entry_stage)
@@ -347,30 +401,58 @@ class TaskState:
         }
 
     def recovery_budget_available(self, trigger: RecoveryTrigger) -> bool:
-        """Decide whether the lifecycle rules may dispatch another recovery turn for this trigger; consulted by the ``recovery_budget_available`` guard before routing a Reject into recovery."""
+        """
+        Decide whether the lifecycle rules may dispatch another recovery
+        turn for this trigger.
+
+        Consulted by the ``recovery_budget_available`` guard before
+        routing a Reject into recovery. Hook-reject loops use a single
+        global "we already invoked recovery" flag; everything else uses
+        per-fingerprint budget keys so distinct failure shapes each get
+        their own one-shot recovery attempt.
+        """
         if trigger.reason_code == "hook_reject_loop":
             return not self.hook_reject_recovery_invoked
         return all(outcome.trigger.budget_key() != trigger.budget_key() for outcome in self._budget_recovery_history())
 
     def _budget_recovery_history(self) -> list[RecoveryOutcome]:
-        """Slice of ``recovery_history`` that counts toward the current budget window; pre-recovery outcomes preserved across a budget reset (e.g. after a successful operator override) are excluded so they cannot exhaust the new window."""
+        """
+        Slice of ``recovery_history`` that counts toward the current
+        budget window.
+
+        Pre-recovery outcomes preserved across a budget reset (e.g.
+        after a successful operator override that intentionally clears
+        the slate) are excluded so they cannot exhaust the new window.
+        """
         return self.recovery_history[max(0, self.recovery_budget_history_start) :]
 
 
 class Persistence(Protocol):
-    """Structural type the runner depends on so tests can substitute an in-memory persistence without inheriting from ``SqlitePersistence``."""
+    """
+    Structural type the runner depends on for state persistence.
+
+    Tests substitute an in-memory implementation that satisfies the
+    protocol without inheriting from ``SqlitePersistence``; production
+    uses ``SqlitePersistence`` (the only real implementation).
+    """
 
     def save(self, state: TaskState) -> None:
-        """Persist the lifecycle cursor for one task; tests may swap a no-op implementation, the production binding writes ``pipeline_task_state``."""
+        """Persist the lifecycle cursor for one task; the production binding writes ``pipeline_task_state`` and tests usually swap a no-op or in-memory implementation."""
         ...
 
     def load(self, task_id: str) -> TaskState:
-        """Return the persisted cursor for a task; tests may return an in-memory record, the production binding reads ``pipeline_task_state`` and raises ``TaskNotFound`` for unknown ids."""
+        """Return the persisted cursor for a task; production reads ``pipeline_task_state`` and raises ``TaskNotFound`` for unknown ids, tests usually return an in-memory record."""
         ...
 
 
 def _string_list(value: Any) -> list[str]:
-    """Coerce a json field into a deduped, stripped list of non-empty strings; used by ``LastReport.from_payload`` to defend report-rebuild against payloads with stray empty entries or non-string items."""
+    """
+    Coerce a json field into a deduped, stripped list of strings.
+
+    Used by ``LastReport.from_payload`` to defend report-rebuild against
+    payloads with stray empty entries or non-string items, so a slightly
+    malformed report cannot derail the resume path.
+    """
     if not isinstance(value, list):
         return []
     normalized: list[str] = []
@@ -388,7 +470,13 @@ def _string_list(value: Any) -> list[str]:
 
 
 def _state_payload(state: TaskState) -> dict[str, Any]:
-    """Serialize the non-column fields of ``TaskState`` into the json blob ``SqlitePersistence.save`` writes to ``pipeline_task_state.payload``; the inverse of ``_state_from_row`` and the only producer of that column shape."""
+    """
+    Serialize the non-column fields of ``TaskState`` into the json blob.
+
+    Inverse of ``_state_from_row`` and the only producer of the
+    ``pipeline_task_state.payload`` shape; centralising it here is what
+    keeps writers and readers from drifting apart on field naming.
+    """
     if state.entry_stage is None:
         entry_stage_payload = None
     else:
@@ -445,7 +533,13 @@ def _state_from_row(
     payload: dict[str, Any],
     limits: Limits,
 ) -> TaskState:
-    """Rebuild a ``TaskState`` from one ``pipeline_task_state`` row; the inverse of ``_state_payload``, called by ``SqlitePersistence.load`` so the runner can resume from where the previous launch left off."""
+    """
+    Rebuild a ``TaskState`` from one ``pipeline_task_state`` row.
+
+    Inverse of ``_state_payload``, called by ``SqlitePersistence.load``
+    so the runner can resume from where the previous launch left off
+    instead of starting every task in the READY state.
+    """
     last_report_data = payload.get("last_report") or {}
     last_rejections_data = payload.get("last_rejection_by_stage") or {}
     failed_run_history_data = payload.get("failed_run_history") or {}
@@ -547,12 +641,26 @@ class SqlitePersistence:
     """
 
     def __init__(self, workspace: Workspace, limits: Limits | None = None) -> None:
-        """Bind the persistence to a workspace plus a (re-injected on every load) ``Limits`` config; constructed once per runner launch so every save/load against this task uses the same retry budget configuration."""
+        """
+        Bind the persistence to a workspace plus a ``Limits`` config.
+
+        ``Limits`` is re-injected on every ``load`` so the runner-level
+        retry/budget configuration travels with the persistence object
+        rather than getting baked into the persisted row; constructed
+        once per runner launch so every save/load uses the same config.
+        """
         self.workspace = workspace
         self.limits = limits or Limits()
 
     def save(self, state: TaskState) -> None:
-        """Upsert the lifecycle cursor for this task and append a ``pipeline_task_state_saved`` audit event; called by the runner after every state-machine step that mutates ``TaskState``."""
+        """
+        Upsert the lifecycle cursor and emit a ``pipeline_task_state_saved`` audit event.
+
+        Called by the runner after every state-machine step that
+        mutates ``TaskState``; the audit event is what lets the events
+        feed reconstruct the full sequence of state changes even when
+        only the latest row survives in the cursor table.
+        """
         payload = _state_payload(state)
         payload_json = json.dumps(payload, sort_keys=True)
         updated_at = utcnow()
@@ -592,7 +700,14 @@ class SqlitePersistence:
             connection.commit()
 
     def load(self, task_id: str) -> TaskState:
-        """Return the last persisted ``TaskState`` for the task; raises ``TaskNotFound`` for tasks that never reached the runner. Called by the runner on launch and by status/debug/diagnostics readers."""
+        """
+        Return the last persisted ``TaskState`` for the task.
+
+        Raises ``TaskNotFound`` for tasks that never reached the runner
+        so the caller can decide whether to initialise a fresh state or
+        treat the missing row as an error. Used by the runner on launch
+        and by status/debug/diagnostics readers.
+        """
         with self.workspace.connect() as connection:
             row = connection.execute(
                 "SELECT stage, pipeline_mode, payload FROM pipeline_task_state WHERE task_id = ?",

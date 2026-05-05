@@ -16,7 +16,14 @@ from litehive.workspace import Workspace
 
 
 def mark_interrupted_subagent(root: Path, task: TaskRecord, reason: str, stage: str) -> RuntimeSubagentState | None:
-    """Promote the task's currently-running subagent to ``interrupted`` and persist the snapshot artifacts so a later resume sees a frozen subagent record instead of a half-running one. Returns ``None`` if there is nothing to interrupt — repair callers use that to decide whether the interruption originated in the runner or in a subagent."""
+    """
+    Promote the task's running subagent to ``interrupted`` and persist artifacts.
+
+    A later resume sees a frozen subagent record instead of a
+    half-running one; returns ``None`` when there is nothing to
+    interrupt — repair callers use that to decide whether the
+    interruption originated in the runner itself or in a subagent.
+    """
     active = task.runtime.execution.active_subagent
     interruption = task.runtime.execution.interruption
     if interruption is None:
@@ -51,7 +58,14 @@ def mark_interrupted_subagent(root: Path, task: TaskRecord, reason: str, stage: 
 
 
 def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeSubagentState) -> str:
-    """Pick the best available transcript snippet to attach to the interrupted-subagent record — preferring a saved report summary, then a freshly summarised execution trace, falling back to a fixed string so the journal entry is never empty."""
+    """
+    Pick the best available transcript snippet for the interrupted record.
+
+    Prefers a saved report summary, then a freshly summarised execution
+    trace, then a fixed fallback string so the journal entry is never
+    empty; an empty snippet would render as a missing reason in the
+    operator-facing interruption journal.
+    """
     report = load_subagent_report(Workspace.from_path(root), task.id, active.id)
     if report:
         summary = str(report.get("summary") or "").strip()
@@ -71,7 +85,14 @@ def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeS
 
 
 def _interrupted_subagent_reason(task: TaskRecord, reason: str) -> str:
-    """Preserve a previously-recorded interruption reason on re-interruption of the same subagent so a second repair pass doesn't overwrite the original cause with a generic "stale runner" label."""
+    """
+    Preserve a prior interruption reason on re-interruption of the same subagent.
+
+    A second repair pass otherwise would overwrite the original cause
+    with the generic "stale runner" label and the operator would lose
+    the more specific failure context (semantic reject, hook failure,
+    etc.) that the first pass captured.
+    """
     active = task.runtime.execution.active_subagent
     interruption = task.runtime.execution.interruption
     if interruption is None:
@@ -93,7 +114,14 @@ def _write_interrupted_subagent_artifacts(
     subagent: RuntimeSubagentState,
     resume_stage: str,
 ) -> None:
-    """Persist the interrupted subagent's session+report files in-place so disk artifacts and the in-memory task record agree; the resume flow reads these to decide whether to continue or re-run the subagent."""
+    """
+    Persist the interrupted subagent's session and report files.
+
+    Writes them in place so disk artifacts and the in-memory task
+    record agree; the resume flow reads these to decide whether to
+    continue the subagent or re-run it from scratch, and a divergence
+    between memory and disk would mean resume picks the wrong action.
+    """
     now = utcnow()
     workspace = Workspace.from_path(root)
     session_payload = load_subagent_session(workspace, task.id, subagent.id)

@@ -36,7 +36,15 @@ from litehive.workspace import Workspace
 
 
 def _effective_task_engine(root: Path, task: TaskRecord) -> str:
-    """Determine which engine the task is currently running under by checking the active subagent first, then the most recent subagent reference, then the workspace default; the value is what the audit/activity entries record as the "previous engine" of the switch."""
+    """
+    Determine which engine the task is currently running under.
+
+    Checks the active subagent first, then the most recent subagent
+    reference, then the workspace default; the result is what the audit
+    and activity entries record as the "previous engine" of the switch
+    so an operator reading the timeline sees the actual swap, not just
+    the configured-at-task-creation engine.
+    """
     if task.runtime.execution.active_subagent is not None:
         return task.runtime.execution.active_subagent.engine
     if task.subagents:
@@ -45,7 +53,15 @@ def _effective_task_engine(root: Path, task: TaskRecord) -> str:
 
 
 def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
-    """Collect the relative subagent artifact directories from prior runs (newest-first, deduplicated, with the latest base directory pinned) so the activity entry tells the new engine exactly where to find the previous engine's output."""
+    """
+    Collect the relative subagent artifact directories from prior runs.
+
+    Newest-first, deduplicated, with the latest base directory pinned so
+    the activity entry tells the new engine exactly where to find the
+    previous engine's output. Without these paths, the engine swap would
+    silently drop the prior context and the new engine would start from
+    scratch.
+    """
     paths: list[str] = []
     for candidate in (ref.path for ref in reversed(task.subagents)):
         if candidate and candidate not in paths:
@@ -65,7 +81,13 @@ def _switch_activity_entry_message(
     new_engine: str,
     prior_work_paths: list[str],
 ) -> str:
-    """Format the multi-line activity entry that follows an engine switch; the explicit ``prior_work`` block tells the next agent which subagent dirs to read so the switch doesn't lose context."""
+    """
+    Format the multi-line activity entry that follows an engine switch.
+
+    The explicit ``prior_work`` block tells the next agent which subagent
+    directories to read so the switch does not lose context; the message
+    is what the new agent reads first when it picks up the task.
+    """
     lines = [
         f"Engine switch requested: {reason}",
         f"engine: {previous_engine} -> {new_engine}",
@@ -87,7 +109,15 @@ def switch_task_engine(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> SwitchTaskSummary:
-    """Carry out an operator-initiated engine swap end-to-end — stop the runner if needed, mark the switch on runtime metadata, re-queue the task at the front, and append the activity + audit entries that name the previous and new engines plus the prior subagent artifacts the new engine should consult; called by `litehive queue switch`."""
+    """
+    Carry out an operator-initiated engine swap end-to-end.
+
+    Stops the runner if needed, marks the switch on runtime metadata,
+    re-queues the task at the front, and appends the activity + audit
+    entries that name the previous and new engines plus the prior
+    subagent artifacts the new engine should consult. Called by
+    ``litehive queue switch``.
+    """
     # inline: tasks.status imports tasks.switch_engine indirectly via
     # the queue CLI re-export; keeping these imports inside the
     # function avoids the partial-init cycle that would otherwise

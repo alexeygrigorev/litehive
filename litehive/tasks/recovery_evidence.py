@@ -28,7 +28,16 @@ def collect_recovery_evidence(
     task: TaskRecord,
     stage: str | None = None,
 ) -> list[RecoveryEvidenceItem]:
-    """Gather every signal the recovery agent needs into a single evidence list — task record, runtime state, sqlite activity/events, the latest stage report, the latest subagent's artifacts, the wrapper log, engine monitoring, and the dirty-path snapshot for both the main checkout and the task worktree — so the recovery prompt sees the same facts the operator would when triaging by hand."""
+    """
+    Gather every signal the recovery agent needs into one evidence list.
+
+    Bundles the task record, runtime state, SQLite activity/events, the
+    latest stage report, the latest subagent's artifacts, the wrapper log,
+    engine monitoring, and the dirty-path snapshot for both the main
+    checkout and the task worktree. Centralising the gather lets the
+    recovery prompt see the same facts the operator would when triaging by
+    hand.
+    """
     evidence: list[RecoveryEvidenceItem] = []
     workspace = Workspace.from_path(root)
     activity_entries = load_task_activity(workspace, task)
@@ -252,5 +261,11 @@ def collect_recovery_evidence(
 
 
 def stage_report_context(report: StageReport) -> str:
-    """Render the one-line summary the recovery prompt embeds for the latest stage report; the recovery agent uses this to decide whether to advance, retry, or rewind without expanding the full report payload."""
+    """
+    Render the one-line summary the recovery prompt embeds for a stage report.
+
+    Lets the recovery agent decide whether to advance, retry, or rewind
+    without expanding the full report payload — the inline form keeps the
+    prompt budget low while still exposing pipeline_state/verdict/source.
+    """
     return f"{report.pipeline_state}/{report.verdict} source={report.source} summary={report.summary}"

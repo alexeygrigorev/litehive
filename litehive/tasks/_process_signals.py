@@ -22,17 +22,25 @@ def terminate_subagent_pid(
     wait_timeout_seconds: float = 5.0,
     poll_interval_seconds: float = 0.1,
 ) -> bool:
-    """Best-effort terminate a subagent process by pid.
+    """
+    Best-effort terminate a subagent process by pid.
 
-    Returns ``True`` if a signal was sent to a live process, ``False``
-    if the pid was already dead or ``None``. Raises
-    :class:`WorkspaceConflictError` if SIGTERM and then SIGKILL both
-    fail to reap the process within the timeout (operator must
-    intervene; we don't silently leave a zombie running).
+    Returns ``True`` if a signal was sent to a live process, ``False`` when
+    the pid was already dead or ``None``. Raises ``WorkspaceConflictError``
+    when SIGTERM and SIGKILL both fail to reap the process within the
+    timeout — the operator must intervene rather than us silently leaving a
+    zombie running.
     """
 
     def _pid_is_dead() -> bool:
-        """Detect when a subagent pid has actually exited (or become a zombie); checks ``waitpid``, ``/proc/<pid>/status`` State, and the runner-lock liveness probe in turn so flaky single-source signals don't make ``terminate_subagent_pid`` spin."""
+        """
+        Detect when a subagent pid has actually exited (or become a zombie).
+
+        Checks ``waitpid``, the ``/proc/<pid>/status`` State line, and the
+        runner-lock liveness probe in turn so a flaky single-source signal
+        cannot make the outer ``terminate_subagent_pid`` spin forever on a
+        process that has already left.
+        """
         if pid is None:
             return True
         try:
@@ -57,7 +65,14 @@ def terminate_subagent_pid(
     sleep_interval = max(poll_interval_seconds, 0.01)
 
     def _wait_until_dead(timeout_seconds: float) -> bool:
-        """Poll ``_pid_is_dead`` until the process exits or the deadline passes; the SIGTERM/SIGKILL escalation flow needs a bounded wait between signals so a stuck subagent cannot block stop forever."""
+        """
+        Poll ``_pid_is_dead`` until the process exits or the deadline passes.
+
+        The SIGTERM/SIGKILL escalation needs a bounded wait between signals
+        so a stuck subagent cannot block ``stop_current_task`` forever; the
+        deadline rather than the per-poll budget is what guarantees the
+        outer call returns within ``wait_timeout_seconds``.
+        """
         deadline = time.monotonic() + max(timeout_seconds, 0.0)
         while not _pid_is_dead() and time.monotonic() < deadline:
             time.sleep(sleep_interval)

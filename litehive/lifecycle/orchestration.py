@@ -2,8 +2,7 @@
 
 One function — ``run_task(root, task)`` — that wires up the pipeline
 end-to-end and drives one task through the state machine. It is the
-
-
+single boundary the daemon and CLI both go through to start a task.
 
 What it does, in order:
 
@@ -96,15 +95,17 @@ def run_task(
     engine_override: str | None = None,
     model_override: str | None = None,
 ) -> ExecutionResult:
-    """Run a single task through the state machine.
+    """
+    Run a single task through the state machine.
 
     Takes the workspace runner guard and publishes a heartbeat so other
-    tools see the task as active. Always uses the real ``GitCommitNode``
-    —
+    tools (CLI status, daemon supervisors) see the task as active.
+    Always uses the real ``GitCommitNode`` so tests that exercise the
+    commit stage do touch git plumbing.
 
     ``engine_factory`` is an injection point for tests: pass a callable
-    that produces fake ``Engine`` instances and the pipeline will use it in place
-    of the real ``heru_engine_factory``.
+    that produces fake ``Engine`` instances and the pipeline will use
+    it in place of the real ``heru_engine_factory``.
     """
     root = root.resolve()
     config = load_config(root)
@@ -216,10 +217,14 @@ def _observe_transition(
     event: object,
     trans: Transition,
 ) -> None:
-    """State-machine transition hook that turns hook outcomes into stage reports and journal/activity entries.
+    """
+    Turn hook outcomes into stage reports plus journal/activity entries.
 
-    Only hook events produce reports here; engine events are reported by the
-    nodes themselves. The runner invokes this on every transition.
+    Only hook events produce reports here; engine events are reported
+    by the nodes themselves. The runner invokes this on every
+    transition (passed in via ``transition_observer``) so a hook reject
+    or hook-with-warnings outcome lands in the same observability sinks
+    as agent verdicts.
     """
     del trans
     task = get_task(root, state.task_id)

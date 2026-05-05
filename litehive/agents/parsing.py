@@ -23,14 +23,16 @@ def stage_report_from_subagent(
     result: SubagentResult,
     root: Path,
 ) -> StageReport:
-    """Build a :class:`StageReport` for a single subagent run.
+    """
+    Build a :class:`StageReport` for a single subagent run.
 
-    The agent submits its verdict via ``litehive agent report``, which
-    appends a :class:`TaskActivityEntry`. This helper looks for that
-    entry. If it is present, the activity becomes the report. If it is
-    absent, the agent finished a turn without reporting and we
-    construct a synthetic ``reject`` so the lifecycle can route the
-    failure through the normal nudge / non-completion paths.
+    The agent submits its verdict via ``litehive agent report``,
+    which appends a :class:`TaskActivityEntry`. This helper looks for
+    that entry: present → the activity becomes the report; absent →
+    the agent finished a turn without reporting and we construct a
+    synthetic ``reject`` so the lifecycle can route the failure
+    through the normal nudge / non-completion paths instead of
+    treating silence as success.
     """
     pipeline_state: ReportPipelineState = canonical_report_pipeline_state(stage)
     latest = latest_task_activity_entry(

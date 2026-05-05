@@ -13,7 +13,13 @@ from litehive.workspace import Workspace
 
 
 def load_task_activity(workspace: Workspace, task: TaskRecord) -> list[TaskActivityEntry]:
-    """Read the persisted activity feed (agent verdicts and reports) for a task; tolerates malformed rows by skipping them so a single corrupt entry does not blank out the whole feed for the lifecycle code."""
+    """
+    Read the persisted activity feed (agent verdicts and reports) for a task.
+
+    Malformed rows are skipped rather than raised so a single corrupt entry
+    cannot blank out the whole feed for the lifecycle code that consumes it
+    (stage builders, retraction logic, the task-logs renderer).
+    """
     with workspace.connect() as connection:
         rows = connection.execute(
             """
@@ -41,10 +47,11 @@ def load_task_activity(workspace: Workspace, task: TaskRecord) -> list[TaskActiv
 
 
 def _save_task_activity_to_db(workspace: Workspace, task_id: str, activity: list[TaskActivityEntry]) -> None:
-    """Replace ``task_activity`` rows and emit a ``task_reported`` event in one transaction.
+    """
+    Replace ``task_activity`` rows and emit a ``task_reported`` event atomically.
 
     The single low-level write used by both ``save_task_activity`` and
-    ``append_task_activity``: deleting + reinserting the whole feed is
+    ``append_task_activity``; deleting and reinserting the whole feed is
     simpler than tracking per-row diffs and the activity feed is small
     enough that the cost is negligible.
     """
@@ -69,12 +76,24 @@ def _save_task_activity_to_db(workspace: Workspace, task_id: str, activity: list
 
 
 def save_task_activity(workspace: Workspace, task: TaskRecord, activity: list[TaskActivityEntry]) -> None:
-    """Replace the task's activity feed wholesale; used by the retraction path that needs to rewrite an existing entry's message in place rather than appending a new one."""
+    """
+    Replace the task's activity feed wholesale.
+
+    Used by the retraction path that needs to rewrite an existing entry's
+    message in place (e.g. marking a pass entry as retracted after the
+    requeue-time filesystem check) rather than appending a new entry.
+    """
     _save_task_activity_to_db(workspace, task.id, activity)
 
 
 def append_task_activity(workspace: Workspace, task: TaskRecord, entry: TaskActivityEntry) -> None:
-    """Append one verdict/report entry, the common write path; takes the load+rewrite cost so the on-disk ordering matches arrival order without requiring callers to track entry indexes."""
+    """
+    Append one verdict or report entry; the common write path for activity.
+
+    Pays the load+rewrite cost on every append so the on-disk ordering tracks
+    arrival order without requiring callers to track entry indexes themselves.
+    Reached by every stage controller and by the recovery report path.
+    """
     activity = load_task_activity(workspace, task)
     activity.append(entry)
     save_task_activity(workspace, task, activity)
@@ -89,7 +108,13 @@ def latest_task_activity_entry(
     verdicts: Iterable[str] | None = None,
     after: datetime | None = None,
 ) -> TaskActivityEntry | None:
-    """Find the most recent activity entry matching the given filter; the stage-report builder uses this to locate the verdict an agent submitted via ``litehive agent report`` for the just-finished subagent run."""
+    """
+    Find the most recent activity entry matching the given filter.
+
+    Used by the stage-report builder to locate the verdict an agent submitted
+    via ``litehive agent report`` for the just-finished subagent run, so the
+    report payload can be paired with the correct activity row.
+    """
     if verdicts is None:
         allowed_verdicts = None
     else:
@@ -111,11 +136,13 @@ def latest_task_activity_entry(
 
 
 def _parse_created_at(value: str) -> datetime:
-    """Parse the ``created_at`` ISO string, normalizing trailing ``Z`` to ``+00:00`` and naive datetimes to UTC.
+    """
+    Parse the ``created_at`` ISO string into a UTC-aware datetime.
 
-    Used by ``latest_task_activity_entry`` so the ``after`` filter can
-    compare entries written by older code (no timezone) against newer
-    UTC-aware writers without raising.
+    Normalises trailing ``Z`` to ``+00:00`` and naive datetimes to UTC so
+    ``latest_task_activity_entry``'s ``after`` filter can compare entries
+    written by older code (no timezone) against newer UTC-aware writers
+    without raising on the mixed-shape comparison.
     """
     if value.endswith("Z"):
         value = value[:-1] + "+00:00"

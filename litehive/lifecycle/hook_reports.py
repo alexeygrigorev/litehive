@@ -29,14 +29,29 @@ from .nodes.hook import HookSpec
 
 
 def _normalize_hook_spec_data(hook) -> dict:
-    """Coerce a string-or-dict hook entry into the dict shape `_build_hook_spec` expects."""
+    """
+    Coerce a string-or-dict hook entry into the dict shape the spec
+    builder expects.
+
+    Workspace config accepts either ``"my-cmd"`` or
+    ``{"command": "my-cmd", ...}`` for hook entries, so callers don't
+    have to wrap shorthand entries by hand; this helper hides that
+    flexibility from ``_build_hook_spec``.
+    """
     if isinstance(hook, str):
         return {"command": hook}
     return hook
 
 
 def _build_hook_spec(spec_data: dict) -> HookSpec:
-    """Construct a `HookSpec` from a normalized dict, honoring the `None`-pass-through rule for description and instructions_on_failure."""
+    """
+    Construct a ``HookSpec`` from a normalized dict.
+
+    Honours the ``None``-pass-through rule for ``description`` and
+    ``instructions_on_failure`` — explicit ``None`` in config means
+    "no value", not "use the default", so the helper preserves the
+    distinction instead of coercing to an empty string.
+    """
     if spec_data.get("description") is None:
         description = None
     else:
@@ -54,7 +69,14 @@ def _build_hook_spec(spec_data: dict) -> HookSpec:
 
 
 def hook_specs_from_config(config) -> dict[str, list[HookSpec]]:
-    """Translate ``LitehiveConfig.runner_hooks`` into ``HookSpec`` lists."""
+    """
+    Translate ``LitehiveConfig.runner_hooks`` into ``HookSpec`` lists.
+
+    Used by ``orchestration.run_task`` to feed the registry; phases
+    with no configured hooks are omitted from the result so the
+    registry registers an empty hook list (which immediately returns
+    ``HookOk``) only for the phases that actually need one.
+    """
     out: dict[str, list[HookSpec]] = {}
     for phase, hooks in (getattr(config, "runner_hooks", None) or {}).items():
         specs = [_build_hook_spec(_normalize_hook_spec_data(hook)) for hook in hooks or []]

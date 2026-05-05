@@ -38,12 +38,15 @@ def run_worktree_merge_agent(
     main_head: str,
     config: LitehiveConfig | None = None,
 ) -> None:
-    """Try to merge ``main_head`` into ``worktree_path``; if conflicts, run the resolver agent.
+    """
+    Merge ``main_head`` into ``worktree_path``, running the resolver
+    agent on conflicts.
 
-    On a clean merge, journals success and returns. On a conflict, the
-    merge-resolver subagent is launched against the conflicting files.
-    If the agent does not clear all conflicts, the merge is aborted so
-    the worktree is left in its pre-merge state.
+    A clean merge journals success and returns. On a conflict, the
+    merge-resolver subagent is launched against the conflicting
+    files; if the agent does not clear all conflicts, the merge is
+    aborted so the worktree is left in its pre-merge state instead
+    of half-resolved.
     """
     workspace = Workspace.from_path(root)
     merged, message = merge_no_edit(worktree_path, main_head)

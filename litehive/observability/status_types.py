@@ -1,4 +1,13 @@
-"""Shared types and constants for the `litehive status`/`litehive health` diagnostics."""
+"""
+Shared types and constants for status diagnostics.
+
+Owns the typed shapes (:class:`StatusIssue`,
+:class:`StatusSnapshot`, recovery context) and constant sets
+(failure-reason allowlists, resumable stages, wedged threshold)
+that the loaders, probes, and renderers share. Living in one
+place prevents the constants from drifting across the diagnostic
+modules.
+"""
 
 from dataclasses import dataclass
 from typing import Literal
@@ -38,7 +47,15 @@ class StatusIssue:
     message: str
 
     def render(self) -> str:
-        """Format an issue as a single ``key: message`` line for the status diagnostics block; concentrating the wire format here so every consumer renders issues identically."""
+        """
+        Format an issue as a single ``key: message`` line.
+
+        Used by the verbose status diagnostics block.
+        Concentrating the wire format here so every consumer
+        renders issues identically — without the helper, a CLI
+        path and a daemon path could format differently and
+        break monitoring scripts that grep on the exact shape.
+        """
         return f"{self.key}: {self.message}"
 
 

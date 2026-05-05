@@ -26,12 +26,25 @@ STAGES: tuple[PipelineState, ...] = AGENT_STAGES + SYSTEM_STAGES
 
 
 def before(stage: str | PipelineState) -> PipelineState:
-    """Return the ``before_<stage>`` hook node that runs immediately before ``stage``; the canonical naming convention used by the rule table and prompt builder."""
+    """
+    Return the pre-stage hook phase for an agent stage.
+
+    Encodes the ``before_<stage>`` naming convention shared by the rule
+    table and the prompt builder; defining it once here means a rename
+    (or a new stage) only needs to update one place instead of every
+    rule row that references the pre-hook.
+    """
     return canonical_pipeline_state(f"before_{stage}")
 
 
 def after(stage: str | PipelineState) -> PipelineState:
-    """Return the ``after_<stage>`` hook node that runs immediately after ``stage``; mirror of ``before`` for the post-stage hook half of the lifecycle."""
+    """
+    Return the post-stage hook phase for an agent stage.
+
+    Mirror of :func:`before` for the post-stage hook half of the
+    lifecycle; the rule table uses both helpers so the runner never has
+    to format hook phase names by hand.
+    """
     return canonical_pipeline_state(f"after_{stage}")
 
 
@@ -68,7 +81,14 @@ _PRIMARY_STAGE_BY_PHASE: dict[PipelineState, PipelineState] = {
 
 
 def pipeline_stage_for_phase(phase: str | PipelineState) -> PipelineState:
-    """Collapse a hook/system phase to its primary agent stage (e.g. ``after_implementing → implementing``); used by reporting and prompt scaffolding to attribute hook activity to the stage that owns it."""
+    """
+    Collapse a hook/system phase to its primary agent stage.
+
+    For example ``after_implementing → implementing``. Reporting and
+    prompt scaffolding use this to attribute hook activity to the stage
+    that owns it, so a hook reject at ``after_implementing`` shows up
+    against the implementing stage rather than as its own row.
+    """
     state = canonical_pipeline_state(phase)
     return _PRIMARY_STAGE_BY_PHASE.get(state, state)
 

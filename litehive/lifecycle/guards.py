@@ -21,49 +21,71 @@ class Guard:
     description: str = ""
 
     def __call__(self, state: TaskState, event: Event) -> bool:
-        """Evaluate the guard's predicate against (state, event); used by the rule engine when matching transitions."""
+        """Evaluate the predicate during rule matching."""
         return self.fn(state, event)
 
     def __and__(self, other: "Guard") -> "Guard":
-        """Compose two guards into one that fires only when both hold; lets rule rows write `mode("single") & zero_change_shortcut()`."""
+        """
+        Build a guard that fires only when both inputs do.
+
+        Lets rule rows compose conjunctions inline (``mode("single") &
+        zero_change_shortcut()``) without writing a named helper for every
+        pair. The combinator is short-circuit so the right-hand predicate
+        is skipped when the left-hand one already rejected the (state,
+        event) pair.
+        """
         left, right = self.fn, other.fn
 
         def both(state: TaskState, event: Event) -> bool:
-            """Closure body for ``Guard.__and__``: short-circuit AND of the two captured predicates against the same (state, event)."""
             return left(state, event) and right(state, event)
 
         return Guard(both, f"({self.description} AND {other.description})")
 
     def __or__(self, other: "Guard") -> "Guard":
-        """Compose two guards into one that fires when either holds; used by rule rows that share a transition under alternative conditions."""
+        """
+        Build a guard that fires when either input does.
+
+        Used by rule rows where two distinct conditions should reach the
+        same transition target; short-circuits so the right-hand predicate
+        is only evaluated when the left-hand one rejected.
+        """
         left, right = self.fn, other.fn
 
         def either(state: TaskState, event: Event) -> bool:
-            """Closure body for ``Guard.__or__``: short-circuit OR of the two captured predicates against the same (state, event)."""
             return left(state, event) or right(state, event)
 
         return Guard(either, f"({self.description} OR {other.description})")
 
     def __invert__(self) -> "Guard":
-        """Negate a guard so the rule table can express the complement (e.g. `recovery_budget_exhausted = ~recovery_budget_available`) without duplicating predicate logic."""
+        """
+        Build the complement of this guard.
+
+        Lets the rule table express paired conditions like
+        ``recovery_budget_exhausted = ~recovery_budget_available`` without
+        a second predicate definition that could drift from the original.
+        """
         inner = self.fn
 
         def negated(state: TaskState, event: Event) -> bool:
-            """Closure body for ``Guard.__invert__``: invert the captured predicate so the rule table can express the complement guard without a parallel definition."""
             return not inner(state, event)
 
         return Guard(negated, f"NOT ({self.description})")
 
 
 def mode(m: PipelineMode | str) -> Guard:
-    """True when the task's pipeline mode matches `m`. Used by the after_implementing rule fan-out, where `single` skips the testing/accepting stages and `full` keeps them."""
+    """
+    Match the task's pipeline mode.
+
+    Used by the ``after_implementing`` rule fan-out, where ``single``
+    skips the testing/accepting stages and ``full`` keeps them, so the
+    rule table can branch on mode without introducing a separate state.
+    """
     if isinstance(m, PipelineMode):
         want = m
     else:
         want = PipelineMode(m)
 
     def check(state: TaskState, event: Event) -> bool:
-        """Predicate body for ``mode(...)``: compare the task's pipeline mode to the value bound at factory time."""
         del event
         return state.pipeline_mode == want
 
@@ -71,9 +93,14 @@ def mode(m: PipelineMode | str) -> Guard:
 
 
 def stage_retries_remaining(stage: PipelineState) -> Guard:
-    """True when this stage still has reject-retry attempts left under the per-stage retry limit. Gates the retry-target rule emitted by `retry_epoch_rules` so a Reject loops the task back to the configured stage instead of failing it."""
+    """
+    Match while the stage still has reject-retry attempts left.
+
+    Gates the retry-target rule emitted by ``retry_epoch_rules`` so a
+    Reject loops the task back to the configured stage instead of
+    failing it as soon as the very first reject lands.
+    """
     def check(state: TaskState, event: Event) -> bool:
-        """Predicate body for ``stage_retries_remaining(stage)``: compare the per-stage retry counter to the budget bound at factory time."""
         del event
         return state.stage_retry.get(stage, 0) < state.limits.stage_retry_limit
 
@@ -81,9 +108,15 @@ def stage_retries_remaining(stage: PipelineState) -> Guard:
 
 
 def stage_retries_exhausted(stage: PipelineState) -> Guard:
-    """True once this stage has burned its full reject-retry budget. Combined with `last_hook_ok` to escape a stuck testing stage by jumping to accepting instead of failing the task outright."""
+    """
+    Match once the stage has burned its full reject-retry budget.
+
+    Combined with ``last_hook_ok`` to escape a stuck testing stage by
+    jumping to accepting instead of failing the task outright — when
+    hooks pass, the QA rejection is treated as semantic-only and the
+    reviewer gets a chance to override.
+    """
     def check(state: TaskState, event: Event) -> bool:
-        """Predicate body for ``stage_retries_exhausted(stage)``: check the per-stage retry counter has reached the configured budget."""
         del event
         return state.stage_retry.get(stage, 0) >= state.limits.stage_retry_limit
 
@@ -91,9 +124,15 @@ def stage_retries_exhausted(stage: PipelineState) -> Guard:
 
 
 def last_hook_ok() -> Guard:
-    """True when the most recent hook report passed. Pairs with `stage_retries_exhausted` so we only override testing rejects when the hook itself was happy — semantic-only failure, not a broken pipeline."""
+    """
+    Match when the most recent hook report passed.
+
+    Pairs with ``stage_retries_exhausted`` so we only override testing
+    rejects when the hook itself was happy — i.e. the failure is
+    semantic-only, not a broken pipeline that should be failed
+    outright.
+    """
     def check(state: TaskState, event: Event) -> bool:
-        """Predicate body for ``last_hook_ok``: check whether the most recent hook report flagged success."""
         del event
         return state.last_report.hook_ok is True
 
@@ -101,9 +140,15 @@ def last_hook_ok() -> Guard:
 
 
 def hook_reject_loop_detected() -> Guard:
-    """True when the same hook has rejected the task `same_hook_reject_limit` times in a row. Used by `retry_epoch_rules` to fail the task on a hook livelock instead of looping forever."""
+    """
+    Match when the same hook has rejected ``same_hook_reject_limit``
+    times in a row.
+
+    Used by ``retry_epoch_rules`` to fail the task on a hook livelock
+    instead of looping forever — once a hook has rejected the same
+    stage repeatedly, no amount of further retry is going to land it.
+    """
     def check(state: TaskState, event: Event) -> bool:
-        """Predicate body for ``hook_reject_loop_detected``: only fire on hook rejects whose ``consecutive_same_hook_rejects`` metadata has reached the configured limit."""
         if not isinstance(event, Reject) or event.source != "hook":
             return False
         count = event.metadata.get("consecutive_same_hook_rejects")
@@ -113,18 +158,33 @@ def hook_reject_loop_detected() -> Guard:
 
 
 def rejection_loop_detected(retry_target_stage: PipelineState) -> Guard:
-    """True when reviewer rejects keep cycling back to the same retry target without progress. Used by `retry_epoch_rules` to fail the task with `rejection_loop_detected` instead of retrying the same stage indefinitely."""
+    """
+    Match when reviewer rejects keep cycling back to the same retry
+    target without progress.
+
+    Used by ``retry_epoch_rules`` to fail the task with
+    ``rejection_loop_detected`` instead of retrying indefinitely. The
+    actual loop heuristic lives in ``lifecycle_deltas`` so guard and
+    effect can stay in sync — this wrapper just adapts it to the Guard
+    protocol.
+    """
     def check(state: TaskState, event: Event) -> bool:
-        """Predicate body for ``rejection_loop_detected(retry_target_stage)``: delegate to the lifecycle-deltas helper that owns the actual loop heuristic so guard and effect agree."""
         return rejection_loop_detected_delta(state, event, retry_target_stage=retry_target_stage)
 
     return Guard(check, f"rejection_loop_detected({retry_target_stage})")
 
 
 def zero_change_shortcut() -> Guard:
-    """True when the implementing stage produced no file changes and no new tests. Lets `single`-mode tasks short-circuit straight to DONE instead of running an empty commit through the merge pipeline."""
+    """
+    Match when the implementing stage produced no file changes and no
+    new tests.
+
+    Lets ``single``-mode tasks short-circuit straight to DONE instead
+    of running an empty commit through the merge pipeline, so a SWE
+    that decides the task is already satisfied does not produce a noise
+    commit.
+    """
     def check(state: TaskState, event: Event) -> bool:
-        """Predicate body for ``zero_change_shortcut``: check the most recent stage report shows neither file edits nor new tests."""
         del event
         return state.last_report.files_changed == 0 and state.last_report.tests_added == 0
 
@@ -132,9 +192,16 @@ def zero_change_shortcut() -> Guard:
 
 
 def pre_exec_budget_remaining() -> Guard:
-    """True while the task has not yet used its single pre-exec recovery attempt. Reserved for a pre-exec entry rule; not currently wired into the rule table."""
+    """
+    Match while the task has not yet used its single pre-exec recovery
+    attempt.
+
+    Reserved for a pre-exec entry rule; the rule table currently
+    enforces the one-attempt budget inside ``PreExecRecoveryNode``
+    itself, but the guard exists so the rule shape can move without a
+    separate predicate to define.
+    """
     def check(state: TaskState, event: Event) -> bool:
-        """Predicate body for ``pre_exec_budget_remaining``: check the per-task pre-exec attempt counter is still below 1."""
         del event
         return state.pre_exec_recovery_attempt < 1
 
@@ -142,24 +209,44 @@ def pre_exec_budget_remaining() -> Guard:
 
 
 def recovery_budget_available() -> Guard:
-    """True when the recovery trigger inferred from the event still has budget left. Gates the `_recovery_rules` row that routes Crash/Timeout/Blocked into RECOVERING instead of FAILED."""
+    """
+    Match when the recovery trigger inferred from the event still has
+    budget left.
+
+    Gates the ``_recovery_rules`` row that routes Crash/Timeout/Blocked
+    into RECOVERING instead of FAILED. Each unique failure fingerprint
+    gets one shot at recovery; once that shot is used, the matching
+    guard flips and the partner rule fails the task instead.
+    """
     def check(state: TaskState, event: Event) -> bool:
-        """Predicate body for ``recovery_budget_available``: derive the recovery trigger from the event and consult the per-fingerprint budget on ``state``."""
         return state.recovery_budget_available(recovery_trigger_from_event(state, event))
 
     return Guard(check, "recovery_budget_available")
 
 
 def recovery_budget_exhausted() -> Guard:
-    """True when the recovery trigger inferred from the event has no budget left. Gates the `_recovery_rules` row that routes Crash/Timeout/Blocked straight to FAILED."""
+    """
+    Match when the recovery trigger inferred from the event has no
+    budget left.
+
+    Gates the ``_recovery_rules`` row that routes Crash/Timeout/Blocked
+    straight to FAILED. Defined as the inverse of
+    ``recovery_budget_available`` so the two rule rows can never
+    disagree about whether budget remains.
+    """
     available = recovery_budget_available()
     return ~available
 
 
 def recovery_resume_is_concrete() -> Guard:
-    """True when the recovery agent reported a non-empty resume target. Gates the RECOVERING→resume rule so a vague success report falls through to the FAILED rule with `recovery_missing_target_stage`."""
+    """
+    Match when ``RecoverySucceeded`` carries a non-empty resume target.
+
+    Gates the RECOVERING→resume rule so a vague success report falls
+    through to the FAILED rule with ``recovery_missing_target_stage``
+    instead of resuming somewhere unspecified.
+    """
     def check(state: TaskState, event: Event) -> bool:
-        """Predicate body for ``recovery_resume_is_concrete``: only fire on ``RecoverySucceeded`` whose ``resume`` field is a non-blank stage label."""
         del state
         return isinstance(event, RecoverySucceeded) and bool(event.resume.strip())
 
@@ -167,7 +254,7 @@ def recovery_resume_is_concrete() -> Guard:
 
 
 def _always(state: TaskState, event: Event) -> bool:
-    """Predicate body for the module-level `always` guard; backs unconditional rule rows that need a Guard object for uniformity."""
+    """Backing predicate for the module-level ``always`` guard, used by rule rows that need a Guard object but no real condition."""
     del state, event
     return True
 

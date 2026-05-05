@@ -1,4 +1,13 @@
-"""Workspace-level engine usage and quota monitoring."""
+"""
+Workspace-level engine usage and quota monitoring.
+
+Records per-engine invocation counters, success/failure counts,
+and the most recent quota/limit signal so ``litehive status``
+and the engine-selection loop can see what the agents actually
+consumed without re-probing every provider on every call.
+Persistence goes through the workspace mutation guard so
+concurrent stages cannot interleave half-written rows.
+"""
 
 import json
 import sqlite3
@@ -17,18 +26,41 @@ from litehive.workspace import Workspace
 
 
 def load_engine_monitoring(workspace: Workspace) -> WorkspaceEngineMonitoring:
-    """Return the per-engine usage/quota snapshot persisted for this workspace, or an empty snapshot when the table does not exist yet; called by :func:`record_engine_execution` and :func:`record_engine_observation` (so updates merge with the existing record) and by status/diagnostics readers."""
+    """
+    Return the per-engine usage/quota snapshot for this workspace.
+
+    Returns an empty snapshot when the table does not exist
+    yet (fresh workspace). Called by
+    :func:`record_engine_execution` and
+    :func:`record_engine_observation` so updates merge with
+    the existing record, and by status/diagnostics readers.
+    """
     return _load_engine_monitoring_from_db(workspace)
 
 
 def save_engine_monitoring(workspace: Workspace, monitoring: WorkspaceEngineMonitoring) -> None:
-    """Replace the entire ``engine_monitoring`` table contents under the workspace mutation guard; called by the record helpers after they merge a new observation, with the lock guaranteeing concurrent stages cannot interleave half-written rows."""
+    """
+    Replace the entire ``engine_monitoring`` table under the mutation guard.
+
+    Called by the record helpers after they merge a new
+    observation. The workspace mutation guard guarantees
+    concurrent stages cannot interleave half-written rows; a
+    delete + reinsert under that lock is the simplest correct
+    way to keep the in-memory aggregate as the source of truth.
+    """
     with workspace_mutation_guard(workspace.root):
         _save_engine_monitoring_to_db(workspace, monitoring)
 
 
 def _load_engine_monitoring_from_db(workspace: Workspace) -> WorkspaceEngineMonitoring:
-    """Read every ``engine_monitoring`` row over a read-only sqlite handle and rebuild the :class:`WorkspaceEngineMonitoring` aggregate, skipping rows whose JSON payload is malformed; the read-only mode lets status surfaces query monitoring without competing with the writer for the workspace lock."""
+    """
+    Read every ``engine_monitoring`` row through a read-only handle.
+
+    Skips rows whose JSON payload is malformed so a single bad
+    row cannot blank the snapshot. Read-only mode lets status
+    surfaces query monitoring without competing with the writer
+    for the workspace mutation guard.
+    """
     db_path = workspace_path(workspace.root, "data.db")
     if not db_path.exists():
         return WorkspaceEngineMonitoring()
@@ -54,7 +86,15 @@ def _load_engine_monitoring_from_db(workspace: Workspace) -> WorkspaceEngineMoni
 
 
 def _save_engine_monitoring_to_db(workspace: Workspace, monitoring: WorkspaceEngineMonitoring) -> None:
-    """Truncate-and-rewrite the ``engine_monitoring`` table inside one transaction; the wholesale-replace strategy is intentional because the in-memory aggregate is the source of truth and partial updates would race the readers."""
+    """
+    Truncate-and-rewrite ``engine_monitoring`` in one transaction.
+
+    The wholesale replace is intentional: the in-memory
+    aggregate is the source of truth and partial updates would
+    race the readers. Inside a single SQL transaction,
+    truncate-then-insert is atomic from any reader's
+    perspective.
+    """
     with workspace.connect() as connection:
         connection.execute("DELETE FROM engine_monitoring")
         for engine_name, record in monitoring.engines.items():
@@ -81,7 +121,16 @@ def record_engine_execution(
     failure_kind: str | None,
     failure_reason: str | None,
 ) -> WorkspaceEngineMonitoring:
-    """Bump invocation/success/failure counters and persist the latest usage observation after an engine CLI run completes; called by the orchestrator runner once per stage execution so the workspace's quota/usage view in ``litehive status`` reflects what the agents actually consumed."""
+    """
+    Record a completed engine CLI invocation.
+
+    Bumps invocation/success/failure counters and persists the
+    latest usage observation. Called by the orchestrator runner
+    once per stage execution so the workspace's quota/usage
+    view in ``litehive status`` reflects what the agents
+    actually consumed; without this, the dashboard would always
+    lag behind real usage.
+    """
     monitoring = load_engine_monitoring(workspace)
     extract_usage_observation = getattr(adapter, "extract_usage_observation", None)
     if callable(extract_usage_observation):
@@ -110,7 +159,15 @@ def record_engine_observation(
     adapter: ExternalCLIAdapter,
     execution: CLIExecutionResult,
 ) -> WorkspaceEngineMonitoring:
-    """Persist mid-execution usage telemetry without bumping the invocation counter, short-circuiting when there is nothing useful to record; called when an engine emits a streaming usage event the runner wants to capture before the final ``record_engine_execution`` call."""
+    """
+    Persist mid-execution usage telemetry without bumping invocation counts.
+
+    Short-circuits when the observation carries no usage,
+    limit, or metadata signal so an empty observation costs
+    nothing. Called when an engine emits a streaming usage
+    event the runner wants to capture before the final
+    :func:`record_engine_execution` call lands.
+    """
     monitoring = load_engine_monitoring(workspace)
     extract_usage_observation = getattr(adapter, "extract_usage_observation", None)
     if callable(extract_usage_observation):
@@ -149,7 +206,17 @@ def _apply_engine_observation(
     failure_kind: str | None,
     failure_reason: str | None,
 ) -> WorkspaceEngineMonitoring:
-    """Merge one observation into the per-engine usage record (counters, last-seen quota state, metadata, limit reasons) and return the updated aggregate; the shared core both ``record_engine_execution`` and ``record_engine_observation`` call so the bump-vs-no-bump branching lives in exactly one place."""
+    """
+    Merge one observation into the per-engine usage record.
+
+    Updates counters, last-seen quota state, metadata, and
+    limit reasons. Shared core that both
+    :func:`record_engine_execution` and
+    :func:`record_engine_observation` call so the
+    bump-vs-no-bump branching lives in exactly one place; the
+    invariant that observations are commutative-modulo-counters
+    is hard to maintain across two implementations.
+    """
     record = monitoring.engines.get(engine_name)
     if record is None:
         record = EngineUsageRecord(engine=engine_name)
@@ -195,7 +262,16 @@ def _apply_engine_observation(
 
 
 def _limit_kind(reason: str | None) -> str | None:
-    """Classify a free-form failure/limit reason into one of ``budget``/``rate``/``capacity``/``quota`` (or None when no marker matches), so the monitoring aggregate carries a structured kind alongside the human-readable reason; used by :func:`_apply_engine_observation` when the engine adapter did not supply its own ``limit_kind``."""
+    """
+    Classify a free-form limit/failure reason into a structured kind.
+
+    Returns ``budget``, ``rate``, ``capacity``, ``quota``, or
+    ``None`` when no marker matches. The monitoring aggregate
+    carries a structured kind alongside the human-readable
+    reason so engine selection can act on the kind without
+    re-parsing prose. Used by :func:`_apply_engine_observation`
+    when the engine adapter did not supply its own ``limit_kind``.
+    """
     if not reason:
         return None
     normalized = reason.lower()

@@ -15,14 +15,26 @@ from litehive.workspace import Workspace
 
 @dataclass(frozen=True)
 class TaskAuditState:
-    """Lightweight task snapshot for audit rows."""
+    """
+    Lightweight task snapshot for the audit log's before/after fields.
+
+    Frozen so a snapshot taken before a mutation cannot be accidentally
+    modified by the same code path that's mutating the live task afterwards.
+    """
 
     status: str
     pipeline_status: str
 
 
 class TaskAuditEntry(BaseModel):
-    """Structured audit record for a task lifecycle or queue mutation."""
+    """
+    Structured audit record for a task lifecycle or queue mutation.
+
+    One row per state-changing call: the table is the system of record for
+    "who changed what, when, and why" and is the data source for the operator
+    audit/diagnostics CLI plus the parallel ``task_*`` event log used by
+    external observers.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -42,14 +54,27 @@ class TaskAuditEntry(BaseModel):
 
 
 def snapshot_task_audit_state(task: TaskRecord | None) -> TaskAuditState | None:
-    """Freeze a task's status fields into the lightweight before/after shape the audit log stores; capturing the snapshot at the call site lets the caller mutate the live record afterwards without losing the original values."""
+    """
+    Freeze a task's status fields into the audit log's before/after shape.
+
+    Capturing the snapshot at the call site lets the caller mutate the live
+    record afterwards without losing the original values, which is what every
+    transition module (close, park, abandon, requeue, resume, update) relies
+    on to record the pre-transition statuses.
+    """
     if task is None:
         return None
     return TaskAuditState(status=str(task.status), pipeline_status=str(task.pipeline_status))
 
 
 def queue_position(queue: list[str] | tuple[str, ...], task_id: str) -> int | None:
-    """Locate a task within the runtime queue ordering for audit context; returns a 1-indexed position so the audit log reads naturally to operators ("position 3 of 7") rather than as raw list indices."""
+    """
+    Locate a task within the runtime queue ordering for audit context.
+
+    Returns a 1-indexed position so the audit log reads naturally to
+    operators ("position 3 of 7") rather than as raw list indices; ``None``
+    means the task wasn't in the queue at the moment of capture.
+    """
     try:
         return list(queue).index(task_id) + 1
     except ValueError:
@@ -68,7 +93,13 @@ def build_task_audit_entry(
     context: dict[str, Any] | None = None,
     created_at: str | None = None,
 ) -> TaskAuditEntry:
-    """Compose a structured audit row from the call-site's before/after snapshots; used by every task-mutation surface (CLI, recovery, lifecycle) so the schema stays uniform and queryable."""
+    """
+    Compose a structured audit row from the call-site's before/after snapshots.
+
+    The single audit-row factory used by every task-mutation surface (CLI,
+    recovery, lifecycle transitions) so the schema stays uniform and the
+    audit query path can rely on a stable shape rather than per-caller dialects.
+    """
     if before_task is None:
         task_status_before = None
         pipeline_status_before = None
@@ -106,7 +137,14 @@ def build_task_audit_entry(
 
 
 def insert_task_audit_entries(connection: sqlite3.Connection, entries: Iterable[TaskAuditEntry]) -> None:
-    """Bulk-insert audit rows on an open connection; used by the persistence layer so an audit batch lands in the same transaction as the task-state mutation it describes."""
+    """
+    Bulk-insert audit rows on an already-open connection.
+
+    Takes the connection rather than opening one so the persistence layer can
+    bundle the audit batch into the same transaction as the task-state
+    mutation it describes — partial visibility (mutation without audit, or
+    vice versa) would corrupt the operator-facing history.
+    """
     rows = [
         (
             entry.task_id,
@@ -149,7 +187,14 @@ def insert_task_audit_entries(connection: sqlite3.Connection, entries: Iterable[
 
 
 def append_task_audit_entries(workspace: Workspace, entries: Iterable[TaskAuditEntry]) -> None:
-    """Top-level "log these audit entries" call: writes audit rows and the parallel task-event entries in one transaction so external observers see the audit and the event log progress together."""
+    """
+    Top-level "log these audit entries" call.
+
+    Writes audit rows and the parallel task-event entries in one transaction
+    so external observers see the audit and the event log progress together;
+    used by the engine-switch flow and other surfaces that audit outside the
+    full persist-task-and-state envelope.
+    """
     entry_list = list(entries)
     if not entry_list:
         return
@@ -171,7 +216,14 @@ def load_task_audit_entries(
     action: str | None = None,
     limit: int = 20,
 ) -> list[TaskAuditEntry]:
-    """Read recent audit rows for the operator-facing audit/diagnostics CLI; returns most-recent-first because the audit UI is a tail view, not a forward replay."""
+    """
+    Read recent audit rows for the operator-facing audit/diagnostics CLI.
+
+    Returns most-recent-first because the audit UI is a tail view, not a
+    forward replay; ordering is by row id so concurrently inserted entries
+    keep their relative arrival order rather than relying on string-typed
+    ``created_at`` timestamps.
+    """
     query = """
         SELECT
             id,

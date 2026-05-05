@@ -1,4 +1,13 @@
-"""Probe functions that turn workspace state into individual `StatusIssue`s for `litehive status`/`health`."""
+"""
+Probe functions that turn workspace state into status issues.
+
+Each ``_probe_*`` examines one slice of workspace state and
+produces zero or more :class:`StatusIssue` instances.
+``litehive status`` and ``litehive health`` aggregate the
+results so the operator sees one diagnostic line per fault.
+The probes are deliberately small and read-only: they never
+mutate workspace state and never raise on the status path.
+"""
 
 import json
 from pathlib import Path
@@ -30,7 +39,14 @@ from litehive.state.locking import runner_metadata_present, runner_pid_is_alive
 
 
 def probe_registry_files() -> list[StatusIssue]:
-    """Surface a broken global workspace registry so health output explains why no workspace can be resolved."""
+    """
+    Surface a broken global workspace registry as a status issue.
+
+    Without this probe, a corrupt registry would silently break
+    workspace resolution everywhere and the operator would have
+    no signal pointing at the registry file. Returns an empty
+    list when the registry is healthy or absent.
+    """
     issues: list[StatusIssue] = []
     registry_error = workspace_registry_error()
     if registry_error is not None:
@@ -48,8 +64,15 @@ def probe_registry_files() -> list[StatusIssue]:
 
 
 def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusState) -> list[StatusIssue]:
-    """Detect a wedged runner (live pid but stale heartbeat) or a stale runner lock (active task but no live pid),
-    so the operator knows whether to wait, restart, or `litehive repair`."""
+    """
+    Detect a wedged runner or a stale runner lock.
+
+    "Wedged" means a live PID but a stale heartbeat — the
+    runner is alive but stuck. "Stale" means an active task
+    record exists but the recorded PID is dead. Surfacing both
+    tells the operator whether to wait (wedged - restart soon),
+    or run ``litehive repair`` (stale - clean up).
+    """
     issues: list[StatusIssue] = []
     active_task_id = runner.active_task_id or state.active_task_id
     live_pid = runner_pid_is_alive(runner.pid)
@@ -87,7 +110,15 @@ def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusS
 
 
 def _probe_daemon_status(root: Path) -> list[StatusIssue]:
-    """Flag the daemon as STOPPED when its lockfile says stale and the recorded pid is dead, prompting a restart."""
+    """
+    Flag a daemon whose lockfile says ``stale`` with a dead PID.
+
+    The combination means the daemon supervisor crashed without
+    cleaning up; surfacing it prompts the operator to restart
+    rather than leave the workspace looking idle while no
+    daemon is actually scheduling work. Bad metadata is also
+    surfaced so the operator can fix the lock file directly.
+    """
     try:
         entry = daemon_metadata(root)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
@@ -118,8 +149,15 @@ def _probe_daemon_status(root: Path) -> list[StatusIssue]:
 
 
 def _probe_last_cycle(root: Path) -> list[StatusIssue]:
-    """Catch the case where the most recent run-all cycle ended with a repair traceback and never re-ran,
-    so health output points the operator at the failed log instead of looking healthy."""
+    """
+    Catch a stalled cycle where repair tracebacked and the daemon stopped.
+
+    Looks for a ``*-repair.log`` with a traceback that has no
+    matching ``*-run.log`` follow-up — the run-all cycle never
+    re-ran. Surfacing this points the operator at the failed log
+    instead of leaving the workspace looking healthy when in
+    fact the daemon is silently broken.
+    """
     latest_dir = latest_run_all_log_dir(root)
     if latest_dir is None:
         return []
@@ -149,8 +187,15 @@ def _probe_last_cycle(root: Path) -> list[StatusIssue]:
 
 
 def _probe_heru_link(root: Path) -> list[StatusIssue]:
-    """Detect a `[tool.uv.sources].heru.path` that no longer resolves on disk — that breaks every worktree's
-    `uv sync`, so health output names the missing path before the next agent run dies."""
+    """
+    Detect a broken local heru source path in pyproject.
+
+    A ``[tool.uv.sources].heru.path`` that no longer resolves
+    on disk breaks every worktree's ``uv sync`` and would only
+    show up as obscure failures inside agent runs. Surfacing it
+    here names the missing path before the next agent run dies
+    on resolve.
+    """
     pyproject_path = root / "pyproject.toml"
     if not pyproject_path.exists():
         return []
@@ -184,8 +229,15 @@ def _probe_heru_link(root: Path) -> list[StatusIssue]:
 
 
 def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIssue]:
-    """Re-surface a previous main/origin-main divergence stop with the current diff so the operator knows
-    manual reconciliation is still pending before the pool can run."""
+    """
+    Re-surface a previous main/origin-main divergence stop.
+
+    When the pool stopped on ``diverged_from_origin``, the
+    underlying git divergence persists across daemon restarts;
+    the operator must reconcile manually before the pool can
+    resume. Re-rendering the diff each status read keeps the
+    blocker visible until the operator clears it.
+    """
     if state.pool_stop_reason != "diverged_from_origin":
         return []
     # inline: daemon.execution top-level-imports observability.status, which
@@ -207,8 +259,16 @@ def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIs
 
 
 def _probe_pool_stop_reason(state: WorkspaceState) -> list[StatusIssue]:
-    """Show a CRITICAL banner when the pool auto-stopped after the consecutive-failures cap was hit, so
-    operators don't wait for tasks that the scheduler will never start."""
+    """
+    Show a banner when the pool auto-stopped on consecutive failures.
+
+    Operators otherwise wait for queued tasks that the scheduler
+    will never start; the consecutive-failure stop is sticky
+    until the operator clears it. The "3" floor on the failure
+    count matches :func:`_emit_consecutive_task_failure_stop`
+    so a stale counter does not produce a misleading "stopped
+    after 0" message.
+    """
     if state.pool_stop_reason != "consecutive_task_failures":
         return []
     failure_count = max(3, int(state.consecutive_task_failures))
@@ -229,8 +289,15 @@ def _probe_task_index_references(
     state: WorkspaceState,
     state_issues: list[StatusIssue],
 ) -> list[StatusIssue]:
-    """Catch queue/active references that point at task ids missing from the SQLite task table — without this
-    `health` would show a clean queue while the scheduler keeps tripping on phantom ids."""
+    """
+    Catch queue and active references pointing at unknown task ids.
+
+    Without this probe ``health`` would show a clean queue
+    while the scheduler keeps tripping on phantom ids; the
+    SQLite task index is the source of truth for what tasks
+    exist, and queue entries that disagree are bugs that warrant
+    a database reconcile.
+    """
     if any(issue.key in _TASKS_UNAVAILABLE_KEYS for issue in state_issues):
         return []
     db_path = workspace_path(root, "data.db")
@@ -280,8 +347,15 @@ def _probe_task_status_damage(
     runner: RunnerStatusState,
     state_issues: list[StatusIssue],
 ) -> list[StatusIssue]:
-    """Walk every task and emit recovery-failure / backlog-damage issues so `health` calls out individual stuck
-    tasks before they silently block the queue."""
+    """
+    Walk every task and surface recovery-failure or backlog-damage.
+
+    Calls out individual stuck tasks so ``health`` flags them
+    before they silently block the queue. Skipped when earlier
+    state probes already failed to load the task index — there
+    is nothing to walk safely. Sorts the per-task issues by
+    task id so successive runs produce a stable diff.
+    """
     if any(issue.key in _TASKS_UNAVAILABLE_KEYS for issue in state_issues):
         return []
     if not workspace_path(root, "data.db").exists():
@@ -323,8 +397,15 @@ def _probe_task_status_damage(
 
 
 def _live_active_pipeline_stage(active_task_id: str | None, tasks: list[TaskRecord]) -> str | None:
-    """Return the stage the active task is genuinely running, used by backlog-damage probes to avoid flagging
-    a queued sibling that legitimately matches the in-flight stage."""
+    """
+    Return the pipeline stage the active task is currently running.
+
+    Used by backlog-damage probes to avoid flagging a queued
+    sibling whose ``pipeline_status`` legitimately matches an
+    in-flight stage. Looks at runtime execution status and the
+    current-stage status because both must agree on "running"
+    before we trust the stage as live.
+    """
     if active_task_id is None:
         return None
     active_task = next((task for task in tasks if task.id == active_task_id), None)
@@ -337,8 +418,15 @@ def _live_active_pipeline_stage(active_task_id: str | None, tasks: list[TaskReco
 
 
 def _recovery_failure_issue(root: Path, task: TaskRecord) -> StatusIssue | None:
-    """Build an ERROR issue for a task whose recovery budget/attempt failed, so `health` tells the operator
-    which task to evidence and requeue rather than leaving it silently flagged."""
+    """
+    Build a recovery-failure issue for a task whose recovery is exhausted.
+
+    Tells the operator which task to evidence and requeue
+    rather than leaving the task silently flagged. Composes
+    the message from the lifecycle persistence layer so the
+    issue carries the same detail the scheduler saw, not just
+    the surface-level flag string.
+    """
     if task.flag_reason is None:
         flag_reason = None
     else:
@@ -366,8 +454,15 @@ def _recovery_failure_issue(root: Path, task: TaskRecord) -> StatusIssue | None:
 
 
 def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureContext:
-    """Pull the recovery failure reason / explanation / origin stage out of the lifecycle persistence layer
-    so the recovery-failure issue carries the same detail the scheduler saw, not just the flag string."""
+    """
+    Pull recovery failure reason, explanation, and origin stage.
+
+    Reads the lifecycle persistence layer so the recovery-failure
+    issue carries the same detail the scheduler saw, not just
+    the surface flag string. Tolerates a missing/corrupted
+    pipeline-state row by emitting a synthesized context that
+    still flags the failure.
+    """
     context = _RecoveryFailureContext()
     try:
         from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound  # noqa: PLC0415
@@ -399,8 +494,15 @@ def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureC
 
 
 def _task_issue_stage(task: TaskRecord, preferred_stage: str | None = None) -> str:
-    """Pick the most informative stage label to attach to a task issue, falling back through last_outcome,
-    current_stage, pipeline_status — so the message points at the stage that actually broke."""
+    """
+    Pick the most informative stage label to attach to a task issue.
+
+    Prefers an explicit ``preferred_stage``, then falls back
+    through ``last_outcome``, ``current_stage``, and
+    ``pipeline_status``. The fallback chain ensures the message
+    points at the stage that actually broke, not at a stale
+    ``pipeline_status`` that has since drifted.
+    """
     if preferred_stage:
         return preferred_stage
     return str(
@@ -417,9 +519,16 @@ def _backlog_damage_issue(
     active_task_id: str | None,
     active_stage: str | None,
 ) -> StatusIssue | None:
-    """Detect inconsistencies between TaskStatus, pipeline_status, and resume markers — e.g. a task in
-    `queued/backlog` that runtime says should resume mid-pipeline — that the scheduler would silently
-    normalize away if not surfaced here."""
+    """
+    Detect inconsistencies between status, pipeline_status, and resume markers.
+
+    Examples: a task in ``queued/backlog`` that runtime says
+    should resume mid-pipeline; a queued task at a stale
+    pipeline stage with no resume marker. The scheduler would
+    silently normalize these away — surfacing them here lets
+    the operator decide whether the normalization is correct or
+    a real ``litehive repair`` is needed first.
+    """
     if task.id == active_task_id:
         return None
     status = task.status
@@ -461,8 +570,15 @@ def _backlog_damage_issue(
 
 
 def _runtime_resume_stage(task: TaskRecord) -> str | None:
-    """Return the stage the task's runtime markers say it should resume from (if any of them point to a
-    resumable stage), used by backlog-damage detection to tell `backlog` apart from a stale resume marker."""
+    """
+    Return the resume stage the task's runtime markers point at.
+
+    Checks the interruption record first (most explicit signal),
+    then the current-stage marker if its status is in the
+    trusted set. Used by backlog-damage detection to tell a
+    legitimately-backlog task apart from one with a stale
+    resume marker pointing into the pipeline.
+    """
     candidates: list[str | None] = []
     interruption = task.runtime.execution.interruption
     if interruption is not None:
@@ -477,8 +593,15 @@ def _runtime_resume_stage(task: TaskRecord) -> str | None:
 
 
 def _task_has_resume_marker(task: TaskRecord) -> bool:
-    """Tell whether a queued task has any trusted marker (current stage or interruption) anchoring its
-    pipeline_status, so the backlog-damage probe doesn't WARN on tasks the scheduler can legitimately resume."""
+    """
+    Tell whether a queued task has a trusted resume marker.
+
+    Either the current-stage marker or an interruption record
+    must anchor the task's ``pipeline_status``. Without this
+    check the backlog-damage probe would emit warnings for
+    tasks the scheduler can legitimately resume — false alarms
+    that would erode operator trust in the diagnostics.
+    """
     stage = str(task.pipeline_status)
     current_stage = task.runtime.pipeline.current_stage
     if current_stage.stage == stage and current_stage.status in _TRUSTED_STAGE_MARKER_STATUSES:

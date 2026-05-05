@@ -18,7 +18,14 @@ _TERMINAL_REPAIR_STAGES = frozenset({TaskStage.ACCEPTING, TaskStage.COMMIT_TO_GI
 
 
 def repair_workspace_state(workspace: Workspace) -> WorkspaceRepairSummary:
-    """Reconcile workspace runtime state after a daemon crash or a forgotten terminal task; called by the daemon startup path and the `litehive repair` CLI."""
+    """
+    Reconcile workspace runtime state after a crash or a forgotten terminal task.
+
+    Called by the daemon startup path and the ``litehive repair`` CLI;
+    runs stale-runner recovery first so the rest of the repair sees a
+    clean active-task pointer, then promotes any task whose latest
+    pass report shows it actually finished.
+    """
     summary = WorkspaceRepairSummary()
     summary.stale_runner_recovered = recover_stale_runner_state(workspace.root, summary=summary)
     summary.mutated = summary.stale_runner_recovered
@@ -28,7 +35,14 @@ def repair_workspace_state(workspace: Workspace) -> WorkspaceRepairSummary:
 
 
 def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepairSummary | None = None) -> bool:
-    """Promote tasks that have already passed accepting/commit-to-git to ``DONE`` when their runtime row is still queued/in-progress; covers the race where a daemon crash left a successful task pinned in the queue, and the operator-visible repair summary reports each touched task id."""
+    """
+    Promote tasks that already passed accepting/commit-to-git to ``DONE``.
+
+    Covers the race where a daemon crash left a successful task pinned
+    in the queue: the latest stage report says the task is finished
+    but the runtime row never caught up. The operator-visible repair
+    summary reports each touched task id so the action is auditable.
+    """
     mutated = False
     root = workspace.root
     with workspace_lock(root):
@@ -100,7 +114,15 @@ def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepa
 
 
 def _stale_terminal_candidate_ids(workspace: Workspace) -> list[str]:
-    """SQL-side filter that returns only tasks whose latest stage report passed at accepting/commit but whose runtime row hasn't been promoted to ``done``; keeps the Python reconciliation loop short by pre-filtering in the database."""
+    """
+    SQL-side filter for tasks whose latest report passed but whose row didn't.
+
+    Returns task ids whose latest stage report passed at accepting or
+    commit-to-git while the runtime row is still
+    queued/in-progress/interrupted; pre-filtering in the database
+    keeps the Python reconciliation loop short on busy workspaces
+    instead of walking every task.
+    """
     with workspace.connect() as connection:
         rows = connection.execute(
             """

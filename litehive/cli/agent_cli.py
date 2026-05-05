@@ -48,12 +48,24 @@ agent_app = typer.Typer(
 
 
 def _current_role() -> str | None:
-    """Read the orchestrator-injected role marker so commands can tell whether they are running inside a subagent shell vs an operator shell."""
+    """
+    Read the orchestrator-injected role marker.
+
+    The orchestrator exports ``LITEHIVE_AGENT_ROLE`` when launching a
+    subagent shell. CLI commands consult this to tell whether they
+    are running inside an agent context vs an operator shell.
+    """
     return os.environ.get("LITEHIVE_AGENT_ROLE")
 
 
 def _current_subagent_id() -> str | None:
-    """Read the orchestrator-injected subagent id used by ``agent report`` to look up the authoritative role in the subagent_sessions table."""
+    """
+    Read the orchestrator-injected subagent id.
+
+    Used by ``agent report`` to look up the authoritative role in
+    the subagent_sessions table; the env var alone cannot be trusted
+    because a misbehaving agent could rewrite it.
+    """
     subagent_id = os.environ.get("LITEHIVE_SUBAGENT_ID")
     if subagent_id and subagent_id.strip():
         return subagent_id.strip()
@@ -61,12 +73,25 @@ def _current_subagent_id() -> str | None:
 
 
 def current_agent_role() -> str | None:
-    """Public read-only accessor for the active agent role; used by operator commands (e.g. task close/update) to decide whether to attribute mutations to the agent or the operator."""
+    """
+    Public read-only accessor for the active agent role.
+
+    Used by operator commands (``task close``, ``task update``) to
+    decide whether a mutation should be attributed to an agent or
+    the operator in the audit trail.
+    """
     return _current_role()
 
 
 def _current_stage() -> str | None:
-    """Read the orchestrator-injected stage label so a verdict can be attributed to the stage that actually launched the subagent, even if the task has since advanced."""
+    """
+    Read the orchestrator-injected stage label.
+
+    Lets a verdict be attributed to the stage that actually launched
+    the subagent, even if the task has since advanced — without it
+    a slow-reporting agent could land its verdict against the wrong
+    stage.
+    """
     stage = os.environ.get("LITEHIVE_STAGE")
     if stage:
         return stage.strip()
@@ -74,7 +99,16 @@ def _current_stage() -> str | None:
 
 
 def _resolve_report_stage(explicit_stage: str | None, task, pipeline_stage: str | None) -> str:
-    """Pick the stage label attached to a verdict via the precedence CLI flag > LITEHIVE_STAGE env > pipeline persistence > task runtime > task pipeline_status, so a stale env var never overrides an explicit operator/orchestrator override."""
+    """
+    Pick the stage label attached to an agent verdict.
+
+    Precedence: explicit CLI flag > ``LITEHIVE_STAGE`` env >
+    pipeline persistence > task runtime > task ``pipeline_status``.
+    Codified so a stale env var never wins over an explicit
+    operator/orchestrator override and so a missing env never breaks
+    attribution: the persisted pipeline state is always available as
+    a fallback.
+    """
     if explicit_stage:
         return explicit_stage
     env_stage = _current_stage()
@@ -89,7 +123,14 @@ def _resolve_report_stage(explicit_stage: str | None, task, pipeline_stage: str 
 
 
 def _allowed_verdicts_for_role(role: str) -> set[str]:
-    """Source of the per-role verdict gate enforced by `agent report`; the conservative default of {pass, reject} matches the four standard pipeline roles and only recovery widens the set."""
+    """
+    Source of the per-role verdict gate enforced by ``agent report``.
+
+    Falls back to the conservative ``{pass, reject}`` for any role
+    not in :data:`VERDICT_ALLOWLIST`; only recovery widens that set.
+    Centralized here so a new role's verdict surface is one
+    dictionary edit, not a sprawl of inline ``if role == ...`` gates.
+    """
     return VERDICT_ALLOWLIST.get(role, {"pass", "reject"})
 
 
@@ -100,7 +141,16 @@ class AgentReportIdentity:
 
 
 def _resolve_report_identity(root: Path, task) -> AgentReportIdentity:
-    """Resolve the role from the orchestrator-recorded subagent session rather than trusting LITEHIVE_AGENT_ROLE alone, so a subagent cannot escalate its role by editing its own env."""
+    """
+    Resolve the verdict-submitting agent's identity from the session store.
+
+    The role is read from the orchestrator-recorded subagent session
+    rather than trusting ``LITEHIVE_AGENT_ROLE`` alone, so a
+    subagent cannot escalate its role by editing its own env. The
+    env var is still cross-checked: if it disagrees with the stored
+    session, the report is rejected loudly rather than silently
+    accepting either side.
+    """
     subagent_id = _current_subagent_id()
     if subagent_id is None:
         print("report failed: LITEHIVE_SUBAGENT_ID not set")
@@ -131,14 +181,27 @@ def _resolve_report_identity(root: Path, task) -> AgentReportIdentity:
 
 
 def block_if_agent() -> None:
-    """Call at the top of any command agents should not use."""
+    """
+    Refuse to run when invoked inside a subagent shell.
+
+    Called at the top of any operator-only command (status, list,
+    show, etc.) so an agent that escapes its prompt and tries to
+    invoke an inspection command exits non-zero with the standard
+    refusal text instead of leaking workspace state.
+    """
     if _current_role() is not None:
         print(_agent_unauthorized_message())
         raise SystemExit(1)
 
 
 def _agent_unauthorized_message() -> str:
-    """Single source of truth for the operator-only refusal text so every guarded surface refuses subagents with the same wording."""
+    """
+    Single source of truth for the operator-only refusal text.
+
+    Centralized so every guarded surface refuses subagents with the
+    same wording — divergent refusal messages would fragment the
+    contract that agents are taught to recognize and recover from.
+    """
     return (
         "You are not authorized to perform this command. "
         "PM agents may shape only the active task via "
@@ -168,7 +231,17 @@ def agent_report_command(
         typer.Option("--follow-up-task", help="Optional follow-up task id", hidden=True),
     ] = None,
 ) -> None:
-    """Sole channel by which a pipeline subagent submits its stage verdict; verdict allow-list and identity are resolved from the orchestrator-created session, not the CLI flags, so a misbehaving agent cannot invent verdicts outside its role."""
+    """
+    Sole channel by which a pipeline subagent submits its stage verdict.
+
+    Verdict allow-list and identity are resolved from the
+    orchestrator-created session, not the CLI flags, so a misbehaving
+    agent cannot invent verdicts outside its role. The verdict is
+    appended to task activity along with files-changed and an
+    optional follow-up task id; recovery resume/advance verdicts
+    additionally require ``--target-stage`` because the pipeline
+    cannot infer the resumption point.
+    """
     if message == "-":
         message = sys.stdin.read()
     elif message_file is not None:
@@ -262,7 +335,14 @@ def agent_report_command(
 
 
 def _require_role(allowed: set[str]) -> str:
-    """Exit if the current role is not in ``allowed``."""
+    """
+    Authorize the current shell against an allow-list of agent roles.
+
+    Exits with the standard refusal message when the orchestrator
+    role marker is absent or outside ``allowed``. Returns the role
+    string on success so the caller can pass it through to the
+    audit trail without re-reading the env.
+    """
     role = _current_role()
     if role is None or role not in allowed:
         print(_agent_unauthorized_message())
@@ -281,7 +361,17 @@ def resolve_active_agent_task_mutation_target(
     requested_task_id: str | None,
     allowed_roles: set[str],
 ) -> AgentTaskMutationTarget:
-    """Authorize and resolve a PM mutation target through the source workspace."""
+    """
+    Authorize and resolve the task an agent is allowed to mutate.
+
+    Used by ``agent update`` and ``agent close``. Combines three
+    checks into one place: role gate (planner/reviewer only),
+    workspace resolution from ``LITEHIVE_WORKSPACE_ROOT``, and the
+    "active task only" rule that prevents an agent from rewriting
+    a queued task it should not touch. The active-task rule is
+    enforced against the persisted state, not the env, so a stale
+    ``LITEHIVE_TASK_ID`` cannot extend the agent's reach.
+    """
     role = _require_role(allowed_roles)
     env_task_id = os.environ.get("LITEHIVE_TASK_ID")
     if env_task_id and env_task_id.strip():
@@ -326,7 +416,15 @@ def agent_update_command(
     constraints: Annotated[list[str] | None, typer.Option("--constraint")] = None,
     priority: Annotated[str | None, typer.Option("--priority")] = None,
 ) -> None:
-    """Restricted shape-the-task surface for planner/reviewer subagents; mutations are forced through the active-task gate so an agent cannot quietly rewrite an unrelated queued task."""
+    """
+    Restricted shape-the-task surface for planner/reviewer subagents.
+
+    Mutations route through the active-task gate so an agent cannot
+    quietly rewrite an unrelated queued task. Each field is treated
+    as "leave alone" when its option is absent so partial updates
+    do not stomp on the rest of the task; the audit trail records
+    the agent role as the actor.
+    """
     target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
 
     sentinel = ...
@@ -374,7 +472,14 @@ def agent_close_command(
     ] = "duplicate",
     reason: Annotated[str, typer.Option("--reason")] = "",
 ) -> None:
-    """Lets a planner/reviewer subagent close the active task in flight (e.g. duplicate detection) without exiting through the operator close path."""
+    """
+    Let a planner/reviewer subagent close the active task in flight.
+
+    Used when an agent discovers mid-pipeline that the task should
+    not run (e.g. duplicate detection by the planner) and needs to
+    exit cleanly without going through the operator close path.
+    The audit trail attributes the close to the agent role.
+    """
     target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
 
     task = close_task(

@@ -22,7 +22,15 @@ from .types import PipelineMode
 
 
 def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqlitePersistence) -> TaskState:
-    """Return a ``TaskState`` for ``task_id``, creating the row if needed."""
+    """
+    Return a ``TaskState`` for ``task_id``, creating the row if needed.
+
+    Called by ``orchestration.run_task`` before constructing the
+    runner; decides between three cases — never-saved task (init
+    fresh), in-flight resumed task (load as-is), and stale row that
+    drifted from the launch request (reset while preserving the
+    cross-run failure/recovery memory).
+    """
     task_record = get_task(workspace_root, task_id)
     if task_record is None:
         raise LookupError(f"no task record for {task_id!r}")
@@ -138,10 +146,14 @@ def _entry_stage_for_task(task_record: TaskRecord) -> PipelineState | None:
 
 
 def _launch_requires_fresh_pipeline_state(task_record: TaskRecord) -> bool:
-    """Detect a queued resume of a previously-paused task so its sqlite state can be rebuilt before launch.
+    """
+    Detect a queued resume of a previously-paused task.
 
-    Skips tasks already mid-flight (``running``); those keep their existing
-    pipeline state.
+    Returns True when the task has an entry stage but is no longer
+    running, meaning we are restarting it from a paused state and the
+    sqlite cursor must be rebuilt before launch. Tasks already
+    mid-flight (``running``) keep their existing pipeline state — we
+    do not reset under a live runner.
     """
     return _entry_stage_for_task(task_record) is not None and task_record.runtime.pipeline.execution_status != "running"
 

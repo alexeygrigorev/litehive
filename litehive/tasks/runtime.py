@@ -21,12 +21,19 @@ from litehive.state.persist import persist_task_and_state
 
 
 def idle_stage_state(updated_at: str, stage: str | None = None) -> RuntimeStageState:
-    """Build the between-stages runtime marker used after a stage finishes or a run resets."""
+    """
+    Build the between-stages runtime marker.
+
+    Returned after a stage finishes or a run resets, so observers see an
+    explicit ``idle`` snapshot rather than inferring idleness from the
+    absence of a ``running`` marker.
+    """
     return RuntimeStageState(stage=stage, updated_at=updated_at)
 
 
 def _running_stage_state(stage: str, started_at: str) -> RuntimeStageState:
-    """Build the runtime marker that says a stage is currently executing.
+    """
+    Build the runtime marker that says a stage is currently executing.
 
     Used by ``mark_stage_started`` to seed ``runtime.pipeline.current_stage``
     so status surfaces and the operator UI can show "running ``<stage>``"
@@ -51,12 +58,13 @@ def _runtime_subagent_state(
     interruption_reason: str = "",
     continuation: RuntimeEngineContinuation | None = None,
 ) -> RuntimeSubagentState:
-    """Project a SubagentRef plus run-time fields into the persisted RuntimeSubagentState shape.
+    """
+    Project a ``SubagentRef`` plus run-time fields into ``RuntimeSubagentState``.
 
     The single helper used by ``mark_subagent_started`` /
-    ``mark_subagent_progress`` / ``mark_subagent_finished`` so every subagent
-    state transition shares the same field mapping (and so adding a new
-    subagent field only requires editing one place).
+    ``mark_subagent_progress`` / ``mark_subagent_finished`` so every
+    subagent state transition shares the same field mapping; adding a new
+    subagent field only requires editing one place.
     """
     return RuntimeSubagentState(
         id=ref.id,
@@ -83,7 +91,13 @@ def clear_task_run_activity(
     updated_at: str | None = None,
     clear_interruption: bool = False,
 ) -> str:
-    """Wipe per-run runtime fields so callers can transition a task into a new execution_status without leaving stale subagent or run-start data behind."""
+    """
+    Wipe per-run runtime fields and set the new ``execution_status``.
+
+    Lets every transition (start, finish, park, abandon, recover) move the
+    task into a clean execution status without leaving stale subagent or
+    run-start data behind that would confuse the next pickup.
+    """
     now = updated_at or utcnow()
     task.runtime.pipeline.execution_status = execution_status
     task.runtime.pipeline.run_started_at = None
@@ -95,7 +109,13 @@ def clear_task_run_activity(
 
 
 def mark_task_run_started(root: Path, task: TaskRecord) -> None:
-    """Record that the runner has just begun executing this task; called by the orchestration loop when a queued task is picked up."""
+    """
+    Record that the runner has just begun executing this task.
+
+    Called by the orchestration loop when a queued task is picked up so
+    observers (status panels, daemons) can see "running" the moment the
+    transition happens rather than only after the first stage emits.
+    """
     now = clear_task_run_activity(task, execution_status="running", clear_interruption=True)
     task.runtime.pipeline.run_started_at = now
     task.runtime.pipeline.retry_count = 0
@@ -106,13 +126,27 @@ def mark_task_run_started(root: Path, task: TaskRecord) -> None:
 
 
 def mark_task_run_finished(root: Path, task: TaskRecord, final_status: str) -> None:
-    """Persist the closing execution_status for a task without touching the workspace queue; called when the orchestration loop only needs to flush runtime fields, not transition queue ownership."""
+    """
+    Persist the closing ``execution_status`` for a task without touching the queue.
+
+    Used when the orchestration loop only needs to flush runtime fields
+    (e.g. interim progress fold-up) and does not yet want to transition
+    queue ownership; the queue-touching variant is
+    ``finish_task_run_transition``.
+    """
     clear_task_run_activity(task, execution_status=final_status)
     save_task_runtime(root, task)
 
 
 def apply_flag_count_auto_defer(task: TaskRecord) -> None:
-    """Increment flag_count and auto-defer if the threshold is reached."""
+    """
+    Increment ``flag_count`` and auto-defer once the threshold is reached.
+
+    Called from the end-of-run transition so a task that has been flagged
+    three runs in a row escalates to "needs human review" instead of
+    silently re-queuing forever; the threshold is the runner-policy choice
+    encoded here.
+    """
     if task.status != TaskStatus.FLAGGED:
         return
     task.flag_count += 1
@@ -121,7 +155,14 @@ def apply_flag_count_auto_defer(task: TaskRecord) -> None:
 
 
 def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) -> TaskRecord:
-    """End-of-run transition that reconciles the task and the workspace queue under the workspace lock; called by the orchestration loop when a run terminates (done, paused, interrupted, queued) so flag auto-defer, queue cleanup, and reinsertion all happen atomically."""
+    """
+    End-of-run transition that reconciles task and queue under one lock.
+
+    Called by the orchestration loop when a run terminates (done, paused,
+    interrupted, queued) so flag auto-defer, queue cleanup, and reinsertion
+    happen atomically rather than leaving the queue and the task record
+    briefly disagreeing about who is active.
+    """
     with workspace_mutation_guard(root), workspace_lock(root):
         apply_flag_count_auto_defer(task)
         clear_task_run_activity(task, execution_status=final_status)
@@ -159,7 +200,14 @@ def set_task_retry_state(
     retry_count: int,
     retry_limit: int,
 ) -> None:
-    """Persist the current per-stage retry counters; called by stage controllers after a retry so the next prompt and the operator-facing status reflect the same numbers."""
+    """
+    Persist the current per-stage retry counters.
+
+    Called by stage controllers after a retry so the next prompt and the
+    operator-facing status reflect the same numbers; without persisting
+    here, the retry budget shown in status would lag behind what the
+    runner is actually doing.
+    """
     _apply_task_retry_state(
         task,
         retry_count=retry_count,
@@ -169,7 +217,14 @@ def set_task_retry_state(
 
 
 def clear_task_outcome(root: Path, task: TaskRecord) -> None:
-    """Reset the last-outcome record so the next stage prompt is not contaminated by a stale verdict; called when a task is being requeued or recovered into a fresh attempt."""
+    """
+    Reset the last-outcome record on disk.
+
+    Called when a task is being requeued or recovered into a fresh attempt
+    so the next stage prompt is not contaminated by a stale verdict from
+    the previous run; the in-memory variant ``_clear_task_outcome`` is for
+    callers that bundle multiple writes.
+    """
     _clear_task_outcome(task)
     save_task_runtime(root, task)
 
@@ -179,10 +234,12 @@ def _apply_task_retry_state(
     retry_count: int,
     retry_limit: int,
 ) -> None:
-    """In-memory half of ``set_task_retry_state``: bumps retry counters and the updated_at marker without persisting.
+    """
+    In-memory half of ``set_task_retry_state``.
 
-    Split out so ``apply_task_outcome`` can update retry numbers as part of a
-    larger atomic in-memory mutation without triggering its own disk write.
+    Bumps retry counters and the ``updated_at`` marker without persisting,
+    so ``apply_task_outcome`` can update retry numbers as part of a larger
+    atomic in-memory mutation without triggering its own disk write.
     """
     task.runtime.pipeline.updated_at = utcnow()
     task.runtime.pipeline.retry_count = retry_count
@@ -190,10 +247,12 @@ def _apply_task_retry_state(
 
 
 def _clear_task_outcome(task: TaskRecord) -> None:
-    """In-memory half of ``clear_task_outcome``: zeroes ``last_outcome`` without persisting.
+    """
+    In-memory half of ``clear_task_outcome``.
 
-    Lets ``apply_task_outcome`` and the recovery flow scrub stale verdicts as
-    part of a larger mutation that is persisted in one transaction by the caller.
+    Zeroes ``last_outcome`` without persisting so ``apply_task_outcome``
+    and the recovery flow can scrub stale verdicts as part of a larger
+    mutation persisted in one transaction by the caller.
     """
     task.runtime.pipeline.updated_at = utcnow()
     task.runtime.pipeline.last_outcome = TaskOutcomeState()
@@ -212,7 +271,14 @@ def mark_task_outcome(
     failure_classification: str | None = None,
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
 ) -> None:
-    """Record the verdict that ended a stage (rejected, flagged, deferred, etc.) and flush it to disk; called by stage controllers so downstream prompts and the operator status share one source of truth."""
+    """
+    Record the verdict that ended a stage and flush it to disk.
+
+    Called by stage controllers (rejected, flagged, deferred, etc.) so
+    downstream prompts and the operator status share one source of truth
+    for the most recent outcome; bypasses the in-memory variant when the
+    caller does not hold the workspace lock.
+    """
     apply_task_outcome(
         task,
         kind=kind,
@@ -240,7 +306,14 @@ def apply_task_outcome(
     failure_classification: str | None = None,
     failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
 ) -> None:
-    """In-memory variant of mark_task_outcome; called by transitions (close, abandon, recovery) that already hold the workspace lock and want to bundle the outcome into their own persistence batch."""
+    """
+    In-memory variant of ``mark_task_outcome``.
+
+    Called by transitions (close, abandon, recovery) that already hold the
+    workspace lock and want to bundle the outcome into their own
+    persistence batch; persisting twice would re-emit the audit/event log
+    entries the batch already covers.
+    """
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.pipeline.last_outcome = TaskOutcomeState(
@@ -258,7 +331,14 @@ def apply_task_outcome(
 
 
 def mark_stage_started(root: Path, task: TaskRecord, stage: str) -> None:
-    """Record that the runner has just entered a pipeline stage; called by the stage dispatcher so observers (status snapshot, daemons) can see what the task is doing right now."""
+    """
+    Record that the runner has just entered a pipeline stage.
+
+    Called by the stage dispatcher so observers (status snapshot, daemons)
+    can see what the task is doing right now; without the marker, status
+    surfaces would have to infer the current stage from the most recent
+    pipeline transition.
+    """
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.pipeline.current_stage = _running_stage_state(stage, started_at=now)
@@ -266,21 +346,39 @@ def mark_stage_started(root: Path, task: TaskRecord, stage: str) -> None:
 
 
 def mark_stage_finished(root: Path, task: TaskRecord, report: StageReport) -> None:
-    """Record that a pipeline stage just exited and flush to disk; called by the stage dispatcher so the next stage starts from a clean current_stage marker."""
+    """
+    Record that a pipeline stage just exited and flush to disk.
+
+    Called by the stage dispatcher so the next stage starts from a clean
+    ``current_stage`` marker; the report parameter is accepted for caller
+    convenience but currently unused — it documents intent at the call site.
+    """
     del report
     apply_stage_finished(task)
     save_task_runtime(root, task)
 
 
 def apply_stage_finished(task: TaskRecord) -> None:
-    """In-memory variant of mark_stage_finished; called by transitions that hold the workspace lock and want to batch the stage-end marker with other writes."""
+    """
+    In-memory variant of ``mark_stage_finished``.
+
+    Called by transitions that hold the workspace lock and want to batch
+    the stage-end marker with other writes; persisting separately would
+    bypass the batch's atomicity guarantee.
+    """
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now)
 
 
 def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> None:
-    """Attach a freshly launched subagent to the task so observers can see who is running; called when the agent manager spawns a stage subagent."""
+    """
+    Attach a freshly launched subagent to the task.
+
+    Called when the agent manager spawns a stage subagent so the status
+    snapshot and the operator UI can see who is running; without the
+    attachment, ``stop_current_task`` would have nothing to signal.
+    """
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.execution.active_subagent = _runtime_subagent_state(ref, started_at=now, updated_at=now)
@@ -288,7 +386,14 @@ def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> Non
 
 
 def mark_subagent_pid(root: Path, task: TaskRecord, pid: int | None) -> None:
-    """Attach the OS pid to the active subagent record once the engine has spawned its child process so stop/abandon flows can signal it."""
+    """
+    Attach the OS pid to the active subagent record.
+
+    Called once the engine has spawned its child process so stop/abandon
+    flows can signal it; without the pid, ``terminate_subagent_pid`` has
+    nothing to send SIGTERM/SIGKILL to and a hung subagent could only be
+    killed manually.
+    """
     if (
         pid is None
         or task.runtime.execution.active_subagent is None
@@ -310,7 +415,14 @@ def mark_subagent_progress(
     transcript: str | None = None,
     continuation: RuntimeEngineContinuation | None = None,
 ) -> None:
-    """Refresh the heartbeat fields on the active subagent (pid, transcript snippet, engine continuation) so liveness probes don't kill a working agent and so resumed runs can pick up where the engine left off."""
+    """
+    Refresh the heartbeat fields on the active subagent.
+
+    Updates pid, transcript snippet, and engine continuation so liveness
+    probes don't kill a working agent and so resumed runs can pick up
+    where the engine left off; without the periodic refresh, stale-runner
+    recovery would mistake a slow subagent for a dead one.
+    """
     if task.runtime.execution.active_subagent is None:
         return
     now = utcnow()
@@ -338,7 +450,13 @@ def mark_subagent_finished(
     interruption_reason: str | None = None,
     continuation: RuntimeEngineContinuation | None = None,
 ) -> None:
-    """Detach the active subagent from the task once its process exits so the next stage starts with a clean slot; called by the agent manager after subagent shutdown."""
+    """
+    Detach the active subagent from the task once its process exits.
+
+    Called by the agent manager after subagent shutdown so the next stage
+    starts with a clean slot; leaving the subagent attached would make
+    the eligibility checks think a new run was already in progress.
+    """
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     del ref, transcript, exit_code, pid, interruption_reason, continuation
@@ -354,7 +472,14 @@ def mark_engine_switch(
     to_engine: str,
     reason: str,
 ) -> None:
-    """Stamp the task with the most recent engine swap so operator status and the audit trail can explain why a stage is running on a different model than the one configured."""
+    """
+    Stamp the task with the most recent engine swap.
+
+    Lets operator status and the audit trail explain why a stage is running
+    on a different model than the one configured; without the stamp, an
+    operator inspecting status would see an unexpected engine and have to
+    cross-reference the audit log to find out why.
+    """
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.execution.last_engine_switch = RuntimeEngineSwitch(
@@ -368,7 +493,14 @@ def mark_engine_switch(
 
 
 def summarize_transcript(transcript: str, limit: int = 120) -> str:
-    """Pick a short human-readable line from a subagent transcript for the status snapshot, skipping the structured VERDICT/SUMMARY scaffolding so operators see real progress text."""
+    """
+    Pick a short human-readable line from a subagent transcript.
+
+    Used by the status snapshot's "current activity" field; skips the
+    structured ``VERDICT:``/``SUMMARY:`` scaffolding so operators see real
+    progress text rather than the prompt formalisms the agent is required
+    to emit.
+    """
     for line in transcript.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("VERDICT:"):
@@ -382,7 +514,13 @@ def summarize_transcript(transcript: str, limit: int = 120) -> str:
 
 
 def duration_seconds(started_at: str | None, ended_at: str | None) -> int:
-    """Compute an integer second delta between two ISO timestamps that tolerates missing or malformed inputs; used by status formatting where a missing duration must not crash the report."""
+    """
+    Compute an integer second delta between two ISO timestamps.
+
+    Tolerates missing or malformed inputs by returning ``0`` rather than
+    raising; status formatting uses this so a missing or corrupt timestamp
+    cannot crash the operator-facing report mid-render.
+    """
     if started_at is None or ended_at is None:
         return 0
     try:

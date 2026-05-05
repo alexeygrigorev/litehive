@@ -32,12 +32,26 @@ class HookSpec:
 
 class HookRunner(Protocol):
     def run(self, spec: HookSpec, state: TaskState) -> subprocess.CompletedProcess[str] | None:
-        """Execute the hook and return ``None`` on success or a failed CompletedProcess on failure; ``HookNode`` uses ``None`` as the pass signal."""
+        """
+        Execute the hook and report success or failure.
+
+        ``None`` is the pass signal — ``HookNode`` checks for it
+        explicitly. A failed ``CompletedProcess`` carries the exit
+        code, stdout, and stderr the rejection feedback will quote, so
+        the agent prompt sees the actual hook output.
+        """
         ...
 
 
 def _failed_process(command: str, code: int, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
-    """Adapter constructor that fakes a ``CompletedProcess`` for non-execution failures (timeout, missing binary) so the rest of the runner sees one consistent result shape."""
+    """
+    Build a synthetic ``CompletedProcess`` for non-execution failures.
+
+    Timeouts and missing-binary errors do not return a real
+    ``CompletedProcess`` from ``subprocess.run``, but the rest of the
+    runner expects one shape; faking it here lets ``HookNode`` treat
+    every failure path the same way.
+    """
     return subprocess.CompletedProcess(command, code, stdout, stderr)
 
 
@@ -55,13 +69,28 @@ class SubprocessHookRunner(HookRunner):
         execution_root_resolver: Callable[[TaskState], Path] | None = None,
         extra_env: dict[str, str] | None = None,
     ) -> None:
-        """Bind the runner to a workspace, optional per-task cwd resolver, and any extra env shared across hooks."""
+        """
+        Bind the runner to a workspace plus optional per-task cwd
+        resolver and shared env.
+
+        The resolver is what lets implementing/testing hooks run
+        against the per-task worktree instead of the main checkout —
+        without it, a hook that checked git status would see the
+        wrong tree entirely.
+        """
         self.workspace_root = Path(workspace_root)
         self.execution_root_resolver = execution_root_resolver
         self.extra_env = dict(extra_env or {})
 
     def run(self, spec: HookSpec, state: TaskState) -> subprocess.CompletedProcess[str] | None:
-        """Execute one ``HookSpec`` under the resolved cwd, normalizing timeout / missing-binary failures into the same ``CompletedProcess`` shape the node expects."""
+        """
+        Execute one ``HookSpec`` under the resolved cwd.
+
+        Timeouts and missing-binary failures are normalized into the
+        same ``CompletedProcess`` shape the node expects; agent identity
+        and stage are exported into the hook's env so a hook can
+        introspect which task it is gating without arguments.
+        """
         if self.execution_root_resolver is None:
             execution_root = self.workspace_root
         else:
@@ -111,13 +140,13 @@ class HookNode(Node):
     node_type = NodeType.HOOK
 
     def __init__(self, name: PipelineState, hooks: list[HookSpec], runner: HookRunner) -> None:
-        """Bind the node to its stage label, ordered list of hooks, and the runner that actually executes them."""
+        """Bind the node to its stage label, the ordered list of hooks, and the runner that executes them — one ``HookNode`` per hook-bearing phase."""
         self.name = name
         self.hooks = hooks
         self.runner = runner
 
     def run(self, state: TaskState) -> Event:
-        """Run hooks in order and short-circuit on the first failure; passing all hooks yields ``HookOk`` for the state machine."""
+        """Run hooks in order and short-circuit on the first failure; passing all hooks yields ``HookOk`` so the rule table can advance to the next phase."""
         for spec in self.hooks:
             result = self.runner.run(spec, state)
             if result is not None:
@@ -126,7 +155,14 @@ class HookNode(Node):
 
 
 def _reject(point: PipelineState, spec: HookSpec, result: subprocess.CompletedProcess[str], state: TaskState) -> Reject:
-    """Build the Reject event for a failed hook, including a fingerprint so the lifecycle can detect repeated same-hook failures and trigger recovery."""
+    """
+    Build the Reject event for a failed hook.
+
+    The fingerprint (``point|command|description``) is what lets the
+    same-hook circuit breaker detect repeated failures of the same
+    hook and route to recovery; without it, a flaky hook that keeps
+    failing identically would just retry forever.
+    """
     description = (spec.description or "").strip()
     hook = {
         "point": point,

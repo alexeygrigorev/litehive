@@ -22,7 +22,14 @@ db_app = make_typer(invoke_without_command=True)
 
 
 def _run_next_task(root: Path):
-    """Pop the next queued task and run it; tests monkey-patch this seam so they can drive the bare-`litehive` entry point without spinning up a real runner."""
+    """
+    Pop the next queued task and run it.
+
+    Exists as a seam between the bare-``litehive`` callback and the real
+    runner so tests can monkey-patch task execution without spinning up
+    the full pipeline. Returns ``None`` when the queue has nothing to
+    drain so the caller can fall through to the status view.
+    """
     task = dequeue_next_task(root)
     if task is None:
         return None
@@ -31,7 +38,13 @@ def _run_next_task(root: Path):
 
 @app.callback(invoke_without_command=True)
 def root(ctx: typer.Context) -> int | None:
-    """Default action when the user runs bare `litehive`: try to dequeue and run the next task, falling back to the workspace `status` view when the queue is empty."""
+    """
+    Default action when the operator runs bare ``litehive``.
+
+    Tries to dequeue and run the next task; when the queue is empty,
+    falls through to the workspace ``status`` view so the operator sees
+    where things stand instead of a silent no-op.
+    """
     if ctx.invoked_subcommand is not None:
         return None
     result = _run_next_task(Path.cwd())
@@ -56,7 +69,15 @@ app.add_typer(agent_app, name="agent", help="Agent-restricted internal commands"
 
 
 def main() -> int:
-    """Process entry point used by the `litehive` console script; runs the typer app outside click's standalone mode so we can translate exit/abort/click errors into integer exit codes ourselves."""
+    """
+    Process entry point used by the ``litehive`` console script.
+
+    Runs the typer app outside click's standalone mode so we can
+    translate exit/abort/click errors into integer exit codes
+    ourselves; standalone mode would call ``sys.exit`` directly and
+    bypass the wrapping that callers expect from a ``main`` returning
+    an int.
+    """
     try:
         result = app(standalone_mode=False)
     except click.exceptions.Exit as exc:

@@ -56,7 +56,14 @@ def _update_task_transition(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    """Edit task metadata or route the operator's intent into a terminal transition (close/park/requeue/abandon); uses ``...`` sentinels so callers can distinguish "leave field alone" from "set to None"."""
+    """
+    Edit task metadata or route the intent into a terminal transition.
+
+    The ``...`` sentinels distinguish "leave field alone" from "set to
+    None"; without them, an explicit clear (e.g. ``model=None``) would be
+    indistinguishable from "no change" and the runner would never see the
+    intended reset.
+    """
 
     if outcome is not ... and outcome is not None:
         if outcome_reason is not ... and outcome_reason is not None:
@@ -215,7 +222,14 @@ def update_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    """Public CLI/agent entry that either edits task metadata or routes the operator's intent into the matching terminal transition (close/park/requeue/abandon)."""
+    """
+    Public CLI/agent entry for task edits and intent routing.
+
+    Either edits task metadata in place or routes the operator's intent
+    into the matching terminal transition (close/park/requeue/abandon); thin
+    shim around ``_update_task_transition`` so the public surface is
+    importable from ``litehive.tasks.status``.
+    """
     return _update_task_transition(
         root,
         task_id,

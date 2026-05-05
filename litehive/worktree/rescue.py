@@ -1,8 +1,12 @@
-"""Rescue operations for stranded task worktrees.
+"""
+Operator-driven rescue of stranded task worktrees onto main.
 
-Cherry-picks commits from a flagged task worktree onto main when the normal
-merge path failed. Sibling of ``litehive.worktree`` so callers that only need
-rescue do not pull in the full WorktreeService graph.
+When the normal merge path fails (the lifecycle layer flags the task
+``merge_failed``), the work is still on the task's worktree branch.
+The rescue flow cherry-picks those commits onto main so the operator
+doesn't lose the work, with conflict detection and metadata-only
+auto-resolution. Sibling of ``litehive.worktree`` so callers that
+only need rescue don't pull in the full ``WorktreeService`` graph.
 """
 
 from pathlib import Path
@@ -46,10 +50,13 @@ from litehive.worktree.paths import is_managed_worktree_path, resolve_recorded_w
 
 
 def collect_rescue_candidates(root: Path) -> list[RescueCandidate]:
-    """Return tasks flagged ``merge_failed`` whose worktrees still hold commits.
+    """
+    Return tasks flagged ``merge_failed`` whose worktrees still hold commits.
 
-    Used by ``litehive worktree rescue`` (CLI) and ``WorktreeService`` to list
-    candidates for an operator-driven cherry-pick onto main.
+    Used by ``litehive worktree rescue`` (CLI) and ``WorktreeService`` to
+    list candidates for an operator-driven cherry-pick onto main.
+    Sorted by task id so the CLI output is stable and the operator
+    can re-invoke against the same ordering.
     """
     candidates: list[RescueCandidate] = []
     for task in list_tasks(root, strict=False):
@@ -77,10 +84,15 @@ def collect_rescue_candidates(root: Path) -> list[RescueCandidate]:
 
 
 def require_clean_main_checkout(root: Path) -> None:
-    """Refuse to rescue unless main is checked out clean.
+    """
+    Refuse to rescue unless ``main`` is checked out clean.
 
-    Called by ``WorktreeService.require_clean_main_checkout`` before any
-    cherry-pick mutates the main checkout's working tree.
+    Called by ``WorktreeService.require_clean_main_checkout`` before
+    any cherry-pick mutates the main checkout's working tree —
+    rescuing onto a dirty main would mix unrelated edits into the
+    rescued commit and confuse later git history. Raises ``GitError``
+    so the rescue CLI surfaces the precondition failure rather than
+    silently performing a half-rescue.
     """
     branch = git_stdout_or_none(root, "branch", "--show-current")
     if branch not in {"main", "master"}:
@@ -90,10 +102,16 @@ def require_clean_main_checkout(root: Path) -> None:
 
 
 def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResult:
-    """Cherry-pick a candidate's worktree commits onto main and finalize the task.
+    """
+    Cherry-pick a candidate's commits onto main and finalize the task record.
 
-    Called by ``WorktreeService.apply_rescue_candidate`` per candidate. The
-    main checkout must already be clean (see ``require_clean_main_checkout``).
+    Called once per candidate by ``WorktreeService.apply_rescue_candidate``.
+    Caller must have run :func:`require_clean_main_checkout` first;
+    this function will not enforce that itself because the rescue CLI
+    runs the check once for the whole batch. Returns a
+    ``RescueResult`` with the high-level outcome (``clean``,
+    ``already_landed``, ``manual_conflict``, …) so the CLI can render
+    a per-row status table.
     """
     task = get_task(root, candidate.task_id)
     if task is None:
@@ -289,7 +307,15 @@ def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResu
 
 
 def _worktree_commits_ahead_of_main(root: Path, worktree_path: Path) -> list[str]:
-    """Return commit SHAs the worktree carries past its fork point with main, oldest-first."""
+    """
+    Return commit SHAs the worktree carries past its fork-point with main, oldest-first.
+
+    The cherry-pick loop in :func:`apply_rescue_candidate` replays
+    these in order; oldest-first preserves the original commit
+    order so the rescued history reads naturally. Empty result
+    means the worktree has no commits to rescue (the
+    ``no_commits`` / ``already_landed`` outcomes branch on this).
+    """
     main_head = current_head(root) or "HEAD"
     fork_point = git_stdout_or_none(worktree_path, "merge-base", main_head, "HEAD")
     if not fork_point:
@@ -298,7 +324,14 @@ def _worktree_commits_ahead_of_main(root: Path, worktree_path: Path) -> list[str
 
 
 def _worktree_patch_already_on_main(root: Path, wt_head: str, main_head: str) -> bool:
-    """Detect that the worktree's diff is already represented on main so rescue can short-circuit to ``already_landed`` instead of duplicating commits."""
+    """
+    True when the worktree's diff is already represented on main.
+
+    Detects the "the operator already merged this manually" case so
+    the rescue flow short-circuits to ``already_landed`` rather than
+    cherry-picking equivalent commits onto main twice. Backed by
+    ``git cherry``, which compares patch ids rather than commit shas.
+    """
     lines = cherry_check(root, main_head, wt_head)
     if lines is None:
         return False
@@ -306,13 +339,30 @@ def _worktree_patch_already_on_main(root: Path, wt_head: str, main_head: str) ->
 
 
 def _is_task_metadata_path(path: str, task_id: str) -> bool:
-    """Return True when ``path`` lives under the per-task ``.litehive/tasks/<id>-...`` metadata tree, which rescue treats as droppable noise rather than real source changes."""
+    """
+    True when ``path`` lives under the per-task ``.litehive/tasks/<id>-...`` tree.
+
+    Per-task metadata changes are bookkeeping noise that should not
+    survive into the rescued commit — they describe how the task
+    ran, not what it changed in the codebase. Used both to drop
+    metadata from staged cherry-picks and to auto-resolve metadata-
+    only conflicts.
+    """
     metadata_prefix = f".litehive/tasks/{task_id}-"
     return path.startswith(metadata_prefix)
 
 
 def _resolve_metadata_conflicts(root: Path, paths: list[str]) -> None:
-    """Auto-resolve cherry-pick conflicts that touch only per-task metadata by taking ``ours`` and re-staging, so a metadata-only collision does not stall rescue."""
+    """
+    Auto-resolve metadata-only cherry-pick conflicts by taking ``ours``.
+
+    Metadata-only collisions are noise — the rescue flow will drop
+    them entirely from the resulting commit anyway, so making the
+    operator resolve them by hand would be busywork that stalls
+    every metadata-only cherry-pick. Failing to re-stage is
+    best-effort because the surrounding flow already handles the
+    "manual_conflict" outcome.
+    """
     if not paths:
         return
     checkout_ours(root, paths)
@@ -325,14 +375,30 @@ def _resolve_metadata_conflicts(root: Path, paths: list[str]) -> None:
 
 
 def _drop_task_metadata_changes(root: Path, task_id: str) -> None:
-    """Strip the task's metadata files out of the staged cherry-pick so the resulting commit only carries real source changes."""
+    """
+    Strip the task's metadata files out of the staged cherry-pick.
+
+    Called between ``cherry-pick --no-commit`` and the actual
+    ``git commit``, so the resulting rescue commit only carries
+    real source changes — keeping the metadata would dirty the
+    rescued history with churn that means nothing on main.
+    """
     changed_paths = git_stdout_lines(root, "diff", "--cached", "--name-only")
     metadata_paths = [path for path in changed_paths if _is_task_metadata_path(path, task_id)]
     restore_paths(root, metadata_paths, source="HEAD", staged=True, worktree=True)
 
 
 def _finalize_rescue(root: Path, task: TaskRecord, outcome: str, head_sha: str | None) -> None:
-    """Commit the rescue result to task + workspace state under the workspace lock, refusing if the runner is still pinned to this task."""
+    """
+    Commit the rescue result to task + workspace state under the workspace lock.
+
+    Mutating both the task and the workspace ``unmerged_worktrees``
+    list as one atomic unit prevents a half-finalized rescue (task
+    marked done but unmerged-worktrees still listing it). Refuses
+    if the runner is still pinned to this task — racing the live
+    runner would corrupt task state — and writes a journal entry so
+    the operator can audit the outcome.
+    """
     journal_message = "Worktree rescue found no commits ahead of main; cleared pending rescue state."
     if outcome == "rescued" and head_sha:
         journal_message = f"Worktree rescue applied onto main at {head_sha}."
@@ -362,7 +428,15 @@ def _finalize_rescue(root: Path, task: TaskRecord, outcome: str, head_sha: str |
 
 
 def _ensure_unmerged_worktree_state(root: Path, task_id: str, worktree_rel: str) -> None:
-    """Re-record the task in ``state.unmerged_worktrees`` after a manual_conflict so the operator still sees it on the next rescue listing."""
+    """
+    Re-record the task in ``state.unmerged_worktrees`` after a manual_conflict.
+
+    Without this, a partial cherry-pick that aborts halfway would
+    drop the task from the unmerged list and the operator's next
+    rescue listing wouldn't show it as still needing attention. The
+    idempotent check (skip when already present) keeps repeated
+    rescue attempts from duplicating the entry.
+    """
     state = load_state(root)
     for entry in state.unmerged_worktrees:
         if entry.task_id == task_id:
@@ -372,7 +446,16 @@ def _ensure_unmerged_worktree_state(root: Path, task_id: str, worktree_rel: str)
 
 
 def _stash_litehive_changes(root: Path) -> str | None:
-    """Set aside any pending ``.litehive/`` workspace edits so the cherry-pick lands on a clean main, returning the stash ref to restore afterwards."""
+    """
+    Set pending ``.litehive/`` workspace edits aside before the cherry-pick.
+
+    The rescue cherry-pick must land on a clean tree, but the daemon
+    or another command may have left ``.litehive/`` metadata edits
+    pending; without stashing them the cherry-pick would refuse or
+    splice metadata into the rescued commit. Returns the stash ref
+    so :func:`_restore_litehive_changes` can pop exactly that
+    entry afterwards.
+    """
     if not git_stdout_lines(root, "status", "--porcelain", "--untracked-files=all", "--", ".litehive"):
         return None
     before = rev_parse_verify(root, "refs/stash") or ""
@@ -389,7 +472,15 @@ def _stash_litehive_changes(root: Path) -> str | None:
 
 
 def _restore_litehive_changes(root: Path, stash_ref: str | None) -> None:
-    """Reapply the ``.litehive/`` stash created by ``_stash_litehive_changes``, falling back to apply+drop when ``stash pop`` reports a conflict."""
+    """
+    Reapply the ``.litehive/`` stash captured by :func:`_stash_litehive_changes`.
+
+    Falls back to apply-then-drop when ``stash pop`` reports a
+    conflict — pop refuses to drop the stash on conflict, but the
+    rescue flow has already done the destructive work and we want
+    the stash gone either way (the operator can recover from
+    reflog if a recoverable conflict actually mattered).
+    """
     if not stash_ref:
         return
     ok, _ = stash_pop(root, ref=stash_ref, with_index=True)
@@ -400,7 +491,16 @@ def _restore_litehive_changes(root: Path, stash_ref: str | None) -> None:
 
 
 def _worktree_has_non_metadata_changes(root: Path, worktree_path: Path, task_id: str) -> bool:
-    """Return True when the worktree has any real-source diff against main; used to decide whether to mark a no-commit worktree as ``already_landed`` rather than a no-op."""
+    """
+    True when the worktree's diff against main contains anything besides task metadata.
+
+    Used by :func:`apply_rescue_candidate` to distinguish "a worktree
+    with real changes the operator already landed on main"
+    (``already_landed``) from "a worktree that never had real
+    changes" (``no_commits`` no-op). Without this, a metadata-only
+    worktree would falsely render as already_landed and confuse the
+    rescue summary.
+    """
     main_head = current_head(root) or "HEAD"
     fork_point = git_stdout_or_none(worktree_path, "merge-base", main_head, "HEAD")
     if not fork_point:

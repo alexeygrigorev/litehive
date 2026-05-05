@@ -54,7 +54,14 @@ from litehive.worktree.inspection import inspect_dirty_worktree_gate
 
 
 def register_root_commands(app: typer.Typer) -> None:
-    """Wire the workspace-level commands (status/health/engine/repair) onto the root typer app from `cli/app.py`."""
+    """
+    Wire the workspace-level commands onto the root Typer app.
+
+    Adds ``status``, ``health``, ``engine``, and ``repair`` from
+    a single registration call so importing this module has no
+    Typer side effects. Called once during CLI bootstrap from
+    ``litehive.cli.app``.
+    """
     app.command("status", help="Show workspace status")(status_command)
     app.command("health", help="Show workspace health diagnostics")(health_command)
     app.command("engine", help="Manage engine freezes and status")(engine_command)
@@ -62,7 +69,14 @@ def register_root_commands(app: typer.Typer) -> None:
 
 
 def print_status_issues(issues) -> int:
-    """Emit the diagnostics block at the bottom of `status` and return a non-zero exit code when any issue is severe enough to fail the command; tests monkey-patch this to silence diagnostics noise."""
+    """
+    Emit the diagnostics block at the bottom of ``status``.
+
+    Returns a non-zero exit code when any issue is severe enough
+    to fail the command so monitoring scripts can wire the exit
+    code into alerting. Tests monkey-patch this to silence
+    diagnostics noise without disabling the broader status path.
+    """
     if not status_has_problems(issues):
         return 0
     print()
@@ -77,7 +91,16 @@ def repair_summary_lines(
     include_empty: bool,
     include_extended_fields: bool,
 ) -> list[str]:
-    """Render the workspace-repair summary as printable lines; `result_label` lets the same formatter serve both `repair` (label='repaired') and the implicit cleanup that runs from other commands."""
+    """
+    Render the workspace-repair summary as printable lines.
+
+    ``result_label`` lets the same formatter serve both the
+    explicit ``repair`` command (label ``"repaired"``) and the
+    implicit cleanup that runs from other commands; without it,
+    each caller would have to translate the summary to text on
+    its own. ``include_empty`` keeps zero-element fields in the
+    output so the layout stays uniform.
+    """
     del include_extended_fields
     if summary.mutated:
         mutated_label = "yes"
@@ -113,7 +136,16 @@ def status_command(
     workspace: WorkspaceOption = Path.cwd(),
     full: Annotated[bool, typer.Option(help="Include the full per-task status dump.")] = False,
 ) -> int:
-    """Render the operator-facing workspace overview (active task, queue, recent activity, engine availability) and surface diagnostics at the bottom; the `--full` mode adds the per-task pipeline dump for debugging."""
+    """
+    Operator-facing workspace overview.
+
+    Renders the active task, queue, recent activity, and engine
+    availability sections, then surfaces any diagnostics at the
+    bottom and returns non-zero when those diagnostics are
+    severe. ``--full`` adds the per-task pipeline dump for
+    debugging — kept off by default so the common operator view
+    fits one screen.
+    """
     ws = Workspace.from_path(workspace)
     root = ws.root
     status = collect_task_pipeline_status(root, diagnostics=full)
@@ -168,7 +200,16 @@ def status_command(
 
 
 def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
-    """Reconcile workspace state: clear stale active-task pointers, requeue interrupted tasks, and normalize terminal entries; the explicit `repair` command for operators when the daemon is not picking up where it left off."""
+    """
+    Reconcile workspace state.
+
+    Clears stale active-task pointers, requeues interrupted
+    tasks, and normalizes terminal entries. The explicit
+    operator-facing ``repair`` command for when the daemon is
+    not picking up where it left off — distinct from the
+    automatic cleanup that runs from ``queue`` and ``run`` so
+    the operator can also force a full reconciliation pass.
+    """
     ensure_workspace(workspace)
     start_time = time.perf_counter()
     try:
@@ -208,7 +249,15 @@ class _QuotaHealth:
 
 
 def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
-    """Render the workspace-health report (active/flagged tasks, worktrees, engine quotas, daemon, recent completions) and exit non-zero when something needs operator attention; the dashboard command driven by external monitoring."""
+    """
+    Render the workspace-health report.
+
+    Covers active/flagged tasks, worktrees, engine quotas, daemon
+    status, and recent completions. Exits non-zero when something
+    needs operator attention so external monitoring can wire the
+    exit code into alerting; that is the difference between this
+    command and ``status``, which is the broader interactive view.
+    """
     ensure_workspace(workspace)
     ws = Workspace.from_path(workspace)
     root = ws.root
@@ -268,7 +317,15 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 
 def health_daemon_status(root: Path) -> tuple[str, str]:
-    """Return a (status, pid) pair for the workspace daemon as the health command renders it; tests use this directly to assert the running/stopped surface without invoking the full report."""
+    """
+    Return a ``(status, pid)`` pair for the workspace daemon.
+
+    Renders the same shape the health command uses so tests can
+    assert the running/stopped surface without invoking the full
+    health report. Returns ``("stopped", "-")`` when no daemon
+    record is present so the caller can render the row without
+    branching.
+    """
     entry = daemon_metadata(root)
     if entry is None or entry.get("status") != "running":
         return ("stopped", "-")
@@ -281,7 +338,15 @@ def health_daemon_status(root: Path) -> tuple[str, str]:
 
 
 def collect_quota_health() -> list[_QuotaHealth]:
-    """Probe each configured engine's quota provider once and return per-engine health rows in `ENGINE_CHOICES` order so `health` always renders the engines in a stable lineup."""
+    """
+    Probe each engine's quota provider once and return health rows.
+
+    Returned in :data:`ENGINE_CHOICES` order so ``health`` always
+    renders the engines in a stable lineup — operators rely on
+    that ordering when scanning successive runs. Z.ai's probe
+    covers both ``goz`` and ``opencode`` because they share a
+    backend; ``gemini`` has no probe surface.
+    """
     claude_status = check_claude_quota()
     codex_status = check_codex_quota()
     copilot_status = check_copilot_quota()
@@ -298,7 +363,14 @@ def collect_quota_health() -> list[_QuotaHealth]:
 
 
 def _unsupported_quota_health(engine: str) -> _QuotaHealth:
-    """Render a placeholder row for engines whose providers don't expose a usage check (e.g. Gemini), so the health command shows them as `unsupported` rather than a hard failure."""
+    """
+    Build a placeholder row for engines without a quota check.
+
+    Lets the health command render Gemini (and any future
+    no-probe engine) as ``unsupported`` rather than as a hard
+    failure; an unsupported engine is not a problem, the
+    operator just cannot prove its quota state remotely.
+    """
     return _QuotaHealth(engine=engine, status="unsupported", summary="no proactive quota check")
 
 
@@ -306,7 +378,15 @@ def quota_health(
     engine: str,
     status: UsageStatus | object,
 ) -> _QuotaHealth:
-    """Translate a heru `UsageStatus` (or unsupported sentinel) into the renderable `_QuotaHealth` shape; tolerates engines whose provider returns a different schema by flagging them as `unavailable` with a problem bit so operators see them as failures rather than silent gaps."""
+    """
+    Translate a heru ``UsageStatus`` into a renderable ``_QuotaHealth``.
+
+    Tolerates engines whose provider returns a different schema
+    by flagging them as ``unavailable`` with the ``problem`` bit
+    set so operators see them as failures rather than silent
+    gaps. ``limit_reached`` becomes the ``warning`` status so the
+    health row can be acted on without parsing the summary text.
+    """
     error = getattr(status, "error", None)
     if error is not None:
         return _QuotaHealth(engine, "unavailable", error)

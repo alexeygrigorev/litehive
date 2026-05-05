@@ -13,7 +13,14 @@ LaunchDiagnostics = dict[str, str | int | bool | None | list[str]]
 
 
 class TaskLaunchFailure(RuntimeError):
-    """Raised when a task cannot be selected or prepared for execution."""
+    """
+    Raised when a task cannot be selected or prepared for execution.
+
+    Carries a structured failure context plus diagnostics so the daemon
+    can log the root cause and the recovery agent can see why launch
+    was aborted; a plain ``RuntimeError`` would lose the context tag
+    that the daemon dispatch logic branches on.
+    """
 
     def __init__(
         self,
@@ -21,7 +28,14 @@ class TaskLaunchFailure(RuntimeError):
         summary: str,
         diagnostics: LaunchDiagnostics | None = None,
     ) -> None:
-        """Carry a structured failure context plus diagnostics so the daemon can log the root cause and the recovery agent can see why launch was aborted."""
+        """
+        Stamp the exception with context, summary, and diagnostics fields.
+
+        Splitting the structured fields out of the message string lets
+        the daemon log the diagnostics dictionary without having to
+        re-parse the human message; the context literal is what the
+        recovery agent dispatches on.
+        """
         super().__init__(summary)
         self.context = context
         self.summary = summary

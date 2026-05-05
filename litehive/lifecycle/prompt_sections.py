@@ -20,7 +20,14 @@ if TYPE_CHECKING:
 
 
 def _header_section(prompt: "AgentPrompt", task_record: TaskRecord | None) -> str:
-    """Identify the task and pipeline coordinates so the agent knows which run it is on."""
+    """
+    Identify the task and pipeline coordinates.
+
+    Always rendered first so the agent's response can be attributed to
+    a specific run; the retry counter only appears once the task has
+    actually retried so a fresh attempt does not start with noise about
+    a missing prior pass.
+    """
     if task_record is not None:
         title_suffix = f" — {task_record.title}"
     else:
@@ -38,7 +45,14 @@ def _header_section(prompt: "AgentPrompt", task_record: TaskRecord | None) -> st
 
 
 def _instructions_section(prompt: "AgentPrompt") -> str:
-    """Render the role/profile/attempt instruction layers the prompt builder selected for this stage."""
+    """
+    Render the role/profile/attempt instruction layers.
+
+    The layer order and the md-overrides-startup precedence are owned
+    by ``RoleAgent._assemble_instruction_layers``; this function only
+    formats the ordered ``(label, text)`` pairs, so layer ordering
+    decisions stay in one place.
+    """
     layers = prompt.instruction_layers or []
     if not layers:
         return ""
@@ -53,14 +67,14 @@ def _instructions_section(prompt: "AgentPrompt") -> str:
 
 
 def _goal_section(task_record: TaskRecord | None) -> str:
-    """State the task goal; falls back to the title when no goal is defined so the section is never empty."""
+    """State the task goal, falling back to the title when no goal is defined so the section is never empty."""
     if task_record is None:
         return "Goal:\n(task record not loaded)"
     return f"Goal:\n{task_record.goal or task_record.title}"
 
 
 def _acceptance_criteria_section(task_record: TaskRecord | None) -> str:
-    """Render the acceptance bullets the accepting stage will check this work against."""
+    """Render the acceptance bullets the accepting stage will check this work against — the SWE prompt uses them as the contract for ``pass``."""
     if task_record is None or not task_record.acceptance_criteria:
         return "Acceptance criteria:\n- (none defined)"
     bullets = "\n".join(f"- {c}" for c in task_record.acceptance_criteria)
@@ -68,7 +82,7 @@ def _acceptance_criteria_section(task_record: TaskRecord | None) -> str:
 
 
 def _plan_section(task_record: TaskRecord | None) -> str:
-    """Render the plan steps grooming committed to so later stages execute against the same plan."""
+    """Render the plan steps grooming committed to so later stages execute against the same plan instead of re-deriving one mid-stream."""
     if task_record is None or not task_record.plan:
         return "Plan:\n- (no plan)"
     bullets = "\n".join(f"- {step}" for step in task_record.plan)
@@ -76,7 +90,13 @@ def _plan_section(task_record: TaskRecord | None) -> str:
 
 
 def _constraints_section(task_record: TaskRecord | None) -> str:
-    """Render task-level constraints; supplies a default scope reminder when none are recorded."""
+    """
+    Render task-level constraints.
+
+    Supplies a default scope reminder when none are recorded so a
+    SWE working on a task with no explicit constraints still sees a
+    "stay in scope" line in its prompt.
+    """
     if task_record is None or not task_record.constraints:
         return "Constraints:\n- Keep changes scoped to the task."
     bullets = "\n".join(f"- {c}" for c in task_record.constraints)
@@ -84,7 +104,7 @@ def _constraints_section(task_record: TaskRecord | None) -> str:
 
 
 def _last_rejection_section(rejection: dict[str, Any]) -> str:
-    """Surface the prior reject verdict as first-class context so the retry agent answers it directly."""
+    """Surface the prior reject verdict as first-class context so the retry agent answers it directly instead of guessing from the activity log."""
     lines = [
         "Last rejection (context from the previous attempt at this stage):",
         f"- Source: {rejection.get('source')}",
@@ -125,7 +145,14 @@ def _prior_work_section(last_report: dict[str, Any], last_rejection: dict[str, A
 
 
 def _recovery_trigger_section(recovery_trigger: dict[str, Any], prompt: "RecoveryPrompt") -> str:
-    """Tell the recovery agent which failure shape kicked the task out of the normal pipeline."""
+    """
+    Tell the recovery agent which failure shape kicked the task out
+    of the normal pipeline.
+
+    Without this section the recovery agent has to reconstruct the
+    trigger from the journal; surfacing it here lets the agent see the
+    structured fingerprint payload it would otherwise have to dig for.
+    """
     lines = ["Recovery trigger (what sent the task into recovery):"]
     for key, value in recovery_trigger.items():
         lines.append(f"- {key}: {value}")
@@ -160,7 +187,15 @@ def _recovery_execution_root_section(prompt: "RecoveryPrompt") -> str:
 
 
 def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
-    """Hand the recovery agent persisted evidence of the failed subagent run instead of asking it to dig."""
+    """
+    Hand the recovery agent persisted evidence of the failed subagent
+    run.
+
+    Recovery diagnosis depends on knowing exactly what the prior agent
+    produced (or failed to produce); inlining the diagnostics keeps the
+    agent from having to re-walk the on-disk artifacts to reconstruct
+    that picture.
+    """
     exit_code_value = diagnostics.get("exit_code")
     if exit_code_value is not None:
         exit_code_label = exit_code_value
@@ -207,7 +242,15 @@ def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
 
 
 def _compact_failure_signal(*texts: str) -> str:
-    """Pick the first failure-flavored line from stdout/stderr/transcript so diagnostics stay one-liner sized."""
+    """
+    Pick the first failure-flavored line from stdout/stderr/transcript.
+
+    Used by the recovery diagnostics section to surface a one-line
+    signal of *what went wrong* without forcing the operator-facing
+    prompt to carry the full transcript; the keyword list is the
+    minimal set that catches the failure modes we have seen in
+    practice.
+    """
     keywords = ("litehive agent report", "traceback", "error", "failed", "exception")
     for text in texts:
         for line in text.splitlines():
@@ -218,7 +261,7 @@ def _compact_failure_signal(*texts: str) -> str:
 
 
 def _single_line(value: str, limit: int) -> str:
-    """Collapse whitespace and truncate so multi-line evidence fits one prompt bullet."""
+    """Collapse whitespace and truncate so multi-line evidence fits one prompt bullet — used by the failure-signal helper above."""
     text = " ".join(value.split())
     if len(text) <= limit:
         return text
@@ -226,7 +269,14 @@ def _single_line(value: str, limit: int) -> str:
 
 
 def _recovery_history_section(recovery_history: list[dict[str, Any]]) -> str:
-    """Show the recovery agent prior recoveries on this task so it can spot loops instead of re-trying the same fix."""
+    """
+    Show prior recovery attempts on this task to the recovery agent.
+
+    Without this, the agent cannot tell that it is on its second or
+    third pass at the same failure and may re-try the same fix instead
+    of escalating; surfacing the history is what enables the
+    "spot the loop and stop" behaviour the role guidance requires.
+    """
     lines = ["Recovery history (persisted prior recovery attempts for this task):"]
     recent = recovery_history[-5:]
     if len(recovery_history) > len(recent):
@@ -250,7 +300,14 @@ def _recovery_history_section(recovery_history: list[dict[str, Any]]) -> str:
 
 
 def _failed_run_history_section(failed_run_history: list[dict[str, Any]]) -> str:
-    """Carry forward stage-failure shape counts that persist across requeue/reset, so retry budgets are visible to the agent."""
+    """
+    Carry forward stage-failure shape counts to the agent.
+
+    These counts persist across requeue/reset and are the only signal
+    the agent has that it has hit the same failure shape on a previous
+    run — without this section, a retry budget that the lifecycle is
+    enforcing silently would look invisible to the agent itself.
+    """
     lines = ["Failed-run history (survives requeue/reset for this task):"]
     recent = failed_run_history[-5:]
     if len(failed_run_history) > len(recent):
@@ -277,7 +334,15 @@ def _failed_run_history_section(failed_run_history: list[dict[str, Any]]) -> str
 
 
 def _repeated_recovery_fingerprint_section(repeated_recovery_fingerprint: dict[str, Any]) -> str:
-    """Force the recovery agent to escalate (file a bug, reject) when the same failure fingerprint recurs."""
+    """
+    Force the recovery agent to escalate when the same failure
+    fingerprint recurs.
+
+    This block is what flips the recovery role's behaviour from
+    "diagnose and resume" to "file a follow-up bug task and reject" —
+    without it, the agent would keep re-routing the task through the
+    same failing path forever.
+    """
     lines = [
         "Repeated recovery fingerprint detected:",
         f"- count_including_current: {repeated_recovery_fingerprint.get('count')}",
@@ -291,7 +356,15 @@ def _repeated_recovery_fingerprint_section(repeated_recovery_fingerprint: dict[s
 
 
 def _scope_analysis_section(scope_analysis: dict[str, Any]) -> str:
-    """Tell the recovery agent whether deleted files look like scope creep or legitimate operator cleanup."""
+    """
+    Tell the recovery agent whether deleted files look like scope creep
+    or legitimate operator cleanup.
+
+    Without this signal, the recovery agent treats every unexpected
+    deletion as suspect and produces noisy false-positive rejects;
+    the analysis lets it distinguish "operator pruned a stale module"
+    from "SWE deleted code outside its scope".
+    """
     lines = ["Scope analysis (operator cleanup vs SWE scope creep):"]
 
     is_operator_cleanup = scope_analysis.get("is_operator_cleanup", False)
@@ -322,7 +395,15 @@ def _scope_analysis_section(scope_analysis: dict[str, Any]) -> str:
 
 
 def _test_failure_attribution_section(attribution: dict[str, Any]) -> str:
-    """Tell the recovery agent whether failing tests touch this task's surface or look pre-existing, so it doesn't blame the SWE for unrelated breakage."""
+    """
+    Tell the recovery agent whether failing tests touch this task's
+    surface or look pre-existing.
+
+    Stops the recovery agent from blaming the SWE for unrelated
+    breakage — when the failing tests do not touch any file the SWE
+    changed, the failure is almost certainly a flake or a pre-existing
+    breakage on main rather than something the SWE introduced.
+    """
     classification = str(attribution.get("classification") or "unknown").replace("_", " ").upper()
     lines = ["Test failure attribution (current recovery trigger):", f"- Classification: {classification}"]
     reasoning = str(attribution.get("reasoning") or "").strip()
@@ -341,7 +422,14 @@ def _test_failure_attribution_section(attribution: dict[str, Any]) -> str:
 
 
 def _merge_conflict_section(conflict_files: list[str], merge_attempt: int | None) -> str:
-    """List the files the merge stage couldn't auto-resolve so the next agent fixes the conflicts before re-merging."""
+    """
+    List the files the merge stage couldn't auto-resolve.
+
+    Rendered into the merge-resolver agent's prompt so it knows which
+    files to fix before re-merging; the merge attempt counter rides
+    along so the agent can see whether this is a fresh conflict or a
+    retry after a previous resolution failure.
+    """
     bullets = "\n".join(f"- {f}" for f in conflict_files)
     if merge_attempt is not None:
         extra = f"\nMerge attempt: {merge_attempt}"
@@ -351,7 +439,14 @@ def _merge_conflict_section(conflict_files: list[str], merge_attempt: int | None
 
 
 def _nudge_section(prompt: "AgentPrompt") -> str:
-    """Re-prompt the agent to actually submit a verdict when its prior turn ended without one."""
+    """
+    Re-prompt the agent to actually submit a verdict.
+
+    Rendered when AgentNode catches ``NudgeRequired`` and rebuilds the
+    prompt with ``nudge=True``; the explicit "you didn't submit"
+    framing is what turns a normal turn into a verdict-submission
+    nudge so the agent doesn't drift back into exploratory work.
+    """
     message = str(prompt.nudge_message or "").strip()
     lines = [
         "IMPORTANT: this is a nudge because your prior turn ended without a verdict submission.",
@@ -365,7 +460,13 @@ def _nudge_section(prompt: "AgentPrompt") -> str:
 
 
 def _string_list(value: Any) -> list[str]:
-    """Coerce report payload values into a deduplicated string list; tolerates the loose typing of subagent JSON."""
+    """
+    Coerce report payload values into a deduplicated string list.
+
+    Tolerates the loose typing of subagent JSON — entries can be
+    strings, numbers, or empty — so a malformed report does not abort
+    prompt rendering halfway through.
+    """
     if not isinstance(value, list):
         return []
     normalized: list[str] = []
@@ -380,7 +481,7 @@ def _string_list(value: Any) -> list[str]:
 
 
 def _compact_list(items: list[str], limit: int, separator: str = ", ") -> str:
-    """Render a long list as `a, b, c, +N more` so prior-work bullets stay one prompt line."""
+    """Render a long list as ``a, b, c, +N more`` so prior-work bullets stay one prompt line instead of blowing past the prompt budget."""
     if len(items) <= limit:
         return separator.join(items)
     shown = separator.join(items[:limit])
@@ -388,7 +489,14 @@ def _compact_list(items: list[str], limit: int, separator: str = ", ") -> str:
 
 
 def _runner_hooks_section(stage: str | None, hooks: list[dict[str, Any]]) -> str:
-    """Warn the agent which post-stage hooks will gate the verdict, so it runs them locally before submitting."""
+    """
+    Warn the agent which post-stage hooks will gate the verdict.
+
+    Showing the hook commands (and descriptions) here lets the agent
+    pre-run them locally before submitting, which dramatically reduces
+    the rate of hook-rejected verdicts that would otherwise trigger a
+    retry cycle.
+    """
     stage_label = _human_stage_label(stage)
     lines = [f"After {stage_label}, these checks will run:"]
     for hook in hooks:
@@ -403,9 +511,15 @@ def _runner_hooks_section(stage: str | None, hooks: list[dict[str, Any]]) -> str
 
 
 def _verdict_instructions_section(prompt: "AgentPrompt") -> str:
-    """Always-final section that tells the agent the exact CLI invocation and verdict vocabulary for its role.
+    """
+    Tell the agent the exact CLI invocation and verdict vocabulary for
+    its role.
 
-    The role determines the allowed verdict set; recovery has a wider menu than the regular pipeline roles.
+    Always rendered last so the agent reads the verdict instructions
+    immediately before deciding what to submit. The role determines
+    the allowed verdict set — recovery has a wider menu (resume,
+    advance, done, budget_hit, reject) than the regular pipeline
+    roles (pass, reject).
     """
     if prompt.role == "recovery":
         verdicts = "<resume|advance|done|budget_hit|reject>"
@@ -426,7 +540,14 @@ def _verdict_instructions_section(prompt: "AgentPrompt") -> str:
 
 
 def _label_to_heading(label: str) -> str:
-    """Map prompt-builder layer keys (`role`, `attempt:fresh`, `swe:md`, ...) to human headings the agent reads."""
+    """
+    Map prompt-builder layer keys to the human heading the agent reads.
+
+    The instruction-section renderer uses raw keys like ``role``,
+    ``attempt:fresh``, ``swe:md``; this lookup turns them into
+    operator-readable headings so the prompt does not leak internal
+    layer naming into the agent context.
+    """
     mapping = {
         "role": "Role guidance",
         "attempt:fresh": "Fresh attempt guidance",
@@ -445,7 +566,7 @@ def _label_to_heading(label: str) -> str:
 
 
 def _human_stage_label(stage: str | None) -> str:
-    """De-snake stage names for the runner-hooks heading; stays generic if no stage is set."""
+    """De-snake stage names for the runner-hooks heading, falling back to a generic label when no stage is set so the heading still parses."""
     if not stage:
         return "this stage"
     return stage.replace("_", " ")

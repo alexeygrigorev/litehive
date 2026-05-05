@@ -1,4 +1,10 @@
-"""Repair pass for tasks that are *not* currently flagged ``running`` but were left in a wedged shape (queued/in-progress/interrupted at a resumable stage) after a crash."""
+"""Repair pass for non-running but wedged tasks.
+
+Handles tasks that are *not* currently flagged ``running`` but were
+left in a wedged shape after a crash (queued/in-progress/interrupted at
+a resumable stage); the running-task counterpart lives in
+``running_task_recovery``.
+"""
 
 import sqlite3
 
@@ -13,7 +19,15 @@ def normalize_nonrunning_resumable_tasks(
     tasks_by_id: dict[str, TaskRecord],
     summary: WorkspaceRepairSummary | None,
 ) -> dict[str, object]:
-    """Second pass that catches tasks left in a wedged shape after a crash — queued/in-progress with stale stage status — and re-canonicalises them so a normal dequeue can pick them up. Preserves the original queue position when one existed; otherwise inserts at the front so previously-active work resumes first."""
+    """
+    Second-pass repair for tasks left in a wedged shape after a crash.
+
+    Catches queued/in-progress tasks with stale stage status and
+    re-canonicalises them so a normal dequeue can pick them up;
+    preserves the original queue position when one existed, otherwise
+    inserts at the front so previously-active work resumes before
+    fresh backlog starts.
+    """
     # inline: tasks.queue top-level-imports execution_recovery (would cycle).
     from litehive.tasks.queue import (  # noqa: PLC0415
         canonicalize_resumable_queue_task,
@@ -93,7 +107,15 @@ def normalize_nonrunning_resumable_tasks(
 
 
 def has_nonrunning_resumable_repair_candidates(workspace: Workspace) -> bool:
-    """SQLite-side existence probe used by the fast-path skip check; encodes the same "is this task wedged at a resumable stage?" predicate as :func:`normalize_nonrunning_resumable_tasks` so we don't load every task into Python just to learn there's nothing to repair."""
+    """
+    SQLite-side existence probe for the recovery fast-path skip check.
+
+    Encodes the same "is this task wedged at a resumable stage?"
+    predicate as ``normalize_nonrunning_resumable_tasks`` so the
+    skip path doesn't have to load every task into Python just to
+    learn there's nothing to repair; keeping the predicates in lockstep
+    is what stops the fast-path from skipping legitimate work.
+    """
     with workspace.connect() as connection:
         try:
             row = connection.execute(

@@ -11,11 +11,14 @@ from typing import TextIO
 
 @dataclass(slots=True)
 class WorkspaceLockManager:
-    """Single owner for workspace lockfile metadata: flock acquisition plus JSON payload I/O.
+    """
+    Single owner for workspace lockfile metadata.
 
-    Wraps the runner and daemon lockfiles so that PID-based liveness checks,
-    stale-lockfile cleanup, and metadata writes share one implementation
-    instead of being re-derived in each subsystem.
+    Wraps the runner and daemon lockfiles so that PID-based liveness
+    checks, stale-lockfile cleanup, flock acquisition, and JSON payload
+    I/O share one implementation instead of being re-derived in each
+    subsystem; ``ProcessLockManager`` layers process-specific policy on
+    top of this.
     """
 
     path: Path
@@ -25,11 +28,12 @@ class WorkspaceLockManager:
     fsync_writes: bool = False
 
     def _is_held_in_process(self) -> bool:
-        """Ask the per-subsystem callback whether the lock is already held by this process.
+        """
+        Ask the per-subsystem callback whether this process holds the lock.
 
-        Lets ``is_active`` short-circuit the flock probe in cases where the
-        current Python process is the holder — flock is per-file-descriptor,
-        so a re-entrant ``acquire`` from the same process would otherwise
+        Lets ``is_active`` short-circuit the flock probe when the current
+        Python process is the holder — flock is per-file-descriptor, so a
+        re-entrant ``acquire`` from the same process would otherwise
         succeed and confuse ownership tracking.
         """
         if self.held_in_process is None:
@@ -37,11 +41,14 @@ class WorkspaceLockManager:
         return self.held_in_process()
 
     def _parse_metadata_text(self, text: str, strict: bool) -> dict[str, object] | None:
-        """Decode the lockfile JSON envelope, returning ``None`` for "do not trust this file".
+        """
+        Decode the lockfile JSON envelope, returning ``None`` on bad files.
 
         Treating empty/null payloads as ``{}`` lets callers distinguish a
-        present-but-uninitialized lockfile from a corrupt one; ``strict=True``
-        re-raises so callers that just wrote the file can spot a write failure.
+        present-but-uninitialised lockfile from a corrupt one;
+        ``strict=True`` re-raises ``json.JSONDecodeError`` so callers that
+        just wrote the file can spot a write failure instead of silently
+        treating their own write as foreign.
         """
         if not text.strip():
             return {}
@@ -58,11 +65,13 @@ class WorkspaceLockManager:
         return dict(document)
 
     def read_metadata(self, strict: bool = False) -> dict[str, object] | None:
-        """Read the lockfile JSON without taking the flock; returns None for missing or unreadable files.
+        """
+        Read the lockfile JSON without taking the flock.
 
-        Used by status/observability paths that want to peek at "who owns the
-        lock" without blocking on the lock itself. ``strict=True`` is for
-        callers that have already validated the file should exist.
+        Returns ``None`` for missing or unreadable files. Used by
+        status/observability paths that want to peek at "who owns the
+        lock" without blocking on it; ``strict=True`` is for callers that
+        have already validated the file should exist.
         """
         if not self.path.exists():
             return None
@@ -75,7 +84,14 @@ class WorkspaceLockManager:
         return self._parse_metadata_text(text, strict=strict)
 
     def read_locked_metadata(self, handle: TextIO) -> dict[str, object]:
-        """Read metadata while the caller already holds the flock; never raises on bad JSON."""
+        """
+        Read metadata while the caller already holds the flock.
+
+        Never raises on bad JSON because the caller is the only writer
+        once the flock is held; if the payload is unreadable here that's
+        a write-bug to surface, but only after the caller's own write
+        completes — returning ``{}`` keeps the caller alive.
+        """
         handle.seek(0)
         payload = self._parse_metadata_text(handle.read(), strict=False)
         if payload is None:
@@ -83,11 +99,14 @@ class WorkspaceLockManager:
         return payload
 
     def write_locked_metadata(self, handle: TextIO, payload: Mapping[str, object]) -> None:
-        """Replace the lockfile contents with ``payload`` while the caller holds the flock.
+        """
+        Replace the lockfile contents with ``payload`` under the held flock.
 
-        Truncate-then-write is intentional: callers see a complete document or
-        an empty file, never a half-overwritten one. ``fsync_writes`` exists
-        for the daemon lock where survival across crashes matters.
+        Truncate-then-write is intentional: callers see a complete
+        document or an empty file, never a half-overwritten one.
+        ``fsync_writes`` exists for the daemon lock where survival
+        across crashes matters; the runner lock skips fsync to keep
+        heartbeat updates cheap.
         """
         handle.seek(0)
         handle.truncate()
@@ -98,7 +117,13 @@ class WorkspaceLockManager:
             os.fsync(handle.fileno())
 
     def clear_locked_metadata(self, handle: TextIO) -> None:
-        """Empty the lockfile while still holding the flock, used on clean release."""
+        """
+        Empty the lockfile while still holding the flock.
+
+        Used on clean release so the next probe sees a present-but-empty
+        file (signals "nobody home") rather than a stale identity payload
+        that would be treated as a still-live owner.
+        """
         handle.seek(0)
         handle.truncate()
         handle.flush()
@@ -106,16 +131,25 @@ class WorkspaceLockManager:
             os.fsync(handle.fileno())
 
     def open(self) -> TextIO:
-        """Open the lockfile in append+read mode, creating the parent directory if needed."""
+        """
+        Open the lockfile in append+read mode, creating the parent dir.
+
+        Append-mode is what makes a missing file safe (the create happens
+        through ``open(..., "a+")``); creating the parent directory means
+        first-use on a fresh workspace doesn't have to pre-provision the
+        directory before the lock is taken.
+        """
         self.path.parent.mkdir(parents=True, exist_ok=True)
         return self.path.open("a+", encoding="utf-8")
 
     def lock(self, handle: TextIO, nonblocking: bool) -> None:
-        """Take an exclusive flock on ``handle``; raises ``BlockingIOError`` in nonblocking mode if contended.
+        """
+        Take an exclusive flock on ``handle``.
 
-        Thin wrapper that ``acquire`` and ``is_active`` route through so the
-        flock-mode flag is normalized in one place and tests can swap the
-        behaviour by subclassing.
+        Raises ``BlockingIOError`` in nonblocking mode when contended.
+        Thin wrapper that ``acquire`` and ``is_active`` both route through
+        so the flock-mode flag is normalised in one place and tests can
+        swap the behaviour by subclassing.
         """
         if nonblocking:
             nonblocking_flag = fcntl.LOCK_NB
@@ -125,20 +159,23 @@ class WorkspaceLockManager:
         fcntl.flock(handle.fileno(), mode)
 
     def unlock(self, handle: TextIO) -> None:
-        """Release the flock on ``handle``; the symmetric pair to ``lock``.
+        """
+        Release the flock on ``handle``.
 
-        Kept as a method (instead of inlining ``fcntl.flock``) so subclasses
-        and tests can intercept release without monkey-patching ``fcntl``.
+        Kept as a method instead of inlining ``fcntl.flock`` so subclasses
+        and tests can intercept release without monkey-patching ``fcntl``;
+        the symmetric pair to ``lock``.
         """
         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
     def acquire(self, nonblocking: bool, cleanup_stale_inode: bool = False) -> TextIO:
-        """Open and flock the lockfile, optionally unlinking a stale inode first.
+        """
+        Open and flock the lockfile, optionally unlinking a stale inode first.
 
-        ``cleanup_stale_inode`` is for the runner-startup path: if a previous
-        runner died without releasing, we delete its lockfile inode before
-        flocking so the new owner gets a fresh file rather than reusing a
-        ghost handle.
+        ``cleanup_stale_inode`` is for the runner-startup path: when a
+        previous runner died without releasing, deleting the inode before
+        flocking gives the new owner a fresh file rather than reusing a
+        ghost handle the dead process may still hold.
         """
         if cleanup_stale_inode:
             self.remove_stale_lockfile()
@@ -151,11 +188,13 @@ class WorkspaceLockManager:
         return handle
 
     def release(self, handle: TextIO, clear_metadata: bool) -> None:
-        """Drop the flock and close the handle, optionally clearing metadata first.
+        """
+        Drop the flock and close the handle, optionally clearing metadata first.
 
         Layered try/finally guarantees the unlock happens even if metadata
         clearing raises — leaving a process alive while still holding the
-        lock would block every subsequent runner/daemon start.
+        lock would block every subsequent runner/daemon start until
+        manual intervention.
         """
         try:
             if clear_metadata:
@@ -167,11 +206,14 @@ class WorkspaceLockManager:
                 handle.close()
 
     def is_active(self) -> bool:
-        """Probe whether some process currently holds the flock without blocking.
+        """
+        Probe whether some process currently holds the flock, without blocking.
 
-        Used by status views and from-startup checks to decide if a previous
-        runner/daemon is still live. Try-and-release is the only portable way
-        to ask "is this lock held?" via fcntl.
+        Used by status views and from-startup checks to decide if a
+        previous runner/daemon is still live; try-and-release is the only
+        portable way to ask "is this lock held?" via fcntl, and the
+        in-process short-circuit keeps a self-probe from spuriously
+        blocking.
         """
         if self._is_held_in_process():
             return True
@@ -187,11 +229,13 @@ class WorkspaceLockManager:
             handle.close()
 
     def _pid_is_live(self, metadata: Mapping[str, object] | None) -> bool:
-        """Return True only if ``metadata`` names a PID that the OS still considers alive.
+        """
+        True only when ``metadata`` names a PID the OS still considers alive.
 
-        ``clear_metadata_if_unlocked`` uses this to decide whether a non-zero
-        metadata blob represents a live owner or leftover state that's safe to
-        scrub.
+        ``clear_metadata_if_unlocked`` uses this to decide whether a
+        non-empty metadata blob represents a live owner or leftover state
+        that's safe to scrub; getting this wrong would either steal a live
+        owner's lock or leave a dead one's metadata in place forever.
         """
         if not metadata:
             return False
@@ -199,12 +243,13 @@ class WorkspaceLockManager:
         return isinstance(pid, int) and self.pid_is_alive(pid)
 
     def pid_is_stale(self) -> bool:
-        """Return True only when the lockfile names a PID that no longer exists.
+        """
+        True only when the lockfile names a PID that no longer exists.
 
         Keeping "missing metadata" and "missing pid" as not-stale is
-        deliberate: callers (recovery, runner startup) should only react to a
-        confirmed dead PID, not to absent files that they themselves may be
-        about to populate.
+        deliberate: callers (recovery, runner startup) should only react
+        to a confirmed dead PID, not to absent files they themselves may
+        be about to populate.
         """
         metadata = self.read_metadata()
         if not metadata:
@@ -219,12 +264,13 @@ class WorkspaceLockManager:
         expected_pid: int | None = None,
         require_stale_pid: bool = False,
     ) -> bool:
-        """Truncate stale lockfile metadata only when no live process holds the flock.
+        """
+        Truncate stale lockfile metadata only when no live process holds the flock.
 
         Used by the recovery flow to scrub leftover runner/daemon entries
-        from a crashed previous run without ever racing a currently-live
-        owner. The optional gates protect against clearing somebody else's
-        valid lock.
+        from a crashed previous run without racing a currently-live owner;
+        ``expected_pid`` and ``require_stale_pid`` are extra gates so a
+        recovery pass cannot clear somebody else's still-valid lock.
         """
         if self._is_held_in_process() or not self.path.exists():
             return False
@@ -248,11 +294,13 @@ class WorkspaceLockManager:
             handle.close()
 
     def remove_stale_lockfile(self) -> bool:
-        """Unlink the lockfile inode when its recorded PID is dead, used before runner startup.
+        """
+        Unlink the lockfile inode when its recorded PID is dead.
 
-        Unlinking (rather than just truncating) is what gives a fresh runner
-        a brand-new inode, so leftover open handles from the previous owner
-        can't accidentally affect the new lock.
+        Used before runner startup; unlinking rather than just truncating
+        is what gives a fresh runner a brand-new inode so leftover open
+        handles from the previous owner cannot accidentally affect the
+        new lock through the same inode.
         """
         metadata = self.read_metadata()
         if not metadata:

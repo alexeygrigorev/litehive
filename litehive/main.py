@@ -1,14 +1,15 @@
-"""Lightweight CLI entrypoint with a fast status path.
+"""
+Process entry point with a cold-start-aware dispatcher.
 
-This module is the process entry point and is the only place where
-inline imports inside functions are routinely allowed. The reason is
-cold-start latency: ``litehive`` is invoked frequently from the
-shell (``litehive status``, in particular, runs in tight feedback
-loops) and importing the full Click/Typer CLI and its transitive
-dependencies for every invocation adds tens of milliseconds. The
-``main()`` dispatcher therefore loads each sub-app only on the
-branch that needs it. Code-style rule R1 in ``docs/code-style.md``
-calls this out as the canonical exception.
+Operators run ``litehive status`` in tight loops (and shell prompt
+integrations call it for every prompt redraw), so paying tens of
+milliseconds to import the full Click/Typer tree on every invocation
+would hurt. ``main()`` therefore parses argv minimally and routes the
+hot paths (``status``, ``agent``, ``task``, ``pipeline``) to the
+smallest sub-app that can serve them, falling back to the full CLI
+only when needed. This module is the canonical exception to the
+"all imports at the top" rule (see ``docs/code-style.md`` Imports
+section); every inline import here carries a ``# inline:`` comment.
 """
 
 import os
@@ -26,11 +27,15 @@ _AGENT_ALLOWED_TASK_ROOT_COMMANDS: set[tuple[str, ...]] = {
 
 
 def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
-    """Return whether an agent role may invoke a non-`agent` command.
+    """
+    Whether an agent role may invoke a non-``agent`` command.
 
-    The public agent-facing CLI is intentionally tiny:
-    `litehive agent report` plus `litehive task add|update|close`.
-    Recovery keeps its small diagnostic allowlist; other commands stay blocked.
+    The agent-facing CLI is intentionally tiny — agents should not
+    have access to operator commands like ``status`` or ``list``.
+    PM-style roles (``planner``, ``reviewer``) get
+    ``task add|update|close`` so they can shape the task they're
+    running; recovery keeps a small read-only allowlist for
+    diagnostic commands; everything else is blocked.
     """
     if not argv:
         return False
@@ -46,7 +51,15 @@ def _agent_command_is_allowed(role: str, argv: list[str]) -> bool:
 
 
 def _agent_blocked_command_message() -> str:
-    """Single source of truth for the operator-only refusal text shared between ``main.py`` and the agent CLI; keeps the wording identical so logs and operators see one message regardless of which guard fires."""
+    """
+    Single source of truth for the operator-only refusal text.
+
+    Shared between this dispatcher and the agent CLI so the
+    wording stays identical regardless of which guard fires.
+    Without one helper, a ``main.py`` refusal and an
+    ``agent_cli`` refusal could diverge and confuse log readers
+    grepping for the message.
+    """
     return (
         "You are not authorized to perform this command. "
         "PM agents may shape only the active task via "
@@ -56,7 +69,15 @@ def _agent_blocked_command_message() -> str:
 
 
 def _workspace_override_from_argv(argv: list[str]) -> Path | None:
-    """Pre-parse ``--workspace`` from raw argv before Typer is loaded; needed by the fast status path which must resolve a workspace without paying the Click cold-start cost."""
+    """
+    Pre-parse ``--workspace`` from raw argv before Typer is loaded.
+
+    The fast status path must resolve the workspace without
+    paying Click's cold-start cost; loading Typer just to read
+    one global option would defeat the entire dispatcher
+    optimization. Returns ``None`` when no override is supplied
+    so the caller falls back to the workspace-discovery flow.
+    """
     for index, arg in enumerate(argv):
         if arg == "--workspace" and index + 1 < len(argv):
             return Path(argv[index + 1])
@@ -66,14 +87,25 @@ def _workspace_override_from_argv(argv: list[str]) -> Path | None:
 
 
 def _requests_help(argv: list[str]) -> bool:
-    """Detect ``--help``/``-h`` in raw argv so the dispatcher can route help requests through the full Typer app (which prints rich help) instead of the fast paths."""
+    """
+    Detect ``--help`` / ``-h`` in raw argv to route help through the full CLI.
+
+    The fast paths produce only their command-specific output;
+    rich help text comes from Typer. Routing help requests
+    through the full CLI keeps that text consistent regardless of
+    which command the operator asked help for.
+    """
     return any(arg in {"--help", "-h"} for arg in argv)
 
 
 def dispatch_status(argv: list[str]) -> int:
-    """Run the default ``litehive status`` without loading the full Click/Typer CLI.
+    """
+    Run the default ``litehive status`` without loading the full CLI.
 
-    Lives in ``main.py`` so the common path stays cheap on cold start.
+    Lives in ``main.py`` so the most-common operator command
+    stays cheap on cold start. Imports the status renderers
+    inline because they're heavy and not needed by the agent /
+    task / pipeline branches.
     """
     # inline: keep CLI cold start fast — these modules are heavy and only
     # needed when the user actually asks for status.
@@ -104,7 +136,17 @@ def dispatch_status(argv: list[str]) -> int:
 
 
 def main() -> int:
-    """Cold-start CLI dispatcher: route ``status``, ``agent``, ``task``, and ``pipeline`` to the smallest typer/click sub-app that handles them, falling back to the full CLI app only when needed; the goal is to keep ``litehive status`` (the hot path) sub-100ms by skipping the global Click tree."""
+    """
+    Cold-start CLI dispatcher.
+
+    Routes ``status``, ``agent``, ``task``, and ``pipeline`` to
+    the smallest Typer/Click sub-app that can handle them and
+    falls back to the full CLI only when needed. Keeps
+    ``litehive status`` (the hot path) sub-100ms by skipping the
+    global Click tree on the common case; agent-role invocations
+    additionally enforce the operator/agent command allowlist
+    before any sub-app loads.
+    """
     argv = sys.argv[1:]
 
     agent_role = os.environ.get("LITEHIVE_AGENT_ROLE")

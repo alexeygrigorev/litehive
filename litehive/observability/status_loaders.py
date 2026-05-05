@@ -1,4 +1,12 @@
-"""Read-only loaders for config/state/runner/monitoring used by the `litehive status` snapshot."""
+"""
+Read-only loaders for the ``litehive status`` snapshot.
+
+Each loader returns a typed value plus a list of
+:class:`StatusIssue` instances; callers concatenate the issues
+into the snapshot so the operator sees one diagnostic line per
+fault. The loaders never raise on the status read path: status
+output must remain useful when one or more inputs are corrupt.
+"""
 
 from dataclasses import asdict, fields
 from pathlib import Path
@@ -28,8 +36,16 @@ from litehive.workspace import Workspace
 
 
 def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssue]]:
-    """Merge global+workspace config like normal load, but downgrade YAML/validation errors into status issues
-    instead of raising so `status`/`health` can still render with whatever fields are valid."""
+    """
+    Merge the layered config the way the runtime loader does, but tolerantly.
+
+    Downgrades YAML and validation errors into status issues
+    instead of raising so ``status``/``health`` can still render
+    with whatever fields are valid; the alternative would be a
+    blank status output for one bad config key. Falls back to
+    the best-effort config builder when the merged dict cannot
+    construct a valid :class:`LitehiveConfig`.
+    """
     issues: list[StatusIssue] = []
     data = asdict(LitehiveConfig())
     for path, key in ((litehive_root() / "config.yaml", "global_config"), (config_path(root), "config")):
@@ -61,12 +77,27 @@ def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssu
 
 
 def _validate_status_config_data(data: Mapping[str, Any]) -> dict[str, Any]:
-    """Thin wrapper that lets ``status`` reuse the standard config validator while keeping a status-only seam tests can monkey-patch to inject malformed payloads without touching production validation."""
+    """
+    Reuse the standard config validator behind a status-only seam.
+
+    Tests monkey-patch this to inject malformed payloads
+    without touching production validation; that pattern keeps
+    the validator strict everywhere else while letting
+    diagnostic tests exercise the tolerant status path.
+    """
     return validate_config_data(data)
 
 
 def _best_effort_status_config(data: Mapping[str, Any]) -> LitehiveConfig:
-    """Build a status-only config without letting one bad field hide valid values."""
+    """
+    Build a status-only :class:`LitehiveConfig` from a partly-bad dict.
+
+    Drops fields one-by-one when validation rejects them so a
+    single bad value cannot hide all the valid ones. Final
+    fallback returns the defaults filtered to the matching
+    valid keys so a wholly-bad config still produces a usable
+    status render.
+    """
     valid_keys = {field.name for field in fields(LitehiveConfig)}
     defaults = asdict(LitehiveConfig())
     remaining = {key: value for key, value in data.items() if key in valid_keys}
@@ -82,8 +113,15 @@ def _best_effort_status_config(data: Mapping[str, Any]) -> LitehiveConfig:
 
 
 def _config_error_key(exc: Exception) -> str | None:
-    """Extract the offending field name from a config validation/TypeError so the best-effort loader can drop
-    just that field and retry instead of giving up the whole config."""
+    """
+    Extract the offending field name from a config validation error.
+
+    Lets :func:`_best_effort_status_config` drop just that field
+    and retry instead of giving up the whole config. Handles
+    pydantic ``ValidationError`` (from the ``loc`` tuple),
+    dataclass ``TypeError`` (parses the message), and the
+    "unexpected keyword argument" form for unknown keys.
+    """
     if isinstance(exc, ValidationError):
         if exc.errors():
             error = exc.errors()[0]
@@ -105,8 +143,15 @@ def _config_error_key(exc: Exception) -> str | None:
 
 
 def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue]]:
-    """Read workspace state read-only and convert SQLite/validation failures into a status issue rather than
-    propagating so `status`/`health` can still render the rest of the snapshot."""
+    """
+    Read workspace state without taking a writer lock.
+
+    Converts SQLite and validation failures into status issues
+    rather than propagating, so ``status``/``health`` can still
+    render the rest of the snapshot when the database is
+    corrupt. Probes the schema version first to detect a
+    badly-mangled file before attempting a full read.
+    """
     issues: list[StatusIssue] = []
     db_path = workspace_path(root, "data.db")
     if db_path.exists():
@@ -148,8 +193,15 @@ def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue
 def _load_engine_monitoring_for_status(
     root: Path,
 ) -> tuple[WorkspaceEngineMonitoring, list[StatusIssue]]:
-    """Load engine usage stats; on failure return an empty record plus a WARN so status output is not blocked
-    by a corrupt engine_monitoring table."""
+    """
+    Load engine usage statistics for the status snapshot.
+
+    On failure returns an empty record plus a ``WARN`` issue so
+    status output is not blocked by a corrupt
+    ``engine_monitoring`` table. The warning level is right
+    here: a missing usage table is degraded info, not a broken
+    workspace.
+    """
     try:
         return load_engine_monitoring(Workspace.from_path(root)), []
     except (OSError, sqlite3.DatabaseError, ValueError, ValidationError) as exc:
@@ -165,8 +217,15 @@ def _load_engine_monitoring_for_status(
 
 
 def _load_runner_status_for_status(root: Path) -> tuple[RunnerStatusState, StatusIssue | None]:
-    """Parse the runner lockfile and reconcile its recorded pid against the OS so the status snapshot reflects
-    RUNNING/STALE/empty, returning a status issue on bad JSON instead of raising."""
+    """
+    Parse the runner lockfile and reconcile its PID against the OS.
+
+    Returns a populated :class:`RunnerStatusState` with status
+    ``RUNNING``, ``STALE``, or empty, plus a status issue on
+    bad JSON. Reconciling here (instead of trusting the
+    lockfile blindly) means a runner crashed at SIGKILL still
+    surfaces as ``STALE`` rather than as a phantom live runner.
+    """
     path = workspace_path(root, "runtime", ".runner.lock")
     mapping, issue = _safe_json_mapping(
         path,

@@ -1,13 +1,20 @@
-"""Read-only diagnostics for `litehive status`.
+"""
+Read-only diagnostics entry point for ``litehive status``.
 
-This module is the entry point for status snapshot collection; the implementation is split across
-sibling modules and re-exported here so callers keep importing from a single path:
+Owns snapshot construction; the implementation is split across
+sibling modules and re-exported here so callers keep importing
+from a single path:
 
-- `status_types`     — `StatusIssue`, `StatusSnapshot`, severity literal, recovery-failure context, constants
-- `status_io`        — YAML/JSON readers and small parsing helpers used by loaders and probes
-- `status_loaders`   — config/state/runner/engine-monitoring loaders
-- `status_probes`    — every `_probe_*` and the `probe_registry_files` public probe
-- `status_rendering` — `status_has_problems` + `render_*` helpers
+- :mod:`.status_types` — :class:`StatusIssue`, :class:`StatusSnapshot`,
+  severity literal, recovery-failure context, constants.
+- :mod:`.status_io` — YAML/JSON readers and small parsing helpers
+  used by loaders and probes.
+- :mod:`.status_loaders` — config, state, runner, and
+  engine-monitoring loaders.
+- :mod:`.status_probes` — every ``_probe_*`` and the public
+  :func:`probe_registry_files`.
+- :mod:`.status_rendering` — :func:`status_has_problems` and the
+  ``render_*`` helpers.
 """
 
 from pathlib import Path
@@ -58,7 +65,16 @@ __all__ = [
 
 
 def collect_status_snapshot(root: Path) -> StatusSnapshot:
-    """Build the full diagnostic snapshot used by `litehive health` to surface every probe finding."""
+    """
+    Build the full diagnostic snapshot.
+
+    Used by ``litehive health`` and by the diagnostic mode of
+    ``litehive status`` to surface every probe finding (registry
+    files, daemon liveness, recent cycle health, heru link,
+    origin divergence, task index references, task status
+    damage). Distinct from :func:`collect_operational_status_snapshot`
+    because the full sweep is too heavy for routine status reads.
+    """
     root = root.resolve()
     registry_issues = probe_registry_files()
     config, config_issues = _load_config_for_status(root)
@@ -94,7 +110,16 @@ def collect_status_snapshot(root: Path) -> StatusSnapshot:
 
 
 def collect_operational_status_snapshot(root: Path) -> StatusSnapshot:
-    """Collect the small read-only status view used by default status output."""
+    """
+    Collect the small read-only status view used by default status output.
+
+    Runs a strict subset of probes — the ones cheap enough to
+    fire on every status read without contending with the
+    runner. The diagnostic-only probes (origin divergence, task
+    index, status damage) are intentionally omitted; an operator
+    who needs them runs ``litehive health`` or
+    ``litehive status --full``.
+    """
     root = root.resolve()
     config, config_issues = _load_config_for_status(root)
     state, state_issues = _load_state_for_status(root)

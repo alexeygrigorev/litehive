@@ -21,7 +21,15 @@ INSTRUCTIONS = """\
 
 
 class PlannerAgent(RoleAgent):
-    """Grooming stage: clarify scope and acceptance criteria."""
+    """
+    Grooming-stage agent.
+
+    Owns scope clarification, acceptance-criteria sharpening, and
+    plan decomposition — the upstream gate that prevents the SWE
+    stage from implementing under-specified work. Verdicts are
+    ``pass`` (task is groomed) or ``reject`` (task cannot be groomed
+    from available context).
+    """
 
     NODE_NAME = PipelineState.GROOMING
     ROLE = "planner"

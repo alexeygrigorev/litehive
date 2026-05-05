@@ -1,4 +1,12 @@
-"""Standalone pipeline CLI commands that do not depend on the full root app."""
+"""
+Standalone pipeline CLI commands.
+
+Imported directly by ``cli.app`` and exposed under ``litehive
+pipeline``. Kept independent of the root app's other groups so the
+pipeline diagnostics surface (rules, set-state, reset, journal) can
+be wired into smaller test harnesses without dragging in queue,
+worktree, and daemon command modules.
+"""
 
 from pathlib import Path
 from typing import Annotated
@@ -19,7 +27,15 @@ app = make_typer(invoke_without_command=True)
 
 @app.command("rules", help="List pipeline transition rules as readable rows")
 def pipeline_rules_command() -> int:
-    """Dump the in-process pipeline transition table so operators can audit which (stage, event) pairs the state machine accepts without reading source."""
+    """
+    Dump the in-process pipeline transition table.
+
+    Renders each registered ``(from_state, event) -> to_state`` rule
+    as one line so operators can audit which transitions the state
+    machine accepts without reading ``lifecycle/transitions.py``.
+    Frozen-set sources are joined with ``|`` and callable
+    destinations are bracketed by their function name.
+    """
     for rule in list_transitions():
         if isinstance(rule.from_state, frozenset):
             from_state = "|".join(str(stage) for stage in sorted(rule.from_state))
@@ -44,7 +60,16 @@ def pipeline_set_state_command(
     stage: Annotated[str, typer.Argument(help="Target stage")],
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
 ) -> None:
-    """Force a task's pipeline stage to an arbitrary value; an operator escape hatch when the state machine has parked a task in a stage automated transitions cannot exit."""
+    """
+    Force a task's pipeline stage to an arbitrary value.
+
+    Operator escape hatch for when the state machine has parked a
+    task in a stage that automated transitions cannot exit (e.g.
+    after a corrupted recovery trigger or a missing report). The
+    target value is normalized through
+    :func:`canonical_pipeline_state` so persisted history stays
+    enum-typed instead of carrying free-form strings.
+    """
     store = SqlitePersistence(Workspace.from_path(workspace))
     try:
         state = store.load(task_id)
@@ -63,7 +88,16 @@ def pipeline_reset_command(
     task_id: Annotated[str, typer.Argument(help="Task id")],
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
 ) -> None:
-    """Wipe all persisted pipeline state for one task so the next run starts fresh; used when accumulated retry counters, recovery triggers, or rejection history would otherwise short-circuit the runner."""
+    """
+    Wipe all persisted pipeline state for one task.
+
+    Used when accumulated retry counters, recovery triggers, or
+    rejection history would otherwise short-circuit the runner the
+    next time it picks up the task. Goes through ``reset_all`` so
+    every column managed by :class:`SqlitePersistence` is cleared
+    in a single transaction — no half-reset state on partial
+    failure.
+    """
     SqlitePersistence(Workspace.from_path(workspace)).reset_all(task_id)
     print(f"task: {task_id}")
     print("reset: ok")
@@ -75,7 +109,15 @@ def pipeline_journal_command(
     workspace: Annotated[Path, typer.Option("--workspace", help="Workspace root")] = Path.cwd(),
     limit: Annotated[int, typer.Option("--limit", "-n", help="Max transitions to show")] = 50,
 ) -> int:
-    """Render every persisted artifact for one task — current state, latest stage/recovery reports, recovery history, retry counters, and the lifecycle/transition log — so a debugger can reconstruct what happened without poking SQLite by hand."""
+    """
+    Render every persisted artifact for one task.
+
+    Dumps current state, the latest stage and recovery reports,
+    recovery history, retry counters, and the lifecycle/transition
+    log so a debugger can reconstruct what happened without poking
+    SQLite by hand. ``--limit`` only caps the transition log; the
+    other sections are short enough to print whole.
+    """
     workspace_obj = Workspace.from_path(workspace)
     journal = SqliteJournal(workspace_obj)
     store = SqlitePersistence(workspace_obj)

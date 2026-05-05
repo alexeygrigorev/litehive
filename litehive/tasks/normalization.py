@@ -5,7 +5,13 @@ from litehive.domain.task import TaskRecord
 
 
 def normalize_acceptance_criteria(items: list[str] | None) -> list[str]:
-    """Strip whitespace and drop blank entries from acceptance-criteria input; the canonical scrubber every loader/CLI parser funnels into so persisted criteria are never empty strings or padded duplicates."""
+    """
+    Strip whitespace and drop blank entries from acceptance-criteria input.
+
+    The canonical scrubber every loader and CLI parser funnels into, so
+    persisted criteria are never empty strings or padded duplicates that
+    would later confuse the grooming gate's "has criteria?" check.
+    """
     if not items:
         return []
 
@@ -19,12 +25,25 @@ def normalize_acceptance_criteria(items: list[str] | None) -> list[str]:
 
 
 def normalize_task_text_list(items: list[str] | None) -> list[str]:
-    """Public alias for the criteria scrubber, kept under a generic name so the `--constraints`/`--plan` CLI parsers can apply the same rule without depending on the criteria-specific symbol; the indirection is the contract, not the body."""
+    """
+    Generic alias for the criteria scrubber.
+
+    Kept under a generic name so ``--constraints`` and ``--plan`` parsers can
+    apply the same rule without importing a criteria-specific symbol; the
+    name (not the body) is the contract that lets the alias evolve later.
+    """
     return normalize_acceptance_criteria(items)
 
 
 def missing_acceptance_criteria_reason(task: TaskRecord) -> str | None:
-    """Return a human-readable explanation when this task should have structured acceptance criteria but does not; the canonical "why is this task stuck in grooming?" message reused by both queue commands and pipeline rerouting."""
+    """
+    Return a human-readable explanation when criteria are required but absent.
+
+    The canonical "why is this task stuck in grooming?" message reused by
+    queue commands and the pipeline reroute that bounces an under-specified
+    task back to grooming, so the same wording reaches every operator
+    surface.
+    """
     if task.acceptance_criteria:
         return None
     signals = _acceptance_criteria_requirement_signals(task)
@@ -37,7 +56,13 @@ def missing_acceptance_criteria_reason(task: TaskRecord) -> str | None:
 
 
 def missing_acceptance_criteria_cli_warning(task: TaskRecord) -> str | None:
-    """Wrap the missing-criteria reason with the operator-actionable hint about `--acceptance-criteria`; used by `task add`/`task update` to nudge the user to fix the task in-place rather than discovering it stuck in grooming later."""
+    """
+    Wrap the missing-criteria reason with the actionable ``--acceptance-criteria`` hint.
+
+    Used by ``task add`` and ``task update`` so the operator is nudged to fix
+    the task in place rather than discovering it stuck in grooming several
+    pipeline ticks later.
+    """
     reason = missing_acceptance_criteria_reason(task)
     if reason is None:
         return None
@@ -48,7 +73,14 @@ def missing_acceptance_criteria_cli_warning(task: TaskRecord) -> str | None:
 
 
 def implementation_entry_stage(task: TaskRecord) -> str:
-    """Decide which stage a freshly (re-)queued task should re-enter at — implementing for single-mode and groomed full-mode tasks, grooming for full-mode tasks still missing criteria; used by queue/recovery flows so requeue does not bypass the grooming gate."""
+    """
+    Decide which stage a freshly (re-)queued task should re-enter at.
+
+    Implementing for single-mode and groomed full-mode tasks; grooming for
+    full-mode tasks still missing criteria. Used by queue and recovery flows
+    so requeue cannot bypass the grooming gate by sending an under-specified
+    task straight back to implementation.
+    """
     if getattr(task, "pipeline_mode", "full") == "single":
         return TaskStage.IMPLEMENTING.value
     if missing_acceptance_criteria_reason(task) is not None:
@@ -57,13 +89,13 @@ def implementation_entry_stage(task: TaskRecord) -> str:
 
 
 def needs_normalization(task: TaskRecord) -> str | None:
-    """Return a reason if the task is underspecified and needs planner normalization before retry.
+    """
+    Return a reason if the task needs planner normalization before retry.
 
-    Tasks already at backlog or grooming will naturally go through planner,
-    so normalization only applies to tasks past grooming that lack meaningful
-    acceptance criteria.
-
-    Single-mode tasks skip normalization entirely since they have no grooming stage.
+    Tasks already at backlog or grooming will go through planner naturally,
+    so normalization only applies to tasks past grooming that lack acceptance
+    criteria. Single-mode tasks skip normalization entirely because they
+    have no grooming stage to bounce back to.
     """
     if getattr(task, "pipeline_mode", "full") == "single":
         return None
@@ -88,7 +120,14 @@ _ACCEPTANCE_REROUTE_STATUSES = frozenset(
 
 
 def reroute_stage_for_acceptance_criteria(task: TaskRecord) -> str:
-    """Send a task back to grooming when it has reached implementation/testing/accepting/commit stages without acceptance criteria so resume/repair flows do not let an underspecified task slip past the grooming gate; called by `tasks/status.py` on resume and on rejection."""
+    """
+    Reroute a stage-reached task back to grooming when criteria are missing.
+
+    Called from the resume and update transitions so an under-specified task
+    that somehow reached implementation/testing/accepting/commit cannot slip
+    past the grooming gate; returns the original stage when criteria are
+    present so the call site is safe to invoke unconditionally.
+    """
     if getattr(task, "pipeline_mode", "full") == "single":
         return task.pipeline_status
     if task.pipeline_status in _ACCEPTANCE_REROUTE_STATUSES:
@@ -99,7 +138,14 @@ def reroute_stage_for_acceptance_criteria(task: TaskRecord) -> str:
 
 
 def _acceptance_criteria_requirement_signals(task: TaskRecord) -> list[str]:
-    """Collect the human-readable signals that mark a task as requiring structured criteria; shared by the boolean predicate and the explanatory-reason helpers so the rule is defined once."""
+    """
+    Collect the human-readable signals that say "this task needs criteria".
+
+    Shared by ``missing_acceptance_criteria_reason`` and the CLI warning so
+    the rule (dependencies, explicit goal, high priority, multi-step plan)
+    lives in one place — adding a new signal only requires editing this
+    helper.
+    """
     signals: list[str] = []
     if task.depends_on:
         signals.append("dependencies")

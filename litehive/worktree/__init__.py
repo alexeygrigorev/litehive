@@ -1,16 +1,20 @@
-"""Free functions and re-exports for the worktree subsystem.
+"""
+Worktree subsystem: per-task git worktrees, sync, cleanup, rescue.
 
-The implementation is split across sibling modules:
+The implementation is split across sibling modules so callers can
+import only what they need without pulling in the whole graph:
 
-* ``litehive.worktree.paths`` — pure path/branch arithmetic.
-* ``litehive.worktree.inspection`` — read-only dirty-state and ownership reports.
-* ``litehive.worktree.cleanup`` — listing and cleanup of managed worktrees.
-* ``litehive.worktree.rescue`` — operator-driven cherry-pick onto main.
-* ``litehive.worktree.service`` — ``WorktreeService`` create/reuse/sync flow.
+- ``litehive.worktree.paths`` — pure path/branch arithmetic.
+- ``litehive.worktree.inspection`` — read-only dirty-state and ownership reports.
+- ``litehive.worktree.cleanup`` — listing and cleanup of managed worktrees.
+- ``litehive.worktree.rescue`` — operator-driven cherry-pick onto main.
+- ``litehive.worktree.service`` — ``WorktreeService`` create/reuse/sync flow
+  used by lifecycle pre-exec.
 
-This module hosts ``resolve_task_execution_root`` (which constructs the
-execution root for a task) and continues to re-export common names so
-existing call sites keep working.
+This init owns ``resolve_task_execution_root``, the small bootstrap
+that turns a workspace + task into a usable execution path (creating
+the worktree on first use, rebasing it on subsequent reuse) and
+re-exports the names used elsewhere in the codebase.
 """
 
 import logging
@@ -76,11 +80,15 @@ def resolve_task_execution_root(
     task: TaskRecord,
     config: LitehiveConfig | None = None,
 ) -> Path:
-    """Resolve or create the execution root for a task.
+    """
+    Pick the directory the task's subagent should run in.
 
-    Returns ``root`` when the workspace is not a git repository. Otherwise
-    reuses or creates the task's worktree, rebasing it onto current main and
-    launching the merge agent if the rebase fails.
+    Used by the runner before spawning a subagent: in a non-git
+    workspace this is just ``root``; in a git workspace it's the
+    task's dedicated worktree (created on first call, reused on
+    subsequent ones, rebased onto current ``main`` to keep the agent
+    on top of fresh code). A failed rebase lands in the merge-resolver
+    agent rather than aborting the task.
     """
     if not is_git_repo(root):
         return root

@@ -1,4 +1,13 @@
-"""Detect broken `.venv/bin` entrypoints after `uv cache clean`."""
+"""
+Detect broken ``.venv/bin`` entrypoints.
+
+``uv cache clean`` removes the cache targets that
+``.venv/bin/<tool>`` symlinks point at, leaving the venv with
+entrypoints that fail to exec. This module probes each
+workspace and per-task-worktree venv before the daemon starts
+work so the failure surfaces as a clear diagnostic instead of
+crashing a subagent at launch.
+"""
 
 from dataclasses import dataclass
 import errno
@@ -28,12 +37,26 @@ class BrokenVenvExecutable:
 
     @property
     def binary_name(self) -> str:
-        """Bare filename of the broken executable for the operator-facing diagnostic line; reading the full path is noisy when only the binary name identifies the problem."""
+        """
+        Bare filename of the broken executable.
+
+        Used in the operator-facing diagnostic line; printing
+        the full path is noisy when only the binary name
+        identifies the problem the operator needs to fix.
+        """
         return self.binary_path.name
 
 
 def discover_workspace_venvs(root: Path) -> list[VenvCheckout]:
-    """Locate every ``.venv`` the workspace might dispatch into — the main checkout plus every per-task worktree — so the health probe walks all of them in one pass instead of leaving worktree venvs to fail at runtime."""
+    """
+    Locate every ``.venv`` the workspace might dispatch into.
+
+    Includes the main checkout's ``.venv`` plus the ``.venv``
+    of every per-task worktree, so the health probe walks all
+    of them in one pass. Worktree venvs are easy to forget;
+    skipping them would let a broken worktree venv kill an
+    agent run after status looked clean.
+    """
     root = root.resolve()
     checkouts: dict[Path, VenvCheckout] = {}
     main_venv = root / ".venv"
@@ -55,7 +78,15 @@ def discover_workspace_venvs(root: Path) -> list[VenvCheckout]:
 
 
 def probe_broken_venv_executables(root: Path) -> list[BrokenVenvExecutable]:
-    """Run a minimal ``--version`` against every executable in each venv's bin dir to surface the "uv cache clean nuked the symlink target" failure mode before it crashes a subagent launch; daemon startup gates on a clean result."""
+    """
+    Probe every venv entrypoint with a minimal ``--version`` exec.
+
+    Surfaces the "uv cache clean nuked the symlink target"
+    failure mode before it crashes a subagent launch. Daemon
+    startup gates on an empty result so a workspace with
+    broken entrypoints cannot quietly start a worker pool that
+    will fail on the first sub-process spawn.
+    """
     findings: list[BrokenVenvExecutable] = []
     for checkout in discover_workspace_venvs(root):
         bin_dir = _venv_bin_dir(checkout.venv_path)
@@ -76,7 +107,15 @@ def probe_broken_venv_executables(root: Path) -> list[BrokenVenvExecutable]:
 
 
 def broken_venv_issue_message(workspace_root: Path, finding: BrokenVenvExecutable) -> str:
-    """Format an operator-facing fix recipe for one broken venv entrypoint; embeds the concrete ``uv venv --clear`` command for the affected checkout so the operator can copy-paste rather than reconstruct paths."""
+    """
+    Format an operator-facing fix recipe for one broken venv entrypoint.
+
+    Embeds the concrete ``uv venv --clear`` command for the
+    affected checkout so the operator can copy-paste it rather
+    than reconstruct paths from a generic instruction. The
+    workspace root is accepted for signature symmetry with
+    upstream callers but not used in the message body.
+    """
     del workspace_root
     checkout_root = finding.checkout.checkout_root
     venv_path = finding.checkout.venv_path
@@ -89,7 +128,15 @@ def broken_venv_issue_message(workspace_root: Path, finding: BrokenVenvExecutabl
 
 
 def daemon_broken_venv_message(workspace_root: Path, findings: list[BrokenVenvExecutable]) -> str:
-    """Aggregate per-finding fix recipes into the single error string the daemon prints when it refuses to start a worker pool over broken venvs."""
+    """
+    Aggregate per-finding fix recipes into one daemon-startup error string.
+
+    The daemon refuses to start a worker pool over broken
+    venvs because every subagent launch would crash; this
+    helper assembles the message it prints in that case so the
+    operator sees every broken venv plus a fix for each in
+    one block.
+    """
     lines = [
         "broken virtualenv entrypoints blocked pool start:",
         *[f"- {broken_venv_issue_message(workspace_root, finding)}" for finding in findings],
@@ -98,7 +145,14 @@ def daemon_broken_venv_message(workspace_root: Path, findings: list[BrokenVenvEx
 
 
 def _venv_bin_dir(venv_path: Path) -> Path:
-    """Return the platform-specific scripts directory inside a venv (``Scripts`` on Windows, ``bin`` elsewhere); centralized so probe and discovery agree on a single layout assumption."""
+    """
+    Return the platform-specific scripts directory inside a venv.
+
+    ``Scripts`` on Windows, ``bin`` elsewhere. Centralized so
+    probe and discovery agree on a single layout assumption;
+    inlining the platform check at every call site would make
+    a future layout change risky.
+    """
     if os.name == "nt":
         bin_name = "Scripts"
     else:
@@ -107,7 +161,15 @@ def _venv_bin_dir(venv_path: Path) -> Path:
 
 
 def _iter_probe_candidates(bin_dir: Path) -> list[Path]:
-    """List entries in a venv bin dir that are worth probing — executable regular files plus symlinks (which are the ones ``uv cache clean`` typically breaks); skips directories and unstattable entries."""
+    """
+    List the entries in a venv bin dir worth probing.
+
+    Yields executable regular files and symlinks (which are
+    the ones ``uv cache clean`` typically breaks). Skips
+    directories and unstattable entries so a transient
+    filesystem error on one entry cannot break the whole
+    probe.
+    """
     candidates: list[Path] = []
     for entry in sorted(bin_dir.iterdir()):
         try:
@@ -122,7 +184,16 @@ def _iter_probe_candidates(bin_dir: Path) -> list[Path]:
 
 
 def _probe_executable(binary_path: Path) -> str | None:
-    """Try to ``exec`` an entrypoint just long enough to confirm its symlink target still exists; returns an error detail string on the specific ENOENT/ENOTDIR failure mode the broken-venv check cares about, ``None`` for everything else (including timeouts) so unrelated runtime errors don't get reported as broken venvs."""
+    """
+    Confirm a venv entrypoint can exec by running ``--version``.
+
+    Returns an error detail string on ENOENT/ENOTDIR (the
+    specific failure mode that signals a broken symlink
+    target after ``uv cache clean``). Returns ``None`` for
+    everything else, including timeouts and other runtime
+    errors, so we never falsely accuse a working entrypoint of
+    being broken.
+    """
     try:
         process = subprocess.Popen(
             [str(binary_path), "--version"],

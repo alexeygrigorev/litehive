@@ -1,4 +1,20 @@
-"""Shared enums and helpers for litehive models."""
+"""
+Domain vocabulary and timestamp/feedback helpers.
+
+The enums here (``PipelineState``, ``TaskStage``, ``PipelineStatus``,
+``PipelineMode``, ``TaskStatus``, ``OutcomeKind``, ``OutcomeReasonCode``,
+``Verdict``, ``RunnerStatus``, ``TriggerEventKind`` partner) are the
+typed alternative to passing raw strings around — code-style rule
+"Domain Values" forbids string-comparing pipeline state and friends
+because renames would rot silently. Convert at the boundary using
+``canonical_pipeline_state``, ``task_stage_for_pipeline_state``, and
+``pipeline_status_for_pipeline_state``.
+
+``utcnow`` is the project-wide source of "now" so persisted timestamps
+stay text-comparable; ``cap_feedback`` truncates long agent feedback
+to fit prompt context windows without losing the pointer to the full
+trace.
+"""
 
 from datetime import UTC, datetime
 from enum import Enum
@@ -17,20 +33,49 @@ TRUNCATION_MARKER = "\n\n… [truncated — full execution trace in subagent art
 
 
 class StringEnum(str, Enum):
-    """Base class for string-valued enums used across persisted models."""
+    """
+    Base class for string-valued enums used across persisted models.
+
+    Inheriting from ``str`` means an enum member compares equal to its
+    underlying string, so SQLite rows and JSON payloads round-trip
+    cleanly without per-field conversion. The custom ``__str__`` keeps
+    f-strings and ``json.dumps`` matching the persisted spelling instead
+    of leaking ``ClassName.MEMBER`` text into stored data.
+    """
 
     def __str__(self) -> str:
-        """Render the enum as its string ``value`` so f-strings and JSON serialization match the persisted spelling instead of the ``Class.NAME`` repr."""
+        """
+        Render the enum as its underlying string value.
+
+        Without this override Python's default would produce
+        ``ClassName.MEMBER``, which is not what the database, JSON
+        artifacts, or operator-facing logs expect to see.
+        """
         return self.value
 
 
 def utcnow() -> str:
-    """Workspace-wide source of "now" as a microsecond-trimmed UTC ISO string; used for every persisted timestamp so SQLite ordering and diffs stay text-comparable."""
+    """
+    Project-wide source of "now" as a UTC ISO string.
+
+    Microseconds are trimmed so SQLite text ordering and ``--diff`` output
+    of two snapshots stay stable; every persisted timestamp in the
+    workspace goes through this helper so two records written in the
+    same second compare exactly equal instead of differing by jitter.
+    """
     return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 def cap_feedback(text: str, limit: int = FEEDBACK_CAP) -> str:
-    """Truncate long subagent feedback to ``FEEDBACK_CAP`` chars with a stable marker so prompts stay under engine context limits while still pointing the reader to the full transcript."""
+    """
+    Truncate long subagent feedback for inclusion in a prompt.
+
+    Replacing the tail with ``TRUNCATION_MARKER`` keeps prompts under
+    engine context limits while pointing readers (and downstream agents)
+    at the full execution-trace artifact. Used by every prompt that
+    quotes prior agent output back to the next agent — a missing cap
+    would let one chatty agent crash the next one's context budget.
+    """
     if len(text) <= limit:
         return text
     return text[: limit - len(TRUNCATION_MARKER)] + TRUNCATION_MARKER
@@ -40,11 +85,14 @@ def cap_feedback(text: str, limit: int = FEEDBACK_CAP) -> str:
 
 
 class OutcomeKind(StringEnum):
-    """Terminal outcome categories for tasks.
+    """
+    Terminal outcome categories for a finished task.
 
-    Used by TaskService and CLI close actions to classify why a task ended.
-    Maps to task close reasons and interruption types for reporting and
-    operator workflow management.
+    Tells the operator (and downstream filters/reports) why a task is no
+    longer running: completion vs. operator close vs. blocked vs.
+    cancelled vs. duplicate. Set by ``TaskService`` and the CLI close
+    actions; consumed by reporting, queue filtering, and the recovery
+    decision of "is there anything to do for this task?".
     """
 
     DONE = "done"  # Task was already or successfully completed
@@ -59,15 +107,15 @@ class OutcomeKind(StringEnum):
 
 
 class OutcomeReasonCode(StringEnum):
-    """Normalized reason codes for stage outcomes and task interruptions.
+    """
+    Normalized reason codes for stage outcomes and task interruptions.
 
-    Captures the specific machine-readable reason behind a stage verdict or
-    task interruption. Differs from Verdict by providing more specific context:
-    - Verdict answers "was this accepted?" (PASS/REJECT/BLOCKED)
-    - OutcomeReasonCode answers "what specifically caused that outcome?"
-
-    Used by PipelineRunner for routing decisions, recovery logic, and
-    reporting for machine-readable summaries and filtering.
+    ``Verdict`` answers "was this accepted?" (pass/reject/blocked);
+    ``OutcomeReasonCode`` answers "what specifically caused that
+    outcome?" so two rejections with different root causes can be
+    distinguished for routing and reporting. Read by ``PipelineRunner``
+    when deciding whether to retry, recover, or fail; surfaced to
+    operators in failure summaries and machine-filterable reports.
     """
 
     VERDICT_FAIL = "verdict_fail"
@@ -90,10 +138,14 @@ class OutcomeReasonCode(StringEnum):
 
 
 class PipelineMode(StringEnum):
-    """Top-level execution mode for a task.
+    """
+    Top-level execution mode for a task: full pipeline vs. single stage.
 
-    Set by task creation or operator task-edit commands. Used by PipelineRunner
-    when deciding which states are eligible for the task.
+    ``FULL`` runs grooming through commit; ``SINGLE`` skips planning and
+    starts in implementation, which is what operators want for
+    follow-ups that already have a precise spec. Set at task creation or
+    via operator task-edit; ``PipelineRunner`` reads this when deciding
+    which pipeline states are eligible for the task.
     """
 
     SINGLE = "single"  # Skip early planning states, start directly in implementation
@@ -101,12 +153,15 @@ class PipelineMode(StringEnum):
 
 
 class PipelineState(StringEnum):
-    """Canonical internal state-machine positions.
+    """
+    Canonical internal state-machine positions.
 
     These are the real nodes the pipeline runner persists, evaluates in
-    transition rules, and passes into prompts. They are intentionally separate
-    from ``PipelineStatus`` and ``TaskStage``, which are operator-facing
-    projections that collapse hook/system nodes into broader task phases.
+    transition rules, and passes into prompt templates. Kept distinct
+    from ``PipelineStatus`` and ``TaskStage`` (the operator-facing
+    projections) so we can rename or split internal nodes — e.g. carve
+    a new ``BEFORE_*`` hook node — without churning what the operator
+    sees on ``litehive status``.
     """
 
     READY = "ready"
@@ -139,11 +194,14 @@ class PipelineState(StringEnum):
 
 
 class TaskStage(StringEnum):
-    """Main execution stages in the task lifecycle.
+    """
+    Operator-facing work phases in the task lifecycle.
 
-    Represents the high-level work phases that a task progresses through.
-    Used for coarse-grained tracking and reporting; detailed runner phases
-    are represented by node names in litehive.lifecycle.types.
+    The five stages collapse the dozens of internal ``PipelineState``
+    nodes (hooks, before/after pairs, recovery sub-states) into the
+    buckets an operator actually thinks in: groom, build, test, accept,
+    commit. Used by status output, stage reports, and the
+    role-by-stage owner mapping (planner/swe/qa/reviewer/runner) below.
     """
 
     GROOMING = "grooming"  # Initial planning and requirement analysis
@@ -154,12 +212,15 @@ class TaskStage(StringEnum):
 
     @property
     def owner_role(self) -> str:
-        """Subagent role that owns this stage (planner/swe/qa/reviewer/runner).
+        """
+        Subagent role that owns this stage (planner/swe/qa/reviewer/runner).
 
-        The mapping is fixed: it expresses *who* runs this stage,
-        not *what* they do. Lives on the enum so prompt and prompt
-        scaffolding code don't carry their own copy of the same
-        lookup table.
+        The mapping is fixed: it expresses *who* runs this stage, not
+        *what* they do. Lives on the enum so prompt builders and
+        scaffolding code can look up ownership directly instead of
+        carrying their own copy of the same lookup table — that
+        duplication is the kind of domain prose ``code-style.md``
+        forbids in prompt modules.
         """
         return _STAGE_OWNER_ROLES[self]
 
@@ -168,7 +229,15 @@ _STAGE_OWNER_ROLES: dict["TaskStage", str] = {}
 
 
 def _populate_stage_owners() -> None:
-    """Fill the stage→owner role lookup after ``TaskStage`` is fully defined; kept as a function rather than a literal so the table can reference enum members directly without forward-reference ceremony."""
+    """
+    Fill the stage→owner-role lookup after ``TaskStage`` is fully defined.
+
+    Wrapped as a function rather than a class-body literal so the table
+    can reference enum members directly without forward-reference
+    ceremony; called once at module import. The mapping powers
+    ``TaskStage.owner_role`` and is the single source of truth for
+    "which subagent owns which stage" across prompts and reporting.
+    """
     # Populated after the enum is defined to avoid forward-reference
     # ceremony with the enum members.
     _STAGE_OWNER_ROLES.update(
@@ -186,14 +255,17 @@ _populate_stage_owners()
 
 
 class TaskStatus(StringEnum):
-    """High-level execution or terminal category for a task.
+    """
+    High-level execution or terminal category for a task.
 
-    Set by TaskService, PipelineRunner, and operator-facing CLI commands.
-    Used by queueing, filtering, reporting, and operator decisions about
-    what happens next.
+    Drives queueing (``QUEUED`` is eligible to run), filtering
+    (``FLAGGED`` requires operator attention), and end-of-life routing
+    (``DONE``/``CLOSED`` are terminal). Set by ``TaskService``,
+    ``PipelineRunner``, and operator CLI commands.
 
-    Note: There is no separate 'cancelled' status because 'close_reason'
-    explains why a task was closed, avoiding status/reason duplication.
+    Note: there is no separate ``cancelled`` status because
+    ``close_reason`` already explains why a task was closed; carrying
+    both would force every consumer to treat them as equivalent.
     """
 
     QUEUED = "queued"  # Waiting in the queue
@@ -206,12 +278,16 @@ class TaskStatus(StringEnum):
 
 
 class PipelineStatus(StringEnum):
-    """Operator-facing projection of internal pipeline progress.
+    """
+    Operator-facing projection of pipeline progress.
 
-    This is not the pipeline state machine. It collapses detailed
-    ``PipelineState`` nodes, including hook and system nodes, into the coarse
-    progress buckets shown in CLI/operator views and persisted on task runtime
-    records for filtering and display.
+    Not the state machine itself: this collapses detailed
+    ``PipelineState`` nodes (including before/after hooks, recovery
+    sub-states, and merge resolution) into the coarse buckets shown in
+    CLI status and persisted on task runtime for filtering. Renaming an
+    internal pipeline state should not require updating this enum,
+    which is why the projection table is explicit
+    (``pipeline_status_for_pipeline_state``) rather than name-derived.
     """
 
     BACKLOG = "backlog"  # Not yet started
@@ -225,7 +301,16 @@ class PipelineStatus(StringEnum):
 
 
 def canonical_pipeline_state(value: str | PipelineState) -> PipelineState:
-    """Normalize a persisted or caller-supplied value to ``PipelineState``."""
+    """
+    Normalize a persisted or caller-supplied value to ``PipelineState``.
+
+    Boundary helper used by every load-side path that pulls a state
+    string out of SQLite, JSON, or a CLI argument: convert to the typed
+    enum once at entry so the rest of the code can compare members
+    directly without sprinkling ``str(...)`` casts. Raises ``ValueError``
+    on unknown spellings, matching the "fail loud on invalid current
+    config" rule rather than silently substituting a default.
+    """
     if isinstance(value, PipelineState):
         return value
     return PipelineState(str(value))
@@ -277,18 +362,28 @@ _PIPELINE_STATUS_BY_PIPELINE_STATE: dict[PipelineState, PipelineStatus] = {
 
 
 def task_stage_for_pipeline_state(value: str | PipelineState) -> TaskStage | None:
-    """Return the user-facing work stage for an internal pipeline state."""
+    """
+    Return the operator-facing ``TaskStage`` for an internal pipeline state.
+
+    Used by reporting and prompt scaffolding to bucket per-state activity
+    into the stage operators recognize (groom/build/test/accept/commit).
+    Returns ``None`` for system-only nodes (``READY``, ``DONE``, ``FAILED``,
+    ``WORKTREE_SYNC``…) that don't belong to any user-visible stage, so
+    callers can distinguish "between stages" from "in stage X".
+    """
     return _TASK_STAGE_BY_PIPELINE_STATE.get(canonical_pipeline_state(value))
 
 
 def pipeline_stage_key(name: str | None) -> TaskStage | str | None:
-    """Collapse any pipeline-state name to its coarse TaskStage key.
+    """
+    Collapse any pipeline-state name to its coarse ``TaskStage`` key.
 
     Used by recovery, prompt serialization, and lifecycle deltas to
     bucket per-state activity into the operator-facing stage it belongs
-    to. Returns the original ``name`` (or ``None``) when the input
-    isn't a known pipeline state, so callers can keep funneling
-    arbitrary keys through a single helper without a separate guard.
+    to. Returns the original ``name`` (or ``None``) when the input is
+    not a known pipeline state, so callers can keep funneling arbitrary
+    keys (e.g. raw recovery labels like ``recovering``) through a
+    single helper without a separate guard branch at every call site.
     """
     if name is None:
         return None
@@ -300,15 +395,27 @@ def pipeline_stage_key(name: str | None) -> TaskStage | str | None:
 
 
 def pipeline_status_for_pipeline_state(value: str | PipelineState) -> PipelineStatus:
-    """Return the operator-facing ``PipelineStatus`` projection for a machine state."""
+    """
+    Project an internal ``PipelineState`` to the operator-facing ``PipelineStatus``.
+
+    Called whenever a state-machine transition needs to update the
+    runtime's coarse progress bucket — e.g. moving into ``BEFORE_TESTING``
+    should still display as ``TESTING`` to the operator. Raises
+    ``KeyError`` on an unmapped state so a missing entry is caught at
+    the boundary instead of silently rendering as ``BACKLOG``.
+    """
     return _PIPELINE_STATUS_BY_PIPELINE_STATE[canonical_pipeline_state(value)]
 
 
 class RunnerStatus(StringEnum):
-    """Status for monitoring the top-level runner process.
+    """
+    Health states for the top-level runner process.
 
-    Used by monitoring and operator interfaces to track the health and
-    activity state of the task execution runner.
+    Surfaced by ``litehive status`` and the daemon's pre-spawn check so
+    an operator can tell a fresh idle runner from a wedged one. ``LATE``
+    means the heartbeat is overdue but still inside the grace window;
+    ``STALE`` means we have given up on the runner and the daemon is
+    free to reclaim the workspace.
     """
 
     IDLE = "idle"  # Runner is active but not executing a task
@@ -318,14 +425,17 @@ class RunnerStatus(StringEnum):
 
 
 class Verdict(StringEnum):
-    """Decision submitted for an executable pipeline state.
+    """
+    Decision submitted for an executable pipeline state.
 
-    Created by subagents and hook execution paths when they submit the result
-    of a pipeline state. Used by PipelineRunner to decide whether to advance,
-    retry, block, or enter recovery. Also used by ActivityEntry and
-    TaskOutcome as the canonical submitted decision value. ``StageReport`` maps
-    submitted decisions into its narrower canonical ``pass/reject/blocked``
-    verdict set.
+    Created by subagents and hook execution paths when they submit the
+    result of a pipeline state, then read by ``PipelineRunner`` to
+    decide whether to advance, retry, block, or enter recovery. Also
+    persisted on ``ActivityEntry`` / ``TaskOutcome`` as the canonical
+    submitted decision. ``StageReport`` collapses this richer set into
+    its narrower ``pass/reject/blocked`` form via
+    ``canonical_stage_report_verdict`` so report storage stays small
+    while activity history keeps the full vocabulary.
     """
 
     PASS = "pass"  # General positive outcome

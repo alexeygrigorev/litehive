@@ -1,4 +1,10 @@
-"""Per-task repair for tasks the workspace still believes are ``running`` after a runner died — the bulk of the stale-runner recovery loop."""
+"""Per-task repair for tasks left running after a runner died.
+
+The bulk of the stale-runner recovery loop: walks every task whose
+runtime row still says ``running``, decides whether the lock holder is
+genuinely live or wedged, and re-canonicalises wedged tasks back to a
+resumable stage with a recovery report.
+"""
 
 from datetime import UTC, datetime
 import sqlite3
@@ -27,14 +33,28 @@ from litehive.workspace import Workspace
 
 
 def _stale_pid_warnings(stale_pid: bool) -> list[str]:
-    """Return the warnings list `_record_stale_recovery` attaches to its recovery report; the caller never wants the literal placeholder when no stale PID was seen, so we surface an empty list instead."""
+    """
+    Return the warnings list attached to the recovery report.
+
+    Used by ``_record_stale_recovery`` to flag a confirmed-dead subagent
+    PID; surfaces an empty list (rather than a placeholder string) when
+    no stale PID was seen so the report renderer doesn't have to filter
+    out a literal "(none)" entry.
+    """
     if stale_pid:
         return ["stale subagent pid detected"]
     return []
 
 
 def running_task_ids(workspace: Workspace) -> list[str]:
-    """Pull every task_id whose runtime row says ``execution_status='running'`` straight from SQLite; the cheap probe the recovery loop uses to decide whether the workspace looks wedged."""
+    """
+    Pull every task id whose runtime row says ``execution_status='running'``.
+
+    The cheap SQLite-side probe the recovery loop uses to decide
+    whether the workspace looks wedged; loading the full task records
+    just to check this would dwarf the cost of the recovery scan
+    itself on busy workspaces.
+    """
     with workspace.connect() as connection:
         try:
             rows = connection.execute(
@@ -51,7 +71,14 @@ def running_task_ids(workspace: Workspace) -> list[str]:
 
 
 def should_requeue_commit_stage_task(task: TaskRecord) -> bool:
-    """True when a task that's parked at the commit-to-git stage must be re-prioritised by repair; the commit stage is the only mid-pipeline stage where requeueing is safe even if the task wasn't the workspace's active task at the time of the crash."""
+    """
+    True when a commit-stage task must be re-prioritised by repair.
+
+    The commit-to-git stage is the only mid-pipeline stage where
+    requeueing is safe even if the task wasn't the workspace's active
+    task at the time of the crash; earlier stages may have unmerged
+    work that re-running could double-claim.
+    """
     return task.pipeline_status == PipelineStatus.COMMIT_TO_GIT and task.status in {
         TaskStatus.QUEUED,
         TaskStatus.IN_PROGRESS,
@@ -64,7 +91,14 @@ def can_attempt_stale_runner_recovery(
     tasks_by_id: dict[str, TaskRecord],
     running_task_ids: list[str],
 ) -> bool:
-    """Gate that prevents the stale-runner repair from racing a live runner; we only intervene when the lock is unowned, the lock pid is dead, or the inactivity timeout proves the live runner is frozen."""
+    """
+    Gate that prevents stale-runner repair from racing a live runner.
+
+    Only intervenes when the lock is unowned, the lock pid is dead, or
+    the inactivity timeout proves the live runner is frozen; without
+    the gate, repair could rewrite state for a runner that is just
+    slow rather than actually stale.
+    """
     if len(running_task_ids) > 1:
         return False
     root = workspace.root
@@ -85,7 +119,14 @@ def recover_running_tasks(
     running_task_ids: list[str],
     summary: WorkspaceRepairSummary | None,
 ) -> dict[str, object]:
-    """Driver loop over every task whose runtime row says ``running``; skips tasks that are not the workspace's active task unless the runner lock metadata is missing (in which case the row is by definition stale)."""
+    """
+    Driver loop over every task whose runtime row says ``running``.
+
+    Skips tasks that are not the workspace's active task unless the
+    runner lock metadata is missing — in that case the row is by
+    definition stale because there's no claim to compare against, so
+    repairing it cannot conflict with a live owner.
+    """
     mutated = False
     transitioned: list[TaskRecord] = []
     journal_messages: dict[str, str] = {}
@@ -124,7 +165,14 @@ def update_active_task_after_recovery(
     running_task_ids: list[str],
     summary: WorkspaceRepairSummary | None,
 ) -> bool:
-    """Reconcile ``state.active_task_id`` and the queue ordering with the just-repaired tasks; clears ``active_task_id`` when the previously-active task is gone or has been requeued, so the next runner doesn't latch onto a task it can no longer run."""
+    """
+    Reconcile ``state.active_task_id`` and queue ordering with just-repaired tasks.
+
+    Clears ``active_task_id`` when the previously-active task is gone
+    or has been requeued so the next runner does not latch onto a task
+    it can no longer run; the prioritisation re-orders the queue so
+    rescued in-flight work runs ahead of fresh backlog.
+    """
     mutated = False
     if prioritized_ids:
         state.queue = [task_id for task_id in state.queue if task_id not in running_task_ids]
@@ -163,7 +211,14 @@ def _has_inactive_running_tasks(
     tasks_by_id: dict[str, TaskRecord],
     timeout_seconds: float,
 ) -> bool:
-    """Decide whether any "running" task has gone silent past the inactivity threshold; lets the recovery scan act on a frozen runner whose lockfile pid is still alive but whose event stream has stopped."""
+    """
+    True when any "running" task has gone silent past the inactivity threshold.
+
+    Lets the recovery scan act on a frozen runner whose lockfile pid
+    is still alive but whose event stream has stopped — the
+    pid-alive-but-deadlocked shape that simple PID checks cannot
+    distinguish from a healthy long-running task.
+    """
     for task in tasks_by_id.values():
         if task.runtime.pipeline.execution_status != "running":
             continue
@@ -189,7 +244,14 @@ def _record_stale_recovery(
     summary: WorkspaceRepairSummary | None,
     stale_pid: bool,
 ) -> None:
-    """Emit the operator-facing recovery report and update the workspace repair summary so a single repair pass is reflected both in the per-task report and in the aggregate "what did repair do?" view shown by the CLI."""
+    """
+    Emit the operator-facing recovery report and update the repair summary.
+
+    A single repair pass is reflected both in the per-task report (so
+    the operator can drill into one task) and in the aggregate "what
+    did repair do?" view shown by the CLI; without the dual write,
+    operators would see only one of the two surfaces.
+    """
     record_recovery_report(
         workspace.root,
         task,
@@ -217,7 +279,14 @@ def _recover_stale_running_task(
     task: TaskRecord,
     summary: WorkspaceRepairSummary | None,
 ) -> tuple[bool, str | None, bool]:
-    """Run the per-task repair on one task that's still flagged ``running``: re-canonicalise it onto its resumable stage, emit the recovery report, and return ``(mutated, journal_message, prioritize)`` so the caller can update the queue order."""
+    """
+    Run the per-task repair on one task still flagged ``running``.
+
+    Re-canonicalises it onto its resumable stage, emits the recovery
+    report, and returns ``(mutated, journal_message, prioritize)`` so
+    the caller can update the queue order in one outer pass instead of
+    persisting each task separately.
+    """
     # inline: tasks.queue top-level-imports execution_recovery (would cycle).
     from litehive.tasks.queue import (  # noqa: PLC0415
         canonicalize_resumable_queue_task,
@@ -251,7 +320,14 @@ def _recover_stale_running_task(
 
 
 def _task_state_row_exists(workspace: Workspace, task_id: str) -> bool:
-    """Existence probe that distinguishes "task was deleted entirely" from "task is in a bad state"; lets the active-task reconciliation safely clear ``state.active_task_id`` only when there's no row to point at anymore."""
+    """
+    Existence probe distinguishing "task deleted" from "task in a bad state".
+
+    Lets the active-task reconciliation safely clear
+    ``state.active_task_id`` only when there is genuinely no row to
+    point at anymore; without the distinction, a temporarily-corrupt
+    task would be wrongly treated as gone.
+    """
     with workspace.connect() as connection:
         try:
             row = connection.execute(

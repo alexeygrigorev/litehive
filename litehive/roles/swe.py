@@ -45,7 +45,16 @@ RETRY_ATTEMPT_GUIDANCE = """\
 
 
 class SWEAgent(RoleAgent):
-    """Implementing stage: write the code and the tests."""
+    """
+    Implementing-stage agent.
+
+    Owns code quality across the whole codebase — broken imports,
+    stale tests, lint errors, and unrelated breakage are in scope on
+    purpose, because the QA and reviewer gates immediately downstream
+    will reject the work otherwise. Verdicts are ``pass`` (work is
+    done with evidence) or ``reject`` (work cannot be completed from
+    available context).
+    """
 
     NODE_NAME = PipelineState.IMPLEMENTING
     ROLE = "swe"

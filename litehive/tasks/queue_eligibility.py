@@ -23,18 +23,26 @@ _RESUMABLE_PIPELINE_STAGES: frozenset[TaskStage] = frozenset(
 
 
 def _normalize_resumable_stage_name(stage: str | None) -> str | None:
-    """Filter a candidate stage label down to the small set of stages a paused/interrupted task can legitimately resume at; ``resumable_queue_stage`` walks several stage hints through this so a stale ``recovering`` or ``backlog`` value never gets treated as a resume target."""
+    """
+    Filter a candidate stage label to the set of legitimate resume targets.
+
+    ``resumable_queue_stage`` walks several stage hints through this so a
+    stale ``recovering`` or ``backlog`` value can never be treated as a
+    resume target — only grooming/implementing/testing/accepting/commit
+    stages may resume in place.
+    """
     if stage in _RESUMABLE_PIPELINE_STAGES:
         return stage
     return None
 
 
 def resumable_queue_stage(task: TaskRecord) -> str | None:
-    """Pick the pipeline stage a queued/idle task should resume at, or ``None`` if it must restart.
+    """
+    Pick the stage a queued/idle task should resume at, or ``None`` to restart.
 
     Used by execution recovery and the ``resume`` lifecycle command to decide
     whether an interrupted task can pick up mid-pipeline (grooming through
-    commit) instead of going back to ``backlog``.
+    commit) instead of being demoted back to ``backlog`` and restarting.
     """
     interruption = task.runtime.execution.interruption
     current_stage = task.runtime.pipeline.current_stage
@@ -63,11 +71,13 @@ def resumable_queue_stage(task: TaskRecord) -> str | None:
 
 
 def resumable_running_stage(task: TaskRecord) -> str | None:
-    """Pick the resume stage for a task whose runtime still claims to be ``running``.
+    """
+    Pick the resume stage for a task whose runtime still claims ``running``.
 
-    Stale-runner recovery calls this when it has just decided a "running" task
-    is actually orphaned (subagent PID dead): it trusts the live current-stage
-    marker first, then falls back to the queued-stage heuristics.
+    Stale-runner recovery uses this once it has decided a "running" task is
+    actually orphaned (e.g. subagent PID dead): trusts the live current-stage
+    marker first because that's the most recent stage hint, then falls back
+    to the queued-stage heuristics.
     """
     current_stage = task.runtime.pipeline.current_stage
     if current_stage.status == "running":
@@ -82,7 +92,14 @@ def resumable_running_stage(task: TaskRecord) -> str | None:
 
 
 def _needs_manual_intervention(task: TaskRecord) -> bool:
-    """True when the task has tripped enough flags (or a sticky reason like ``rejection_loop_detected``) that an operator must look at it before it can run again; ``is_task_eligible_for_execution`` uses this to keep such tasks out of the queue."""
+    """
+    True when the task has tripped enough flags to require operator review.
+
+    Either the flag count crossed the auto-defer threshold or the flag
+    reason is in the sticky set (hook reject loop, semantic reject, time
+    budget exceeded, etc.); ``is_task_eligible_for_execution`` uses this
+    to keep such tasks out of the queue.
+    """
     return has_blocking_failed_run_history(task) or (
         task.status == TaskStatus.FLAGGED
         and (
@@ -100,7 +117,14 @@ def _needs_manual_intervention(task: TaskRecord) -> bool:
 
 
 def _is_recovery_budget_exhausted(task: TaskRecord) -> bool:
-    """True when the task is flagged with a recovery-budget reason and therefore has no automatic path forward; consulted by ``is_task_eligible_for_execution`` so the queue selector skips it instead of looping the recovery agent."""
+    """
+    True when the task has run out of automatic-recovery budget.
+
+    The flag reasons handled here (crash budget exhausted, recovery budget
+    exhausted, recovery failed) all mean the recovery agent has nothing
+    left to try; the queue selector treats them as terminal so it does not
+    burn cycles re-launching the recovery agent on a hopeless task.
+    """
     return task.status == TaskStatus.FLAGGED and task.flag_reason in {
         "crash_budget_exhausted",
         "recovery_budget_exhausted",
@@ -109,7 +133,13 @@ def _is_recovery_budget_exhausted(task: TaskRecord) -> bool:
 
 
 def _should_requeue_commit_stage_task(task: TaskRecord) -> bool:
-    """True when a task that was at the commit stage is in a status the queue selector can still pick up (queued/in-progress/interrupted); used by the auto-recovery requeue path so a task that crashed mid-merge resumes at commit instead of restarting."""
+    """
+    True when a commit-stage task is in a recoverable status.
+
+    Used by the auto-recovery requeue path so a task that crashed mid-merge
+    resumes at the commit stage instead of restarting from scratch and
+    re-doing the implementation/testing work that already passed.
+    """
     return task.pipeline_status == PipelineStatus.COMMIT_TO_GIT and task.status in {
         TaskStatus.QUEUED,
         TaskStatus.IN_PROGRESS,
@@ -118,23 +148,38 @@ def _should_requeue_commit_stage_task(task: TaskRecord) -> bool:
 
 
 def _has_terminal_execution_status(task: TaskRecord) -> bool:
-    """True when the runtime pipeline reports a terminal execution status (done/cancelled/failed/blocked/interrupted); short-circuits ``is_task_eligible_for_execution`` so a task whose runner already finished cannot accidentally requeue itself."""
+    """
+    True when the runtime pipeline reports a terminal execution status.
+
+    Done, cancelled, failed, blocked, and interrupted all qualify; the
+    short-circuit in ``is_task_eligible_for_execution`` prevents a task
+    whose runner already finished from accidentally re-queueing itself
+    on the next selection pass.
+    """
     return str(task.runtime.pipeline.execution_status) in _TERMINAL_EXECUTION_STATUSES
 
 
 def _has_terminal_outcome_kind(task: TaskRecord) -> bool:
-    """True when the last pipeline outcome was a terminal closure verdict (closed/duplicate/deferred/wont_do); short-circuits ``is_task_eligible_for_execution`` for tasks whose acceptor already decided they should not run again."""
+    """
+    True when the last pipeline outcome was a terminal closure verdict.
+
+    Closed, duplicate, deferred, and won't-do all qualify; this short-circuit
+    keeps tasks whose acceptor already decided they should not run again
+    out of the queue selector even when their lifecycle status has not yet
+    been bumped to match.
+    """
     kind = task.runtime.pipeline.last_outcome.kind
     return kind is not None and str(kind) in _TERMINAL_OUTCOME_KINDS
 
 
 def task_has_resume_marker(task: TaskRecord) -> bool:
-    """Tell whether a task's runtime still vouches for its declared pipeline stage.
+    """
+    Tell whether a task's runtime still vouches for its declared pipeline stage.
 
-    The stale-pipeline normalizer (and the workspace-repair pass that mirrors
-    it) calls this before demoting a queued task back to ``backlog`` — a task
-    with a trustworthy stage marker or a matching interruption record must be
-    left alone so it can resume in place.
+    The stale-pipeline normalizer and the workspace-repair pass that mirrors
+    it consult this before demoting a queued task back to ``backlog``: a
+    task with a trustworthy stage marker or a matching interruption record
+    must be left alone so it can resume in place rather than restart.
     """
     stage = str(task.pipeline_status)
     current_stage = task.runtime.pipeline.current_stage
@@ -147,17 +192,24 @@ def task_has_resume_marker(task: TaskRecord) -> bool:
 
 
 def _is_parked_task(task: TaskRecord) -> bool:
-    """True when an operator has explicitly parked the task; queue-selection helpers branch on this so parked tasks don't show up in pickable lists even if their pipeline status looks runnable."""
+    """
+    True when an operator has explicitly parked the task.
+
+    Queue-selection helpers branch on this so parked tasks don't show up in
+    pickable lists even if their pipeline status looks runnable; an operator
+    has to actively un-park before the task can be dequeued.
+    """
     return task.status == TaskStatus.PARKED
 
 
 def is_task_eligible_for_execution(task: TaskRecord) -> bool:
-    """Decide whether a task is allowed to be dequeued or kept active right now.
+    """
+    Decide whether a task may be dequeued or kept active right now.
 
     The single source of truth for "is this task runnable?" — the queue
     selector, workspace-repair flows, status diagnostics, and the
     single-active-task invariant in the workspace lock all consult this so
-    they share the same view of terminal/blocked statuses.
+    they share one view of terminal/blocked statuses.
     """
     if has_blocking_failed_run_history(task):
         return False
@@ -179,19 +231,39 @@ def is_task_eligible_for_execution(task: TaskRecord) -> bool:
 
 
 def _auto_recovery_stage_for_flagged_task(task: TaskRecord) -> str:
-    """Pick the resume stage when a flagged task is rescued back into the queue: keep it at ``commit`` if it was already there, otherwise drop it back to the implementation entry stage so the agent can rebuild the change set."""
+    """
+    Pick the resume stage when a flagged task is rescued back into the queue.
+
+    Keeps a flagged-mid-commit task at ``commit_to_git`` so it doesn't
+    re-do the implementation; otherwise drops the task back to the
+    implementation entry stage so the agent can rebuild the change set
+    from a known-good baseline.
+    """
     if task.pipeline_status == PipelineStatus.COMMIT_TO_GIT:
         return TaskStage.COMMIT_TO_GIT.value
     return implementation_entry_stage(task)
 
 
 def _is_task_completed(task: TaskRecord) -> bool:
-    """True when both the lifecycle status and the pipeline status say DONE; used by the dependency walk so a half-done task (lifecycle done but pipeline still ongoing) cannot satisfy a dependency edge."""
+    """
+    True when both the lifecycle status and the pipeline status say DONE.
+
+    Used by the dependency walk: a half-done task (e.g. lifecycle done but
+    pipeline still ongoing) must not satisfy a dependency edge or downstream
+    tasks would launch before the upstream work is actually committed.
+    """
     return task.status == TaskStatus.DONE and task.pipeline_status == PipelineStatus.DONE
 
 
 def _task_blockers(task: TaskRecord, tasks_by_id: dict[str, TaskRecord]) -> list[str]:
-    """Return human-readable labels for every dependency that is missing or not yet completed; the queue selector uses this to explain why a task is blocked in status output without re-walking the graph."""
+    """
+    Return human-readable labels for unmet or missing dependencies.
+
+    The queue selector uses this to explain why a task is blocked in
+    status output without re-walking the dependency graph for every
+    affected task; one-pass labelling keeps blocked-task rendering O(d)
+    in the number of dependencies.
+    """
     blockers: list[str] = []
     seen: set[str] = set()
     for dependency_id in task.depends_on:
@@ -208,11 +280,13 @@ def _task_blockers(task: TaskRecord, tasks_by_id: dict[str, TaskRecord]) -> list
 
 
 def validate_task_dependencies(root: Path, task_id: str, depends_on: list[str]) -> None:
-    """Reject a task whose ``depends_on`` list is self-referential, missing, or cyclic.
+    """
+    Reject a self-referential, missing, or cyclic ``depends_on`` list.
 
-    Called when persisting a new task and when ``litehive update`` rewrites a
-    task's dependency list — refuses the mutation before it can corrupt the
-    queue selector's blocked-task graph.
+    Called when persisting a new task and when ``litehive update`` rewrites
+    a task's dependency list; refusing the mutation here keeps the queue
+    selector's blocked-task graph from ever observing a cycle and looping
+    forever during selection.
     """
     tasks_by_id = {task.id: task for task in list_tasks(root, strict=False)}
     seen: set[str] = set()
@@ -229,7 +303,14 @@ def validate_task_dependencies(root: Path, task_id: str, depends_on: list[str]) 
 
 
 def _dependency_reaches_task(task_id: str, dependency_id: str, tasks_by_id: dict[str, TaskRecord]) -> bool:
-    """Cycle check used by ``validate_task_dependencies``: walk the dependency graph from ``dependency_id`` and return True if it transitively reaches ``task_id``, so a self-cycle (direct or indirect) can be rejected before the corrupt edge is persisted."""
+    """
+    Cycle check helper used by ``validate_task_dependencies``.
+
+    Walks the dependency graph from ``dependency_id`` and returns True when
+    it transitively reaches ``task_id``, so a self-cycle (direct or indirect)
+    can be rejected before the corrupt edge is persisted. Iterative depth
+    walk to avoid recursion limits on long dependency chains.
+    """
     stack = [dependency_id]
     seen: set[str] = set()
     while stack:
@@ -247,14 +328,27 @@ def _dependency_reaches_task(task_id: str, dependency_id: str, tasks_by_id: dict
 
 
 def _is_interrupted_task(task: TaskRecord) -> bool:
-    """True when an eligible task is mid-pipeline rather than fresh out of backlog; queue-selection logic prefers these tasks when picking the next runner so paused work resumes before new work starts."""
+    """
+    True when an eligible task is mid-pipeline rather than fresh out of backlog.
+
+    Queue-selection prefers these tasks when picking the next runner so
+    paused work resumes before new work starts; without the preference, a
+    long-paused task could be passed over indefinitely in favour of fresh
+    backlog candidates.
+    """
     return is_task_eligible_for_execution(task) and (
         task.status == TaskStatus.IN_PROGRESS or task.pipeline_status != PipelineStatus.BACKLOG
     )
 
 
 def _live_active_pipeline_stage(state: WorkspaceState, tasks_by_id: dict[str, TaskRecord]) -> str | None:
-    """Return the live (running) stage of the workspace's active task, or ``None`` if no task is actively executing; the queue selector consults this so it does not hand out a second task while one is genuinely on-CPU."""
+    """
+    Return the live (running) stage of the workspace's active task.
+
+    ``None`` when no task is actively on-CPU; the queue selector consults
+    this so the stale-pipeline normaliser does not reset stages that are
+    actively executing on the live runner.
+    """
     if state.active_task_id is None:
         return None
     active_task = tasks_by_id.get(state.active_task_id)

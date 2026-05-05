@@ -1,10 +1,19 @@
-"""Daemon lifecycle helpers for Litehive pool execution.
+"""
+Daemon lifecycle for Litehive pool execution.
 
-The daemon's public surface lives in its named submodules
-(``daemon.execution``, ``daemon.registry``, ``daemon.logs``); this
-package init intentionally has no behavior. Re-exporting from
-submodules here would force importing one daemon submodule to also
-import the others (importing ``daemon.logs`` would run
-``daemon.execution`` as a side-effect of package init), creating
-import cycles with ``observability.status``. Keep this file empty.
+Public surface is split across named submodules so callers can
+import only what they need:
+
+- ``daemon.execution`` — the daemon loop body, start/stop, and the
+  status-snapshot hooks the loop uses every iteration.
+- ``daemon.registry`` — the lockfile-backed registration and
+  heartbeat that lets the operator discover the live daemon for a
+  workspace.
+- ``daemon.logs`` — pruning and discovery of run-all session log
+  directories so the operator can ``tail -f`` the latest run.
+
+The init is intentionally empty: re-exporting submodule symbols
+here would force importing one submodule to also import the others
+(loading ``daemon.logs`` would pull in ``daemon.execution``) and
+that creates import cycles with ``observability.status``.
 """

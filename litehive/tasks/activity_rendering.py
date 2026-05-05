@@ -15,16 +15,24 @@ _FILES_CHANGED_PLACEHOLDERS = {"none", "n/a", "-", ""}
 
 
 def append_activity_entry(root: Path, task: TaskRecord, entry: TaskActivityEntry) -> None:
-    """Path-based shim around ``append_task_activity`` for callers that don't yet hold a Workspace.
+    """
+    Path-based shim around ``append_task_activity`` for non-Workspace callers.
 
     Used by stage controllers that only have ``root`` in scope; lets them
-    record an activity entry without first plumbing a Workspace handle through.
+    record an activity entry without first plumbing a ``Workspace`` handle
+    through every intermediate function on the call path.
     """
     append_task_activity(Workspace.from_path(root), task, entry)
 
 
 def normalized_files_changed(paths: Iterable[str]) -> list[str]:
-    """Clean and de-duplicate the agent-reported ``files_changed`` list before it enters the activity feed; agents submit "none"/"-"/"" placeholders that would otherwise pollute downstream filesystem-validation checks."""
+    """
+    Clean and de-duplicate the agent-reported ``files_changed`` list.
+
+    Agents submit ``"none"``/``"-"``/``""`` placeholders when no files
+    changed; left in the activity feed these would pollute the requeue-time
+    filesystem-validation check that compares claimed paths against main.
+    """
     normalized: list[str] = []
     seen: set[str] = set()
     for raw_path in paths:
@@ -39,12 +47,26 @@ def normalized_files_changed(paths: Iterable[str]) -> list[str]:
 
 
 def is_retracted_activity_entry(entry: TaskActivityEntry) -> bool:
-    """Detect entries already marked as retracted so the requeue-time check does not re-mark them; uses the marker string instead of a structured field because the entry shape predates a dedicated retraction flag."""
+    """
+    Detect entries already marked as retracted.
+
+    Used by the requeue-time check before re-marking, so a second pass does
+    not append the marker twice. The string-marker form is intentional: the
+    entry shape predates a dedicated retraction flag and migrating every
+    historical row would lose the markers.
+    """
     return RETRACTED_FILESYSTEM_MARKER in entry.message
 
 
 def is_retractable_pass_entry(entry: TaskActivityEntry) -> bool:
-    """Identify pass-verdicts that the requeue-time filesystem check is allowed to retract; only implement/test/accept stages with claimed file edits qualify, because those are the verdicts whose validity depends on the worktree actually having changes."""
+    """
+    Identify pass verdicts that the requeue-time filesystem check may retract.
+
+    Only implement/test/accept stages with claimed file edits qualify: those
+    are the verdicts whose validity depends on the worktree actually having
+    changes, so a stage with no file claims (e.g. grooming) cannot be falsely
+    invalidated by an empty diff.
+    """
     return (
         entry.verdict == "pass"
         and entry.stage in _RETRACTABLE_STEPS
@@ -53,7 +75,14 @@ def is_retractable_pass_entry(entry: TaskActivityEntry) -> bool:
 
 
 def retract_activity_entry(entry: TaskActivityEntry) -> bool:
-    """Mutate a previously-passed entry in place to record that the filesystem check found no real changes; returns ``False`` when the entry was already retracted so callers don't double-mark or rewrite history."""
+    """
+    Mutate a previously-passed entry in place to record an invalidated pass.
+
+    Returns ``False`` when the entry was already retracted so callers don't
+    double-mark or rewrite history; ``True`` after a fresh marker is appended.
+    Called from the requeue path when the filesystem check shows no changes
+    landed for the stage's claimed files.
+    """
     if is_retracted_activity_entry(entry):
         return False
     entry.message = f"{entry.message.rstrip()}\n{RETRACTED_FILESYSTEM_MARKER}"
@@ -61,7 +90,14 @@ def retract_activity_entry(entry: TaskActivityEntry) -> bool:
 
 
 def render_task_activity(root: Path, task: TaskRecord, for_prompt: bool = False) -> str:
-    """Render the activity feed for either operator inspection or prompt context; the ``for_prompt`` branch withholds the body of retracted entries so subagents are not biased by reports the system has already invalidated."""
+    """
+    Render the activity feed for operator inspection or prompt context.
+
+    The ``for_prompt`` branch withholds the body of retracted entries so
+    subagents are not biased by reports the system has already invalidated;
+    operator-facing renders show the full text so a human can audit what was
+    retracted and why.
+    """
     activity_entries = load_task_activity(Workspace.from_path(root), task)
     if not activity_entries:
         return ""

@@ -36,7 +36,14 @@ ToSpec = PipelineState | str | ToFn | Stage
 
 
 def _entry_phase(stage: str | PipelineState) -> PipelineState:
-    """Translate a logical stage into the phase the runner actually re-enters when resuming — every agent stage has a `before_*` pre-hook phase, but COMMIT has no `before_commit`, so it returns to itself."""
+    """
+    Translate a logical stage into the phase the runner re-enters on resume.
+
+    Every agent stage has a ``before_<stage>`` pre-hook phase that the
+    pipeline runs through first, but COMMIT has no ``before_commit``,
+    so it resumes at itself. Used by the recovery and worktree-sync
+    callable resume targets in this module.
+    """
     pipeline_state = canonical_pipeline_state(stage)
     if pipeline_state == PipelineState.COMMIT:
         return PipelineState.COMMIT
@@ -112,7 +119,14 @@ def _resolve_to(to: ToSpec, state: TaskState, event: Event) -> PipelineState:
 
 
 def evaluate(rules: list[Rule], current: str | PipelineState, event: Event, state: TaskState) -> Transition:
-    """First-match evaluation. Pure function — no I/O, no mutation."""
+    """
+    Find the first rule that matches the current state and event.
+
+    Pure function — no I/O, no mutation. Iterating top-to-bottom and
+    returning on the first match is the rule-table contract: the
+    order in ``rules.py`` is significant, with more specific rows
+    placed before catch-all wildcards.
+    """
     current_state = canonical_pipeline_state(current)
     for rule in rules:
         if not _matches_from(rule.from_state, current_state):
@@ -134,7 +148,16 @@ def evaluate(rules: list[Rule], current: str | PipelineState, event: Event, stat
 
 
 def resume_from_origin(state: TaskState, event: Event) -> PipelineState:
-    """Pick the phase the task should re-enter after the recovery agent reports success — used as a `transition_to` callable from the global RULES table when leaving the `recovering` node, since the destination depends on what triggered recovery (event hint, active trigger, or a forced `done`)."""
+    """
+    Pick where the task re-enters after the recovery agent reports success.
+
+    Used as a ``transition_to`` callable from the global RULES table
+    when leaving the ``recovering`` node. The destination depends on
+    what triggered recovery: an event hint takes precedence, then the
+    active trigger's origin stage, and ``"done"`` short-circuits to
+    the terminal node when the recovery agent decided no resume is
+    needed.
+    """
     if not isinstance(event, RecoverySucceeded):
         raise TypeError(f"resume_from_origin expects RecoverySucceeded, got {type(event).__name__}")
     e = event
@@ -151,7 +174,14 @@ def resume_from_origin(state: TaskState, event: Event) -> PipelineState:
 
 
 def resume_from_pre_exec(state: TaskState, event: Event) -> PipelineState:
-    """Pick where to enter the pipeline after the pre-exec probe self-heals; wired into the RULES table as the `transition_to` for `PreExecRecoverySucceeded` so the runner respects whatever phase the probe asked us to resume at."""
+    """
+    Pick where to enter the pipeline after pre-exec recovery self-heals.
+
+    Wired into the RULES table as the ``transition_to`` for
+    ``PreExecRecoverySucceeded`` so the runner respects whatever phase
+    the probe asked us to resume at — typically ``before_grooming`` for
+    full mode or ``before_implementing`` for single mode.
+    """
     del state
     if not isinstance(event, PreExecRecoverySucceeded):
         raise TypeError(f"resume_from_pre_exec expects PreExecRecoverySucceeded, got {type(event).__name__}")
@@ -162,7 +192,14 @@ def resume_from_pre_exec(state: TaskState, event: Event) -> PipelineState:
 
 
 def entry_from_worktree_sync(state: TaskState, event: Event) -> PipelineState:
-    """Pick the first agent phase a freshly-synced worktree should enter — honours an explicit `entry_stage` saved on the task and otherwise falls back to the pipeline-mode default; used as the `transition_to` after the worktree-sync node passes."""
+    """
+    Pick the first agent phase a freshly-synced worktree should enter.
+
+    Honours an explicit ``entry_stage`` saved on the task (so a resumed
+    or single-stage launch lands where the operator asked) and
+    otherwise falls back to the pipeline-mode default. Used as the
+    ``transition_to`` after the worktree-sync node passes.
+    """
     del event
     if state.entry_stage in STAGES:
         return _entry_phase(state.entry_stage)
@@ -239,7 +276,7 @@ def retry_epoch_rules(counter_stage, phases, retry_target, exhausted_reason: Fai
 
 
 def list_transitions() -> list[Rule]:
-    """Return the default rule table from ``rules.py``."""
+    """Return a fresh copy of the default rule table — used by diagnostics tooling that needs to enumerate transitions without depending on a particular import order."""
     # inline: rules.py top-level-imports transitions.py for ``Rule`` etc.
     from .rules import RULES  # noqa: PLC0415
 

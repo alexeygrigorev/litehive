@@ -9,7 +9,19 @@ def parse_dependency_ids(
     task_id=None,
     allow_clear=False,
 ):
-    """Turn comma-separated `--depends-on` values from `task add`/`task update` into a deduplicated list of ids; `allow_clear` lets `update` accept the literal `none` to wipe dependencies, while plain `add` rejects it. Returns the sentinel `...` when the operator did not pass the option, so the caller can distinguish "leave alone" from "clear"."""
+    """
+    Normalize ``--depends-on`` arguments into a deduplicated id list.
+
+    Splits comma-separated values, strips whitespace, rejects the
+    self-edge ``task_id -> task_id``, and de-dupes while preserving
+    order. ``allow_clear`` lets ``task update`` accept the literal
+    ``none`` to wipe dependencies; plain ``task add`` rejects that
+    sentinel because there is nothing to clear yet.
+
+    Returns the sentinel ``...`` when the operator did not pass the
+    option so the caller can distinguish "leave existing list alone"
+    from "set to empty list".
+    """
     if not raw_values:
         return ...
 
@@ -42,7 +54,15 @@ def parse_acceptance_criteria(
     raw_values,
     allow_clear=False,
 ):
-    """Normalize repeated `--acceptance-criteria` values into a non-empty list; `allow_clear` lets `task update` accept the literal `none` to wipe criteria. Returns `...` when the option was absent so callers can distinguish "unchanged" from "set to empty"."""
+    """
+    Normalize repeated ``--acceptance-criteria`` values into a non-empty list.
+
+    ``allow_clear`` lets ``task update`` accept the literal ``none``
+    to wipe criteria entirely. Returns the sentinel ``...`` when the
+    option was absent so callers can distinguish "unchanged" from
+    "set to empty list" — a distinction the SQLite-backed update
+    path needs to avoid stomping on existing criteria.
+    """
     if not raw_values:
         return ...
 
@@ -61,7 +81,15 @@ def parse_text_list_option(
     option_name,
     allow_clear=False,
 ):
-    """Generic version of `parse_acceptance_criteria` for other repeatable text-list options (constraints, plan, …); shares the same `none`-clears-everything semantics so the CLI behaves consistently across mutable list fields."""
+    """
+    Generic parser for repeatable text-list options (constraints, plan, …).
+
+    Shares the ``none``-clears-everything semantics with
+    :func:`parse_acceptance_criteria` so every mutable list field on
+    a task behaves the same way at the CLI surface. ``option_name``
+    is woven into the error message so the operator sees *which*
+    list rejected an empty value.
+    """
     if not raw_values:
         return ...
 

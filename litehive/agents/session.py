@@ -47,11 +47,15 @@ class SessionMixin:
         engine_name: str,
         execution: CLIExecutionResult | None,
     ) -> str:
-        """Produce the human-readable transcript saved alongside each subagent run.
+        """
+        Produce the human-readable transcript saved alongside each
+        subagent run.
 
-        Falls back to the engine's raw transcript when the unified-event parse
-        yields nothing, so the SubagentManager always has something to write to
-        execution_trace.md after a run completes.
+        Falls back to the engine's raw transcript when the
+        unified-event parse yields nothing so the SubagentManager
+        always has something to write to ``execution_trace.md`` —
+        without this fallback, an engine that fails to emit unified
+        events would leave the transcript artifact empty.
         """
         del engine_name
         if execution is None:
@@ -66,7 +70,7 @@ class SessionMixin:
         engine_name: str,
         execution: CLIExecutionResult | None,
     ) -> RuntimeEngineContinuation | None:
-        """Pull the engine-specific resume token used by retry and continuation flows."""
+        """Pull the engine-specific resume token from the run result so retry and continuation flows can hand it back to the engine on the next turn."""
         return extract_engine_continuation(engine_name, execution)
 
     @staticmethod
@@ -76,7 +80,7 @@ class SessionMixin:
         task_id: str | None = None,
         subagent_id: str | None = None,
     ) -> LiveEventStream | None:
-        """Parse the live event timeline persisted as the subagent's event_stream artifact."""
+        """Parse stdout into the live event timeline persisted as the subagent's ``event_stream`` artifact, so the status UI can replay tool calls without re-parsing raw stdout each time."""
         return event_stream_from_events(
             parse_unified_events(stdout),
             engine_name=engine_name,
@@ -85,7 +89,15 @@ class SessionMixin:
         )
 
     def append_stream_delta(self, base: Path, ref: SubagentRef, stream: str, full_content: str) -> None:
-        """Append only the new portion of a stream to the append-only log."""
+        """
+        Append only the new portion of a stream to the append-only log.
+
+        The session writes the full transcript on every progress
+        callback, but the append-only log should grow incrementally;
+        ``_stream_offsets`` tracks how much of each stream has
+        already been logged so we never double-write or rewrite
+        history.
+        """
         key = f"{ref.id}:{stream}"
         prev = self._stream_offsets.get(key, 0)
         if len(full_content) > prev:
@@ -148,11 +160,15 @@ class SessionMixin:
         interruption_reason: str | None = None,
         continuation=None,
     ) -> None:
-        """Update the session row without touching the report or stream artifacts.
+        """
+        Update the session row without touching the report or stream
+        artifacts.
 
-        Used by SubagentManager for metadata-only events (PID assignment,
-        interruption reason) where rewriting the report payload would clobber
-        the last good values from the engine's own output.
+        Used by SubagentManager for metadata-only events (PID
+        assignment, interruption reason) where rewriting the report
+        payload would clobber the last good values from the engine's
+        own output. The selective update is what keeps a metadata
+        write from undoing a progress snapshot.
         """
         created_at = utcnow()
         resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
@@ -185,11 +201,16 @@ class SessionMixin:
         )
 
     def record_subagent_pid(self, task: TaskRecord, ref: SubagentRef, pid: int | None) -> None:
-        """Pin the engine PID into the runtime row, the session metadata, and the event log.
+        """
+        Pin the engine PID into the runtime row, session metadata,
+        and event log.
 
-        The recovery flow keys off this PID to decide whether a crashed
-        subagent's process is still alive, so it must land in all three places
-        before the engine starts producing real output.
+        The recovery flow keys off this PID to decide whether a
+        crashed subagent's process is still alive, so it must land in
+        all three places before the engine starts producing real
+        output — without all three writes, recovery sees an
+        inconsistent picture and may misclassify a still-running
+        subagent as crashed.
         """
         if pid is None:
             return
@@ -210,11 +231,14 @@ class SessionMixin:
         )
 
     def subagent_inactivity_timeout_seconds(self, engine_name: str) -> float:
-        """Return the engine-specific stdout idle budget enforced by the watchdog.
+        """
+        Return the stdout idle budget the watchdog enforces for an
+        engine.
 
-        Opencode legitimately stalls for long stretches between tool calls and
-        needs a wider window than the global default; this lookup keeps that
-        engine-specific exception in one place.
+        Opencode legitimately stalls for long stretches between tool
+        calls and needs a wider window than the global default; this
+        lookup keeps the engine-specific exception in one place
+        instead of scattering hard-coded exceptions across the watchdog.
         """
         if engine_name == "opencode":
             return _OPENCODE_INACTIVITY_TIMEOUT_SECONDS
@@ -224,11 +248,15 @@ class SessionMixin:
         self,
         execution: CLIExecutionResult,
     ) -> SubagentInactivityTimeout | None:
-        """Detect a watchdog-killed run from its stderr marker after the process has already exited.
+        """
+        Detect a watchdog-killed run from its stderr marker after the
+        process has already exited.
 
-        When the inline watchdog ends a stalled engine the process returns
-        normally; this scrape lets the SubagentManager re-raise the timeout as
-        the verdict rather than treat the truncated transcript as a clean run.
+        When the inline watchdog ends a stalled engine the process
+        returns normally; without this scrape the SubagentManager
+        would treat the truncated transcript as a clean run, lose the
+        timeout signal, and let the lifecycle accept whatever partial
+        output remained.
         """
         match = _COMPLETED_INACTIVITY_PATTERN.search(execution.stderr or "")
         if match is None:
@@ -246,10 +274,14 @@ class SessionMixin:
         engine_name: str,
         execution: CLIExecutionResult,
     ) -> None:
-        """Kill an engine that has stopped producing stdout, then surface the timeout to the caller.
+        """
+        Kill an engine that has stopped producing stdout, then raise
+        the timeout to the caller.
 
-        Runs after each streaming poll in SubagentManager so a hung engine
-        can't quietly burn the whole task budget while emitting no output.
+        Runs after each streaming poll in SubagentManager so a hung
+        engine cannot quietly burn the whole task budget while
+        emitting no output; the kill is best-effort and the raise is
+        what stops the polling loop.
         """
         if execution.pid is None:
             return
@@ -268,7 +300,13 @@ class SessionMixin:
         )
 
     def terminate_stale_pid(self, pid: int) -> None:
-        """Best-effort SIGTERM that swallows the race when the engine already exited."""
+        """
+        Best-effort SIGTERM on a stale subagent pid.
+
+        Swallows the race where the engine already exited between the
+        watchdog's "is it idle" check and this kill — losing the kill
+        is fine because the process is already gone.
+        """
         try:
             os.kill(pid, signal.SIGTERM)
         except ProcessLookupError:
@@ -280,7 +318,7 @@ class SessionMixin:
         task: TaskRecord,
         stdout: str,
     ) -> None:
-        """Persist the parsed timeline so live status views can replay tool calls without re-parsing stdout."""
+        """Persist the parsed event timeline so live status views can replay tool calls without re-parsing raw stdout on every render."""
         event_stream = self.extract_execution_event_stream(
             ref.engine,
             stdout,
@@ -311,11 +349,15 @@ class SessionMixin:
         interruption_reason: str | None,
         continuation=None,
     ) -> None:
-        """Write a complete subagent snapshot: session row, report, prompt, transcript, and streams.
+        """
+        Write a complete subagent snapshot in one call.
 
-        This is the single fan-out point used after a run finishes (success or
-        failure) so that all observer surfaces (CLI, recovery, retrospective
-        debugging) see a consistent set of artifacts.
+        Covers the session row, report, prompt, transcript, and
+        stream artifacts; this is the single fan-out point used after
+        a run finishes (success or failure) so that every observer
+        surface — CLI status, recovery diagnostics, retrospective
+        debugging — sees a consistent set of artifacts instead of
+        catching the snapshot mid-update.
         """
         created_at = utcnow()
         resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()

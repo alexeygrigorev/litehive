@@ -17,11 +17,26 @@ _TASK_PAYLOAD_KEYS = {"task_intent", "task_state"}
 
 
 class RebuildSafetyError(RuntimeError):
-    """Raised when a DB rebuild would drop task rows that still have evidence."""
+    """
+    Raised when a rebuild would drop task rows that still have evidence.
+
+    The rebuild path raises this instead of silently losing data so an
+    operator can decide whether to repair the replay source first or
+    pass an explicit override.
+    """
 
 
 @dataclass(frozen=True, slots=True)
 class RebuildSafetyReport:
+    """
+    Diagnostic snapshot returned by ``assert_database_rebuild_safe``.
+
+    Captures the three id sets the safety check compares (sqlite, on-disk
+    artifacts, replay) plus the missing-from-replay tuple, so the operator
+    CLI can render a useful "what's about to happen?" preview before the
+    destructive rebuild step runs.
+    """
+
     sqlite_task_ids: frozenset[str]
     task_dir_ids: frozenset[str]
     replay_task_ids: frozenset[str]
@@ -29,7 +44,14 @@ class RebuildSafetyReport:
 
 
 def sqlite_task_ids(db_path: Path) -> set[str]:
-    """Enumerate task ids the live SQLite database still owns; the rebuild-safety check compares this set against what the replay source can reconstruct, so a corrupt DB is treated as "no rows" rather than blocking rebuild forever."""
+    """
+    Enumerate task ids the live SQLite database still owns.
+
+    The rebuild-safety check compares this set against what the replay
+    source can reconstruct; a corrupt DB is treated as "no rows" rather
+    than blocking rebuild forever, since the whole point of rebuild is
+    to recover from a bad DB.
+    """
     if not db_path.exists():
         return set()
     try:
@@ -48,7 +70,14 @@ def sqlite_task_ids(db_path: Path) -> set[str]:
 
 
 def task_artifact_dir_ids(root: Path) -> set[str]:
-    """Discover task ids that have on-disk artifact directories; reported alongside DB and replay coverage so an operator can see when artifacts exist for tasks the DB no longer knows about."""
+    """
+    Discover task ids that have on-disk artifact directories.
+
+    Reported alongside DB and replay coverage so an operator can see
+    when artifacts exist for tasks the DB no longer knows about — the
+    artifacts are evidence that a task did exist, even if the DB and
+    log no longer agree.
+    """
     tasks_dir = root / ".litehive" / "tasks"
     if not tasks_dir.exists():
         return set()
@@ -68,7 +97,14 @@ def task_artifact_dir_ids(root: Path) -> set[str]:
 
 
 def event_log_replay_task_ids(root: Path) -> set[str]:
-    """Compute which task ids would be reconstructed if we replayed the workspace's append-only task-event log; deletion events shrink the set so a tombstoned task does not trigger a "missing from replay" failure."""
+    """
+    Compute which task ids the append-only event log can reconstruct.
+
+    Deletion events shrink the set so a tombstoned task does not trigger
+    a "missing from replay" failure; the safety check needs to honour
+    those tombstones or every legitimately deleted task would block a
+    rebuild.
+    """
     path = workspace_path(root, TASK_EVENT_LOG_NAME)
     if not path.exists():
         return set()
@@ -104,7 +140,14 @@ def assert_database_rebuild_safe(
     replay_task_ids: Iterable[str] | None = None,
     operation: str,
 ) -> RebuildSafetyReport:
-    """Refuse a destructive DB rebuild when the replay source cannot account for every task row; called by ``litehive rebuild``/migration paths so we never silently drop tasks that have evidence of work."""
+    """
+    Refuse a destructive DB rebuild that would drop task rows.
+
+    Raises ``RebuildSafetyError`` when the replay source cannot account
+    for every task row in the live DB; called by ``litehive rebuild``
+    and migration paths so we never silently drop tasks that have
+    evidence of real work.
+    """
     sqlite_ids = sqlite_task_ids(db_path)
     artifact_ids = task_artifact_dir_ids(root)
     if replay_task_ids is None:
@@ -139,7 +182,14 @@ def assert_database_rebuild_safe(
 
 
 def backup_database_before_rebuild(root: Path, db_path: Path, label: str) -> Path | None:
-    """Snapshot the current DB into ``backups/`` before a rebuild touches it; the timestamped filename and operator-supplied label give the operator a known-good rollback target if the rebuild is wrong."""
+    """
+    Snapshot the current DB into ``backups/`` before a rebuild touches it.
+
+    The timestamped filename plus the operator-supplied label give a
+    known-good rollback target if the rebuild turns out to be wrong;
+    falls back to a plain copy when SQLite's online backup fails on a
+    corrupt source so a snapshot is still produced.
+    """
     if not db_path.exists():
         return None
     backup_dir = workspace_path(root, "backups")

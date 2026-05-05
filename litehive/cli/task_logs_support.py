@@ -1,4 +1,12 @@
-"""Logs command for daemon, task, and subagent artifacts."""
+"""
+Logs command implementations for daemon, task, and subagent artifacts.
+
+Owns the rendering paths behind ``litehive task logs``: tail a daemon
+run, list pool sessions, render the per-task journal, follow a live
+subagent's stdout, or list every subagent on a task. Kept as a
+support module so the Typer command in ``task_cli`` stays a thin
+dispatcher and these helpers can be exercised directly by tests.
+"""
 
 from datetime import datetime
 from pathlib import Path
@@ -18,7 +26,14 @@ FOLLOW_POLL_SECONDS = 0.1
 
 
 def show_latest_daemon_log(root: Path) -> int:
-    """Operator default for `task logs` with no task id; tails the most recent daemon run so the operator sees what the pool just did without specifying a session."""
+    """
+    Tail the most recent daemon run log.
+
+    Operator default for ``task logs`` without a task id; lets the
+    operator see what the pool just did without having to specify
+    a session timestamp. Tails the last 40 lines so the output
+    fits a terminal page even when the underlying log is large.
+    """
     latest_dir = latest_run_all_log_dir(root)
     log_path = _latest_daemon_log_path(latest_dir)
     if log_path is None:
@@ -31,7 +46,15 @@ def show_latest_daemon_log(root: Path) -> int:
 
 
 def list_daemon_sessions(root: Path) -> int:
-    """Operator overview of recent pool sessions with their stop reasons; capped at five so the listing stays scannable when many runs accumulate."""
+    """
+    List recent pool sessions with their stop reasons.
+
+    Capped at five so the listing stays scannable when many runs
+    accumulate; the operator can ``ls`` the logs directory
+    directly when they need history beyond that. Each row carries
+    the parsed ISO timestamp so log directories can be sorted by
+    eye instead of by the compact ``YYYYmmddTHHMMSSZ`` form.
+    """
     logs_root = workspace_path(root.resolve(), "logs", "run-all")
     if not logs_root.exists():
         print("No daemon run logs found.")
@@ -51,7 +74,15 @@ def list_daemon_sessions(root: Path) -> int:
 
 
 def show_task_journal(root: Path, task) -> int:
-    """Default `task logs <id>` view that renders the per-task narrative journal (stage transitions, verdicts) instead of raw subagent stdout."""
+    """
+    Default ``task logs <id>`` view: the per-task narrative journal.
+
+    Renders stage transitions and verdicts as a story rather than
+    raw subagent stdout, which is usually the right grain for
+    "what happened to this task?". Operators who need raw output
+    can pass ``--agent`` to drop into the subagent evidence view
+    instead.
+    """
     journal = render_task_journal(Workspace.from_path(root), task)
     if not journal:
         print(f"{task.id}: journal not found")
@@ -61,12 +92,27 @@ def show_task_journal(root: Path, task) -> int:
 
 
 def show_latest_subagent(root: Path, task) -> int:
-    """Compact one-screen view of the most recent subagent run for a task; routes to the same evidence renderer as `task evidence` to keep both surfaces consistent."""
+    """
+    One-screen view of the most recent subagent run for a task.
+
+    Routes to the same evidence renderer as ``task evidence`` so
+    both surfaces stay consistent — operators reach the same
+    triage screen whether they enter via ``task logs --agent`` or
+    ``task evidence`` and don't have to learn two different
+    layouts.
+    """
     return render_task_evidence(root, task)
 
 
 def list_task_subagents(root: Path, task) -> int:
-    """Tabular summary of every subagent run on a task with status, exit code, and duration; reverse-chronological so the most recent (usually the one the operator wants) is on top."""
+    """
+    Tabular summary of every subagent run on a task.
+
+    Reverse-chronological so the most recent run (usually the one
+    the operator wants) lands at the top. Combines runtime and
+    persisted session data so a still-active subagent shows live
+    fields instead of stale on-disk values.
+    """
     if not task.subagents:
         print(f"{task.id}: no subagents")
         return 0
@@ -95,7 +141,16 @@ def list_task_subagents(root: Path, task) -> int:
 
 
 def follow_active_subagent(root: Path, task_id: str | None = None) -> int:
-    """`tail -f` analogue for the live subagent stdout so the operator can watch a running stage without leaving the CLI; returns immediately if nothing is currently active."""
+    """
+    ``tail -f`` analogue for the live subagent stdout.
+
+    Lets the operator watch a running stage without leaving the
+    CLI. Returns immediately when there is nothing to follow so
+    the command does not hang on an idle workspace. Polling at
+    :data:`FOLLOW_POLL_SECONDS` is fine because the subagent's
+    own writer is not synchronous-flushed; a tighter poll just
+    burns CPU.
+    """
     task = resolve_follow_task(root, task_id=task_id)
     if task is None:
         ref = None
@@ -143,7 +198,16 @@ def follow_active_subagent(root: Path, task_id: str | None = None) -> int:
 
 
 def _latest_daemon_log_path(latest_dir: Path | None) -> Path | None:
-    """Pick the file ``show_latest_daemon_log`` should tail: prefers the canonical ``*-run.log`` produced by the runner so the output matches what the daemon emitted, and only falls back to a free-form file when the run log is missing."""
+    """
+    Pick the file :func:`show_latest_daemon_log` should tail.
+
+    Prefers the canonical ``*-run.log`` produced by the runner so
+    the output matches what the daemon actually emitted; falls
+    back to any other file in the directory only when the run log
+    is missing (corrupted session, manual deletion). Returns
+    ``None`` when nothing is suitable so the caller can print the
+    "no logs" message.
+    """
     if latest_dir is None or not latest_dir.exists():
         return None
     preferred = sorted(latest_dir.glob("*-run.log"))
@@ -156,7 +220,14 @@ def _latest_daemon_log_path(latest_dir: Path | None) -> Path | None:
 
 
 def _tail_text(text: str, lines: int = _DEFAULT_TAIL_LINES) -> str:
-    """Return only the trailing ``lines`` lines of ``text``; ``show_latest_daemon_log`` uses this so the operator default does not dump a whole multi-megabyte daemon log to the terminal."""
+    """
+    Return the trailing ``lines`` lines of ``text``.
+
+    :func:`show_latest_daemon_log` uses this so the operator
+    default does not dump a multi-megabyte daemon log to the
+    terminal. Forty lines is enough to cover the wrap-up of a
+    typical pool run while still fitting one terminal page.
+    """
     text = text.rstrip("\n")
     if not text:
         return ""
@@ -164,7 +235,15 @@ def _tail_text(text: str, lines: int = _DEFAULT_TAIL_LINES) -> str:
 
 
 def _print_follow_chunk(stdout_path: Path, position: int) -> int:
-    """Print the bytes of ``stdout_path`` past ``position`` and return the new file length; the inner step of ``follow_active_subagent``'s polling loop so each iteration only emits the unwritten tail."""
+    """
+    Print the bytes of ``stdout_path`` past ``position``.
+
+    Returns the new file length so the polling loop in
+    :func:`follow_active_subagent` only emits the unwritten tail
+    on each tick instead of re-printing the whole file. Skips
+    silently when the file vanished mid-poll so a delete does not
+    crash the follower.
+    """
     if not stdout_path.exists():
         return position
     content = stdout_path.read_text(encoding="utf-8")
@@ -175,7 +254,16 @@ def _print_follow_chunk(stdout_path: Path, position: int) -> int:
 
 
 def _session_outcome(directory: Path) -> str:
-    """Recover the pool stop reason for a recorded session by preferring the post-status log (authoritative) and falling back to the run log so older sessions without post-status still surface a useful label."""
+    """
+    Recover the pool stop reason for a recorded session.
+
+    Prefers the post-status log (authoritative because it is
+    written after the pool finishes) and falls back to scanning
+    the run log so older sessions without a post-status file
+    still surface a useful label. Returns ``-`` when neither
+    source carries the field so the listing column stays
+    populated.
+    """
     post_status = sorted(directory.glob("*-post-status.log"))
     for path in reversed(post_status):
         for line in read_text_artifact(path).splitlines():
@@ -194,7 +282,14 @@ def _session_outcome(directory: Path) -> str:
 
 
 def _format_session_timestamp(name: str) -> str:
-    """Convert a ``YYYYmmddTHHMMSSZ`` log directory name into an ISO-8601 string for ``list_daemon_sessions``; returns ``-`` for any directory whose name is not in that exact shape so a stray directory cannot break the listing."""
+    """
+    Convert a ``YYYYmmddTHHMMSSZ`` directory name into an ISO-8601 string.
+
+    Used by :func:`list_daemon_sessions` so the operator sees a
+    readable timestamp instead of the compact log-directory form.
+    Returns ``-`` for any name not in that exact shape so a stray
+    directory under ``logs/run-all`` cannot break the listing.
+    """
     try:
         return datetime.strptime(name, "%Y%m%dT%H%M%SZ").isoformat() + "Z"
     except ValueError:
@@ -202,7 +297,15 @@ def _format_session_timestamp(name: str) -> str:
 
 
 def _latest_subagent_ref(task):
-    """Pick the subagent that ``follow_active_subagent`` should attach to: prefers the runtime's currently-active subagent (so ``--follow`` lands on the live process) and falls back to the most recent ref so a just-finished task is still followable."""
+    """
+    Pick the subagent that :func:`follow_active_subagent` should attach to.
+
+    Prefers the runtime's currently-active subagent so ``--follow``
+    lands on the live process; falls back to the most recent
+    persisted ref so a just-finished task is still followable
+    (the operator gets the final tail rather than a "nothing to
+    follow" message).
+    """
     preferred_ids: list[str] = []
     if task.runtime.execution.active_subagent is not None:
         preferred_ids.append(task.runtime.execution.active_subagent.id)
@@ -216,7 +319,15 @@ def _latest_subagent_ref(task):
 
 
 def _artifact_for_kind(base: Path, kind: str, active: bool) -> Path | None:
-    """Resolve the on-disk path of a subagent artifact, preferring the live `.log` for active runs but falling back to the legacy `.txt` so historic runs remain followable."""
+    """
+    Resolve the on-disk path of a subagent artifact.
+
+    Prefers the live ``.log`` form for active runs (the writer
+    streams there) but falls back to the legacy ``.txt`` so
+    historic runs remain followable. Currently only ``stdout`` is
+    supported; the ``kind`` parameter is here so the caller's
+    intent is explicit and a future stderr follower can extend it.
+    """
     if kind == "stdout":
         if active:
             live = resolve_artifact_path(base, "stdout.log")
@@ -230,7 +341,15 @@ def _artifact_for_kind(base: Path, kind: str, active: bool) -> Path | None:
 
 
 def _pick_value(runtime_state, session: dict[str, object], *keys: str):
-    """Prefer the in-memory runtime field over the persisted session payload so live values (e.g. exit code on a just-finished run) win over stale on-disk snapshots."""
+    """
+    Read a field preferring runtime state over the persisted session.
+
+    Live in-memory values (e.g. exit code on a just-finished run)
+    win over stale on-disk snapshots so the listing reflects the
+    truth at the moment of the call. The variadic ``keys`` lets a
+    caller pass aliases for the same logical value across the two
+    sources (``started_at`` vs ``created_at``).
+    """
     if runtime_state is not None:
         for key in keys:
             value = getattr(runtime_state, key, None)
@@ -244,7 +363,15 @@ def _pick_value(runtime_state, session: dict[str, object], *keys: str):
 
 
 def _format_duration(started_at: str | datetime | None, completed_at: str | datetime | None) -> str:
-    """Render the elapsed time between two ISO timestamps as ``Ns``; ``list_task_subagents`` uses it for the duration column and falls back to ``-`` whenever either side is missing or unparseable so the table still renders for partial data."""
+    """
+    Render elapsed time between two ISO timestamps as ``Ns``.
+
+    Used by :func:`list_task_subagents` for the duration column.
+    Falls back to ``-`` whenever either side is missing or
+    unparseable so the table still renders for partial data, and
+    a negative duration (clock skew) renders as ``-`` rather than
+    a misleading negative number.
+    """
     if not started_at or not completed_at:
         return "-"
     try:
@@ -259,7 +386,15 @@ def _format_duration(started_at: str | datetime | None, completed_at: str | date
 
 
 def resolve_follow_task(root: Path, task_id: str | None) -> object | None:
-    """Pick the task whose stdout `--follow` should attach to: explicit id wins, then the task with an active subagent, then the most recent task that ever had subagents, so the operator can run `task logs --follow` with no arguments mid-run."""
+    """
+    Pick the task whose stdout ``--follow`` should attach to.
+
+    Precedence: explicit id > task with an active subagent > most
+    recent task that ever had subagents. The fallback chain lets
+    the operator run ``task logs --follow`` with no arguments
+    mid-run and land on the obviously interesting task without
+    typing its id.
+    """
     if task_id is not None:
         return get_task_record(root, task_id)
     tasks = list_tasks(root, strict=False)
@@ -270,12 +405,27 @@ def resolve_follow_task(root: Path, task_id: str | None) -> object | None:
 
 
 def load_task_with_runtime(root: Path, task_id: str):
-    """Tolerant task lookup used by `task logs <id>`; deliberately returns None on missing-runtime/missing-task instead of raising so the CLI can print a clean `task not found` rather than a traceback."""
+    """
+    Tolerant task lookup used by ``task logs <id>``.
+
+    Returns ``None`` on missing-runtime/missing-task instead of
+    raising so the CLI can print a clean ``task not found``
+    rather than a traceback. Trivial wrapper today, but kept as
+    the seam where richer runtime hydration can land if the logs
+    surface needs it.
+    """
     return get_task_record(root, task_id)
 
 
 def _coerce_datetime(value: str | datetime) -> datetime:
-    """Accept either an already-parsed datetime or an ISO string (with the SQLite-style ``Z`` suffix) and return a datetime; ``_format_duration`` routes both runtime and persisted timestamps through this so the duration math doesn't need to care which form it got."""
+    """
+    Coerce a runtime or persisted timestamp into a ``datetime``.
+
+    Accepts either an already-parsed ``datetime`` or an ISO
+    string (with the SQLite-style trailing ``Z`` suffix) so
+    :func:`_format_duration` does not have to care which form it
+    received from runtime vs persisted state.
+    """
     if isinstance(value, datetime):
         return value
     return datetime.fromisoformat(value.replace("Z", "+00:00"))

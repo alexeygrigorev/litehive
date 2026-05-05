@@ -34,7 +34,14 @@ class NodeRegistry:
     """Maps node names to their Node implementations."""
 
     def __init__(self) -> None:
-        """Create an empty registry; populated by the lifecycle bootstrap that imports each node module."""
+        """
+        Create an empty registry.
+
+        Populated by ``build_registry`` (and its callers) once per task
+        launch; the registry is otherwise immutable for the run, so a
+        second registration of the same name is treated as a wiring
+        bug rather than silent overwrite.
+        """
         self._nodes: dict[PipelineState, Node] = {}
 
     def register(self, node: Node) -> None:
@@ -64,5 +71,5 @@ class NodeRegistry:
         return list(self._nodes)
 
     def __contains__(self, name: object) -> bool:
-        """Support ``name in registry`` checks used by the transition validator."""
+        """Support ``name in registry`` membership checks used by the transition validator when it walks the rule table."""
         return name in self._nodes

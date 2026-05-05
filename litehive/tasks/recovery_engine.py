@@ -12,7 +12,15 @@ def resolve_recovery_engine(
     task: TaskRecord,
     config: LitehiveConfig | None,
 ) -> tuple[str, str | None]:
-    """Pick the engine/model pair to run a recovery or merge-resolution invocation, honoring the operator's `recovery_engine` override and refusing to fall through to a different engine when the chosen one is unavailable; called by the recovery and merge-resolving stages before they spawn a subagent."""
+    """
+    Pick the engine/model pair for a recovery or merge-resolution invocation.
+
+    Honours the operator's ``recovery_engine`` override and refuses to fall
+    through to a different engine when the chosen one is unavailable; called
+    by the recovery and merge-resolving stages before they spawn a subagent
+    so an unreachable engine fails loudly instead of silently swapping for
+    a different model.
+    """
     # inline: kept so tests can monkey-patch ``select_engine`` on the
     # config.engine_models module (the canonical home) and have callers
     # here see it.

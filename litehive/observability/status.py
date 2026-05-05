@@ -121,12 +121,16 @@ def collect_task_pipeline_status(
     read_only: bool = False,
     diagnostics: bool = False,
 ) -> TaskPipelineStatusData:
-    """Bundle the workspace snapshot the CLI status commands and daemon health line need in one read.
+    """
+    Bundle the workspace snapshot the CLI status commands need in one read.
 
-    Called by the CLI status entry points and by the daemon when emitting periodic health
-    summaries. ``read_only=True`` opens SQLite in URI read-only mode so concurrent runners
-    cannot be blocked by a status read; ``diagnostics=True`` widens the snapshot to include
-    issue collection that the operational fast-path skips.
+    Called by the CLI status entry points and by the daemon when
+    emitting periodic health summaries. ``read_only=True`` opens
+    SQLite in URI read-only mode so concurrent runners cannot be
+    blocked by a status read; ``diagnostics=True`` widens the
+    snapshot to include issue collection that the operational
+    fast-path skips, because the issue scan is too expensive for
+    every status print.
     """
     resolved_root = root.resolve()
     if diagnostics:
@@ -169,13 +173,17 @@ def render_task_pipeline_status_lines(
     mode: StatusRenderMode,
     retry_on_label: str | None = None,
 ) -> list[str]:
-    """Format a collected pipeline snapshot into the flat key/value lines the CLI prints.
+    """
+    Format a collected pipeline snapshot into flat key/value lines.
 
-    Called by the ``litehive status`` CLI handler and by the daemon's periodic status writer;
-    the ``mode`` switch keeps both surfaces sharing one renderer instead of two parallel
-    formatters. ``retry_on_label`` is required in ``full`` mode because the runtime-policy
-    block needs the caller's preformatted label and refusing to default it makes the missing
-    data the call site's problem.
+    Called by the ``litehive status`` CLI handler and by the
+    daemon's periodic status writer. The ``mode`` switch keeps
+    both surfaces sharing one renderer instead of two parallel
+    formatters that would drift over time. ``retry_on_label`` is
+    required in ``full`` mode because the runtime-policy block
+    needs the caller's preformatted label; refusing to default
+    it makes the missing data the call site's problem rather
+    than producing misleading output.
     """
     if mode == "full":
         lines = render_full_status_header_lines(workspace, status.config, status.state, status.runner)
@@ -222,18 +230,29 @@ def render_task_pipeline_status_lines(
 
 
 def _first_or_none(items):
-    """Return the first element of a sequence, or `None` when it is empty; used so call sites can avoid inline ternaries when they only care about the head."""
+    """
+    Return the first element of a sequence or ``None`` when it is empty.
+
+    Used so call sites that only care about the head of a list
+    (e.g. ``queue_head`` for status output) can avoid inline
+    ternaries; helps keep the snapshot construction one
+    dictionary literal rather than a chain of ``if`` blocks.
+    """
     if items:
         return items[0]
     return None
 
 
 def _fast_runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
-    """Distinguish never-started workspaces from stopped/dead runners for the fast status output.
+    """
+    Distinguish never-started workspaces from stopped or dead runners.
 
-    The full status path reads liveness from the runner record alone; the fast path also
-    needs to tell operators "you have not run litehive yet here" apart from "the runner died",
-    which requires probing the on-disk lockfile.
+    The full status path reads liveness from the runner record
+    alone, but the fast path also needs to tell operators "you
+    have not run litehive yet here" apart from "the runner died"
+    — that distinction matters when an operator is debugging an
+    apparently-stopped workspace. Probes the on-disk lockfile to
+    pick the right label.
     """
     if runner.status in {"running", "late"}:
         return "running"
@@ -245,12 +264,15 @@ def _fast_runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
 
 
 def _load_task_read_only(root: Path, task_id: str) -> TaskRecord | None:
-    """Load a task without taking a writer lock, so concurrent ``status`` reads cannot stall a live runner.
+    """
+    Load a task without taking a writer lock.
 
-    The standard ``get_task`` path opens the workspace DB read-write and would contend with
-    an active writer; status output must never block runtime work, so this opens SQLite in
-    URI read-only mode and swallows OS/DB errors back to ``None`` (status is allowed to be
-    incomplete, never to raise).
+    The standard :func:`get_task` path opens the workspace DB
+    read-write and would contend with an active writer; status
+    output must never block runtime work, so this opens SQLite
+    in URI read-only mode and swallows OS/DB errors back to
+    ``None``. Status is allowed to be incomplete, never to
+    raise — a missing task is silently dropped from the snapshot.
     """
     db_path = workspace_path(root, "data.db")
     if not db_path.exists():
@@ -280,11 +302,15 @@ def _load_task_read_only(root: Path, task_id: str) -> TaskRecord | None:
 
 
 def _operational_attention_lines(lines: list[str]) -> list[str]:
-    """Trim attention output to the ``operator_needed:*`` lines the operational status surfaces.
+    """
+    Trim attention output to the ``operator_needed:*`` lines.
 
-    Diagnostics mode emits the full attention list; the operational mode only wants the
-    subset that signals "a human must act", so this drops everything else before the lines
-    reach the CLI status renderer.
+    Diagnostics mode emits the full attention list; the
+    operational mode only wants the subset that signals "a human
+    must act", so this drops everything else before the lines
+    reach the CLI status renderer. Without this filter, the
+    operator sees lower-priority attention noise mixed in with
+    real action items.
     """
     if not lines:
         return []
@@ -296,7 +322,14 @@ def _operational_attention_lines(lines: list[str]) -> list[str]:
 
 
 def render_active_task_detail_lines(task: TaskRecord | None, default_engine: str) -> list[str]:
-    """Render the flat active-task detail lines used by CLI status outputs."""
+    """
+    Render the flat active-task detail block.
+
+    Used by both the fast and full CLI status outputs so the
+    "what is the active task doing right now?" lines are
+    identical between modes. Returns an empty list when no task
+    is active so the caller's ``lines.extend(...)`` is a no-op.
+    """
     if task is None:
         return []
 
@@ -311,12 +344,15 @@ def render_active_task_detail_lines(task: TaskRecord | None, default_engine: str
 
 
 def render_runner_status_line(runner: RunnerStatusState, state: WorkspaceState | None = None) -> str:
-    """Format the one-line ``runner_status: ...`` summary embedded in both CLI status output and daemon health logs.
+    """
+    Format the one-line ``runner_status: ...`` summary.
 
-    Called by the ``full`` status header and by the daemon's heartbeat logger. ``state`` is
-    accepted but ignored; it remains in the signature so the daemon caller can pass it
-    without a conditional, and so future renderers can read workspace state without a
-    breaking API change.
+    Embedded in both CLI status output and daemon health logs;
+    keeping the format identical lets operators correlate the
+    two without translating between formats. ``state`` is
+    accepted but unused — kept on the signature so the daemon
+    caller can pass it unconditionally and so a future renderer
+    can read workspace state without a breaking API change.
     """
     del state
     base_status = (
@@ -333,11 +369,14 @@ def render_full_status_header_lines(
     state: WorkspaceState,
     runner: RunnerStatusState,
 ) -> list[str]:
-    """Emit the workspace/engine/runner/queue header that ``full``-mode status output starts with.
+    """
+    Emit the workspace/engine/runner/queue header for full-mode status.
 
-    Called by ``render_task_pipeline_status_lines`` for the full path; kept as a separate
-    function so tests can exercise the header independently and so the daemon can render
-    just the header for shorter health snapshots without the rest of the status body.
+    Called by :func:`render_task_pipeline_status_lines` for the
+    full path; kept as a separate function so tests can exercise
+    the header independently and so the daemon can render just
+    the header for shorter health snapshots without dragging in
+    the rest of the status body.
     """
     active_task_id = runner.active_task_id or state.active_task_id
     lines = [
@@ -364,11 +403,16 @@ def render_full_status_header_lines(
 
 
 def render_runtime_policy_lines(config: LitehiveConfig, retry_on_label: str) -> list[str]:
-    """Render the retry/pool/process-profile policy block so operators can see effective settings without reading config.
+    """
+    Render the retry/pool/process-profile policy block.
 
-    ``retry_on_label`` is preformatted by the caller (the CLI) because the human-readable
-    spelling depends on which retry-on enum members are active and the formatting helper
-    lives next to the CLI parsing — this renderer just stitches it in.
+    Lets operators see effective runtime settings without
+    reading config files; needed when triaging why the pool
+    behaved differently across runs. ``retry_on_label`` is
+    preformatted by the caller (the CLI) because the
+    human-readable spelling depends on which retry-on enum
+    members are active and the formatter lives next to the CLI
+    parsing — this renderer just stitches it in.
     """
     return [
         f"default_retry_limit: {config.default_retry_limit}",
@@ -385,12 +429,15 @@ def render_engine_availability_lines(
     config: LitehiveConfig,
     monitoring: WorkspaceEngineMonitoring,
 ) -> list[str]:
-    """Emit one ``engine_available:`` line per engine the workspace knows about, marking quota/freeze pressure.
+    """
+    Emit one ``engine_available:`` line per engine the workspace knows about.
 
-    Operators want to see frozen, quota-limited, and rate-limited engines before kicking
-    off a run. This unions every engine the workspace touches (default, preference list,
-    freeze list, and live monitoring), then annotates each with its current status so the
-    CLI status output and the workspace-health command share one source of truth.
+    Marks quota, freeze, and rate-limit pressure so operators
+    see the state of every engine before kicking off a run.
+    Unions every engine the workspace touches (default,
+    preference list, freeze list, live monitoring) and annotates
+    each — that union is what makes the CLI status output and
+    the workspace-health command share one source of truth.
     """
     engine_names = {config.default_engine, *config.engine_preference, *config.engine_freeze}
     engine_names.update(monitoring.engines)

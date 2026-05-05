@@ -2,31 +2,64 @@ from litehive.domain.common import TaskStatus
 
 
 def format_retry_on(config):
-    """Format the `retry_on` failure-kind list for the status header; returns `-` when retries are disabled so the line stays human-readable."""
+    """
+    Format the ``retry_on`` failure-kind list for the status header.
+
+    Returns ``-`` when retries are disabled so the header stays
+    human-readable instead of showing an empty cell that looks like
+    a missing field.
+    """
     if not config.retry_on:
         return "-"
     return ",".join(config.retry_on)
 
 
 def task_engine_label(task_engine, default_engine):
-    """Render the engine cell for queue/status rows; falls back to "<default> (default)" when the task has not pinned an engine so readers can tell pinned vs inherited at a glance."""
+    """
+    Render the engine cell for queue and status rows.
+
+    Falls back to ``"<default> (default)"`` when the task has not
+    pinned an engine so readers can tell pinned-vs-inherited at a
+    glance — important when debugging why two tasks behaved
+    differently under the same workspace config.
+    """
     return task_engine or f"{default_engine} (default)"
 
 
 def task_model_label(task_model):
-    """Render the model cell for queue/status rows; returns "default" when the task inherits the engine's default model rather than printing an empty column."""
+    """
+    Render the model cell for queue and status rows.
+
+    Returns ``"default"`` when the task inherits the engine's default
+    model rather than printing an empty column, keeping the table
+    grid aligned and the inheritance visible.
+    """
     return task_model or "default"
 
 
 def task_dependencies_label(task_id, dependencies):
-    """Format a task's `depends_on` list, omitting any self-reference so a stale self-edge does not show up in the queue view."""
+    """
+    Format a task's ``depends_on`` list for the queue view.
+
+    Drops any self-reference so a stale self-edge (which can sneak
+    in via legacy data) does not surface as a confusing
+    ``T-123 -> T-123`` in the displayed dependency cell.
+    """
     if not dependencies:
         return "-"
     return ", ".join(dependency_id for dependency_id in dependencies if dependency_id != task_id) or "-"
 
 
 def task_interruption_label(task):
-    """Build the trailing interruption suffix appended to a task row when the task is parked mid-pipeline; collects resume stage, source, reason code, and which subagent was running so operators see *why* a task is interrupted on the same line."""
+    """
+    Build the trailing interruption suffix for a parked task row.
+
+    Appended to a task line when the task is paused mid-pipeline.
+    Collects resume stage, source, reason code, and which subagent
+    was running so operators see *why* a task is interrupted on the
+    same line as the task itself, without having to drill into
+    ``task show``.
+    """
     if task.status != TaskStatus.INTERRUPTED or task.runtime.pipeline.current_stage.status != "interrupted":
         return ""
     interruption = task.runtime.execution.interruption

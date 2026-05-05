@@ -1,8 +1,12 @@
-"""Dashboard-style status sections rendered for ``litehive workspace status``.
+"""
+Dashboard-style status sections for ``litehive workspace status``.
 
-These helpers format the indented prose blocks (``=== Active Task ===``,
-``=== Queue ===``, ``=== Recent Activity ===``, etc.) that the workspace status
-command prints to operators. Health-mode renderers live in ``status_health``.
+These helpers format the indented prose blocks (``=== Active
+Task ===``, ``=== Queue ===``, ``=== Recent Activity ===``, …)
+the workspace status command prints to operators. Health-mode
+renderers live in :mod:`litehive.observability.status_health`;
+this module is intentionally split off so the dashboard surface
+is editable without dragging in health logic.
 """
 
 import json
@@ -20,7 +24,15 @@ from litehive.workspace import Workspace
 
 
 def render_active_task_section(task: TaskRecord | None, default_engine: str) -> list[str]:
-    """Render the Active Task dashboard section."""
+    """
+    Render the ``=== Active Task ===`` dashboard section.
+
+    Combines task-level elapsed (since run started) with
+    stage-level elapsed so the operator can tell a freshly
+    transitioned stage apart from one that has been spinning
+    for a while. Returns the section header alone with
+    ``(none)`` when no task is active.
+    """
     lines: list[str] = ["=== Active Task ==="]
     if task is None:
         lines.append("  (none)")
@@ -49,7 +61,14 @@ def render_active_tasks_section(
     tasks: list[TaskRecord],
     default_engine: str,
 ) -> list[str]:
-    """Render the Active Tasks dashboard section."""
+    """
+    Render the ``=== Active Tasks ===`` plural section.
+
+    Used by status surfaces that allow more than one in-flight
+    task (e.g. a future multi-task pool). Includes the worktree
+    path per row so the operator can switch into the right
+    directory without an extra ``task show``.
+    """
     lines: list[str] = ["=== Active Tasks ==="]
     if not tasks:
         lines.append("  (none)")
@@ -70,7 +89,15 @@ def render_active_tasks_section(
 
 
 def find_last_completed_task(tasks: list[TaskRecord]) -> TaskRecord | None:
-    """Return the most recently completed (done) task by updated_at."""
+    """
+    Return the most recently completed task by ``updated_at``.
+
+    Used by the dashboard's "Last Completed" section so the
+    operator sees the most recent success without scrolling
+    through history. Filters to ``DONE`` only — closed/abandoned
+    tasks are not "completed" for this purpose because their
+    work was not finished.
+    """
     done_tasks = [t for t in tasks if t.status == TaskStatus.DONE]
     if not done_tasks:
         return None
@@ -78,7 +105,13 @@ def find_last_completed_task(tasks: list[TaskRecord]) -> TaskRecord | None:
 
 
 def render_last_completed_section(task: TaskRecord | None, workspace: Workspace) -> list[str]:
-    """Render the Last Completed dashboard section."""
+    """
+    Render the ``=== Last Completed ===`` dashboard section.
+
+    Falls back through outcome kind, last verdict, and
+    ``updated_at`` so the operator sees a complete row even when
+    the legacy outcome record was missing one of the fields.
+    """
     lines: list[str] = ["=== Last Completed ==="]
     if task is None:
         lines.append("  (none)")
@@ -92,7 +125,15 @@ def render_last_completed_section(task: TaskRecord | None, workspace: Workspace)
 
 
 def render_queue_section(queue: list[str], tasks: list[TaskRecord]) -> list[str]:
-    """Render the Queue dashboard section."""
+    """
+    Render the ``=== Queue ===`` dashboard section.
+
+    Shows queue length and the next task's title; only the head
+    is rendered because the dashboard is a one-screen overview
+    and longer queue listings live under ``litehive queue``.
+    Falls back to the queued id when the title cannot be
+    resolved so an empty title cell never confuses the operator.
+    """
     lines: list[str] = ["=== Queue ==="]
     count = len(queue)
     if count == 0:
@@ -111,7 +152,15 @@ def render_queue_section(queue: list[str], tasks: list[TaskRecord]) -> list[str]
 
 
 def collect_recent_activity(workspace: Workspace, limit: int = 5) -> list[dict[str, Any]]:
-    """Return recent task events from SQLite."""
+    """
+    Return the most recent task events from SQLite.
+
+    Sourced directly from the workspace events table because the
+    dashboard wants the global stream, not a per-task slice. The
+    default ``limit`` keeps the recent-activity dashboard
+    section to a few lines so it does not crowd out other
+    sections.
+    """
     with workspace.connect() as connection:
         rows = connection.execute(
             """
@@ -153,7 +202,15 @@ _EVENT_LABELS: dict[str, str] = {
 
 
 def render_recent_activity_section(events: list[dict[str, Any]]) -> list[str]:
-    """Render the Recent Activity dashboard section."""
+    """
+    Render the ``=== Recent Activity ===`` dashboard section.
+
+    Builds one human-readable line per event using
+    :data:`_EVENT_LABELS` for the verb. Adds a small set of
+    domain-aware suffixes (stage, role, engine, exit code,
+    verdict) when present so the operator gets the most useful
+    context without expanding the full event payload.
+    """
     lines: list[str] = ["=== Recent Activity ==="]
     if not events:
         lines.append("  (no recent activity)")

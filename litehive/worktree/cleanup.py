@@ -1,8 +1,13 @@
-"""Discovery and cleanup of Litehive-managed task worktrees.
+"""
+Listing and cleanup of Litehive-managed task worktrees.
 
-Listing live worktrees, removing them on terminal task transitions, and bulk
-cleaning closed/done tasks. Sibling of ``litehive.worktree`` so callers that
-only need cleanup do not pull in the full WorktreeService graph.
+Three jobs: enumerate live managed worktrees with their dirty count
+(``collect_managed_worktrees``), remove a single terminal task's
+worktree on the lifecycle hand-off (``cleanup_terminal_task_worktree``),
+and bulk-remove every cleanable worktree from the operator CLI
+(``remove_cleanable_worktrees``). Lives as a sibling of
+``litehive.worktree`` so callers that only need cleanup don't have
+to import the full ``WorktreeService`` graph.
 """
 
 from pathlib import Path
@@ -29,10 +34,14 @@ from litehive.worktree.paths import (
 
 
 def cleanup_terminal_task_worktree(root: Path, task: TaskRecord) -> None:
-    """Remove a terminal task's worktree and branch, then clear task metadata.
+    """
+    Remove a terminal task's worktree, drop its branch, and clear task metadata.
 
-    Called by ``WorktreeService.cleanup_terminal_task_worktree`` and the
-    lifecycle orchestrator on terminal transitions (done/closed/cancelled).
+    The lifecycle orchestrator calls this on terminal transitions
+    (done/closed/cancelled) so finished tasks don't leave abandoned
+    worktrees and branches lying around. The branch deletion is
+    best-effort because git refuses to drop a branch a worktree
+    still holds — we delete the worktree first and then sweep up.
     """
     worktree_rel = get_task_worktree_path(task)
     if not worktree_rel:
@@ -47,10 +56,14 @@ def cleanup_terminal_task_worktree(root: Path, task: TaskRecord) -> None:
 
 
 def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
-    """Return live Litehive-managed task worktrees with their dirty-change count.
+    """
+    Enumerate live Litehive-managed task worktrees with their dirty-change count.
 
-    Used by ``WorktreeService.collect_managed_worktrees`` and the
-    ``litehive worktree`` CLI for operator listing.
+    Backs the ``litehive worktree`` listing CLI and any flow that
+    needs to render "what's on disk right now" — including the
+    cleanup decision in ``remove_cleanable_worktrees``. Sorts by
+    task id so two operator invocations produce identical output
+    and tests don't have to depend on filesystem walk order.
     """
     state = load_state(root)
     if state.active_task_id:
@@ -88,11 +101,16 @@ def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
 
 
 def remove_cleanable_worktrees(root: Path, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
-    """Remove worktrees for terminal tasks and report what was touched.
+    """
+    Remove worktrees for terminal tasks and report what was touched.
 
-    Bulk operation backing ``WorktreeService.remove_cleanable_worktrees`` and
-    the ``litehive worktree clean`` CLI. ``dry_run`` returns the candidate
-    list without touching disk.
+    Backs ``litehive worktree clean``. The result dict separates
+    candidates by what actually happened (removed, deferred because
+    the workspace was locked, failed with a git error, skipped
+    because the task is still active) so the CLI can render an
+    accurate per-row outcome instead of a single boolean. ``dry_run``
+    returns the candidate list without touching disk for the
+    ``--dry-run`` flag.
     """
     worktrees = collect_managed_worktrees(root)
     candidates = [item for item in worktrees if item.cleanable]

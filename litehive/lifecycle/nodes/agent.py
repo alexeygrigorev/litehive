@@ -24,7 +24,14 @@ class TransientError(Exception):
     """
 
     def __init__(self, message: str, failure_kind: str | None = None) -> None:
-        """Carry a normalized ``failure_kind`` (``execution_limit``, ``timeout``, …) so the AgentNode can match it against the configured ``retry_on`` set rather than parsing the message string."""
+        """
+        Carry a normalized ``failure_kind`` alongside the message.
+
+        Values like ``execution_limit`` or ``timeout`` let AgentNode
+        match against the configured ``retry_on`` set without parsing
+        the message string — message text changes between engine
+        versions, but the kind stays stable.
+        """
         super().__init__(message)
         self.failure_kind = failure_kind
 
@@ -85,7 +92,14 @@ class Engine(Protocol):
     name: str
 
     def run_turn(self, session: Any, prompt: Any, state: TaskState) -> AgentVerdict:
-        """Execute one engine turn and return the resolved verdict; the AgentNode wraps each call in retry/nudge/exclusion bookkeeping so the protocol stays minimal."""
+        """
+        Execute one engine turn and return the resolved verdict.
+
+        AgentNode wraps each call in retry / nudge / exclusion
+        bookkeeping, so the protocol can stay minimal — the engine
+        itself only has to do one turn at a time and surface failures
+        through the documented exception taxonomy.
+        """
         ...
 
 
@@ -104,15 +118,29 @@ class EngineSelector(Protocol):
         node_name: PipelineState,
         excluded: frozenset[str],
     ) -> Engine | None:
-        """Return the next engine to try for this node visit, honouring the AgentNode's ``excluded`` set so we never re-pick an engine that has already crashed in this run."""
+        """
+        Return the next engine to try for this node visit.
+
+        Honours the AgentNode's ``excluded`` set so an engine that has
+        already crashed during this visit is never re-picked; returning
+        ``None`` is the signal that no engine is eligible and the node
+        should escalate as ``AllEnginesExhausted``.
+        """
         ...
 
 
 class SessionProvider(Protocol):
-    """Per-(task, node, engine) session store the AgentNode uses so retries can resume the engine via ``--continue``."""
+    """
+    Per-(task, node, engine) session store the AgentNode uses.
+
+    The session captures the engine's resume handle so retries on the
+    same engine (``--continue`` / ``--resume``) keep talking to the
+    same conversation; switching engines starts a new conversation
+    because handles do not carry across engines.
+    """
 
     def get_or_create(self, task_id: str, node_name: PipelineState, engine_name: str) -> Any:
-        """Return the session id for a task/node/engine triple, creating it on first use; the AgentNode calls this once per outer-loop engine selection."""
+        """Return the session for one task/node/engine triple, creating it on first use; AgentNode calls this once per outer-loop engine selection."""
         ...
 
     def persist(self, task_id: str, node_name: PipelineState, engine_name: str, session: Any) -> None:
@@ -171,7 +199,14 @@ class AgentNode(Node):
         sleep_fn: Callable[[float], None] | None = None,
         grace_period_seconds: int | None = None,
     ) -> None:
-        """Wire the node to its engine selector, session store, and retry budgets; the lifecycle factory constructs one ``AgentNode`` per role-stage and reuses it across tasks."""
+        """
+        Wire the node to its selector, session store, and retry budgets.
+
+        The lifecycle factory constructs one ``AgentNode`` per
+        role-stage and reuses it across tasks, so the dependencies
+        captured here are workspace-scoped (selector, sessions) plus
+        per-stage policy (retry budgets, grace period).
+        """
         self.name = name
         self.selector = selector
         self.sessions = session_provider
@@ -189,7 +224,14 @@ class AgentNode(Node):
             self.grace_period_seconds = grace_period_seconds
 
     def build_prompt(self, state: TaskState) -> Any:
-        """Hook subclasses override to assemble the role-specific prompt; the base raises so a misregistered node fails loudly instead of running an empty turn."""
+        """
+        Hook subclasses override to assemble the role-specific prompt.
+
+        The base raises ``NotImplementedError`` so a misregistered
+        node fails loudly instead of running an empty turn — silently
+        passing an empty prompt to an engine would burn budget and
+        produce noise.
+        """
         raise NotImplementedError
 
     def build_nudge_prompt(self, state: TaskState, original_prompt: Any) -> Any:
@@ -226,7 +268,17 @@ class AgentNode(Node):
         return original_prompt
 
     def run(self, state: TaskState) -> Event:
-        """Drive the engine-selection outer loop: build the prompt once, then keep asking the selector for a fresh engine until one resolves to an Event or every engine is excluded."""
+        """
+        Drive the engine-selection outer loop until a resolved Event
+        comes back.
+
+        Builds the prompt once, then asks the selector for a fresh
+        engine each iteration; an engine that crashes or runs out of
+        retries is added to the excluded set so the next pick won't
+        return it. Loops until either an inner-loop call resolves to a
+        ``Pass``/``Reject``/``Blocked``/``Crash`` event or every
+        eligible engine has been excluded.
+        """
         prompt = self.build_prompt(state)
         excluded: set[str] = set()
         last_exc: Exception | None = None
@@ -322,7 +374,15 @@ class AgentNode(Node):
         return EngineBlockedError(f"retry budget ({self.retry_budget}) exhausted on {engine.name}: {last_exc}")
 
     def verdict_to_event(self, verdict: AgentVerdict) -> Event:
-        """Translate the adapter-level ``AgentVerdict`` into the state-machine Event vocabulary so the runner stays oblivious to engine response shapes."""
+        """
+        Translate an adapter-level ``AgentVerdict`` into a state-machine
+        Event.
+
+        The runner only knows the Event vocabulary; this mapping is
+        what lets engine adapters speak ``AgentVerdict`` without the
+        runner caring about engine response shapes. Recovery overrides
+        this method because its verdict vocabulary is wider.
+        """
         outcome = verdict.outcome.lower()
         if outcome == "pass":
             return Pass(metadata=dict(verdict.metadata or {}))
@@ -343,7 +403,16 @@ class AgentNode(Node):
 
 
 def _metadata_classification(metadata: dict[str, Any]) -> str | None:
-    """Recover a verdict classification that adapters tucked into ``metadata`` instead of the dedicated field, so older engine integrations still produce typed Reject events."""
+    """
+    Recover a verdict classification that an adapter tucked into
+    ``metadata`` instead of the dedicated field.
+
+    Older engine integrations populated ``classification`` /
+    ``verdict_classification`` keys on the metadata dict before
+    ``AgentVerdict.classification`` existed; this fallback lets those
+    adapters still produce typed Reject events without forcing every
+    integration to rewrite at once.
+    """
     for key in ("verdict_classification", "classification"):
         value = metadata.get(key)
         if isinstance(value, str) and value.strip():

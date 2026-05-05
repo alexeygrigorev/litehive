@@ -24,11 +24,25 @@ class Stage:
     node: type
 
     def __post_init__(self) -> None:
-        """Coerce ``name`` to a real ``PipelineState`` enum even when callers pass the string spelling, so equality and ordering are always between typed values."""
+        """
+        Coerce ``name`` to a real ``PipelineState`` enum.
+
+        Callers sometimes pass the bare string spelling for ergonomics;
+        normalising at construction time means equality and ordering
+        below are always between typed values, so a string-vs-enum
+        mismatch can never silently miss in a comparison.
+        """
         object.__setattr__(self, "name", canonical_pipeline_state(self.name))
 
     def __eq__(self, other):
-        """Treat a ``Stage`` as equal to either another Stage with the same name or the raw string spelling of that name; lets the rule table mix ``Stages.GROOMING`` and ``"grooming"`` keys."""
+        """
+        Compare equal to another ``Stage`` with the same name *or* to
+        the raw string spelling of that name.
+
+        Lets the rule table mix ``Stages.GROOMING`` and ``"grooming"``
+        keys without forcing every call site to re-coerce; the runner
+        and rule loader both rely on this dual-shape equality.
+        """
         if isinstance(other, str):
             return self.name == other
         if isinstance(other, Stage):
@@ -36,7 +50,7 @@ class Stage:
         return NotImplemented
 
     def __hash__(self):
-        """Hash by the underlying state name so ``Stage`` and the matching string spelling collide in the same dict bucket; required for the equality contract above."""
+        """Hash by the underlying state name so ``Stage`` and the matching string spelling collide in the same dict bucket — required by the dual-shape equality contract above."""
         return hash(self.name)
 
     def __lt__(self, other):

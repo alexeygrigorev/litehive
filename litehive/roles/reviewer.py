@@ -32,7 +32,15 @@ RETRY_ATTEMPT_GUIDANCE = """\
 
 
 class ReviewerAgent(RoleAgent):
-    """Accepting stage: final done/not-done judgment before commit."""
+    """
+    Accepting-stage agent.
+
+    Final done/not-done judgment before commit — the only role
+    allowed to override an exhausted-but-hooks-green QA reject and
+    pass the task through, and the only role with the authority to
+    close a task with a non-``done`` close reason
+    (``wont_do``/``duplicate``/``deferred``).
+    """
 
     NODE_NAME = PipelineState.ACCEPTING
     ROLE = "reviewer"

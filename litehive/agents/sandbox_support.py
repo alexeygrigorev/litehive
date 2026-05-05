@@ -14,17 +14,24 @@ from heru.engine_detection import (
 
 
 class SandboxSummary(Protocol):
-    """Sandbox policy snapshot the adapter advertises to the operator status surface."""
+    """Sandbox policy snapshot the adapter advertises to the operator status surface — kept as a protocol so this module does not have to import the concrete summary type."""
 
     enabled: bool
     summary: str
 
 
 class SandboxLauncher(Protocol):
-    """Sandbox-launcher contract used by ``SandboxedAdapter`` to confine engine invocations without depending on a concrete launcher implementation."""
+    """
+    Sandbox-launcher contract used by ``SandboxedAdapter``.
+
+    The adapter confines engine invocations without depending on a
+    concrete launcher implementation; production passes the real
+    ``SandboxLauncher`` in ``litehive.agents.sandbox`` and tests can
+    pass a stub that satisfies the protocol.
+    """
 
     def policy_summary(self, engine_name: str, role: str = "") -> SandboxSummary:
-        """Resolve the effective sandbox policy snapshot for an engine/role pair so adapters can advertise it without depending on the concrete launcher."""
+        """Resolve the effective sandbox policy snapshot so adapters can advertise it without depending on the concrete launcher implementation."""
         ...
 
     def wrap_invocation(
@@ -34,7 +41,7 @@ class SandboxLauncher(Protocol):
         invocation: object,
         role: str = "",
     ) -> object:
-        """Rewrite a ``CLIInvocation`` to run inside the sandbox; called by ``SandboxedAdapter.finalize_invocation`` right before exec."""
+        """Rewrite a ``CLIInvocation`` to run inside the sandbox — called by ``SandboxedAdapter.finalize_invocation`` right before the engine is exec'd."""
         ...
 
 
@@ -43,7 +50,14 @@ def forced_engine_rw_state_dirs(
     policy: object | None,
     env: Mapping[str, str] | None = None,
 ) -> frozenset[Path]:
-    """State dirs that an engine must be able to write into."""
+    """
+    Return the state dirs an engine must be able to write into.
+
+    Operators sometimes classify these paths read-only in the
+    workspace policy; the sandbox launcher consults this set so it
+    can promote them to rw regardless and prevent silent breakage of
+    engine session/rollout writes.
+    """
 
     effective_env = dict(env or {})
     setenv = getattr(policy, "setenv", None)
@@ -85,7 +99,15 @@ def forced_engine_rw_state_dirs(
 
 
 def sanitize_path_env(raw_path: str) -> str:
-    """Drop PATH segments that point at ephemeral codex arg0 dirs."""
+    """
+    Drop PATH segments that point at ephemeral codex arg0 dirs.
+
+    Codex spawns a wrapper process whose temp PATH segment vanishes
+    when the run ends; carrying that segment into a child engine
+    invocation produces a stale PATH entry that can break shelling
+    out. Stripping it here keeps the propagated PATH usable across
+    the sandbox boundary.
+    """
 
     if not raw_path:
         return raw_path
@@ -102,10 +124,26 @@ def sanitize_path_env(raw_path: str) -> str:
 
 
 class SandboxedAdapter(ExternalCLIAdapter):
-    """Wrap a heru engine adapter so every invocation is finalized through the workspace sandbox launcher; isolates "what command does the engine want to run" from "how do we confine that command on this host"."""
+    """
+    Wrap a heru engine adapter so every invocation is finalized
+    through the workspace sandbox launcher.
+
+    Isolates "what command does the engine want to run" from "how do
+    we confine that command on this host"; engine adapters stay
+    unaware of sandboxing, and the sandbox does not have to know any
+    engine's argv shape.
+    """
 
     def __init__(self, adapter: ExternalCLIAdapter, launcher: SandboxLauncher, engine_name: str, role: str) -> None:
-        """Wrap an existing engine adapter and resolve its sandbox policy once so every later invocation reuses the same snapshot."""
+        """
+        Wrap an existing engine adapter and snapshot its sandbox
+        policy once at construction.
+
+        Caching the policy snapshot avoids re-resolving config on
+        every invocation, and keeps every subsequent ``run`` /
+        ``run_live`` / status display agreeing on what the policy was
+        at the time the adapter was built.
+        """
         super().__init__(
             name=adapter.name,
             binary=adapter.binary,
@@ -126,7 +164,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
         max_turns: int | None = None,
         resume_session_id: str | None = None,
     ) -> list[str]:
-        """Defer command construction to the wrapped engine adapter; the sandbox layer never rewrites the engine's argv."""
+        """Defer command construction to the wrapped engine adapter — the sandbox layer never rewrites the engine's argv, only the surrounding invocation."""
         return self._adapter.build_command(
             prompt,
             cwd,
@@ -136,11 +174,11 @@ class SandboxedAdapter(ExternalCLIAdapter):
         )
 
     def detect_capabilities(self):
-        """Delegate capability detection to the wrapped adapter; the sandbox neither adds nor removes capabilities."""
+        """Delegate capability detection to the wrapped adapter — sandboxing neither adds nor removes engine capabilities."""
         return self._adapter.detect_capabilities()
 
     def finalize_invocation(self, invocation):
-        """Hook that runs immediately before exec: hands the invocation to the sandbox launcher so the engine actually runs confined."""
+        """Hand the invocation to the sandbox launcher right before exec — this is where "engine wants to run X" turns into "actually run X confined"."""
         return self._launcher.wrap_invocation(
             self._engine_name,
             self.binary,
@@ -149,7 +187,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
         )
 
     def sandbox_details(self) -> tuple[bool, str]:
-        """Expose the policy snapshot for the status/audit surface so operators can see whether sandboxing was effective for this engine."""
+        """Expose the policy snapshot to the status/audit surface so operators can confirm the engine actually ran sandboxed for this run."""
         return (self._summary.enabled, self._summary.summary)
 
     def run(
@@ -162,7 +200,16 @@ class SandboxedAdapter(ExternalCLIAdapter):
         on_started=None,
         emit_unified: bool = False,
     ) -> CLIExecutionResult:
-        """Forward to the wrapped adapter's ``run`` when it overrides the base, otherwise fall back to base run; preserves engine-specific run paths while still going through ``finalize_invocation`` for sandboxing."""
+        """
+        Forward to the wrapped adapter's ``run`` when it overrides the
+        base.
+
+        Some engines override ``run`` to add engine-specific
+        behaviour (custom argv shape, alternate exec path); the
+        override-detection probe makes sure those paths still go
+        through ``finalize_invocation`` for sandboxing instead of
+        being silently skipped because we used the base ``run``.
+        """
         if has_callable_override(self._adapter, "run", ORIGINAL_EXTERNAL_ADAPTER_RUN):
             run_callable = effective_engine_callable(self._adapter, "run")
             if not callable(run_callable):
@@ -202,7 +249,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
         inactivity_timeout_seconds: float = 0,
         emit_unified: bool = False,
     ) -> CLIExecutionResult:
-        """Streaming counterpart of ``run`` with the same override-detection logic so engine-specific live paths still get sandboxed."""
+        """Streaming counterpart of ``run`` with the same override-detection logic so engine-specific live paths still go through ``finalize_invocation``."""
         if has_callable_override(self._adapter, "run_live", ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE):
             run_live_callable = effective_engine_callable(self._adapter, "run_live")
             if not callable(run_live_callable):
@@ -237,7 +284,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
         )
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:
-        """Delegate transcript rendering to the wrapped adapter; sandboxing doesn't change the post-mortem format."""
+        """Delegate transcript rendering to the wrapped adapter — sandboxing does not change the post-mortem format the engine adapter knows how to produce."""
         return self._adapter.render_transcript(execution)
 
 

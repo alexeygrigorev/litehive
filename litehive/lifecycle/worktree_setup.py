@@ -31,20 +31,34 @@ from .runtime_sync import _MANUAL_REVIEW_FLAG_REASONS
 
 
 def _resolve_worktree(root: Path, state: TaskState) -> Path:
-    """Look up the on-disk worktree path for a task, falling back to root."""
+    """Look up the on-disk worktree path for a task, falling back to the workspace root when no worktree was recorded — the commit/sync nodes never want a missing path."""
     _, worktree_path = _task_recorded_worktree(root, state.task_id)
     return worktree_path or root
 
 
 def _resolve_hook_execution_root(root: Path, state: TaskState) -> Path:
-    """Run pre-commit hooks in the task checkout and keep after_commit on main."""
+    """
+    Pick the cwd for runner hooks based on stage.
+
+    Pre-commit hooks run in the task worktree so they see the agent's
+    edits; the ``after_commit`` hook runs on main because by that
+    point the changes have already landed there and we want to verify
+    the integrated state.
+    """
     if state.stage == PipelineState.AFTER_COMMIT:
         return root
     return _resolve_worktree(root, state)
 
 
 def _task_recorded_worktree(root: Path, task_id: str) -> tuple[TaskRecord | None, Path | None]:
-    """Look up a task and its on-disk worktree path together so commit/sync nodes can resolve both in one go without a second db hit."""
+    """
+    Look up the task and its on-disk worktree path together.
+
+    Commit and sync nodes need both the TaskRecord (for commit message
+    rendering) and the worktree path (for the actual git work);
+    returning them in one call means a single db hit per resolution
+    instead of two.
+    """
     task = get_task(root, task_id)
     if task is None:
         return None, None
@@ -55,7 +69,7 @@ def _task_recorded_worktree(root: Path, task_id: str) -> tuple[TaskRecord | None
 
 
 def build_commit_node(root: Path) -> CommitNode:
-    """Return the production ``GitCommitNode`` bound to this workspace."""
+    """Return the production ``GitCommitNode`` bound to this workspace; called by ``orchestration.run_task`` once per launch to wire the commit stage."""
     return GitCommitNode(
         root,
         worktree_resolver=lambda state: _resolve_worktree(root, state),
@@ -64,7 +78,7 @@ def build_commit_node(root: Path) -> CommitNode:
 
 
 def _build_worktree_sync_node(root: Path) -> GitWorktreeSyncNode:
-    """Return the production ``GitWorktreeSyncNode`` bound to this workspace."""
+    """Return the production ``GitWorktreeSyncNode`` bound to this workspace; mirrors ``build_commit_node`` for the worktree-sync stage."""
     return GitWorktreeSyncNode(
         workspace_root=root,
         worktree_resolver=lambda state: _resolve_worktree(root, state),
@@ -72,33 +86,35 @@ def _build_worktree_sync_node(root: Path) -> GitWorktreeSyncNode:
 
 
 def _worktree_missing_probe(root: Path):
-    """Return a probe callable backed by the worktree service."""
+    """
+    Build the worktree-existence probe for ``ReadyNode``.
+
+    Returns a closure that asks ``WorktreeService`` whether the task
+    has a recorded worktree that is no longer on disk; the runner
+    uses it to decide "should this task re-run worktree setup before
+    launch?" without every call site reaching into the service
+    directly.
+    """
     service = WorktreeService(root)
 
     def _probe(state) -> bool:
-        """Probe closure used by the pre-exec recovery flow to detect a recorded-but-missing worktree.
-
-        Captured by ``_worktree_missing_probe`` so the runner can ask the
-        machine "should this task re-run worktree setup before launch?"
-        without each call site reaching into ``WorktreeService`` directly.
-        """
         return service.task_has_missing_recorded_worktree(state.task_id)
 
     return _probe
 
 
 def _worktree_metadata_repair(root: Path):
-    """Return a stale worktree metadata repair backed by the worktree service."""
+    """
+    Build the stale-worktree-metadata repair for ``PreExecRecoveryNode``.
+
+    Twin of ``_worktree_missing_probe``: when the probe says a
+    recorded worktree is gone, the machine calls this to wipe the
+    stale path on the task record so the next launch creates a fresh
+    worktree instead of failing the existence check.
+    """
     service = WorktreeService(root)
 
     def _repair(state) -> None:
-        """Repair closure used by the pre-exec recovery flow to clear the stale worktree record.
-
-        Twin of ``_probe``: when the probe says a recorded worktree is gone,
-        the machine calls this to wipe the stale path on the task record so
-        the next launch creates a fresh worktree instead of failing the
-        existence check.
-        """
         service.clear_missing_recorded_worktree(state.task_id)
 
     return _repair

@@ -56,7 +56,15 @@ class StateMachineRunner:
         task_time_budget_seconds: float | None = None,
         clock: Clock | None = None,
     ) -> None:
-        """Wire the runner with everything it cannot resolve on its own — node registry, persistence, journal, and operator-controlled knobs (stop predicate, time budget, observability hooks)."""
+        """
+        Wire the runner with the dependencies it cannot resolve itself.
+
+        Receives the node registry, persistence layer, journal, and the
+        operator-controlled knobs (stop predicate, time budget, and the
+        two observability hooks). Constructed once per task launch by
+        ``orchestration.run_task``; the registry and rules are otherwise
+        immutable for the run.
+        """
         self.registry = registry
         self.persistence = persistence
         self.rules = rules
@@ -69,7 +77,14 @@ class StateMachineRunner:
         self._clock = clock or time.monotonic
 
     def run_task(self, task_id: str) -> TaskState:
-        """Drive a single task through the state machine until it reaches a terminal node, the operator stops the daemon, or the task time budget is exceeded; called by the daemon's per-task worker loop."""
+        """
+        Drive a single task through the state machine to completion.
+
+        Loops until the task hits a terminal node, the operator
+        ``stop_requested`` predicate fires, or the cumulative agent
+        time budget is exceeded. Called by the daemon's per-task worker
+        loop and by ``orchestration.run_task`` for the one-shot CLI.
+        """
         state = self.persistence.load(task_id)
         self.journal.task_started(task_id, state.stage)
         while state.stage not in TERMINAL_NODES:
@@ -97,7 +112,15 @@ class StateMachineRunner:
         self,
         state: TaskState,
     ) -> TaskTimeBudgetExceeded | None:
-        """Synthesize a budget-exceeded event when the task has burned its agent-time allowance, but only before commit — once the task has reached commit/after_commit/merge_resolving we let it finish rather than abandon real progress."""
+        """
+        Synthesize a budget-exceeded event when the task has burned
+        its agent-time allowance.
+
+        Only fires before commit; once the task has reached
+        commit/after_commit/merge_resolving we let it finish rather
+        than abandon real progress that's about to land. ``None`` means
+        no synthetic event — the run loop continues normally.
+        """
         budget = self._task_time_budget_seconds
         if budget is None:
             return None
@@ -117,7 +140,15 @@ class StateMachineRunner:
         event: Event,
         task_id: str,
     ) -> None:
-        """Run one rule evaluation and commit its consequences — apply the StateDelta, walk event side-effects, persist, notify observers, and record the transition in the journal — keeping the run loop a thin orchestrator."""
+        """
+        Run one rule evaluation and commit its consequences in order.
+
+        Applies the StateDelta, walks event side-effects, persists the
+        new state, notifies observers, then records the transition in
+        the journal. Keeping every consequence in one method is what
+        keeps ``run_task`` itself a thin orchestrator that only walks
+        from node to node.
+        """
         trans = evaluate(self.rules, from_stage, event, state)
         self._apply_delta(state, trans.delta)
         self.apply_event_side_effects(state, event)
@@ -194,7 +225,15 @@ class StateMachineRunner:
         to_stage: str,
         event: Event,
     ) -> None:
-        """Clear the hook-reject circuit-breaker counters once the task has actually moved forward, so a later rejection at a different agent stage starts from zero instead of inheriting a stale streak from the previous stage."""
+        """
+        Clear the hook-reject streak once the task has actually moved
+        forward.
+
+        Without this, a later rejection at a different agent stage
+        would inherit a stale streak from the previous stage and the
+        circuit breaker would fail the task on what is really a fresh
+        problem.
+        """
         if not isinstance(event, (Pass, HookOk)):
             return
         if pipeline_stage_for_phase(from_stage) == pipeline_stage_for_phase(to_stage):
@@ -207,7 +246,15 @@ class StateMachineRunner:
         state: TaskState,
         clear_recovery_invoked: bool,
     ) -> None:
-        """Reset the hook-reject streak counters; the `clear_recovery_invoked` flag distinguishes "real progress" (clear everything, including the recovery-was-tried bit) from "delta-driven clear" (the rule asked for a reset but recovery may still be in flight)."""
+        """
+        Reset the hook-reject streak counters.
+
+        ``clear_recovery_invoked`` distinguishes "real progress" (clear
+        everything, including the recovery-was-tried bit) from
+        "delta-driven clear" (the rule asked for a reset but recovery
+        may still be in flight, so the recovery-tried flag must
+        survive).
+        """
         state.consecutive_same_hook_rejects = 0
         state.last_hook_reject_fingerprint = None
         if clear_recovery_invoked:
@@ -215,7 +262,15 @@ class StateMachineRunner:
 
     @staticmethod
     def _apply_delta(state: TaskState, delta: StateDelta) -> None:
-        """Translate the rule-produced StateDelta into concrete TaskState mutations; this is the only place fields like retry counters, recovery triggers, rejection-loop tracking, and failure metadata are written, so rules can stay declarative."""
+        """
+        Translate the rule-produced StateDelta into concrete TaskState
+        mutations.
+
+        This is the only place fields like retry counters, recovery
+        triggers, rejection-loop tracking, and failure metadata are
+        written, so rules can stay declarative — they emit the delta
+        they want; this method is the single applier.
+        """
         if delta.inc_stage_retry is not None:
             stage = delta.inc_stage_retry
             state.stage_retry[stage] = state.stage_retry.get(stage, 0) + 1
@@ -261,7 +316,17 @@ class StateMachineRunner:
 
     @staticmethod
     def _record_failed_run(state: TaskState, record: FailedRunRecord) -> None:
-        """Merge a new failed-run report into the per-failure-shape history without overwriting operator-override bookkeeping; called from `_apply_delta` when a rule emits `record_failed_run` so the recovery agent can see how many times the same shape has recurred."""
+        """
+        Merge a new failed-run report into the per-failure-shape
+        history.
+
+        Operator-override bookkeeping (``operator_override_count``,
+        ``last_operator_override_at``) is preserved on the existing
+        row so it cannot be silently zeroed by a fresh failure.
+        Called from ``_apply_delta`` when a rule emits
+        ``record_failed_run`` so the recovery agent can see how many
+        times the same shape has recurred.
+        """
         existing = state.failed_run_history.get(record.key)
         if existing is None:
             state.failed_run_history[record.key] = record
@@ -288,7 +353,15 @@ class StateMachineRunner:
         to_stage: str,
         event: Event,
     ) -> None:
-        """Drop the saved subagent sessions for the destination agent stage when a reject hands control to a different agent, so the next agent starts fresh instead of resuming a conversation that was rejected at someone else's stage."""
+        """
+        Drop saved subagent sessions for the destination stage when a
+        reject hands control across agents.
+
+        Without this, the next agent would resume a conversation that
+        was rejected at *someone else's* stage and inherit irrelevant
+        context; same-agent retries are deliberately not affected so
+        the engine's own resume flag still works inside one stage.
+        """
         if self.session_store is None or not isinstance(event, Reject) or event.source != "agent":
             return
         from_agent_stage = pipeline_stage_for_phase(from_stage)

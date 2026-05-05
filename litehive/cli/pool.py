@@ -5,7 +5,14 @@ from litehive.workspace import Workspace
 
 
 def task_stage_outcomes(root, task_id, slug):
-    """Flatten a task's stored stage reports into the `state=verdict` strings the pool summary embeds per task so operators can see each pipeline stage's outcome without opening the report files."""
+    """
+    Flatten a task's stored stage reports into ``state=verdict`` strings.
+
+    The pool summary embeds these per task so operators can see each
+    pipeline stage's outcome inline without opening the report files
+    on disk. ``slug`` is accepted for historical signature stability
+    but unused — the SQLite report store keys reports by task id.
+    """
     del slug
     return [
         f"{report.pipeline_state}={report.verdict}"
@@ -26,7 +33,15 @@ def _pool_task_report_entry(
     close_reason=None,
     flag_reason=None,
 ):
-    """Shared shape for every per-task line in the pool summary so completed/flagged/resumable/closed/skipped buckets all carry the same fields and rendering downstream stays uniform."""
+    """
+    Shared shape for every per-task line in the pool summary.
+
+    Forces completed, flagged, resumable, closed, and skipped
+    buckets to carry the same fields so the downstream renderer can
+    treat one entry-format and operators read consistent columns
+    across buckets. Empty fields stay set to ``None`` so callers
+    can spot the absence rather than guess at a missing key.
+    """
     if slug is not None:
         stage_outcomes = task_stage_outcomes(root, task_id, slug)
     else:
@@ -46,7 +61,14 @@ def _pool_task_report_entry(
 
 
 def _pending_pool_tasks(root):
-    """Tasks the pool did not complete on this run but could legitimately resume later; surfaced under `remaining`/`skipped` so operators see what work is still queued."""
+    """
+    Collect tasks the pool did not complete on this run.
+
+    These are tasks that legitimately resume on the next pool run
+    (queued or in-progress with an unfinished pipeline). Surfaced
+    under ``remaining``/``skipped`` so operators see what work is
+    still queued without having to read ``litehive queue``.
+    """
     pending = []
     for task in list_tasks(root):
         if task.status in {TaskStatus.QUEUED, TaskStatus.IN_PROGRESS} and task.pipeline_status != PipelineStatus.DONE:
@@ -64,7 +86,16 @@ def _pending_pool_tasks(root):
 
 
 def _resumable_pool_tasks(root):
-    """Tasks parked or interrupted mid-pipeline; reported separately from generic remaining work so the operator knows which need an explicit resume gesture rather than just another pool run."""
+    """
+    Collect tasks parked or interrupted mid-pipeline.
+
+    Reported separately from generic remaining work so the operator
+    knows which need an explicit ``resume`` gesture rather than
+    just another pool run; a parked task without a resume signal
+    will sit forever otherwise. Carries the last interruption
+    reason so the operator can decide whether a resume is even
+    appropriate.
+    """
     resumable = []
     for task in list_tasks(root):
         if task.status not in {TaskStatus.INTERRUPTED, TaskStatus.PARKED} or task.pipeline_status == PipelineStatus.DONE:
@@ -86,7 +117,14 @@ def _resumable_pool_tasks(root):
 
 
 def _closed_pool_tasks(root):
-    """Tasks deliberately closed (done/duplicate/wont_do/deferred) during the run; carries the close_reason so the summary explains why work the operator queued is no longer in flight."""
+    """
+    Collect tasks deliberately closed (done/duplicate/wont_do/deferred) during the run.
+
+    Carries the ``close_reason`` so the summary explains why work
+    the operator queued is no longer in flight; without it,
+    closed tasks would silently disappear from the visible work
+    list and the operator would have to chase them down.
+    """
     closed = []
     for task in list_tasks(root):
         if task.status != TaskStatus.CLOSED:
@@ -112,7 +150,16 @@ def _format_pool_task_report_line(
     label,
     entry,
 ):
-    """Single-line operator rendering of one task entry; reason/close_reason/flag_reason are only appended when set so empty fields do not pad every line."""
+    """
+    Render one task entry as a single operator-facing line.
+
+    Reason, close_reason, flag_reason, and follow-up task id are
+    only appended when set so empty fields do not pad every line —
+    a fixed-width layout would inflate the summary for the common
+    case. ``label`` is the bucket name (completed, flagged, …)
+    that prefixes the line so a flat ``grep label:`` walks one
+    bucket cleanly.
+    """
     stage_outcomes = [str(item) for item in entry.get("stage_outcomes", [])]
     if stage_outcomes:
         stage_outcomes_label = ", ".join(stage_outcomes)
@@ -141,7 +188,15 @@ def _format_pool_task_report_line(
 
 
 def pool_stop_condition_label(stop_reason):
-    """Translate the machine stop_reason enum into the operator-facing phrase printed in the pool summary; unknown reasons fall back to a humanized form so a new reason still renders sanely if added before the table is updated."""
+    """
+    Translate a machine ``stop_reason`` into the operator-facing phrase.
+
+    The phrase is printed in the pool summary's ``stop_condition``
+    line. Unknown reasons fall back to a humanized form
+    (underscores -> spaces) so a new reason still renders sanely
+    if it lands before this table is updated — better than a raw
+    enum string in front of the operator.
+    """
     labels = {
         "single_task_complete": "single task complete",
         "queue_exhausted": "queue exhausted",
@@ -164,7 +219,15 @@ def pool_stop_condition_label(stop_reason):
 
 
 def _pool_no_useful_progress_report(stop_reason):
-    """Map stop reasons that did not advance the queue to a (progress_status, summary) pair so the pool report makes the no-progress / operator-action distinction explicit instead of leaving the operator to infer it from the stop reason alone."""
+    """
+    Map non-progress stop reasons to a ``(progress_status, summary)`` pair.
+
+    Makes the "no progress" vs "operator action required"
+    distinction explicit in the pool report instead of leaving the
+    operator to infer intent from the stop reason alone. Unknown
+    or successful stop reasons return ``(None, None)`` so the
+    summary can omit the section cleanly.
+    """
     reports = {
         "blocked_tasks_remaining": (
             "no_useful_progress",
@@ -197,7 +260,13 @@ def _pool_no_useful_progress_report(stop_reason):
 def _print_pool_summary_report(
     report,
 ):
-    """Stdout variant of the pool summary writer; currently no in-tree callers (candidate for removal alongside the data builder below)."""
+    """
+    Print the pool summary to stdout instead of writing it to a file.
+
+    Used as a debug/operator override path; no production callers
+    today (candidate for removal alongside the data builder below
+    once the dead-helper sweep retires both).
+    """
     report = _ensure_pool_summary_report_fields(report)
     for line in _pool_summary_report_lines(report=report):
         print(line)
@@ -210,7 +279,15 @@ def _pool_summary_report_data(
     stop_reason,
     tasks_run=None,
 ):
-    """Builds the structured pool-summary payload (counts plus per-task entries plus stop semantics); no current callers, kept for the eventual machine-readable summary surface."""
+    """
+    Build the structured pool-summary payload.
+
+    Combines bucket counts, per-task entries, and stop semantics
+    into one dict so a renderer can emit either text or JSON from
+    the same source. Currently has no in-tree callers; kept as the
+    typed seam for the eventual machine-readable summary surface
+    rather than rebuilding it from the printed text.
+    """
     remaining = _pending_pool_tasks(root)
     resumable = _resumable_pool_tasks(root)
     closed = _closed_pool_tasks(root)
@@ -244,7 +321,15 @@ def _pool_summary_report_data(
 def _pool_summary_report_lines(
     report,
 ):
-    """Render the operator-facing pool-summary text; bucket order (completed, flagged, resumable, closed, skipped, remaining) is the order operators triage in, not alphabetical."""
+    """
+    Render the operator-facing pool-summary text.
+
+    Bucket order (completed, flagged, resumable, closed, skipped,
+    remaining) follows the operator's triage flow, not alphabet:
+    the operator first wants to confirm what completed, then which
+    failed, then what they need to act on. Reordering the buckets
+    would change muscle memory for everyone reading these summaries.
+    """
     report = _ensure_pool_summary_report_fields(report)
     completed = [entry for entry in report["completed"] if isinstance(entry, dict)]
     flagged = [entry for entry in report["flagged"] if isinstance(entry, dict)]
@@ -311,7 +396,14 @@ def _pool_summary_report_lines(
 
 
 def _ensure_pool_summary_report_fields(report):
-    """Backfill progress_status/summary for reports produced before those fields existed so older persisted summaries still render the operator-action prose; passes through reports that already carry the fields."""
+    """
+    Backfill ``progress_status``/``summary`` on legacy persisted reports.
+
+    Older persisted summaries did not carry these fields; without
+    backfilling, re-rendering an older report would drop the
+    operator-action prose entirely. Reports that already carry
+    both fields pass through unchanged.
+    """
     progress_status = report.get("progress_status")
     summary = report.get("summary")
     if progress_status is not None or summary is not None:
@@ -330,7 +422,15 @@ def _write_pool_summary_report(
     root,
     report,
 ):
-    """Persist the operator-facing pool summary to `.litehive/pool-summary.txt` so daemon runs leave behind a fixed, scriptable artifact instead of operators having to recover it from stdout logs."""
+    """
+    Persist the operator-facing pool summary to a fixed file.
+
+    Writes ``.litehive/pool-summary.txt`` so daemon runs leave
+    behind a stable, scriptable artifact; operators should not
+    have to recover it from stdout logs that may have been
+    truncated. The path is hard-coded because it is part of the
+    operator-facing contract.
+    """
     report = _ensure_pool_summary_report_fields(report)
     report_path = root / ".litehive" / "pool-summary.txt"
     report_lines = _pool_summary_report_lines(report=report)

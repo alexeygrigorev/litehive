@@ -41,7 +41,14 @@ _MANUAL_REVIEW_FLAG_REASONS = {
 
 
 def _runtime_hook_reject_fingerprint(state: TaskState) -> RuntimeHookRejectFingerprint | None:
-    """Project the lifecycle-side hook-reject fingerprint into the runtime-domain shape stored on TaskRecord."""
+    """
+    Project the lifecycle hook-reject fingerprint to the runtime shape.
+
+    Lifecycle and runtime use distinct dataclasses because the runtime
+    side is part of the public TaskRecord exposed to status/CLI views,
+    so the lifecycle struct must be re-serialised into the runtime
+    type rather than passed through as-is.
+    """
     fingerprint = state.last_hook_reject_fingerprint
     if fingerprint is None:
         return None
@@ -54,7 +61,15 @@ def _runtime_hook_reject_fingerprint(state: TaskState) -> RuntimeHookRejectFinge
 
 
 def _runtime_recovery_outcome(outcome) -> RuntimeRecoveryOutcome:
-    """Flatten a lifecycle ``RecoveryOutcome`` (with a nested trigger) into the flat runtime record stored on TaskRecord."""
+    """
+    Flatten a lifecycle ``RecoveryOutcome`` (with a nested trigger)
+    into the flat runtime record stored on TaskRecord.
+
+    The runtime shape is a single struct with no nesting because that
+    is what the operator-facing JSON snapshot expects; the lifecycle
+    shape keeps the trigger nested so it can carry the fingerprint
+    payload into the recovery-budget logic without rebuilding it.
+    """
     trigger = outcome.trigger
     return RuntimeRecoveryOutcome(
         origin_stage=trigger.origin_stage,
@@ -71,7 +86,14 @@ def _runtime_recovery_outcome(outcome) -> RuntimeRecoveryOutcome:
 
 
 def _runtime_recovery_key(outcome: RuntimeRecoveryOutcome) -> tuple[str | None, str, str, str, str | None]:
-    """Build the dedup key used to collapse repeated recovery outcomes when projecting history into the runtime record."""
+    """
+    Identity tuple used to dedupe recovery outcomes during projection.
+
+    Two outcomes that match on origin/fingerprint/budget/verdict and
+    timestamp describe the same recovery attempt persisted twice; the
+    projector below collapses them so ``litehive status`` shows each
+    attempt only once.
+    """
     return (
         outcome.origin_stage,
         outcome.fingerprint,
@@ -95,7 +117,14 @@ def _runtime_recovery_history_projection(current_state: TaskState) -> list[Runti
 
 
 def _runtime_failed_run_record(record: FailedRunRecord) -> RuntimeFailedRunRecord:
-    """Project a lifecycle ``FailedRunRecord`` to the runtime-domain shape exposed on TaskRecord for status views."""
+    """
+    Project a lifecycle ``FailedRunRecord`` to its runtime twin.
+
+    Same field set, separate struct because the runtime side is part
+    of the operator-facing TaskRecord shape and must stay decoupled
+    from the lifecycle storage struct so a lifecycle field rename
+    cannot silently change a status payload.
+    """
     return RuntimeFailedRunRecord(
         stage=record.stage,
         failure_shape=record.failure_shape,
@@ -162,7 +191,15 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
 
 
 def _latest_recovery_trigger(state: TaskState):
-    """Return whichever recovery trigger best describes ``state``: the active one, or the most recent historical one."""
+    """
+    Return whichever recovery trigger best describes the task right now.
+
+    Prefers the live ``active_recovery_trigger`` because that reflects
+    the in-flight failure; falls back to the most recent historical
+    trigger so a terminal ``_sync_terminal_status`` call still has a
+    trigger to attribute the failure to after the active one was
+    cleared.
+    """
     if state.active_recovery_trigger is not None:
         return state.active_recovery_trigger
     if state.recovery_history:
@@ -171,7 +208,14 @@ def _latest_recovery_trigger(state: TaskState):
 
 
 def _recovery_origin_stage(origin_stage: str | None) -> str | None:
-    """Translate a pipeline-state origin into its task-stage label for operator-facing surfaces, leaving unknown values intact."""
+    """
+    Translate a pipeline-state origin label into its task-stage label.
+
+    Operator-facing surfaces report stages in task-stage terms, but
+    the lifecycle stores them as pipeline states; unknown values pass
+    through so a future stage that has no task-stage projection
+    surfaces as itself rather than disappearing.
+    """
     if origin_stage is None:
         return None
     try:
@@ -261,7 +305,14 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
 
 
 def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
-    """Mirror the pipeline stage back to the TaskRecord so litehive status stays accurate."""
+    """
+    Mirror the pipeline stage back to the TaskRecord.
+
+    Called after every state-machine step so ``litehive status`` and
+    the queue stay coherent with the runner's view; without this,
+    operator-facing surfaces would drift from the actual lifecycle
+    state until the task ends.
+    """
     task_record = get_task(workspace_root, state.task_id)
     if task_record is None:
         return None
@@ -367,7 +418,14 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
 
 
 def _clear_terminal_task_from_workspace_state(root: Path, task_id: str) -> None:
-    """Drop a finished task from the active slot and queue so the next runner tick selects a different task."""
+    """
+    Drop a finished task from the active slot and queue.
+
+    Without this, the next runner tick would re-select the same
+    finished task and either re-run it (if it can find work to do) or
+    spin in a tight no-op loop until an operator manually cleared the
+    queue.
+    """
     state = load_state(root)
     if state.active_task_id == task_id:
         state.active_task_id = None

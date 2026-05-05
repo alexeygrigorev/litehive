@@ -46,7 +46,14 @@ def recover_stale_runner_state(
     root: Path,
     summary: WorkspaceRepairSummary | None = None,
 ) -> bool:
-    """Top-level entry point for "is the workspace stuck because a previous runner died?" — invoked by the queue, daemon, ``litehive stop``, and CLI repair flows. Returns whether anything was mutated; takes the workspace lock and only acts when no live runner owns the lock."""
+    """
+    Top-level entry for "is the workspace stuck because a previous runner died?".
+
+    Invoked by the queue, daemon, ``litehive stop``, and the CLI repair
+    flows. Returns whether anything was mutated; takes the workspace
+    lock and only acts when no live runner owns the runner lock, so a
+    live runner cannot be repaired out from under itself.
+    """
     root = root.resolve()
     workspace = Workspace.from_path(root)
     with workspace_lock(root):
@@ -121,7 +128,14 @@ def _can_skip_recovery_scan(
     runner_lock_held: bool,
     has_repair_candidates: bool,
 ) -> bool:
-    """Cheap fast-path that bypasses the full repair scan when the workspace is already quiet; protects the hot start-of-runner path from doing expensive SQL work on every launch."""
+    """
+    Cheap fast-path that bypasses the full repair scan on a quiet workspace.
+
+    Protects the hot start-of-runner path from doing expensive SQL work
+    on every launch; the conjunction (no running tasks, no active
+    pointer, no repair candidates, no held lock) is the unambiguous
+    "nothing to do" shape so skipping it is safe.
+    """
     del root
     return (
         not running_task_ids

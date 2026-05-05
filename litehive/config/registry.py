@@ -1,4 +1,13 @@
-"""Global cross-workspace registry backed by SQLite."""
+"""
+Global cross-workspace registry backed by SQLite.
+
+Lives outside any one workspace so a single shared file remembers
+every workspace this user has ever initialized on this machine.
+``litehive status`` and multi-workspace dashboards rely on this to
+enumerate workspaces without filesystem scanning. Corruption is
+recoverable: a quick-check failure quarantines the file and the
+next operation rebuilds an empty registry.
+"""
 
 from datetime import UTC, datetime
 import logging
@@ -21,16 +30,37 @@ _REGISTRY_TABLE = "workspace_registry"
 
 
 class WorkspaceRegistryError(RuntimeError):
-    """Raised when the global workspace registry cannot be read or written."""
+    """
+    Raised when the global workspace registry cannot be read or written.
+
+    Distinct from generic ``OSError`` / ``sqlite3.DatabaseError``
+    so callers can catch only registry-level failures (timeouts,
+    corruption that survived self-heal) without masking other
+    SQLite errors that come from a workspace's own database.
+    """
 
 
 def workspace_registry_path() -> Path:
-    """Resolve the cross-workspace SQLite registry file under the user's litehive root; this is the single shared file that lets ``litehive status`` and discovery list every workspace the operator has ever initialized on this machine."""
+    """
+    Resolve the cross-workspace SQLite registry file path.
+
+    Lives under the user's litehive root so a single shared file
+    spans every workspace they have ever initialized; without that
+    shared file, multi-workspace discovery would have to scan the
+    filesystem.
+    """
     return litehive_root() / "workspaces.db"
 
 
 def _int_env(name: str, default: int) -> int:
-    """Read a non-negative integer from the named env var, falling back to ``default`` for unset or unparseable values; used by the registry tunables (lock retries, busy timeout) so operators can override locking behaviour without editing code."""
+    """
+    Read a non-negative integer from the named env var.
+
+    Falls back to ``default`` for unset or unparseable values.
+    Used by the registry tunables (lock retries, busy timeout) so
+    operators and CI can override locking behaviour via env without
+    editing code.
+    """
     raw = os.environ.get(name)
     if raw is None:
         return default
@@ -41,27 +71,62 @@ def _int_env(name: str, default: int) -> int:
 
 
 def _registry_lock_retries() -> int:
-    """Number of extra ``database is locked`` retries the registry tolerates beyond the SQLite busy timeout; consumed by ``_locked_registry_operation`` and tunable via env so CI can crank it up without code changes."""
+    """
+    Extra retries the registry tolerates beyond the SQLite busy timeout.
+
+    Consumed by :func:`_locked_registry_operation`. Tunable via
+    ``LITEHIVE_REGISTRY_LOCK_RETRIES`` so CI can crank it up
+    without code changes when concurrent test runs hit the same
+    file.
+    """
     return _int_env("LITEHIVE_REGISTRY_LOCK_RETRIES", _DEFAULT_LOCK_RETRIES)
 
 
 def _registry_busy_timeout_ms() -> int:
-    """SQLite ``PRAGMA busy_timeout`` value in milliseconds, clamped to at least 1ms; used by the connection opener to bound how long a writer waits on a contended registry."""
+    """
+    SQLite ``PRAGMA busy_timeout`` value in milliseconds.
+
+    Clamped to at least 1 ms so a misconfigured zero does not
+    disable busy waits entirely. Used by the connection opener to
+    bound how long a writer waits on a contended registry before
+    surfacing a "locked" error to the retry loop.
+    """
     return max(_int_env("LITEHIVE_REGISTRY_BUSY_TIMEOUT_MS", _DEFAULT_BUSY_TIMEOUT_MS), 1)
 
 
 def _registry_busy_timeout_seconds() -> float:
-    """Same busy timeout as :func:`_registry_busy_timeout_ms` but in seconds, for the ``sqlite3.connect(timeout=…)`` parameter which uses seconds rather than milliseconds."""
+    """
+    Busy timeout in seconds for the ``sqlite3.connect`` ``timeout`` parameter.
+
+    Same value as :func:`_registry_busy_timeout_ms`, just rescaled.
+    The connect-level timeout uses seconds while the pragma uses
+    milliseconds; keeping both in sync prevents one bound from
+    silently overriding the other.
+    """
     return _registry_busy_timeout_ms() / 1000
 
 
 def _registry_lock_retry_delay_seconds() -> float:
-    """Sleep duration between ``_locked_registry_operation`` retry attempts; small by default so the worst case is a brief stall rather than a fast spin."""
+    """
+    Sleep between :func:`_locked_registry_operation` retry attempts.
+
+    Small by default so the worst case is a brief stall rather
+    than a tight CPU spin. Tunable via env so a test that wants
+    to drive contention can pin the delay to zero.
+    """
     return _int_env("LITEHIVE_REGISTRY_LOCK_RETRY_DELAY_MS", _DEFAULT_LOCK_RETRY_DELAY_MS) / 1000
 
 
 def _open_registry_connection(path: Path) -> sqlite3.Connection:
-    """Open an autocommit sqlite connection to the registry with WAL (or in-memory journals when ``LITEHIVE_SKIP_FSYNC`` is set for tests), creating the parent directory if needed; the single chokepoint that all registry reads/writes go through so pragmas stay consistent."""
+    """
+    Open an autocommit SQLite connection to the registry.
+
+    Creates the parent directory if needed and applies WAL
+    journaling — except under ``LITEHIVE_SKIP_FSYNC`` (tests)
+    where in-memory journals trade durability for speed. The
+    single chokepoint every registry read/write goes through so
+    pragmas stay consistent.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path, timeout=_registry_busy_timeout_seconds(), isolation_level=None)
     connection.row_factory = sqlite3.Row
@@ -76,7 +141,14 @@ def _open_registry_connection(path: Path) -> sqlite3.Connection:
 
 
 def _ensure_registry_schema(connection: sqlite3.Connection) -> None:
-    """Create the registry table and its ``registered_at`` index on first contact; called by every read/write helper so a freshly-quarantined or never-existed registry rebuilds itself transparently on the next access."""
+    """
+    Create the registry table and its index on first contact.
+
+    Called by every read/write helper so a freshly-quarantined or
+    never-existed registry rebuilds itself transparently on the
+    next access; the alternative would be a separate bootstrap
+    step that callers might forget.
+    """
     connection.execute(
         f"""
         CREATE TABLE IF NOT EXISTS {_REGISTRY_TABLE} (
@@ -94,7 +166,15 @@ def _ensure_registry_schema(connection: sqlite3.Connection) -> None:
 
 
 def _registry_quick_check(connection: sqlite3.Connection) -> None:
-    """Run ``PRAGMA quick_check`` and raise ``DatabaseError`` if SQLite reports anything other than ``ok``; called by :func:`workspace_registry_error` so corruption can be surfaced through a structured exception path rather than silent breakage."""
+    """
+    Run ``PRAGMA quick_check`` and raise on a non-``ok`` result.
+
+    Called by :func:`workspace_registry_error` so corruption is
+    surfaced through a structured exception path rather than
+    silent breakage; status diagnostics use that path to render
+    the "registry broken" notice without taking the registry
+    write lock.
+    """
     row = connection.execute("PRAGMA quick_check").fetchone()
     if row is None:
         return
@@ -104,7 +184,15 @@ def _registry_quick_check(connection: sqlite3.Connection) -> None:
 
 
 def workspace_registry_error() -> str | None:
-    """Run ``PRAGMA quick_check`` on the registry and return a short error string when the file is corrupt, or None when it is healthy or absent; consumed by status diagnostics to surface "registry broken" without taking the registry lock for a real query."""
+    """
+    Probe the registry for corruption and return a short error label.
+
+    Returns ``None`` when the registry is healthy or absent.
+    Consumed by status diagnostics to surface "registry broken"
+    without taking the registry write lock; the cheap
+    ``PRAGMA quick_check`` is enough to flag a corrupt file
+    before a more expensive operation hits the same problem.
+    """
     path = workspace_registry_path()
     if not path.exists():
         return None
@@ -117,13 +205,29 @@ def workspace_registry_error() -> str | None:
 
 
 def quarantine_corrupt_workspace_registry(reason: str) -> Path | None:
-    """Move a corrupt registry file aside under a timestamped ``.corrupt-*`` name and return the new path; called inline by the read/write helpers when SQLite raises ``DatabaseError`` so the next operation can recreate a fresh registry instead of failing forever."""
+    """
+    Move a corrupt registry file aside under a timestamped name.
+
+    Called inline by the read/write helpers when SQLite raises
+    ``DatabaseError`` so the next operation can recreate a fresh
+    registry instead of failing forever. The quarantined file is
+    preserved (with the failure reason in a log line) so an
+    operator can inspect it after the fact.
+    """
     path = workspace_registry_path()
     return _backup_corrupt_registry_file(path, reason=reason, label="workspace registry")
 
 
 def _backup_corrupt_registry_file(path: Path, reason: str, label: str) -> Path | None:
-    """Atomically rename a corrupt sqlite file to a ``.corrupt-<UTC timestamp>`` sibling and log the reason; the single rename helper used by :func:`quarantine_corrupt_workspace_registry` so the on-disk artifact format is consistent across registry types."""
+    """
+    Atomically rename a corrupt sqlite file to a timestamped sibling.
+
+    The single rename helper used by
+    :func:`quarantine_corrupt_workspace_registry` so the on-disk
+    artifact format (``<name>.corrupt-<UTC timestamp>``) stays
+    consistent across registry types — important when an operator
+    later cleans up after the fact.
+    """
     if not path.exists():
         return None
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -138,7 +242,14 @@ def _backup_corrupt_registry_file(path: Path, reason: str, label: str) -> Path |
 
 
 def _canonical_workspace_root(root: Path | str) -> Path | None:
-    """Expand ``~`` and resolve symlinks so two registry rows pointing at the same physical directory deduplicate to one; returns None on filesystem errors so a single broken row cannot poison the whole listing."""
+    """
+    Canonicalize a workspace root for stable equality.
+
+    Expands ``~`` and resolves symlinks so two registry rows
+    pointing at the same physical directory deduplicate to one
+    entry on read. Returns ``None`` on filesystem errors so a
+    single broken row cannot poison the whole listing.
+    """
     try:
         return Path(root).expanduser().resolve()
     except OSError:
@@ -146,7 +257,15 @@ def _canonical_workspace_root(root: Path | str) -> Path | None:
 
 
 def _locked_registry_operation(operation, path: Path):
-    """Run a registry callable, retrying through ``database is locked``/``busy`` errors up to ``_registry_lock_retries`` times before surfacing a ``TimeoutError``; wraps every public registry read/write so contention with another process becomes a bounded wait, not an immediate failure."""
+    """
+    Run a registry callable with bounded retries through SQLite locks.
+
+    Retries through ``database is locked``/``busy`` errors up to
+    :func:`_registry_lock_retries` times before surfacing
+    ``TimeoutError``; wraps every public registry read/write so
+    contention with another process becomes a bounded wait rather
+    than an immediate failure visible to the operator.
+    """
     retries_remaining = _registry_lock_retries()
     retry_delay_seconds = _registry_lock_retry_delay_seconds()
     while True:
@@ -164,7 +283,14 @@ def _locked_registry_operation(operation, path: Path):
 
 
 def _read_registered_workspace_paths(connection: sqlite3.Connection) -> list[Path]:
-    """SELECT all workspace roots newest-first and canonicalize each one, dropping unresolvable or duplicate entries; the inner SQL+canonicalization step that :func:`list_registered_workspace_paths` wraps with locking and self-healing."""
+    """
+    Read all workspace roots newest-first, canonicalized and deduplicated.
+
+    The inner SQL+canonicalization step that
+    :func:`list_registered_workspace_paths` wraps with locking
+    and self-healing. Drops unresolvable rows so one broken entry
+    does not break the listing for the rest of the workspaces.
+    """
     rows = connection.execute(
         f"""
         SELECT root
@@ -184,7 +310,16 @@ def _read_registered_workspace_paths(connection: sqlite3.Connection) -> list[Pat
 
 
 def list_registered_workspace_paths() -> list[Path]:
-    """Return every canonical workspace root the registry knows about, newest-first, after self-healing one round of corruption; called by workspace discovery (``litehive status``, multi-workspace dashboards) which must enumerate every workspace this user has ever initialized."""
+    """
+    Return every canonical workspace root the registry knows about.
+
+    Newest-first, after self-healing one round of corruption (a
+    fresh registry is rebuilt automatically on the second
+    attempt). Called by workspace discovery — ``litehive status``,
+    multi-workspace dashboards — which must enumerate every
+    workspace this user has initialized without filesystem
+    scanning.
+    """
     path = workspace_registry_path()
     with _REGISTRY_MUTEX:
         for attempt in range(2):
@@ -205,14 +340,31 @@ def list_registered_workspace_paths() -> list[Path]:
 
 
 def _list_registered_workspace_paths(path: Path) -> list[Path]:
-    """Open a connection, ensure schema, and read all registered roots; the lock-protected callable that :func:`list_registered_workspace_paths` hands to ``_locked_registry_operation``."""
+    """
+    Open a registry connection, ensure schema, and read all roots.
+
+    The lock-protected callable that
+    :func:`list_registered_workspace_paths` hands to
+    :func:`_locked_registry_operation`; kept private and
+    parameterless except for ``path`` so the retry wrapper does
+    not have to know about schema bootstrap.
+    """
     with _open_registry_connection(path) as connection:
         _ensure_registry_schema(connection)
         return _read_registered_workspace_paths(connection)
 
 
 def register_workspace_path(root: Path) -> None:
-    """Upsert a workspace root into the registry with the current timestamp, silently dropping unresolvable paths; called once during workspace bootstrap so future cross-workspace discovery can find this root without scanning the filesystem."""
+    """
+    Upsert a workspace root with the current timestamp.
+
+    Silently drops unresolvable paths so a transient filesystem
+    error during bootstrap does not block workspace creation.
+    Called once during ``ensure_workspace`` so future
+    cross-workspace discovery can find this root without scanning
+    the filesystem; also called when discovery resolves a
+    workspace via cwd or env so registration stays current.
+    """
     resolved = _canonical_workspace_root(root)
     if resolved is None:
         return
@@ -236,7 +388,15 @@ def register_workspace_path(root: Path) -> None:
 
 
 def _register_workspace_path(path: Path, root: Path) -> None:
-    """Upsert one workspace root inside an immediate transaction so concurrent registrations from sibling workspaces serialize cleanly; the lock-protected callable :func:`register_workspace_path` hands to ``_locked_registry_operation``."""
+    """
+    Upsert one workspace root inside an immediate transaction.
+
+    Concurrent registrations from sibling workspaces serialize
+    cleanly via ``BEGIN IMMEDIATE`` rather than racing through
+    autocommit; the alternative would lose timestamp updates when
+    two CLI calls land at the same instant. Lock-protected
+    callable handed to :func:`_locked_registry_operation`.
+    """
     with _open_registry_connection(path) as connection:
         _ensure_registry_schema(connection)
         connection.execute("BEGIN IMMEDIATE")

@@ -1,4 +1,12 @@
-"""SQLite event persistence for task lifecycle and subagent sessions."""
+"""
+SQLite event persistence for task lifecycle and subagent sessions.
+
+The append-only ``events`` table is the durable narrative of what
+happened to a task — every transition, every subagent run.
+Recovery and operator surfaces replay it when the task store is
+out of date or wiped, which is why the writes go through a single
+helper rather than scattered SQL.
+"""
 
 import json
 import os
@@ -16,9 +24,14 @@ def append_event(
     kind: str,
     data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Append a single event to the task's JSONL event stream.
+    """
+    Append a single event to a task's durable event stream.
 
-    Returns the full event dict that was written.
+    Records the canonical ``(ts, task_id, kind[, data])`` shape
+    so downstream readers can rebuild a coherent timeline. The
+    full event dict is returned so callers can include it in a
+    test assertion or pipe it into another sink without having
+    to re-read the row.
     """
     event: dict[str, Any] = {
         "ts": utcnow(),
@@ -40,7 +53,15 @@ def append_event(
 
 
 def read_events(workspace: Workspace, task: TaskRecord) -> list[dict[str, Any]]:
-    """Read all events for a task from SQLite."""
+    """
+    Read all events for a task in insertion order.
+
+    Skips rows whose payload fails to round-trip through JSON
+    (legacy or corrupted data) so a single bad row cannot block
+    the whole replay path. Replay-driven recovery and operator
+    inspection both call this; keeping the reader tolerant lets
+    them make progress on otherwise-readable history.
+    """
     with workspace.connect() as connection:
         rows = connection.execute(
             """
@@ -63,9 +84,14 @@ def read_events(workspace: Workspace, task: TaskRecord) -> list[dict[str, Any]]:
 
 
 def last_event_timestamp(workspace: Workspace, task: TaskRecord) -> str | None:
-    """Return the timestamp of the last persisted event for a task.
+    """
+    Return the timestamp of the last persisted event for a task.
 
-    Returns ``None`` if no events exist.
+    Returns ``None`` when no events exist so the caller can
+    distinguish "never seen" from "stale". Used to drive
+    inactivity timeouts; reading the most recent ``created_at``
+    via SQL is cheaper than loading every event just to inspect
+    the tail.
     """
     with workspace.connect() as connection:
         row = connection.execute(
@@ -88,9 +114,15 @@ def append_session_log(
     name: str,
     content: str,
 ) -> None:
-    """Append content to an append-only session log file (e.g. stdout.log, stderr.log).
+    """
+    Append content to a subagent session log file.
 
-    Creates the file if it doesn't exist.  Appends only the new delta.
+    Used for ``stdout.log``/``stderr.log``-style streams. Goes
+    through ``os.open`` with ``O_APPEND`` rather than open-mode
+    ``"a"`` so concurrent writers (the live subagent and a
+    follower writing trace markers) cannot tear each other's
+    writes. Skips the write when ``content`` is empty so empty
+    polls are no-ops.
     """
     if not content:
         return
@@ -104,7 +136,14 @@ def append_session_log(
 
 
 def ensure_session_log(base: Path, name: str) -> Path:
-    """Ensure an empty session log file exists (for tail -f on startup)."""
+    """
+    Ensure an empty session log file exists.
+
+    Lets ``tail -f`` (or :func:`follow_active_subagent`) attach
+    on subagent startup before the first byte is written;
+    without the placeholder, the follower would spin in a
+    "file not found" loop until the subagent produced output.
+    """
     path = base / f"{name}.log"
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():

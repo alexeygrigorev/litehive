@@ -1,13 +1,16 @@
-"""Pure path/identity helpers for litehive-managed task worktrees.
+"""
+Pure path/identity helpers for managed task worktrees.
 
-These functions answer "where is the worktree for task X?" and "is this
-path inside the litehive-managed worktree directory?". They are pure
-filesystem path arithmetic — no git, no state, no I/O beyond ``resolve()``
-and a single venv-symlink helper.
+Answers "where is the worktree for task X?", "is this path inside
+the litehive-managed area?", and produces the canonical absolute
+string we persist on the task record. No git, no state, no I/O
+beyond ``resolve()`` — except for :func:`ensure_worktree_venv_link`,
+which is the one place that touches disk because every caller that
+creates a worktree wants the venv link in the same step.
 
-The richer worktree behavior (sync, rescue, cleanup) lives in
-``litehive.worktree``; the dataclasses describing managed worktrees live
-in ``litehive.domain.worktree``.
+Richer worktree behaviour (sync/rescue/cleanup) lives in sibling
+modules; the dataclasses describing managed worktrees live in
+``litehive.domain.worktree``.
 """
 
 import logging
@@ -25,17 +28,39 @@ logger = logging.getLogger("litehive.worktree.paths")
 
 
 def task_worktree_path(root: Path, task: TaskRecord) -> Path:
-    """Compute the canonical ``<workspace>/worktrees/<id>-<slug>`` location a task's worktree should occupy; used by creation and lookup so both sides agree on placement."""
+    """
+    Compute the canonical worktree location for a task.
+
+    Layout is ``<workspace>/worktrees/<id>-<slug>`` so creation and
+    lookup agree on placement; if the two sides ever disagreed,
+    ``WorktreeService.sync_task_worktree`` would create a duplicate
+    worktree on each call. Centralizing the layout here is the only
+    place to change it.
+    """
     return workspace_path(root, "worktrees") / f"{task.id}-{task.slug}"
 
 
 def task_worktree_branch(task: TaskRecord) -> str:
-    """Return the namespaced ``litehive/<id>-<slug>`` git branch a task's worktree commits to; the ``litehive/`` prefix keeps these separate from human-authored branches."""
+    """
+    Return the namespaced git branch a task's worktree commits to.
+
+    Uses the ``litehive/<id>-<slug>`` prefix so litehive-managed
+    branches don't collide with operator-authored branches and so a
+    branch listing makes it obvious which branches the daemon owns.
+    """
     return f"litehive/{task.id}-{task.slug}"
 
 
 def is_managed_worktree_path(root: Path, worktree_path: str | None) -> bool:
-    """Decide whether a recorded path belongs to the litehive worktree tree; rescue and cleanup use this to refuse touching paths the user moved or hand-edited."""
+    """
+    Whether a stored worktree path belongs to the litehive-managed tree.
+
+    Rescue and cleanup use this to refuse touching paths the operator
+    moved or hand-edited — modifying a path outside the
+    ``worktrees/`` directory would surprise the operator and could
+    delete unrelated work. ``None`` and relative paths are treated
+    as "not managed" because we can't reason about them safely.
+    """
     if not worktree_path:
         return False
     path = Path(worktree_path).expanduser()
@@ -48,7 +73,16 @@ def is_managed_worktree_path(root: Path, worktree_path: str | None) -> bool:
 
 
 def resolve_recorded_worktree_path(root: Path, worktree_path: str | None) -> Path | None:
-    """Turn a stored worktree path string back into an absolute ``Path``, treating relative entries as workspace-relative; returns ``None`` when no path was recorded."""
+    """
+    Turn a stored worktree path back into an absolute resolved ``Path``.
+
+    Pairs with :func:`serialize_worktree_path`: serializing always
+    writes an absolute string, but old records may carry a
+    workspace-relative path. Treating relative entries as
+    workspace-relative keeps those legacy records readable.
+    Returns ``None`` when no path was recorded so callers branch
+    once on "no worktree" instead of on every individual field.
+    """
     if not worktree_path:
         return None
     path = Path(worktree_path).expanduser()
@@ -58,16 +92,27 @@ def resolve_recorded_worktree_path(root: Path, worktree_path: str | None) -> Pat
 
 
 def serialize_worktree_path(path: Path) -> str:
-    """Render a worktree path into the canonical absolute string stored on the task record so reads via ``resolve_recorded_worktree_path`` round-trip cleanly."""
+    """
+    Render a worktree path as the canonical absolute string for the task record.
+
+    Always resolves so two callers passing the same logical path
+    produce identical stored strings — without that, the round-trip
+    through :func:`resolve_recorded_worktree_path` could re-resolve
+    differently and break equality tests in the cleanup flow.
+    """
     return str(path.expanduser().resolve())
 
 
 def ensure_worktree_venv_link(root: Path, worktree_path: Path) -> Path | None:
-    """Ensure the worktree has a venv symlink to the main venv.
+    """
+    Symlink the worktree's ``.venv`` to the main repo's venv.
 
-    Used after creating a new task worktree so the agent inside it can
-    invoke the same ``python``/``uv``/test runners that work at the
-    repo root. Returns the symlink path on success, ``None`` when the
+    Used after creating a new task worktree so the agent inside it
+    can invoke the same ``python``/``uv``/test runners that work at
+    the repo root. Without this, every agent would re-create its own
+    venv on every task and tests that import workspace-installed
+    packages would silently differ between the main checkout and the
+    worktree. Returns the symlink path on success, ``None`` when the
     main repo has no ``.venv`` to link against.
     """
     main_venv = (root / ".venv").expanduser()

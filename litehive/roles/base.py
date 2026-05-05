@@ -32,7 +32,15 @@ class PromptContext:
 
 
 def _bulletize(lines: list[str]) -> str:
-    """Render a list of guidance lines as a Markdown bullet block; centralised so every layer that emits "startup guidance" produces the same shape and the agent prompt remains diff-friendly."""
+    """
+    Render a list of guidance lines as a Markdown bullet block.
+
+    Centralised so every layer that emits "startup guidance"
+    produces the same shape and the rendered prompt stays
+    diff-friendly between runs — without one helper, the role and
+    cross-role layers could format bullets differently and produce
+    spurious diffs.
+    """
     return "\n".join(f"- {line}" for line in lines)
 
 
@@ -80,7 +88,15 @@ class RoleAgent(AgentNode):
         retry_backoff_multiplier: float = 2.0,
         grace_period_seconds: int | None = None,
     ) -> None:
-        """Verify the subclass declared its NODE_NAME/ROLE and forward the rest of the wiring to ``AgentNode``; the prompt context is captured here so ``build_prompt`` can layer workspace overlays without re-reading config every turn."""
+        """
+        Verify the subclass declared its NODE_NAME/ROLE and forward
+        the rest of the wiring to ``AgentNode``.
+
+        ``prompt_context`` is captured on the instance so
+        ``build_prompt`` can layer workspace overlays without
+        re-reading config every turn — without that capture, every
+        turn would re-resolve the workspace startup guidance.
+        """
         if not self.NODE_NAME or not self.ROLE:
             raise TypeError(f"{type(self).__name__} must set NODE_NAME and ROLE class attributes")
         super().__init__(
@@ -139,10 +155,13 @@ class RoleAgent(AgentNode):
         return state.last_rejection_by_stage.get(rejection_stage) or fallback
 
     def _runner_hooks_for_stage(self) -> list[dict[str, Any]]:
-        """Return the configured after-stage hooks for this node.
+        """
+        Return the configured after-stage hooks for this node.
 
-        Loads from workspace config so the agent knows what automated
-        checks will run on its output and can pre-check before submitting.
+        Loads from workspace config so the agent's prompt can list the
+        automated checks that will run on its output; surfacing them
+        lets the agent pre-check locally before submitting and avoid
+        the hook-rejection retry cycle.
         """
         after_phase = f"after_{self.NODE_NAME}"
         root = self.prompt_context.workspace_root
@@ -214,13 +233,20 @@ class RoleAgent(AgentNode):
         return "", "", "fresh"
 
     def _startup_guidance_for(self, key: str) -> list[str]:
-        """Merge built-in startup guidance with workspace-config additions for the given role or ``"all"`` key."""
+        """Merge built-in startup guidance with workspace-config additions for the role or ``"all"`` key, in that order, so workspace bullets append to the defaults rather than replacing them."""
         merged = list(default_startup_guidance().get(key, []))
         merged.extend(self.prompt_context.startup_guidance.get(key, []))
         return merged
 
     def _load_overlay_md(self, key: str) -> str | None:
-        """Read the per-workspace ``.litehive/agents/{key}.md`` overlay if present; this file fully replaces startup guidance for that key."""
+        """
+        Read the per-workspace ``.litehive/agents/{key}.md`` overlay.
+
+        When present, the file *fully replaces* startup guidance for
+        that key — that's the contract operators rely on when they
+        want to override built-in role guidance entirely instead of
+        just appending to it.
+        """
         root = self.prompt_context.workspace_root
         md_path = root / ".litehive" / "agents" / f"{key}.md"
         if not md_path.is_file():
@@ -230,17 +256,21 @@ class RoleAgent(AgentNode):
 
 
 def _last_rejection_payload_or_none(last_rejection: LastRejection | None) -> dict[str, str] | None:
-    """Wrap `_last_rejection_payload` so callers can hand off `None` directly; lets the prompt-builder avoid an inline ternary at the call site."""
+    """Wrap ``_last_rejection_payload`` so callers can hand off ``None`` directly — lets ``build_prompt`` avoid an inline ternary at the call site."""
     if last_rejection is None:
         return None
     return _last_rejection_payload(last_rejection)
 
 
 def _last_rejection_payload(last_rejection: LastRejection) -> dict[str, str]:
-    """Project the persisted rejection record down to the fields the agent prompt is allowed to see.
+    """
+    Project the persisted rejection down to the fields the agent
+    prompt is allowed to see.
 
-    Drops storage-only metadata (timestamps, internal ids) so the
-    agent sees only source/reason/phase plus optional classification.
+    Storage-only metadata (timestamps, internal ids) is dropped so
+    the agent sees only source/reason/phase plus optional
+    classification — leaking storage internals into the prompt
+    surface is what makes prompts brittle to schema changes.
     """
     payload = {
         "source": last_rejection.source,
@@ -253,7 +283,7 @@ def _last_rejection_payload(last_rejection: LastRejection) -> dict[str, str]:
 
 
 def _failed_run_history_payload(state: TaskState) -> list[dict[str, Any]]:
-    """Flatten the failed-run history map into a stably-ordered list for the agent prompt so retry decisions can use it as context."""
+    """Flatten the failed-run history map into a stably-ordered list for the agent prompt so retry decisions can use it as context — sorted on key so the same history renders identically across runs."""
     return [
         {
             "key": key,

@@ -1,4 +1,12 @@
-"""Dataclasses and error types for the tasks package."""
+"""
+Operation-result dataclasses and error types for task-management flows.
+
+These are the shapes the task service returns (selection, repair, stop,
+switch summaries) plus the lock state the runner uses to coordinate
+exclusive workspace access. Keeping them in ``domain`` lets the CLI
+render results without importing the task service implementation, and
+lets tests construct them directly.
+"""
 
 from dataclasses import dataclass, field
 import threading
@@ -10,11 +18,14 @@ from litehive.domain.task import TaskRecord
 
 @dataclass(slots=True)
 class RunnerLockState:
-    """Thread-safe state for the runner process lock.
+    """
+    Thread-safe handle for the runner's exclusive workspace lock.
 
-    Tracks the lock file handle, recursion depth, and current runner status.
-    Used by TaskRunner to coordinate exclusive workspace access and prevent
-    concurrent task execution conflicts.
+    Tracks the open lockfile, the reentrant depth count (so nested
+    runner calls don't double-release), and the live
+    ``RunnerStatusState`` whose updates ``metadata_lock`` serializes.
+    Owned by ``TaskRunner`` to prevent two concurrent task executions
+    from corrupting workspace state.
     """
 
     handle: TextIO  # Open file handle to the lock file
@@ -26,11 +37,13 @@ class RunnerLockState:
 
 @dataclass(slots=True)
 class BlockedTask:
-    """Summary of a task that cannot proceed due to dependencies.
+    """
+    Summary row for a task that the queue can't pick because deps aren't done.
 
-    Used by task selection and queue management to track tasks waiting
-    on upstream dependencies. Helps operators understand task ordering
-    and dependency bottlenecks.
+    The selection helper returns these alongside the chosen task so
+    the CLI can render "X is queued at position 3 but is waiting on
+    Y" — without that context an operator would only see "no task
+    selected" and have to grep dependency lists themselves.
     """
 
     task_id: str  # Unique task identifier
@@ -41,11 +54,14 @@ class BlockedTask:
 
 @dataclass(slots=True)
 class TaskSelection:
-    """Result of selecting the next task for execution.
+    """
+    Output of "pick the next task to run".
 
-    Contains either a ready-to-run task or information about why no task
-    could be selected. Used by TaskRunner to determine what work to do
-    next and provide feedback about queue bottlenecks.
+    Carries either the chosen ``TaskRecord`` plus an empty
+    ``blocked`` list, or ``task=None`` plus the list of dependency-
+    blocked tasks the selector skipped. ``TaskRunner`` and the CLI
+    consume the same shape so a successful pick and a "nothing to do
+    but here's why" branch render through one path.
     """
 
     task: TaskRecord | None  # Selected task ready for execution, if any
@@ -54,11 +70,14 @@ class TaskSelection:
 
 @dataclass(slots=True)
 class TaskPlan:
-    """Complete view of all tasks in dependency order.
+    """
+    Whole-queue view in dependency-respecting order.
 
-    Shows both executable and blocked tasks to help operators understand
-    the complete task queue state and dependency relationships.
-    Used by CLI commands for displaying task status and queue planning.
+    Distinct from ``TaskSelection``: that returns the *next* task,
+    while this returns *every* task plus the blocked summaries so the
+    operator's plan command can render a full topology. The CLI
+    builds it once per invocation rather than walking dependencies
+    twice.
     """
 
     tasks: list[TaskRecord]  # All tasks in dependency-respecting order
@@ -67,11 +86,14 @@ class TaskPlan:
 
 @dataclass(slots=True)
 class WorkspaceRepairSummary:
-    """Summary of workspace repair operations performed.
+    """
+    Per-invocation report from the workspace-repair flow.
 
-    Records what cleanup and recovery actions were taken to restore
-    workspace consistency. Used by health check commands and recovery
-    logic to report what repairs were needed and applied.
+    The repair command (and recovery's auto-repair entrypoint) walks
+    each consistency check and appends to the lists below. ``mutated``
+    is the binary "did we change anything?" signal; the typed lists
+    let the operator output enumerate exactly which tasks/runner state
+    were touched. Empty summary = workspace was already healthy.
     """
 
     mutated: bool = False  # Whether any workspace state was changed
@@ -83,21 +105,40 @@ class WorkspaceRepairSummary:
 
     @property
     def repaired(self) -> bool:
-        """Alias for ``mutated`` used by the operator-facing repair summary; reads more naturally in the CLI ``repaired: yes/no`` output line."""
+        """
+        Alias for ``mutated`` reading more naturally in the CLI summary.
+
+        The operator-facing line is ``repaired: yes/no``, which is
+        easier to scan than ``mutated: true/false``. Both names point
+        at the same flag — having only ``mutated`` would force the
+        CLI to do its own inversion.
+        """
         return self.mutated
 
 
 class WorkspaceConflictError(ValueError):
-    """Raised when workspace mutations would conflict with an active runner."""
+    """
+    Raised when a workspace mutation would race a live runner.
+
+    The ``persist_*`` helpers raise this to refuse a write that would
+    clobber state another runner is in the middle of updating;
+    callers must back off and retry rather than override. A
+    ``ValueError`` subclass so existing ``except ValueError`` blocks
+    still catch it, but distinct enough that conflict-aware callers
+    can route on the specific class.
+    """
 
 
 @dataclass(slots=True)
 class StopTaskSummary:
-    """Summary of a task stop operation.
+    """
+    Outcome record returned by ``stop_task``.
 
-    Records which task was stopped and what process was terminated.
-    Used by task control commands to report the outcome of stop requests
-    and provide visibility into task lifecycle management.
+    Distinguishes "stopped a queued task" (no runner, no signal) from
+    "stopped a running task" (``runner_pid`` set, ``signal_sent``
+    true) so the CLI can render the right operator message and tests
+    can assert on the exact path taken without reaching into the
+    runner state.
     """
 
     task: TaskRecord  # Task that was stopped
@@ -107,12 +148,14 @@ class StopTaskSummary:
 
 @dataclass(slots=True)
 class SwitchTaskSummary:
-    """Summary of a task engine switch operation.
+    """
+    Outcome record returned by ``switch_task_engine``.
 
-    Returned by switch_task_engine() to communicate the result of switching
-    a task from one AI engine to another. Tracks the state transition details
-    including whether the task was actively running and needed to be stopped.
-    Primary consumers: CLI switch commands and engine routing diagnostics.
+    Carries before/after engine names plus the runner-side state
+    transition (was the task running, did we have to signal a runner,
+    what prior-work paths exist) so the CLI can explain to the
+    operator what happened and engine-routing diagnostics can audit
+    the switch trail.
     """
 
     task: TaskRecord  # Task that had its engine switched

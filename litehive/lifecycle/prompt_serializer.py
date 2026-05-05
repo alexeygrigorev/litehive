@@ -148,7 +148,15 @@ def serialize_prompt(
 
 
 def _load_task_activity_history(workspace_root: Path, task_record: TaskRecord) -> list[dict[str, Any]]:
-    """Read the task's persisted activity entries."""
+    """
+    Read the task's persisted activity entries for the prompt.
+
+    Called only when the typed prompt did not pre-populate ``activity``
+    — typically the production path, where the serializer has to fall
+    back to disk. Tests monkey-patch ``load_task_activity`` on this
+    module which is why the history loader lives here rather than in
+    ``prompt_sections``.
+    """
     try:
         activity_entries = load_task_activity(Workspace.from_path(workspace_root), task_record)
     except (OSError, ValidationError, yaml.YAMLError):
@@ -177,9 +185,13 @@ _TRUNCATION_MARKER = "…(truncated)"
 
 
 def _cap_message(entry: dict[str, Any]) -> dict[str, Any]:
-    """Cap an activity entry's message so one verbose verdict can't blow up the prompt size.
+    """
+    Cap an activity entry's message so one verbose verdict can't blow
+    up the prompt size.
 
-    Returns a shallow copy with the message truncated; callers keep the original entry intact.
+    Returns a shallow copy with the message truncated; callers keep
+    the original entry intact so the persisted activity log still
+    holds the full text even though the prompt sees a trimmed copy.
     """
     msg = entry.get("message", "")
     if len(msg) <= _MESSAGE_CAP:
@@ -189,10 +201,15 @@ def _cap_message(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def _entry_sources(entry: dict[str, Any]) -> set[str]:
-    """Expand an activity entry's role into the set of source labels last_rejection might use to point at it.
+    """
+    Expand an activity entry's role into the set of source labels
+    ``last_rejection`` might use to point at it.
 
-    The activity log records role (`grooming`, `hook`, `recovery`, ...) while last_rejection records
-    a `source` field that may be either the role or the generic `agent`/`hook`. This bridges the two.
+    The activity log records role (``grooming``, ``hook``,
+    ``recovery``, …) while ``last_rejection`` records a ``source``
+    field that may be either the role or the generic
+    ``agent``/``hook``. This bridges the two so dedupe matching does
+    not miss when the labels disagree purely on level of generality.
     """
     sources: set[str] = set()
     explicit_source = str(entry.get("source") or "").strip()
@@ -210,7 +227,14 @@ def _entry_sources(entry: dict[str, Any]) -> set[str]:
 
 
 def _matches_last_rejection(entry: dict[str, Any], last_rejection: dict[str, Any]) -> bool:
-    """Detect activity entries that already get rendered in the dedicated last-rejection section, so we don't double-render them."""
+    """
+    Detect activity entries already rendered in the last-rejection section.
+
+    Used by the prompt trimmer to avoid double-rendering: the
+    dedicated last-rejection block carries the full reject text, so
+    seeing the same entry again under "Task activity" would just push
+    real context out of the prompt window for no benefit.
+    """
     if entry.get("verdict") != "reject":
         return False
 
@@ -338,7 +362,14 @@ def _activity_section(
     current_stage: str | None = None,
     last_rejection: dict[str, Any] | None = None,
 ) -> str:
-    """Render the trimmed cross-stage activity log so the current agent sees what earlier stages decided."""
+    """
+    Render the trimmed cross-stage activity log.
+
+    Walked through ``_trim_activity_for_prompt`` first so the current
+    agent only sees the prior verdicts that matter to its stage; the
+    output is what the engine reads under the "Task activity" heading
+    before deciding its next move.
+    """
     trimmed = _trim_activity_for_prompt(activity, current_stage, last_rejection)
     if not trimmed:
         return ""

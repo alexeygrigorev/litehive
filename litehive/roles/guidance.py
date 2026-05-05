@@ -25,9 +25,12 @@ DEFAULT_STARTUP_GUIDANCE: dict[str, list[str]] = {
 
 
 def default_startup_guidance() -> dict[str, list[str]]:
-    """Return a fresh deep copy of the built-in startup guidance map so callers can mutate without touching the module-level default.
+    """
+    Return a fresh deep copy of the built-in startup guidance map.
 
-    Called by ``RoleAgent`` when assembling instruction layers; the deep copy
-    avoids sharing per-role bullet lists across stages.
+    Called by ``RoleAgent`` when assembling instruction layers; the
+    deep copy is what stops stages from sharing per-role bullet
+    lists, so a stage that mutates its own copy cannot pollute the
+    module-level default that other stages still read from.
     """
     return deepcopy(DEFAULT_STARTUP_GUIDANCE)

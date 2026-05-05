@@ -45,10 +45,14 @@ from litehive.workspace import Workspace
 
 
 def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: typer.Typer) -> None:
-    """Wire runner, backup, and db commands onto the top-level Typer app.
+    """
+    Wire runner, backup, and db commands onto the top-level Typer app.
 
-    Called once during CLI bootstrap (``litehive.cli.app``); keeps command
-    wiring out of the module top-level so importing the runner has no side effects.
+    Called once during CLI bootstrap from ``litehive.cli.app``. The
+    explicit registration call keeps command wiring out of the
+    module top-level so importing this module has no side effects
+    on the Typer registry — important for tests and for any tool
+    that imports ``runner`` purely for its helpers.
     """
     app.command("start", help="Start the background Litehive runner")(start)
     app.command("stop", help="Stop the background Litehive runner")(stop)
@@ -71,7 +75,15 @@ def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: ty
 
 
 def start(workspace: WorkspaceOption = Path.cwd()) -> int:
-    """Boot the background daemon for a workspace; the operator entry point for ``litehive start``."""
+    """
+    Boot the background daemon for a workspace.
+
+    Operator entry point for ``litehive start``. Applies any pending
+    DB migrations before forking so the daemon never inherits an
+    out-of-date schema, then double-forks via
+    :func:`start_background_daemon` so the operator's shell returns
+    immediately with the new daemon's PID.
+    """
     foreground = False
     apply_pending_migrations(workspace)
     if foreground:
@@ -88,7 +100,14 @@ def start(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 
 def daemon_status(workspace):
-    """Print daemon liveness lines for a workspace; reused by ``litehive daemon status``."""
+    """
+    Print daemon liveness lines for a workspace.
+
+    Used by ``litehive daemon status`` and exists as a separate
+    function (rather than inlined in the daemon CLI module) so
+    tests can drive it directly without going through the Typer
+    command machinery.
+    """
     ensure_workspace(workspace)
     for line in daemon_status_lines(workspace):
         print(line)
@@ -96,7 +115,14 @@ def daemon_status(workspace):
 
 
 def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
-    """Halt the workspace daemon and report the previous PID; the operator entry point for ``litehive stop``."""
+    """
+    Halt the workspace daemon and report the previous PID.
+
+    Operator entry point for ``litehive stop``. Returns exit code
+    1 when no daemon was running so a script chaining ``stop`` and
+    ``start`` can detect the "nothing to stop" case rather than
+    silently treating it as success.
+    """
     ensure_workspace(workspace)
     entry = stop_workspace_daemon(workspace)
     print(f"workspace: {workspace.resolve()}")
@@ -111,7 +137,15 @@ def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 
 def restart(workspace: WorkspaceOption = Path.cwd()) -> int:
-    """Stop and re-launch the workspace daemon, applying any pending DB migrations between cycles."""
+    """
+    Stop and re-launch the workspace daemon.
+
+    Applies any pending DB migrations between the stop and start
+    so the new daemon never inherits a schema older than what its
+    code expects. Reports both the previous and new PID so the
+    operator can confirm the restart actually replaced the
+    process.
+    """
     previous = stop_workspace_daemon(workspace)
     apply_pending_migrations(workspace)
     try:
@@ -131,13 +165,27 @@ def restart(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 
 def daemon_worker(workspace):
-    """Run the daemon loop in-process for the foreground/worker entry; reused by ``litehive daemon worker``."""
+    """
+    Run the daemon loop in-process for the foreground/worker entry.
+
+    Used by ``litehive daemon worker`` after the supervisor has
+    already detached. ``output_stream=None`` suppresses the
+    stdout banner the foreground ``start`` path prints because
+    the worker process has no controlling terminal.
+    """
     return run_daemon_loop(workspace, output_stream=None)
 
 
 @dataclass(slots=True)
 class _RunCommandIteration:
-    """One pass of ``run_once``: carries exit code plus pool-state signals so the drain loop knows whether to keep going."""
+    """
+    One pass of :func:`run_once`.
+
+    Carries the exit code plus pool-state signals
+    (``consecutive_task_failures``, ``pool_stop_reason``) so the
+    drain loop and the single-shot path can decide whether to
+    continue or stop without re-reading state from the database.
+    """
 
     exit_code: int
     ran_task: bool
@@ -151,9 +199,15 @@ def run_once(
     engine: str | None = None,
     model: str | None = None,
 ) -> _RunCommandIteration:
-    """Dequeue and execute the next task once, surfacing pool-stop signals to the caller.
+    """
+    Dequeue and execute the next task once.
 
-    Used by both the single-shot ``litehive run`` path and the drain loop, and exercised
+    Surfaces pool-stop signals to the caller so the drain loop and
+    single-shot path can share this code without each repeating the
+    "should we keep going?" logic. Also short-circuits when the
+    pool is already in the consecutive-failure stop state so a
+    known-bad pool does not eat another task.
+    Used by ``litehive run``, the drain loop, and exercised
     directly by the hook-reject circuit-breaker tests.
     """
     stopped_iteration = _existing_consecutive_task_failure_stop(workspace)
@@ -213,7 +267,15 @@ def run_once(
 
 
 def _existing_consecutive_task_failure_stop(workspace: Path) -> _RunCommandIteration | None:
-    """Short-circuit ``run_once`` when the pool is already in the consecutive-failure stop state so the runner doesn't dequeue another task into a known-bad pool; returns the synthetic iteration result that ``run_once`` would otherwise produce after the failure."""
+    """
+    Short-circuit ``run_once`` when the pool is already in the failure-stop state.
+
+    Without this guard the runner would dequeue another task into
+    a known-bad pool and either fail it again or silently skip it.
+    Returns the synthetic iteration result that ``run_once`` would
+    otherwise produce after the next failure, so the caller's
+    handling of the stopped state stays uniform.
+    """
     state = load_state(workspace)
     if state.pool_stop_reason != CONSECUTIVE_TASK_FAILURE_STOP_REASON:
         return None
@@ -227,7 +289,15 @@ def _existing_consecutive_task_failure_stop(workspace: Path) -> _RunCommandItera
 
 
 def _emit_consecutive_task_failure_stop(consecutive_task_failures: int) -> None:
-    """Print the operator-visible critical-status banner when the pool stops after repeated failures; floors at 3 so a stale counter cannot show ``stopped after 0`` and confuse the operator."""
+    """
+    Print the operator-visible banner when the pool stops after repeated failures.
+
+    Floors the failure count at 3 so a stale counter cannot show
+    ``stopped after 0`` (or other below-threshold numbers) which
+    would look like a glitch rather than the actual circuit-breaker
+    behavior. Three is the threshold the pool stop reason itself
+    represents.
+    """
     failure_count = max(3, int(consecutive_task_failures))
     print(f"critical_status: stopped after {failure_count} consecutive task failures")
 
@@ -237,7 +307,15 @@ def _run_single(
     engine: str | None = None,
     model: str | None = None,
 ) -> int:
-    """Single-shot ``litehive run`` path: dispatch one ``run_once`` and surface either the pool-stopped banner or the no-queued-task message; the operator default when neither ``--drain`` nor ``--dry-run`` is given."""
+    """
+    Single-shot ``litehive run`` path.
+
+    Dispatches one :func:`run_once` and surfaces either the
+    pool-stopped banner or a "no queued task" message — without
+    that explicit message the operator would otherwise see a
+    silent zero exit code on an empty queue. The operator default
+    when neither ``--drain`` nor ``--dry-run`` is given.
+    """
     iteration = run_once(workspace, engine=engine, model=model)
     if iteration.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
         print(f"Pool stopped: {CONSECUTIVE_TASK_FAILURE_STOP_REASON}")
@@ -252,7 +330,15 @@ def _preview_single(
     engine: str | None = None,
     model: str | None = None,
 ) -> int:
-    """Implement ``litehive run --dry-run`` by peeking the queue selector and the engine selector without launching the task; lets an operator confirm which task and engine the next run would pick before committing."""
+    """
+    Implement ``litehive run --dry-run``.
+
+    Peeks the queue selector and the engine selector without
+    actually launching the task. Lets an operator confirm which
+    task and engine the next run would pick before committing —
+    valuable when triaging engine quotas or freezes that may have
+    pushed the choice somewhere unexpected.
+    """
     selection = peek_next_task_selection(workspace)
     if selection.task is None:
         state = load_state(workspace)
@@ -283,7 +369,16 @@ def _preview_single(
 
 
 def _workspace_has_dirty_non_litehive_changes(workspace: Path) -> bool:
-    """True when the workspace's git tree has uncommitted user-owned changes (ignoring litehive's own runtime files); used by the drain loop's ``--stop-on-dirty-git`` policy so the pool refuses to run on top of in-flight operator edits."""
+    """
+    Detect uncommitted user-owned changes in the workspace tree.
+
+    Ignores litehive's own runtime files (``.litehive/`` and
+    workspace state) because those are expected to churn during
+    normal operation. Used by the drain loop's
+    ``--stop-on-dirty-git`` policy so the pool refuses to run on
+    top of in-flight operator edits, which would otherwise be
+    swept into a checkpoint commit.
+    """
     if not is_git_repo(workspace):
         return False
     return has_non_litehive_changes(workspace)
@@ -297,7 +392,16 @@ def _run_drain(
     max_tasks: int | None,
     stop_on_dirty_git: bool,
 ) -> int:
-    """Drive ``litehive run --drain``: loop ``run_once`` until the queue empties, the failure cap is hit, ``max_tasks`` is reached, or the workspace turns dirty; records the chosen stop reason on the pool so subsequent invocations and status displays explain why the pool quit."""
+    """
+    Drive ``litehive run --drain``.
+
+    Loops :func:`run_once` until the queue empties, the failure
+    cap is hit, ``max_tasks`` is reached, or the workspace turns
+    dirty. Records the chosen stop reason on the pool before
+    returning so subsequent invocations and status displays can
+    explain why the pool quit; without that record the operator
+    would have to guess from the printed banner alone.
+    """
     tasks_run = 0
     while True:
         if stop_on_dirty_git and _workspace_has_dirty_non_litehive_changes(workspace):
@@ -341,10 +445,16 @@ def run_command(
     max_tasks: Annotated[int | None, typer.Option(help="Stop after this many tasks")] = None,
     stop_on_dirty_git: Annotated[bool | None, typer.Option("--stop-on-dirty-git", flag_value=True)] = None,
 ) -> int:
-    """Run, preview, or drain queued tasks; the operator entry point for ``litehive run``.
+    """
+    Run, preview, or drain queued tasks.
 
-    Resolves pool-stop policy from CLI flags falling back to workspace config, then
-    dispatches to single-shot, dry-run preview, or drain-loop execution.
+    Operator entry point for ``litehive run``. Resolves the
+    pool-stop policy from CLI flags falling back to workspace
+    config (so the operator can override config without editing
+    files), then dispatches to single-shot, dry-run preview, or
+    drain-loop execution. ``--dry-run`` and ``--drain`` are
+    mutually exclusive because previewing a multi-task drain has
+    no defined meaning.
     """
     ensure_workspace(workspace)
     if dry_run and drain:
@@ -394,10 +504,16 @@ def report_command(
     ] = None,
     files_changed: Annotated[list[str] | None, typer.Option(help="Changed paths; repeat for multiple")] = None,
 ) -> int:
-    """Append a stage verdict (advance/reject/done/...) to the active task's activity log.
+    """
+    Append a stage verdict (advance/reject/done/...) to a task's activity log.
 
-    The operator entry point for ``litehive report``; agents are blocked from invoking it.
-    Resolves the target task from ``--task-id``, ``LITEHIVE_TASK_ID``, or the workspace's active task.
+    Operator entry point for ``litehive report``; agents are
+    blocked at the top of the function so the broader verdict
+    surface here cannot be used to bypass the role-gated
+    ``agent report``. Resolves the target task from ``--task-id``,
+    ``LITEHIVE_TASK_ID``, or the workspace's active task — in that
+    order — so the same command works inside a hook script and
+    from a plain operator shell.
     """
     block_if_agent()
     if message == "-":
@@ -444,12 +560,20 @@ def report_command(
 
 
 def backup_group(ctx: typer.Context) -> None:
-    """Typer group callback for ``litehive backup``; rejects bare invocation without a subcommand."""
+    """Typer group callback for ``litehive backup``; rejects bare invocation."""
     require_subcommand(ctx)
 
 
 def backup_create(workspace: WorkspaceOption = Path.cwd()) -> int:
-    """Snapshot the workspace runtime database; the operator entry point for ``litehive backup create``."""
+    """
+    Snapshot the workspace runtime database.
+
+    Operator entry point for ``litehive backup create``. Produces a
+    timestamped, compressed copy of the SQLite store so an operator
+    can roll back after a botched migration or accidental
+    destructive command — the snapshot is the only path back if
+    the live database is corrupted.
+    """
     ensure_workspace(workspace)
     try:
         backup = create_workspace_backup(workspace)
@@ -463,7 +587,13 @@ def backup_create(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 
 def backup_list(workspace: WorkspaceOption = Path.cwd()) -> int:
-    """List database backup snapshots so an operator can pick a timestamp for ``backup restore``."""
+    """
+    List database backup snapshots in a workspace.
+
+    Renders timestamp/size/path for each known backup so an
+    operator can pick a timestamp for ``backup restore``. The
+    output is line-oriented so it can feed shell pipelines.
+    """
     ensure_workspace(workspace)
     backups = list_workspace_backups(workspace)
     print(f"backups: {len(backups)}")
@@ -479,7 +609,15 @@ def backup_restore(
     workspace: WorkspaceOption = Path.cwd(),
     yes: Annotated[bool, typer.Option("--yes", help="Skip overwrite confirmation")] = False,
 ) -> int:
-    """Restore a workspace database from a named backup; refuses to run while a daemon or runner is active to avoid clobbering live state."""
+    """
+    Restore a workspace database from a named backup.
+
+    Refuses to run while a daemon or runner is active because
+    overwriting the SQLite file under a live writer would corrupt
+    in-flight state and mid-stream transactions. Confirms before
+    overwriting unless ``--yes`` is set so an interactive operator
+    cannot accidentally wipe their workspace.
+    """
     ensure_workspace(workspace)
     daemon = get_workspace_daemon(workspace)
     if daemon is not None:
@@ -510,14 +648,21 @@ def backup_restore(
 
 
 def db_group(ctx: typer.Context) -> None:
-    """Typer group callback for ``litehive db``; passes through to subcommands or errors on bare invocation."""
+    """Typer group callback for ``litehive db``; rejects bare invocation."""
     if ctx.invoked_subcommand is not None:
         return
     require_subcommand(ctx)
 
 
 def db_status(workspace: WorkspaceOption = Path.cwd()) -> int:
-    """Print schema version and pending migrations so operators know whether ``db migrate`` is needed."""
+    """
+    Print schema version and pending migrations for a workspace.
+
+    Operators read this to know whether ``db migrate`` is needed
+    before starting the daemon; running with pending migrations
+    leaves the system in an undefined state because newer code can
+    rely on schema additions that are not yet in the file.
+    """
     workspace = normalize_workspace_root(workspace, source="--workspace")
     status = migration_status(workspace)
     print(f"workspace: {workspace}")
@@ -533,7 +678,14 @@ def db_migrate(
     workspace: WorkspaceOption = Path.cwd(),
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show pending migrations only")] = False,
 ) -> int:
-    """Apply pending workspace database migrations; the operator entry point for ``litehive db migrate``."""
+    """
+    Apply pending workspace database migrations.
+
+    Operator entry point for ``litehive db migrate``. ``--dry-run``
+    prints the migrations that *would* apply without changing the
+    file so an operator can rehearse a release before flipping
+    schema state on a live workspace.
+    """
     workspace = normalize_workspace_root(workspace, source="--workspace")
     try:
         plan = apply_pending_migrations(workspace, dry_run=dry_run)
@@ -561,7 +713,15 @@ def db_migrate(
 
 
 def db_rebuild_from_events(workspace: WorkspaceOption = Path.cwd()) -> int:
-    """Replay the append-only task event log to rebuild SQLite tables; the operator recovery path when the runtime DB is corrupted or lost."""
+    """
+    Replay the append-only task event log to rebuild SQLite tables.
+
+    Operator recovery path for when the runtime DB is corrupted or
+    lost; the event log is the source of truth for task history,
+    so a clean replay reproduces the workspace's task state from
+    durable evidence rather than relying on a backup that may be
+    older than the latest events.
+    """
     workspace = normalize_workspace_root(workspace, source="--workspace")
     try:
         summary = rebuild_sqlite_from_task_event_log(Workspace.from_path(workspace))
@@ -588,7 +748,15 @@ def db_audit(
     limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum rows to show")] = 20,
     action: Annotated[str | None, typer.Option("--action", help="Optional action filter")] = None,
 ) -> int:
-    """Print durable task audit log entries (status/queue/pipeline transitions) so operators can trace what happened to a task."""
+    """
+    Print durable task audit log entries.
+
+    Each entry records a status, queue, or pipeline transition with
+    actor and source attribution so operators can trace why a task
+    moved between states without correlating multiple log files.
+    Both ``task_id`` and ``--action`` filters narrow the output for
+    targeted investigations.
+    """
     workspace = normalize_workspace_root(workspace, source="--workspace")
     entries = load_task_audit_entries(Workspace.from_path(workspace), task_id=task_id, action=action, limit=limit)
     print(f"workspace: {workspace}")
@@ -608,7 +776,14 @@ def db_audit(
 
 
 def db_settings(workspace: WorkspaceOption = Path.cwd()) -> int:
-    """Print the audited runtime settings stored in the workspace database, sorted by key."""
+    """
+    Print the audited runtime settings stored in the workspace database.
+
+    Sorted by key so the output is stable across runs, which makes
+    diffs between two workspaces (or two snapshots of the same
+    workspace) meaningful. Values are JSON-encoded so structured
+    settings render unambiguously.
+    """
     workspace = normalize_workspace_root(workspace, source="--workspace")
     settings = load_runtime_settings(Workspace.from_path(workspace))
     print(f"workspace: {workspace}")
@@ -622,7 +797,14 @@ def db_settings_audit(
     workspace: WorkspaceOption = Path.cwd(),
     limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum rows to show")] = 20,
 ) -> int:
-    """Print the change history of audited runtime settings (old_value -> new_value with actor and source)."""
+    """
+    Print the change history of audited runtime settings.
+
+    Each entry shows ``old_value -> new_value`` with actor and
+    source attribution so operators can answer "who changed this
+    setting and when?" without grepping logs. The optional ``key``
+    argument narrows the output to one setting.
+    """
     workspace = normalize_workspace_root(workspace, source="--workspace")
     entries = load_runtime_setting_audit_entries(Workspace.from_path(workspace), key=key, limit=limit)
     print(f"workspace: {workspace}")

@@ -27,7 +27,14 @@ def record_recovery_report(
     blocker: str | None = None,
     warnings: list[str] | None = None,
 ) -> ReportReference:
-    """Persist the recovery agent's verdict — the report itself plus a matching task-activity entry — so both the report viewer and the activity timeline see the same trigger, runnable-state, and blocker; called by the recovery stage when its agent finishes a triage pass."""
+    """
+    Persist the recovery agent's verdict.
+
+    Writes the report itself plus a matching task-activity entry so the
+    report viewer and the activity timeline see the same trigger,
+    runnable-state, and blocker. Called by the recovery stage when its
+    agent finishes a triage pass.
+    """
     report = RecoveryReport(
         task_id=task.id,
         origin_stage=origin_stage,

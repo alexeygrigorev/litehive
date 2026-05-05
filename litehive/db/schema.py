@@ -1,4 +1,18 @@
-"""SQLite schema migration runtime for Litehive workspace databases."""
+"""
+SQLite schema migration runtime for the workspace database.
+
+Discovers bundled ``NNNN_name.sql`` migration files via
+``importlib.resources``, applies pending ones in order inside one
+transaction each, and tracks them in ``schema_migrations``.
+``connect_workspace_db`` is the single open path every workspace
+caller uses; it lazily applies migrations on first open per process
+so callers don't have to remember to run a migration step.
+
+Detects diverged history (renamed/reordered migrations) and rebuilds
+the database after a guarded backup so a renamed migration cannot
+silently look "already applied" by version while pointing at a
+different schema.
+"""
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -70,17 +84,39 @@ class MigrationPlan:
 
 
 class MigrationApplyError(RuntimeError):
-    """Raised when a schema migration fails."""
+    """
+    Raised when a single schema migration fails.
+
+    Carries the failing ``Migration`` and the underlying SQLite
+    cause so ``litehive db migrate`` can render which migration
+    name + version blew up rather than only the bare SQLite error
+    text — the operator needs both to know whether to roll forward
+    or revert.
+    """
 
     def __init__(self, migration: Migration, cause: Exception) -> None:
-        """Wrap the SQL error from a single failed migration with the migration metadata so the ``litehive db migrate`` CLI can show which migration name+version blew up rather than only the underlying SQLite error string."""
+        """
+        Wrap the SQL error with migration metadata for operator output.
+
+        The message intentionally puts the migration name first
+        because that's what shows up on the CLI's first error
+        line; the underlying ``cause`` is preserved on the
+        attribute for tests and detailed diagnostics.
+        """
         super().__init__(f"migration {migration.name} failed: {cause}")
         self.migration = migration
         self.cause = cause
 
 
 def _utcnow() -> str:
-    """Format an ``applied_at`` timestamp the way ``schema_migrations`` rows expect (second-precision Z-suffixed)."""
+    """
+    Format an ``applied_at`` timestamp for ``schema_migrations`` rows.
+
+    Second-precision with the ``Z`` suffix because that's the spelling
+    the migration table has carried since version 1; switching to a
+    different ISO variant would make freshly-applied rows sort
+    differently from existing rows.
+    """
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
@@ -88,7 +124,16 @@ def _task_intent_column_values(
     intent: TaskIntentRecord,
     state: TaskStateRecord | None = None,
 ) -> dict[str, str]:
-    """Project a TaskIntentRecord/TaskStateRecord pair onto the flat column shape used by migration 7's task_intent backfill."""
+    """
+    Project a ``TaskIntentRecord`` / ``TaskStateRecord`` pair onto the migration-7 column shape.
+
+    Migration 7 introduced denormalized columns on ``task_intent``
+    (``slug``, ``priority``, ``goal``, ``…_json``) so list/filter
+    queries don't have to parse JSON on every row. This helper
+    produces the flat dict the backfill insert consumes; keeping
+    the projection in Python avoids embedding pydantic-aware logic
+    in SQL.
+    """
     if intent.created_from is None:
         provenance_payload: dict = {}
     else:
@@ -116,7 +161,16 @@ def _task_intent_column_values(
 
 
 def _sync_task_intent_columns(connection: sqlite3.Connection) -> None:
-    """Backfill the denormalized ``task_intent`` columns from each row's JSON payload; called after migration 7 runs so list/filter queries see the new columns populated for every existing task instead of needing a one-shot operator step."""
+    """
+    Backfill the denormalized ``task_intent`` columns from each row's JSON payload.
+
+    Called immediately after migration 7 applies so existing task
+    rows have the new columns populated without requiring a
+    separate operator step. Skipping a row that won't validate is
+    intentional — the migration has already committed, and a single
+    bad row shouldn't block the rest from being usable on the new
+    schema.
+    """
     rows = connection.execute(
         """
         SELECT intent.task_id, intent.payload AS intent_payload, state.payload AS state_payload
@@ -173,12 +227,27 @@ def _sync_task_intent_columns(connection: sqlite3.Connection) -> None:
 
 
 def _migration_resources():
-    """Locate the bundled migration directory through ``importlib.resources``; isolated as a one-liner so tests can monkey-patch a single symbol when they need to substitute a fixture set of migrations."""
+    """
+    Locate the bundled migration directory via ``importlib.resources``.
+
+    Isolated as a one-liner so tests can monkey-patch this single
+    symbol to substitute a fixture set of migrations — patching the
+    full ``available_migrations`` would require duplicating the
+    discovery logic in every test.
+    """
     return importlib.resources.files(MIGRATIONS_PACKAGE)
 
 
 def available_migrations() -> tuple[Migration, ...]:
-    """Discover bundled SQL migrations; called by the migration CLI and by ``apply_pending_migrations`` to compute the apply plan."""
+    """
+    Discover bundled SQL migration files in version order.
+
+    Reads each ``NNNN_name.sql`` from ``litehive.db.migrations`` so
+    the apply plan is computed from what's currently shipped, not
+    from a Python-side registry that could drift. Called by the
+    migration CLI for status output and by
+    :func:`apply_pending_migrations` to compute the pending list.
+    """
     migrations: list[Migration] = []
     for entry in sorted(_migration_resources().iterdir(), key=lambda item: item.name):
         if not entry.name.endswith(".sql") or "_" not in entry.name:
@@ -197,7 +266,15 @@ def available_migrations() -> tuple[Migration, ...]:
 
 
 def _open_connection(db_path: Path) -> sqlite3.Connection:
-    """Single point that applies the project's connection pragmas (foreign keys, durability tradeoffs) so migration code and ``connect_workspace_db`` cannot diverge."""
+    """
+    Open a SQLite connection with the project's pragmas applied.
+
+    Single point that toggles foreign keys, sets row factory, and
+    applies the test-mode durability shortcuts. Migration code and
+    :func:`connect_workspace_db` both call this so the two paths
+    cannot diverge on, say, ``foreign_keys`` and let one path
+    write rows the other rejects.
+    """
     db_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
@@ -212,7 +289,15 @@ def _open_connection(db_path: Path) -> sqlite3.Connection:
 
 
 def _ensure_schema_migrations_table(connection: sqlite3.Connection) -> None:
-    """Bootstrap the bookkeeping table on a fresh db so the first migration query does not error before migration 1 has run."""
+    """
+    Bootstrap the ``schema_migrations`` bookkeeping table on a fresh db.
+
+    Without this, the very first migration-status query would fail
+    because the table it reads doesn't yet exist (migration 1 is
+    what creates the rest of the schema, but it can't bootstrap
+    its own log). Idempotent ``CREATE TABLE IF NOT EXISTS`` so it
+    is safe to call before every operation.
+    """
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -226,14 +311,30 @@ def _ensure_schema_migrations_table(connection: sqlite3.Connection) -> None:
 
 
 def _applied_versions(connection: sqlite3.Connection) -> set[int]:
-    """Return the version set used by both ``migration_status`` (status reporting) and ``apply_pending_migrations`` (to skip already-applied migrations)."""
+    """
+    Return the set of applied migration versions.
+
+    Used by :func:`migration_status` for status reporting and by
+    :func:`apply_pending_migrations` to skip migrations whose
+    version is already in the log. The set form is what the apply
+    loop actually uses; ordering is preserved by the SQL but
+    discarded here.
+    """
     _ensure_schema_migrations_table(connection)
     rows = connection.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
     return {int(row["version"]) for row in rows}
 
 
 def _applied_migration_rows(connection: sqlite3.Connection) -> list[tuple[int, str]]:
-    """Return ``(version, name)`` for each applied migration in order; ``_database_requires_rebuild`` uses the names (not just versions) to detect a renamed migration that would otherwise look already-applied by version alone."""
+    """
+    Return ``(version, name)`` for each applied migration in order.
+
+    :func:`_database_requires_rebuild` consults the *names* (not
+    just versions) to detect a renamed migration that would
+    otherwise look "already applied" by version number alone —
+    such a rename would silently leave the schema in a state the
+    bundled migrations no longer describe.
+    """
     _ensure_schema_migrations_table(connection)
     rows = connection.execute("SELECT version, name FROM schema_migrations ORDER BY version").fetchall()
     return [(int(row["version"]), str(row["name"])) for row in rows]
@@ -243,7 +344,16 @@ def _has_required_baseline_tables(
     connection: sqlite3.Connection,
     applied_versions: set[int],
 ) -> bool:
-    """Confirm every table the applied migrations should have created is actually present; ``_database_requires_rebuild`` consults this so a partially-applied or table-dropped DB is treated as needing a rebuild rather than silently limping forward."""
+    """
+    Confirm every table the applied migrations should have created is present.
+
+    :func:`_database_requires_rebuild` consults this so a
+    partially-applied or table-dropped DB triggers a rebuild
+    instead of silently limping forward — a missing
+    ``runtime_settings`` table after a successful migration 6
+    means something has gone very wrong, and continuing would
+    just produce ``OperationalError`` on every read.
+    """
     rows = connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
     tables = {str(row["name"]) for row in rows}
     required_tables = set(_BASELINE_REQUIRED_TABLES)
@@ -257,7 +367,15 @@ def _migration_history_matches_prefix(
     applied: list[tuple[int, str]],
     available: tuple[Migration, ...],
 ) -> bool:
-    """Return whether the DB's applied-migration log is a strict prefix of the bundled migrations; used by ``_database_requires_rebuild`` to detect a renamed/reordered/diverged history that cannot be reconciled by patching forward."""
+    """
+    True when the DB's applied log is a strict prefix of the bundled migrations.
+
+    :func:`_database_requires_rebuild` uses this to detect a
+    renamed, reordered, or otherwise-diverged migration history
+    that cannot be reconciled by patching forward — once the
+    history shape has diverged, continuing would either skip a
+    needed migration or apply one out of order.
+    """
     if len(applied) > len(available):
         return False
     expected_prefix = [(migration.version, migration.name) for migration in available[: len(applied)]]
@@ -265,7 +383,15 @@ def _migration_history_matches_prefix(
 
 
 def _database_requires_rebuild(db_path: Path, migrations: tuple[Migration, ...]) -> bool:
-    """Detect a DB whose history has diverged from the bundled migrations (e.g. a renamed migration) so ``apply_pending_migrations`` can rebuild it instead of trying to patch in place."""
+    """
+    Detect a DB whose history has diverged from the bundled migrations.
+
+    Returns ``True`` when the log doesn't prefix-match the bundled
+    list, when required tables for already-applied migrations are
+    missing, or when the file itself is unreadable as SQLite. In
+    all those cases :func:`apply_pending_migrations` will back up
+    and rebuild rather than try to patch a broken history forward.
+    """
     if not db_path.exists():
         return False
     try:
@@ -282,7 +408,13 @@ def _database_requires_rebuild(db_path: Path, migrations: tuple[Migration, ...])
 
 
 def migration_status(root: Path) -> MigrationStatus:
-    """Read-only view used by the ``litehive db status`` CLI; does not mutate the database."""
+    """
+    Read-only migration view used by ``litehive db status``.
+
+    Returns the current version plus the applied/pending lists
+    without mutating the DB so the CLI can render status from a
+    background process without racing the daemon's schema writes.
+    """
     db_path = workspace_path(root, "data.db")
     migrations = available_migrations()
     applied: list[Migration] = []
@@ -306,7 +438,16 @@ def migration_status(root: Path) -> MigrationStatus:
 
 
 def apply_pending_migrations(root: Path, dry_run: bool = False) -> MigrationPlan:
-    """Bring the workspace DB up to the bundled schema; called by the migration CLI and lazily by ``connect_workspace_db`` on first open per-process."""
+    """
+    Bring the workspace DB up to the bundled schema.
+
+    Called explicitly by ``litehive db migrate`` and lazily by
+    :func:`connect_workspace_db` on first open per process. Detects
+    diverged history and rebuilds the DB after a guarded backup
+    rather than trying to patch forward. ``dry_run`` returns the
+    plan without writing anything so the operator can review what
+    a migration would do.
+    """
     db_path = workspace_path(root, "data.db")
     migrations = available_migrations()
     if _database_requires_rebuild(db_path, migrations):
@@ -358,7 +499,15 @@ _DbFingerprint: TypeAlias = tuple[int, int] | None
 
 
 def _db_fingerprint(db_path: Path) -> _DbFingerprint:
-    """Identify the file (dev/inode) so the in-process migration cache invalidates only when the DB is replaced, not on every write."""
+    """
+    Identify the DB file by ``(dev, inode)`` for the migration cache key.
+
+    Tracking identity rather than mtime/size means the in-process
+    migration cache invalidates only when the file is replaced
+    (e.g. by a rebuild), not on every successful write — without
+    this, every write would force a redundant migration check on
+    the next open and cripple write throughput.
+    """
     try:
         stat = db_path.stat()
     except OSError:
@@ -373,12 +522,28 @@ REBUILT_DB_PATHS: set[str] = set()
 
 
 def _db_cache_key(db_path: Path) -> str:
-    """Canonical cache key for ``MIGRATED_DB_PATHS``/``REBUILT_DB_PATHS``; resolves the path so two callers entering through different cwd-relative paths share one cache slot."""
+    """
+    Canonical cache key for ``MIGRATED_DB_PATHS`` / ``REBUILT_DB_PATHS``.
+
+    Resolves the path so two callers entering through different
+    cwd-relative paths share one cache slot — without resolution,
+    a CLI running from the workspace root and a daemon running
+    from elsewhere would each miss the other's cached state and
+    re-run migration checks redundantly.
+    """
     return str(db_path.resolve())
 
 
 def consume_rebuilt_database_marker(root: Path) -> bool:
-    """One-shot signal so callers (status/recovery output) can warn the operator exactly once that a rebuild happened this process."""
+    """
+    One-shot signal that a database rebuild happened this process.
+
+    Called by status/recovery output so the operator sees the
+    rebuild warning exactly once per process — leaving the marker
+    in place would spam the status block on every subsequent
+    invocation. Returns ``True`` the first time and ``False``
+    afterwards.
+    """
     key = _db_cache_key(workspace_path(root, "data.db"))
     if key not in REBUILT_DB_PATHS:
         return False
@@ -388,7 +553,16 @@ def consume_rebuilt_database_marker(root: Path) -> bool:
 
 @contextmanager
 def connect_workspace_db(root: Path, migrate: bool = True) -> Iterator[sqlite3.Connection]:
-    """The single entry point every workspace caller uses to talk to SQLite, so pragmas and on-demand migration stay consistent."""
+    """
+    The single entry point for opening the workspace's SQLite database.
+
+    Every workspace read or write goes through this context manager
+    so pragmas and on-demand migration stay consistent across
+    callers — opening sqlite directly would diverge on
+    ``foreign_keys`` or skip the lazy migration check.
+    ``migrate=False`` is used by the read-only fast status path
+    that must not block on a migration run.
+    """
     db_path = workspace_path(root, "data.db")
     if migrate:
         # In-process cache keyed on the absolute db_path (not root), because

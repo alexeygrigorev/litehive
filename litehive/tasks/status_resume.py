@@ -62,10 +62,24 @@ def _requeue_task_transition(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    """Reset a flagged/parked/closed task back to the implementation entry stage and put it on the queue; retracts already-merged pass entries so the next implementation attempt does not double-claim work that is already on main."""
+    """
+    Reset a flagged/parked/closed task back to the implementation entry stage.
+
+    Retracts already-merged pass entries so the next implementation attempt
+    does not double-claim work that already landed on main; the retraction
+    is what turns the activity feed into an honest record after the task is
+    requeued.
+    """
 
     def _task_checkout_path(task: TaskRecord) -> Path:
-        """Pick the checkout the path-divergence probe should look at — the recorded task worktree if it still exists on disk, otherwise the main checkout — so requeue's pass-retraction logic compares the right tree against main."""
+        """
+        Pick the checkout the path-divergence probe should look at.
+
+        Prefers the recorded task worktree when it still exists on disk;
+        otherwise falls back to the main checkout, so requeue's
+        pass-retraction logic compares the right tree against main rather
+        than always assuming the worktree is intact.
+        """
         worktree_path = resolve_recorded_worktree_path(
             root, task.runtime.pipeline.git.worktree_path or task.git.worktree_path
         )
@@ -74,7 +88,13 @@ def _requeue_task_transition(
         return root
 
     def _path_differs_from_main(checkout_path: Path, main_ref: str, relative_path: str) -> bool:
-        """Convert ``GitError`` into ``ValueError`` so requeue surfaces the failure in the same domain shape as its other validation errors instead of leaking a git-specific exception class."""
+        """
+        Convert ``GitError`` to ``ValueError`` for the requeue path.
+
+        Lets requeue surface the failure in the same domain shape as its
+        other validation errors instead of leaking a git-specific exception
+        class up to the CLI handler.
+        """
         try:
             return path_differs_at_ref(checkout_path, main_ref, relative_path)
         except GitError as exc:
@@ -143,7 +163,13 @@ def _requeue_task_transition(
 
 
 def _resume_task_transition(root: Path, task_id: str, front: bool = False) -> TaskRecord:
-    """Pick the right pipeline stage to re-enter for an interrupted/parked/flagged task and queue it from there; preserves the prior outcome only when the operator is genuinely resuming, not when they want a clean retry."""
+    """
+    Pick the right pipeline stage and queue an interrupted/parked/flagged task.
+
+    Preserves the prior outcome when the operator is genuinely resuming
+    (so the next agent sees the previous failure context); clears it for
+    requested-retry shapes so the next run starts from a clean verdict.
+    """
 
     with workspace_lock(root):
         task = require_task(root, task_id)
@@ -210,7 +236,13 @@ def requeue_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    """Public CLI/agent entry for sending a flagged, parked, or closed task back to the implementation queue for another pass."""
+    """
+    Public CLI/agent entry for requeueing a flagged/parked/closed task.
+
+    Sends the task back to the implementation queue for another pass; the
+    public-surface shim around ``_requeue_task_transition`` so existing
+    imports of ``requeue_task`` from ``litehive.tasks.status`` keep working.
+    """
     return _requeue_task_transition(
         root,
         task_id,
@@ -222,5 +254,11 @@ def requeue_task(
 
 
 def resume_task(root: Path, task_id: str, front: bool = False) -> TaskRecord:
-    """Public CLI/agent entry for putting an interrupted, parked, or stranded task back on the queue at the stage it was last working on."""
+    """
+    Public CLI/agent entry for putting a paused task back on the queue.
+
+    Resumes interrupted, parked, or stranded tasks at the stage they were
+    last working on; thin shim around ``_resume_task_transition`` for the
+    public surface importable via ``litehive.tasks.status``.
+    """
     return _resume_task_transition(root, task_id, front=front)

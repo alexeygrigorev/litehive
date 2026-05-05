@@ -45,7 +45,14 @@ def _abandon_task_transition(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    """Cancel an in-flight or parked task: signal the live subagent if any, mark the task closed/cancelled, and drop it from the queue; differs from close_task in that abandon is the operator-initiated kill path while close records a deliberate terminal outcome."""
+    """
+    Cancel an in-flight or parked task.
+
+    Signals the live subagent (if any), marks the task closed/cancelled,
+    and drops it from the queue. Differs from ``close_task`` in being the
+    operator-initiated kill path: ``close`` records a deliberate terminal
+    outcome, ``abandon`` says "stop right now and tear it down".
+    """
 
     with workspace_lock(root):
         task = require_task(root, task_id)
@@ -90,11 +97,13 @@ def _close_task_transition(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
+    """
+    Mark a task as explicitly closed with a terminal outcome.
 
-    """Mark a task as explicitly closed with a terminal outcome.
-
-    Valid outcomes: ``done``, ``wont_do``, ``deferred``, ``duplicate``, ``execution_cancelled``.
-    The task is removed from the queue.
+    Valid outcomes are ``done``, ``wont_do``, ``deferred``, ``duplicate``,
+    and ``execution_cancelled``. The task is removed from the queue and any
+    live runner/subagent is signalled so a closed task does not keep
+    consuming runtime resources.
     """
     if outcome not in _CLOSE_OUTCOME_REASON_CODES:
         allowed = ", ".join(sorted(_CLOSE_OUTCOME_REASON_CODES))
@@ -170,10 +179,12 @@ def _park_task_transition(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
+    """
+    Mark a task as parked and remove it from the queue.
 
-    """Mark a task as parked.
-
-    The task is removed from the queue and set to status 'parked'.
+    Parked tasks are still visible in status surfaces but no longer
+    selectable by the runner; the operator brings them back via
+    ``litehive task resume`` when ready.
     """
     with workspace_lock(root):
         task = require_task(root, task_id)
@@ -207,7 +218,13 @@ def abandon_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    """Public CLI/agent entry for the operator-initiated kill path that signals the live subagent and marks the task cancelled."""
+    """
+    Public CLI/agent entry for the operator-initiated kill path.
+
+    Signals the live subagent and marks the task cancelled; thin wrapper
+    around ``_abandon_task_transition`` so the public surface stays
+    importable from ``litehive.tasks.status``.
+    """
     return _abandon_task_transition(
         root,
         task_id,
@@ -226,7 +243,14 @@ def close_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    """Public CLI/agent entry for terminating a task with a deliberate verdict (done, wont_do, deferred, duplicate, execution_cancelled) and optional follow-up reference."""
+    """
+    Public CLI/agent entry for terminating a task with a deliberate verdict.
+
+    Accepts ``done``, ``wont_do``, ``deferred``, ``duplicate``, or
+    ``execution_cancelled`` as outcome plus an optional follow-up task
+    reference; thin wrapper around ``_close_task_transition`` so the public
+    surface stays importable from ``litehive.tasks.status``.
+    """
     return _close_task_transition(
         root,
         task_id,
@@ -245,7 +269,13 @@ def park_task(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> TaskRecord:
-    """Public CLI/agent entry for taking a task out of the queue without closing it, so the operator can pick it up again later via resume."""
+    """
+    Public CLI/agent entry for parking a task without closing it.
+
+    Removes the task from the queue but keeps it resumable so the operator
+    can pick it up again later via ``litehive task resume``; thin wrapper
+    around ``_park_task_transition`` for the public surface.
+    """
     return _park_task_transition(
         root,
         task_id,

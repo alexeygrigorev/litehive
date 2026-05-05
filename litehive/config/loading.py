@@ -1,4 +1,12 @@
-"""Config loading and merge helpers."""
+"""
+Config loading and merge helpers.
+
+Owns the layered-config pipeline: defaults from
+:class:`LitehiveConfig`, the user-global layer under the litehive
+root, and the per-workspace layer. Runtime-setting overrides are
+applied last by :func:`load_config` so they always win over
+file-based values.
+"""
 
 from dataclasses import asdict
 from pathlib import Path
@@ -12,7 +20,15 @@ from litehive.config.workspace_files import config_path, context_path
 
 
 def _read_config_layer(path: Path) -> dict[str, Any]:
-    """Load one YAML config layer; missing files return ``{}`` so every caller can blindly merge over the default-config baseline."""
+    """
+    Load one YAML config layer.
+
+    Missing files return ``{}`` so every caller can blindly merge
+    over the default-config baseline without testing for absence.
+    Non-mapping payloads raise loudly because the contract is "a
+    config file is a YAML mapping" — silently turning a list or
+    scalar into ``{}`` would mask the operator's mistake.
+    """
     if not path.exists():
         return {}
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -22,7 +38,15 @@ def _read_config_layer(path: Path) -> dict[str, Any]:
 
 
 def merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> dict[str, Any]:
-    """Deep-merge ``overlay`` over ``base``: nested mappings combine recursively, scalars and lists overwrite. Defines the precedence rule between defaults, user-global, and workspace config layers."""
+    """
+    Deep-merge ``overlay`` over ``base``.
+
+    Nested mappings combine recursively; scalars and lists are
+    replaced wholesale because partial list merging would force
+    operators to specify positional intent. Defines the precedence
+    rule between defaults, user-global, and workspace config
+    layers.
+    """
     merged = dict(base)
     for key, value in overlay.items():
         current = merged.get(key)
@@ -34,14 +58,30 @@ def merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> 
 
 
 def load_effective_config_data(root: Path) -> dict[str, Any]:
-    """Materialize the effective config dict from defaults + user-global + per-workspace layers without applying runtime-setting overrides yet."""
+    """
+    Materialize the effective config dict from the layered files.
+
+    Applies defaults, then the user-global layer under the
+    litehive root, then the per-workspace layer. Runtime-setting
+    overrides are *not* applied here because that step requires
+    the SQLite store; tests and tools that only want the file
+    layout call this directly.
+    """
     config = asdict(LitehiveConfig())
     config = merge_config_layers(config, _read_config_layer(litehive_root() / "config.yaml"))
     return merge_config_layers(config, _read_config_layer(config_path(root)))
 
 
 def load_config(root: Path) -> LitehiveConfig:
-    """Public config entrypoint: bootstrap the workspace if needed, layer in runtime-setting overrides, and return a validated ``LitehiveConfig``. Called by every CLI command and the daemon at startup."""
+    """
+    Public config entrypoint.
+
+    Bootstraps the workspace if needed, layers in runtime-setting
+    overrides on top of the file-based config, and returns a
+    validated :class:`LitehiveConfig`. Called by every CLI command
+    and the daemon at startup so config evolution stays in one
+    place.
+    """
     ensure_workspace(root)
     # inline: runtime_settings transitively pulls db.schema which loads
     # config.* back through litehive/config/__init__.py during partial init.
@@ -53,6 +93,14 @@ def load_config(root: Path) -> LitehiveConfig:
 
 
 def load_context(root: Path) -> str:
-    """Read the workspace context document used as a stable preamble for prompts; bootstrap the workspace first so the file is guaranteed to exist."""
+    """
+    Read the workspace context document used as a prompt preamble.
+
+    The context document is the stable workspace-level prose
+    every agent prompt opens with (project background, conventions).
+    Bootstraps the workspace first so the file is guaranteed to
+    exist; without bootstrap, a fresh workspace would error here
+    instead of seeing the seeded context.
+    """
     ensure_workspace(root)
     return context_path(root).read_text(encoding="utf-8")

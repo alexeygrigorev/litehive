@@ -38,21 +38,44 @@ app = make_typer(invoke_without_command=True)
 
 
 def _display_flag_reason(task) -> str:
-    """Render the flag-reason cell for `task list`/`task show`; collapses non-flagged rows to ``-`` so the column reads cleanly."""
+    """
+    Render the flag-reason cell for ``task list`` and ``task show``.
+
+    Non-flagged rows collapse to ``-`` so the column reads cleanly
+    rather than littering most rows with empty reasons. Flagged
+    rows without a stored reason fall back to ``"unknown"`` so the
+    cell is never silently blank.
+    """
     if task.status != TaskStatus.FLAGGED:
         return "-"
     return task.flag_reason or "unknown"
 
 
 def _display_close_reason(task) -> str:
-    """Render the close-reason cell with a layered fallback (explicit close_reason > pipeline last_outcome > unknown) so closed tasks always carry a reason in operator output."""
+    """
+    Render the close-reason cell with a layered fallback.
+
+    Order of preference: explicit ``close_reason``, then the
+    pipeline's last outcome ``reason_code``, then ``"unknown"``.
+    The fallback chain ensures closed tasks always carry *some*
+    reason in operator output even when the close path forgot to
+    set the explicit field — better than rendering a misleading
+    blank cell.
+    """
     if task.status not in {TaskStatus.CLOSED, TaskStatus.DONE}:
         return "-"
     return task.close_reason or task.runtime.pipeline.last_outcome.reason_code or "unknown"
 
 
 def _show_dependency_label(root, task) -> str:
-    """Render the depends_on cell with each dependency's current status (or ``missing``) inline so an operator can spot a broken prerequisite without an extra `task show`."""
+    """
+    Render the ``depends_on`` cell with each dependency's current status inline.
+
+    Inlines each prerequisite's status (or ``missing`` for a stale
+    edge) so an operator can spot a broken dependency without an
+    extra ``task show`` per id. Loaded with ``strict=False`` so a
+    corrupted record does not block the rest of the listing.
+    """
     if not task.depends_on:
         return "-"
 
@@ -67,7 +90,15 @@ def _show_dependency_label(root, task) -> str:
 
 
 def _print_creation_provenance(task) -> None:
-    """Print the ``created_from`` block on `task show` so operators can trace whether a task was created by a human, a planner subagent, or a follow-up edge from another stage."""
+    """
+    Print the ``created_from`` block on ``task show``.
+
+    Lets operators trace whether a task was created by a human, a
+    planner subagent, or a follow-up edge from another stage —
+    valuable when triaging unexpected work in the queue. ``-`` is
+    printed when no provenance was recorded so the section keeps a
+    fixed shape across tasks.
+    """
     created_from = task.created_from
     if created_from is None:
         print("created_from: -")
@@ -100,7 +131,15 @@ def add(
         str | None, typer.Option(click_type=choice(VALID_TASK_PRIORITIES), help="Task priority")
     ] = None,
 ) -> int:
-    """Operator entry point for queueing new work; warns when acceptance criteria are missing so the planner is not handed an underspecified goal."""
+    """
+    Queue a new task.
+
+    Operator entry point for queueing new work. Warns (but does
+    not fail) when acceptance criteria are missing so the planner
+    is not handed an underspecified goal silently — the planner
+    can still triage the task, but the operator sees the gap on
+    creation rather than in a downstream rejection.
+    """
     ensure_workspace(workspace)
     try:
         depends_on = parse_dependency_ids(depends_on)
@@ -146,7 +185,15 @@ def evidence(
     task_id: Annotated[str, typer.Argument(help="Task ID (e.g. T-0001)")],
     workspace: WorkspaceOption = Path.cwd(),
 ) -> int:
-    """Operator triage view that surfaces only the routing/recovery signal needed to decide what to do with a stuck task."""
+    """
+    Operator triage view of a stuck task.
+
+    Surfaces only the routing/recovery signal an operator needs to
+    decide what to do with a parked task (current stage, recovery
+    triggers, latest verdicts). Distinct from the verbose
+    ``task show`` because most triage decisions only need the
+    pipeline-level evidence and not the task fields.
+    """
     ensure_workspace(workspace)
     try:
         task = require_task(workspace, task_id)
@@ -163,7 +210,15 @@ def debug(
     all_: Annotated[bool, typer.Option("--all", help="List all subagents")] = False,
     worktree: Annotated[bool, typer.Option(help="Show worktree details")] = False,
 ) -> int:
-    """Compatibility alias kept so muscle-memory `task debug` invocations still resolve; routes to evidence/worktree/all-subagents views depending on flags."""
+    """
+    Compatibility alias for ``task evidence`` and related views.
+
+    Kept so muscle-memory ``task debug`` invocations still resolve
+    after the rename to ``evidence``. ``--worktree`` routes to the
+    worktree-detail view, ``--all`` to the every-subagent listing,
+    otherwise the latest-subagent view; the operator picks the
+    flavor without remembering three separate command names.
+    """
     ensure_workspace(workspace)
     try:
         task = require_task(workspace, task_id)
@@ -186,7 +241,16 @@ def logs(
     all_: Annotated[bool, typer.Option("--all", help="List all subagent runs")] = False,
     follow: Annotated[bool, typer.Option(help="Follow live stdout")] = False,
 ) -> int:
-    """Single operator-facing entry point that dispatches across daemon sessions, the task journal, subagent evidence, or live stdout follow so the operator does not need to remember per-artifact paths."""
+    """
+    Single operator-facing entry point for log-style evidence.
+
+    Dispatches across daemon sessions, the task journal, subagent
+    evidence, and live-stdout follow so the operator does not need
+    to remember per-artifact paths or which command owns which
+    log type. Flag precedence is ``--follow`` > ``--daemon`` >
+    task-id branch, with ``--agent``/``--all`` further selecting
+    inside the task branch.
+    """
     ensure_workspace(workspace)
     if follow:
         return follow_active_subagent(workspace, task_id=task_id)
@@ -210,7 +274,14 @@ def list_tasks_command(
     workspace: WorkspaceOption = Path.cwd(),
     show_all: Annotated[bool, typer.Option("--all", help="Include done tasks")] = False,
 ) -> int:
-    """Operator queue overview that hides DONE tasks by default so the live work surface stays scannable."""
+    """
+    Operator queue overview.
+
+    Hides DONE tasks by default so the live work surface stays
+    scannable; ``--all`` opts back into the historical view.
+    Loads tasks with ``strict=False`` so a single corrupted record
+    does not blank out the entire listing.
+    """
     ensure_workspace(workspace)
     tasks = list_tasks(workspace, strict=False)
     filtered = []
@@ -233,7 +304,15 @@ def list_tasks_command(
 
 @app.command("show", help="Print full details for a single task")
 def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: WorkspaceOption = Path.cwd()) -> int:
-    """Full single-task dump for operators who need every field (criteria, plan, runtime stage, last outcome) on one screen before deciding to retry, abandon, or edit."""
+    """
+    Print every field for one task.
+
+    Used by operators who need criteria, plan, runtime stage, last
+    outcome, and provenance on one screen before deciding to
+    retry, abandon, or edit. Distinct from ``task evidence``
+    because triage rarely needs the full surface — this is the
+    "I'm reasoning about the whole task" view.
+    """
     ensure_workspace(workspace)
     task = get_task(workspace, task_id)
     if task is None:
@@ -287,7 +366,15 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
 
 @app.command("abandon", help="Cancel a flagged or closed task and remove it from the queue")
 def abandon(task_id: Annotated[str, typer.Argument(help="Task id")], workspace: WorkspaceOption = Path.cwd()) -> int:
-    """Operator escape hatch for tasks the pipeline cannot finish; intentionally distinct from `close` because abandoned work yields no follow-up reasoning."""
+    """
+    Operator escape hatch for tasks the pipeline cannot finish.
+
+    Intentionally distinct from ``close`` because abandoned work
+    yields no follow-up reasoning: there is no "won't do
+    because…" to record, the operator just wants the task out of
+    the queue. Closing with an explicit outcome is the correct
+    surface when a reason and follow-up matter.
+    """
     ensure_workspace(workspace)
     try:
         task = abandon_task(workspace, task_id)
@@ -311,7 +398,16 @@ def close(
     reason: Annotated[str | None, typer.Option(help="Optional rationale")] = None,
     follow_up_task: Annotated[str | None, typer.Option(help="Optional follow-up task id")] = None,
 ) -> int:
-    """Closes a task with an explicit outcome; reused by planner/reviewer subagents (via env-detected role) so the same surface serves operators and in-pipeline agents under different audit attribution."""
+    """
+    Close a task with an explicit outcome and optional follow-up.
+
+    Reused by planner and reviewer subagents (via env-detected
+    role) so the same command surface serves operators and
+    in-pipeline agents while producing different audit
+    attribution. The agent path is gated through
+    :func:`resolve_active_agent_task_mutation_target` so an agent
+    cannot close a queued task it should not touch.
+    """
     agent_role = current_agent_role()
     close_kwargs: dict[str, str] = {}
     mutation_workspace = workspace
@@ -357,7 +453,16 @@ def update(
     constraints: Annotated[list[str] | None, typer.Option("--constraint", help="Replace task constraints")] = None,
     plan: Annotated[list[str] | None, typer.Option("--plan-step", help="Replace task plan steps")] = None,
 ) -> int:
-    """Edits task fields after creation; shared with planner/reviewer subagents so they can shape the active task while still routing every mutation through the workspace audit log."""
+    """
+    Edit task fields after creation.
+
+    Shared with planner and reviewer subagents so they can shape
+    the active task without their own command surface; mutations
+    still route through the workspace audit log so an agent's
+    edits are distinguishable from an operator's. Each option is
+    treated as "leave alone" when absent so partial updates do
+    not stomp on unspecified fields.
+    """
     agent_role = current_agent_role()
     update_kwargs: dict[str, object] = {}
     mutation_workspace = workspace

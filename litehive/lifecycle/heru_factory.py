@@ -74,28 +74,57 @@ logger = logging.getLogger(__name__)
 
 
 class _NullSelector:
-    """Stub engine selector used when constructing a ``RecoveryAgent`` purely
-    to render its prompt during the direct-recovery handoff (no engine pick
-    happens — the adapter shells Codex itself)."""
+    """
+    Stub engine selector for the direct-recovery prompt build.
+
+    Constructed only when ``RecoveryAgent`` is being instantiated to
+    render its prompt during the direct-recovery handoff; no engine
+    pick happens because the handoff shells Codex itself rather than
+    going through the normal selector path.
+    """
 
     def select(self, state, node_name, excluded):
-        """Stub selector method: the direct-recovery handoff only needs ``RecoveryAgent`` to render its prompt, so no real engine pick is performed."""
+        """
+        Always return ``None``.
+
+        The direct-recovery handoff only needs ``RecoveryAgent`` to
+        render its prompt — the actual engine call happens inside the
+        adapter, so no selection is required.
+        """
         del state, node_name, excluded
         return None
 
 
 class _NullSessions:
-    """Stub session store paired with ``_NullSelector`` for the direct-recovery
-    prompt build: no continuation IDs are persisted because that turn bypasses
-    ``SubagentManager`` entirely."""
+    """
+    Stub session store paired with ``_NullSelector``.
+
+    Used only by the direct-recovery prompt build: that turn bypasses
+    ``SubagentManager`` entirely, so no continuation IDs are produced
+    or persisted and a real session store would only see throwaway
+    rows.
+    """
 
     def get_or_create(self, task_id, node_name, engine_name):
-        """Return a throwaway ``Session``: the direct-recovery turn shells Codex itself instead of going through SubagentManager, so no real session needs to be tracked."""
+        """
+        Return a throwaway empty ``Session``.
+
+        The direct-recovery turn shells Codex itself instead of going
+        through SubagentManager, so no real session ever exists; the
+        caller only needs *something* shaped like a Session to satisfy
+        ``RecoveryAgent.build_prompt``.
+        """
         del task_id, node_name, engine_name
         return Session()
 
     def persist(self, task_id, node_name, engine_name, session):
-        """No-op session persist: the direct-recovery bypass does not produce a continuation we want to remember, so the call is intentionally swallowed."""
+        """
+        Swallow the persist call.
+
+        The direct-recovery bypass produces no continuation we want to
+        remember, so writing it would just leave a phantom row behind
+        on the next normal launch.
+        """
         del task_id, node_name, engine_name, session
 
 
@@ -372,15 +401,26 @@ class HeruEngineAdapter:
         workspace_root: Path,
         model_name: str | None = None,
     ) -> None:
-        """Pin a heru-backed engine to a workspace plus an optional model override; constructed by ``heru_engine_factory`` per pick so multiple selectors using the same engine don't share mutable adapter state."""
+        """
+        Pin a heru-backed engine to a workspace and optional model.
+
+        Constructed by ``heru_engine_factory`` per selector pick so
+        multiple selectors using the same engine name don't share
+        mutable adapter state — each pick gets its own instance.
+        """
         self.name = engine_name
         self.workspace_root = Path(workspace_root)
         self.model_name = model_name
 
     def with_model(self, model_name: str | None) -> "HeruEngineAdapter":
-        """Return a sibling adapter pinned to a specific model. Used when the
-        selector wants to retry the same engine on a different model without
-        mutating the existing instance."""
+        """
+        Return a sibling adapter pinned to a specific model.
+
+        Used when the selector wants to retry the same engine on a
+        different model without mutating the existing instance, so the
+        original adapter (used by other in-flight stages) is not
+        disturbed.
+        """
         return HeruEngineAdapter(
             self.name,
             self.workspace_root,
@@ -388,11 +428,16 @@ class HeruEngineAdapter:
         )
 
     def run_turn(self, session: Session, prompt: Any, state: TaskState) -> AgentVerdict:
-        """Run one agent turn for the lifecycle pipeline: serialize the role's
-        prompt, hand it to ``SubagentManager``, then read the journal for the
-        verdict the agent submitted via ``litehive agent report``. Raises
-        ``NudgeRequired`` if the agent finished without submitting, and
-        translates engine failures into the ``Engine`` error taxonomy."""
+        """
+        Run one agent turn for the lifecycle pipeline.
+
+        Serializes the role's prompt, hands it to ``SubagentManager``,
+        then reads the journal for the verdict the agent submitted via
+        ``litehive agent report``. Raises ``NudgeRequired`` if the
+        agent finished without submitting, and translates engine
+        failures into the ``Engine`` error taxonomy that AgentNode
+        knows how to react to.
+        """
         if not isinstance(prompt, AgentPrompt):
             raise UnrecoverableError(
                 f"HeruEngineAdapter expects an AgentPrompt from RoleAgent.build_prompt, got {type(prompt).__name__}"
@@ -504,7 +549,15 @@ class HeruEngineAdapter:
 
     @classmethod
     def _crash_resume_prompt(cls, prompt_text: str) -> str:
-        """Prepend the crash-resume preamble to the original prompt; used by ``_run_with_crash_resume`` so a resumed session sees an explicit ``continue where you left off`` instruction before the role's prompt body."""
+        """
+        Prepend the crash-resume preamble to the original prompt.
+
+        Used by ``_run_with_crash_resume`` so a resumed session sees an
+        explicit ``continue where you left off`` instruction before the
+        role's prompt body — without it, the resumed engine would re-
+        read the original instructions and likely repeat work it
+        already finished.
+        """
         return f"{cls.CRASH_RESUME_PROMPT_PREFIX}{prompt_text}"
 
     def _handle_startup_failure(
@@ -731,15 +784,10 @@ def _is_retryable_failure(exc: Exception) -> bool:
 
 
 def heru_engine_factory(workspace_root: Path):
-    """Return a callable that produces ``HeruEngineAdapter`` instances.
-
-    Suitable as the ``engine_factory`` argument for
-    ``ConfigBackedEngineSelector``.
-    """
+    """Return a callable that produces ``HeruEngineAdapter`` instances. Suitable as the ``engine_factory`` argument for ``ConfigBackedEngineSelector``."""
     root = Path(workspace_root)
 
     def _factory(engine_name: str) -> Engine:
-        """Per-name factory closure handed to ``ConfigBackedEngineSelector``; constructs a fresh adapter so picks of the same engine across stages don't share continuation state."""
         return HeruEngineAdapter(engine_name, root)
 
     return _factory

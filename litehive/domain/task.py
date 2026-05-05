@@ -1,4 +1,13 @@
-"""Task and workspace record models."""
+"""
+``TaskRecord`` and its persistence-boundary projections.
+
+The aggregate root is ``TaskRecord``: every task-scoped read/write goes
+through it. ``TaskIntentRecord`` and ``TaskStateRecord`` project the
+record into two halves at the SQLite write boundary so operator-supplied
+fields and runtime-managed fields can be saved as separate rows (intent
+is rarely written; state churns on every run). ``WorkspaceState`` is
+the workspace-wide leftover that doesn't belong on any single task.
+"""
 
 from typing import Literal
 
@@ -14,7 +23,15 @@ from .runtime import SubagentRef, TaskRuntime
 
 
 def canonicalize_task_terminal_state(task: "TaskRecord") -> None:
-    """Fill in ``close_reason`` and clear ``flag_reason`` on terminal tasks so persisted records always satisfy the contract that closed/done tasks have a reason and aren't simultaneously flagged."""
+    """
+    Make a task's terminal fields self-consistent before persistence.
+
+    Closed/done tasks must always carry a ``close_reason`` and must
+    never simultaneously be flagged; without this normalization the
+    operator's status view could show "done + still flagged" or
+    "closed without a reason" depending on which write path produced
+    the record. Called from every persistence path that ends a task.
+    """
     status = str(task.status)
     if status == "closed":
         outcome_reason_code = task.runtime.pipeline.last_outcome.reason_code
@@ -33,10 +50,15 @@ def canonicalize_task_terminal_state(task: "TaskRecord") -> None:
 
 
 class TaskRetryPolicy(BaseModel):
-    """Configured retry limits for a task.
+    """
+    Per-task overrides for the retry budget.
 
-    Set by task creation and task-edit flows. Used by PipelineRunner and
-    recovery logic when deciding whether another attempt is allowed.
+    Set at task creation or via task-edit; falls back to workspace
+    defaults when ``None``. Read by ``PipelineRunner`` before bumping
+    a counter and by recovery logic before deciding whether another
+    attempt is allowed. Stage retry vs. overall retry are tracked
+    separately so a single chatty stage can't exhaust the whole task
+    budget.
     """
 
     max_retries: int | None = None  # Overall retry limit across all stages
@@ -45,11 +67,15 @@ class TaskRetryPolicy(BaseModel):
 
 
 class TaskCreationSource(BaseModel):
-    """Metadata about what created this task.
+    """
+    Provenance record stored on every newly-created task.
 
-    Records the context for task creation across manual/operator task adds,
-    in-agent task creation, and follow-up task flows. Helps track task
-    relationships and creation provenance for debugging and auditing.
+    Distinguishes manual operator adds, in-agent task creation, and
+    follow-up task flows so the operator's task graph can render the
+    parent/child relationship and the recovery layer can detect
+    runaway agent task creation. ``blocking=True`` partners with
+    :func:`blocked_on_follow_up_reason` to wire the parent's
+    wait-on-child reason.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -63,11 +89,14 @@ class TaskCreationSource(BaseModel):
 
 
 class GitSettings(BaseModel):
-    """Git configuration and state for task execution.
+    """
+    Combined operator-intent + runtime-state git settings for a task.
 
-    Combines operator intent (auto_commit, commit_message) with runtime
-    state tracking (commit_sha, checkpoint attempts) for git operations
-    during task execution.
+    The two halves split at the persistence boundary
+    (``TaskIntentGitSettings`` and ``TaskStateGitSettings``) so intent
+    rarely writes and state churns per commit, but they live together
+    in memory so callers don't have to merge two records every time
+    they touch the task's git state.
     """
 
     auto_commit: bool = True  # Whether to auto-commit changes
@@ -77,14 +106,26 @@ class GitSettings(BaseModel):
     worktree_path: str | None = None  # Path to git worktree
 
     def to_intent_git_settings(self) -> "TaskIntentGitSettings":
-        """Project the operator-controlled subset out of the combined git settings for the intent persistence boundary."""
+        """
+        Project the operator-controlled fields for the intent row.
+
+        Used by the storage layer when writing the rarely-changing
+        intent row; the corresponding runtime fields are split off via
+        :meth:`to_state_git_settings`.
+        """
         return TaskIntentGitSettings(
             auto_commit=self.auto_commit,
             commit_message=self.commit_message,
         )
 
     def to_state_git_settings(self) -> "TaskStateGitSettings":
-        """Project the runtime-tracking subset out of the combined git settings for the state persistence boundary."""
+        """
+        Project the runtime-tracking fields for the state row.
+
+        Pairs with :meth:`to_intent_git_settings`; together they form
+        the two halves stored in the SQLite ``task_intent`` and
+        ``task_state`` tables.
+        """
         return TaskStateGitSettings(
             commit_sha=self.commit_sha,
             checkpoint_attempts=self.checkpoint_attempts,
@@ -93,11 +134,13 @@ class GitSettings(BaseModel):
 
 
 class TaskIntentGitSettings(BaseModel):
-    """Git settings representing operator intent.
+    """
+    Operator-supplied git settings persisted on the intent row.
 
-    Contains only the operator-specified git configuration, separated from
-    runtime state tracking. Used for persistence of operator preferences
-    without runtime execution details.
+    Holds the two operator-controlled knobs (``auto_commit``,
+    ``commit_message``) without any runtime tracking, so the intent
+    row stays stable across runs and can be rewritten by ``litehive
+    update`` without disturbing the per-run state half.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -107,11 +150,13 @@ class TaskIntentGitSettings(BaseModel):
 
 
 class TaskStateGitSettings(BaseModel):
-    """Git state tracking for runtime execution.
+    """
+    Runtime-managed git fields persisted on the state row.
 
-    Contains only the runtime state information from git operations,
-    separated from operator intent. Used for persistence of execution
-    state without operator preferences.
+    Holds the per-run tracking (current commit, checkpoint attempts,
+    worktree path) without any operator-controlled knobs, so the state
+    row can churn on every commit without touching the rarely-written
+    intent row.
     """
 
     commit_sha: str | None = None  # Current git commit SHA
@@ -119,7 +164,14 @@ class TaskStateGitSettings(BaseModel):
     worktree_path: str | None = None  # Path to git worktree
 
     def to_git_updates(self) -> dict[str, str | int | None]:
-        """Return the dict shape ``GitSettings.model_copy(update=...)`` accepts so state-side fields can be reapplied without touching operator-intent fields."""
+        """
+        Return the update-dict shape ``GitSettings.model_copy(update=...)`` consumes.
+
+        Used by ``TaskStateRecord.apply_to_task`` when overlaying the
+        loaded state row back onto a freshly-built task, so state-side
+        fields land on the task without stomping on the operator-intent
+        fields that stayed in memory.
+        """
         return {
             "commit_sha": self.commit_sha,
             "checkpoint_attempts": self.checkpoint_attempts,
@@ -128,15 +180,15 @@ class TaskStateGitSettings(BaseModel):
 
 
 class TaskIntentRecord(BaseModel):
-    """Operator-specified task intent and configuration.
+    """
+    Persistence half of a ``TaskRecord`` carrying operator intent.
 
-    Represents the immutable or operator-controlled aspects of a task:
-    what the operator wants accomplished, how they want it executed, and
-    their planning inputs. Separated from runtime state to maintain a
-    clear boundary between operator intent and execution bookkeeping.
-
-    Primary consumers: task creation flows, operator editing, and
-    persistence when separating intent from runtime state.
+    Holds *what* the operator wants done (goal, acceptance criteria,
+    constraints, plan, dependencies, mode, priority) plus their git
+    preferences. Separated from ``TaskStateRecord`` so editing the
+    intent (``litehive update``) doesn't have to traverse the
+    state-row schema, and so the rarely-changing intent stays small
+    and stable in storage.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -157,15 +209,15 @@ class TaskIntentRecord(BaseModel):
 
 
 class TaskStateRecord(BaseModel):
-    """Runtime execution state and system-managed task properties.
+    """
+    Persistence half of a ``TaskRecord`` carrying runtime state.
 
-    Represents the mutable execution state that changes as the task
-    progresses: current status, pipeline position, execution attempts,
-    and runtime tracking. Separated from intent to maintain a clear
-    boundary between operator intent and execution bookkeeping.
-
-    Primary consumers: PipelineRunner, RecoveryCoordinator, and persistence
-    when separating runtime state from operator intent.
+    Holds the per-run mutable fields: status, pipeline position, model
+    selection, runtime, retry policy, subagent refs, runtime git
+    state. Read by ``PipelineRunner`` and recovery logic; written on
+    every transition. Pairs with ``TaskIntentRecord`` —
+    :meth:`apply_to_task` reassembles the two halves into a
+    ``TaskRecord``.
     """
 
     model: str | None = None  # AI model being used
@@ -181,7 +233,15 @@ class TaskStateRecord(BaseModel):
     runtime: TaskRuntime = Field(default_factory=TaskRuntime)  # Detailed execution state
 
     def apply_to_task(self, record: "TaskRecord") -> "TaskRecord":
-        """Overlay this state snapshot back onto a TaskRecord built from intent; called by ``TaskRecord.from_intent_and_state`` when reassembling persisted tasks from the split storage shape."""
+        """
+        Overlay this state snapshot back onto a task built from intent.
+
+        Called by ``TaskRecord.from_intent_and_state`` when
+        reassembling a persisted task from its two SQLite rows. The
+        intent half is read first to seed identity, then this method
+        layers in the runtime-changing fields without disturbing the
+        intent half's git operator-knobs.
+        """
         record.model = self.model
         record.status = self.status
         record.close_reason = self.close_reason
@@ -197,34 +257,20 @@ class TaskStateRecord(BaseModel):
 
 
 class TaskRecord(BaseModel):
-    """A unit of work tracked by Litehive - the main aggregate root.
+    """
+    The aggregate root for a single unit of work tracked by Litehive.
 
-    Created by TaskService when the operator creates a new task, or by
-    follow-up task creation flows when one task produces another task.
-    Exists to store the operator's intended work item plus its execution-
-    attached runtime state.
+    Carries operator intent (``goal``, ``acceptance_criteria``,
+    ``constraints``, ``plan``, ``depends_on``) and execution-attached
+    runtime state in one in-memory shape; persistence splits these
+    along the ``TaskIntentRecord`` / ``TaskStateRecord`` boundary.
+    Read and written by ``PipelineRunner``, recovery, and the CLI;
+    subagents and prompts read it for context.
 
-    Used by PipelineRunner, RecoveryCoordinator, and CLI commands to read
-    and update task progress. Also used by subagents and prompts to
-    understand the task goal, plan, and constraints.
-
-    This is the main aggregate boundary in the system - prefer loading and
-    changing task-scoped data through task-oriented services instead of
-    letting unrelated modules mutate pieces independently.
-
-    Field meanings:
-    - goal: the main intended result
-    - acceptance_criteria: concrete completion conditions
-    - constraints: limitations or rules that must be respected
-    - plan: the current working plan for the task
-    - depends_on: upstream task ids
-    - runtime: mutable execution-only state, separated from task intent
-
-    Why default_factory is used for runtime and other mutable fields:
-    TaskRuntime is mutable state, so each Task must get its own fresh
-    TaskRuntime instance. Field(default_factory=TaskRuntime) creates a
-    new instance per task. Using runtime: TaskRuntime = TaskRuntime()
-    directly would risk sharing one instance across multiple tasks.
+    Mutable fields (``runtime``, lists) use ``Field(default_factory=...)``
+    so every new task gets its own instance — a class-level mutable
+    default would silently share one ``TaskRuntime`` across multiple
+    tasks and corrupt every concurrent run.
     """
 
     id: str
@@ -254,7 +300,13 @@ class TaskRecord(BaseModel):
     )  # Mutable execution state, excluded from serialization
 
     def to_intent_record(self) -> TaskIntentRecord:
-        """Project the operator-intent half of the task for the intent persistence boundary."""
+        """
+        Project the operator-intent half of the task for the intent row.
+
+        Pairs with :meth:`to_state_record`; together they let the
+        storage layer write the two SQLite rows without ever observing
+        the merged ``TaskRecord`` shape on disk.
+        """
         return TaskIntentRecord(
             id=self.id,
             slug=self.slug,
@@ -272,7 +324,14 @@ class TaskRecord(BaseModel):
         )
 
     def to_state_record(self) -> TaskStateRecord:
-        """Project the runtime-state half of the task for the state persistence boundary; deep-copies retry policy and runtime so callers can mutate without aliasing the live task."""
+        """
+        Project the runtime-state half of the task for the state row.
+
+        Deep-copies ``retry_policy`` and ``runtime`` so a caller that
+        mutates the projection (e.g. for storage normalization) cannot
+        accidentally alias the live task's nested objects. Pairs with
+        :meth:`to_intent_record`.
+        """
         return TaskStateRecord(
             model=self.model,
             status=self.status,
@@ -288,7 +347,15 @@ class TaskRecord(BaseModel):
         )
 
     def to_storage_state_record(self) -> TaskStateRecord:
-        """State projection used at the SQLite write boundary; rewrites runtime to the for-storage shape and pins worktree_path so reads back match what was written."""
+        """
+        State projection prepared for the SQLite write boundary.
+
+        Calls ``TaskRuntime.for_storage`` so the persisted runtime
+        carries the latest commit/worktree, and pins
+        ``state.git.worktree_path`` to the same value so the round-trip
+        through SQLite reads back what was written instead of a value
+        that lagged the most recent commit.
+        """
         state = self.to_state_record()
         state.runtime = self.runtime.for_storage(
             commit_sha=self.git.commit_sha,
@@ -304,7 +371,14 @@ class TaskRecord(BaseModel):
         intent: TaskIntentRecord,
         state: TaskStateRecord | None = None,
     ) -> "TaskRecord":
-        """Reassemble a TaskRecord from its persisted intent and state halves; the read-side counterpart of ``to_intent_record`` / ``to_state_record``."""
+        """
+        Reassemble a ``TaskRecord`` from its persisted intent + state halves.
+
+        The read-side counterpart of :meth:`to_intent_record` /
+        :meth:`to_state_record`. ``state=None`` is supported for
+        legacy paths that need an intent-only projection (e.g. before
+        the state row has been written for a brand-new task).
+        """
         record = cls(**intent.model_dump(mode="python"))
         if state is None:
             return record
@@ -312,14 +386,31 @@ class TaskRecord(BaseModel):
 
 
 class UnmergedWorktree(BaseModel):
-    """Pointer to a worktree whose branch never made it back into main; surfaced to operators by health and status commands so abandoned work is visible."""
+    """
+    Pointer to a worktree whose branch never made it back into main.
+
+    Health and status surfaces render these so abandoned worktrees are
+    visible to operators; the worktree-rescue CLI iterates over them
+    to offer cherry-pick onto main. Persisted on
+    ``WorkspaceState.unmerged_worktrees`` because the entry survives
+    the originating task being closed.
+    """
 
     task_id: str
     worktree_path: str
 
 
 class WorkspaceState(BaseModel):
-    """Workspace-scoped runtime state outside any single task: active selection, queue, pool stop reason, and unmerged-worktree leftovers."""
+    """
+    Workspace-scoped runtime state that doesn't belong on any single task.
+
+    Holds the active task selection, the task queue, the operator-
+    facing pool-stop reason, the consecutive-failure streak that
+    drives "halt on repeated failures", a monotonic task numbering
+    counter, and the unmerged-worktree list. Lives in one record so
+    the daemon and CLI can read/write the workspace's runtime in a
+    single round-trip.
+    """
 
     active_task_id: str | None = None
     queue: list[str] = Field(default_factory=list)

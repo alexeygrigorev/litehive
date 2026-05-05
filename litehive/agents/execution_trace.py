@@ -28,7 +28,14 @@ class ExecutionTraceView:
 
 
 def parse_unified_events(stdout: str) -> tuple[UnifiedEvent, ...]:
-    """Recover unified events from a captured engine stdout buffer when the structured event stream is unavailable; tolerant of garbage/non-JSON lines so partial captures still yield a usable trace."""
+    """
+    Recover unified events from a captured engine stdout buffer.
+
+    Used when the structured event stream artifact is unavailable —
+    a partial run, a crash, an older format. Tolerant of garbage and
+    non-JSON lines so partial captures still yield a usable trace
+    rather than failing the whole parse on one malformed line.
+    """
     events: list[UnifiedEvent] = []
     for line_number, raw_line in enumerate(stdout.splitlines(), 1):
         line = raw_line.strip()
@@ -54,7 +61,14 @@ def parse_unified_events(stdout: str) -> tuple[UnifiedEvent, ...]:
 
 
 def render_event_for_execution_trace(event: UnifiedEvent) -> str:
-    """Format one unified event as the human-readable Markdown chunk that ends up in the persisted execution trace; tool calls and results are wrapped in fenced ``tool`` blocks so the trace round-trips through diff and chat UIs."""
+    """
+    Format one unified event as a Markdown chunk for the trace.
+
+    Tool calls and results are wrapped in fenced ``tool`` blocks so
+    the trace round-trips cleanly through diff and chat UIs that
+    only render fenced code; without the fence, free-form tool
+    output would interfere with surrounding Markdown.
+    """
     if event.kind in {"message", "status"} and event.content:
         return event.content
     if event.kind == "error" and event.error:
@@ -79,7 +93,7 @@ def render_event_for_execution_trace(event: UnifiedEvent) -> str:
 
 
 def render_execution_trace_from_events(events: tuple[UnifiedEvent, ...], stderr: str) -> str:
-    """Stitch rendered events plus any stderr tail into the canonical trace text written to ``execution_trace.md`` and shown by the status UI."""
+    """Stitch rendered events plus any stderr tail into the canonical trace text written to ``execution_trace.md`` and shown by the status UI — the single place that decides how events and stderr compose."""
     parts = [rendered for event in events if (rendered := render_event_for_execution_trace(event))]
     if not parts:
         if stderr.strip():
@@ -96,7 +110,14 @@ def event_stream_from_events(
     task_id: str | None = None,
     subagent_id: str | None = None,
 ) -> LiveEventStream | None:
-    """Wrap parsed unified events into a heru ``LiveEventStream`` so the timeline-renderer paths can treat reconstructed-from-stdout traces and live captures uniformly."""
+    """
+    Wrap parsed unified events into a heru ``LiveEventStream``.
+
+    Lets the timeline-renderer paths treat reconstructed-from-stdout
+    traces (this function's input) and live captures uniformly — the
+    renderer only knows how to read ``LiveEventStream``, so the
+    fallback path has to lift its parsed events into that shape.
+    """
     if not events:
         return None
     event_stream = LiveEventStream(engine=engine_name, task_id=task_id, subagent_id=subagent_id)
@@ -106,7 +127,14 @@ def event_stream_from_events(
 
 
 def render_execution_trace_from_streams(stdout: str, stderr: str) -> str:
-    """Build a trace from raw stdout/stderr when no structured event stream artifact survived; fallback path used by the loader when the modern session-store events are missing."""
+    """
+    Build a trace from raw stdout/stderr.
+
+    Fallback path used by the loader when no structured event stream
+    artifact survived (older runs, partial captures); produces a
+    readable trace that lets diagnostics still recover *something*
+    from a half-broken subagent run.
+    """
     events = parse_unified_events(stdout)
     if events:
         return render_execution_trace_from_events(events, stderr=stderr)
@@ -117,7 +145,14 @@ def render_execution_trace_from_streams(stdout: str, stderr: str) -> str:
 
 
 def render_execution_trace_from_event_stream_payload(payload: dict[str, Any], stderr: str) -> str:
-    """Render a trace from the JSON event-stream payload persisted by the session store; preferred path because it does not depend on the engine flushing well-formed JSONL to stdout."""
+    """
+    Render a trace from the persisted JSON event-stream payload.
+
+    Preferred path because it reads from the session store rather
+    than parsing engine stdout — engines do not always flush
+    well-formed JSONL, but the session-store payload was written by
+    our own code and is structurally clean.
+    """
     raw_events = payload.get("events")
     if not isinstance(raw_events, list):
         return ""
@@ -139,7 +174,16 @@ def load_subagent_execution_trace(
     active: bool,
     runtime_state: RuntimeSubagentState | None = None,
 ) -> ExecutionTraceView | None:
-    """Load a readable execution trace without relying on live transcript state."""
+    """
+    Load a readable execution trace for one subagent.
+
+    Walks four sources in preference order — cached
+    ``execution_trace.md`` (only for finished runs), persisted
+    event-stream payload, raw stdout/stderr, and the runtime state
+    snippet — so callers always get the freshest trace available
+    without relying on a live transcript that may have been
+    truncated or lost.
+    """
 
     base = task_dir(root, task) / ref.path
     if not active and ref.status != "running":
@@ -192,7 +236,15 @@ def load_subagent_execution_trace(
 
 
 def _read_stream_artifact(base: Path, stream: str, active: bool) -> ExecutionTraceView | None:
-    """Pick the right stdout/stderr artifact file: the live ``.log`` while a subagent runs, the persisted ``.txt`` after it finishes; the order flips so we don't read a stale ``.txt`` over a still-growing ``.log``."""
+    """
+    Pick the right stdout/stderr artifact file for the stream.
+
+    While a subagent runs, the live ``.log`` is the freshest source;
+    after it finishes, the persisted ``.txt`` is the canonical one.
+    The order flips on ``active`` so we don't accidentally read a
+    stale ``.txt`` over a still-growing ``.log`` and miss recent
+    output.
+    """
     if stream not in {"stdout", "stderr"}:
         raise ValueError(f"Unsupported stream artifact: {stream}")
     if active:

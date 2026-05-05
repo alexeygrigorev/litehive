@@ -40,7 +40,14 @@ _CLOSE_REASON_CODE_LABELS: dict[str, str] = {
 
 
 def _reset_pipeline_state(root: Path, task_id: str, preserve_run_memory: bool = False) -> None:
-    """Wipe the SQLite-side lifecycle/runtime rows for a task before it starts a new attempt; preserve_run_memory keeps recovery evidence so a requeue still has the prior failure context to feed back."""
+    """
+    Wipe the SQLite-side lifecycle/runtime rows before a new attempt.
+
+    ``preserve_run_memory`` keeps the recovery-evidence trail so a requeue
+    can feed prior failure context back to the next agent; without that
+    flag the task starts truly clean (used by ``recover``-style operator
+    actions).
+    """
     SqlitePersistence(Workspace.from_path(root)).reset_current_lifecycle_state(
         task_id, preserve_run_memory=preserve_run_memory
     )
@@ -58,7 +65,14 @@ def _persist_transition(
     before_queue: list[str],
     context: dict[str, object] | None = None,
 ) -> None:
-    """Bundle a task/queue mutation with its audit entry so every status transition emits one consistent journal+audit row; shared by every transition in this module to keep the audit shape uniform."""
+    """
+    Bundle a task/queue mutation with its audit entry in one transaction.
+
+    Shared by every transition in this module so each status change emits
+    one consistent journal+audit row; centralising the envelope keeps the
+    audit shape uniform across requeue/resume/close/park/abandon and
+    avoids each transition reinventing the build_task_audit_entry call.
+    """
 
     persist_task_and_state_without_runner_guard(
         root,
@@ -82,7 +96,13 @@ def _persist_transition(
 
 
 def _queue_task(state: WorkspaceState, task_id: str, front: bool = False) -> None:
-    """Place a task into the workspace queue without ever creating a duplicate entry; called by requeue and resume so a task that was already queued ends up at exactly one position."""
+    """
+    Place a task into the workspace queue without creating a duplicate.
+
+    Called by requeue and resume so a task that was already queued ends up
+    at exactly one position; without the dedupe step the same task could
+    be selected twice in a row and the dependent counts would skew.
+    """
     state.queue = [item for item in state.queue if item != task_id]
     if front:
         state.queue.insert(0, task_id)
@@ -91,12 +111,13 @@ def _queue_task(state: WorkspaceState, task_id: str, front: bool = False) -> Non
 
 
 def _apply_cancelled_task_state(task: TaskRecord, reason: str) -> None:
-    """Project a task into the closed/cancelled shape used by the abandon flow.
+    """
+    Project a task into the closed/cancelled shape used by ``abandon``.
 
-    Called from the abandon-task transition: clears any in-flight run, marks
-    the task ``closed`` with ``execution_cancelled`` so downstream surfaces
-    can distinguish CLI-cancelled from user-closed tasks, and stamps a
-    last_outcome that future status views display.
+    Clears any in-flight run, marks the task ``closed`` with
+    ``execution_cancelled`` so downstream surfaces can distinguish a
+    CLI-cancelled task from a user-closed one, and stamps a ``last_outcome``
+    that future status views display.
     """
     clear_task_run_activity(task, execution_status="cancelled")
     task.status = TaskStatus.CLOSED
@@ -120,12 +141,14 @@ def _apply_close_task_state(
     follow_up_task_id: str | None = None,
     pipeline_status: str | None = None,
 ) -> str:
-    """Project a task into the appropriate done/closed shape and return the journal message.
+    """
+    Project a task into the done/closed shape and return the journal message.
 
     The ``litehive task close`` flow funnels every closure outcome
-    (``done``/``wont_do``/``deferred``/``duplicate``) through here so the
-    status, pipeline_status, last_outcome, and journal text are all decided
-    from one rule set. Returns the journal text the caller should record.
+    (``done``/``wont_do``/``deferred``/``duplicate``) through here so
+    status, pipeline_status, last_outcome, and journal text all come from
+    one rule set; returning the journal text lets the caller persist it
+    in the same audit envelope.
     """
     if outcome == "done":
         execution_status = "done"
@@ -162,11 +185,12 @@ def _apply_close_task_state(
 
 
 def _apply_parked_task_state(task: TaskRecord) -> None:
-    """Project a task into the parked shape used by the park-task flow.
+    """
+    Project a task into the parked shape used by ``park_task``.
 
-    Called from the park transition: clears in-flight runtime so the runner
-    won't pick the task up, then flips the task to ``parked`` so the operator
-    can revisit it later via ``litehive task resume``.
+    Clears the in-flight runtime so the runner will not pick the task up,
+    then flips the task to ``parked`` so the operator can revisit it later
+    via ``litehive task resume``.
     """
     clear_task_run_activity(task, execution_status="paused")
     task.status = TaskStatus.PARKED

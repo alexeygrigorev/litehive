@@ -1,9 +1,13 @@
-"""Engine monitoring and live event-stream models.
+"""
+Engine monitoring records persisted on workspace state.
 
-The engine-facing types (EngineUsageWindow, EngineUsageObservation,
-LiveEvent, LiveEventStream) now live in heru.types. This module re-exports
-them and keeps the litehive-only `EngineUsageRecord` /
-`WorkspaceEngineMonitoring` authoritative here.
+The engine-facing primitives (``EngineUsageWindow``, ``EngineUsageObservation``,
+``LiveEvent``, ``LiveEventStream``) live in ``heru.types`` so the engine
+client and the workspace see the same shapes. This module owns the two
+litehive-side aggregations: ``EngineUsageRecord`` (per-engine counters)
+and ``WorkspaceEngineMonitoring`` (workspace-wide map). Both are read by
+the status output and the engine-routing decisions; updates flow through
+the runner as it observes engine outcomes.
 """
 
 from pydantic import BaseModel, Field
@@ -19,10 +23,14 @@ from heru.types import (
 
 
 class EngineUsageRecord(BaseModel):
-    """Usage and monitoring data for a specific engine.
+    """
+    Per-engine counters and the most recent usage window.
 
-    Tracks engine invocation patterns, success/failure rates, resource
-    limits, and usage windows for monitoring and routing decisions.
+    Aggregates invocation counts, success/failure splits, and resource-limit
+    events so engine-routing logic can prefer healthy engines and operator
+    surfaces can show why an engine was avoided. Updated by the runner each
+    time it observes an engine outcome; persisted as part of
+    ``WorkspaceEngineMonitoring``.
     """
 
     engine: str  # Engine name
@@ -41,10 +49,13 @@ class EngineUsageRecord(BaseModel):
 
 
 class WorkspaceEngineMonitoring(BaseModel):
-    """Aggregated engine monitoring data for a workspace.
+    """
+    Workspace-wide map from engine name to ``EngineUsageRecord``.
 
-    Contains usage records for all engines used within a workspace,
-    providing a complete view of engine utilization patterns.
+    Single source of truth for engine health across a workspace; the
+    routing helper consults this to skip engines that have hit limits
+    and the status output reads it to render the engine-monitoring
+    block. Created on demand if missing; never split per-task.
     """
 
     engines: dict[str, EngineUsageRecord] = Field(default_factory=dict)  # Engine name to usage record mapping

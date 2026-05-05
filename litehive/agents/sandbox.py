@@ -30,11 +30,13 @@ SandboxedAdapter = LitehiveSandboxedAdapter
 
 
 def sandbox_profile_for_role(role: str) -> SandboxProfile:
-    """Pick the git-wrapper profile that matches a subagent role.
+    """
+    Pick the git-wrapper profile that matches a subagent role.
 
-    The merge-resolver role is the only one allowed to touch git inside the
-    sandbox (with a guarded wrapper); everything else gets git fully blocked
-    so engine code can't accidentally rewrite history.
+    The merge-resolver role is the only one allowed to touch git
+    inside the sandbox (and only via the guarded wrapper); every
+    other role gets git fully blocked so engine code can't
+    accidentally rewrite history while sandboxed.
     """
     if role == "merge-resolver":
         return SandboxProfile.MERGE_RESOLVER
@@ -56,7 +58,7 @@ class SandboxPolicySummary:
     propagated_mounts: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, object]:
-        """Serialize the policy summary for the resource_control field of subagent reports."""
+        """Serialize the policy summary into the ``resource_control`` field of subagent reports so operators can audit how each engine was confined."""
         return {
             "enabled": self.enabled,
             "backend": self.backend,
@@ -71,7 +73,16 @@ class SandboxPolicySummary:
 
     @property
     def summary(self) -> str:
-        """One-line "host" or "sandbox[...]" string used in CLI output and SubagentRef.sandbox_summary."""
+        """
+        Render the policy as a one-line ``host`` or ``sandbox[...]``
+        string.
+
+        Used in CLI output and stored on
+        ``SubagentRef.sandbox_summary`` so the same human-readable
+        form appears in every operator-facing surface; the structured
+        fields are still available via :meth:`as_dict` for callers
+        that need them.
+        """
         if not self.enabled:
             return "host"
         details = [
@@ -96,16 +107,19 @@ class SandboxLauncher:
     """Builds docker-run argv that wraps every external engine invocation."""
 
     def __init__(self, root: Path, config: LitehiveConfig) -> None:
-        """Store workspace root (resolved) and config so per-engine policies can be looked up on each invocation."""
+        """Store the resolved workspace root and the parsed config so per-engine policies can be looked up on each invocation without re-loading config."""
         self.root = root.resolve()
         self.config = config
 
     def policy_summary(self, engine_name: str, role: str = "") -> SandboxPolicySummary:
-        """Resolve the effective sandbox policy for an engine/role pair.
+        """
+        Resolve the effective sandbox policy for an engine/role pair.
 
-        Used both by the SubagentManager (for resource_control reporting) and
-        internally by wrap_invocation, so workspace-level config and per-engine
-        overrides only need to be merged in one place.
+        Used both by the SubagentManager (for ``resource_control``
+        reporting) and internally by ``wrap_invocation``, so
+        workspace-level config and per-engine overrides only need to
+        be merged in one place — the two consumers always see the
+        same policy shape.
         """
         del role
         policy = self._policy_for_engine(engine_name)
@@ -145,11 +159,15 @@ class SandboxLauncher:
         invocation: CLIInvocation,
         role: str = "",
     ) -> CLIInvocation:
-        """Rewrite an engine CLI invocation so it runs inside the configured sandbox.
+        """
+        Rewrite an engine CLI invocation so it runs inside the
+        configured sandbox.
 
-        Returns the original invocation unchanged when sandboxing is disabled
-        for the engine, so callers (the SandboxedAdapter wrapper around heru's
-        ExternalCLIAdapter) don't need to branch on policy themselves.
+        Returns the original invocation unchanged when sandboxing is
+        disabled for the engine, so callers (the ``SandboxedAdapter``
+        wrapper around heru's ``ExternalCLIAdapter``) don't need to
+        branch on policy themselves and the disabled-sandbox path
+        stays a single line.
         """
         summary = self.policy_summary(engine_name, role)
         if not summary.enabled:
@@ -184,11 +202,15 @@ class SandboxLauncher:
         invocation: CLIInvocation,
         summary: SandboxPolicySummary,
     ) -> CLIInvocation:
-        """Assemble the docker run argv: mounts, env allowlist, git wrapper, and translated workspace paths.
+        """
+        Assemble the docker-run argv: mounts, env allowlist, git
+        wrapper, and translated workspace paths.
 
-        All policy decisions (network mode, workspace ro/rw, credential
-        propagation, git profile) collapse into one argv build here so the
-        SubagentManager only sees a single transformed CLIInvocation.
+        All policy decisions (network mode, workspace ro/rw,
+        credential propagation, git profile) collapse into one argv
+        build here so the SubagentManager only sees a single
+        transformed CLIInvocation — without one assembler, each
+        decision would scatter across the call sites.
         """
         runtime_config = self.config.external_engine_sandbox
         policy = self._policy_for_engine(engine_name)
@@ -328,7 +350,15 @@ class SandboxLauncher:
         return CLIInvocation(argv=tuple(argv), cwd=invocation.cwd, env=invocation.env)
 
     def ensure_docker_git_wrappers(self) -> dict[str, Path]:
-        """Return checked-in git wrapper commands for Docker sandbox."""
+        """
+        Return checked-in git wrapper commands for the Docker sandbox.
+
+        The wrappers (``no_git.sh`` and ``git_wrapper.py``) live in
+        the source tree so each role can be mounted with the right
+        wrapper without dynamically generating one — the no-git
+        profile blocks every git call, the merge-resolver profile
+        proxies through a guarded wrapper.
+        """
         sandbox_dir = Path(__file__).resolve().parents[1] / "sandbox"
         merge_git = sandbox_dir / "git_wrapper.py"
         no_git = sandbox_dir / "no_git.sh"
@@ -341,7 +371,7 @@ class SandboxLauncher:
         }
 
     def _policy_for_engine(self, engine_name: str) -> ExternalEngineSandboxPolicy | None:
-        """Return the per-engine sandbox policy from workspace config, or ``None`` if the engine has no override."""
+        """Return the per-engine sandbox policy from workspace config, or ``None`` when the engine has no override and the workspace defaults apply."""
         return self.config.external_engine_sandbox.engine_policies.get(engine_name)
 
     @staticmethod
@@ -350,11 +380,15 @@ class SandboxLauncher:
         policy: ExternalEngineSandboxPolicy | None,
         env: Mapping[str, str] | None = None,
     ) -> tuple[Path, ...]:
-        """Filter the policy's read-only bind list, dropping engine state dirs that need rw access.
+        """
+        Filter the policy's read-only bind list.
 
-        Workspace policies sometimes list engine state dirs (e.g.
-        ``$CODEX_HOME``) under ``extra_ro_binds`` even though the engine must
-        write rollouts there; ``_resolved_extra_rw_binds`` re-promotes them.
+        Drops engine state dirs that need rw access; workspace
+        policies sometimes list engine state dirs (e.g.
+        ``$CODEX_HOME``) under ``extra_ro_binds`` even though the
+        engine must write rollouts there. The matching rw helper
+        re-promotes those paths so a misconfigured policy does not
+        silently break engine state writes.
         """
         forced_rw = forced_engine_rw_state_dirs(engine_name, policy, env)
         resolved_paths: list[Path] = []
@@ -385,11 +419,15 @@ class SandboxLauncher:
         policy: ExternalEngineSandboxPolicy | None,
         env: Mapping[str, str] | None = None,
     ) -> tuple[Path, ...]:
-        """Resolve read-write bind paths and force-add engine state dirs the policy may have missed.
+        """
+        Resolve read-write bind paths and force-add missed engine state
+        dirs.
 
-        Engines like codex must write to ``$CODEX_HOME/sessions``; if a
-        workspace policy classifies that path read-only or omits it, this
-        helper still mounts it rw so rollouts succeed.
+        Engines like codex must write to ``$CODEX_HOME/sessions``; if
+        a workspace policy classifies that path read-only or omits it
+        entirely, this helper still mounts it rw so rollouts succeed
+        — operators should not have to know which engine paths are
+        write-required.
         """
         forced_rw = forced_engine_rw_state_dirs(engine_name, policy, env)
         resolved_paths: list[Path] = []
@@ -424,7 +462,15 @@ class SandboxLauncher:
         host_root: Path,
         container_root: PurePosixPath,
     ) -> list[str]:
-        """Rewrite host workspace paths inside argv to their bind-mount paths in the container."""
+        """
+        Rewrite host workspace paths in argv to their container paths.
+
+        The engine builds argv with absolute host paths (workspace
+        root, prompt files, etc.); inside the container those paths
+        resolve to the bind-mount root, so we substitute the prefix
+        before exec — without this, the engine would dereference
+        host paths that don't exist in the container.
+        """
         translated: list[str] = []
         host_root_text = str(host_root)
         for arg in argv:
@@ -440,7 +486,7 @@ class SandboxLauncher:
 
     @staticmethod
     def _bind_mount_spec(source: Path, target: PurePosixPath, read_only: bool) -> str:
-        """Format a single ``--mount type=bind,...`` argument for ``docker run``; centralized so the read-only flag and key order stay consistent across every mount we add."""
+        """Format a single ``--mount type=bind,...`` argument for ``docker run`` — centralized so the read-only flag and key order stay consistent across every mount we add to the argv."""
         if read_only:
             mode = ",readonly"
         else:

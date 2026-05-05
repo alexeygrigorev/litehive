@@ -1,28 +1,26 @@
-"""Workspace value object: the bundle of identity, storage, and config every workspace operation needs.
+"""
+``Workspace`` value object bundling identity, storage, and config.
 
-Workspaces today are passed around as ``root: Path`` and every helper that
-wants the SQLite store, a config layer, or a runtime subpath re-imports a
-small set of utilities (``connect_workspace_db``, ``load_config``,
-``workspace_path``, ``task_dir``) and threads ``root`` through all internal
-helpers. The forwarding adds noise without adding meaning, and obscures the
-real shape of dependencies — many helpers only need *one* of those handles
-but accept ``root`` because that is the lowest common denominator.
+Pre-``Workspace``, helpers were threaded ``root: Path`` through
+chains of private functions and re-imported the same set of utilities
+(``connect_workspace_db``, ``load_config``, ``workspace_path``,
+``task_dir``) at every level. The forwarding added noise without
+meaning and obscured the real shape of dependencies — many helpers
+only needed *one* handle but accepted ``root`` as the lowest common
+denominator. ``Workspace`` collapses the three handles into a single
+value object so a function declares "I need the DB" or "I need the
+config" by calling the right method.
 
-``Workspace`` collapses the three handles into a single value object so a
-function can declare "I need the DB" or "I need the config" by calling the
-right method, and so callers stop forwarding ``root`` through chains of
-private helpers (R12 step B). The constructor is the only place that does
-the boundary check — everything downstream takes a ready-made
-``Workspace``.
+The constructor (:meth:`Workspace.from_path`) is the only place that
+runs the boundary validation; everything downstream takes a ready-
+made ``Workspace`` and trusts the root field. Lives at the package
+top level (rather than under ``domain/``) because it imports IO
+handles, and ``domain/`` is reserved for pure data records by the
+architecture guardrail in ``tests/test_architecture_guardrails.py``.
 
-Lives at the package top level (rather than under ``domain/``) because it
-imports IO handles (``connect_workspace_db``, ``load_config``); the
-``domain/`` package is reserved for pure data records by the architecture
-guardrail (see ``tests/test_architecture_guardrails.py``).
-
-This is an *incremental* migration: only the feature areas explicitly
-ported take ``Workspace``; the rest still take ``root: Path``. Each new
-area can be moved one at a time as ergonomics warrant.
+This is an *incremental* migration: only ported feature areas take
+``Workspace``; the rest still take ``root: Path``. Each new area
+moves over as ergonomics warrant.
 """
 
 from __future__ import annotations
@@ -45,17 +43,19 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class Workspace:
-    """Bundle of workspace identity, on-demand SQLite access, lazy config, and subpath helpers.
+    """
+    Bundle of workspace identity, on-demand SQLite access, lazy config, and subpath helpers.
 
-    Frozen so it can be safely shared across helpers, passed into closures, and used
-    as a dataclass field of other records without surprising aliasing. The cached
-    config lives in a one-slot mutable holder (``_config_cache``) so freezing the
-    outer object doesn't disable the cache.
-
-    Construct via :meth:`from_path` at the boundary (CLI entry, daemon startup,
-    test fixtures) — that constructor runs the workspace existence check that
-    used to live inline in dozens of callers. Internal helpers should accept a
-    ready-made ``Workspace`` rather than running the check again.
+    Frozen so it can be safely shared across helpers, passed into
+    closures, and used as a dataclass field of other records without
+    surprising aliasing. The cached config lives in a one-slot
+    mutable holder (``_config_cache``) so freezing the outer object
+    doesn't disable the cache. Construct via :meth:`from_path` at
+    the system boundary (CLI entry, daemon startup, test fixtures)
+    — that's the only place that runs the workspace-existence check
+    that used to live inline in dozens of callers. Internal helpers
+    should accept a ready-made ``Workspace`` rather than running
+    the check again.
     """
 
     root: Path
@@ -74,46 +74,48 @@ class Workspace:
 
     @classmethod
     def from_path(cls, root: Path) -> "Workspace":
-        """Boundary constructor: validate the root and return a ``Workspace``.
+        """
+        Boundary constructor: validate ``root`` and return a ``Workspace``.
 
-        This is the only place a ``Path`` becomes a ``Workspace``. Runs
-        ``normalize_workspace_root`` so unresolved shell variables, paths nested
-        inside ``.litehive/`` control directories, and managed-worktree paths
-        are rejected up front — every downstream helper can then trust the
-        ``root`` field without re-validating.
-
-        CLI entry points and daemon startup should call this once and pass the
-        resulting ``Workspace`` through the call graph. Tests that need a
-        ``Workspace`` for a ``tmp_path`` workspace should also go through
-        ``from_path`` so they exercise the same validation as production.
+        The only place a raw ``Path`` becomes a ``Workspace``. Runs
+        ``normalize_workspace_root`` so unresolved shell variables,
+        paths nested inside ``.litehive/`` control directories, and
+        managed-worktree paths are rejected up front — every
+        downstream helper can then trust the ``root`` field without
+        re-validating. Tests that need a ``Workspace`` for a
+        ``tmp_path`` should also go through here so they exercise
+        the same validation as production code paths.
         """
         normalized = normalize_workspace_root(root, source="Workspace.from_path")
         return cls(root=normalized)
 
     @contextmanager
     def connect(self, migrate: bool = True) -> Iterator[sqlite3.Connection]:
-        """Yield a SQLite connection for this workspace's runtime database.
+        """
+        Yield a SQLite connection for this workspace's runtime database.
 
-        Thin instance-method wrapper over ``connect_workspace_db(self.root)`` so
-        callers that hold a ``Workspace`` don't need to import the schema module
-        or remember the root-keyed pragma/migration plumbing. Behaviour is
-        identical to the free function — a context manager that commits on
-        success, rolls back on exception, and closes on exit.
+        Thin instance-method wrapper over ``connect_workspace_db``
+        so callers holding a ``Workspace`` don't need to import the
+        schema module or remember the root-keyed pragma/migration
+        plumbing. Behaviour is identical to the free function:
+        commits on success, rolls back on exception, closes on
+        exit.
         """
         with connect_workspace_db(self.root, migrate=migrate) as connection:
             yield connection
 
     def config(self) -> "LitehiveConfig":
-        """Return the merged ``LitehiveConfig`` for this workspace, cached after the first call.
+        """
+        Return the merged ``LitehiveConfig`` for this workspace, cached after first call.
 
-        The merge fans defaults + user-global + per-workspace YAML + audited
-        runtime settings, runs validation, and ensures the workspace exists on
-        disk. That work is non-trivial and idempotent, so we cache the result
-        on the instance: a single ``Workspace`` should not reload its own
-        config repeatedly within one CLI invocation. Different ``Workspace``
-        instances pointing at the same root each maintain their own cache —
-        that is intentional, because tests sometimes want to observe a fresh
-        load.
+        The merge fans defaults + user-global + per-workspace YAML
+        + audited runtime settings, runs validation, and ensures
+        the workspace exists on disk. That work is non-trivial and
+        idempotent, so we cache the result on the instance: a
+        single ``Workspace`` should not reload its own config
+        repeatedly within one CLI invocation. Different
+        ``Workspace`` instances at the same root each keep their
+        own cache so tests can observe a fresh load when they want.
         """
         if not self._config_cache:
             # inline: config.loading transitively re-imports parts of
@@ -125,41 +127,49 @@ class Workspace:
         return self._config_cache[0]
 
     def runtime_dir(self) -> Path:
-        """Return the workspace's hashed runtime directory under ``litehive_root``.
+        """
+        Return the workspace's hashed runtime directory under ``litehive_root``.
 
-        Convenience accessor for ``workspace_path(root)`` with no extra parts —
-        useful when callers want to enumerate runtime artifacts (logs, locks,
-        the SQLite db file) without composing the path themselves.
+        Convenience accessor for ``workspace_path(root)`` with no
+        extra parts — useful when callers want to enumerate runtime
+        artifacts (logs, locks, ``data.db``) without composing the
+        path themselves and risking off-by-one path joining.
         """
         return workspace_path(self.root)
 
     def runtime_path(self, *parts: str) -> Path:
-        """Compose a path inside the workspace's runtime directory.
+        """
+        Compose a path inside the workspace's runtime directory.
 
-        Method form of ``workspace_path(root, *parts)``. Goes through the same
-        helper so the global-runtime layout stays in one place; this exists so
-        a holder of ``Workspace`` doesn't need to also import
-        ``litehive.config.paths``.
+        Method form of ``workspace_path(root, *parts)``. Goes
+        through the same helper so the global-runtime layout
+        (hashed-by-root, under ``$XDG_DATA_HOME``) stays in one
+        place; exists so a ``Workspace`` holder doesn't need to
+        also import ``litehive.config.paths``.
         """
         return workspace_path(self.root, *parts)
 
     def control_dir(self) -> Path:
-        """Return the in-repo ``.litehive/`` control directory for this workspace.
+        """
+        Return the in-repo ``.litehive/`` control directory.
 
-        Convenience accessor for ``workspace_dir(root)``. Distinct from
-        :meth:`runtime_dir` — the control directory holds the user-visible
-        config/context/gitignore inside the repo, while the runtime directory
-        holds machine-managed state under ``$XDG_DATA_HOME``.
+        Distinct from :meth:`runtime_dir` — the control directory
+        holds the user-visible config/context/gitignore that's
+        committed to the repo, while the runtime directory holds
+        machine-managed state outside the repo. Operators edit the
+        former; the daemon owns the latter.
         """
         return workspace_dir(self.root)
 
     def task_dir(self, task: "TaskRecord", bootstrap: bool = True) -> Path:
-        """Return the per-task working directory for a ``TaskRecord``.
+        """
+        Return the per-task working directory for a ``TaskRecord``.
 
-        Forwards to ``litehive.tasks.paths.task_dir`` so the id-slug naming
-        convention stays in one place. Lives on ``Workspace`` so helpers that
-        already hold a workspace handle don't have to reach for a separate
-        path module just to find a task's artifact directory.
+        Forwards to ``litehive.tasks.paths.task_dir`` so the
+        id-slug naming convention stays in one place. Lives on
+        ``Workspace`` so helpers already holding a workspace
+        handle don't have to reach for a separate path module
+        just to find a task's artifact directory.
         """
         # inline: tasks.paths transitively imports config.workspace which
         # would re-enter this module's import chain at module load time.

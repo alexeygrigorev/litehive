@@ -40,16 +40,36 @@ _MANUAL_CREATION_RATIONALE = "Created outside a Litehive agent session."
 
 
 class TaskStateMissingError(RuntimeError):
-    """Raised when a task has no SQLite runtime state row."""
+    """
+    Raised when a task has no SQLite runtime state row.
+
+    Distinct from "task not found" so callers can choose to recover (the
+    intent row is present, just the runtime side is missing) instead of
+    treating the task as gone — losing only the runtime row is the
+    common shape after a partial migration.
+    """
 
 
 def _highest_task_number_in_store(root: Path) -> int:
-    """Return the largest ``T-NNNN`` numeric prefix actually present in the store; ``_reserve_next_task_numbers`` consults this whenever the in-memory ``next_task_number`` is missing/zero so a freshly bootstrapped workspace cannot reuse an existing id."""
+    """
+    Return the largest ``T-NNNN`` numeric prefix actually present in the store.
+
+    ``_reserve_next_task_numbers`` consults this whenever the in-memory
+    ``next_task_number`` is missing or zero so a freshly bootstrapped
+    workspace cannot reuse an existing id when the counter was lost.
+    """
     return runtime_store(root).highest_task_number()
 
 
 def _reserve_next_task_numbers(root, state, count: int = 1) -> list[int]:
-    """Allocate the next ``count`` task numbers, advancing the workspace counter so manual and follow-up creation paths cannot collide on the same id."""
+    """
+    Allocate the next ``count`` task numbers and advance the workspace counter.
+
+    Reserving in advance prevents the manual and follow-up creation
+    paths from colliding on the same id when both run inside the same
+    transaction (e.g. follow-up emission while the operator is also
+    creating a sibling).
+    """
     if count < 1:
         raise ValueError("count must be 1 or greater")
     if state.next_task_number <= 0:
@@ -60,7 +80,14 @@ def _reserve_next_task_numbers(root, state, count: int = 1) -> list[int]:
 
 
 def _task_creation_stage(root: Path, current_task_id: str | None) -> str | None:
-    """Resolve the stage of the agent that's creating a sibling task: prefers ``LITEHIVE_STAGE`` from the subagent env, falls back to the parent task's runtime stage, then its pipeline status; ``_default_task_creation_source`` records this as provenance so follow-up audits know which stage spawned the new task."""
+    """
+    Resolve the stage of the agent currently creating a sibling task.
+
+    Prefers ``LITEHIVE_STAGE`` from the subagent environment, falls back
+    to the parent task's runtime stage, then its pipeline status;
+    ``_default_task_creation_source`` records this as provenance so
+    follow-up audits can answer "which stage spawned this task?".
+    """
     env_stage = (os.environ.get("LITEHIVE_STAGE") or "").strip()
     if env_stage:
         return env_stage
@@ -79,7 +106,14 @@ def _task_creation_stage(root: Path, current_task_id: str | None) -> str | None:
 
 
 def _default_task_creation_source(root: Path) -> TaskCreationSource:
-    """Build the provenance attached to a new task at create time: detects whether an agent is calling (via ``LITEHIVE_AGENT_ROLE``) and stamps the parent task/stage/role so audit logs can later answer ``where did this task come from`` for any agent-spawned task."""
+    """
+    Build the provenance attached to a new task at create time.
+
+    Detects whether an agent is calling (via ``LITEHIVE_AGENT_ROLE``)
+    and stamps the parent task/stage/role so audit logs can later answer
+    "where did this task come from?" for any agent-spawned task; manual
+    operator creation falls through to a generic ``manual`` source.
+    """
     agent_role = (os.environ.get("LITEHIVE_AGENT_ROLE") or "").strip()
     current_task_id = (os.environ.get("LITEHIVE_TASK_ID") or "").strip() or None
     if not agent_role:
@@ -100,7 +134,14 @@ def _default_task_creation_source(root: Path) -> TaskCreationSource:
 
 
 def ensure_runtime_ignored(root: Path) -> None:
-    """Refresh the workspace ``.gitignore`` after any persistence write so newly materialized runtime files are not committed to the user's repo by accident."""
+    """
+    Refresh the workspace ``.gitignore`` after any persistence write.
+
+    Newly materialized runtime files (lockfiles, run logs, transcripts)
+    must not be committed to the user's repo by accident; refreshing on
+    every write keeps the ignore rules in sync with whatever the latest
+    layout produces.
+    """
     ignore_path = workspace_gitignore_path(root)
     expected = render_workspace_gitignore()
     if not ignore_path.exists() or ignore_path.read_text(encoding="utf-8") != expected:
@@ -108,7 +149,14 @@ def ensure_runtime_ignored(root: Path) -> None:
 
 
 def task_state_for_storage(task: TaskRecord) -> TaskStateRecord:
-    """Canonicalize a task's mutable runtime fields (commit sha, worktree path, flag reason) and project them onto the storage shape; every persistence path (locking, persist, records) routes its writes through this so the SQLite row always reflects a single agreed state."""
+    """
+    Canonicalise a task's mutable runtime fields and project to storage shape.
+
+    Reconciles commit sha, worktree path, and flag reason before
+    persistence; every write path (locking, persist, records) routes
+    through this helper so the SQLite row reflects one agreed state
+    rather than each caller picking its own normalisation.
+    """
     _normalize_task_commit_sha_state(task)
     _normalize_task_worktree_state(task)
     _normalize_task_flag_reason(task)
@@ -116,35 +164,72 @@ def task_state_for_storage(task: TaskRecord) -> TaskStateRecord:
 
 
 def write_task_runtime(root: Path, task: TaskRecord) -> None:
-    """Persist a task's runtime row without entering the workspace mutation guard; used by the engine adapters that already hold their own lock and need a raw save."""
+    """
+    Persist a task's runtime row without entering the workspace mutation guard.
+
+    Used by engine adapters that already hold their own lock and need a
+    raw save; entering the guard here would force re-entry on a thread
+    that has already taken it via a different pathway.
+    """
     runtime_store(root).save_task_state(task.id, task_state_for_storage(task))
     ensure_runtime_ignored(root)
 
 
 def set_task_commit_sha(task: TaskRecord, commit_sha: str | None) -> None:
-    """Mirror a freshly recorded commit sha onto both the intent and the runtime sides of the task; the orchestration layer calls this after the commit stage produces a HEAD sha and after the queue resets a task for retry."""
+    """
+    Mirror a commit sha onto both the intent and runtime sides of a task.
+
+    The orchestration layer calls this after the commit stage produces a
+    HEAD sha and again after the queue resets a task for retry; keeping
+    both sides in sync means status surfaces and merge checks see one
+    truth regardless of which slot they read.
+    """
     task.git.commit_sha = commit_sha
     task.runtime.pipeline.git.commit_sha = commit_sha
 
 
 def get_task_worktree_path(task: TaskRecord) -> str | None:
-    """Return the worktree path the task is currently bound to, preferring the runtime side and falling back to the legacy intent slot so worktree, recovery, and inspection callers see a single value during the runtime/intent migration."""
+    """
+    Return the worktree path the task is currently bound to.
+
+    Prefers the runtime side (the new source of truth) and falls back to
+    the legacy intent slot so worktree, recovery, and inspection callers
+    see a single value during the runtime/intent migration.
+    """
     return task.runtime.pipeline.git.worktree_path or task.git.worktree_path
 
 
 def set_task_worktree_path(task: TaskRecord, worktree_path: str | None) -> None:
-    """Record a worktree binding on the runtime side (the new source of truth) and clear the legacy intent slot so the worktree service, rescue, and cleanup paths stop seeing a stale ghost path."""
+    """
+    Record a worktree binding on the runtime side and clear the legacy slot.
+
+    Clearing the intent slot is what stops the worktree service, rescue,
+    and cleanup paths from later seeing a ghost path that disagrees with
+    the runtime-side binding.
+    """
     task.runtime.pipeline.git.worktree_path = worktree_path
     task.git.worktree_path = None
 
 
 def clear_task_worktree_path(task: TaskRecord) -> None:
-    """Detach a task from any recorded worktree; the worktree cleanup, rescue, and service flows call this once the on-disk worktree has been removed or merged so the next selection cannot point back at a deleted directory."""
+    """
+    Detach a task from any recorded worktree.
+
+    Called by worktree cleanup, rescue, and service flows once the
+    on-disk worktree has been removed or merged; without the clear, the
+    next selection could hand the runner a path that no longer exists.
+    """
     set_task_worktree_path(task, None)
 
 
 def _normalize_task_worktree_state(task: TaskRecord) -> None:
-    """Reconcile runtime and intent worktree slots before persistence or after a load so legacy rows that still carry the path on the intent side are migrated onto the runtime side without losing the binding."""
+    """
+    Reconcile runtime and intent worktree slots on persist and on load.
+
+    Legacy rows still carry the path on the intent side; this helper
+    migrates the binding onto the runtime side without losing it so a
+    re-saved row never has the path on the wrong slot.
+    """
     if task.runtime.pipeline.git.worktree_path:
         task.git.worktree_path = None
         return
@@ -153,7 +238,14 @@ def _normalize_task_worktree_state(task: TaskRecord) -> None:
 
 
 def _normalize_task_commit_sha_state(task: TaskRecord) -> None:
-    """Keep the intent and runtime commit sha slots in sync before persistence and after load so older rows that recorded the sha on only one side don't appear divergent to status snapshots and merge checks."""
+    """
+    Keep intent and runtime commit-sha slots in sync.
+
+    Run before persistence and after load so older rows that recorded
+    the sha on only one side don't appear divergent to status snapshots
+    and merge checks; without the normaliser the two slots could carry
+    different values for the same commit.
+    """
     if task.git.commit_sha:
         task.runtime.pipeline.git.commit_sha = task.git.commit_sha
         return
@@ -162,7 +254,14 @@ def _normalize_task_commit_sha_state(task: TaskRecord) -> None:
 
 
 def _normalize_task_flag_reason(task: TaskRecord) -> None:
-    """Reconcile a task's terminal state and ensure ``flag_reason`` is populated when the task is flagged (defaulting to the last outcome's reason_code, then ``"unknown"``); ``task_state_for_storage`` calls this so the persisted row never shows ``status=flagged`` with an empty reason."""
+    """
+    Reconcile terminal state and ensure ``flag_reason`` is set when flagged.
+
+    Defaults to the last outcome's ``reason_code``, then to ``"unknown"``;
+    ``task_state_for_storage`` calls this so the persisted row never shows
+    ``status=flagged`` with an empty reason — operator status would
+    otherwise render a flagged task without a "why".
+    """
     canonicalize_task_terminal_state(task)
     if task.status == TaskStatus.FLAGGED:
         task.flag_reason = task.flag_reason or task.runtime.pipeline.last_outcome.reason_code or "unknown"
@@ -171,21 +270,41 @@ def _normalize_task_flag_reason(task: TaskRecord) -> None:
 
 
 def _created_from_payload(task: TaskRecord) -> dict | None:
-    """Return the audit-context shape of `task.created_from`, or `None` when the task was created from scratch; isolated so the create-task and follow-up audit paths share the same null-handling."""
+    """
+    Return the audit-context shape of ``task.created_from``.
+
+    ``None`` when the task was created from scratch; isolated so the
+    create-task and follow-up audit paths share one null-handling rule
+    instead of each branch dumping the model differently.
+    """
     if task.created_from is None:
         return None
     return task.created_from.model_dump(mode="json")
 
 
 def _create_task_runtime_dirs(base: Path) -> None:
-    """Materialize the per-task runtime layout (reports, subagents, artifacts) for both the manual create path and the follow-up batch path; raises if directories already exist so we never silently reuse stale debris from a previous task."""
+    """
+    Materialise the per-task runtime layout (reports, subagents, artifacts).
+
+    Used by both the manual create path and the follow-up batch path;
+    raises when directories already exist so a fresh task never silently
+    reuses stale debris from a previous run that happened to share the
+    slug.
+    """
     (base / "reports").mkdir(parents=True, exist_ok=False)
     (base / "subagents").mkdir(parents=True, exist_ok=False)
     (base / "artifacts").mkdir(parents=True, exist_ok=False)
 
 
 def _cleanup_created_task_dirs(paths: list[Path]) -> list[OSError]:
-    """Best-effort rollback of on-disk task directories when ``_persist_created_tasks`` fails after them; collects (rather than raises) any cleanup errors so the caller can surface both the original DB failure and the cleanup damage in a single ExceptionGroup."""
+    """
+    Best-effort rollback of on-disk task directories.
+
+    Called when ``_persist_created_tasks`` fails after the directories
+    have already landed; collects (rather than raises) cleanup errors
+    so the caller can surface both the original DB failure and the
+    cleanup damage in a single ``ExceptionGroup``.
+    """
     errors: list[OSError] = []
     for path in reversed(paths):
         try:
@@ -204,7 +323,15 @@ def _persist_created_tasks(
     cleanup_dirs: list[Path],
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
-    """Atomically commit a batch of newly minted tasks (intent rows, state rows, journal entries, audit entries, workspace state) and roll back the runtime directories created on disk if the SQLite transaction fails; shared by the manual create and follow-up creation paths so both inherit the same all-or-nothing guarantee."""
+    """
+    Atomically commit a batch of newly minted tasks.
+
+    Writes intent rows, state rows, journal entries, audit entries, and
+    workspace state in one transaction; rolls back the on-disk runtime
+    directories if the SQLite write fails so a half-created task never
+    leaves disk debris pointing at a row that was never committed.
+    Shared by the manual create and follow-up creation paths.
+    """
     # inline: kept so tests can monkey-patch ``merged_state_for_runner_owned_write``
     # on the persist module (the canonical home) and have callers here see it.
     from litehive.state.persist import merged_state_for_runner_owned_write, skip_bootstrap_load_state  # noqa: PLC0415
@@ -218,7 +345,14 @@ def _persist_created_tasks(
     try:
 
         def callback() -> None:
-            """Single-shot SQLite write for the ``write_atomic_files_and_then`` rollback flow; pulling the runtime_store call into a closure lets the file-write step finish first so the DB transaction (which cannot be undone) only fires once the on-disk artifacts are safely in place."""
+            """
+            Single-shot SQLite write for the ``write_atomic_files_and_then`` flow.
+
+            Pulling the ``runtime_store`` call into a closure lets the
+            file-write step finish first so the DB transaction (which
+            cannot be undone) only fires once the on-disk artifacts are
+            safely in place.
+            """
             runtime_store(root).save_runtime_transaction(
                 task_intents={task.id: task.to_intent_record() for task in tasks},
                 task_states={task.id: task_state_for_storage(task) for task in tasks},
@@ -239,13 +373,27 @@ def _persist_created_tasks(
 
 
 def save_task_runtime(root: Path, task: TaskRecord) -> None:
-    """Persist a task's runtime row under the workspace mutation guard; the lifecycle's runtime-update helpers call this when they need a fresh state snapshot written without any accompanying journal or queue change."""
+    """
+    Persist a task's runtime row under the workspace mutation guard.
+
+    Called by the lifecycle's runtime-update helpers when they need a
+    fresh state snapshot without any accompanying journal or queue
+    change; the guard makes the snapshot safe to take while a runner is
+    also touching workspace state on a different transition.
+    """
     with workspace_mutation_guard(root):
         write_task_runtime(root, task)
 
 
 def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
-    """Hydrate a task's runtime row from SQLite and run the worktree/commit-sha normalizers; ``get_task`` calls it for the strict path that requires a runtime row, ``get_task_record`` calls it for the tolerant path that accepts the missing-row error."""
+    """
+    Hydrate a task's runtime row from SQLite and run the normalisers.
+
+    ``get_task`` invokes this on the strict path that requires a runtime
+    row; ``get_task_record`` calls it on the tolerant path that accepts
+    the ``TaskStateMissingError`` so diagnostics can still report on a
+    half-deleted task.
+    """
     store = runtime_store(root)
     task_state = store.load_task_state(task.id)
     if task_state is None:
@@ -268,7 +416,14 @@ def create_task(
     auto_commit: bool = True,
     priority: str | None = None,
 ) -> TaskRecord:
-    """Create and persist a single new task: the user-facing ``litehive task add`` CLI and the agent-facing task-creation tool both end here, so this is where dependency validation, priority validation, queue insertion, and audit emission live."""
+    """
+    Create and persist a single new task.
+
+    The user-facing ``litehive task add`` CLI and the agent-facing
+    task-creation tool both end here, so dependency validation,
+    priority validation, queue insertion, and audit emission all live
+    in one place rather than being duplicated across entry points.
+    """
     ensure_workspace(root)
     if retry_limit is not None and retry_limit < 0:
         raise ValueError("Retry limit must be 0 or greater")
@@ -353,7 +508,14 @@ def create_follow_up_tasks(
     stage: str,
     follow_ups: list[FollowUpTaskSpec],
 ) -> list[TaskRecord]:
-    """Spawn the follow-up tasks the grooming, testing, and accepting stages emit when their report carries a ``follow_ups`` block; persists them as a single atomic batch so a partial failure cannot leave half-created sibling tasks behind."""
+    """
+    Spawn follow-up tasks emitted by grooming/testing/accepting reports.
+
+    Persists the batch atomically so a partial failure cannot leave
+    half-created sibling tasks behind; only fires for stages that may
+    legitimately emit follow-ups, ignoring follow-up blocks from
+    pipeline stages where they are meaningless.
+    """
     if not follow_ups:
         return []
     if stage not in {TaskStage.GROOMING, TaskStage.TESTING, TaskStage.ACCEPTING}:
@@ -430,7 +592,15 @@ def create_follow_up_tasks(
 
 
 def discard_created_task(root: Path, task_id: str) -> None:
-    """Remove a task that should never have existed: drops its queue entry, clears it from ``active_task_id`` if set, deletes its on-disk directory, and tombstones its SQLite rows; called by the rollback path when a creation step fails downstream of the initial persist."""
+    """
+    Remove a task that should never have existed.
+
+    Drops the queue entry, clears it from ``active_task_id`` if set,
+    deletes the on-disk directory, and tombstones the SQLite rows;
+    called by the rollback path when a creation step fails downstream
+    of the initial persist so the workspace is left in the
+    pre-creation shape.
+    """
     with workspace_lock(root):
         task = get_task(root, task_id)
         state = load_state(root)
@@ -467,7 +637,15 @@ def _load_tasks_from_store(
     include_runtime: bool,
     strict: bool,
 ) -> list[TaskRecord]:
-    """Iterate every stored task intent and pair it with its runtime row; the two listing entry points (``list_tasks`` and ``list_tasks_state_first``) share this so they apply the same strict/lenient policy when a runtime row is missing or malformed."""
+    """
+    Iterate every stored task intent and pair it with its runtime row.
+
+    The two listing entry points (``list_tasks`` and
+    ``list_tasks_state_first``) share this helper so they apply the
+    same strict/lenient policy when a runtime row is missing or
+    malformed; without the shared core, the two would drift in their
+    handling of half-deleted tasks.
+    """
     store = runtime_store(root)
     records: list[TaskRecord] = []
     for intent in store.list_task_intents():
@@ -493,7 +671,14 @@ def list_tasks(
     include_runtime: bool = True,
     strict: bool = True,
 ) -> list[TaskRecord]:
-    """Return every task in id-iteration order with its runtime row attached; the queue selector, status snapshot builder, recovery probes, and worktree inspection all use this when they need the full task population."""
+    """
+    Return every task in id order with its runtime row attached.
+
+    Used by the queue selector, status snapshot builder, recovery
+    probes, and worktree inspection when they need the full task
+    population; ``strict=False`` lets recovery still see tasks whose
+    runtime row was deleted out from under them.
+    """
     return _load_tasks_from_store(
         root,
         include_runtime=include_runtime,
@@ -506,7 +691,14 @@ def list_tasks_state_first(
     state: WorkspaceState | None = None,
     include_runtime: bool = False,
 ) -> list[TaskRecord]:
-    """Return tasks ordered by workspace priority - active task first, then queued tasks in queue order, then everything else by id; status displays and the operator CLI render this ordering directly so the user sees the work-in-flight at the top."""
+    """
+    Return tasks ordered by workspace priority.
+
+    Active task first, then queued tasks in queue order, then everything
+    else by id; status displays and the operator CLI render this
+    ordering directly so the user sees the work-in-flight at the top
+    without having to re-sort client-side.
+    """
     task_by_id = {task.id: task for task in _load_tasks_from_store(root, include_runtime=include_runtime, strict=True)}
 
     if state is None:
@@ -517,7 +709,13 @@ def list_tasks_state_first(
     seen: set[str] = set()
 
     def add(task_id: str | None) -> None:
-        """Append a task id to the running ordering once, skipping unknown/duplicate ids; ``list_tasks_state_first`` uses it so the active task, queued tasks, and id-sorted leftovers can be appended in priority order without each pass re-checking for duplicates."""
+        """
+        Append a task id to the running ordering at most once.
+
+        Skips unknown or duplicate ids so the three append passes
+        (active, queued, id-sorted leftovers) can be applied in
+        priority order without each pass re-checking for duplicates.
+        """
         if task_id is None or task_id in seen or task_id not in task_by_id:
             return
         seen.add(task_id)
@@ -533,7 +731,14 @@ def list_tasks_state_first(
 
 
 def get_task(root: Path, task_id: str) -> TaskRecord | None:
-    """Look up a task by id and require its runtime row to exist; the orchestration loop, queue selector, and audit emitters use this when they cannot continue without a fully hydrated task and would rather raise on a half-deleted row than guess."""
+    """
+    Look up a task by id and require its runtime row to exist.
+
+    The orchestration loop, queue selector, and audit emitters use
+    this when they cannot continue without a fully hydrated task and
+    would rather raise on a half-deleted row than guess at runtime
+    state from intent-only data.
+    """
     intent = runtime_store(root).load_task_intent(task_id)
     if intent is None:
         return None
@@ -542,7 +747,14 @@ def get_task(root: Path, task_id: str) -> TaskRecord | None:
 
 
 def get_task_record(root: Path, task_id: str) -> TaskRecord | None:
-    """Return the task record, tolerating missing runtime rows; the recovery and diagnostics flows use this so they can still report on a task whose runtime row was deleted out from under it."""
+    """
+    Return the task record, tolerating a missing runtime row.
+
+    Recovery and diagnostics flows use this so they can still report on
+    a task whose runtime row was deleted out from under them — the
+    task's intent is recoverable, but forcing a runtime row to exist
+    would mask exactly the corruption these flows want to surface.
+    """
     intent = runtime_store(root).load_task_intent(task_id)
     if intent is None:
         return None
@@ -555,7 +767,14 @@ def get_task_record(root: Path, task_id: str) -> TaskRecord | None:
 
 
 def require_task(root: Path, task_id: str) -> TaskRecord:
-    """Look up a task by id and raise if it does not exist; CLI handlers and engine adapters call this when a missing task is a programmer/operator error rather than an expected absence."""
+    """
+    Look up a task by id and raise if it does not exist.
+
+    CLI handlers and engine adapters call this when a missing task is
+    a programmer/operator error rather than an expected absence; the
+    raise stops them from silently continuing on a ``None`` they would
+    have to dereference downstream anyway.
+    """
     task = get_task(root, task_id)
     if task is None:
         raise ValueError(f"Task {task_id} not found")
@@ -563,7 +782,14 @@ def require_task(root: Path, task_id: str) -> TaskRecord:
 
 
 def save_task(root: Path, task: TaskRecord) -> None:
-    """Persist both the intent and runtime sides of a task atomically, refreshing ``updated_at``; the stage transition helpers and CLI mutators (status edits, retry resets) call this when they need a single-task write that respects the workspace mutation guard."""
+    """
+    Persist both the intent and runtime sides of a task atomically.
+
+    Refreshes ``updated_at`` and runs under the workspace mutation
+    guard; stage transition helpers and CLI mutators (status edits,
+    retry resets) call this when they need a single-task write
+    without touching workspace-level queue state.
+    """
     task.updated_at = utcnow()
     with workspace_mutation_guard(root):
         write_atomic_files_and_then(

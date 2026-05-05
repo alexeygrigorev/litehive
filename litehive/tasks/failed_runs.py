@@ -12,8 +12,14 @@ FAILED_RUN_REQUEUE_BUDGET = 1
 
 
 def blocking_failed_run_records(task: TaskRecord) -> list[RuntimeFailedRunRecord]:
-    """Return failed-run records that require operator acknowledgement."""
+    """
+    Return failed-run records that require operator acknowledgement.
 
+    A record blocks when the same failure shape has tripped the requeue
+    budget more times than the operator has acknowledged; the requeue and
+    reset flows refuse to run until the operator explicitly overrides each
+    blocking record.
+    """
     blocked: list[RuntimeFailedRunRecord] = []
     for record in task.runtime.pipeline.failed_run_history.values():
         if record.count <= FAILED_RUN_REQUEUE_BUDGET:
@@ -25,7 +31,13 @@ def blocking_failed_run_records(task: TaskRecord) -> list[RuntimeFailedRunRecord
 
 
 def has_blocking_failed_run_history(task: TaskRecord) -> bool:
-    """True when at least one failed-run record needs operator acknowledgement; the requeue/reset CLI uses this to refuse work that has already exhausted retries on the same failure shape."""
+    """
+    True when at least one failed-run record still needs acknowledgement.
+
+    Consulted by ``is_task_eligible_for_execution`` and the requeue/reset
+    flows so a task that has exhausted retries on the same failure shape
+    stays out of the runner's hands until an operator confirms.
+    """
     return bool(blocking_failed_run_records(task))
 
 
@@ -34,11 +46,12 @@ def mark_failed_run_operator_override(
     task: TaskRecord,
     records: list[RuntimeFailedRunRecord] | None = None,
 ) -> list[dict[str, object]]:
-    """Acknowledge blocked failed-run records on authoritative ``TaskState``.
+    """
+    Acknowledge blocked failed-run records on the authoritative ``TaskState``.
 
-    Runtime records are updated as the storage projection returned to callers,
-    but the lifecycle state row remains the owner so reset/requeue cannot leave
-    a stale second mutable copy behind.
+    Updates both the lifecycle state row (the owner) and the runtime storage
+    projection callers see, so reset/requeue cannot leave a stale second
+    mutable copy behind that would re-block the task on the next pass.
     """
 
     now = utcnow()
@@ -96,7 +109,14 @@ def mark_failed_run_operator_override(
 
 
 def failed_run_block_message(task: TaskRecord, records: list[RuntimeFailedRunRecord]) -> str:
-    """Format the operator-facing refusal text that the requeue/reset commands print when a task has been failing the same way repeatedly; tells the operator how to override (`--force`) instead of leaving them to guess at the gate."""
+    """
+    Format the operator-facing refusal text for the requeue/reset gate.
+
+    Names the offending stage/failure-shape pairs and points the operator at
+    ``--force`` so they don't have to guess how to override a repeatedly
+    failing task; emitted by ``requeue`` and ``reset`` when a blocking
+    record is found.
+    """
     details = "; ".join(
         (f"{record.stage} shape={record.failure_shape} count={record.count} latest_at={record.latest_at or '-'}")
         for record in records

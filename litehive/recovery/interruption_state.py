@@ -1,4 +1,9 @@
-"""Task-level interruption bookkeeping: stamping a task as ``INTERRUPTED`` and rendering the operator-visible journal line."""
+"""Task-level interruption bookkeeping.
+
+Stamps a task as ``INTERRUPTED`` and renders the operator-visible journal
+line that explains why the task is paused; paired with ``interrupted_subagent``
+which handles the subagent-side snapshot.
+"""
 
 from pathlib import Path
 
@@ -19,7 +24,14 @@ def prepare_interrupted_task(
     summary: str,
     reason: str | None = None,
 ) -> None:
-    """Stamp a task as ``INTERRUPTED`` at ``stage`` so the next dequeue resumes from a known recovery point; called by the queue's stop/recovery flows when a runner crash or stale-runner detection requires the in-flight stage to be requeued."""
+    """
+    Stamp a task as ``INTERRUPTED`` at ``stage`` so a later dequeue resumes cleanly.
+
+    Called by the queue's stop/recovery flows when a runner crash or
+    stale-runner detection requires the in-flight stage to be
+    requeued; the stamp gives the next dequeue a known recovery point
+    rather than forcing it to re-derive one from runtime state.
+    """
     now = utcnow()
     interruption_reason = reason or summary
     timestamps = _interruption_timestamps(task, now)
@@ -43,7 +55,14 @@ def prepare_interrupted_task(
 
 
 def interruption_journal_message(task: TaskRecord) -> str:
-    """Render the human-readable journal line that the queue/stop flows persist when an interruption is recorded; pulls subagent details (pid, role, snippet) out of runtime state so the operator-visible journal explains *why* the task is paused."""
+    """
+    Render the human-readable journal line for an interruption.
+
+    Pulls subagent details (pid, role, snippet) out of runtime state so
+    the operator-visible journal explains *why* the task is paused
+    instead of just saying "interrupted"; called by the queue/stop
+    flows when persisting the interruption record.
+    """
     interruption = task.runtime.execution.interruption
     if interruption is None:
         return f"Interrupted run recorded. Resume from `{task.pipeline_status}`."
@@ -71,7 +90,14 @@ def interruption_journal_message(task: TaskRecord) -> str:
 
 
 def stale_interruption_reason(task: TaskRecord, stage: str, stale_pid: bool = False) -> str:
-    """Build the ``reason`` string the stale-runner repair attaches to the task; embeds subagent role/engine and (when known) "pid no longer alive" so the recovery report distinguishes "runner died" from "subagent died" failures."""
+    """
+    Build the ``reason`` string the stale-runner repair attaches to the task.
+
+    Embeds subagent role/engine and (when known) "pid no longer alive"
+    so the recovery report distinguishes "runner died" from "subagent
+    died" failures; the operator triaging a stuck workspace needs that
+    distinction to decide where to look first.
+    """
     active = task.runtime.execution.active_subagent
     if active is None:
         return f"Stale runner detected while `{stage}` was still marked running."
@@ -86,7 +112,14 @@ def stale_interruption_reason(task: TaskRecord, stage: str, stale_pid: bool = Fa
 
 
 def _interruption_timestamps(task: TaskRecord, now: str) -> dict[str, str | None]:
-    """Pick the four timestamps an interruption record needs (run/stage start, stage start, started_at, interrupted_at) so the bookkeeping uses subagent timestamps when available and falls back to stage-level ones, keeping duration math meaningful even when the subagent never started."""
+    """
+    Pick the four timestamps an interruption record needs.
+
+    Uses subagent timestamps when available and falls back to
+    stage-level ones so duration math stays meaningful even when the
+    subagent never actually started; without the fallback, a runner
+    crash before subagent launch would yield a zero-duration record.
+    """
     started_at = task.runtime.pipeline.current_stage.started_at or task.runtime.pipeline.run_started_at
     if task.runtime.execution.active_subagent is not None:
         interrupted_at = task.runtime.execution.active_subagent.updated_at
@@ -112,7 +145,15 @@ def _set_interruption_metadata(
     stage_started_at: str | None,
     interrupted_at: str | None,
 ) -> None:
-    """One-shot mutation that wires together the interruption record, the apply-outcome bookkeeping, and the current-stage snapshot; centralised here so the three layers (task outcome, interruption state, current stage) stay consistent in time."""
+    """
+    One-shot mutation wiring up the three interruption-related layers.
+
+    Touches the interruption record, the apply-outcome bookkeeping,
+    and the current-stage snapshot in one place so the three layers
+    (task outcome, interruption state, current stage) stay consistent
+    — without the centralisation, the layers tended to drift after
+    schema changes.
+    """
     interrupted_subagent = mark_interrupted_subagent(root, task, reason=reason, stage=stage)
     apply_task_outcome(
         task,

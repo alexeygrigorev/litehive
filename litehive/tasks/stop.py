@@ -36,7 +36,14 @@ from litehive.tasks.queue import active_task_markers, validate_single_active_tas
 
 
 def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
-    """Resolve which task `litehive queue stop` should target by checking every active-task marker (state pointer, runner lock metadata, runtime row); raises when there is nothing to stop or when the workspace shows multiple actives, since the latter is a bug we want surfaced rather than papered over."""
+    """
+    Resolve which task ``litehive queue stop`` should target.
+
+    Checks every active-task marker (state pointer, runner lock metadata,
+    runtime row); raises when there is nothing to stop or when the
+    workspace shows multiple actives, since the latter is a bug we want
+    surfaced loudly rather than papered over.
+    """
     markers = active_task_markers(root, state)
     if not markers:
         raise ValueError("No active task to stop")
@@ -46,7 +53,14 @@ def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
 
 
 def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskRecord:
-    """Park the active task and clear the active runtime markers under the workspace lock, skipping the usual runner-held precondition because the caller has already taken responsibility for signalling/reaping the runner; called by `stop_current_task` once the runner is no longer in the way."""
+    """
+    Park the active task and clear runtime markers under the workspace lock.
+
+    Skips the usual runner-held precondition because the caller has
+    already taken responsibility for signalling and reaping the runner;
+    used by ``stop_current_task`` once the runner is no longer in the way
+    so the parking step itself does not deadlock on the runner guard.
+    """
     with workspace_lock(root):
         state = load_state(root)
         active_task_id = _active_task_id_for_stop(root, state)
@@ -121,7 +135,15 @@ def stop_current_task(
     wait_timeout_seconds: float = 5.0,
     poll_interval_seconds: float = 0.1,
 ) -> StopTaskSummary:
-    """Carry out an operator stop end-to-end — SIGINT the runner, escalate to subagent SIGTERM/SIGKILL if needed, run stale-runner recovery, and only then park the task — refusing to silently leave a half-stopped runner around; called by `litehive queue stop` and by the engine-switch flow when it needs to interrupt the active task first."""
+    """
+    Carry out an operator stop end-to-end.
+
+    SIGINTs the runner, escalates to subagent SIGTERM/SIGKILL if needed,
+    runs stale-runner recovery, and only then parks the task. Refuses to
+    silently leave a half-stopped runner around; called by
+    ``litehive queue stop`` and by the engine-switch flow when it must
+    interrupt the active task first.
+    """
     state = load_state(root)
     try:
         active_task_id = _active_task_id_for_stop(root, state)

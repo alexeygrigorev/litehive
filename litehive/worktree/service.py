@@ -1,9 +1,12 @@
-"""WorktreeService: lifecycle/recovery/CLI entry point for worktree decisions.
+"""
+``WorktreeService``: the worktree-decisions entry point shared by lifecycle, recovery, and CLI.
 
-Holds the create-or-reuse-and-rebase flow used at lifecycle pre-exec, plus
-small wrappers that delegate to the cleanup, inspection, and rescue sibling
-modules so callers can hold a single object instead of importing six free
-functions.
+Owns the create-or-reuse-and-rebase flow used at lifecycle pre-exec
+(``sync_task_worktree``) and exposes thin instance-method wrappers
+over the cleanup/inspection/rescue sibling modules so callers can
+hold one ``WorktreeService`` per workspace instead of importing six
+free functions. The free-function form still exists in the siblings;
+this class is a convenience facade, not a re-implementation.
 """
 
 from pathlib import Path
@@ -61,19 +64,39 @@ from litehive.worktree.rescue import apply_rescue_candidate, collect_rescue_cand
 
 
 def status_porcelain_untracked(cwd: Path) -> bool:
-    """Whether the worktree has any dirty entries including untracked files.
+    """
+    Whether the worktree has any dirty entries including untracked files.
 
-    Internal helper for ``WorktreeService._stash_local_changes`` so it can
-    skip stashing when there is nothing to stash.
+    Internal helper for ``WorktreeService._stash_local_changes`` so
+    the stash step can skip when there's nothing to stash — running
+    ``git stash push`` on a clean tree creates a no-op stash entry
+    that pollutes the stash list and confuses recovery.
     """
     return bool(status_porcelain_with_options(cwd, include_ignored=False))
 
 
 class WorktreeService:
-    """Owns git/worktree decisions shared by lifecycle, recovery, and CLI."""
+    """
+    Worktree decisions shared by lifecycle, recovery, and the worktree CLI.
+
+    One instance per workspace; methods scope all git operations
+    under ``self.root``. ``sync_task_worktree`` is the heart —
+    everything else is either a thin wrapper over a sibling module
+    or a private rebase/merge helper. Lifecycle pre-exec drives
+    sync; recovery uses the cleanup/inspection helpers; the CLI
+    drives rescue.
+    """
 
     def __init__(self, root: Path) -> None:
-        """Bind the service to a single workspace root; every method below scopes its git operations under this directory so callers can hold one ``WorktreeService`` per workspace and forget about path threading."""
+        """
+        Bind the service to a single workspace root.
+
+        Every method below scopes its git operations under this
+        directory so callers can hold one ``WorktreeService`` per
+        workspace and forget about path threading. The ``Path()``
+        wrap normalizes the input so equality checks downstream
+        don't fail on a string vs. a ``Path``.
+        """
         self.root = Path(root)
 
     def sync_task_worktree(
@@ -84,7 +107,19 @@ class WorktreeService:
         resolver_state: object | None = None,
         main_ref: str = "origin/main",
     ) -> WorktreeSyncResult:
-        """Create/reuse/sync a task worktree for lifecycle pre-exec."""
+        """
+        Create, reuse, and sync a task worktree for lifecycle pre-exec.
+
+        Three branches: create when nothing is recorded or the
+        recorded path is gone (``add_worktree_branch`` plus venv
+        link), reuse when the recorded worktree exists (rebase onto
+        local ``main`` and optionally merge ``origin/<main>``), and
+        no-op when the workspace is not a git repo. Conflict during
+        rebase or merge raises ``WorktreeMergeConflict`` so the
+        merge-resolver lifecycle node can pick up the conflict
+        files — that exception is the contract between this
+        function and the merge-resolver agent.
+        """
         if not is_git_repo(self.root):
             return WorktreeSyncResult(changed=False)
 
@@ -128,23 +163,54 @@ class WorktreeService:
         return WorktreeSyncResult(changed=main_changed or changed, worktree_path=worktree)
 
     def collect_managed_worktrees(self) -> list[ManagedWorktree]:
-        """Enumerate worktrees the workspace owns so the CLI status path can list them."""
+        """
+        Enumerate worktrees the workspace owns so the CLI status path can list them.
+
+        Thin instance wrapper over :func:`collect_managed_worktrees`
+        so callers holding a service handle don't import the cleanup
+        module just to list.
+        """
         return collect_managed_worktrees(self.root)
 
     def remove_cleanable_worktrees(self, dry_run: bool = False) -> dict[str, list[ManagedWorktree]]:
-        """Drop worktrees for completed/abandoned tasks; called by the cleanup CLI and recovery flows."""
+        """
+        Drop worktrees for completed/abandoned tasks.
+
+        Used by ``litehive worktree clean`` and the recovery flow's
+        post-success cleanup. ``dry_run`` lets the CLI preview what
+        would be removed without touching disk.
+        """
         return remove_cleanable_worktrees(self.root, dry_run=dry_run)
 
     def collect_rescue_candidates(self) -> list[RescueCandidate]:
-        """Find worktrees with unmerged work that need operator triage before deletion."""
+        """
+        Find worktrees with unmerged work needing operator triage before deletion.
+
+        Pairs with :meth:`apply_rescue_candidate`; the rescue CLI
+        lists candidates first so the operator can review before
+        applying.
+        """
         return collect_rescue_candidates(self.root)
 
     def apply_rescue_candidate(self, candidate: RescueCandidate) -> RescueResult:
-        """Carry out a single rescue (stash/branch/merge) chosen by the recovery CLI."""
+        """
+        Carry out a single rescue chosen by the rescue CLI.
+
+        Cherry-picks the candidate's commits onto main with metadata
+        scrub and finalization. Caller must have run
+        :meth:`require_clean_main_checkout` once for the batch.
+        """
         return apply_rescue_candidate(self.root, candidate)
 
     def inspect_task_worktree(self, task: TaskRecord) -> TaskWorktreeInspection:
-        """Snapshot a task's worktree state (existence, dirty files, ahead-of-main commits) for status/diagnostics readers."""
+        """
+        Snapshot a task's worktree state for status and diagnostics readers.
+
+        Bundles existence, uncommitted changes, and committed-past-
+        main paths into a single ``TaskWorktreeInspection`` so the
+        operator's status output renders all three from one helper
+        call instead of three separate git invocations.
+        """
         worktree_rel = get_task_worktree_path(task)
         worktree_path = resolve_recorded_worktree_path(self.root, worktree_rel)
         if worktree_rel is None or worktree_path is None or not worktree_path.exists():
@@ -166,7 +232,14 @@ class WorktreeService:
         )
 
     def task_has_missing_recorded_worktree(self, task_id: str) -> bool:
-        """Detect a stale DB pointer to a worktree that was deleted out-of-band; recovery uses this to decide whether to re-create."""
+        """
+        Detect a stale task→worktree pointer that no longer maps to a directory.
+
+        Recovery uses this before deciding whether to re-create the
+        worktree from scratch — without the check, recovery would
+        try to reuse a path that is no longer on disk and fail
+        unpredictably during a rebase.
+        """
         task = get_task(self.root, task_id)
         if task is None:
             return False
@@ -174,7 +247,14 @@ class WorktreeService:
         return inspection.worktree_rel is not None and not inspection.exists
 
     def clear_missing_recorded_worktree(self, task_id: str) -> None:
-        """Forget a recorded worktree path that no longer exists on disk so the next pre-exec creates a fresh one."""
+        """
+        Forget a recorded worktree path that no longer exists on disk.
+
+        Lets the next pre-exec create a fresh worktree instead of
+        repeatedly trying to use a stale pointer. Idempotent — a
+        no-op when the recorded path is still valid, so callers can
+        invoke speculatively.
+        """
         task = get_task(self.root, task_id)
         if task is None or not self.task_has_missing_recorded_worktree(task_id):
             return
@@ -182,19 +262,47 @@ class WorktreeService:
         save_task(self.root, task)
 
     def cleanup_terminal_task_worktree(self, task: TaskRecord) -> None:
-        """Tear down the worktree once the task reaches a terminal pipeline state; called by the lifecycle finisher."""
+        """
+        Tear down the worktree once the task reaches a terminal pipeline state.
+
+        Called by the lifecycle finisher on done/closed/cancelled
+        transitions; thin wrapper over the free function in
+        ``litehive.worktree.cleanup``.
+        """
         cleanup_terminal_task_worktree(self.root, task)
 
     def require_clean_main_checkout(self) -> None:
-        """Guard merge/rescue flows that assume the main checkout has no uncommitted edits."""
+        """
+        Guard merge/rescue flows that assume a clean main checkout.
+
+        Called once before a batch of rescue applies so dirty edits
+        from the operator can't get spliced into the rescued
+        commits. Raises ``GitError`` to halt the batch loudly
+        rather than performing a partial rescue.
+        """
         require_clean_main_checkout(self.root)
 
     def prune_stale_worktrees(self) -> None:
-        """Force git to drop bookkeeping for worktrees whose directories disappeared, so re-create can reuse the branch name."""
+        """
+        Force git to drop bookkeeping for worktrees whose directories vanished.
+
+        Without this, ``git worktree add`` refuses to reuse a
+        branch name git still associates with a deleted directory,
+        and the next pre-exec for the same task would error out.
+        ``--expire now`` skips the default grace period so cleanup
+        is immediate.
+        """
         prune_worktrees(self.root, expire_now=True)
 
     def registered_worktree_for_branch(self, branch: str) -> Path | None:
-        """Find an existing on-disk worktree git already tracks for ``branch`` so sync can reuse it instead of creating a duplicate."""
+        """
+        Find an existing on-disk worktree git already tracks for ``branch``.
+
+        Lets sync reuse a worktree git knows about instead of
+        adding a duplicate when the task record has lost the
+        recorded path but git still has the branch checked out
+        somewhere. Returns ``None`` if no live worktree matches.
+        """
         porcelain = list_worktrees_porcelain(self.root)
 
         current_path: Path | None = None
@@ -223,13 +331,31 @@ class WorktreeService:
         worktree_resolver: "Callable[[object], Path] | None",
         resolver_state: object | None,
     ) -> Path:
-        """Pick the worktree path :func:`sync_task_worktree` should operate on, preferring an injected lifecycle resolver when one is provided so tests can redirect to a sandbox; falls back to the path recorded on the task otherwise."""
+        """
+        Pick the worktree path :meth:`sync_task_worktree` should operate on.
+
+        Prefers an injected lifecycle resolver when one is supplied
+        so tests can redirect sync to a sandboxed path without
+        rewriting the recorded task pointer; falls back to the
+        recorded path otherwise. Without the indirection, tests
+        would have to monkey-patch ``Path`` to redirect.
+        """
         if worktree_resolver is None:
             return recorded
         return Path(worktree_resolver(resolver_state))
 
     def _rebase_existing_worktree_onto_local_main(self, worktree: Path) -> bool:
-        """Rebase a reused task worktree onto the workspace's current main HEAD before lifecycle pre-exec runs, returning True when HEAD actually moved; raises ``WorktreeMergeConflict`` for unresolved conflicts so the caller can surface them, and skips no-op rebases of the main checkout itself."""
+        """
+        Rebase a reused task worktree onto current local ``main`` before pre-exec.
+
+        Returns ``True`` when HEAD actually moved so the caller
+        can surface "the workspace shifted" to the agent. Raises
+        ``WorktreeMergeConflict`` for unresolved conflicts so the
+        merge-resolver lifecycle node can pick up the file list,
+        and skips the no-op self-rebase when the worktree path
+        IS the main checkout (some single-task workflows reuse
+        main directly).
+        """
         if worktree.resolve() == self.root.resolve():
             return False
         main_head = current_head(self.root)
@@ -247,7 +373,17 @@ class WorktreeService:
         raise GitError(f"worktree_sync rebase onto local main {main_head[:8]} failed")
 
     def _merge_origin_main(self, worktree: Path, main_ref: str) -> bool:
-        """Fetch and merge ``origin/<main>`` into the worktree, stashing local edits around the merge so an in-flight agent's working changes survive; returns True when the merge actually moved HEAD, raises ``WorktreeMergeConflict`` for unresolved conflicts, and aborts the merge before re-raising on other failures so the worktree is never left half-merged."""
+        """
+        Fetch and merge ``origin/<main>`` into the worktree.
+
+        Stashes local edits around the merge so an in-flight agent's
+        working changes survive a sync. Returns ``True`` when the
+        merge actually moved HEAD. Raises ``WorktreeMergeConflict``
+        on unresolved conflicts so the merge-resolver node can take
+        over; aborts the merge before re-raising on other failures
+        so the worktree is never left half-merged for the next
+        sync to trip over.
+        """
         stash_ref = self._stash_local_changes(worktree)
         restored_stash = False
         try:
@@ -277,27 +413,64 @@ class WorktreeService:
 
     @staticmethod
     def _head(worktree: Path) -> str | None:
-        """Return the worktree's current HEAD SHA or None if undetermined; thin alias to ``current_head`` so the rebase flow can compare before/after without importing git ops directly."""
+        """
+        Worktree HEAD SHA or ``None`` if undetermined.
+
+        Thin alias to ``current_head`` so the rebase flow can
+        compare before/after HEADs without importing the git ops
+        module directly at every site.
+        """
         return current_head(worktree)
 
     @staticmethod
     def _is_dirty(worktree: Path) -> bool:
-        """Return True when the worktree has any tracked-file modifications; gates :func:`sync_task_worktree`'s decision to skip the origin merge so we don't clobber an agent's in-flight edits."""
+        """
+        True when the worktree has any tracked-file modifications.
+
+        Gates :meth:`sync_task_worktree`'s decision to skip the
+        origin merge — merging on top of an agent's in-flight
+        edits would clobber work the agent intended to keep.
+        """
         return has_changes(worktree)
 
     @staticmethod
     def _has_origin(worktree: Path) -> bool:
-        """Return True when the worktree has an ``origin`` remote configured; gates :func:`sync_task_worktree`'s origin-merge step so workspaces without a remote are silently no-ops instead of erroring."""
+        """
+        True when the worktree has an ``origin`` remote configured.
+
+        Gates :meth:`sync_task_worktree`'s origin-merge step so a
+        workspace without an ``origin`` is silently a no-op
+        instead of erroring on every sync. Local-only workspaces
+        are a real use case (single-machine ops, demo setups).
+        """
         return remote_url(worktree, "origin") is not None
 
     @staticmethod
     def _unresolved(worktree: Path) -> list[str]:
-        """Return paths git considers unmerged in the worktree; used by :func:`_rebase_existing_worktree_onto_local_main` and :func:`_merge_origin_main` to distinguish a real merge conflict (raise ``WorktreeMergeConflict``) from a generic git error."""
+        """
+        Return paths git considers unmerged in the worktree.
+
+        Used by :meth:`_rebase_existing_worktree_onto_local_main`
+        and :meth:`_merge_origin_main` to distinguish a real merge
+        conflict (raise ``WorktreeMergeConflict`` so the resolver
+        node can act) from a generic git error (just raise
+        ``GitError``).
+        """
         return unmerged_files(worktree)
 
     @staticmethod
     def _stash_local_changes(worktree: Path) -> str | None:
-        """Stash dirty entries (including untracked) and return the new ``refs/stash`` SHA so :func:`_merge_origin_main` can pop exactly that stash later, or None when there was nothing to stash; raises ``GitError`` on stash failure rather than silently dropping work."""
+        """
+        Stash dirty entries (including untracked) before a sync merge.
+
+        Returns the new ``refs/stash`` SHA so
+        :meth:`_merge_origin_main` can pop exactly that stash
+        later, even if another sync runs concurrently and pushes
+        a new stash on top. Returns ``None`` when there was
+        nothing to stash. Raises ``GitError`` on stash failure
+        rather than silently dropping work — losing in-flight
+        agent edits would be much worse than failing the sync.
+        """
         if not status_porcelain_untracked(worktree):
             return None
         before_ref = rev_parse_verify(worktree, "refs/stash") or ""
@@ -310,7 +483,15 @@ class WorktreeService:
         return after_ref
 
     def _restore_local_changes(self, worktree: Path, stash_ref: str | None) -> None:
-        """Pop the stash entry created by :func:`_stash_local_changes` after a successful origin merge; promotes a conflicted pop into ``WorktreeMergeConflict`` so the caller can surface the conflicting paths instead of leaving the agent staring at a silent stash."""
+        """
+        Pop the stash entry from :meth:`_stash_local_changes` after the merge.
+
+        Promotes a conflicted pop into ``WorktreeMergeConflict`` so
+        the caller can surface the conflicting paths to the
+        merge-resolver node — leaving the stash silently sitting
+        in the stash list while the worktree looks clean would
+        let the next sync run on top of forgotten edits.
+        """
         if not stash_ref:
             return
         ok, message = stash_pop(worktree, ref=stash_ref, with_index=True)

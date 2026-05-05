@@ -46,7 +46,14 @@ class MergeConflict(Exception):
     ``git diff --name-only --diff-filter=U`` reported."""
 
     def __init__(self, conflict_files: list[str]) -> None:
-        """Stash the unresolved file list on the exception so the commit-stage node can surface it in the ``MergeConflictDetected`` event without re-running ``git diff``."""
+        """
+        Stash the unresolved file list on the exception.
+
+        Carrying the list on the exception means the commit-stage node
+        can surface it in the ``MergeConflictDetected`` event without
+        re-running ``git diff``, and the merge-resolver agent then
+        receives the same list it would have produced from a re-run.
+        """
         super().__init__(f"{len(conflict_files)} unresolved file(s)")
         self.conflict_files = conflict_files
 
@@ -62,12 +69,19 @@ class SystemNode(Node):
     node_type = NodeType.SYSTEM
 
     def __init__(self, name: PipelineState) -> None:
-        """Bind the node's pipeline-stage label, which the runner uses for transition lookups and event log entries."""
+        """Bind the node's pipeline-stage label so the runner can look it up in the registry and the journal can attribute events to the right stage."""
         self.name = name
 
     @abstractmethod
     def run(self, state: TaskState) -> Event:
-        """Inspect ``state`` and emit the typed ``Event`` the runner uses to drive the next transition; concrete subclasses implement the actual probe/sync/merge logic."""
+        """
+        Inspect ``state`` and emit a typed ``Event``.
+
+        The runner uses the returned event to drive the next
+        transition; concrete subclasses implement the actual probe /
+        sync / merge logic and translate their outcomes to the Event
+        vocabulary the rule table understands.
+        """
         ...
 
 
@@ -89,12 +103,28 @@ class ReadyNode(SystemNode):
         self,
         probes: "list[Callable[[TaskState], bool]] | None" = None,
     ) -> None:
-        """Register the probe callables that decide whether the entry stage needs pre-exec recovery; production wiring injects a worktree-existence probe."""
+        """
+        Register the probe callables that decide whether the entry
+        stage needs pre-exec recovery.
+
+        Production wiring injects a worktree-existence probe so a
+        recorded-but-missing worktree is fixed up before the pipeline
+        starts; tests usually pass an empty list (always clean).
+        """
         super().__init__(PipelineState.READY)
         self.probes = list(probes or [])
 
     def run(self, state: TaskState) -> Event:
-        """Run every registered probe and route to ``NeedsPreExecRecovery`` if any fires (or raises), else emit ``CleanState`` so the pipeline advances to its first stage."""
+        """
+        Walk every registered probe and emit the matching event.
+
+        Routes to ``NeedsPreExecRecovery`` if any probe returns true or
+        raises; emits ``CleanState`` only when every probe is silent so
+        the pipeline can advance to its first stage. Treating raises as
+        "needs recovery" rather than crashing is intentional — a probe
+        bug should not wedge the pipeline before recovery has a chance
+        to fix it.
+        """
         for probe in self.probes:
             try:
                 if probe(state):
@@ -139,7 +169,14 @@ class WorktreeSyncNode(SystemNode):
         super().__init__(PipelineState.WORKTREE_SYNC)
 
     def run(self, state: TaskState) -> Event:
-        """Translate ``self.sync()`` outcomes into the rule-table events: ``Pass`` on success, ``Reject(source="system")`` for merge conflicts, ``Crash(GitError)`` for any other git failure."""
+        """
+        Translate ``self.sync()`` outcomes into rule-table events.
+
+        ``Pass`` on success, ``Reject(source="system")`` for merge
+        conflicts (so the rule table can route to recovery rather
+        than failing outright), and ``Crash(GitError)`` for any other
+        git failure (so the wildcard recovery rule picks it up).
+        """
         try:
             self.sync(state)
         except MergeConflict as exc:
@@ -154,8 +191,14 @@ class WorktreeSyncNode(SystemNode):
         return Pass()
 
     def sync(self, state: TaskState) -> bool:
-        """Return True if anything was merged, False if already up-to-date
-        or the worktree isn't available yet. Subclasses override to call git."""
+        """
+        Subclass hook for the actual worktree merge.
+
+        Returns ``True`` if anything was merged, ``False`` if the
+        worktree was already up to date or the worktree isn't available
+        yet. The base implementation is a no-op so a registry that
+        forgot to wire ``GitWorktreeSyncNode`` does not crash.
+        """
         del state
         return False
 
@@ -188,14 +231,29 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         worktree_resolver: "WorktreeResolver",
         main_ref: str = "origin/main",
     ) -> None:
-        """Wire the node to the workspace root, the per-task worktree resolver, and the upstream branch (default ``origin/main``) used as the merge source during sync."""
+        """
+        Wire the node to the workspace root, per-task worktree
+        resolver, and upstream branch.
+
+        ``main_ref`` defaults to ``origin/main`` so a worktree that
+        has an ``origin`` remote merges from upstream after rebasing
+        onto local main; workspaces without an ``origin`` skip the
+        upstream merge entirely.
+        """
         super().__init__()
         self.workspace_root = Path(workspace_root)
         self.worktree_resolver = worktree_resolver
         self.main_ref = main_ref
 
     def sync(self, state: TaskState) -> bool:
-        """Provision-or-rebase the task worktree onto local main and merge ``main_ref`` when present; raise ``MergeConflict``/``GitError`` so the base ``run`` can convert them to typed events."""
+        """
+        Provision-or-rebase the task worktree, then merge ``main_ref``.
+
+        Raises ``MergeConflict`` / ``GitError`` so the base ``run``
+        can convert them to typed events the rule table understands;
+        a clean rebase + merge returns ``True`` when anything moved
+        and ``False`` when the worktree was already current.
+        """
         from litehive.worktree import WorktreeMergeConflict, WorktreeService  # noqa: PLC0415
 
         try:
@@ -231,12 +289,27 @@ class PreExecRecoveryNode(SystemNode):
         self,
         repairs: "list[Callable[[TaskState], None]] | None" = None,
     ) -> None:
-        """Register the best-effort repair callables this node will run before the pipeline enters its first stage; the repair list is what subclasses inject worktree/database fixers into."""
+        """
+        Register the best-effort repair callables this node runs before
+        the pipeline's first stage.
+
+        Production wiring injects worktree/database fixers; the list is
+        the extension point so a new repair shape can be added without
+        subclassing the node.
+        """
         super().__init__("recovering_pre_exec")
         self.repairs = list(repairs or [])
 
     def run(self, state: TaskState) -> Event:
-        """Honour the pre-exec recovery budget, run each repair (swallowing exceptions to stderr so one bad fixer cannot wedge the pipeline), and emit ``PreExecRecoverySucceeded`` with the resume stage the rule table needs."""
+        """
+        Honour the pre-exec recovery budget, run each repair, and emit
+        ``PreExecRecoverySucceeded``.
+
+        Exceptions from individual repairs are logged to stderr and
+        swallowed so one bad fixer cannot wedge the pipeline; a
+        budget-exhausted entry returns ``PreExecRecoveryBudgetHit``
+        instead, which the rule table routes straight to FAILED.
+        """
         if state.pre_exec_recovery_attempt > 1:
             return PreExecRecoveryBudgetHit()
         for repair in self.repairs:
@@ -279,7 +352,15 @@ class CommitNode(SystemNode):
         super().__init__("commit")
 
     def run(self, state: TaskState) -> Event:
-        """Drive ``_merge_worktree`` and translate its outcomes into the rule-table events: ``Pass`` on success, ``MergeConflictDetected`` for unresolved files, ``Crash(GitError)`` otherwise."""
+        """
+        Drive ``_merge_worktree`` and translate outcomes into rule-table
+        events.
+
+        ``Pass`` for a clean merge, ``MergeConflictDetected`` so the
+        rule table can route to the ``MergeAgent``, and
+        ``Crash(GitError)`` for any other git failure (which the
+        wildcard recovery rule will pick up).
+        """
         try:
             metadata = self._merge_worktree(state) or {}
             return Pass(metadata=metadata)
@@ -289,7 +370,14 @@ class CommitNode(SystemNode):
             return Crash(exc_type="GitError", message=str(exc))
 
     def _merge_worktree(self, state: TaskState) -> dict[str, object] | None:
-        """Subclass hook for the actual merge — ``GitCommitNode`` binds it to git, ``StubCommitNode`` no-ops it."""
+        """
+        Subclass hook for the actual merge.
+
+        ``GitCommitNode`` binds it to git, ``StubCommitNode`` no-ops
+        it. Returning ``None`` means "clean merge, no extra metadata";
+        a dict gets carried into the ``Pass`` event's metadata so
+        downstream guards can read it (e.g. the head sha).
+        """
         raise NotImplementedError
 
 
@@ -300,7 +388,7 @@ class StubCommitNode(CommitNode):
     """
 
     def _merge_worktree(self, state: TaskState) -> dict[str, object] | None:
-        """Test stub — pretend the merge succeeded and let the base class emit ``Pass`` so the rule table can be exercised without touching git."""
+        """Pretend the merge succeeded so the rule table can be exercised without touching git plumbing."""
         del state
         return None
 
@@ -330,7 +418,15 @@ def _is_runner_owned_metadata(relpath: str, task_id: str) -> bool:
 
 
 def _is_main_checkout_cleanup_excluded(relpath: str) -> bool:
-    """Return True when ``relpath`` must stay out of the main cleanup commit."""
+    """
+    Return True when ``relpath`` must stay out of the main cleanup
+    commit.
+
+    Top-level ``.litehive/*.db`` files are workspace-local SQLite
+    state that the runner rewrites continuously; capturing them in
+    main would create spurious diffs and merge conflicts on every
+    task.
+    """
     return relpath.startswith(".litehive/") and relpath.count("/") == 1 and relpath.endswith(".db")
 
 
@@ -407,14 +503,29 @@ class GitCommitNode(CommitNode):
         worktree_resolver: WorktreeResolver,
         task_resolver: TaskResolver | None = None,
     ) -> None:
-        """Wire the node to the main repo root, the per-task worktree resolver, and an optional task resolver used to render rich auto-commit messages."""
+        """
+        Wire the node to the main repo root, per-task worktree
+        resolver, and optional task resolver.
+
+        ``task_resolver`` is what lets the auto-commit messages quote
+        the task title and id; without it, the helpers fall back to a
+        plain ``litehive <task_id>: <detail>`` line.
+        """
         super().__init__()
         self.main_repo_root = Path(main_repo_root)
         self.worktree_resolver = worktree_resolver
         self.task_resolver = task_resolver
 
     def _merge_worktree(self, state: TaskState) -> dict[str, object] | None:
-        """Run the real commit-stage merge: auto-commit any uncommitted SWE edits, short-circuit when the worktree branch is already on main, then ``git merge --no-edit`` and surface unresolved conflicts/dirty checkouts as ``MergeConflict`` so the base class can route to ``MergeAgent``."""
+        """
+        Run the real commit-stage merge.
+
+        Auto-commits any uncommitted SWE edits, short-circuits when the
+        worktree branch is already on main, then runs ``git merge
+        --no-edit`` and surfaces unresolved conflicts and dirty
+        checkouts as ``MergeConflict`` so the base class routes them to
+        ``MergeAgent``.
+        """
         worktree = self.worktree_resolver(state)
         self.autocommit_worktree_changes(worktree, state)
         local_only_paths = self._worktree_local_only_paths(worktree)
@@ -491,7 +602,7 @@ class GitCommitNode(CommitNode):
         raise MergeConflict(unresolved)
 
     def main_head(self) -> str | None:
-        """Return the current commit on the main repo's HEAD; overridable seam used by the commit-stage merge logic and stubbed in tests."""
+        """Return the current commit on the main repo's HEAD — overridable seam the commit-stage tests stub to control merge ordering."""
         return current_head(self.main_repo_root)
 
     def autocommit_worktree_changes(self, worktree: Path, state: TaskState) -> None:
@@ -532,7 +643,16 @@ class GitCommitNode(CommitNode):
         commit_with_message_stdin(worktree, message)
 
     def autocommit_main_checkout_changes(self, state: TaskState) -> str | None:
-        """Commit any remaining dirty non-ignored files on main after a clean merge."""
+        """
+        Commit any remaining dirty non-ignored files on main after a
+        clean merge.
+
+        After the worktree merge lands, the main checkout can still
+        carry workspace-local files the merge did not touch (restored
+        local-only paths, gitignored runtime artifacts that just
+        crossed the ignore line); cleaning them up in a follow-up
+        commit prevents the next task from seeing a dirty main.
+        """
         entries = self.git_status_entries(self.main_repo_root)
         committable = [
             (code, path)
@@ -556,7 +676,14 @@ class GitCommitNode(CommitNode):
         return head
 
     def _generated_commit_message(self, state: TaskState, detail: str) -> str:
-        """Build the commit message used by the auto-commit helpers — falls back to a plain ``litehive <task_id>`` line when the runner did not wire up a task_resolver."""
+        """
+        Build the commit message used by the auto-commit helpers.
+
+        Uses the configured task-resolver when one is wired so the
+        message can quote real task metadata; otherwise falls back to a
+        plain ``litehive <task_id>: <detail>`` line so the commit still
+        reads sensibly when the resolver is unavailable.
+        """
         if self.task_resolver is not None:
             task = self.task_resolver(state)
             if task is not None:
@@ -564,16 +691,19 @@ class GitCommitNode(CommitNode):
         return f"litehive {state.task_id}: {detail}"
 
     def git_status_entries(self, repo_root: Path) -> list[tuple[str, str]]:
-        """Return ``(porcelain_code, path)`` tuples for the auto-commit helpers; public seam that the commit-stage tests monkey-patch to fake a dirty checkout."""
+        """Return ``(porcelain_code, path)`` tuples for the auto-commit helpers — public seam the commit-stage tests monkey-patch to fake a dirty checkout."""
         return self._git_status_entries_with_options(repo_root)
 
     def _filter_stageable_paths(self, repo_root: Path, paths: list[str]) -> list[str]:
-        """Drop stale pathspecs so one vanished path cannot abort the batch add.
+        """
+        Drop stale pathspecs so one vanished path cannot abort the
+        whole ``git add``.
 
-        `git status` and the subsequent `git add` are separate steps. If a path
-        disappears in between and is no longer tracked, `git add -- <path>`
-        fails the entire command with a pathspec error. Existing files and
-        tracked deletions are safe to pass through.
+        ``git status`` and the subsequent ``git add`` are separate
+        steps. If a path disappears in between and is no longer
+        tracked, ``git add -- <path>`` fails the entire command with a
+        pathspec error. Existing files and tracked deletions are safe
+        to pass through.
         """
         filtered: list[str] = []
         for relpath in paths:
@@ -590,7 +720,14 @@ class GitCommitNode(CommitNode):
         repo_root: Path,
         include_ignored: bool = False,
     ) -> list[tuple[str, str]]:
-        """Parse ``git status --porcelain`` lines for the auto-commit helpers, extracting the destination path on rename/copy entries so ``git add`` can stage them."""
+        """
+        Parse ``git status --porcelain`` lines for the auto-commit
+        helpers.
+
+        Extracts the destination path on rename/copy entries so
+        ``git add`` can stage them — passing ``"old -> new"`` to
+        ``git add`` is invalid and would error out otherwise.
+        """
         entries: list[tuple[str, str]] = []
         for line in status_porcelain_with_options(repo_root, include_ignored=include_ignored):
             # Porcelain format: "XY path" for most changes; "R  old -> new" for
@@ -604,12 +741,20 @@ class GitCommitNode(CommitNode):
         return entries
 
     def _worktree_local_only_paths(self, worktree: Path) -> list[str]:
-        """Snapshot worktree-only paths (gitignored or runner-owned ``.litehive/*.db``) before merge so the commit stage can copy them back onto main afterward — git itself never carries them across the merge."""
+        """
+        Snapshot worktree-only paths before the merge.
+
+        Gitignored files and runner-owned ``.litehive/*.db`` files do
+        not cross a merge by themselves, so the commit stage records
+        them now and restores them on main afterward — without this
+        snapshot the post-merge main checkout would lose its local
+        artifacts every cycle.
+        """
         entries = self._git_status_entries_with_options(worktree, include_ignored=True)
         return [path for code, path in entries if code == "!!" or _is_main_checkout_cleanup_excluded(path)]
 
     def _restore_local_only_paths(self, worktree: Path, relpaths: list[str]) -> None:
-        """Copy the local-only paths recorded by ``_worktree_local_only_paths`` from the worktree onto the main checkout once the merge is settled."""
+        """Copy each path recorded by ``_worktree_local_only_paths`` from the worktree onto the main checkout once the merge is settled."""
         for relpath in relpaths:
             source = worktree / relpath
             if not source.exists():
@@ -622,11 +767,11 @@ class GitCommitNode(CommitNode):
             shutil.copy2(source, destination)
 
     def worktree_head(self, worktree: Path) -> str:
-        """Return the worktree's HEAD commit; overridable seam the commit-stage tests monkey-patch to simulate already-landed branches."""
+        """Return the worktree's HEAD commit — overridable seam the commit-stage tests stub to simulate already-landed branches."""
         return head_sha_strict(worktree)
 
     def worktree_branch(self, worktree: Path) -> str | None:
-        """Return the branch checked out in the worktree (``None`` for detached HEAD); overridable seam the commit-stage tests stub to control the merge ref."""
+        """Return the branch checked out in the worktree (``None`` for detached HEAD) — overridable seam the commit-stage tests stub to control the merge ref."""
         return current_branch(worktree)
 
     @staticmethod
@@ -660,15 +805,30 @@ class GitCommitNode(CommitNode):
         return files
 
     def _merge_in_progress(self) -> bool:
-        """True when ``.git/MERGE_HEAD`` exists, meaning a previous commit-stage attempt left the repo mid-merge; ``_merge_worktree`` resumes that merge instead of starting a fresh one."""
+        """
+        Detect a half-finished merge in the main repo.
+
+        True when ``.git/MERGE_HEAD`` exists, meaning a previous
+        commit-stage attempt left the repo mid-merge; ``_merge_worktree``
+        resumes that merge instead of starting a fresh one so the
+        already-resolved files are not redone.
+        """
         return rev_parse_verify(self.main_repo_root, "MERGE_HEAD") is not None
 
     def _conclude_in_progress_merge(self) -> None:
-        """Finish a leftover merge whose conflicts have already been resolved on disk by running ``git commit --no-edit``; called from ``_merge_worktree`` when ``_merge_in_progress`` is true and ``_unresolved_conflicts`` is empty."""
+        """Finish a leftover merge whose conflicts have already been resolved on disk — called from ``_merge_worktree`` when ``_merge_in_progress`` is true and ``_unresolved_conflicts`` is empty."""
         commit_no_edit(self.main_repo_root)
 
     def worktree_patch_already_on_main(self, worktree_head: str, main_head: str | None) -> bool:
-        """Return True when every commit on the worktree branch is already on main (e.g. cherry-picked) so the commit stage can short-circuit to a ``reconciled_noop`` instead of producing a duplicate merge."""
+        """
+        Detect that every commit on the worktree branch is already on
+        main.
+
+        Lets the commit stage short-circuit to a ``reconciled_noop``
+        instead of producing a duplicate merge — the most common shape
+        is a task whose changes were cherry-picked to main while the
+        task was queued.
+        """
         if not main_head:
             return False
         lines = cherry_check(self.main_repo_root, main_head, worktree_head)
@@ -677,9 +837,9 @@ class GitCommitNode(CommitNode):
         return bool(lines) and all(line.startswith("-") for line in lines)
 
     def _unresolved_conflicts(self) -> list[str]:
-        """Return the unmerged files (``git diff --name-only --diff-filter=U``) so ``_merge_worktree`` can decide between raising ``MergeConflict`` and concluding a clean merge."""
+        """Return the unmerged files reported by git so ``_merge_worktree`` can decide between raising ``MergeConflict`` and concluding a clean merge."""
         return unmerged_files(self.main_repo_root)
 
     def _abort_merge(self) -> None:
-        """Run ``git merge --abort`` to clean up after a non-conflict failure (bad ref, missing commit) so the next commit-stage attempt isn't poisoned by a half-applied merge."""
+        """Run ``git merge --abort`` to clean up after a non-conflict failure (bad ref, missing commit) so the next commit-stage attempt is not poisoned by a half-applied merge."""
         merge_abort(self.main_repo_root)

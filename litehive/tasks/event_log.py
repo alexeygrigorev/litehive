@@ -58,7 +58,13 @@ _REPLAY_CLEARED_TABLES = (
 
 @dataclass(frozen=True, slots=True)
 class TaskEventLogReplaySummary:
-    """Summary of a task event log replay into SQLite."""
+    """
+    Summary of a task event log replay into SQLite.
+
+    Returned by ``rebuild_sqlite_from_task_event_log`` so the operator-facing
+    rebuild CLI can show what was reconstructed (events seen vs replayed,
+    tasks rebuilt, audit/activity counts) instead of reporting a bare success.
+    """
 
     event_log_path: Path
     events_seen: int
@@ -88,7 +94,13 @@ class _ReplayState:
 
     @classmethod
     def empty(cls) -> "_ReplayState":
-        """Construct a fresh replay accumulator with all per-table dicts/lists pre-seeded; the replay loop calls this once before walking the JSONL log so every collection it appends to already exists."""
+        """
+        Construct a fresh replay accumulator with every collection pre-seeded.
+
+        The replay loop calls this once before walking the JSONL log so each
+        ``setdefault``/append in ``_apply_event`` can target an already-existing
+        dict or list instead of re-checking for ``None``.
+        """
         return cls(
             workspace_state=None,
             task_intents={},
@@ -106,18 +118,30 @@ class _ReplayState:
 
 def task_event_log_path(workspace: Workspace) -> Path:
     """Return the workspace-level task event log path, outside SQLite."""
-
     return workspace.runtime_path(TASK_EVENT_LOG_NAME)
 
 
 def task_event_logging_suppressed() -> bool:
-    """True while replay is rebuilding SQLite, so state mutations skip emitting fresh events."""
+    """
+    True while replay is rebuilding SQLite from the JSONL log.
+
+    State mutations consult this so they do not append fresh events while a
+    rebuild walks the log; without it, the replay's writes would be mirrored
+    back into the log and double-count on the next replay.
+    """
     return _SUPPRESS_TASK_EVENT_LOGGING.get()
 
 
 @contextmanager
 def suppress_task_event_logging():
-    """Scope guard used by replay so rebuilding SQLite never re-appends synthetic history to the log."""
+    """
+    Scope guard the replay driver wraps around its SQLite writes.
+
+    Pairs with ``task_event_logging_suppressed`` so rebuilding SQLite from the
+    on-disk log never re-appends synthetic history. Without the guard a
+    rebuild would write its own events back to the log and corrupt subsequent
+    replays.
+    """
     token = _SUPPRESS_TASK_EVENT_LOGGING.set(True)
     try:
         yield
@@ -126,7 +150,14 @@ def suppress_task_event_logging():
 
 
 def task_event_type_for_audit_action(action: str) -> str:
-    """Map an audit-log action to the canonical task event type, so the audit writer and the event log share vocabulary."""
+    """
+    Map an audit-log action to the canonical task event type.
+
+    The audit writer and the event log share vocabulary through this map so
+    consumers (replay, observers) only need to know one set of names. Unknown
+    actions fall through to a ``task_<action>`` fallback rather than dropping
+    the event.
+    """
     return _ACTION_EVENT_TYPES.get(action, f"task_{action}")
 
 
@@ -137,10 +168,13 @@ def append_task_event(
     payload: dict[str, Any] | None = None,
     timestamp: str | None = None,
 ) -> dict[str, Any] | None:
-    """Append one immutable task event record.
+    """
+    Append one immutable task event record to the JSONL log.
 
-    Returns the event that was written. During replay the function is
-    suppressed so rebuilding SQLite never creates synthetic history.
+    Returns the event that was written, or ``None`` while replay is active so
+    the rebuild path does not re-append the events it is currently consuming.
+    The fsync is conditional on ``LITEHIVE_SKIP_FSYNC`` so the test suite can
+    skip the cost without losing crash safety in production.
     """
 
     if task_event_logging_suppressed():
@@ -166,8 +200,14 @@ def append_task_event(
 
 
 def read_task_events(workspace: Workspace) -> tuple[list[dict[str, Any]], int]:
-    """Read complete JSON task events, skipping corrupt or truncated lines."""
+    """
+    Read complete JSON task events from the workspace event log.
 
+    Returns ``(events, invalid_count)`` so the replay summary can report how
+    many lines were unparseable. Corrupt or truncated lines are skipped
+    rather than raised because the log is append-only and a partial last
+    line is normal after a crash.
+    """
     path = task_event_log_path(workspace)
     if not path.exists():
         return [], 0
@@ -193,7 +233,13 @@ def read_task_events(workspace: Workspace) -> tuple[list[dict[str, Any]], int]:
 
 
 def task_event_log_has_events(workspace: Workspace) -> bool:
-    """Cheap check used by the state store to decide if a fresh workspace can be rebuilt from the log on first open."""
+    """
+    Cheap probe for "should we rebuild SQLite from the log?".
+
+    The state store uses this on first open to decide whether to replay; the
+    streaming form avoids loading the whole file when the answer is yes after
+    the first valid line, which matters on workspaces with very long logs.
+    """
     path = task_event_log_path(workspace)
     if not path.exists():
         return False
@@ -212,8 +258,14 @@ def task_event_log_has_events(workspace: Workspace) -> bool:
 
 
 def rebuild_sqlite_from_task_event_log(workspace: Workspace, clear_existing: bool = True) -> TaskEventLogReplaySummary:
-    """Replay the append-only task event log into the workspace SQLite DB."""
+    """
+    Replay the append-only task event log into the workspace SQLite DB.
 
+    Used both for first-open hydration (when SQLite is empty but the JSONL
+    log has history) and for explicit rebuilds via the operator CLI. Asserts
+    rebuild safety and snapshots the existing DB to ``backups/`` first so a
+    bad replay can be rolled back rather than silently dropping rows.
+    """
     events, invalid = read_task_events(workspace)
     replay_state = _ReplayState.empty()
     for event in events:
@@ -246,7 +298,14 @@ def rebuild_sqlite_from_task_event_log(workspace: Workspace, clear_existing: boo
 
 
 def sqlite_task_tables_empty(workspace: Workspace) -> bool:
-    """Used by the state store at workspace open to decide whether replay should run (empty SQLite alongside a non-empty event log)."""
+    """
+    True when both ``task_intent`` and ``task_state`` are empty.
+
+    Paired with ``task_event_log_has_events`` by the state store at workspace
+    open: an empty SQLite alongside a non-empty log is the signal that a
+    replay is needed (the DB was wiped or never created), and only that
+    combination triggers the rebuild path.
+    """
     with workspace.connect() as connection:
         task_intent_count = connection.execute("SELECT COUNT(*) FROM task_intent").fetchone()[0]
         task_state_count = connection.execute("SELECT COUNT(*) FROM task_state").fetchone()[0]
@@ -254,7 +313,14 @@ def sqlite_task_tables_empty(workspace: Workspace) -> bool:
 
 
 def _apply_event(replay_state: _ReplayState, event: dict[str, Any]) -> None:
-    """Fold one event's payload slots into the in-memory replay state, so the SQLite write step sees the latest snapshot per task."""
+    """
+    Fold one event's payload slots into the in-memory replay state.
+
+    Latest-write-wins for upsert-shaped slots (intent, state, pipeline state),
+    append for log-shaped slots (journal, audit, transitions). Keeping the
+    fold pure in memory lets the SQLite write step at the end see the final
+    snapshot per task without any partial writes leaking out on crash.
+    """
     event_type = str(event.get("event_type") or "")
     task_id = _optional_str(event.get("task_id"))
     payload = dict(event.get("payload") or {})
@@ -317,7 +383,14 @@ def _apply_event(replay_state: _ReplayState, event: dict[str, Any]) -> None:
 
 
 def _delete_task_scoped_replay_state(replay_state: _ReplayState, task_id: str) -> None:
-    """Drop every replay-state collection scoped to ``task_id`` so a ``task_deleted`` / ``task_removed`` event can rebuild SQLite without leaving stale rows for the gone task."""
+    """
+    Drop every replay-state collection scoped to ``task_id``.
+
+    A ``task_deleted``/``task_removed`` event must completely tombstone the
+    task; without dropping the per-task lists in this accumulator, replay
+    would rebuild stale rows (stage reports, pipeline transitions, journal
+    entries) for a task that should no longer exist.
+    """
     replay_state.task_intents.pop(task_id, None)
     replay_state.task_states.pop(task_id, None)
     replay_state.task_journal.pop(task_id, None)
@@ -336,7 +409,14 @@ def _delete_task_scoped_replay_state(replay_state: _ReplayState, task_id: str) -
 
 
 def _rewrite_latest_stage_report(replay_state: _ReplayState, report: dict[str, Any]) -> None:
-    """Replace the most recent stage report for the same (task_id, pipeline_state) pair instead of appending a duplicate, so a stage that was retried in-place during the original run shows up exactly once after replay."""
+    """
+    Replace the most recent stage report for a (task_id, pipeline_state) pair.
+
+    A stage that was retried in-place during the original run wrote a
+    rewrite event rather than a fresh append; without this rewrite handler
+    the replay would double-count and the stage history would diverge from
+    what the operator originally saw.
+    """
     task_id = str(report.get("task_id") or "")
     pipeline_state = str(report.get("pipeline_state") or report.get("stage") or "")
     for index in range(len(replay_state.stage_reports) - 1, -1, -1):
@@ -349,13 +429,25 @@ def _rewrite_latest_stage_report(replay_state: _ReplayState, report: dict[str, A
 
 
 def _clear_replay_tables(connection: sqlite3.Connection) -> None:
-    """Wipe every SQLite table the replay rebuilds, called inside a transaction by the replay driver so the rewrite from the JSONL log starts from a known-empty state."""
+    """
+    Wipe every SQLite table the replay rebuilds.
+
+    Called inside a transaction by the replay driver so the rewrite from the
+    JSONL log starts from a known-empty state and ``INSERT`` (rather than
+    ``INSERT OR REPLACE``) is enough to repopulate.
+    """
     for table_name in _REPLAY_CLEARED_TABLES:
         connection.execute(f"DELETE FROM {table_name}")
 
 
 def _write_replay_state(connection: sqlite3.Connection, replay_state: _ReplayState) -> None:
-    """Flush the in-memory replay accumulator into SQLite by dispatching to the per-table ``_insert_*`` helpers; called once after the JSONL walk completes so a partial replay never leaks half-written rows."""
+    """
+    Flush the in-memory replay accumulator into SQLite.
+
+    Called once after the JSONL walk completes by dispatching to the per-table
+    ``_insert_*`` helpers; running in one transaction means a partial replay
+    never leaks half-written rows visible to other readers.
+    """
     workspace_state = _workspace_state_payload(replay_state)
     _insert_workspace_state(connection, workspace_state)
     for task_id, intent in sorted(replay_state.task_intents.items()):
@@ -381,14 +473,27 @@ def _write_replay_state(connection: sqlite3.Connection, replay_state: _ReplaySta
 
 
 def _workspace_state_payload(replay_state: _ReplayState) -> dict[str, Any]:
-    """Reconcile replayed workspace state with observed task IDs so a missing/stale next_task_number can't collide with rebuilt tasks."""
+    """
+    Reconcile replayed workspace state with the task ids observed during replay.
+
+    A missing or stale ``next_task_number`` in the replayed payload would let
+    the next ``litehive new`` mint a task id that collides with an existing
+    rebuilt task; advancing past the largest observed number keeps id
+    allocation monotonic across rebuilds.
+    """
     payload = dict(replay_state.workspace_state or WorkspaceState().model_dump(mode="json"))
     payload["next_task_number"] = max(int(payload.get("next_task_number") or 0), _highest_task_number(replay_state))
     return payload
 
 
 def _highest_task_number(replay_state: _ReplayState) -> int:
-    """Return the largest ``T-NNNN`` task number observed during replay so ``_workspace_state_payload`` can advance ``next_task_number`` past every rebuilt task and avoid ID collisions on the next ``litehive new``."""
+    """
+    Return the largest ``T-NNNN`` task number observed during replay.
+
+    Consumed by ``_workspace_state_payload`` so ``next_task_number`` can be
+    advanced past every rebuilt task; without this floor a freshly replayed
+    workspace could mint a colliding id on the very next ``litehive new``.
+    """
     highest = 0
     for task_id in set(replay_state.task_intents) | set(replay_state.task_states):
         try:
@@ -399,7 +504,14 @@ def _highest_task_number(replay_state: _ReplayState) -> int:
 
 
 def _insert_workspace_state(connection: sqlite3.Connection, payload: dict[str, Any]) -> None:
-    """Upsert the singleton ``pool_state`` row plus the queue snapshot during replay; split from the queue payload because the queue lives in its own table and the two are written atomically inside the replay transaction."""
+    """
+    Upsert the singleton ``pool_state`` row plus the queue snapshot.
+
+    The queue is split out of the workspace payload because it lives in its
+    own table; both writes happen inside the replay transaction so a reader
+    can never observe a pool snapshot referencing a queue that doesn't yet
+    exist.
+    """
     now = utcnow()
     state_payload = WorkspaceState.model_validate(payload).model_dump(mode="json")
     queue_payload = json.dumps(state_payload.pop("queue"), sort_keys=True)
@@ -426,7 +538,13 @@ def _insert_workspace_state(connection: sqlite3.Connection, payload: dict[str, A
 
 
 def _insert_task_intent(connection: sqlite3.Connection, task_id: str, payload: dict[str, Any]) -> None:
-    """Upsert one task's intent row (denormalized columns + JSON payload) during replay so list/filter queries hit indexed columns instead of parsing JSON; called by ``_write_replay_state`` for every replayed task."""
+    """
+    Upsert one task's intent row during replay.
+
+    Writes the JSON payload alongside the denormalized columns (slug, title,
+    priority, etc.) so list/filter queries hit indexed columns instead of
+    parsing JSON; ``_write_replay_state`` calls this for every replayed task.
+    """
     intent = TaskIntentRecord.model_validate(payload)
     updated_at = str(payload.get("updated_at") or intent.created_at or utcnow())
     column_values = _task_intent_column_values(intent)
@@ -485,7 +603,14 @@ def _insert_task_intent(connection: sqlite3.Connection, task_id: str, payload: d
 
 
 def _insert_task_state(connection: sqlite3.Connection, task_id: str, payload: dict[str, Any]) -> None:
-    """Upsert one task's runtime state row during replay AND mirror the lifecycle/pipeline status onto the matching ``task_intent`` row so list views see consistent statuses without a join."""
+    """
+    Upsert one task's runtime state row during replay.
+
+    Also mirrors the lifecycle/pipeline status onto the matching
+    ``task_intent`` row so list views see consistent statuses without a join;
+    the mirroring must happen on every state write or the indexed status
+    columns would drift from the JSON source of truth.
+    """
     state = TaskStateRecord.model_validate(payload)
     updated_at = state.updated_at or utcnow()
     connection.execute(
@@ -509,7 +634,14 @@ def _insert_task_state(connection: sqlite3.Connection, task_id: str, payload: di
 
 
 def _insert_task_journal(connection: sqlite3.Connection, task_id: str, journal: list[dict[str, Any]]) -> None:
-    """Upsert every journal entry for a task during replay, preferring the persisted ``entry_index`` over the loop counter so re-replays stay idempotent under ``INSERT OR REPLACE``."""
+    """
+    Upsert every journal entry for a task during replay.
+
+    Prefers the persisted ``entry_index`` over the loop counter so re-replays
+    stay idempotent under ``INSERT OR REPLACE``; falling back to the loop
+    counter only when the entry was written by code that didn't carry the
+    index forward.
+    """
     for fallback_index, entry in enumerate(journal):
         if entry.get("entry_index") is not None:
             entry_index_raw = entry.get("entry_index")
@@ -533,7 +665,13 @@ def _insert_task_journal(connection: sqlite3.Connection, task_id: str, journal: 
 
 
 def _insert_task_activity(connection: sqlite3.Connection, task_id: str, activity: list[dict[str, Any]]) -> None:
-    """Append every activity entry for a task during replay; the table is wiped first by ``_clear_replay_tables`` so simple ``INSERT`` is safe and the entry index can come from the loop counter."""
+    """
+    Append every activity entry for a task during replay.
+
+    The activity table is wiped first by ``_clear_replay_tables``, so a plain
+    ``INSERT`` is safe and the entry index can come from the loop counter
+    without needing an idempotent upsert path.
+    """
     for entry_index, entry in enumerate(activity):
         created_at = str(entry.get("created_at") or utcnow())
         connection.execute(
@@ -546,7 +684,13 @@ def _insert_task_activity(connection: sqlite3.Connection, task_id: str, activity
 
 
 def _insert_stage_report(connection: sqlite3.Connection, report: dict[str, Any]) -> None:
-    """Append a stage report row during replay, accepting either ``pipeline_state`` (current schema) or ``stage`` (legacy) keys so old event-log lines still index into the same column."""
+    """
+    Append a stage report row during replay.
+
+    Accepts either ``pipeline_state`` (current schema) or ``stage`` (legacy)
+    keys so older event-log lines still index into the same column without
+    requiring a one-shot migration of the on-disk JSONL.
+    """
     task_id = str(report.get("task_id") or "")
     pipeline_state = str(report.get("pipeline_state") or report.get("stage") or "")
     created_at = str(report.get("created_at") or utcnow())
@@ -560,7 +704,14 @@ def _insert_stage_report(connection: sqlite3.Connection, report: dict[str, Any])
 
 
 def _insert_recovery_report(connection: sqlite3.Connection, report: dict[str, Any]) -> None:
-    """Append a recovery report row during replay, normalizing the ``trigger_event_kind`` enum (which serializes as either ``Enum`` or string in old logs) to a plain string for the indexed column."""
+    """
+    Append a recovery report row during replay.
+
+    Normalises the ``trigger_event_kind`` enum (which older logs serialised
+    sometimes as an ``Enum`` and sometimes as a string) to a plain string
+    for the indexed column so query-time filters see one shape regardless
+    of when the event was originally emitted.
+    """
     task_id = str(report.get("task_id") or "")
     origin_stage = _optional_str(report.get("origin_stage"))
     trigger = report.get("trigger_event_kind")
@@ -579,7 +730,14 @@ def _insert_recovery_report(connection: sqlite3.Connection, report: dict[str, An
 
 
 def _insert_task_audit_entry(connection: sqlite3.Connection, entry: dict[str, Any]) -> None:
-    """Append one audit-log row during replay; the before/after status fields go through ``_optional_str`` / ``_optional_int`` so legitimate ``None`` values stay distinct from the literal string ``"None"`` in the indexed columns."""
+    """
+    Append one audit-log row during replay.
+
+    Before/after status fields go through ``_optional_str`` / ``_optional_int``
+    so legitimate ``None`` values stay distinct from the literal string
+    ``"None"`` in the indexed columns; otherwise audit queries that filter
+    on missing-status would silently match real string entries.
+    """
     connection.execute(
         """
         INSERT INTO task_audit_log (
@@ -616,7 +774,13 @@ def _insert_task_audit_entry(connection: sqlite3.Connection, entry: dict[str, An
 
 
 def _insert_pipeline_task_state(connection: sqlite3.Connection, task_id: str, row: dict[str, Any]) -> None:
-    """Upsert the per-task pipeline-state row during replay so the rule engine can resume each task at the exact stage/mode it was at when the workspace last shut down."""
+    """
+    Upsert the per-task pipeline-state row during replay.
+
+    Lets the rule engine resume each task at the exact stage/mode it was at
+    when the workspace last shut down, instead of re-running grooming or
+    re-evaluating which transition to take next.
+    """
     connection.execute(
         """
         INSERT INTO pipeline_task_state (task_id, stage, pipeline_mode, payload, updated_at)
@@ -638,7 +802,14 @@ def _insert_pipeline_task_state(connection: sqlite3.Connection, task_id: str, ro
 
 
 def _insert_pipeline_transition(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
-    """Append one rule-engine transition row during replay (from_stage / event / to_stage / delta) so the observability views and `litehive status` history can reconstruct the exact transition sequence."""
+    """
+    Append one rule-engine transition row during replay.
+
+    Persists the from_stage / event / to_stage / delta tuple so the
+    observability views and ``litehive status`` history can reconstruct the
+    exact transition sequence after a rebuild — the per-task state alone
+    can't show how we got there.
+    """
     connection.execute(
         """
         INSERT INTO pipeline_transitions (
@@ -662,7 +833,14 @@ def _insert_pipeline_transition(connection: sqlite3.Connection, row: dict[str, A
 
 
 def _insert_pipeline_journal(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
-    """Append one pipeline-journal row during replay; the journal is the human-readable narrative behind `pipeline_transitions` and is what the report renderer pulls per-task lifecycle messages from."""
+    """
+    Append one pipeline-journal row during replay.
+
+    The journal is the human-readable narrative paired with
+    ``pipeline_transitions`` and feeds the per-task lifecycle messages the
+    report renderer surfaces; without replaying it the operator would lose
+    the explanatory text behind every state change.
+    """
     connection.execute(
         """
         INSERT INTO pipeline_journal (task_id, seq, created_at, kind, payload)
@@ -679,21 +857,40 @@ def _insert_pipeline_journal(connection: sqlite3.Connection, row: dict[str, Any]
 
 
 def _optional_str(value: object) -> str | None:
-    """Coerce a JSON-decoded value to ``str``, preserving ``None`` so the audit-log replay doesn't substitute the literal text ``"None"`` for missing before/after status fields."""
+    """
+    Coerce a JSON-decoded value to ``str`` while preserving ``None``.
+
+    Used by the audit-log replay so a missing before/after status doesn't get
+    rewritten as the literal text ``"None"``; downstream filters that test
+    for ``IS NULL`` would otherwise silently miss real entries.
+    """
     if value is None:
         return None
     return str(value)
 
 
 def _optional_int(value: object) -> int | None:
-    """Coerce a JSON-decoded value to ``int``, preserving ``None`` for absent queue-position fields in the audit-log replay (zero is a real position; ``None`` means "not in the queue at all")."""
+    """
+    Coerce a JSON-decoded value to ``int`` while preserving ``None``.
+
+    Mirrors ``_optional_str`` for queue-position fields in the audit-log
+    replay: zero is a real position, ``None`` means "not in the queue at
+    all", and conflating them would corrupt audit summaries.
+    """
     if value is None:
         return None
     return int(value)
 
 
 def _task_intent_column_values(intent: TaskIntentRecord) -> dict[str, str]:
-    """Project a ``TaskIntentRecord`` onto the denormalized columns of ``task_intent`` so ``_insert_task_intent`` can bind them to the prepared statement; keeps the JSON-vs-column projection in one place."""
+    """
+    Project a ``TaskIntentRecord`` onto the denormalised ``task_intent`` columns.
+
+    Keeps the JSON-vs-column projection in one place so ``_insert_task_intent``
+    only has to bind values to the prepared statement; concentrating the rule
+    here means a new column added to ``task_intent`` only requires updating
+    one helper.
+    """
     if intent.created_from is None:
         provenance_payload: dict = {}
     else:

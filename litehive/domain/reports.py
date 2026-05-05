@@ -1,4 +1,14 @@
-"""Stage, recovery, and reporting models (litehive-native)."""
+"""
+Stage reports, recovery reports, activity entries, and the verdict aliases
+that bridge submitted-decision strings to the canonical report verdict set.
+
+Two parallel record families live here. ``StageReport`` /
+``RecoveryReport`` are the machine-readable summaries the runner persists
+for routing; ``TaskActivityEntry`` is the human-readable, append-only
+log shown to operators. Keeping both in this module makes it obvious
+that the activity log is *not* the routing input — every place that
+reads activity for routing should be redirected to the reports.
+"""
 
 from typing import Literal, TypeAlias
 
@@ -49,14 +59,30 @@ _STAGE_REPORT_VERDICT_ALIASES: dict[str, StageReportVerdict] = {
 
 
 def classify_task_activity_verdict(role: str, verdict: str) -> str | None:
-    """Return the first-class classification for a newly submitted verdict."""
+    """
+    Return the first-class classification for a newly submitted verdict.
+
+    Specifically tags QA/reviewer rejects as ``semantic_reject`` so the
+    recovery budget can group judgement-based rejects separately from
+    hook-driven ones — those are the rejects that retry exhaustion
+    treats as terminal under ``has_blocking_failed_run_history``.
+    Returns ``None`` for verdicts that don't need a classification.
+    """
     if verdict.strip().lower() == "reject" and role.strip().lower() in SEMANTIC_REJECT_ROLES:
         return SEMANTIC_REJECT_CLASSIFICATION
     return None
 
 
 def canonical_stage_report_verdict(verdict: str) -> StageReportVerdict | None:
-    """Map submitted activity verdicts into the canonical StageReport verdict set."""
+    """
+    Map a submitted activity verdict to the canonical StageReport verdict.
+
+    Activity entries carry a wider vocabulary (``advance``, ``done``,
+    ``budget_hit``…) but stage reports only persist
+    ``pass``/``reject``/``blocked``. Returns ``None`` when the input
+    verdict has no report mapping (e.g. ``comment``) so the caller can
+    distinguish "report this" from "log this for humans only".
+    """
     return _STAGE_REPORT_VERDICT_ALIASES.get(verdict.strip().lower())
 
 
@@ -72,13 +98,16 @@ _REPORT_PIPELINE_STATE_LITERALS: frozenset[str] = frozenset({"merge_resolving", 
 
 
 def canonical_report_pipeline_state(value: str | TaskStage) -> ReportPipelineState:
-    """Convert a stage label to the typed ``ReportPipelineState``.
+    """
+    Convert a stage label to the typed ``ReportPipelineState``.
 
-    Accepts the string used by callers (e.g. ``"implementing"``,
-    ``"merge_resolving"``) and returns either the matching
-    :class:`TaskStage` member or one of the literal extensions allowed
-    on stage reports. Raises :class:`ValueError` otherwise — there is
-    no fallback "unknown" stage.
+    Accepts the string spelling used by submitting callers
+    (``"implementing"``, ``"merge_resolving"``) and returns either the
+    matching :class:`TaskStage` member or one of the two literal
+    extensions allowed on stage reports (``merge_resolving``,
+    ``recovering``). Raises ``ValueError`` on unknown spellings —
+    there is no "unknown" fallback because storing a bad value would
+    silently break every consumer that filters by stage.
     """
     if isinstance(value, TaskStage):
         return value
@@ -89,24 +118,20 @@ def canonical_report_pipeline_state(value: str | TaskStage) -> ReportPipelineSta
 
 
 class StageReport(BaseModel):
-    """Normalized machine-readable summary of a pipeline state execution.
+    """
+    Normalized, machine-readable summary of one pipeline-state execution.
 
-    Separate from ActivityEntry to serve different purposes:
-    - ActivityEntry: append-only conversation and review history for humans
-    - StageReport: normalized machine-readable summary for routing, reporting,
-      and later analysis by PipelineRunner and recovery logic
+    Distinct from ``TaskActivityEntry``: activity is the append-only
+    human history, while ``StageReport`` is the routing input
+    ``PipelineRunner`` reads to decide pass/reject/blocked. Built by
+    ``stage_report_from_subagent`` from ``litehive agent report`` CLI
+    submissions; the legacy ``STAGE_RESULT: <yaml>`` parsing path is
+    gone.
 
-    Historically heru parsed a `STAGE_RESULT: <yaml>` block out of agent
-    stdout to build one of these. That path is gone — agents now submit
-    verdicts via the `litehive agent report` CLI and `stage_report_from_subagent`
-    constructs this record directly.
-
-    Primary consumers: PipelineRunner for routing decisions, recovery logic
-    for failure analysis, and reporting systems for metrics and debugging.
-
-    ``failure_diagnostics`` is report-local evidence about this stage verdict.
-    It can help construct a ``FailureFingerprint`` later, but it is not the
-    recovery-domain identity or budget key.
+    ``failure_diagnostics`` is report-local evidence and may seed a
+    later ``FailureFingerprint`` — but the report does not own
+    recovery identity. The recovery vocabulary lives in
+    ``litehive.domain.recovery``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -131,11 +156,15 @@ class StageReport(BaseModel):
 
 
 class FollowUpTaskSpec(BaseModel):
-    """Specification for creating a follow-up task.
+    """
+    Spec for a follow-up task spawned by a running stage.
 
-    Used when a stage execution determines that additional work is needed
-    that should be tracked as a separate task. Captures the intent and
-    requirements for the follow-up task creation.
+    An agent decides during a stage that side work needs its own task
+    — and emits one of these to the runner, which then creates the
+    actual ``TaskRecord``. ``blocking=True`` means the parent should
+    wait on the follow-up (encoded later via
+    :func:`blocked_on_follow_up_reason`); ``blocking=False`` lets the
+    parent finish independently while the follow-up queues.
     """
 
     title: str  # Brief title for the follow-up task
@@ -146,11 +175,14 @@ class FollowUpTaskSpec(BaseModel):
 
 
 class RecoveryEvidenceItem(BaseModel):
-    """Evidence collected during recovery diagnosis.
+    """
+    One piece of evidence recorded by the recovery agent.
 
-    Represents a piece of information gathered by the recovery agent
-    to understand the failure context and determine appropriate recovery
-    actions. Used to document what was checked during recovery.
+    The recovery agent's prompt asks it to enumerate what it inspected
+    (logs, files, status output, …) and surface each as evidence so a
+    later operator can audit the diagnosis. Stored on
+    ``RecoveryReport.evidence``; never used for routing — purely for
+    audit and debugging.
     """
 
     kind: str  # Type of evidence (file, log, state, etc.)
@@ -162,11 +194,13 @@ class RecoveryEvidenceItem(BaseModel):
 
 
 class RecoveryAction(BaseModel):
-    """Action taken during recovery to address a failure.
+    """
+    One action the recovery agent reports it performed.
 
-    Documents what the recovery agent did to attempt to resolve the
-    issue that triggered recovery. Used for recovery audit trails
-    and understanding recovery effectiveness.
+    Companion to ``RecoveryEvidenceItem``: actions describe what the
+    agent *changed* (files edited, scripts run, deps installed) while
+    evidence describes what it *looked at*. Stored on
+    ``RecoveryReport.actions`` for the operator-facing audit trail.
     """
 
     action: str  # Description of the recovery action taken
@@ -175,14 +209,15 @@ class RecoveryAction(BaseModel):
 
 
 class RecoveryReport(BaseModel):
-    """Complete report of a recovery attempt.
+    """
+    Complete machine-readable record of a recovery attempt.
 
-    Documents everything that happened during a recovery attempt:
-    what triggered it, what evidence was collected, what actions were
-    taken, and what the final state is.
-
-    Used by RecoveryCoordinator to decide next steps and by operators
-    to understand recovery patterns and effectiveness.
+    Built by the recovery agent submission path; the lifecycle layer
+    converts it into the lighter ``RecoveryOutcome`` for the history
+    list and uses ``runnable_state`` to decide whether the task is
+    safe to resume. The full report stays in storage for the
+    operator's audit view; the lifecycle layer only needs the
+    summary.
     """
 
     task_id: str  # Task that underwent recovery
@@ -199,11 +234,14 @@ class RecoveryReport(BaseModel):
 
 
 class ExecutionEstimate(BaseModel):
-    """Velocity and ETA estimate for task execution.
+    """
+    ETA projection for an in-flight task.
 
-    Provides time estimates for task completion based on historical
-    execution patterns and current progress. Used by monitoring and
-    operator interfaces to understand expected completion times.
+    Computed from historical stage durations and the task's current
+    position; rendered by status output so an operator can decide
+    whether to wait, switch tasks, or interrupt. Velocity is in
+    stages-per-hour because that's the unit operators reason about
+    when comparing engines, not seconds-per-token.
     """
 
     stage_duration_seconds: float = 0.0  # Average time per stage based on history
@@ -212,16 +250,15 @@ class ExecutionEstimate(BaseModel):
 
 
 class TaskActivityEntry(BaseModel):
-    """A single entry in the task activity log.
+    """
+    One row of the human-readable task activity log.
 
-    Represents one entry in the human-readable task history for review
-    and conversation. Separate from StageReport to serve different purposes:
-    - ActivityEntry: append-only conversation history for humans
-    - StageReport: normalized machine-readable summary for routing
-
-    Message is intentionally a free-form string since this object exists
-    for human-readable review history. Structured machine data should
-    live in dedicated fields on reports and runtime records.
+    Append-only conversation/decision history shown in the operator's
+    task view. Carries a free-form ``message`` because the audience is
+    a human reading back through the run; structured machine data
+    belongs on ``StageReport`` / runtime records, not here. Routing
+    code that reads from activity is a code smell — that's what
+    ``StageReport`` is for.
     """
 
     role: str  # Who created this entry (agent role, operator, system)

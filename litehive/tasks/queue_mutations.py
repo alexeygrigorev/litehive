@@ -33,7 +33,8 @@ from litehive.tasks.runtime import clear_task_run_activity, idle_stage_state
 
 
 def enqueue_task(root: Path, task_id: str) -> WorkspaceState:
-    """Append a task to the back of the workspace queue.
+    """
+    Append a task to the back of the workspace queue.
 
     No production or test callers remain — candidate for removal alongside
     ``enqueue_task_front``; queue inserts now go through ``move_queued_task``
@@ -43,19 +44,23 @@ def enqueue_task(root: Path, task_id: str) -> WorkspaceState:
 
 
 def enqueue_task_front(root: Path, task_id: str) -> WorkspaceState:
-    """Insert a task at the head of the workspace queue.
+    """
+    Insert a task at the head of the workspace queue.
 
-    No callers — see ``enqueue_task``; both wrappers look like dead weight.
+    No callers — see ``enqueue_task``; both wrappers look like dead weight
+    that is preserved only so the legacy public surface keeps compiling.
     """
     return _enqueue_task(root, task_id, front=True)
 
 
 def _enqueue_task(root: Path, task_id: str, front: bool) -> WorkspaceState:
-    """Shared body of ``enqueue_task`` / ``enqueue_task_front``: dedupes, inserts, and audits.
+    """
+    Shared body of ``enqueue_task`` / ``enqueue_task_front``.
 
-    Splits the front/back enqueue parameter out so both wrappers share the
-    same locking, audit-entry shape, and runner-guard handling. Both wrappers
-    are currently dead code, but this helper is preserved alongside them.
+    Dedupes, inserts, and audits in one pass so the two public wrappers
+    share locking, audit-entry shape, and runner-guard handling. Both
+    wrappers are currently dead code, but this helper is preserved alongside
+    them in case they are re-introduced.
     """
     with workspace_lock(root):
         state = load_state(root)
@@ -89,11 +94,13 @@ def _enqueue_task(root: Path, task_id: str, front: bool) -> WorkspaceState:
 
 
 def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
-    """Reorder a queued task to a 1-based position, recording an audit entry.
+    """
+    Reorder a queued task to a 1-based position and record an audit entry.
 
-    The ``litehive queue move`` CLI calls this when an operator hand-curates the
-    queue; the engine switch flow also re-positions the active task here when
-    the user swaps engines mid-run.
+    The ``litehive queue move`` CLI calls this when an operator hand-curates
+    the queue; the engine-switch flow also re-positions the active task
+    here when the user swaps engines mid-run so the swapped task continues
+    next instead of being preempted by other queued work.
     """
     if position < 1:
         raise ValueError("Queue position must be 1 or greater")
@@ -130,10 +137,13 @@ def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
 
 
 def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
-    """Hoist the given queued tasks to the front of the queue, in order.
+    """
+    Hoist the given queued tasks to the front of the queue, in order.
 
-    Called by the ``litehive queue prioritize`` CLI when an operator wants a
-    specific batch run next without manually moving each task one at a time.
+    Called by the ``litehive queue prioritize`` CLI when an operator wants
+    a specific batch run next without manually moving each task one at a
+    time; the relative ordering inside ``task_ids`` is preserved so the
+    operator can also reshuffle a small set in one call.
     """
     if not task_ids:
         raise ValueError("At least one task id is required")
@@ -186,12 +196,13 @@ def reset_task_for_recovery(
     pipeline_status: str,
     clear_last_outcome: bool = True,
 ) -> None:
-    """Rewind a task's lifecycle cursor and clear runtime activity for a fresh attempt.
+    """
+    Rewind a task's lifecycle cursor and clear runtime activity for a fresh attempt.
 
-    The status-mutation flows (``requeue_task``, flagged-task auto-recovery,
-    and the dequeue path that revives flagged tasks) call this so the runner
-    sees a clean ``idle`` stage marker and zeroed retry counters instead of
-    leftover ``running``/``failed`` state from the previous attempt.
+    Called by the status-mutation flows — ``requeue_task``, flagged-task
+    auto-recovery, and the dequeue path that revives flagged tasks — so the
+    runner sees a clean ``idle`` stage marker and zeroed retry counters
+    instead of leftover ``running``/``failed`` state from the previous run.
     """
     now = utcnow()
     task.status = status
@@ -209,21 +220,26 @@ def reset_task_for_recovery(
 
 
 def enqueue_recovered_task(state: WorkspaceState, task_id: str) -> None:
-    """Move a recovered task to the back of the queue, ensuring it appears exactly once.
+    """
+    Move a recovered task to the back of the queue, exactly once.
 
-    Recovery flows (``restore_untouched_active_task`` and the flagged-task
-    auto-recovery in ``dequeue_next_task_selection``) call this so a task
+    Recovery flows — ``restore_untouched_active_task`` and the flagged-task
+    auto-recovery in ``dequeue_next_task_selection`` — call this so a task
     that was rolled back to ``queued`` lands at the tail without showing up
-    twice if it had also been left in the queue.
+    twice if it was already present in the queue.
     """
     state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
     state.queue.append(task_id)
 
 
 def drop_task_from_workspace_state(state: WorkspaceState, task_id: str) -> bool:
-    """Remove a task from workspace state (queue, active_task_id, unmerged_worktrees).
+    """
+    Remove a task from every workspace-state slot that can reference it.
 
-    Returns True if any state was modified, False otherwise.
+    Wipes the queue, the active_task_id pointer, and the unmerged-worktrees
+    list in one pass so a closed/abandoned/parked task cannot be referenced
+    from one slot after being removed from another. Returns True when at
+    least one slot was modified so callers can decide whether to persist.
     """
     changed = False
     if state.active_task_id == task_id:
@@ -238,11 +254,13 @@ def drop_task_from_workspace_state(state: WorkspaceState, task_id: str) -> bool:
 
 
 def prepare_completed_task_for_recovery(task: TaskRecord, recovery_stage: str) -> None:
-    """Reopen a finished task at the chosen stage by resetting its lifecycle and dropping the merge SHA.
+    """
+    Reopen a finished task at the chosen stage.
 
-    The completed-task recovery flow (``litehive task recover`` after a task is
-    already ``done``) calls this so the merge commit reference is cleared and
-    the runner re-picks the task from the chosen pipeline stage.
+    Called by the completed-task recovery flow (``litehive task recover``
+    on an already-done task): clearing the merge commit reference is what
+    lets the runner re-pick the task from the chosen pipeline stage rather
+    than treating it as already merged.
     """
     reset_task_for_recovery(
         task,
@@ -253,12 +271,14 @@ def prepare_completed_task_for_recovery(task: TaskRecord, recovery_stage: str) -
 
 
 def canonicalize_resumable_queue_task(task: TaskRecord, stage: str | None = None) -> str | None:
-    """Force a resumable task into a clean ``queued`` shape at the chosen pipeline stage.
+    """
+    Force a resumable task into a clean ``queued`` shape at the chosen stage.
 
-    Workspace-repair and stale-runner recovery call this once they have decided
-    a task is recoverable: it strips ``flag_reason``/``close_reason``, plants an
-    ``idle`` stage marker, and re-points any sticky ``interrupted`` outcome at
-    the resume stage so the runner can pick the task up cleanly.
+    Called by workspace-repair and stale-runner recovery once they have
+    decided a task is recoverable: strips ``flag_reason``/``close_reason``,
+    plants an ``idle`` stage marker, and re-points any sticky ``interrupted``
+    outcome at the resume stage so the runner picks the task up cleanly
+    instead of inheriting stale failure state.
     """
     if stage is not None:
         target_stage = _normalize_resumable_stage_name(stage)

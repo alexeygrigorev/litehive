@@ -1,9 +1,12 @@
-"""Per-task summary helpers used by status renderers.
+"""
+Per-task summary helpers used by status renderers.
 
-These helpers resolve display labels (engine, stage, verdict, summary), format
-durations, and produce the multi-line per-task block that the CLI task list and
-``litehive task show`` print. Pure formatting / data lookup; no IO beyond
-read-only report storage.
+Resolves display labels (engine, stage, verdict, summary),
+formats durations, and builds the multi-line per-task block
+``litehive task list`` and ``litehive task show`` print. Pure
+formatting and data lookup with no side effects beyond
+read-only report storage; status output must never mutate
+workspace state.
 """
 
 import sqlite3
@@ -27,7 +30,16 @@ _PIPELINE_STAGES: list[TaskStage] = [
 
 
 def estimate_task_execution(workspace: Workspace, task: TaskRecord) -> ExecutionEstimate:
-    """Return velocity and ETA estimate based on workspace report history."""
+    """
+    Return a velocity and ETA estimate for a task.
+
+    Computes per-stage average duration from the workspace's
+    persisted stage reports and projects remaining time based
+    on how many stages the task still has to run. Conservative
+    on cold workspaces: returns an empty estimate when there
+    is no history rather than a zero-anchored guess that would
+    mislead the operator.
+    """
     durations = _collect_report_durations(workspace)
     if not durations:
         return ExecutionEstimate()
@@ -54,7 +66,14 @@ def estimate_task_execution(workspace: Workspace, task: TaskRecord) -> Execution
 
 
 def _collect_report_durations(workspace: Workspace) -> list[float]:
-    """Collect positive stage report durations from workspace runtime storage."""
+    """
+    Collect positive stage report durations from runtime storage.
+
+    Filters out non-positive durations because zero or
+    negative entries (legacy or partially-filled reports)
+    would skew the average for :func:`estimate_task_execution`
+    in a way the operator would not see in the dashboard.
+    """
     return [
         float(report.duration_seconds)
         for report in load_workspace_stage_reports(workspace)
@@ -63,11 +82,14 @@ def _collect_report_durations(workspace: Workspace) -> list[float]:
 
 
 def _task_engine_label(task: TaskRecord, default_engine: str) -> str:
-    """Resolve which engine name to display for a task, preferring live execution over historical record.
+    """
+    Resolve which engine name to display for a task.
 
-    Status surfaces want the engine *currently doing the work* — the live subagent if one
-    is running, otherwise the most recent historical subagent, otherwise the workspace
-    default. The fallback chain keeps display honest across idle/active/never-run states.
+    Prefers the live subagent's engine, falling back to the
+    most recent historical subagent and finally the workspace
+    default. Status surfaces want the engine *currently doing
+    the work*; the fallback chain keeps the display honest
+    across idle, active, and never-run states.
     """
     if task.runtime.execution.active_subagent is not None:
         return task.runtime.execution.active_subagent.engine
@@ -78,21 +100,27 @@ def _task_engine_label(task: TaskRecord, default_engine: str) -> str:
 
 
 def _task_stage_label(task: TaskRecord) -> str:
-    """Pick a non-empty stage label for status output, falling back to pipeline status then ``-``.
+    """
+    Pick a non-empty stage label for status output.
 
-    Tasks transitioning between stages can have an empty ``current_stage.stage`` for a brief
-    window; the fallback to ``pipeline_status`` keeps the dashboard from rendering blank
-    cells during that window without lying about the state.
+    Falls back to ``pipeline_status`` then ``-`` because a
+    task transitioning between stages can have an empty
+    ``current_stage.stage`` for a brief window; without the
+    fallback the dashboard would print blank cells during that
+    window and obscure what the task is actually doing.
     """
     return task.runtime.pipeline.current_stage.stage or task.pipeline_status or "-"
 
 
 def _latest_stage_report_for_task(workspace: Workspace, task: TaskRecord) -> Any | None:
-    """Fetch the most recent stage report for a task, swallowing storage errors so status never raises.
+    """
+    Fetch the most recent stage report for a task, tolerantly.
 
-    Status output is best-effort: a missing or corrupt report row must not break the CLI
-    render. Callers that want hard failures should go through ``report_storage`` directly;
-    this wrapper exists specifically so the dashboard renderers can ignore IO/parse errors.
+    Swallows storage errors back to ``None`` so status output
+    is best-effort: a missing or corrupt report row must not
+    break the CLI render. Callers that want hard failures use
+    :mod:`litehive.tasks.report_storage` directly — this wrapper
+    is the dashboard-only gentle path.
     """
     try:
         from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
@@ -103,11 +131,14 @@ def _latest_stage_report_for_task(workspace: Workspace, task: TaskRecord) -> Any
 
 
 def _task_last_verdict_label(task: TaskRecord, workspace: Workspace) -> str:
-    """Resolve the verdict to display by preferring the persisted stage report over the in-memory outcome.
+    """
+    Resolve the verdict to display.
 
-    The stage report is the durable record; the runtime ``last_outcome`` may lag or be
-    cleared on certain transitions. Falling back through both keeps the health/flagged
-    sections honest when one of the two has been pruned.
+    Prefers the persisted stage report (the durable record)
+    over the in-memory outcome (which can lag or be cleared on
+    certain transitions). Falling back through both keeps the
+    health and flagged sections honest when one of the two
+    sources has been pruned.
     """
     latest_report = _latest_stage_report_for_task(workspace, task)
     if latest_report is None:
@@ -118,12 +149,14 @@ def _task_last_verdict_label(task: TaskRecord, workspace: Workspace) -> str:
 
 
 def _task_last_summary_label(task: TaskRecord, workspace: Workspace) -> str:
-    """Pick the most descriptive human-readable reason text available across reports, outcomes, and flags.
+    """
+    Pick the most descriptive "why" text available for a task.
 
-    Different tasks die in different ways: a stage report has a summary, a runtime outcome
-    has a reason, a flagged task has a flag_reason, a closed task has a close_reason. The
-    health and recent-completion renderers want one column for "why", so the fallback chain
-    walks each source in priority order.
+    Walks stage report summary, outcome reason, flag reason,
+    and close reason in priority order. Different tasks die in
+    different ways and any one column might be empty; the
+    fallback chain gives the operator a single, populated
+    "why" column instead of guessing at four possible sources.
     """
     latest_report = _latest_stage_report_for_task(workspace, task)
     if latest_report is None:
@@ -140,12 +173,15 @@ def _task_last_summary_label(task: TaskRecord, workspace: Workspace) -> str:
 
 
 def _latest_stage_failure_classification(workspace: Workspace, task: TaskRecord) -> str | None:
-    """Surface the persisted-report failure classification for the task summary, or ``None`` if unavailable.
+    """
+    Surface the persisted-report failure classification.
 
-    The runtime outcome carries its own ``failure_classification``; the report row keeps an
-    independent value so post-hoc reclassification (e.g. recovery agents) doesn't have to
-    rewrite runtime state. Status prints both side-by-side, so the report-side accessor
-    lives separately and tolerates missing rows.
+    The runtime outcome carries its own
+    ``failure_classification``; the report row keeps an
+    independent value so post-hoc reclassification (recovery
+    agents, manual edits) does not have to rewrite runtime
+    state. Status prints both side-by-side, so this report-
+    side accessor lives separately and tolerates missing rows.
     """
     try:
         from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
@@ -159,12 +195,15 @@ def _latest_stage_failure_classification(workspace: Workspace, task: TaskRecord)
 
 
 def render_task_summary(task: TaskRecord, active: bool, workspace: Workspace) -> list[str]:
-    """Build the multi-line per-task block used by ``litehive task list`` and ``litehive task show``.
+    """
+    Build the multi-line per-task block.
 
-    Called by the CLI task-listing handlers in ``litehive/cli/workspace.py``. The ``active``
-    flag controls only the leading marker (``*`` vs blank); the rest of the output is a
-    deterministic dump of pipeline state, retry policy, last outcome, failure history, and
-    execution estimate so operators can read one block per task without cross-referencing.
+    Used by ``litehive task list`` and ``litehive task show``.
+    The ``active`` flag only controls the leading marker
+    (``*`` vs blank); the rest of the output is a deterministic
+    dump of pipeline state, retry policy, last outcome, failure
+    history, and execution estimate so operators can read one
+    block per task without cross-referencing other commands.
     """
     if active:
         marker = "*"
@@ -325,12 +364,15 @@ def render_task_summary(task: TaskRecord, active: bool, workspace: Workspace) ->
 
 
 def _duration_label(started_at: str | None, fallback_seconds: int) -> str:
-    """Compute elapsed seconds from an ISO timestamp and format it, falling back when no start time exists.
+    """
+    Format elapsed time since an ISO start timestamp.
 
-    Status is rendered from frozen records that may predate the current process by hours;
-    the live elapsed value is the useful one. When the start timestamp is missing or
-    unparseable we fall back to the persisted ``duration_seconds`` rather than printing 0,
-    so brief stages whose start time was never captured still show non-zero time.
+    Falls back to the persisted ``duration_seconds`` when the
+    start timestamp is missing or unparseable, rather than
+    printing zero. Status is rendered from frozen records that
+    can predate the current process by hours; the live elapsed
+    value is the useful one when available, but a non-zero
+    persisted duration beats a misleading zero.
     """
     if started_at is None:
         return _seconds_label(fallback_seconds)
@@ -343,7 +385,14 @@ def _duration_label(started_at: str | None, fallback_seconds: int) -> str:
 
 
 def _seconds_label(seconds: int) -> str:
-    """Format a duration as the compact ``Ns`` / ``NmMMs`` / ``NhMMm`` form used everywhere in status output."""
+    """
+    Format a duration in the compact status grammar.
+
+    Picks ``Ns`` for under a minute, ``NmMMs`` for under an
+    hour, and ``NhMMm`` otherwise so each status row stays
+    single-width regardless of magnitude. Used everywhere in
+    status output to keep durations easy to scan side-by-side.
+    """
     if seconds < 60:
         return f"{seconds}s"
     minutes, remaining_seconds = divmod(seconds, 60)
@@ -354,14 +403,27 @@ def _seconds_label(seconds: int) -> str:
 
 
 def _pid_label(pid: int | None) -> str:
-    """Render ``pid=<n>`` for present PIDs and ``pid=-`` for missing ones, matching the rest of the status grammar."""
+    """
+    Render ``pid=<n>`` or ``pid=-`` for the status grammar.
+
+    Keeps the column populated when the PID is unknown so
+    successive status reads have a stable layout that monitoring
+    scripts can grep without conditional branches.
+    """
     if pid is not None:
         return f"pid={pid}"
     return "pid=-"
 
 
 def _sandbox_label(sandboxed: bool, sandbox_summary: str) -> str:
-    """Format the subagent sandbox column so operators can tell ``host`` from sandboxed runs at a glance."""
+    """
+    Format the subagent sandbox column for status output.
+
+    Distinguishes ``host`` runs (no sandbox) from sandboxed
+    runs at a glance; sandbox state matters when triaging
+    permission and network issues, so it gets its own labeled
+    column rather than being buried in a free-text field.
+    """
     if sandboxed:
         return f"sandbox={sandbox_summary or 'enabled'}"
     return "sandbox=host"

@@ -1,4 +1,12 @@
-"""Workspace bootstrap helpers."""
+"""
+Workspace bootstrap and resolution helpers.
+
+Owns three responsibilities: validating and normalizing a candidate
+workspace path (rejecting unresolved shell vars and Litehive-internal
+paths), resolving the right workspace for a CLI invocation when no
+explicit path is given, and bootstrapping a workspace on first use
+(directories, seeded config, runtime store).
+"""
 
 import os
 import re
@@ -21,7 +29,14 @@ _WORKSPACE_CONFIG_TEMPLATE = Path(__file__).resolve().parents[1] / "cli" / "temp
 
 
 def render_workspace_gitignore() -> str:
-    """Produce the ``.gitignore`` body written into ``.litehive/`` so workspace runtime artifacts never end up in the user's commits."""
+    """
+    Produce the ``.gitignore`` body written into ``.litehive/``.
+
+    Lists the runtime artifacts that must never end up in the
+    user's commits (lockfile, pool summary). Generated rather
+    than checked-in by hand so the ignore list stays in sync
+    with the files Litehive actually writes.
+    """
     return "\n".join(
         [
             ".lock",
@@ -32,7 +47,15 @@ def render_workspace_gitignore() -> str:
 
 
 def registered_workspace_root(path: Path) -> Path | None:
-    """Return the owning workspace root when ``path`` is inside a managed worktree."""
+    """
+    Return the owning workspace root when ``path`` is inside a managed worktree.
+
+    Used by :func:`normalize_workspace_root` so a CLI run from
+    inside a worktree directory still resolves to the real
+    workspace and not the worktree path. Returns ``None`` when
+    the path is not under any registered workspace's worktrees
+    directory.
+    """
     resolved = path.resolve()
     if "worktrees" not in resolved.parts:
         return None
@@ -46,7 +69,16 @@ def registered_workspace_root(path: Path) -> Path | None:
 
 
 def _reject_invalid_workspace_path(path: Path | str, source: str) -> None:
-    """Reject workspace paths containing unresolved shell variables."""
+    """
+    Reject workspace paths containing unresolved shell variables.
+
+    Catches the classic mistake of passing ``$WORKSPACE`` literally
+    (single-quoted, missed expansion) instead of the expanded
+    absolute path; without this the workspace would be bootstrapped
+    inside a directory literally named ``$WORKSPACE`` and the
+    operator would chase ghosts. ``source`` tells the operator
+    which CLI surface produced the bad value.
+    """
     raw = str(path).strip()
     match = _UNRESOLVED_SHELL_VAR_RE.search(raw)
     if match is not None:
@@ -57,7 +89,14 @@ def _reject_invalid_workspace_path(path: Path | str, source: str) -> None:
 
 
 def _workspace_parent_root(path: Path) -> Path | None:
-    """Walk up looking for an existing ``.litehive`` directory; used to detect attempts to bootstrap a workspace inside another one."""
+    """
+    Walk up the parents looking for an existing ``.litehive`` directory.
+
+    Used to detect attempts to bootstrap a workspace inside
+    another one — a nested workspace would silently capture
+    operator commands meant for the outer workspace, so the
+    bootstrap path refuses it loudly.
+    """
     for ancestor in path.parents:
         try:
             if workspace_dir(ancestor).is_dir():
@@ -68,12 +107,27 @@ def _workspace_parent_root(path: Path) -> Path | None:
 
 
 def _task_matches(root: Path, task_id: str | None) -> bool:
-    """Workspace-resolution predicate: a candidate root is acceptable when no task id is constraining the search, or when the workspace actually owns that task."""
+    """
+    Workspace-resolution predicate.
+
+    A candidate root is acceptable when no task id constrains the
+    search or when the workspace actually owns that task. Lets
+    :func:`resolve_workspace` skip past unrelated workspaces in
+    the registry when a task id was provided.
+    """
     return task_id is None or _task_exists(root, task_id)
 
 
 def _reject_litehive_control_paths(path: Path, source: str) -> None:
-    """Reject workspace paths inside .litehive control directories or managed worktrees."""
+    """
+    Reject paths inside ``.litehive`` control dirs or managed worktrees.
+
+    Bootstrapping a workspace there would create a nested
+    ``.litehive`` inside another one and produce subtle
+    cross-talk; refusing up front keeps the failure mode obvious
+    instead of letting the operator discover the corruption
+    later.
+    """
     resolved_path = path.resolve()
 
     # Check if path is inside managed worktrees
@@ -104,7 +158,16 @@ def _reject_litehive_control_paths(path: Path, source: str) -> None:
 
 
 def normalize_workspace_root(root: Path, source: str) -> Path:
-    """Validate, expand, and re-route a candidate workspace path; rejects unresolved shell vars and Litehive-internal paths, and redirects worktree paths back to the owning workspace."""
+    """
+    Validate, expand, and re-route a candidate workspace path.
+
+    Rejects unresolved shell vars and Litehive-internal paths,
+    and redirects worktree paths back to the owning workspace so
+    a CLI run inside a managed worktree still acts on the real
+    workspace. ``source`` is woven into errors so an operator
+    knows which input (env, ``--workspace``, …) produced a bad
+    value.
+    """
     _reject_invalid_workspace_path(root, source=source)
     resolved_input = Path(root).expanduser().resolve()
     _reject_litehive_control_paths(resolved_input, source=source)
@@ -120,7 +183,15 @@ def normalize_workspace_root(root: Path, source: str) -> Path:
 
 
 def _reject_nested_workspace_bootstrap(root: Path, source: str) -> None:
-    """Reject workspace creation inside existing Litehive workspace directories."""
+    """
+    Reject workspace creation inside an existing Litehive workspace.
+
+    Distinct from :func:`_reject_litehive_control_paths` because
+    the existing-workspace check looks at parent ``.litehive``
+    directories — a nested workspace under an unrelated parent
+    workspace would silently break command routing and is rarely
+    what the operator intended.
+    """
     parent_workspace = _workspace_parent_root(root)
     if parent_workspace is None:
         return
@@ -131,7 +202,15 @@ def _reject_nested_workspace_bootstrap(root: Path, source: str) -> None:
 
 
 def _task_exists(root: Path, task_id: str) -> bool:
-    """Cheap on-disk check: does this workspace's tasks dir hold a directory whose prefix matches ``task_id``? Used by workspace resolution to disambiguate when a task id is supplied."""
+    """
+    Cheap on-disk check for "does this workspace own this task?".
+
+    Looks for a directory under ``.litehive/tasks/`` whose name
+    starts with ``task_id-``. Used by workspace resolution to
+    disambiguate when a task id is supplied — far cheaper than
+    loading the full task store and good enough because task ids
+    are unique within a workspace.
+    """
     tasks_root = workspace_dir(root) / "tasks"
     return any(tasks_root.glob(f"{task_id}-*"))
 
@@ -141,7 +220,15 @@ def _resolve_workspace_from_search_root(
     effective_task_id: str | None,
     register: bool,
 ) -> Path | None:
-    """Try to resolve a workspace by walking ancestors of ``search_root``; called by ``resolve_workspace`` for the cwd-driven and explicit-cwd lookup phases."""
+    """
+    Resolve a workspace by walking ancestors of ``search_root``.
+
+    Called by :func:`resolve_workspace` for both the cwd-driven
+    and explicit-cwd lookup phases — same logic, run at two
+    different points in the resolution chain. Returns ``None``
+    when no ancestor directory carries a ``.litehive`` directory
+    that matches the optional task constraint.
+    """
     resolved_search_root = normalize_workspace_root(search_root, source=f"cwd:{search_root}")
     if resolved_search_root != search_root and _task_matches(resolved_search_root, effective_task_id):
         if register:
@@ -165,7 +252,16 @@ def resolve_workspace(
     cwd: Path | None = None,
     register: bool = True,
 ) -> Path:
-    """Pick the right workspace for a CLI invocation by checking, in order: explicit cwd, ``LITEHIVE_WORKSPACE_ROOT``, current cwd, and the registry by task id. The fallback chain is the contract every CLI command relies on for ``--workspace``-less invocation."""
+    """
+    Pick the right workspace for a CLI invocation.
+
+    Precedence: explicit ``cwd``, ``LITEHIVE_WORKSPACE_ROOT``
+    env, the actual current cwd, and finally the registry by task
+    id. The fallback chain is the contract every CLI command
+    relies on for ``--workspace``-less invocation; reordering it
+    would break invocation patterns that hooks and operator
+    scripts rely on.
+    """
     effective_task_id = task_id
     if effective_task_id is None and cwd is None:
         effective_task_id = os.environ.get("LITEHIVE_TASK_ID")
@@ -210,12 +306,28 @@ def resolve_workspace(
 
 
 def _register_workspace(root: Path) -> None:
-    """Persist the workspace path to the cross-process registry so later CLI calls (especially those driven only by task id) can find it without an explicit ``--workspace`` flag."""
+    """
+    Persist the workspace path to the cross-process registry.
+
+    Lets later CLI calls — especially those driven only by task
+    id, e.g. inside hook scripts — find the workspace without an
+    explicit ``--workspace`` flag. Always uses the resolved
+    absolute path so the registry never carries relative entries.
+    """
     register_workspace_path(root.resolve())
 
 
 def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
-    """Bootstrap a workspace on first use: create directories, seed config/context/gitignore, register the path, and bootstrap the runtime store. Idempotent so every CLI command can call it at startup without checking first."""
+    """
+    Bootstrap a workspace on first use.
+
+    Creates directories, seeds config/context/gitignore, registers
+    the path, and bootstraps the runtime store. Idempotent so
+    every CLI command can call it at startup without first
+    checking whether the workspace already exists; ``config`` is
+    only consulted on first creation, established workspaces are
+    not rewritten.
+    """
     root = normalize_workspace_root(root, source="ensure_workspace")
     _reject_nested_workspace_bootstrap(root, source="ensure_workspace")
     base = workspace_dir(root)

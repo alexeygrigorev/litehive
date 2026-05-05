@@ -42,7 +42,15 @@ def engine_command(
     reason: Annotated[str | None, typer.Option(help="Operator note")] = None,
     limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum audit rows to show")] = 20,
 ) -> int:
-    """Operator entrypoint behind ``litehive engine``: routes the chosen subcommand to status, audit, default, preference, freeze, or unfreeze."""
+    """
+    Operator entrypoint behind ``litehive engine``.
+
+    Routes the chosen subcommand to status, audit, default,
+    preference, freeze, or unfreeze. Uses one positional ``action``
+    rather than separate Typer commands so the engine-name argument
+    can be reused across subcommands without exposing six near-
+    duplicate command signatures.
+    """
     load_config(workspace)
     if action == "status":
         if name:
@@ -144,7 +152,15 @@ def engine_command(
 
 
 def _parse_engine_preference(value: str | None) -> list[str] | None:
-    """Parse the operator's preference string (comma- or space-separated) into a normalized engine list before persisting."""
+    """
+    Parse an operator-supplied preference string into a normalized engine list.
+
+    Accepts comma- or space-separated names because the operator may
+    type either form on the shell. Normalization through
+    :func:`normalize_engine_sequence` enforces the canonical names
+    and order before persistence so the audit log records a clean
+    value, not whatever the operator typed.
+    """
     if value is None:
         return None
     engines = [part.strip() for part in value.replace(",", " ").split() if part.strip()]
@@ -154,14 +170,30 @@ def _parse_engine_preference(value: str | None) -> list[str] | None:
 
 
 def _engine_list_label(value: object) -> str:
-    """Render audit-row old/new values uniformly whether the persisted value is a list or a scalar."""
+    """
+    Render an audit-row engine value uniformly across shapes.
+
+    The persisted value can be a list (preference) or a scalar
+    (legacy default). Rather than branch in the caller, this helper
+    always returns the comma-joined or stringified form so the
+    "before -> after" line in ``engine preference`` output looks the
+    same regardless of which historical shape was read back.
+    """
     if isinstance(value, list):
         return ",".join(str(item) for item in value)
     return str(value)
 
 
 def _render_engine_audit_lines(root: Path, key: str | None, limit: int) -> list[str]:
-    """Render the operator-facing audit log of engine setting changes for the ``engine audit`` subcommand."""
+    """
+    Render the audit log block shown by ``engine audit``.
+
+    Pulls runtime-setting audit entries from the SQLite store and
+    flattens each into a fixed line block (id, key, timestamps,
+    actor, source, before/after values, context). Operators read
+    this output to reconstruct who changed an engine setting and
+    why, so the layout is intentionally script-friendly.
+    """
     entries = load_runtime_setting_audit_entries(Workspace.from_path(root), key=key, limit=limit)
     lines = [f"setting_audit_entries: {len(entries)}"]
     for entry in entries:
@@ -181,7 +213,14 @@ def _render_engine_audit_lines(root: Path, key: str | None, limit: int) -> list[
 
 
 def _render_engine_status_lines(root: Path) -> list[str]:
-    """Build the per-engine status block (availability, freeze, quota) the operator sees from ``engine status``."""
+    """
+    Build the per-engine status block shown by ``engine status``.
+
+    Combines workspace config (default engine, preference order,
+    persisted freezes), live engine capabilities (available?), and
+    one quota probe per provider. The operator uses this to decide
+    whether to flip the default engine before queueing more work.
+    """
     config = load_config(root)
     active_freezes = active_engine_freezes(config)
     quota_statuses = _collect_quota_statuses()
@@ -224,7 +263,15 @@ def _render_engine_status_lines(root: Path) -> list[str]:
 
 
 def _collect_quota_statuses() -> dict[str, object]:
-    """Probe each supported provider's quota once so the status table doesn't pay the network cost per engine row."""
+    """
+    Probe each supported provider's quota once.
+
+    Returns a dict keyed by engine name so the status renderer can
+    do an O(1) lookup per row instead of paying the network cost
+    per engine. Z.ai's probe covers both ``goz`` and ``opencode``
+    because they share a backend; ``gemini`` has no probe surface
+    so it carries the literal ``"unsupported"`` sentinel.
+    """
     zai_status = _safe_quota_check(check_zai_quota)
     return {
         "claude": _safe_quota_check(check_claude_quota),
@@ -237,7 +284,15 @@ def _collect_quota_statuses() -> dict[str, object]:
 
 
 def _safe_quota_check(checker) -> object:
-    """Run a quota probe under a broad except so a single broken provider can't blank out the whole status table."""
+    """
+    Run a quota probe under a broad except.
+
+    A single broken provider must not blank out the whole status
+    table; the operator still wants to see the engines that *do*
+    work. The exception is converted into a labeled
+    :class:`UsageStatus` so downstream rendering can treat it the
+    same as a successful probe with an error attribute.
+    """
     try:
         return checker()
     except Exception as exc:  # pragma: no cover - defensive fallback
@@ -245,7 +300,14 @@ def _safe_quota_check(checker) -> object:
 
 
 def _quota_error_label(exc: Exception) -> str:
-    """Pick a human-readable label for the status row when a quota probe raises with an empty message."""
+    """
+    Pick a human-readable label for a failed quota probe.
+
+    Some provider SDKs raise with empty ``str(exc)`` (e.g. wrapped
+    HTTP errors). Falling back to the exception class name keeps
+    the status row informative instead of printing
+    ``quota: unavailable ()`` which would look broken.
+    """
     message = str(exc).strip()
     if message:
         return message
@@ -253,7 +315,15 @@ def _quota_error_label(exc: Exception) -> str:
 
 
 def _render_quota_line(_engine_name: str, status: object) -> str:
-    """Translate a heru quota probe result into the single-line ``quota: ...`` row shown in ``engine status``."""
+    """
+    Translate a heru quota probe result into one ``quota: ...`` row.
+
+    Renders the limited / ok / unavailable verdict the operator
+    sees in ``engine status``. The engine name is accepted but
+    unused — kept on the signature so callers do not have to
+    reshape the call site if a future provider needs per-engine
+    formatting.
+    """
     quota_error = _quota_status_error(status)
     if quota_error is not None:
         return quota_error
@@ -265,7 +335,14 @@ def _render_quota_line(_engine_name: str, status: object) -> str:
 
 
 def _quota_status_error(status: object) -> str | None:
-    """Detect the unsupported/error variants of a quota probe result so the renderer skips its happy path."""
+    """
+    Detect the unsupported/error variants of a quota probe result.
+
+    Returns a pre-formatted ``quota: ...`` string when the status
+    is the ``"unsupported"`` sentinel or carries an ``error``
+    attribute; returns ``None`` on the happy path so
+    :func:`_render_quota_line` continues with the limit check.
+    """
     if status == "unsupported":
         return "quota: unsupported"
     error = getattr(status, "error", None)

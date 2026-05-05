@@ -65,12 +65,13 @@ def _normalize_stale_pipeline_statuses(
     state: WorkspaceState,
     tasks_by_id: dict[str, TaskRecord],
 ) -> list[TaskRecord]:
-    """Reset queued non-active tasks back to ``backlog`` when their pipeline_status is stale.
+    """
+    Reset queued non-active tasks back to ``backlog`` when their stage is stale.
 
-    Called by ``_resolve_next_task_from_state`` before queue selection: a queued
-    task that still claims an in-flight stage from a prior run would be picked
-    up at that stage and skip the proper kickoff. Returns the list of mutated
-    tasks so the caller can persist them in a single transaction.
+    Called by ``_resolve_next_task_from_state`` before queue selection: a
+    queued task that still claims an in-flight stage from a prior run would
+    be picked up at that stage and skip the proper kickoff. Returns the
+    mutated tasks so the caller can persist them atomically.
     """
     active_stage = _live_active_pipeline_stage(state, tasks_by_id)
     mutated: list[TaskRecord] = []
@@ -95,11 +96,13 @@ def _normalize_stale_pipeline_statuses(
 
 
 def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
-    """Pin a specific task as the workspace's active task, bypassing the queue selector.
+    """
+    Pin a specific task as the workspace's active task, bypassing selection.
 
-    Integration tests and helper fixtures use this to put a known task in the
-    runner's slot directly; production code reaches active state through
-    ``dequeue_next_task_selection`` instead.
+    Integration tests and helper fixtures use this to put a known task in
+    the runner's slot directly; production code reaches active state through
+    ``dequeue_next_task_selection`` so the eligibility checks and audit
+    bookkeeping run.
     """
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
@@ -118,21 +121,24 @@ def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
 
 
 def peek_next_task(root: Path) -> TaskRecord | None:
-    """Return the next runnable task without dequeuing it; only test code calls this.
+    """
+    Return the next runnable task without dequeuing it.
 
-    Production status surfaces use ``peek_next_task_selection`` so they can
-    surface blocked tasks too — this thin wrapper drops that information and
-    is a candidate for inlining at the one test caller.
+    Only test code calls this; production status surfaces use
+    ``peek_next_task_selection`` so they can also report the blocked tasks.
+    This thin wrapper drops that information and is a candidate for
+    inlining at its one test caller.
     """
     return peek_next_task_selection(root).task
 
 
 def peek_next_task_selection(root: Path) -> TaskSelection:
-    """Return the next runnable task plus blocked-task diagnostics, leaving the queue intact.
+    """
+    Return the next runnable task plus blocked-task diagnostics, queue intact.
 
     Currently exercised only by queue-invariant tests; the public status
-    surfaces use the dequeue path. If no production caller appears, fold it
-    back into the dequeue helper.
+    surfaces use the dequeue path instead. If no production caller appears,
+    fold it back into the dequeue helper rather than carrying two near-copies.
     """
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), workspace_lock(root):
@@ -148,10 +154,13 @@ def peek_next_task_selection(root: Path) -> TaskSelection:
 
 
 def plan_task_selections(root: Path) -> TaskPlan:
-    """Simulate dequeue iterations against a copy of state to preview the runner's plan.
+    """
+    Simulate dequeue iterations to preview the runner's plan.
 
-    No callers — the ``litehive plan`` CLI surface this was written for never
-    landed; safe to remove unless that surface is being revived.
+    Walks a deep copy of state and ``tasks_by_id`` so the simulation never
+    mutates real workspace state; no callers, because the ``litehive plan``
+    CLI surface this was written for never landed. Safe to remove unless
+    the surface is being revived.
     """
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), workspace_lock(root):
@@ -178,22 +187,26 @@ def plan_task_selections(root: Path) -> TaskPlan:
 
 
 def dequeue_next_task(root: Path) -> TaskRecord | None:
-    """Pick the next runnable task and promote it to active; the runner's main entry point.
+    """
+    Pick the next runnable task and promote it to active.
 
-    The CLI runner loop and the one-shot ``litehive run`` command call this to
-    advance the queue; callers that also need to render blocked-task reasons
-    use ``dequeue_next_task_selection`` directly.
+    The runner's main entry point: the CLI runner loop and the one-shot
+    ``litehive run`` command call this to advance the queue. Callers that
+    also need blocked-task reasons use ``dequeue_next_task_selection``
+    directly so they don't have to re-walk the queue to recover them.
     """
     return dequeue_next_task_selection(root).task
 
 
 def dequeue_next_task_selection(root: Path) -> TaskSelection:
-    """Pick the next runnable task, promote it to active, and report blocked siblings.
+    """
+    Pick the next runnable task, promote it to active, and report blocked siblings.
 
-    Drives the runner's task pickup: resolves the next eligible candidate,
-    auto-recovers flagged tasks that still have budget, transitions the task
-    from ``queued``/``interrupted`` to ``in_progress``, and persists the
-    workspace mutation so the runner can begin executing.
+    The runner's pickup driver: resolves the next eligible candidate,
+    auto-recovers flagged tasks that still have budget, transitions the
+    chosen task from ``queued``/``interrupted`` to ``in_progress``, and
+    persists the workspace mutation so the runner can begin executing
+    without a second round-trip.
     """
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), workspace_lock(root):
@@ -279,11 +292,12 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
 
 
 def _dependent_task_count(task_id: str, queue: list[str], tasks_by_id: dict[str, TaskRecord]) -> int:
-    """Count how many other queued tasks transitively depend on ``task_id``.
+    """
+    Count how many other queued tasks transitively depend on ``task_id``.
 
-    Feeds the queue selection key in ``_task_selection_key``: tasks that unblock
-    more downstream work win ties so the queue drains breadth-first instead of
-    starving siblings behind a popular dependency.
+    Feeds the selection key in ``_task_selection_key``: tasks that unblock
+    more downstream work win ties so the queue drains breadth-first instead
+    of starving siblings behind a popular dependency.
     """
     eligible_task_ids = {
         queued_id
@@ -316,11 +330,13 @@ def _task_selection_key(
     queue: list[str],
     tasks_by_id: dict[str, TaskRecord],
 ) -> tuple[int | str, ...]:
-    """Build the sort key the queue selector uses to break ties between ready candidates.
+    """
+    Build the sort key the selector uses to break ties between ready candidates.
 
-    Called once per ready task in ``_resolve_next_task_from_snapshot``: prefers
-    earlier queue position, then more-blocked-on tasks, then interrupted tasks
-    over fresh ones, then stable-by-id. Tuple ordering encodes runner policy.
+    Called once per ready task in ``_resolve_next_task_from_snapshot``:
+    prefers earlier queue position, then more-blocked-on tasks, then
+    interrupted tasks over fresh ones, then stable-by-id. The tuple
+    ordering is the runner's policy — change it here, not at the call site.
     """
     if _is_interrupted_task(task):
         interrupted_rank = 0
@@ -337,12 +353,14 @@ def _task_selection_key(
 def _resolve_next_task_from_state(
     root: Path, state: WorkspaceState
 ) -> tuple[TaskRecord | None, list[BlockedTask], bool, list[TaskRecord]]:
-    """Load tasks from disk, normalize stale stages, then resolve the next runnable task.
+    """
+    Load tasks from disk, normalise stale stages, resolve the next runnable task.
 
     The disk-touching wrapper around ``_resolve_next_task_from_snapshot``
-    shared by peek/dequeue/plan: also enforces that every queued task id has a
-    matching SQLite intent row, raising ``TaskLaunchFailure`` so the runner
-    surfaces missing-intent corruption instead of silently dropping the task.
+    shared by peek/dequeue/plan: also enforces that every queued task id
+    has a matching SQLite intent row, raising ``TaskLaunchFailure`` so the
+    runner surfaces missing-intent corruption instead of silently dropping
+    the task.
     """
     tasks_by_id = {task.id: task for task in list_tasks(root, strict=False)}
     store = runtime_store(root)
@@ -365,12 +383,13 @@ def restore_missing_queued_tasks(
     state: WorkspaceState,
     tasks_by_id: dict[str, TaskRecord],
 ) -> list[str]:
-    """Push resumable tasks that fell off the queue back to its front.
+    """
+    Push resumable tasks that fell off the queue back to its front.
 
-    Called from ``_resolve_next_task_from_snapshot`` before candidate scoring:
-    if a task is mid-execution or carries a resume marker but is not in
-    ``state.queue``, it must be reinstated at the head or the runner will
-    pick a fresh task and leave unfinished work stranded.
+    Called from ``_resolve_next_task_from_snapshot`` before candidate
+    scoring: when a task is mid-execution or carries a resume marker but is
+    no longer in ``state.queue``, it must be reinstated at the head or the
+    runner will pick a fresh task and leave unfinished work stranded.
     """
     restored_front: list[str] = []
     queued_ids = set(state.queue)
@@ -393,12 +412,13 @@ def _resolve_next_task_from_snapshot(
     state: WorkspaceState,
     tasks_by_id: dict[str, TaskRecord],
 ) -> tuple[TaskRecord | None, list[BlockedTask], bool]:
-    """Pure-snapshot version of next-task resolution; honors active task, blockers, and tie-break order.
+    """
+    Pure-snapshot next-task resolution honouring active, blocked, and tie-break order.
 
-    The shared core for peek/dequeue/plan: walks an in-memory ``state`` plus
-    ``tasks_by_id`` map and returns the chosen task, the blocked diagnostics,
-    and whether the snapshot was mutated. Splitting it out lets ``plan_task_selections``
-    simulate dequeues against a deep copy without touching disk.
+    The shared core for peek/dequeue/plan: walks an in-memory ``state``
+    plus ``tasks_by_id`` and returns ``(chosen_task, blocked, mutated)``.
+    Keeping this snapshot-only lets ``plan_task_selections`` simulate
+    dequeues against a deep copy without touching disk.
     """
     mutated = False
     blocked: list[BlockedTask] = []
@@ -465,21 +485,23 @@ def _resolve_next_task_from_snapshot(
 
 
 def clear_active_task(root: Path) -> WorkspaceState:
-    """Detach whichever task currently sits in the active slot.
+    """
+    Detach whichever task currently sits in the active slot.
 
-    No callers — operators clear the active task via stop/close/abandon flows
-    that already null out ``state.active_task_id`` themselves. Candidate for
-    removal.
+    No callers — operators clear the active task via stop/close/abandon
+    flows that already null out ``state.active_task_id`` themselves.
+    Candidate for removal.
     """
     return set_active_task(root, None)
 
 
 def restore_untouched_active_task(root: Path) -> WorkspaceState:
-    """Push the active task back onto the queue if it was never actually started.
+    """
+    Push the active task back onto the queue if it was never actually started.
 
     No callers — duplicates the resume/recovery logic in
-    ``recovery.execution_recovery`` and ``restore_missing_queued_tasks``. Looks
-    like a leftover from before workspace-repair owned this concern.
+    ``recovery.execution_recovery`` and ``restore_missing_queued_tasks``;
+    looks like a leftover from before workspace-repair owned this concern.
     """
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
@@ -549,12 +571,13 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
 
 
 def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict[str, list[str]]:
-    """Collect every signal that says "this task is active", keyed by task id.
+    """
+    Collect every signal that says "this task is active", keyed by task id.
 
     Underpins the single-active-task invariant: the workspace lock and the
-    task-stop flow call this to prove no two tasks claim ``in_progress`` /
-    ``running`` at the same time, and to spell out which signal disagrees when
-    they do.
+    task-stop flow call this to prove no two tasks claim ``in_progress``
+    or ``running`` at once, and to spell out which signal disagrees when
+    they do (so the conflict message names the failing slot).
     """
     markers: dict[str, list[str]] = {}
     current_state = state or load_state(root)
@@ -581,11 +604,12 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
 
 
 def validate_single_active_task(root: Path, state: WorkspaceState | None = None) -> None:
-    """Raise ``WorkspaceConflictError`` if more than one task is currently active.
+    """
+    Raise ``WorkspaceConflictError`` if more than one task is currently active.
 
-    Hot-path guard: every queue mutation, runner pickup, and stop flow calls
-    this before touching state so a corrupted workspace fails loudly instead
-    of silently launching two runners against the same worktree.
+    Hot-path guard: every queue mutation, runner pickup, and stop flow
+    calls this before touching state so a corrupted workspace fails loudly
+    instead of silently launching two runners against the same worktree.
     """
     markers = active_task_markers(root, state)
     if len(markers) <= 1:

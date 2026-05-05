@@ -25,14 +25,26 @@ logger = logging.getLogger(__name__)
 
 
 def _event_payload(event: Event) -> dict[str, Any]:
-    """Flatten a transition Event into a JSON-friendly dict for the transition row; non-dataclass events store as ``{}`` rather than blowing up the writer."""
+    """
+    Flatten a transition Event into a JSON-friendly dict for the row.
+
+    Non-dataclass events store as ``{}`` so a future event subclass that
+    forgets ``@dataclass`` cannot crash the journal writer mid-transition
+    — losing the payload is preferable to losing the row.
+    """
     if is_dataclass(event):
         return asdict(event)
     return {}
 
 
 def _delta_payload(delta: StateDelta) -> dict[str, Any]:
-    """Drop default/empty fields from a ``StateDelta`` so the journal records only the values the transition actually changed; keeps replay diffs readable."""
+    """
+    Drop default/empty fields from a ``StateDelta`` before journaling.
+
+    The journal records only the fields the transition actually changed
+    so replay diffs stay readable; without this, every row would carry
+    every dormant ``StateDelta`` field as ``None``/``False``/empty.
+    """
     return {k: v for k, v in asdict(delta).items() if v not in (None, False, (), [], {})}
 
 
@@ -58,13 +70,26 @@ class PipelineJournal(ABC):
     """
 
     def __init__(self) -> None:
-        """Initialize the per-task seq cache; concrete subclasses lazily fill it from storage on the first ``_append`` for a task."""
+        """
+        Initialize the per-task seq cache.
+
+        The cache is filled lazily on the first ``_append`` for a task, so a
+        concrete subclass that resumes seq numbering from storage only pays
+        that read once per task even when the journal is shared across many
+        tasks in one process.
+        """
         self._next_seq: dict[str, int] = {}
 
     # ── public entry points used by the Runner ───────────────────────
 
     def task_started(self, task_id: str, stage: PipelineState) -> None:
-        """Record that the runner began driving a task; called once per task pickup so replay can find the start."""
+        """
+        Record that the runner has begun driving a task.
+
+        Called once per task pickup; without this row, replay cannot find a
+        coherent start for the lifecycle and the subsequent transition rows
+        look like they appear out of nowhere.
+        """
         self._append(KIND_TASK_STARTED, task_id, {"stage": str(stage)})
 
     def transition(
@@ -76,7 +101,14 @@ class PipelineJournal(ABC):
         rule_description: str,
         delta: StateDelta,
     ) -> None:
-        """Record one state-machine edge after the runner fires it; the structured row feeds analytics like 'how often does testing reject?'."""
+        """
+        Record one state-machine edge after the runner fires it.
+
+        The structured row is what feeds analytics like "how often does
+        testing reject?" and powers the recovery agent's view of pipeline
+        history; the columns are deliberately kept directly queryable so
+        questions can be answered without re-parsing JSON.
+        """
         self._append(
             KIND_TRANSITION,
             task_id,
@@ -91,17 +123,36 @@ class PipelineJournal(ABC):
         )
 
     def stop_requested(self, task_id: str, stage: PipelineState) -> None:
-        """Record an external stop intent (CLI ``stop``, daemon shutdown) so the gap between request and termination is reconstructable."""
+        """
+        Record an external stop intent (CLI ``stop``, daemon shutdown).
+
+        Recording the request separately from termination makes the gap
+        between "operator asked us to stop" and "task actually stopped"
+        reconstructable from replay.
+        """
         self._append(KIND_STOP_REQUESTED, task_id, {"stage": str(stage)})
 
     def task_finished(self, task_id: str, stage: PipelineState) -> None:
-        """Record that the task reached a terminal state; bookend for ``task_started`` used by replay and post-mortem reporting."""
+        """
+        Record that the task reached a terminal state.
+
+        Bookend for ``task_started`` used by replay and post-mortem
+        reporting; without it, the timeline cannot tell whether the
+        runner finished cleanly or was interrupted.
+        """
         self._append(KIND_TASK_FINISHED, task_id, {"stage": str(stage)})
 
     # ── template method ──────────────────────────────────────────────
 
     def _append(self, kind: str, task_id: str, payload: dict[str, Any]) -> None:
-        """Template method shared by every public entry point: assigns the next per-task seq, timestamps the row, logs it, then delegates the write to ``_store``."""
+        """
+        Template method shared by every public entry point above.
+
+        Assigns the next per-task seq (lazy-loading from storage on first
+        use), timestamps the row, logs it, and delegates the actual write
+        to ``_store``. Keeping all four steps here is what lets backends
+        only implement ``_store``.
+        """
         if task_id not in self._next_seq:
             self._next_seq[task_id] = self._load_starting_seq(task_id)
         seq = self._next_seq[task_id]
@@ -111,7 +162,13 @@ class PipelineJournal(ABC):
         self._store(task_id, seq, created_at, kind, payload)
 
     def _log(self, kind: str, task_id: str, payload: dict[str, Any]) -> None:
-        """Emit a human-readable log line per journal kind so operators can follow runner activity in stderr without querying SQLite."""
+        """
+        Emit a human-readable log line for this journal kind.
+
+        Logging happens here (not in ``_store``) so operators can follow
+        runner activity on stderr without querying SQLite, and so a
+        ``NullJournal`` can suppress logs by overriding only this method.
+        """
         if kind == KIND_TASK_STARTED:
             logger.info("task %s: starting at stage=%s", task_id, payload["stage"])
         elif kind == KIND_TRANSITION:
@@ -129,7 +186,13 @@ class PipelineJournal(ABC):
             logger.info("task %s: reached terminal %s", task_id, payload["stage"])
 
     def _load_starting_seq(self, task_id: str) -> int:
-        """Hook for subclasses to resume seq numbering across restarts; the base returns 0 so in-memory journals always start fresh."""
+        """
+        Resume seq numbering after a process restart.
+
+        Default implementation returns 0 so in-memory journals always
+        start fresh; persistent backends override to read ``MAX(seq)``
+        from storage so a restart does not collide on existing rows.
+        """
         del task_id
         return 0
 
@@ -142,7 +205,14 @@ class PipelineJournal(ABC):
         kind: str,
         payload: dict[str, Any],
     ) -> None:
-        """Persist one prepared journal row; the only piece a backend must implement, called from ``_append`` after seq + timestamp + log."""
+        """
+        Persist one prepared journal row.
+
+        The only piece a backend must implement; the base class fills in
+        seq, timestamp, and the log line before calling this so a backend
+        only needs to know how to write a row, not how to sequence the
+        journal.
+        """
         ...
 
 
@@ -159,7 +229,14 @@ class SqliteJournal(PipelineJournal):
     """
 
     def __init__(self, workspace: Workspace) -> None:
-        """Bind the journal to a workspace; the ``Workspace`` selects which SQLite db is opened for every write via ``workspace.connect()``."""
+        """
+        Bind the journal to a workspace.
+
+        The ``Workspace`` selects which SQLite db is opened for every
+        write via ``workspace.connect()``, so one ``SqliteJournal`` per
+        workspace is the expected shape — sharing one across workspaces
+        would route rows into the wrong db.
+        """
         super().__init__()
         self.workspace = workspace
 
@@ -171,7 +248,13 @@ class SqliteJournal(PipelineJournal):
         kind: str,
         payload: dict[str, Any],
     ) -> None:
-        """Route writes to the structured ``pipeline_transitions`` table or the free-form ``pipeline_journal`` table depending on kind, so transitions stay queryable by column."""
+        """
+        Dispatch a row to the right table based on its kind.
+
+        Transitions go to the structured ``pipeline_transitions`` table
+        so columns stay queryable; lifecycle events go to the free-form
+        ``pipeline_journal`` table where the payload shape is open.
+        """
         if kind == KIND_TRANSITION:
             self._insert_transition(task_id, seq, created_at, payload)
         else:
@@ -184,7 +267,14 @@ class SqliteJournal(PipelineJournal):
         created_at: str,
         payload: dict[str, Any],
     ) -> None:
-        """Write one transition row plus its mirrored task-event so analytics and operator activity feeds see the same edge."""
+        """
+        Write one transition row and mirror it onto the task event log.
+
+        The mirrored task-event row is what powers operator-facing
+        activity feeds, while the structured ``pipeline_transitions`` row
+        is what analytics queries hit; both must land in the same
+        commit so the two surfaces never disagree about what fired.
+        """
         with self.workspace.connect() as connection:
             connection.execute(
                 """
@@ -234,7 +324,14 @@ class SqliteJournal(PipelineJournal):
         kind: str,
         payload: dict[str, Any],
     ) -> None:
-        """Write a non-transition lifecycle row (started / stop_requested / finished) and mirror it onto the task event log for activity replay."""
+        """
+        Write a non-transition lifecycle row.
+
+        Covers ``task_started`` / ``stop_requested`` / ``task_finished``;
+        each row is also mirrored onto the task event log so activity
+        replay sees the same lifecycle bookend whether it walks the
+        journal or the events table.
+        """
         with self.workspace.connect() as connection:
             connection.execute(
                 """
@@ -260,7 +357,14 @@ class SqliteJournal(PipelineJournal):
             connection.commit()
 
     def _load_starting_seq(self, task_id: str) -> int:
-        """Resume per-task seq numbering across runner restarts by querying ``MAX(seq)`` across both journal tables; without this, restarts would collide on existing rows."""
+        """
+        Resume per-task seq numbering across runner restarts.
+
+        Queries ``MAX(seq)`` across both journal tables and returns the
+        next free value. Without this, a restart would re-emit rows at
+        seq 0 and collide with the existing rows from the previous
+        process.
+        """
         with self.workspace.connect() as connection:
             row = connection.execute(
                 """
@@ -279,7 +383,14 @@ class SqliteJournal(PipelineJournal):
         return max_seq + 1
 
     def load_transitions(self, task_id: str) -> list[dict[str, Any]]:
-        """Replay the structured transition rows for one task; used by the diagnostics CLI and the recovery agent to reconstruct pipeline history."""
+        """
+        Replay the structured transition rows for one task.
+
+        Used by the diagnostics CLI and the recovery agent to
+        reconstruct pipeline history; the recovery agent in particular
+        relies on the from/to/event shape to detect repeated failure
+        fingerprints across runs.
+        """
         with self.workspace.connect() as connection:
             rows = connection.execute(
                 """
@@ -306,7 +417,13 @@ class SqliteJournal(PipelineJournal):
         ]
 
     def load_lifecycle(self, task_id: str) -> list[dict[str, Any]]:
-        """Replay non-transition events (started/stop_requested/finished); paired with ``load_transitions`` to render a task's full timeline."""
+        """
+        Replay the non-transition events for one task.
+
+        Returns the started / stop_requested / finished bookends; paired
+        with ``load_transitions`` to render a task's full timeline (the
+        bookends frame the structured transition rows in between).
+        """
         with self.workspace.connect() as connection:
             rows = connection.execute(
                 """
@@ -339,11 +456,23 @@ class NullJournal(PipelineJournal):
         kind: str,
         payload: dict[str, Any],
     ) -> None:
-        """No-op store: tests and one-shot CLIs use ``NullJournal`` to keep the runner contract while skipping persistence."""
+        """
+        Discard the prepared row.
+
+        Tests and one-shot CLIs use ``NullJournal`` to keep the runner
+        contract while skipping persistence — the runner still asks for
+        a journal on every transition, but the row goes nowhere.
+        """
         del task_id, seq, created_at, kind, payload
         return None
 
     def _log(self, kind: str, task_id: str, payload: dict[str, Any]) -> None:
-        """Suppress runner log lines too, so lifecycle tests asserting on stderr stay deterministic when the journal is disabled."""
+        """
+        Suppress the per-row log line as well.
+
+        Without this override, lifecycle tests asserting on stderr would
+        see runner activity even when persistence is disabled, and the
+        "no journal" mode would not be truly silent.
+        """
         del kind, task_id, payload
         return None

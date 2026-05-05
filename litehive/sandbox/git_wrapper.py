@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Git wrapper used by the merge-resolver sandbox profile."""
+"""
+Sandboxed git shim for the merge-resolver subagent.
+
+The merge-resolver sandbox profile points the agent's ``PATH`` at this
+shim so an LLM-driven merge cannot ``push --force``, rewrite history,
+or reset against ``origin/*``. ``rejection_reason`` is the single
+decision point — it returns a short reason string for blocked commands
+and ``None`` for allowed ones; ``main`` calls it from the entry point
+and ``execv``s the real git binary on the allowed path.
+"""
 
 import os
 from pathlib import Path
@@ -12,7 +21,15 @@ _PROTECTED_REFS = {"main", "master", "origin/main", "origin/master"}
 
 
 def main(argv: list[str], real_git_path: str, workspace_root: str) -> int:
-    """Entry point used as ``$LITEHIVE_REAL_GIT_PATH``'s shim: rejects destructive git invocations with an attention-log entry and exit code 2, otherwise ``execv``s the real git binary so the agent sees no shim at all; the merge-resolver sandbox profile points its ``PATH`` at this so an LLM-driven merge cannot ``push --force`` or rewrite history."""
+    """
+    Sandbox entry point used as the merge-resolver agent's ``git``.
+
+    Refuses destructive invocations with an attention-log entry and
+    exit code 2 — the merge-resolver agent sees a non-zero exit and
+    a short stderr reason just like a normal git failure. Allowed
+    invocations are ``execv``'d to the real git binary so the agent
+    sees no shim at all.
+    """
     reason = rejection_reason(argv)
     if reason is not None:
         append_attention_log(
@@ -26,7 +43,17 @@ def main(argv: list[str], real_git_path: str, workspace_root: str) -> int:
 
 
 def rejection_reason(argv: list[str], cwd: Path | None = None) -> str | None:
-    """Inspect a git argv and return a short reason string when the invocation matches one of the merge-resolver sandbox's denied patterns (force-push, history rewrite, hard reset to origin, rebase/cherry-pick onto protected refs, …) or None when it should be allowed; the single decision point that both :func:`main` and the unit tests use, factored out so test cases can assert the reason text without spawning subprocesses."""
+    """
+    Inspect a git argv and return the reason it should be blocked, or ``None``.
+
+    The single decision point both :func:`main` and the unit tests
+    consult so test cases can assert the reason text without
+    spawning subprocesses. Blocks force-push, history rewrites
+    (``filter-repo``/``filter-branch``/``reflog expire``/``gc --prune=now``),
+    hard reset to ``origin/*``, ``remote set-url origin``, and
+    ``rebase``/``cherry-pick`` onto protected refs — the patterns
+    an LLM could plausibly stumble into that would cost real work.
+    """
     if not argv:
         return None
     command = argv[0]
@@ -62,22 +89,51 @@ def rejection_reason(argv: list[str], cwd: Path | None = None) -> str | None:
 
 
 def _non_option_args(argv: list[str]) -> list[str]:
-    """Return positional args (filter out flags) so the rebase/cherry-pick checks can scan only ref-shaped arguments rather than colliding with ``--onto`` or ``-i``; called by :func:`rejection_reason` for those two commands."""
+    """
+    Return positional args, dropping flags so ref checks don't catch ``--onto``.
+
+    The rebase/cherry-pick blocks scan for protected refs; without
+    filtering, ``-i`` / ``--onto`` / ``--strategy`` would all
+    falsely match the ``starts with "-"`` token check. Called by
+    :func:`rejection_reason` for those two commands.
+    """
     return [arg for arg in argv if arg and not arg.startswith("-")]
 
 
 def _is_origin_ref(value: str) -> bool:
-    """Return True when an argv token looks like ``origin/<branch>``; used by :func:`rejection_reason` to block ``git reset --hard origin/main`` and friends."""
+    """
+    True when an argv token looks like ``origin/<branch>``.
+
+    Used by :func:`rejection_reason` to catch ``git reset --hard
+    origin/main`` and friends — the destructive part is the hard
+    reset against a remote-tracking ref, which would silently
+    drop unpushed work.
+    """
     return value.startswith("origin/")
 
 
 def _is_protected_ref(value: str) -> bool:
-    """Return True for refs the merge-resolver sandbox refuses to rebase/cherry-pick onto (main/master locally, anything under ``origin/``, anything under ``refs/remotes/``); the policy table that :func:`rejection_reason` consults for those commands."""
+    """
+    True for refs the sandbox refuses to rebase or cherry-pick onto.
+
+    Policy table consulted by :func:`rejection_reason`: ``main`` /
+    ``master`` locally, anything under ``origin/``, and anything
+    under ``refs/remotes/``. These are the refs where a rewritten
+    history would corrupt the operator's source of truth.
+    """
     return value in _PROTECTED_REFS or value.startswith("origin/") or value.startswith("refs/remotes/")
 
 
 def _current_ref(cwd: Path) -> str | None:
-    """Read ``HEAD`` directly from disk to determine the currently-checked-out branch, returning the short branch name (e.g. ``main``) or None for detached/unparseable HEADs; called by :func:`rejection_reason` so we can block ``rebase``/``cherry-pick`` when the sandbox is currently sitting on a protected ref."""
+    """
+    Read ``HEAD`` directly off disk to determine the current branch.
+
+    Returns the short branch name (e.g. ``main``) or ``None`` for
+    detached / unparseable HEADs. Called by :func:`rejection_reason`
+    so we can block ``rebase`` / ``cherry-pick`` when the sandbox
+    is currently sitting on a protected ref — without that, an
+    agent could rebase main onto a topic branch.
+    """
     git_dir = _resolve_git_dir(cwd)
     if git_dir is None:
         return None
@@ -97,7 +153,17 @@ def _current_ref(cwd: Path) -> str | None:
 
 
 def _resolve_git_dir(cwd: Path) -> Path | None:
-    """Walk up from ``cwd`` to find the closest ``.git`` directory, dereferencing the ``gitdir: …`` indirection that worktrees use so we can read HEAD inside a worktree just like inside the main repo; called by :func:`_current_ref`. Returns None when no git directory is found, which makes the rebase/cherry-pick checks no-op outside a repo (as ``execv`` would simply fail anyway)."""
+    """
+    Walk up from ``cwd`` to find the git directory, dereferencing worktree pointers.
+
+    Worktrees store ``HEAD`` in a sibling ``gitdir: <path>``
+    indirection rather than in the worktree's own ``.git``
+    directory; following the indirection lets :func:`_current_ref`
+    read HEAD inside a worktree just like inside the main repo.
+    Returns ``None`` outside a repo so the rebase/cherry-pick
+    checks become a no-op — ``execv`` would fail anyway and we
+    don't want to invent a refusal for a non-git scenario.
+    """
     current = cwd.resolve()
     for candidate in (current, *current.parents):
         git_entry = candidate / ".git"
@@ -116,7 +182,15 @@ def _resolve_git_dir(cwd: Path) -> Path | None:
 
 
 def _format_cmd(argv: list[str]) -> str:
-    """Render argv as a single ``git foo bar`` string for the attention-log entry; cosmetic helper that exists so the log line shows the full rejected command, not just the rejection reason."""
+    """
+    Render argv as a single ``git foo bar`` string for the attention log.
+
+    The attention-log entry shows both the full rejected command
+    and the reason — without the command an operator reading the
+    log later would see "merge-resolver git wrapper rejected ...:
+    push with force or mirror is not allowed" with no idea which
+    push was blocked.
+    """
     if not argv:
         return "git"
     return "git " + " ".join(argv)

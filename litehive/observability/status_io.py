@@ -1,4 +1,12 @@
-"""File/parse helpers used by the `litehive status` loaders to degrade gracefully on corrupt YAML/JSON."""
+"""
+File and parse helpers for the ``litehive status`` loaders.
+
+Lets the loaders degrade gracefully on corrupt or unreadable
+YAML/JSON: each helper returns a ``(value, issue)`` pair so the
+caller can record a structured diagnostic and keep going,
+instead of taking down the whole status surface for one bad
+file.
+"""
 
 from datetime import UTC, datetime
 import json
@@ -16,8 +24,14 @@ def _safe_yaml_mapping(
     key: str,
     remediation: str,
 ) -> tuple[dict[str, Any] | None, StatusIssue | None]:
-    """Read a YAML file expected to be a top-level mapping; on parse error or wrong shape return a status
-    issue instead of raising, so the config loader can keep merging the layers it could read."""
+    """
+    Read a YAML file expected to contain a top-level mapping.
+
+    On parse error or wrong shape returns a :class:`StatusIssue`
+    instead of raising, so the config loader can keep merging
+    the layers it *could* read; one corrupt file should not
+    blank out an otherwise-readable workspace config.
+    """
     data, issue = _safe_yaml_document(path, key=key, remediation=remediation)
     if issue is not None:
         return None, issue
@@ -37,8 +51,15 @@ def _safe_yaml_document(
     key: str,
     remediation: str,
 ) -> tuple[object | None, StatusIssue | None]:
-    """Read a YAML file and turn YAMLError/OSError into a status issue with location info, so corrupt config
-    surfaces as one diagnostic line instead of crashing `status`/`health`."""
+    """
+    Read a YAML file, converting parse and IO errors into status issues.
+
+    Each error becomes one diagnostic line carrying the file
+    location info, so corrupt config surfaces as one issue
+    instead of crashing ``status``/``health``. Distinct from
+    :func:`_safe_yaml_mapping` because some YAML callers accept
+    non-mapping documents (lists, scalars).
+    """
     if not path.exists():
         return None, None
     try:
@@ -63,8 +84,15 @@ def _safe_json_mapping(
     key: str,
     remediation: str,
 ) -> tuple[dict[str, Any] | None, StatusIssue | None]:
-    """Read a JSON file expected to be an object; on missing/blank file return empty, on parse/shape errors
-    return a status issue so the runner-state loader can degrade gracefully."""
+    """
+    Read a JSON file expected to contain a top-level object.
+
+    Missing or blank files return ``({}, None)`` so the caller
+    can treat absence as "default state", while parse and shape
+    errors return a structured status issue. Used by the
+    runner-state loader so a corrupt status file degrades to a
+    visible diagnostic rather than a missed report.
+    """
     if not path.exists():
         return None, None
     try:
@@ -97,8 +125,14 @@ def _safe_json_mapping(
 
 
 def _heartbeat_age_seconds(heartbeat_at: str | None) -> int | None:
-    """Convert the runner's last-heartbeat ISO timestamp into seconds-since-now, used by the runner-state probe
-    to decide WEDGED."""
+    """
+    Compute seconds elapsed since the runner's last heartbeat.
+
+    Used by the runner-state probe to decide whether the runner
+    is wedged. Returns ``None`` for missing or unparseable
+    timestamps so the probe can short-circuit on "no signal"
+    rather than treating a parse failure as zero seconds.
+    """
     if not heartbeat_at:
         return None
     try:
@@ -109,8 +143,14 @@ def _heartbeat_age_seconds(heartbeat_at: str | None) -> int | None:
 
 
 def _validation_error_label(exc: Exception) -> str:
-    """Format the first pydantic ValidationError (or any other exception) as a one-line `path: msg` label so
-    config/runner status messages stay scannable instead of dumping pydantic's full multi-line traceback."""
+    """
+    Format the first validation error as a one-line ``path: msg`` label.
+
+    Keeps config/runner status messages scannable instead of
+    dumping pydantic's full multi-line traceback into the
+    operator's terminal. Falls back to ``str(exc)`` for non-
+    pydantic exceptions so the helper can be applied uniformly.
+    """
     if isinstance(exc, ValidationError):
         if exc.errors():
             error = exc.errors()[0]
@@ -125,8 +165,15 @@ def _validation_error_label(exc: Exception) -> str:
 
 
 def _yaml_location_label(exc: yaml.YAMLError | None) -> str:
-    """Render the line number from a YAMLError (or `line unknown`) so corrupt-YAML status messages point
-    at the offending line."""
+    """
+    Render the line number from a YAMLError as a short label.
+
+    Returns ``"line unknown"`` when the exception lacks a
+    ``problem_mark`` so corrupt-YAML status messages always
+    carry a location field even when PyYAML cannot give a
+    precise line. Lets diagnostics include "line N" inline
+    without conditional formatting at every call site.
+    """
     if exc is None:
         return "line unknown"
     mark = getattr(exc, "problem_mark", None)
