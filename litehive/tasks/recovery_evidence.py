@@ -27,6 +27,7 @@ def collect_recovery_evidence(
     task: TaskRecord,
     stage: str | None = None,
 ) -> list[RecoveryEvidenceItem]:
+    """Gather every signal the recovery agent needs into a single evidence list — task record, runtime state, sqlite activity/events, the latest stage report, the latest subagent's artifacts, the wrapper log, engine monitoring, and the dirty-path snapshot for both the main checkout and the task worktree — so the recovery prompt sees the same facts the operator would when triaging by hand."""
     evidence: list[RecoveryEvidenceItem] = []
     activity_entries = load_task_activity(root, task)
     task_events = read_events(root, task)

@@ -17,6 +17,7 @@ _DAEMON_LOCKS_MUTEX = threading.Lock()
 
 
 def daemon_lock_path(workspace: Path) -> Path:
+    """Canonical daemon lockfile location; centralized so registry, status, and recovery agree on a single path."""
     return workspace_path(workspace.resolve(), "runtime", ".daemon.lock")
 
 
@@ -26,6 +27,7 @@ def _daemon_lock_is_held_in_process(workspace: Path) -> bool:
 
 
 def _daemon_lock_manager(workspace: Path) -> ProcessLockManager:
+    """Build a per-call lock manager bound to this workspace; cheap to construct and avoids a long-lived global handle."""
     workspace = workspace.resolve()
     return ProcessLockManager(
         lock_path=daemon_lock_path(workspace),
@@ -37,6 +39,7 @@ def _daemon_lock_manager(workspace: Path) -> ProcessLockManager:
 
 
 def daemon_lock_is_active(workspace: Path) -> bool:
+    """Check whether a live daemon currently holds the lock; used by CLI status and start-guard checks."""
     workspace = workspace.resolve()
     return _daemon_lock_manager(workspace).is_active()
 
@@ -48,6 +51,7 @@ def _clear_stale_daemon_metadata(workspace: Path, pid: int | None = None) -> Non
 
 
 def daemon_metadata(workspace: Path) -> dict[str, object] | None:
+    """Return the persisted daemon metadata tagged ``running`` or ``stale``; called by status/health surfaces that need to distinguish a live daemon from a leftover lockfile."""
     workspace = workspace.resolve()
     manager = _daemon_lock_manager(workspace)
     metadata = manager.read_metadata()
@@ -63,6 +67,7 @@ def daemon_metadata(workspace: Path) -> dict[str, object] | None:
 
 
 def get_workspace_daemon(workspace: Path) -> dict[str, object] | None:
+    """Return daemon metadata only when a live daemon is running; the strict variant for callers that must not act on stale state."""
     metadata = daemon_metadata(workspace)
     if metadata is None:
         return None
@@ -72,6 +77,7 @@ def get_workspace_daemon(workspace: Path) -> dict[str, object] | None:
 
 
 def register_daemon(workspace: Path, pid: int, log_dir: Path) -> None:
+    """Acquire the workspace daemon lock and persist this process as the active daemon; raises if another live daemon already owns the lock."""
     workspace = workspace.resolve()
     manager = _daemon_lock_manager(workspace)
     # Remove stale lock file before opening — inherited FDs from dead
@@ -111,6 +117,7 @@ def register_daemon(workspace: Path, pid: int, log_dir: Path) -> None:
 
 
 def unregister_daemon(workspace: Path, pid: int | None = None) -> None:
+    """Release the daemon lock on shutdown; the ``pid`` guard prevents one daemon from clearing another's metadata when both shared the workspace path."""
     workspace = workspace.resolve()
     manager = _daemon_lock_manager(workspace)
     with _DAEMON_LOCKS_MUTEX:
@@ -128,6 +135,7 @@ def unregister_daemon(workspace: Path, pid: int | None = None) -> None:
 
 
 def touch_daemon(workspace: Path, pid: int | None = None) -> bool:
+    """Refresh the daemon heartbeat so external observers can tell a live daemon from a frozen one; called on the daemon's main loop tick."""
     workspace = workspace.resolve()
     manager = _daemon_lock_manager(workspace)
     with _DAEMON_LOCKS_MUTEX:

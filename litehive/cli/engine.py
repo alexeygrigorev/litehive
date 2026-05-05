@@ -41,6 +41,7 @@ def engine_command(
     reason: Annotated[str | None, typer.Option(help="Operator note")] = None,
     limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum audit rows to show")] = 20,
 ) -> int:
+    """Operator entrypoint behind ``litehive engine``: routes the chosen subcommand to status, audit, default, preference, freeze, or unfreeze."""
     load_config(workspace)
     if action == "status":
         if name:
@@ -122,6 +123,7 @@ def engine_command(
 
 
 def _parse_engine_preference(value: str | None) -> list[str] | None:
+    """Parse the operator's preference string (comma- or space-separated) into a normalized engine list before persisting."""
     if value is None:
         return None
     engines = [part.strip() for part in value.replace(",", " ").split() if part.strip()]
@@ -131,12 +133,14 @@ def _parse_engine_preference(value: str | None) -> list[str] | None:
 
 
 def _engine_list_label(value: object) -> str:
+    """Render audit-row old/new values uniformly whether the persisted value is a list or a scalar."""
     if isinstance(value, list):
         return ",".join(str(item) for item in value)
     return str(value)
 
 
 def _render_engine_audit_lines(root: Path, key: str | None, limit: int) -> list[str]:
+    """Render the operator-facing audit log of engine setting changes for the ``engine audit`` subcommand."""
     entries = load_runtime_setting_audit_entries(root, key=key, limit=limit)
     lines = [f"setting_audit_entries: {len(entries)}"]
     for entry in entries:
@@ -156,6 +160,7 @@ def _render_engine_audit_lines(root: Path, key: str | None, limit: int) -> list[
 
 
 def _render_engine_status_lines(root: Path) -> list[str]:
+    """Build the per-engine status block (availability, freeze, quota) the operator sees from ``engine status``."""
     config = load_config(root)
     active_freezes = active_engine_freezes(config)
     quota_statuses = _collect_quota_statuses()
@@ -186,6 +191,7 @@ def _render_engine_status_lines(root: Path) -> list[str]:
 
 
 def _collect_quota_statuses() -> dict[str, object]:
+    """Probe each supported provider's quota once so the status table doesn't pay the network cost per engine row."""
     zai_status = _safe_quota_check(check_zai_quota)
     return {
         "claude": _safe_quota_check(check_claude_quota),
@@ -198,6 +204,7 @@ def _collect_quota_statuses() -> dict[str, object]:
 
 
 def _safe_quota_check(checker) -> object:
+    """Run a quota probe under a broad except so a single broken provider can't blank out the whole status table."""
     try:
         return checker()
     except Exception as exc:  # pragma: no cover - defensive fallback
@@ -205,6 +212,7 @@ def _safe_quota_check(checker) -> object:
 
 
 def _quota_error_label(exc: Exception) -> str:
+    """Pick a human-readable label for the status row when a quota probe raises with an empty message."""
     message = str(exc).strip()
     if message:
         return message
@@ -212,6 +220,7 @@ def _quota_error_label(exc: Exception) -> str:
 
 
 def _render_quota_line(_engine_name: str, status: object) -> str:
+    """Translate a heru quota probe result into the single-line ``quota: ...`` row shown in ``engine status``."""
     quota_error = _quota_status_error(status)
     if quota_error is not None:
         return quota_error
@@ -223,6 +232,7 @@ def _render_quota_line(_engine_name: str, status: object) -> str:
 
 
 def _quota_status_error(status: object) -> str | None:
+    """Detect the unsupported/error variants of a quota probe result so the renderer skips its happy path."""
     if status == "unsupported":
         return "quota: unsupported"
     error = getattr(status, "error", None)

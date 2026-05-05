@@ -83,6 +83,7 @@ def switch_task_engine(
     audit_actor: str = "operator",
     audit_source: str = "cli",
 ) -> SwitchTaskSummary:
+    """Carry out an operator-initiated engine swap end-to-end — stop the runner if needed, mark the switch on runtime metadata, re-queue the task at the front, and append the activity + audit entries that name the previous and new engines plus the prior subagent artifacts the new engine should consult; called by `litehive queue switch`."""
     # inline: tasks.status imports tasks.switch_engine indirectly via
     # the queue CLI re-export; keeping these imports inside the
     # function avoids the partial-init cycle that would otherwise

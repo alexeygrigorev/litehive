@@ -14,11 +14,15 @@ from heru.engine_detection import (
 
 
 class SandboxSummary(Protocol):
+    """Sandbox policy snapshot the adapter advertises to the operator status surface."""
+
     enabled: bool
     summary: str
 
 
 class SandboxLauncher(Protocol):
+    """Sandbox-launcher contract used by ``SandboxedAdapter`` to confine engine invocations without depending on a concrete launcher implementation."""
+
     def policy_summary(self, engine_name: str, role: str = "") -> SandboxSummary: ...
 
     def wrap_invocation(
@@ -113,6 +117,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
         max_turns: int | None = None,
         resume_session_id: str | None = None,
     ) -> list[str]:
+        """Defer command construction to the wrapped engine adapter; the sandbox layer never rewrites the engine's argv."""
         return self._adapter.build_command(
             prompt,
             cwd,
@@ -122,9 +127,11 @@ class SandboxedAdapter(ExternalCLIAdapter):
         )
 
     def detect_capabilities(self):
+        """Delegate capability detection to the wrapped adapter; the sandbox neither adds nor removes capabilities."""
         return self._adapter.detect_capabilities()
 
     def finalize_invocation(self, invocation):
+        """Hook that runs immediately before exec: hands the invocation to the sandbox launcher so the engine actually runs confined."""
         return self._launcher.wrap_invocation(
             self._engine_name,
             self.binary,
@@ -133,6 +140,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
         )
 
     def sandbox_details(self) -> tuple[bool, str]:
+        """Expose the policy snapshot for the status/audit surface so operators can see whether sandboxing was effective for this engine."""
         return (self._summary.enabled, self._summary.summary)
 
     def run(
@@ -145,6 +153,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
         on_started=None,
         emit_unified: bool = False,
     ) -> CLIExecutionResult:
+        """Forward to the wrapped adapter's ``run`` when it overrides the base, otherwise fall back to base run; preserves engine-specific run paths while still going through ``finalize_invocation`` for sandboxing."""
         if has_callable_override(self._adapter, "run", ORIGINAL_EXTERNAL_ADAPTER_RUN):
             run_callable = effective_engine_callable(self._adapter, "run")
             if not callable(run_callable):
@@ -184,6 +193,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
         inactivity_timeout_seconds: float = 0,
         emit_unified: bool = False,
     ) -> CLIExecutionResult:
+        """Streaming counterpart of ``run`` with the same override-detection logic so engine-specific live paths still get sandboxed."""
         if has_callable_override(self._adapter, "run_live", ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE):
             run_live_callable = effective_engine_callable(self._adapter, "run_live")
             if not callable(run_live_callable):
@@ -218,6 +228,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
         )
 
     def render_transcript(self, execution: CLIExecutionResult) -> str:
+        """Delegate transcript rendering to the wrapped adapter; sandboxing doesn't change the post-mortem format."""
         return self._adapter.render_transcript(execution)
 
 

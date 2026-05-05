@@ -14,6 +14,7 @@ from .runtime import SubagentRef, TaskRuntime
 
 
 def canonicalize_task_terminal_state(task: "TaskRecord") -> None:
+    """Fill in ``close_reason`` and clear ``flag_reason`` on terminal tasks so persisted records always satisfy the contract that closed/done tasks have a reason and aren't simultaneously flagged."""
     status = str(task.status)
     if status == "closed":
         outcome_reason_code = task.runtime.pipeline.last_outcome.reason_code
@@ -74,12 +75,14 @@ class GitSettings(BaseModel):
     worktree_path: str | None = None  # Path to git worktree
 
     def to_intent_git_settings(self) -> "TaskIntentGitSettings":
+        """Project the operator-controlled subset out of the combined git settings for the intent persistence boundary."""
         return TaskIntentGitSettings(
             auto_commit=self.auto_commit,
             commit_message=self.commit_message,
         )
 
     def to_state_git_settings(self) -> "TaskStateGitSettings":
+        """Project the runtime-tracking subset out of the combined git settings for the state persistence boundary."""
         return TaskStateGitSettings(
             commit_sha=self.commit_sha,
             checkpoint_attempts=self.checkpoint_attempts,
@@ -114,6 +117,7 @@ class TaskStateGitSettings(BaseModel):
     worktree_path: str | None = None  # Path to git worktree
 
     def to_git_updates(self) -> dict[str, str | int | None]:
+        """Return the dict shape ``GitSettings.model_copy(update=...)`` accepts so state-side fields can be reapplied without touching operator-intent fields."""
         return {
             "commit_sha": self.commit_sha,
             "checkpoint_attempts": self.checkpoint_attempts,
@@ -175,6 +179,7 @@ class TaskStateRecord(BaseModel):
     runtime: TaskRuntime = Field(default_factory=TaskRuntime)  # Detailed execution state
 
     def apply_to_task(self, record: "TaskRecord") -> "TaskRecord":
+        """Overlay this state snapshot back onto a TaskRecord built from intent; called by ``TaskRecord.from_intent_and_state`` when reassembling persisted tasks from the split storage shape."""
         record.model = self.model
         record.status = self.status
         record.close_reason = self.close_reason
@@ -247,6 +252,7 @@ class TaskRecord(BaseModel):
     )  # Mutable execution state, excluded from serialization
 
     def to_intent_record(self) -> TaskIntentRecord:
+        """Project the operator-intent half of the task for the intent persistence boundary."""
         return TaskIntentRecord(
             id=self.id,
             slug=self.slug,
@@ -264,6 +270,7 @@ class TaskRecord(BaseModel):
         )
 
     def to_state_record(self) -> TaskStateRecord:
+        """Project the runtime-state half of the task for the state persistence boundary; deep-copies retry policy and runtime so callers can mutate without aliasing the live task."""
         return TaskStateRecord(
             model=self.model,
             status=self.status,
@@ -279,6 +286,7 @@ class TaskRecord(BaseModel):
         )
 
     def to_storage_state_record(self) -> TaskStateRecord:
+        """State projection used at the SQLite write boundary; rewrites runtime to the for-storage shape and pins worktree_path so reads back match what was written."""
         state = self.to_state_record()
         state.runtime = self.runtime.for_storage(
             commit_sha=self.git.commit_sha,
@@ -294,6 +302,7 @@ class TaskRecord(BaseModel):
         intent: TaskIntentRecord,
         state: TaskStateRecord | None = None,
     ) -> "TaskRecord":
+        """Reassemble a TaskRecord from its persisted intent and state halves; the read-side counterpart of ``to_intent_record`` / ``to_state_record``."""
         record = cls(**intent.model_dump(mode="python"))
         if state is None:
             return record
@@ -301,11 +310,15 @@ class TaskRecord(BaseModel):
 
 
 class UnmergedWorktree(BaseModel):
+    """Pointer to a worktree whose branch never made it back into main; surfaced to operators by health and status commands so abandoned work is visible."""
+
     task_id: str
     worktree_path: str
 
 
 class WorkspaceState(BaseModel):
+    """Workspace-scoped runtime state outside any single task: active selection, queue, pool stop reason, and unmerged-worktree leftovers."""
+
     active_task_id: str | None = None
     queue: list[str] = Field(default_factory=list)
     pool_stop_reason: str | None = None

@@ -261,6 +261,7 @@ class StateMachineRunner:
 
     @staticmethod
     def _record_failed_run(state: TaskState, record: FailedRunRecord) -> None:
+        """Merge a new failed-run report into the per-failure-shape history without overwriting operator-override bookkeeping; called from `_apply_delta` when a rule emits `record_failed_run` so the recovery agent can see how many times the same shape has recurred."""
         existing = state.failed_run_history.get(record.key)
         if existing is None:
             state.failed_run_history[record.key] = record
@@ -287,6 +288,7 @@ class StateMachineRunner:
         to_stage: str,
         event: Event,
     ) -> None:
+        """Drop the saved subagent sessions for the destination agent stage when a reject hands control to a different agent, so the next agent starts fresh instead of resuming a conversation that was rejected at someone else's stage."""
         if self.session_store is None or not isinstance(event, Reject) or event.source != "agent":
             return
         from_agent_stage = pipeline_stage_for_phase(from_stage)

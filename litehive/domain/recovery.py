@@ -87,9 +87,11 @@ class FailureFingerprint:
     diagnostics: dict[str, Any] = field(default_factory=dict)  # Additional failure context
 
     def budget_key(self) -> str:
+        """Collapse classification or raw fingerprint into the recovery-budget bucket key."""
         return self.classification or self.fingerprint
 
     def to_payload(self) -> dict[str, Any]:
+        """Serialize to the JSON-safe shape persisted in lifecycle state recovery history."""
         return {
             "fingerprint": self.fingerprint,
             "classification": self.classification,
@@ -98,6 +100,7 @@ class FailureFingerprint:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "FailureFingerprint":
+        """Rehydrate from persisted lifecycle state, defaulting unknown fingerprints rather than raising."""
         return cls(
             fingerprint=str(payload.get("fingerprint") or "unknown"),
             classification=payload.get("classification"),
@@ -131,10 +134,12 @@ class RecoveryTrigger:
     diagnostics: dict[str, Any] = field(default_factory=dict)  # Additional failure context
 
     def budget_key(self) -> str:
+        """Compose origin stage with the fingerprint so budgets are scoped per stage, not workspace-wide."""
         origin = self.origin_stage or "<unknown>"
         return f"{origin}:{self.failure_fingerprint.budget_key()}"
 
     def to_payload(self) -> dict[str, Any]:
+        """Serialize the active trigger for persistence in lifecycle state."""
         return {
             "origin_stage": self.origin_stage,
             "trigger_event_kind": self.trigger_event_kind.value,
@@ -147,6 +152,7 @@ class RecoveryTrigger:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "RecoveryTrigger":
+        """Rehydrate from persisted state, treating unknown trigger kinds as UNKNOWN rather than failing the load."""
         return cls(
             origin_stage=payload.get("origin_stage"),
             trigger_event_kind=TriggerEventKind(payload.get("trigger_event_kind") or TriggerEventKind.UNKNOWN),
@@ -183,6 +189,7 @@ class RecoveryOutcome:
     created_at: str = field(default_factory=utcnow)  # When the recovery outcome was recorded
 
     def to_payload(self) -> dict[str, Any]:
+        """Serialize a completed recovery attempt for the recovery_history list."""
         return {
             "trigger": self.trigger.to_payload(),
             "recovery_verdict": self.recovery_verdict,
@@ -194,6 +201,7 @@ class RecoveryOutcome:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "RecoveryOutcome":
+        """Rehydrate from persisted recovery_history entries, defaulting missing dispositions to TERMINATED."""
         return cls(
             trigger=RecoveryTrigger.from_payload(dict(payload.get("trigger") or {})),
             recovery_verdict=str(payload.get("recovery_verdict") or ""),
@@ -208,10 +216,12 @@ BLOCKED_ON_FOLLOW_UP_REASON_PREFIX = "blocked_on_follow_up:"
 
 
 def blocked_on_follow_up_reason(follow_up_task_id: str) -> str:
+    """Encode the parent's wait-on-child reason string when an agent spawns a blocking follow-up task."""
     return f"{BLOCKED_ON_FOLLOW_UP_REASON_PREFIX}{follow_up_task_id.strip()}"
 
 
 def parse_blocked_on_follow_up_reason(reason: str | None) -> str | None:
+    """Recover the follow-up task id from a parent's reason string; called by the runner when deciding whether the parent can resume."""
     if reason is None:
         return None
     normalized = reason.strip()

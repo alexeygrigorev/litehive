@@ -12,6 +12,7 @@ from litehive.config.workspace_files import config_path, context_path
 
 
 def _read_config_layer(path: Path) -> dict[str, Any]:
+    """Load one YAML config layer; missing files return ``{}`` so every caller can blindly merge over the default-config baseline."""
     if not path.exists():
         return {}
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -21,6 +22,7 @@ def _read_config_layer(path: Path) -> dict[str, Any]:
 
 
 def merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> dict[str, Any]:
+    """Deep-merge ``overlay`` over ``base``: nested mappings combine recursively, scalars and lists overwrite. Defines the precedence rule between defaults, user-global, and workspace config layers."""
     merged = dict(base)
     for key, value in overlay.items():
         current = merged.get(key)
@@ -32,12 +34,14 @@ def merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> 
 
 
 def load_effective_config_data(root: Path) -> dict[str, Any]:
+    """Materialize the effective config dict from defaults + user-global + per-workspace layers without applying runtime-setting overrides yet."""
     config = asdict(LitehiveConfig())
     config = merge_config_layers(config, _read_config_layer(litehive_root() / "config.yaml"))
     return merge_config_layers(config, _read_config_layer(config_path(root)))
 
 
 def load_config(root: Path) -> LitehiveConfig:
+    """Public config entrypoint: bootstrap the workspace if needed, layer in runtime-setting overrides, and return a validated ``LitehiveConfig``. Called by every CLI command and the daemon at startup."""
     ensure_workspace(root)
     # inline: runtime_settings transitively pulls db.schema which loads
     # config.* back through litehive/config/__init__.py during partial init.
@@ -48,5 +52,6 @@ def load_config(root: Path) -> LitehiveConfig:
 
 
 def load_context(root: Path) -> str:
+    """Read the workspace context document used as a stable preamble for prompts; bootstrap the workspace first so the file is guaranteed to exist."""
     ensure_workspace(root)
     return context_path(root).read_text(encoding="utf-8")
