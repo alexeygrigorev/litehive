@@ -75,6 +75,7 @@ class _RecoveryFailureContext:
 
 
 def collect_status_snapshot(root: Path) -> StatusSnapshot:
+    """Build the full diagnostic snapshot used by `litehive health` to surface every probe finding."""
     root = root.resolve()
     registry_issues = probe_registry_files()
     config, config_issues = _load_config_for_status(root)
@@ -130,6 +131,7 @@ def collect_operational_status_snapshot(root: Path) -> StatusSnapshot:
 
 
 def status_has_problems(issues: list[StatusIssue]) -> bool:
+    """Decide whether the status command should print an issues block and exit non-zero."""
     return any(issue.severity in {"WARN", "ERROR"} for issue in issues)
 
 
@@ -140,12 +142,14 @@ def render_health_summary(issues: list[StatusIssue]) -> str:
 
 
 def render_issue_lines(issues: list[StatusIssue]) -> list[str]:
+    """Render the verbose issue block (full message + remediation) shown by `litehive health`."""
     if not status_has_problems(issues):
         return []
     return [*(issue.render() for issue in issues), render_health_summary(issues)]
 
 
 def render_operational_issue_lines(issues: list[StatusIssue]) -> list[str]:
+    """Render the terse issue block used by the default `litehive status`, with remediation hints stripped."""
     if not status_has_problems(issues):
         return []
     return [
@@ -155,10 +159,12 @@ def render_operational_issue_lines(issues: list[StatusIssue]) -> list[str]:
 
 
 def _operational_issue_message(message: str) -> str:
+    """Trim the ` — remediation…` tail off a status message so default `status` output stays one-line per issue."""
     return message.split(" — ", 1)[0]
 
 
 def probe_registry_files() -> list[StatusIssue]:
+    """Surface a broken global workspace registry so health output explains why no workspace can be resolved."""
     issues: list[StatusIssue] = []
     registry_error = workspace_registry_error()
     if registry_error is not None:
@@ -176,6 +182,8 @@ def probe_registry_files() -> list[StatusIssue]:
 
 
 def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssue]]:
+    """Merge global+workspace config like normal load, but downgrade YAML/validation errors into status issues
+    instead of raising so `status`/`health` can still render with whatever fields are valid."""
     issues: list[StatusIssue] = []
     data = asdict(LitehiveConfig())
     for path, key in ((litehive_root() / "config.yaml", "global_config"), (config_path(root), "config")):
@@ -227,6 +235,8 @@ def _best_effort_status_config(data: Mapping[str, Any]) -> LitehiveConfig:
 
 
 def _config_error_key(exc: Exception) -> str | None:
+    """Extract the offending field name from a config validation/TypeError so the best-effort loader can drop
+    just that field and retry instead of giving up the whole config."""
     if isinstance(exc, ValidationError):
         if exc.errors():
             error = exc.errors()[0]
@@ -248,6 +258,8 @@ def _config_error_key(exc: Exception) -> str | None:
 
 
 def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue]]:
+    """Read workspace state read-only and convert SQLite/validation failures into a status issue rather than
+    propagating so `status`/`health` can still render the rest of the snapshot."""
     issues: list[StatusIssue] = []
     db_path = workspace_path(root, "data.db")
     if db_path.exists():
@@ -289,6 +301,8 @@ def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue
 def _load_engine_monitoring_for_status(
     root: Path,
 ) -> tuple[WorkspaceEngineMonitoring, list[StatusIssue]]:
+    """Load engine usage stats; on failure return an empty record plus a WARN so status output is not blocked
+    by a corrupt engine_monitoring table."""
     try:
         return load_engine_monitoring(root), []
     except (OSError, sqlite3.DatabaseError, ValueError, ValidationError) as exc:
@@ -304,6 +318,8 @@ def _load_engine_monitoring_for_status(
 
 
 def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusState) -> list[StatusIssue]:
+    """Detect a wedged runner (live pid but stale heartbeat) or a stale runner lock (active task but no live pid),
+    so the operator knows whether to wait, restart, or `litehive repair`."""
     issues: list[StatusIssue] = []
     active_task_id = runner.active_task_id or state.active_task_id
     live_pid = runner_pid_is_alive(runner.pid)
@@ -341,6 +357,7 @@ def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusS
 
 
 def _probe_daemon_status(root: Path) -> list[StatusIssue]:
+    """Flag the daemon as STOPPED when its lockfile says stale and the recorded pid is dead, prompting a restart."""
     try:
         entry = daemon_metadata(root)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
@@ -371,6 +388,8 @@ def _probe_daemon_status(root: Path) -> list[StatusIssue]:
 
 
 def _probe_last_cycle(root: Path) -> list[StatusIssue]:
+    """Catch the case where the most recent run-all cycle ended with a repair traceback and never re-ran,
+    so health output points the operator at the failed log instead of looking healthy."""
     latest_dir = latest_run_all_log_dir(root)
     if latest_dir is None:
         return []
@@ -400,6 +419,8 @@ def _probe_last_cycle(root: Path) -> list[StatusIssue]:
 
 
 def _probe_heru_link(root: Path) -> list[StatusIssue]:
+    """Detect a `[tool.uv.sources].heru.path` that no longer resolves on disk — that breaks every worktree's
+    `uv sync`, so health output names the missing path before the next agent run dies."""
     pyproject_path = root / "pyproject.toml"
     if not pyproject_path.exists():
         return []
@@ -433,6 +454,8 @@ def _probe_heru_link(root: Path) -> list[StatusIssue]:
 
 
 def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIssue]:
+    """Re-surface a previous main/origin-main divergence stop with the current diff so the operator knows
+    manual reconciliation is still pending before the pool can run."""
     if state.pool_stop_reason != "diverged_from_origin":
         return []
     # inline: daemon.execution top-level-imports observability.status, which
@@ -454,6 +477,8 @@ def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIs
 
 
 def _probe_pool_stop_reason(state: WorkspaceState) -> list[StatusIssue]:
+    """Show a CRITICAL banner when the pool auto-stopped after the consecutive-failures cap was hit, so
+    operators don't wait for tasks that the scheduler will never start."""
     if state.pool_stop_reason != "consecutive_task_failures":
         return []
     failure_count = max(3, int(state.consecutive_task_failures))
@@ -474,6 +499,8 @@ def _probe_task_index_references(
     state: WorkspaceState,
     state_issues: list[StatusIssue],
 ) -> list[StatusIssue]:
+    """Catch queue/active references that point at task ids missing from the SQLite task table — without this
+    `health` would show a clean queue while the scheduler keeps tripping on phantom ids."""
     if any(issue.key in _TASKS_UNAVAILABLE_KEYS for issue in state_issues):
         return []
     db_path = workspace_path(root, "data.db")
@@ -523,6 +550,8 @@ def _probe_task_status_damage(
     runner: RunnerStatusState,
     state_issues: list[StatusIssue],
 ) -> list[StatusIssue]:
+    """Walk every task and emit recovery-failure / backlog-damage issues so `health` calls out individual stuck
+    tasks before they silently block the queue."""
     if any(issue.key in _TASKS_UNAVAILABLE_KEYS for issue in state_issues):
         return []
     if not workspace_path(root, "data.db").exists():
@@ -564,6 +593,8 @@ def _probe_task_status_damage(
 
 
 def _live_active_pipeline_stage(active_task_id: str | None, tasks: list[TaskRecord]) -> str | None:
+    """Return the stage the active task is genuinely running, used by backlog-damage probes to avoid flagging
+    a queued sibling that legitimately matches the in-flight stage."""
     if active_task_id is None:
         return None
     active_task = next((task for task in tasks if task.id == active_task_id), None)
@@ -576,6 +607,8 @@ def _live_active_pipeline_stage(active_task_id: str | None, tasks: list[TaskReco
 
 
 def _recovery_failure_issue(root: Path, task: TaskRecord) -> StatusIssue | None:
+    """Build an ERROR issue for a task whose recovery budget/attempt failed, so `health` tells the operator
+    which task to evidence and requeue rather than leaving it silently flagged."""
     if task.flag_reason is None:
         flag_reason = None
     else:
@@ -603,6 +636,8 @@ def _recovery_failure_issue(root: Path, task: TaskRecord) -> StatusIssue | None:
 
 
 def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureContext:
+    """Pull the recovery failure reason / explanation / origin stage out of the lifecycle persistence layer
+    so the recovery-failure issue carries the same detail the scheduler saw, not just the flag string."""
     context = _RecoveryFailureContext()
     try:
         from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound  # noqa: PLC0415
@@ -633,6 +668,8 @@ def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureC
 
 
 def _task_issue_stage(task: TaskRecord, preferred_stage: str | None = None) -> str:
+    """Pick the most informative stage label to attach to a task issue, falling back through last_outcome,
+    current_stage, pipeline_status — so the message points at the stage that actually broke."""
     if preferred_stage:
         return preferred_stage
     return str(
@@ -649,6 +686,9 @@ def _backlog_damage_issue(
     active_task_id: str | None,
     active_stage: str | None,
 ) -> StatusIssue | None:
+    """Detect inconsistencies between TaskStatus, pipeline_status, and resume markers — e.g. a task in
+    `queued/backlog` that runtime says should resume mid-pipeline — that the scheduler would silently
+    normalize away if not surfaced here."""
     if task.id == active_task_id:
         return None
     status = task.status
@@ -690,6 +730,8 @@ def _backlog_damage_issue(
 
 
 def _runtime_resume_stage(task: TaskRecord) -> str | None:
+    """Return the stage the task's runtime markers say it should resume from (if any of them point to a
+    resumable stage), used by backlog-damage detection to tell `backlog` apart from a stale resume marker."""
     candidates: list[str | None] = []
     interruption = task.runtime.execution.interruption
     if interruption is not None:
@@ -704,6 +746,8 @@ def _runtime_resume_stage(task: TaskRecord) -> str | None:
 
 
 def _task_has_resume_marker(task: TaskRecord) -> bool:
+    """Tell whether a queued task has any trusted marker (current stage or interruption) anchoring its
+    pipeline_status, so the backlog-damage probe doesn't WARN on tasks the scheduler can legitimately resume."""
     stage = str(task.pipeline_status)
     current_stage = task.runtime.pipeline.current_stage
     if current_stage.stage == stage and current_stage.status in _TRUSTED_STAGE_MARKER_STATUSES:
@@ -719,6 +763,8 @@ def _safe_yaml_mapping(
     key: str,
     remediation: str,
 ) -> tuple[dict[str, Any] | None, StatusIssue | None]:
+    """Read a YAML file expected to be a top-level mapping; on parse error or wrong shape return a status
+    issue instead of raising, so the config loader can keep merging the layers it could read."""
     data, issue = _safe_yaml_document(path, key=key, remediation=remediation)
     if issue is not None:
         return None, issue
@@ -738,6 +784,8 @@ def _safe_yaml_document(
     key: str,
     remediation: str,
 ) -> tuple[object | None, StatusIssue | None]:
+    """Read a YAML file and turn YAMLError/OSError into a status issue with location info, so corrupt config
+    surfaces as one diagnostic line instead of crashing `status`/`health`."""
     if not path.exists():
         return None, None
     try:
@@ -758,6 +806,8 @@ def _safe_yaml_document(
 
 
 def _load_runner_status_for_status(root: Path) -> tuple[RunnerStatusState, StatusIssue | None]:
+    """Parse the runner lockfile and reconcile its recorded pid against the OS so the status snapshot reflects
+    RUNNING/STALE/empty, returning a status issue on bad JSON instead of raising."""
     path = workspace_path(root, "runtime", ".runner.lock")
     mapping, issue = _safe_json_mapping(
         path,
@@ -791,6 +841,8 @@ def _safe_json_mapping(
     key: str,
     remediation: str,
 ) -> tuple[dict[str, Any] | None, StatusIssue | None]:
+    """Read a JSON file expected to be an object; on missing/blank file return empty, on parse/shape errors
+    return a status issue so the runner-state loader can degrade gracefully."""
     if not path.exists():
         return None, None
     try:
@@ -823,6 +875,8 @@ def _safe_json_mapping(
 
 
 def _heartbeat_age_seconds(heartbeat_at: str | None) -> int | None:
+    """Convert the runner's last-heartbeat ISO timestamp into seconds-since-now, used by the runner-state probe
+    to decide WEDGED."""
     if not heartbeat_at:
         return None
     try:
@@ -833,6 +887,8 @@ def _heartbeat_age_seconds(heartbeat_at: str | None) -> int | None:
 
 
 def _validation_error_label(exc: Exception) -> str:
+    """Format the first pydantic ValidationError (or any other exception) as a one-line `path: msg` label so
+    config/runner status messages stay scannable instead of dumping pydantic's full multi-line traceback."""
     if isinstance(exc, ValidationError):
         if exc.errors():
             error = exc.errors()[0]
@@ -847,6 +903,8 @@ def _validation_error_label(exc: Exception) -> str:
 
 
 def _yaml_location_label(exc: yaml.YAMLError | None) -> str:
+    """Render the line number from a YAMLError (or `line unknown`) so corrupt-YAML status messages point
+    at the offending line."""
     if exc is None:
         return "line unknown"
     mark = getattr(exc, "problem_mark", None)

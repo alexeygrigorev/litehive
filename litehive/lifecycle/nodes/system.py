@@ -51,6 +51,13 @@ class MergeConflict(Exception):
 
 
 class SystemNode(Node):
+    """Base class for pipeline nodes the runner drives without invoking an agent.
+
+    Concrete subclasses cover the non-agent points in the pipeline (entry probe,
+    worktree sync, pre-exec recovery, automatic commit) — anywhere we need a
+    typed ``Event`` decision but no LLM call.
+    """
+
     node_type = NodeType.SYSTEM
 
     def __init__(self, name: PipelineState) -> None:
@@ -263,6 +270,7 @@ class CommitNode(SystemNode):
             return Crash(exc_type="GitError", message=str(exc))
 
     def _merge_worktree(self, state: TaskState) -> dict[str, object] | None:
+        """Subclass hook for the actual merge — ``GitCommitNode`` binds it to git, ``StubCommitNode`` no-ops it."""
         raise NotImplementedError
 
 
@@ -460,6 +468,7 @@ class GitCommitNode(CommitNode):
         raise MergeConflict(unresolved)
 
     def main_head(self) -> str | None:
+        """Return the current commit on the main repo's HEAD; overridable seam used by the commit-stage merge logic and stubbed in tests."""
         return current_head(self.main_repo_root)
 
     def autocommit_worktree_changes(self, worktree: Path, state: TaskState) -> None:
@@ -524,6 +533,7 @@ class GitCommitNode(CommitNode):
         return head
 
     def _generated_commit_message(self, state: TaskState, detail: str) -> str:
+        """Build the commit message used by the auto-commit helpers — falls back to a plain ``litehive <task_id>`` line when the runner did not wire up a task_resolver."""
         if self.task_resolver is not None:
             task = self.task_resolver(state)
             if task is not None:
@@ -531,6 +541,7 @@ class GitCommitNode(CommitNode):
         return f"litehive {state.task_id}: {detail}"
 
     def git_status_entries(self, repo_root: Path) -> list[tuple[str, str]]:
+        """Return ``(porcelain_code, path)`` tuples for the auto-commit helpers; public seam that the commit-stage tests monkey-patch to fake a dirty checkout."""
         return self._git_status_entries_with_options(repo_root)
 
     def _filter_stageable_paths(self, repo_root: Path, paths: list[str]) -> list[str]:
@@ -556,6 +567,7 @@ class GitCommitNode(CommitNode):
         repo_root: Path,
         include_ignored: bool = False,
     ) -> list[tuple[str, str]]:
+        """Parse ``git status --porcelain`` lines for the auto-commit helpers, extracting the destination path on rename/copy entries so ``git add`` can stage them."""
         entries: list[tuple[str, str]] = []
         for line in status_porcelain_with_options(repo_root, include_ignored=include_ignored):
             # Porcelain format: "XY path" for most changes; "R  old -> new" for
@@ -569,10 +581,12 @@ class GitCommitNode(CommitNode):
         return entries
 
     def _worktree_local_only_paths(self, worktree: Path) -> list[str]:
+        """Snapshot worktree-only paths (gitignored or runner-owned ``.litehive/*.db``) before merge so the commit stage can copy them back onto main afterward — git itself never carries them across the merge."""
         entries = self._git_status_entries_with_options(worktree, include_ignored=True)
         return [path for code, path in entries if code == "!!" or _is_main_checkout_cleanup_excluded(path)]
 
     def _restore_local_only_paths(self, worktree: Path, relpaths: list[str]) -> None:
+        """Copy the local-only paths recorded by ``_worktree_local_only_paths`` from the worktree onto the main checkout once the merge is settled."""
         for relpath in relpaths:
             source = worktree / relpath
             if not source.exists():
@@ -585,9 +599,11 @@ class GitCommitNode(CommitNode):
             shutil.copy2(source, destination)
 
     def worktree_head(self, worktree: Path) -> str:
+        """Return the worktree's HEAD commit; overridable seam the commit-stage tests monkey-patch to simulate already-landed branches."""
         return head_sha_strict(worktree)
 
     def worktree_branch(self, worktree: Path) -> str | None:
+        """Return the branch checked out in the worktree (``None`` for detached HEAD); overridable seam the commit-stage tests stub to control the merge ref."""
         return current_branch(worktree)
 
     @staticmethod
@@ -627,6 +643,7 @@ class GitCommitNode(CommitNode):
         commit_no_edit(self.main_repo_root)
 
     def worktree_patch_already_on_main(self, worktree_head: str, main_head: str | None) -> bool:
+        """Return True when every commit on the worktree branch is already on main (e.g. cherry-picked) so the commit stage can short-circuit to a ``reconciled_noop`` instead of producing a duplicate merge."""
         if not main_head:
             return False
         lines = cherry_check(self.main_repo_root, main_head, worktree_head)
