@@ -18,13 +18,11 @@ from dataclasses import dataclass
 from typing import Callable
 
 from litehive.domain.common import utcnow
-from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION
 from litehive.domain.recovery import (
     FailureFingerprint,
     RecoveryDisposition,
     RecoveryOutcome,
     RecoveryTrigger,
-    TriggerEventKind,
     parse_blocked_on_follow_up_reason,
 )
 from litehive.lifecycle.events import (
@@ -219,33 +217,6 @@ def _reason_code_from_event(state: TaskState, event: Event) -> str | None:
     return None
 
 
-def _trigger_event_kind(event: Event) -> TriggerEventKind:
-    """
-    Project a failure ``Event`` onto the recovery agent's ``TriggerEventKind``.
-
-    The recovery prompt branches on the kind to pick its diagnosis
-    template, and the agent must see domain labels (``REJECT``,
-    ``SEMANTIC_REJECT``, ``CRASH``) rather than Python class names that
-    would change under refactor. Called by ``recovery_trigger_from_event``
-    when packaging a failure for the recovery agent.
-    """
-    if isinstance(event, Reject):
-        if event.classification == SEMANTIC_REJECT_CLASSIFICATION:
-            return TriggerEventKind.SEMANTIC_REJECT
-        return TriggerEventKind.REJECT
-    if isinstance(event, Blocked):
-        return TriggerEventKind.BLOCKED
-    if isinstance(event, Crash):
-        return TriggerEventKind.CRASH
-    if isinstance(event, Timeout):
-        return TriggerEventKind.TIMEOUT
-    if isinstance(event, StageRetryLimitHit):
-        return TriggerEventKind.STAGE_RETRY_LIMIT
-    if isinstance(event, OverallRetryLimitHit):
-        return TriggerEventKind.RETRY_LIMIT
-    return TriggerEventKind.UNKNOWN
-
-
 def _fingerprint_from_event(state: TaskState, event: Event) -> FailureFingerprint:
     """
     Build the ``FailureFingerprint`` keying the per-trigger recovery budget.
@@ -342,7 +313,7 @@ def recovery_trigger_from_event(state: TaskState, event: Event) -> RecoveryTrigg
         diagnostics = {}
     return RecoveryTrigger(
         origin_stage=state.stage,
-        trigger_event_kind=_trigger_event_kind(event),
+        trigger_event_kind=event.trigger_event_kind,
         failure_fingerprint=_fingerprint_from_event(state, event),
         source=source,
         reason_code=reason_code,

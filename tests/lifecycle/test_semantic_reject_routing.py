@@ -144,15 +144,13 @@ def test_task_time_budget_exceeded_fails_before_next_pre_commit_stage() -> None:
 
 def test_semantic_reject_trigger_event_kind_classification() -> None:
     """Test that semantic reject events get classified with SEMANTIC_REJECT TriggerEventKind."""
-    from litehive.domain.lifecycle_deltas import _trigger_event_kind
-
     # Regular reject event
     regular_reject = Reject(
         source="agent",
         reason="implementation doesn't meet criteria",
         classification=None,
     )
-    assert _trigger_event_kind(regular_reject) == TriggerEventKind.REJECT
+    assert regular_reject.trigger_event_kind == TriggerEventKind.REJECT
 
     # Semantic reject event
     semantic_reject = Reject(
@@ -160,8 +158,8 @@ def test_semantic_reject_trigger_event_kind_classification() -> None:
         reason="acceptance evidence is incomplete",
         classification=SEMANTIC_REJECT_CLASSIFICATION,
     )
-    assert _trigger_event_kind(semantic_reject) == TriggerEventKind.SEMANTIC_REJECT
+    assert semantic_reject.trigger_event_kind == TriggerEventKind.SEMANTIC_REJECT
 
     # Other event types should remain unchanged
     crash = Crash(exc_type="RuntimeError", message="adapter crashed")
-    assert _trigger_event_kind(crash) == TriggerEventKind.CRASH
+    assert crash.trigger_event_kind == TriggerEventKind.CRASH

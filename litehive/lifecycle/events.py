@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from litehive.domain.common import PipelineState
+from litehive.domain.recovery import TriggerEventKind
+from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION
 
 
 @dataclass(frozen=True)
@@ -24,6 +26,19 @@ class Event:
     around, hash, and log. Direct instances of ``Event`` are never fired —
     only the concrete subclasses below.
     """
+
+    @property
+    def trigger_event_kind(self) -> TriggerEventKind:
+        """
+        Recovery-trigger label this event carries when a failure is
+        being lifted into a ``RecoveryTrigger``.
+
+        Subclasses override the property (or a class-level constant)
+        when they have a more specific kind. The base returns
+        ``UNKNOWN`` so non-failure events that accidentally reach the
+        recovery layer surface clearly instead of being mis-categorised.
+        """
+        return TriggerEventKind.UNKNOWN
 
 
 @dataclass(frozen=True)
@@ -110,6 +125,21 @@ class Reject(Event):
     classification: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def trigger_event_kind(self) -> TriggerEventKind:
+        """
+        ``SEMANTIC_REJECT`` when the reviewer/QA flagged the work as
+        wrong on the merits, plain ``REJECT`` otherwise.
+
+        The recovery agent groups repeats by this kind, so a hook
+        reject must not pass for a semantic one — that distinction is
+        what keeps "test setup is wonky" loops from drowning out a real
+        "the SWE keeps producing the same bad code" loop.
+        """
+        if self.classification == SEMANTIC_REJECT_CLASSIFICATION:
+            return TriggerEventKind.SEMANTIC_REJECT
+        return TriggerEventKind.REJECT
+
 
 @dataclass(frozen=True)
 class MergeConflictDetected(Event):
@@ -142,6 +172,10 @@ class Blocked(Event):
 
     reason: str
 
+    @property
+    def trigger_event_kind(self) -> TriggerEventKind:
+        return TriggerEventKind.BLOCKED
+
 
 @dataclass(frozen=True)
 class Crash(Event):
@@ -163,6 +197,10 @@ class Crash(Event):
     exc_type: str
     message: str
 
+    @property
+    def trigger_event_kind(self) -> TriggerEventKind:
+        return TriggerEventKind.CRASH
+
 
 @dataclass(frozen=True)
 class Timeout(Event):
@@ -174,6 +212,10 @@ class Timeout(Event):
     anywhere in M1 — reserved for when the runner gains true timeout
     enforcement around ``node.run()`` calls.
     """
+
+    @property
+    def trigger_event_kind(self) -> TriggerEventKind:
+        return TriggerEventKind.TIMEOUT
 
 
 @dataclass(frozen=True)
@@ -191,6 +233,10 @@ class StageRetryLimitHit(Event):
 
     stage: PipelineState
 
+    @property
+    def trigger_event_kind(self) -> TriggerEventKind:
+        return TriggerEventKind.STAGE_RETRY_LIMIT
+
 
 @dataclass(frozen=True)
 class OverallRetryLimitHit(Event):
@@ -202,6 +248,10 @@ class OverallRetryLimitHit(Event):
     Not currently emitted; the rule exists so we can turn it on without
     a rule-table change.
     """
+
+    @property
+    def trigger_event_kind(self) -> TriggerEventKind:
+        return TriggerEventKind.RETRY_LIMIT
 
 
 @dataclass(frozen=True)
