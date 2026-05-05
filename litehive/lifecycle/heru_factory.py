@@ -117,7 +117,9 @@ def _recovery_execution_root(workspace_root: Path) -> Path:
         resolved = candidate.resolve()
     except OSError:
         resolved = candidate
-    return resolved if resolved.is_dir() else workspace_root
+    if resolved.is_dir():
+        return resolved
+    return workspace_root
 
 
 def _agent_execution_root(workspace_root: Path, task, role: str) -> Path:
@@ -141,7 +143,9 @@ def _display_path(root: Path, path: Path) -> str:
         relative = path.relative_to(root)
     except ValueError:
         return str(path)
-    return "." if str(relative) == "" else str(relative)
+    if str(relative) == "":
+        return "."
+    return str(relative)
 
 
 def _rewrite_hallucinated_implementing_pass(
@@ -301,7 +305,10 @@ def latest_verdict_after(
             "test_results": _extract_test_results(latest.message or ""),
         },
     }
-    classification = latest.verdict_classification if latest.verdict == "reject" else None
+    if latest.verdict == "reject":
+        classification = latest.verdict_classification
+    else:
+        classification = None
     if classification:
         metadata["verdict_classification"] = classification
     return AgentVerdict(
@@ -598,7 +605,10 @@ class HeruEngineAdapter:
         """Translate heru exceptions into the error taxonomy."""
         from heru import RetryableExecutionFailure  # noqa: PLC0415
 
-        kind = exc.kind if isinstance(exc, RetryableExecutionFailure) else None
+        if isinstance(exc, RetryableExecutionFailure):
+            kind = exc.kind
+        else:
+            kind = None
         message = str(exc)
 
         if kind in {"quota_exhausted", "rate_limited"}:

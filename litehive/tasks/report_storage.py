@@ -77,7 +77,9 @@ def load_recovery_reports(root: Path, task: TaskRecord) -> list[RecoveryReport]:
 
 def latest_recovery_report(root: Path, task: TaskRecord) -> RecoveryReport | None:
     reports = load_recovery_reports(root, task)
-    return reports[-1] if reports else None
+    if reports:
+        return reports[-1]
+    return None
 
 
 def record_stage_report(root: Path, task: TaskRecord, report: StageReport) -> ReportReference:
@@ -153,7 +155,10 @@ def load_stage_reports(
     pipeline_state: str | None = None,
     stage: str | None = None,
 ) -> list[StageReport]:
-    selected_pipeline_state = pipeline_state if pipeline_state is not None else stage
+    if pipeline_state is not None:
+        selected_pipeline_state = pipeline_state
+    else:
+        selected_pipeline_state = stage
     return _load_stage_reports(root, task_id=task.id, pipeline_state=selected_pipeline_state)
 
 

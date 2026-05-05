@@ -108,7 +108,9 @@ def _resolve_git_dir(cwd: Path) -> Path | None:
 
 
 def _format_cmd(argv: list[str]) -> str:
-    return "git" if not argv else "git " + " ".join(argv)
+    if not argv:
+        return "git"
+    return "git " + " ".join(argv)
 
 
 if __name__ == "__main__":

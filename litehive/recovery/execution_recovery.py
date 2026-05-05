@@ -48,7 +48,10 @@ from litehive.tasks.runtime import (
 def mark_interrupted_subagent(root: Path, task: TaskRecord, reason: str, stage: str) -> RuntimeSubagentState | None:
     active = task.runtime.execution.active_subagent
     interruption = task.runtime.execution.interruption
-    existing = None if interruption is None else interruption.subagent
+    if interruption is None:
+        existing = None
+    else:
+        existing = interruption.subagent
     if active is None and (existing is None or existing.status != "interrupted"):
         return None
     now = utcnow()
@@ -118,7 +121,10 @@ def interruption_journal_message(task: TaskRecord) -> str:
     ]
     if interruption.subagent is not None:
         subagent = interruption.subagent
-        pid = subagent.pid if subagent.pid is not None else "-"
+        if subagent.pid is not None:
+            pid = subagent.pid
+        else:
+            pid = "-"
         parts.append(
             f"Subagent `{subagent.id}` ({subagent.role}/{subagent.engine}, pid={pid}, "
             f"path `{subagent.path}`) stopped with status `{subagent.status}`."
@@ -132,7 +138,10 @@ def interruption_journal_message(task: TaskRecord) -> str:
 def stale_interruption_reason(task: TaskRecord, stage: str, stale_pid: bool = False) -> str:
     active = task.runtime.execution.active_subagent
     if active is not None:
-        pid_detail = f", pid {active.pid} no longer alive" if stale_pid and active.pid else ""
+        if stale_pid and active.pid:
+            pid_detail = f", pid {active.pid} no longer alive"
+        else:
+            pid_detail = ""
         return (
             f"Stale runner detected while subagent `{active.id}` "
             f"({active.role}/{active.engine}{pid_detail}) was still marked running in `{stage}`."
@@ -264,7 +273,10 @@ def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeS
     ref = next((candidate for candidate in reversed(task.subagents) if candidate.id == active.id), None)
     if ref is not None:
         trace = load_subagent_execution_trace(root, task, ref, active=True, runtime_state=active)
-        snippet = "" if trace is None else summarize_transcript(trace.text)
+        if trace is None:
+            snippet = ""
+        else:
+            snippet = summarize_transcript(trace.text)
         if snippet:
             return snippet
     return active.execution_trace_snippet or "runner interrupted before subagent completion"
@@ -273,7 +285,10 @@ def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeS
 def _interrupted_subagent_reason(task: TaskRecord, reason: str) -> str:
     active = task.runtime.execution.active_subagent
     interruption = task.runtime.execution.interruption
-    last_interrupted = None if interruption is None else interruption.subagent
+    if interruption is None:
+        last_interrupted = None
+    else:
+        last_interrupted = interruption.subagent
     if (
         last_interrupted is not None
         and last_interrupted.interruption_reason
@@ -326,11 +341,10 @@ def _write_interrupted_subagent_artifacts(
 
 def _interruption_timestamps(task: TaskRecord, now: str) -> dict[str, str | None]:
     started_at = task.runtime.pipeline.current_stage.started_at or task.runtime.pipeline.run_started_at
-    interrupted_at = (
-        task.runtime.execution.active_subagent.updated_at
-        if task.runtime.execution.active_subagent is not None
-        else task.runtime.pipeline.current_stage.updated_at or started_at or now
-    )
+    if task.runtime.execution.active_subagent is not None:
+        interrupted_at = task.runtime.execution.active_subagent.updated_at
+    else:
+        interrupted_at = task.runtime.pipeline.current_stage.updated_at or started_at or now
     return {
         "run_started_at": task.runtime.pipeline.run_started_at,
         "stage_started_at": task.runtime.pipeline.current_stage.started_at,
@@ -563,7 +577,10 @@ def _normalize_nonrunning_resumable_tasks(
         if stage is None:
             continue
         queue_contains_task = task.id in state.queue
-        queue_index = None if not queue_contains_task else state.queue.index(task.id)
+        if not queue_contains_task:
+            queue_index = None
+        else:
+            queue_index = state.queue.index(task.id)
         should_normalize = (
             task.status != TaskStatus.QUEUED
             or task.runtime.pipeline.execution_status != "idle"

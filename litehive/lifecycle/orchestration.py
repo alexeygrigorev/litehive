@@ -89,7 +89,10 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
     if task_record is None:
         raise LookupError(f"no task record for {task_id!r}")
     raw = task_record.pipeline_mode
-    mode = PipelineMode(raw) if isinstance(raw, str) and raw else PipelineMode.FULL
+    if isinstance(raw, str) and raw:
+        mode = PipelineMode(raw)
+    else:
+        mode = PipelineMode.FULL
     entry_stage = _entry_stage_for_task(task_record)
     fresh_state_kwargs = dict(
         task_id=task_id,
@@ -286,7 +289,10 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
         )
         return
     current_stage = task_record.runtime.pipeline.current_stage
-    started_at = current_stage.started_at if current_stage.stage == state.stage else now
+    if current_stage.stage == state.stage:
+        started_at = current_stage.started_at
+    else:
+        started_at = now
     task_record.runtime.pipeline.execution_status = "running"
     task_record.runtime.pipeline.current_stage = current_stage.model_copy(
         update={
@@ -313,7 +319,9 @@ def _recovery_origin_stage(origin_stage: str | None) -> str | None:
         task_stage = task_stage_for_pipeline_state(origin_stage)
     except ValueError:
         return origin_stage
-    return origin_stage if task_stage is None else str(task_stage)
+    if task_stage is None:
+        return origin_stage
+    return str(task_stage)
 
 
 def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | None:
@@ -337,8 +345,14 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
                 )
     elif state.stage == PipelineState.FAILED:
         trigger = _latest_recovery_trigger(state)
-        origin_stage = trigger.origin_stage if trigger is not None else None
-        failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
+        if trigger is not None:
+            origin_stage = trigger.origin_stage
+        else:
+            origin_stage = None
+        if hasattr(state.failed_reason, "value"):
+            failed_reason = state.failed_reason.value
+        else:
+            failed_reason = state.failed_reason
         merge_reject = state.last_rejection_by_stage.get(PipelineState.MERGE_RESOLVING)
         if origin_stage == PipelineState.MERGE_RESOLVING or merge_reject is not None:
             task_record.status = TaskStatus.FLAGGED
@@ -364,10 +378,14 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
             elif failed_reason == "recovery_exhausted":
                 task_record.flag_reason = "recovery_failed"
             elif failed_reason == "recovery_budget_hit":
-                trigger_kind = trigger.trigger_event_kind.value if trigger is not None else None
-                task_record.flag_reason = (
-                    "crash_budget_exhausted" if trigger_kind in {"crash", "timeout"} else "recovery_budget_exhausted"
-                )
+                if trigger is not None:
+                    trigger_kind = trigger.trigger_event_kind.value
+                else:
+                    trigger_kind = None
+                if trigger_kind in {"crash", "timeout"}:
+                    task_record.flag_reason = "crash_budget_exhausted"
+                else:
+                    task_record.flag_reason = "recovery_budget_exhausted"
     else:
         task_record.status = TaskStatus.IN_PROGRESS
         task_record.close_reason = None
@@ -426,7 +444,10 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
 
 
 def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskState) -> None:
-    failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else state.failed_reason
+    if hasattr(state.failed_reason, "value"):
+        failed_reason = state.failed_reason.value
+    else:
+        failed_reason = state.failed_reason
     if state.stage != PipelineState.FAILED:
         return
     if failed_reason != "recovery_exhausted":

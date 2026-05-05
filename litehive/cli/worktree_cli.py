@@ -72,7 +72,9 @@ def clean(
         print(f"remove_failed: {item.task_id} {message}")
     print(f"removed_count: {len(removed)}")
     print(f"deferred_count: {len(deferred)}")
-    return 1 if failures else 0
+    if failures:
+        return 1
+    return 0
 
 
 @app.command("rescue", help="List or rescue flagged merge-recovery worktree commits onto main")
@@ -138,4 +140,6 @@ def rescue(
     print(f"missing_worktree_count: {missing_worktree_count}")
     print(f"no_commits_count: {no_commits_count}")
     print(f"active_task_count: {active_task_count}")
-    return 1 if manual_conflict_count or missing_worktree_count or active_task_count else 0
+    if manual_conflict_count or missing_worktree_count or active_task_count:
+        return 1
+    return 0

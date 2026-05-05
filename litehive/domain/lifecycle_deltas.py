@@ -123,8 +123,14 @@ def _stage_retry_exhausted_record(
     if state.stage_retry.get(counter_stage, 0) < state.limits.stage_retry_limit:
         return None
     failure_shape = _event_failure_shape(event)
-    source = event.source if isinstance(event, Reject) else None
-    classification = event.classification if isinstance(event, Reject) else None
+    if isinstance(event, Reject):
+        source = event.source
+    else:
+        source = None
+    if isinstance(event, Reject):
+        classification = event.classification
+    else:
+        classification = None
     now = utcnow()
     return FailedRunRecord(
         stage=counter_stage,
@@ -291,7 +297,10 @@ def _hook_reject_delta(state: TaskState, event: Event, recovery_invoked: bool | 
         state.last_hook_reject_fingerprint is not None
         and state.last_hook_reject_fingerprint.fingerprint == fingerprint.fingerprint
     )
-    count = state.consecutive_same_hook_rejects + 1 if same_as_last else 1
+    if same_as_last:
+        count = state.consecutive_same_hook_rejects + 1
+    else:
+        count = 1
     return StateDelta(
         set_consecutive_same_hook_rejects=count,
         set_last_hook_reject_fingerprint=fingerprint,
@@ -464,7 +473,10 @@ def _rejection_tracking_delta(
     retry_target_stage: PipelineState | None = None,
 ) -> StateDelta:
     rejection = _rejection_from_event(state, event)
-    set_rej = (stage, rejection) if rejection is not None else None
+    if rejection is not None:
+        set_rej = (stage, rejection)
+    else:
+        set_rej = None
     hook_delta = _hook_reject_delta(state, event, recovery_invoked=False)
     rejection_loop_delta = _rejection_loop_delta(state, event, retry_target_stage=retry_target_stage)
     return StateDelta(
@@ -482,9 +494,15 @@ def _rejection_tracking_delta(
 def fail_rejection_loop(stage: PipelineState, retry_target_stage: PipelineState) -> EffectFn:
     def _effect(state: TaskState, event: Event) -> StateDelta:
         rejection = _rejection_from_event(state, event)
-        set_rej = (stage, rejection) if rejection is not None else None
+        if rejection is not None:
+            set_rej = (stage, rejection)
+        else:
+            set_rej = None
         rejection_loop_delta = _rejection_loop_delta(state, event, retry_target_stage=retry_target_stage)
-        message = event.reason if isinstance(event, Reject) else ""
+        if isinstance(event, Reject):
+            message = event.reason
+        else:
+            message = ""
         return StateDelta(
             set_last_rejection=set_rej,
             set_rejection_loop=rejection_loop_delta.set_rejection_loop,
@@ -515,7 +533,10 @@ def stash_conflict_files(state: TaskState, event: Event) -> StateDelta:
     """
     if not isinstance(event, MergeConflictDetected):
         return StateDelta()
-    current_attempt = state.merge_context.merge_attempt if state.merge_context is not None else 0
+    if state.merge_context is not None:
+        current_attempt = state.merge_context.merge_attempt
+    else:
+        current_attempt = 0
     return StateDelta(
         set_merge_context=MergeContext(
             conflict_files=tuple(event.conflict_files),
@@ -525,12 +546,21 @@ def stash_conflict_files(state: TaskState, event: Event) -> StateDelta:
 
 
 def fail(reason: FailedReason) -> EffectFn:
-    normalized_reason = reason if isinstance(reason, FailedReason) else FailedReason(reason)
+    if isinstance(reason, FailedReason):
+        normalized_reason = reason
+    else:
+        normalized_reason = FailedReason(reason)
 
     def _effect(state: TaskState, event: Event) -> StateDelta:
         rejection = _rejection_from_event(state, event)
-        set_rej = (state.stage, rejection) if rejection is not None else None
-        hook_delta = _hook_reject_delta(state, event) if isinstance(event, Reject) else EMPTY_DELTA
+        if rejection is not None:
+            set_rej = (state.stage, rejection)
+        else:
+            set_rej = None
+        if isinstance(event, Reject):
+            hook_delta = _hook_reject_delta(state, event)
+        else:
+            hook_delta = EMPTY_DELTA
         if isinstance(event, (Reject, Blocked)):
             message = event.reason
         elif isinstance(event, Crash):
@@ -636,7 +666,13 @@ def _recovery_failure_explanation(
             f"`{trigger.failure_fingerprint.budget_key()}`."
         )
     if reason == FailedReason.RECOVERY_CRASHED:
-        suffix = f": {message}" if message else "."
+        if message:
+            suffix = f": {message}"
+        else:
+            suffix = "."
         return f"Recovery agent crashed while handling `{subject}`{suffix}"
-    suffix = f": {message}" if message else "."
+    if message:
+        suffix = f": {message}"
+    else:
+        suffix = "."
     return f"Recovery could not restore a runnable path for `{subject}`{suffix}"

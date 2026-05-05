@@ -52,7 +52,9 @@ def _current_role() -> str | None:
 
 def _current_subagent_id() -> str | None:
     subagent_id = os.environ.get("LITEHIVE_SUBAGENT_ID")
-    return subagent_id.strip() if subagent_id and subagent_id.strip() else None
+    if subagent_id and subagent_id.strip():
+        return subagent_id.strip()
+    return None
 
 
 def current_agent_role() -> str | None:
@@ -61,7 +63,9 @@ def current_agent_role() -> str | None:
 
 def _current_stage() -> str | None:
     stage = os.environ.get("LITEHIVE_STAGE")
-    return stage.strip() if stage else None
+    if stage:
+        return stage.strip()
+    return None
 
 
 def _resolve_report_stage(explicit_stage: str | None, task, pipeline_stage: str | None) -> str:
@@ -163,9 +167,10 @@ def agent_report_command(
     normalized_verdict = verdict.strip().lower()
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
     try:
-        root = (
-            resolve_workspace(tid) if workspace is None else normalize_workspace_root(workspace, source="--workspace")
-        )
+        if workspace is None:
+            root = resolve_workspace(tid)
+        else:
+            root = normalize_workspace_root(workspace, source="--workspace")
     except ValueError as exc:
         print(f"report failed: {exc}")
         raise SystemExit(1)
@@ -186,7 +191,10 @@ def agent_report_command(
     if normalized_verdict not in allowed:
         print("You are not authorized to perform this command.")
         raise SystemExit(1)
-    normalized_target_stage = target_stage.strip() if target_stage else None
+    if target_stage:
+        normalized_target_stage = target_stage.strip()
+    else:
+        normalized_target_stage = None
     if agent_role == "recovery" and normalized_verdict in {"resume", "advance"}:
         if not normalized_target_stage:
             print(f"report failed: recovery verdict '{normalized_verdict}' requires --target-stage")
@@ -195,7 +203,10 @@ def agent_report_command(
         print("report failed: --target-stage is only valid with recovery resume/advance verdicts")
         raise SystemExit(1)
 
-    normalized_follow_up_task = follow_up_task.strip() if follow_up_task else None
+    if follow_up_task:
+        normalized_follow_up_task = follow_up_task.strip()
+    else:
+        normalized_follow_up_task = None
     if normalized_follow_up_task:
         if normalized_follow_up_task == task.id:
             print("report failed: follow-up task id cannot reference the current task")
@@ -267,7 +278,10 @@ def resolve_active_agent_task_mutation_target(
     """Authorize and resolve a PM mutation target through the source workspace."""
     role = _require_role(allowed_roles)
     env_task_id = os.environ.get("LITEHIVE_TASK_ID")
-    env_task_id = env_task_id.strip() if env_task_id and env_task_id.strip() else None
+    if env_task_id and env_task_id.strip():
+        env_task_id = env_task_id.strip()
+    else:
+        env_task_id = None
     tid = requested_task_id or env_task_id
     if not tid:
         print("agent task mutation failed: LITEHIVE_TASK_ID is not set")

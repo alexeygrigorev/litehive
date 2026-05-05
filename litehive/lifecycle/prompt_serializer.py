@@ -387,7 +387,10 @@ def _scope_analysis_section(scope_analysis: dict[str, Any]) -> str:
     lines = ["Scope analysis (operator cleanup vs SWE scope creep):"]
 
     is_operator_cleanup = scope_analysis.get("is_operator_cleanup", False)
-    classification = "OPERATOR CLEANUP" if is_operator_cleanup else "POTENTIAL SCOPE CREEP"
+    if is_operator_cleanup:
+        classification = "OPERATOR CLEANUP"
+    else:
+        classification = "POTENTIAL SCOPE CREEP"
     lines.append(f"- Classification: {classification}")
 
     reasoning = scope_analysis.get("reasoning", "No analysis available")
@@ -430,7 +433,10 @@ def _test_failure_attribution_section(attribution: dict[str, Any]) -> str:
 
 def _merge_conflict_section(conflict_files: list[str], merge_attempt: int | None) -> str:
     bullets = "\n".join(f"- {f}" for f in conflict_files)
-    extra = f"\nMerge attempt: {merge_attempt}" if merge_attempt is not None else ""
+    if merge_attempt is not None:
+        extra = f"\nMerge attempt: {merge_attempt}"
+    else:
+        extra = ""
     return f"Merge conflict files (resolve all of these):\n{bullets}{extra}"
 
 
@@ -630,7 +636,10 @@ def _activity_section(
         stage = entry.get("stage", "?")
         verdict = entry.get("verdict", "comment")
         classification = entry.get("verdict_classification") or entry.get("classification")
-        verdict_label = f"{verdict}; classification={classification}" if classification else str(verdict)
+        if classification:
+            verdict_label = f"{verdict}; classification={classification}"
+        else:
+            verdict_label = str(verdict)
         message = entry.get("message", "")
         blocks.append(f"[{stage}] {role} ({verdict_label}): {message}")
     return "Task activity:\n" + "\n".join(blocks)
@@ -651,8 +660,14 @@ def _runner_hooks_section(stage: str | None, hooks: list[dict[str, Any]]) -> str
 
 
 def _verdict_instructions_section(prompt: dict[str, Any]) -> str:
-    verdicts = "<resume|advance|done|budget_hit|reject>" if prompt.get("role") == "recovery" else "<pass|reject>"
-    example_verdict = "resume" if prompt.get("role") == "recovery" else "pass"
+    if prompt.get("role") == "recovery":
+        verdicts = "<resume|advance|done|budget_hit|reject>"
+    else:
+        verdicts = "<pass|reject>"
+    if prompt.get("role") == "recovery":
+        example_verdict = "resume"
+    else:
+        example_verdict = "pass"
     return (
         "IMPORTANT: when you are done, submit your verdict by running:\n"
         f'  litehive agent report --verdict {example_verdict} --message "your report text"\n'

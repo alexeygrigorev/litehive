@@ -170,7 +170,10 @@ class SubagentManager(SessionMixin):
         current_stage = task.runtime.pipeline.current_stage.stage
         if current_stage:
             return current_stage
-        pipeline_stage = str(task.pipeline_status) if task.pipeline_status else ""
+        if task.pipeline_status:
+            pipeline_stage = str(task.pipeline_status)
+        else:
+            pipeline_stage = ""
         if (
             pipeline_stage in _REPORTABLE_STAGES
             or pipeline_stage == PipelineState.MERGE_RESOLVING
@@ -266,7 +269,10 @@ class SubagentManager(SessionMixin):
             # Probe the wrapped adapter for capability preference. The sandbox wrapper
             # exposes both run and run_live, so inspecting the wrapper would hide
             # whether the underlying engine actually prefers a custom run override.
-            live_execution_probe = engine if execution_engine is not engine else execution_engine
+            if execution_engine is not engine:
+                live_execution_probe = engine
+            else:
+                live_execution_probe = execution_engine
             callback_probe = live_execution_probe
             task_env = {
                 "LITEHIVE_TASK_ID": task.id,
@@ -333,7 +339,10 @@ class SubagentManager(SessionMixin):
                 proc,
             )
             continuation = self.extract_execution_continuation(ref.engine, proc)
-            ref.status = "completed" if proc.exit_code == 0 else "failed"
+            if proc.exit_code == 0:
+                ref.status = "completed"
+            else:
+                ref.status = "failed"
             if proc.exit_code != 0:
                 interruption_reason = classify_execution_interruption(
                     transcript,

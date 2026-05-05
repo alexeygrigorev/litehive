@@ -326,8 +326,14 @@ def _status_entry_needs_git_add(code: str) -> bool:
     which is what crashed T-0429's commit stage.
     """
 
-    index_state = code[0] if len(code) >= 1 else " "
-    worktree_state = code[1] if len(code) >= 2 else " "
+    if len(code) >= 1:
+        index_state = code[0]
+    else:
+        index_state = " "
+    if len(code) >= 2:
+        worktree_state = code[1]
+    else:
+        worktree_state = " "
     return worktree_state != " " or index_state in {"?", "U"}
 
 

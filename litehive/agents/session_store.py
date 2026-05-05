@@ -80,16 +80,22 @@ def save_subagent_artifacts(
 def load_subagent_session(root: Path, task_id: str, subagent_id: str) -> dict[str, Any]:
     payload = load_subagent_artifacts(root, task_id, subagent_id)
     session = payload.get("session")
-    return session if isinstance(session, dict) else {}
+    if isinstance(session, dict):
+        return session
+    return {}
 
 
 def load_subagent_report(root: Path, task_id: str, subagent_id: str) -> dict[str, Any]:
     payload = load_subagent_artifacts(root, task_id, subagent_id)
     report = payload.get("report")
-    return report if isinstance(report, dict) else {}
+    if isinstance(report, dict):
+        return report
+    return {}
 
 
 def load_subagent_event_stream(root: Path, task_id: str, subagent_id: str) -> dict[str, Any]:
     payload = load_subagent_artifacts(root, task_id, subagent_id)
     event_stream = payload.get(_EVENT_STREAM_KEY)
-    return event_stream if isinstance(event_stream, dict) else {}
+    if isinstance(event_stream, dict):
+        return event_stream
+    return {}

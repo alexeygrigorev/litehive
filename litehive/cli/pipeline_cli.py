@@ -19,14 +19,19 @@ app = make_typer(invoke_without_command=True)
 @app.command("rules", help="List pipeline transition rules as readable rows")
 def pipeline_rules_command() -> int:
     for rule in list_transitions():
-        from_state = (
-            "|".join(str(stage) for stage in sorted(rule.from_state))
-            if isinstance(rule.from_state, frozenset)
-            else str(rule.from_state)
-        )
-        to = rule.transition_to if not callable(rule.transition_to) else f"<{rule.transition_to.__name__}>"
+        if isinstance(rule.from_state, frozenset):
+            from_state = "|".join(str(stage) for stage in sorted(rule.from_state))
+        else:
+            from_state = str(rule.from_state)
+        if not callable(rule.transition_to):
+            to = rule.transition_to
+        else:
+            to = f"<{rule.transition_to.__name__}>"
         event_name = rule.on_event.__name__
-        desc = f"  # {rule.description}" if rule.description else ""
+        if rule.description:
+            desc = f"  # {rule.description}"
+        else:
+            desc = ""
         print(f"{from_state:25s} --[{event_name:25s}]--> {to}{desc}")
     return 0
 

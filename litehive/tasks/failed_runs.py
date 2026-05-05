@@ -48,7 +48,10 @@ def mark_failed_run_operator_override(
         pipeline_state = None
     for record in records or blocking_failed_run_records(task):
         key = f"{record.stage}:{record.failure_shape}"
-        state_record = None if pipeline_state is None else pipeline_state.failed_run_history.get(key)
+        if pipeline_state is None:
+            state_record = None
+        else:
+            state_record = pipeline_state.failed_run_history.get(key)
         if state_record is None and pipeline_state is not None:
             state_record = FailedRunRecord(
                 stage=record.stage,

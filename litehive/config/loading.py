@@ -24,11 +24,10 @@ def merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> 
     merged = dict(base)
     for key, value in overlay.items():
         current = merged.get(key)
-        merged[key] = (
-            merge_config_layers(current, value)
-            if isinstance(current, Mapping) and isinstance(value, Mapping)
-            else value
-        )
+        if isinstance(current, Mapping) and isinstance(value, Mapping):
+            merged[key] = merge_config_layers(current, value)
+        else:
+            merged[key] = value
     return merged
 
 

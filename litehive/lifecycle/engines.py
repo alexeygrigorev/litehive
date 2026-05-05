@@ -62,7 +62,10 @@ class ConfigBackedEngineSelector:
     ) -> None:
         self.config = config
         self.engine_factory = engine_factory
-        self.workspace_root = workspace_root.resolve() if workspace_root is not None else None
+        if workspace_root is not None:
+            self.workspace_root = workspace_root.resolve()
+        else:
+            self.workspace_root = None
         self.engine_override = engine_override
         self.model_override = model_override
         self.check_quota = check_quota

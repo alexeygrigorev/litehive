@@ -114,7 +114,10 @@ def persist_engine_freeze_iso(
     source: str = "runtime",
     reason: str | None = None,
 ) -> None:
-    context = {"reason": reason} if reason else None
+    if reason:
+        context = {"reason": reason}
+    else:
+        context = None
     set_engine_freeze(
         root,
         engine_name=engine_name,
@@ -132,7 +135,10 @@ def clear_persisted_engine_freeze(
     source: str = "runtime",
     reason: str | None = None,
 ) -> bool:
-    context = {"reason": reason} if reason else None
+    if reason:
+        context = {"reason": reason}
+    else:
+        context = None
     return clear_engine_freeze(root, engine_name=engine_name, actor=actor, source=source, context=context).changed
 
 
@@ -185,7 +191,10 @@ def _quota_block_reason(engine_name: str, status: object) -> tuple[str | None, s
     if not bool(getattr(status, "limit_reached", False)):
         return None, None
     reset_at = _preferred_quota_reset_at(status)
-    reset_suffix = f", resets {reset_at}" if reset_at else ""
+    if reset_at:
+        reset_suffix = f", resets {reset_at}"
+    else:
+        reset_suffix = ""
     return f"{engine_name} usage limit reached{reset_suffix}", reset_at
 
 
@@ -254,7 +263,10 @@ def select_engine(
         expired_freeze = (
             engine_name not in frozen_engines and _parse_datetime_utc(config.engine_freeze.get(engine_name)) is not None
         )
-        quota_reason, freeze_until = engine_quota_block(root, engine_name) if check_quota else (None, None)
+        if check_quota:
+            quota_reason, freeze_until = engine_quota_block(root, engine_name)
+        else:
+            quota_reason, freeze_until = (None, None)
         if quota_reason is not None:
             if freeze_until is not None:
                 _persist_engine_freeze(root, config, engine_name=engine_name, freeze_until=freeze_until)
@@ -275,7 +287,10 @@ def select_engine(
             engine_attempts=attempts,
             skipped=skipped,
         )
-    blocked_reason = skipped[-1].reason if skipped else "no eligible engine available"
+    if skipped:
+        blocked_reason = skipped[-1].reason
+    else:
+        blocked_reason = "no eligible engine available"
     return EngineSelection(
         engine_name=None,
         model_name=None,

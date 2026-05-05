@@ -97,7 +97,10 @@ def evaluate(rules: list[Rule], current: str | PipelineState, event: Event, stat
         if rule.when is not None and not rule.when(state, event):
             continue
         target = _resolve_to(rule.transition_to, state, event)
-        delta = rule.with_effect(state, event) if rule.with_effect is not None else EMPTY_DELTA
+        if rule.with_effect is not None:
+            delta = rule.with_effect(state, event)
+        else:
+            delta = EMPTY_DELTA
         return Transition(next=target, delta=delta, rule=rule)
     raise NoTransitionError(current, event)
 
@@ -147,8 +150,14 @@ def retry_epoch_rules(counter_stage, phases, retry_target, exhausted_reason: Fai
     ``retry_target`` — where to go on retry (usually IMPLEMENTING).
     ``exhausted_reason`` — terminal failure reason when retries are exhausted.
     """
-    name = counter_stage.name if isinstance(counter_stage, Stage) else counter_stage
-    retry_target_name = retry_target.name if isinstance(retry_target, Stage) else retry_target
+    if isinstance(counter_stage, Stage):
+        name = counter_stage.name
+    else:
+        name = counter_stage
+    if isinstance(retry_target, Stage):
+        retry_target_name = retry_target.name
+    else:
+        retry_target_name = retry_target
     rules: list[Rule] = []
     for phase in phases:
         rules.append(

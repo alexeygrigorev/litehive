@@ -166,7 +166,10 @@ def _render_engine_status_lines(root: Path) -> list[str]:
     ]
     for engine_name in ENGINE_CHOICES:
         caps = get_engine(engine_name).capabilities
-        frozen_until = config.engine_freeze.get(engine_name) if engine_name in active_freezes else None
+        if engine_name in active_freezes:
+            frozen_until = config.engine_freeze.get(engine_name)
+        else:
+            frozen_until = None
         lines.extend(
             [
                 "",

@@ -106,7 +106,10 @@ def main() -> int:
     agent_role = os.environ.get("LITEHIVE_AGENT_ROLE")
     if agent_role:
         route_via_root_cli = False
-        cmd = argv[0] if argv else None
+        if argv:
+            cmd = argv[0]
+        else:
+            cmd = None
         if cmd is None:
             print("Usage: litehive agent report | litehive task [add|update|close]")
             print("\nRun 'litehive --help' for details.")
@@ -143,7 +146,9 @@ def main() -> int:
             return exc.exit_code
         except click.Abort:
             return 1
-        return 0 if result is None else int(result)
+        if result is None:
+            return 0
+        return int(result)
 
     if argv and argv[0] == "task":
         import click  # noqa: PLC0415
@@ -159,7 +164,9 @@ def main() -> int:
             return exc.exit_code
         except click.Abort:
             return 1
-        return 0 if result is None else int(result)
+        if result is None:
+            return 0
+        return int(result)
 
     if argv and argv[0] == "pipeline":
         import click  # noqa: PLC0415
@@ -175,7 +182,9 @@ def main() -> int:
             return exc.exit_code
         except click.Abort:
             return 1
-        return 0 if result is None else int(result)
+        if result is None:
+            return 0
+        return int(result)
 
     from litehive.cli.app import main as cli_main  # noqa: PLC0415
 

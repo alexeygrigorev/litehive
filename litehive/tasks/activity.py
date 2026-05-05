@@ -80,7 +80,10 @@ def latest_task_activity_entry(
     verdicts: Iterable[str] | None = None,
     after: datetime | None = None,
 ) -> TaskActivityEntry | None:
-    allowed_verdicts = None if verdicts is None else set(verdicts)
+    if verdicts is None:
+        allowed_verdicts = None
+    else:
+        allowed_verdicts = set(verdicts)
     for entry in reversed(load_task_activity(root, task)):
         if role is not None and entry.role != role:
             continue

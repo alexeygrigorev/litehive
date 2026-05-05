@@ -50,11 +50,10 @@ def _merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) ->
     merged = dict(base)
     for key, value in overlay.items():
         current = merged.get(key)
-        merged[key] = (
-            _merge_config_layers(current, value)
-            if isinstance(current, Mapping) and isinstance(value, Mapping)
-            else value
-        )
+        if isinstance(current, Mapping) and isinstance(value, Mapping):
+            merged[key] = _merge_config_layers(current, value)
+        else:
+            merged[key] = value
     return merged
 
 
@@ -175,7 +174,10 @@ def set_runtime_setting(
     new_json = _json_dumps(value)
     with connect_workspace_db(root) as connection:
         row = connection.execute("SELECT value_json FROM runtime_settings WHERE key = ?", (key,)).fetchone()
-        old_json = None if row is None else str(row["value_json"])
+        if row is None:
+            old_json = None
+        else:
+            old_json = str(row["value_json"])
         old_value = _json_loads(old_json)
         if old_value == value:
             return RuntimeSettingChange(key=key, old_value=old_value, new_value=value, changed=False)

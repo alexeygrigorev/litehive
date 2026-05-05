@@ -17,7 +17,9 @@ def latest_run_all_log_dir(workspace: Path) -> Path | None:
     if not log_base.exists():
         return None
     candidates = sorted(path for path in log_base.iterdir() if path.is_dir())
-    return candidates[-1] if candidates else None
+    if candidates:
+        return candidates[-1]
+    return None
 
 
 def prune_run_all_log_dirs(log_base: Path, keep: int = _RUN_ALL_SESSION_RETENTION) -> None:
@@ -37,4 +39,6 @@ def latest_matching(log_dir: Path | None, pattern: str) -> Path | None:
     if log_dir is None or not log_dir.exists():
         return None
     matches = sorted(log_dir.glob(pattern))
-    return matches[-1] if matches else None
+    if matches:
+        return matches[-1]
+    return None

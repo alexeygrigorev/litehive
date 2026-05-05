@@ -66,11 +66,10 @@ def render_task_activity(root: Path, task: TaskRecord, for_prompt: bool = False)
             if claimed_files:
                 lines.append(f"Claimed files: {', '.join(claimed_files)}")
             continue
-        verdict_label = (
-            f"{entry.verdict}; classification={entry.verdict_classification}"
-            if entry.verdict_classification
-            else str(entry.verdict)
-        )
+        if entry.verdict_classification:
+            verdict_label = f"{entry.verdict}; classification={entry.verdict_classification}"
+        else:
+            verdict_label = str(entry.verdict)
         header = f"[{entry.created_at}] {entry.role} ({entry.stage}) - {verdict_label}"
         lines.append(f"\n--- {header} ---")
         lines.append(entry.message)

@@ -228,15 +228,22 @@ def _best_effort_status_config(data: Mapping[str, Any]) -> LitehiveConfig:
 
 def _config_error_key(exc: Exception) -> str | None:
     if isinstance(exc, ValidationError):
-        error = exc.errors()[0] if exc.errors() else {}
+        if exc.errors():
+            error = exc.errors()[0]
+        else:
+            error = {}
         location = error.get("loc", ())
-        return str(location[0]) if location else None
+        if location:
+            return str(location[0])
+        return None
     message = str(exc)
     for field in fields(LitehiveConfig):
         if field.name in message:
             return field.name
     if "unexpected keyword argument" in message:
-        return message.rsplit("'", 2)[1] if "'" in message else None
+        if "'" in message:
+            return message.rsplit("'", 2)[1]
+        return None
     return None
 
 
@@ -407,7 +414,10 @@ def _probe_heru_link(root: Path) -> list[StatusIssue]:
     if not isinstance(configured_path, str) or not configured_path.strip():
         return []
     candidate = Path(configured_path).expanduser()
-    resolved = candidate if candidate.is_absolute() else (root / candidate)
+    if candidate.is_absolute():
+        resolved = candidate
+    else:
+        resolved = (root / candidate)
     if resolved.exists():
         return []
     return [
@@ -430,11 +440,10 @@ def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIs
     from litehive.daemon.execution import check_origin_divergence  # noqa: PLC0415
 
     message = check_origin_divergence(root)
-    detail = (
-        message
-        if message is not None
-        else "local main and origin/main previously diverged; manual reconciliation is still required."
-    )
+    if message is not None:
+        detail = message
+    else:
+        detail = "local main and origin/main previously diverged; manual reconciliation is still required."
     return [
         StatusIssue(
             key="origin_divergence",
@@ -492,7 +501,10 @@ def _probe_task_index_references(
     if not missing_ids:
         return []
     sample = ", ".join(missing_ids[:10])
-    suffix = "" if len(missing_ids) <= 10 else f", ... ({len(missing_ids)} total)"
+    if len(missing_ids) <= 10:
+        suffix = ""
+    else:
+        suffix = f", ... ({len(missing_ids)} total)"
     return [
         StatusIssue(
             key="task_index",
@@ -564,7 +576,10 @@ def _live_active_pipeline_stage(active_task_id: str | None, tasks: list[TaskReco
 
 
 def _recovery_failure_issue(root: Path, task: TaskRecord) -> StatusIssue | None:
-    flag_reason = None if task.flag_reason is None else str(task.flag_reason)
+    if task.flag_reason is None:
+        flag_reason = None
+    else:
+        flag_reason = str(task.flag_reason)
     context = _recovery_failure_context(root, task)
     if flag_reason not in _RECOVERY_FAILURE_FLAG_REASONS and context.failed_reason is None:
         return None
@@ -602,7 +617,10 @@ def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureC
 
     failed_reason = None
     if state.failed_reason is not None:
-        failed_reason = state.failed_reason.value if hasattr(state.failed_reason, "value") else str(state.failed_reason)
+        if hasattr(state.failed_reason, "value"):
+            failed_reason = state.failed_reason.value
+        else:
+            failed_reason = str(state.failed_reason)
     if failed_reason in _RECOVERY_FAILURE_STATE_REASONS:
         context.failed_reason = failed_reason
     context.explanation = state.recovery_failure_explanation or state.failed_message
@@ -641,9 +659,10 @@ def _backlog_damage_issue(
 
     runtime_stage = _runtime_resume_stage(task)
     if pipeline_status == PipelineStatus.BACKLOG and runtime_stage is not None:
-        queue_detail = (
-            " It is missing from WorkspaceState.queue, so the scheduler will not see it." if missing_from_queue else ""
-        )
+        if missing_from_queue:
+            queue_detail = " It is missing from WorkspaceState.queue, so the scheduler will not see it."
+        else:
+            queue_detail = ""
         return StatusIssue(
             key="backlog_damage",
             severity="ERROR",
@@ -815,10 +834,15 @@ def _heartbeat_age_seconds(heartbeat_at: str | None) -> int | None:
 
 def _validation_error_label(exc: Exception) -> str:
     if isinstance(exc, ValidationError):
-        error = exc.errors()[0] if exc.errors() else {}
+        if exc.errors():
+            error = exc.errors()[0]
+        else:
+            error = {}
         location = ".".join(str(part) for part in error.get("loc", ()))
         message = error.get("msg") or "validation error"
-        return f"{location}: {message}" if location else str(message)
+        if location:
+            return f"{location}: {message}"
+        return str(message)
     return str(exc).strip() or type(exc).__name__
 
 

@@ -250,7 +250,10 @@ def _should_continue_for_stop_reason(reason: object) -> bool:
 
 
 def _emit_runner_wait(status, stream: TextIO | None) -> None:
-    pid = "-" if getattr(status, "pid", None) is None else str(status.pid)
+    if getattr(status, "pid", None) is None:
+        pid = "-"
+    else:
+        pid = str(status.pid)
     task_id = getattr(status, "active_task_id", None) or "-"
     heartbeat = getattr(status, "heartbeat_at", None) or "-"
     state = getattr(status, "status", None) or "running"

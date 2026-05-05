@@ -49,7 +49,10 @@ class Guard:
 
 
 def mode(m: PipelineMode | str) -> Guard:
-    want = m if isinstance(m, PipelineMode) else PipelineMode(m)
+    if isinstance(m, PipelineMode):
+        want = m
+    else:
+        want = PipelineMode(m)
 
     def check(state: TaskState, event: Event) -> bool:
         return state.pipeline_mode == want

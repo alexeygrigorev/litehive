@@ -194,7 +194,10 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     root = workspace.resolve()
     state = load_state(root)
     tasks = list_tasks_state_first(root, state=state, include_runtime=True)
-    active_task = get_task(root, state.active_task_id) if state.active_task_id else None
+    if state.active_task_id:
+        active_task = get_task(root, state.active_task_id)
+    else:
+        active_task = None
     flagged_tasks = [task for task in tasks if task.status == TaskStatus.FLAGGED]
     worktrees = collect_managed_worktrees(root)
     dirty_report = inspect_dirty_worktree_gate(root)
@@ -239,7 +242,9 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
 
     has_quota_problem = any(item.problem for item in quota_health)
     has_worktree_problem = dirty_report.blocks_pool
-    return 1 if flagged_tasks or has_worktree_problem or has_quota_problem else 0
+    if flagged_tasks or has_worktree_problem or has_quota_problem:
+        return 1
+    return 0
 
 
 def health_daemon_status(root: Path) -> tuple[str, str]:

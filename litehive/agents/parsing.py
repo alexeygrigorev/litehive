@@ -49,14 +49,19 @@ def stage_report_from_subagent(
             warnings=["Agent did not submit verdict via litehive agent report CLI."],
         )
 
-    failure_classification = latest.verdict_classification if latest.verdict == "reject" else None
+    if latest.verdict == "reject":
+        failure_classification = latest.verdict_classification
+    else:
+        failure_classification = None
     report_verdict = canonical_stage_report_verdict(latest.verdict) or "reject"
-    summary = latest.message.splitlines()[0] if latest.message else f"{pipeline_state} {latest.verdict}"
-    failure_diagnostics = (
-        {"verdict_classification": failure_classification, "role": latest.role}
-        if failure_classification
-        else {}
-    )
+    if latest.message:
+        summary = latest.message.splitlines()[0]
+    else:
+        summary = f"{pipeline_state} {latest.verdict}"
+    if failure_classification:
+        failure_diagnostics = {"verdict_classification": failure_classification, "role": latest.role}
+    else:
+        failure_diagnostics = {}
     return StageReport(
         task_id=task.id,
         pipeline_state=pipeline_state,

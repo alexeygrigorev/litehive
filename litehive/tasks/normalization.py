@@ -25,7 +25,9 @@ def normalize_task_text_list(items: list[str] | None) -> list[str]:
 
 def extract_report_line(text: str, key: str) -> str | None:
     match = re.search(rf"^{key}:\s*(.+)$", text, re.MULTILINE)
-    return match.group(1).strip() if match else None
+    if match:
+        return match.group(1).strip()
+    return None
 
 
 def extract_report_list_section(text: str, key: str) -> list[str]:

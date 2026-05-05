@@ -52,8 +52,14 @@ def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
     ``litehive worktree`` CLI for operator listing.
     """
     state = load_state(root)
-    active_task = get_task(root, state.active_task_id) if state.active_task_id else None
-    active_path = get_task_worktree_path(active_task) if active_task is not None else None
+    if state.active_task_id:
+        active_task = get_task(root, state.active_task_id)
+    else:
+        active_task = None
+    if active_task is not None:
+        active_path = get_task_worktree_path(active_task)
+    else:
+        active_path = None
 
     worktrees: list[ManagedWorktree] = []
     for task in list_tasks(root, strict=False):

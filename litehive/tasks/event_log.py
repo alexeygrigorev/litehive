@@ -497,7 +497,10 @@ def _insert_task_journal(connection: sqlite3.Connection, task_id: str, journal: 
         created_at = str(entry.get("created_at") or utcnow())
         message = str(entry.get("message") or "")
         metadata = entry.get("metadata")
-        metadata_payload = metadata if isinstance(metadata, dict) else {}
+        if isinstance(metadata, dict):
+            metadata_payload = metadata
+        else:
+            metadata_payload = {}
         connection.execute(
             """
             INSERT OR REPLACE INTO task_journal (task_id, entry_index, created_at, message, metadata)

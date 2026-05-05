@@ -31,17 +31,19 @@ def task_interruption_label(task):
     if task.status != TaskStatus.INTERRUPTED or task.runtime.pipeline.current_stage.status != "interrupted":
         return ""
     interruption = task.runtime.execution.interruption
-    stage = (
-        interruption.resume_stage
-        if interruption is not None and interruption.resume_stage is not None
-        else task.runtime.pipeline.current_stage.stage or task.pipeline_status
-    )
+    if interruption is not None and interruption.resume_stage is not None:
+        stage = interruption.resume_stage
+    else:
+        stage = task.runtime.pipeline.current_stage.stage or task.pipeline_status
     label = f" resumable_from={stage}"
     if interruption is not None:
         label += f" interruption={interruption.source}"
     if task.runtime.pipeline.last_outcome.reason_code:
         label += f" reason_code={task.runtime.pipeline.last_outcome.reason_code}"
-    interrupted_subagent = None if interruption is None else interruption.subagent
+    if interruption is None:
+        interrupted_subagent = None
+    else:
+        interrupted_subagent = interruption.subagent
     if interrupted_subagent is not None:
         label += (
             f" interrupted_subagent={interrupted_subagent.id}:{interrupted_subagent.role}/{interrupted_subagent.engine}"

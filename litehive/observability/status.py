@@ -58,15 +58,22 @@ def collect_task_pipeline_status(
     diagnostics: bool = False,
 ) -> TaskPipelineStatusData:
     resolved_root = root.resolve()
-    snapshot = (
-        collect_status_snapshot(resolved_root) if diagnostics else collect_operational_status_snapshot(resolved_root)
-    )
+    if diagnostics:
+        snapshot = collect_status_snapshot(resolved_root)
+    else:
+        snapshot = collect_operational_status_snapshot(resolved_root)
     active_task_id = snapshot.runner.active_task_id or snapshot.state.active_task_id
     if read_only:
-        active_task = _load_task_read_only(resolved_root, active_task_id) if active_task_id else None
+        if active_task_id:
+            active_task = _load_task_read_only(resolved_root, active_task_id)
+        else:
+            active_task = None
         waiting_lines = waiting_for_you_lines(resolved_root, reconcile=False)
     else:
-        active_task = get_task(resolved_root, active_task_id) if active_task_id else None
+        if active_task_id:
+            active_task = get_task(resolved_root, active_task_id)
+        else:
+            active_task = None
         waiting_lines = waiting_for_you_lines(resolved_root)
     if not diagnostics:
         waiting_lines = _operational_attention_lines(waiting_lines)
@@ -155,7 +162,10 @@ def _load_task_read_only(root: Path, task_id: str) -> TaskRecord | None:
         if intent_row is None:
             return None
         intent = TaskIntentRecord.model_validate(json.loads(intent_row["payload"]))
-        state = None if state_row is None else TaskStateRecord(**json.loads(state_row["payload"]))
+        if state_row is None:
+            state = None
+        else:
+            state = TaskStateRecord(**json.loads(state_row["payload"]))
         task = TaskRecord.from_intent_and_state(intent, state)
     except (OSError, sqlite3.DatabaseError, ValueError):
         return None
@@ -179,7 +189,10 @@ def estimate_task_execution(root: Path, task: TaskRecord) -> ExecutionEstimate:
         return ExecutionEstimate()
 
     avg_duration = sum(durations) / len(durations)
-    velocity = 3600.0 / avg_duration if avg_duration > 0 else 0.0
+    if avg_duration > 0:
+        velocity = 3600.0 / avg_duration
+    else:
+        velocity = 0.0
 
     current_step = task.runtime.pipeline.current_stage.stage or task.pipeline_status or _PIPELINE_STAGES[0]
     try:
@@ -258,9 +271,15 @@ def _latest_stage_failure_classification(root: Path | None, task: TaskRecord) ->
 
 
 def render_task_summary(task: TaskRecord, active: bool, root: Path | None = None) -> list[str]:
-    marker = "*" if active else " "
+    if active:
+        marker = "*"
+    else:
+        marker = " "
     retry_policy = task.retry_policy.max_retries
-    retry_label = "default" if retry_policy is None else str(retry_policy)
+    if retry_policy is None:
+        retry_label = "default"
+    else:
+        retry_label = str(retry_policy)
     lines = [f"{marker} {task.id} [{task.status}/{task.pipeline_status}] retry_limit={retry_label} {task.title}"]
     if task.depends_on:
         lines.append(f"  depends_on={', '.join(task.depends_on)}")
@@ -277,7 +296,10 @@ def render_task_summary(task: TaskRecord, active: bool, root: Path | None = None
 
     runtime = task.runtime
     latest_report = _latest_stage_report_for_task(root, task)
-    configured_limit = retry_policy if retry_policy is not None else "default"
+    if retry_policy is not None:
+        configured_limit = retry_policy
+    else:
+        configured_limit = "default"
     lines.append(f"  retry_policy=configured:{configured_limit} effective:{runtime.pipeline.retry_limit}")
     if (
         runtime.pipeline.execution_status != "idle"
@@ -354,7 +376,10 @@ def render_task_summary(task: TaskRecord, active: bool, root: Path | None = None
         reason = runtime.pipeline.last_outcome.reason or "-"
         recorded_at = runtime.pipeline.last_outcome.recorded_at or "-"
         follow_up_task_id = runtime.pipeline.last_outcome.follow_up_task_id or "-"
-        outcome_label = "close_reason" if runtime.pipeline.last_outcome.kind in {"closed", "done"} else "reason_code"
+        if runtime.pipeline.last_outcome.kind in {"closed", "done"}:
+            outcome_label = "close_reason"
+        else:
+            outcome_label = "reason_code"
         lines.append(
             "  "
             + (
@@ -427,11 +452,15 @@ def _seconds_label(seconds: int) -> str:
 
 
 def _pid_label(pid: int | None) -> str:
-    return f"pid={pid}" if pid is not None else "pid=-"
+    if pid is not None:
+        return f"pid={pid}"
+    return "pid=-"
 
 
 def _sandbox_label(sandboxed: bool, sandbox_summary: str) -> str:
-    return f"sandbox={sandbox_summary or 'enabled'}" if sandboxed else "sandbox=host"
+    if sandboxed:
+        return f"sandbox={sandbox_summary or 'enabled'}"
+    return "sandbox=host"
 
 
 # ---------------------------------------------------------------------------
@@ -673,7 +702,10 @@ def render_queue_section(queue: list[str], tasks: list[TaskRecord]) -> list[str]
     task_by_id = {t.id: t for t in tasks}
     head_id = queue[0]
     head_task = task_by_id.get(head_id)
-    head_title = head_task.title if head_task else head_id
+    if head_task:
+        head_title = head_task.title
+    else:
+        head_title = head_id
     lines.append(f"  {count} queued, next: {head_id} {head_title}")
     return lines
 
@@ -698,7 +730,10 @@ def render_engine_availability_lines(
             detail = f" until={config.engine_freeze.get(engine_name, '-')}"
         elif record is not None and record.last_limit_kind in {"quota", "rate", "budget"}:
             status = str(record.last_limit_kind)
-        default_marker = " default=yes" if engine_name == config.default_engine else ""
+        if engine_name == config.default_engine:
+            default_marker = " default=yes"
+        else:
+            default_marker = ""
         lines.append(f"engine_available: {engine_name} status={status}{default_marker}{detail}")
     return lines
 

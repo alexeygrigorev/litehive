@@ -482,7 +482,10 @@ def list_tasks_state_first(
 ) -> list[TaskRecord]:
     task_by_id = {task.id: task for task in _load_tasks_from_store(root, include_runtime=include_runtime, strict=True)}
 
-    workspace_state = load_state(root) if state is None else state
+    if state is None:
+        workspace_state = load_state(root)
+    else:
+        workspace_state = state
     ordered_ids: list[str] = []
     seen: set[str] = set()
 

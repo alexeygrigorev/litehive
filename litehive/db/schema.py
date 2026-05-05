@@ -273,7 +273,10 @@ def migration_status(root: Path) -> MigrationStatus:
             applied.append(migration)
         else:
             pending.append(migration)
-    current_version = applied[-1].version if applied else 0
+    if applied:
+        current_version = applied[-1].version
+    else:
+        current_version = 0
     return MigrationStatus(
         current_version=current_version,
         applied_migrations=tuple(applied),

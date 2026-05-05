@@ -90,7 +90,10 @@ class RecoveryAgent(RoleAgent):
 
         if task_record is None and self.prompt_context and self.prompt_context.workspace_root:
             task_record = get_task_record(self.prompt_context.workspace_root, state.task_id)
-        root = None if self.prompt_context is None else self.prompt_context.workspace_root
+        if self.prompt_context is None:
+            root = None
+        else:
+            root = self.prompt_context.workspace_root
         if root is not None:
             try:
                 litehive_source_path, recovery_execution_root = _recovery_source_checkout(root)
@@ -174,7 +177,10 @@ def _runtime_recovery_projection_payload(outcome: RuntimeRecoveryOutcome) -> dic
 def _merged_recovery_history_payload(state: TaskState, task_record: Any) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
     seen: set[tuple[str | None, str, str, str, str | None]] = set()
-    runtime_history = [] if task_record is None else list(task_record.runtime.pipeline.recovery_history)
+    if task_record is None:
+        runtime_history = []
+    else:
+        runtime_history = list(task_record.runtime.pipeline.recovery_history)
     items = [
         *[_runtime_recovery_projection_payload(outcome) for outcome in runtime_history],
         *[_state_recovery_payload(outcome) for outcome in state.recovery_history],
@@ -237,7 +243,10 @@ def _recovery_source_checkout(root: Path | None) -> tuple[str | None, str | None
         resolved = candidate.resolve()
     except OSError:
         resolved = candidate
-    execution_root = resolved if resolved.is_dir() else root
+    if resolved.is_dir():
+        execution_root = resolved
+    else:
+        execution_root = root
     return raw_source, str(execution_root)
 
 
@@ -260,7 +269,10 @@ def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) ->
     rel_path = str(subagent_base.relative_to(task_dir(root, task_record)))
     runtime_state = None
     interruption = task_record.runtime.execution.interruption
-    interrupted_subagent = None if interruption is None else interruption.subagent
+    if interruption is None:
+        interrupted_subagent = None
+    else:
+        interrupted_subagent = interruption.subagent
     for candidate in (task_record.runtime.execution.active_subagent, interrupted_subagent):
         if candidate is not None and (candidate.path == rel_path or subagent_base.name.startswith(candidate.id)):
             runtime_state = candidate
@@ -286,18 +298,20 @@ def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) ->
     session_payload = load_subagent_session(root, task_record.id, subagent_id)
     report_payload = load_subagent_report(root, task_record.id, subagent_id)
     trace_ref = runtime_state or subagent_ref
-    execution_trace_view = (
-        None
-        if trace_ref is None
-        else load_subagent_execution_trace(
-            root,
-            task_record,
-            trace_ref,
-            active=runtime_state is not None and runtime_state.status == "running",
-            runtime_state=runtime_state,
-        )
-    )
-    execution_trace = "" if execution_trace_view is None else execution_trace_view.text
+    if trace_ref is None:
+        execution_trace_view = None
+    else:
+        execution_trace_view = load_subagent_execution_trace(
+                root,
+                task_record,
+                trace_ref,
+                active=runtime_state is not None and runtime_state.status == "running",
+                runtime_state=runtime_state,
+            )
+    if execution_trace_view is None:
+        execution_trace = ""
+    else:
+        execution_trace = execution_trace_view.text
     stdout = _read_subagent_artifact(subagent_base, "stdout.txt")
     stderr = _read_subagent_artifact(subagent_base, "stderr.txt")
     exit_code = None

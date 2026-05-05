@@ -39,7 +39,10 @@ def debug_all(root: Path, task):
     print()
     for ref in task.subagents:
         exit_code = _read_exit_code(root, task.id, ref.id)
-        exit_str = str(exit_code) if exit_code is not None else "-"
+        if exit_code is not None:
+            exit_str = str(exit_code)
+        else:
+            exit_str = "-"
         print(f"  {ref.id}  role={ref.role}  engine={ref.engine}  status={ref.status}  exit_code={exit_str}")
     return 0
 
@@ -196,17 +199,24 @@ def _read_exit_code(root: Path, task_id: str, subagent_id: str) -> int | None:
     """Read exit_code from runtime/session storage for a subagent."""
     session = load_subagent_session(root, task_id, subagent_id)
     value = session.get("exit_code")
-    return value if isinstance(value, int) else None
+    if isinstance(value, int):
+        return value
+    return None
 
 
 def _enum_value(value) -> str | None:
     if value is None:
         return None
-    return value.value if hasattr(value, "value") else str(value)
+    if hasattr(value, "value"):
+        return value.value
+    return str(value)
 
 
 def _first_line(value: str, limit: int = 180) -> str:
-    text = value.strip().splitlines()[0] if value.strip() else "-"
+    if value.strip():
+        text = value.strip().splitlines()[0]
+    else:
+        text = "-"
     if len(text) <= limit:
         return text
     return text[: limit - 3] + "..."
@@ -214,5 +224,8 @@ def _first_line(value: str, limit: int = 180) -> str:
 
 def _compact_paths(paths: list[str], limit: int = 6) -> str:
     shown = paths[:limit]
-    suffix = "" if len(paths) <= limit else f", ... (+{len(paths) - limit})"
+    if len(paths) <= limit:
+        suffix = ""
+    else:
+        suffix = f", ... (+{len(paths) - limit})"
     return ", ".join(shown) + suffix

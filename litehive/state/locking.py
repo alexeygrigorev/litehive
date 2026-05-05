@@ -279,7 +279,10 @@ def runner_conflict_message(root: Path) -> str:
         details.append(f"heartbeat_at={heartbeat_at}")
     if command:
         details.append(f"command={command}")
-    suffix = f" ({', '.join(details)})" if details else ""
+    if details:
+        suffix = f" ({', '.join(details)})"
+    else:
+        suffix = ""
     return (
         f"workspace is already being mutated by another runner{suffix}. "
         "Wait for the active run to finish before changing this workspace."

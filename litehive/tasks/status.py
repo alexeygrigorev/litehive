@@ -349,9 +349,15 @@ def _apply_close_task_state(
     follow_up_task_id: str | None = None,
     pipeline_status: str | None = None,
 ) -> str:
-    execution_status = "done" if outcome == "done" else "cancelled"
+    if outcome == "done":
+        execution_status = "done"
+    else:
+        execution_status = "cancelled"
     clear_task_run_activity(task, execution_status=execution_status)
-    task.status = TaskStatus.DONE if outcome == "done" else TaskStatus.CLOSED
+    if outcome == "done":
+        task.status = TaskStatus.DONE
+    else:
+        task.status = TaskStatus.CLOSED
     task.close_reason = outcome
     task.flag_reason = None
     task.pipeline_status = pipeline_status or (PipelineStatus.DONE if outcome == "done" else task.pipeline_status)
@@ -399,15 +405,20 @@ def _close_task_transition(
     state = load_state(root)
     stop_summary: StopTaskSummary | None = None
     task_snapshot = get_task_record(root, task_id)
-    active_subagent_pid = (
-        None
-        if task_snapshot is None or task_snapshot.runtime.execution.active_subagent is None
-        else task_snapshot.runtime.execution.active_subagent.pid
-    )
-    runner_metadata = read_runner_lock_metadata(root) if runner_lock_is_held(root) else None
+    if task_snapshot is None or task_snapshot.runtime.execution.active_subagent is None:
+        active_subagent_pid = None
+    else:
+        active_subagent_pid = task_snapshot.runtime.execution.active_subagent.pid
+    if runner_lock_is_held(root):
+        runner_metadata = read_runner_lock_metadata(root)
+    else:
+        runner_metadata = None
     if state.active_task_id == task_id or (runner_metadata is not None and runner_metadata.active_task_id == task_id):
         stop_summary = stop_current_task(root)
-    runner_pid = None if stop_summary is None else stop_summary.runner_pid
+    if stop_summary is None:
+        runner_pid = None
+    else:
+        runner_pid = stop_summary.runner_pid
     _terminate_subagent_pid(task_id, active_subagent_pid)
     _terminate_subagent_pid(task_id, runner_pid)
     with workspace_lock(root):

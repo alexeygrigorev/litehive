@@ -197,12 +197,14 @@ def list_tasks(
             continue
         filtered.append(task)
     for task in filtered:
-        flag_reason = f" flag_reason={_display_flag_reason(task)}" if task.status == TaskStatus.FLAGGED else ""
-        close_reason = (
-            f" close_reason={_display_close_reason(task)}"
-            if task.status in {TaskStatus.CLOSED, TaskStatus.DONE}
-            else ""
-        )
+        if task.status == TaskStatus.FLAGGED:
+            flag_reason = f" flag_reason={_display_flag_reason(task)}"
+        else:
+            flag_reason = ""
+        if task.status in {TaskStatus.CLOSED, TaskStatus.DONE}:
+            close_reason = f" close_reason={_display_close_reason(task)}"
+        else:
+            close_reason = ""
         print(f"{task.id} [{task.status}/{task.pipeline_status}] {task.title}{flag_reason}{close_reason}")
     return 0
 

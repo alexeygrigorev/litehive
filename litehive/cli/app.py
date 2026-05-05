@@ -63,4 +63,6 @@ def main() -> int:
         return exc.exit_code
     except click.Abort:
         return 1
-    return 0 if result is None else int(result)
+    if result is None:
+        return 0
+    return int(result)

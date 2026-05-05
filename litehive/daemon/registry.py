@@ -53,7 +53,10 @@ def daemon_metadata(workspace: Path) -> dict[str, object] | None:
     metadata = manager.read_metadata()
     if not metadata:
         return None
-    status = "running" if manager.is_active() else "stale"
+    if manager.is_active():
+        status = "running"
+    else:
+        status = "stale"
     payload = dict(metadata)
     payload["status"] = status
     return payload
@@ -63,7 +66,9 @@ def get_workspace_daemon(workspace: Path) -> dict[str, object] | None:
     metadata = daemon_metadata(workspace)
     if metadata is None:
         return None
-    return metadata if metadata.get("status") == "running" else None
+    if metadata.get("status") == "running":
+        return metadata
+    return None
 
 
 def register_daemon(workspace: Path, pid: int, log_dir: Path) -> None:

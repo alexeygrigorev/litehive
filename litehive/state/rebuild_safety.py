@@ -118,7 +118,10 @@ def assert_database_rebuild_safe(
     )
     if missing_ids:
         sample = ", ".join(missing_ids[:10])
-        suffix = "" if len(missing_ids) <= 10 else f", ... ({len(missing_ids)} total)"
+        if len(missing_ids) <= 10:
+            suffix = ""
+        else:
+            suffix = f", ... ({len(missing_ids)} total)"
         raise RebuildSafetyError(
             f"refusing {operation}: replay source covers {len(replay_ids)} task(s), "
             f"but existing DB task rows reference {len(expected_ids)} task(s); "

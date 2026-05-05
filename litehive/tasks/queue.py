@@ -268,7 +268,10 @@ def resumable_running_stage(task: TaskRecord) -> str | None:
 
 
 def canonicalize_resumable_queue_task(task: TaskRecord, stage: str | None = None) -> str | None:
-    target_stage = _normalize_resumable_stage_name(stage) if stage is not None else resumable_queue_stage(task)
+    if stage is not None:
+        target_stage = _normalize_resumable_stage_name(stage)
+    else:
+        target_stage = resumable_queue_stage(task)
     if target_stage is None:
         return None
     now = clear_task_run_activity(task, execution_status="idle")
@@ -643,7 +646,10 @@ def _task_selection_key(
     queue: list[str],
     tasks_by_id: dict[str, TaskRecord],
 ) -> tuple[int | str, ...]:
-    interrupted_rank = 0 if _is_interrupted_task(task) else 1
+    if _is_interrupted_task(task):
+        interrupted_rank = 0
+    else:
+        interrupted_rank = 1
     return (
         queue_index,
         -_dependent_task_count(task.id, queue, tasks_by_id),
@@ -841,7 +847,10 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
     current_state = state or load_state(root)
     tasks = list_tasks(root, strict=False)
     tasks_by_id = {task.id: task for task in tasks}
-    active_task = None if current_state.active_task_id is None else tasks_by_id.get(current_state.active_task_id)
+    if current_state.active_task_id is None:
+        active_task = None
+    else:
+        active_task = tasks_by_id.get(current_state.active_task_id)
     if active_task is not None and (
         is_task_eligible_for_execution(active_task) or active_task.runtime.pipeline.execution_status == "running"
     ):

@@ -36,11 +36,10 @@ def daemon_run(workspace: WorkspaceOption, foreground: bool = False) -> int:
 @app.command("status", help="Show daemon state for a workspace")
 def daemon_status(workspace: StatusWorkspaceOption = None) -> int:
     try:
-        root = (
-            resolve_workspace(None, register=False)
-            if workspace is None
-            else normalize_workspace_root(workspace, source="--workspace")
-        )
+        if workspace is None:
+            root = resolve_workspace(None, register=False)
+        else:
+            root = normalize_workspace_root(workspace, source="--workspace")
     except ValueError as exc:
         print(f"daemon status failed: {exc}")
         return 1

@@ -313,9 +313,18 @@ def run_command(
     if dry_run:
         return _preview_single(workspace, engine=engine, model=model)
     config = load_config(workspace)
-    effective_stop_on_failure = config.pool_stop_on_failure if stop_on_failure is None else stop_on_failure
-    effective_max_tasks = config.pool_max_tasks if max_tasks is None else max_tasks
-    effective_stop_on_dirty_git = config.pool_stop_on_dirty_git if stop_on_dirty_git is None else stop_on_dirty_git
+    if stop_on_failure is None:
+        effective_stop_on_failure = config.pool_stop_on_failure
+    else:
+        effective_stop_on_failure = stop_on_failure
+    if max_tasks is None:
+        effective_max_tasks = config.pool_max_tasks
+    else:
+        effective_max_tasks = max_tasks
+    if stop_on_dirty_git is None:
+        effective_stop_on_dirty_git = config.pool_stop_on_dirty_git
+    else:
+        effective_stop_on_dirty_git = stop_on_dirty_git
     if drain:
         return _run_drain(
             workspace,
@@ -354,11 +363,10 @@ def report_command(
     if not task_id:
         task_id = os.environ.get("LITEHIVE_TASK_ID")
     try:
-        root = (
-            resolve_workspace(task_id)
-            if workspace is None
-            else normalize_workspace_root(workspace, source="--workspace")
-        )
+        if workspace is None:
+            root = resolve_workspace(task_id)
+        else:
+            root = normalize_workspace_root(workspace, source="--workspace")
     except ValueError as exc:
         print(f"report failed: {exc}")
         return 1
@@ -484,7 +492,10 @@ def db_migrate(
     print(f"workspace: {workspace}")
     print(f"dry_run: {'yes' if plan.dry_run else 'no'}")
     if plan.pending_migrations:
-        label = "would_apply" if plan.dry_run else "applied"
+        if plan.dry_run:
+            label = "would_apply"
+        else:
+            label = "applied"
         for migration in plan.pending_migrations:
             print(f"{label}: {migration.name}")
     else:

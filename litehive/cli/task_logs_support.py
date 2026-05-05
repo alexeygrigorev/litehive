@@ -76,7 +76,10 @@ def list_task_subagents(root: Path, task) -> int:
         started_at = _pick_value(runtime_state, session, "started_at", "created_at")
         completed_at = _pick_value(runtime_state, session, "completed_at", "updated_at")
         duration = _format_duration(started_at, completed_at)
-        exit_str = str(exit_code) if exit_code is not None else "-"
+        if exit_code is not None:
+            exit_str = str(exit_code)
+        else:
+            exit_str = "-"
         print(
             f"{ref.id}  role={ref.role}  engine={ref.engine}  status={ref.status}  "
             f"exit_code={exit_str}  duration={duration}"
@@ -86,7 +89,10 @@ def list_task_subagents(root: Path, task) -> int:
 
 def follow_active_subagent(root: Path, task_id: str | None = None) -> int:
     task = resolve_follow_task(root, task_id=task_id)
-    ref = None if task is None else _latest_subagent_ref(task)
+    if task is None:
+        ref = None
+    else:
+        ref = _latest_subagent_ref(task)
     is_active = bool(
         task is not None
         and ref is not None
@@ -135,7 +141,9 @@ def _latest_daemon_log_path(latest_dir: Path | None) -> Path | None:
     if preferred:
         return preferred[-1]
     candidates = sorted(path for path in latest_dir.iterdir() if path.is_file())
-    return candidates[-1] if candidates else None
+    if candidates:
+        return candidates[-1]
+    return None
 
 
 def _tail_text(text: str, lines: int = _DEFAULT_TAIL_LINES) -> str:
@@ -188,7 +196,9 @@ def _latest_subagent_ref(task):
         for ref in reversed(task.subagents):
             if ref.id == subagent_id:
                 return ref
-    return task.subagents[-1] if task.subagents else None
+    if task.subagents:
+        return task.subagents[-1]
+    return None
 
 
 def _artifact_for_kind(base: Path, kind: str, active: bool) -> Path | None:
@@ -226,7 +236,9 @@ def _format_duration(started_at: str | datetime | None, completed_at: str | date
     except ValueError:
         return "-"
     total_seconds = int((end - start).total_seconds())
-    return f"{total_seconds}s" if total_seconds >= 0 else "-"
+    if total_seconds >= 0:
+        return f"{total_seconds}s"
+    return "-"
 
 
 def resolve_follow_task(root: Path, task_id: str | None) -> object | None:

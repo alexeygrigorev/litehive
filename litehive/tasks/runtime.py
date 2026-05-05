@@ -333,7 +333,9 @@ def summarize_transcript(transcript: str, limit: int = 120) -> str:
             continue
         if stripped.startswith("SUMMARY:"):
             stripped = stripped.partition(":")[2].strip()
-        return stripped if len(stripped) <= limit else stripped[: limit - 3].rstrip() + "..."
+        if len(stripped) <= limit:
+            return stripped
+        return stripped[: limit - 3].rstrip() + "..."
     return ""
 
 

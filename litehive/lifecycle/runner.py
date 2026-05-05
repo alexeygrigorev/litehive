@@ -77,7 +77,10 @@ class StateMachineRunner:
                 continue
             from_stage = state.stage
             node = self.registry.get(from_stage)
-            started_at = self._clock() if node.node_type == NodeType.AGENT else None
+            if node.node_type == NodeType.AGENT:
+                started_at = self._clock()
+            else:
+                started_at = None
             event = node.run(state)
             if started_at is not None:
                 state.agent_elapsed_seconds += max(0.0, self._clock() - started_at)

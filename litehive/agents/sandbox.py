@@ -155,11 +155,10 @@ class SandboxLauncher:
         runtime_config = self.config.external_engine_sandbox
         policy = self._policy_for_engine(engine_name)
         workspace_mount = PurePosixPath(runtime_config.workspace_mount_path)
-        workspace_mode = (
-            runtime_config.default_workspace_mode
-            if policy is None or policy.workspace_mode is None
-            else policy.workspace_mode
-        )
+        if policy is None or policy.workspace_mode is None:
+            workspace_mode = runtime_config.default_workspace_mode
+        else:
+            workspace_mode = policy.workspace_mode
         container_argv = self._translate_container_argv(
             invocation.argv,
             host_root=self.root,
@@ -365,5 +364,8 @@ class SandboxLauncher:
 
     @staticmethod
     def _bind_mount_spec(source: Path, target: PurePosixPath, read_only: bool) -> str:
-        mode = ",readonly" if read_only else ""
+        if read_only:
+            mode = ",readonly"
+        else:
+            mode = ""
         return f"type=bind,src={source},dst={target}{mode}"

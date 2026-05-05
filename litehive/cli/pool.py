@@ -21,7 +21,10 @@ def _pool_task_report_entry(
     close_reason=None,
     flag_reason=None,
 ):
-    stage_outcomes = task_stage_outcomes(root, task_id, slug) if slug is not None else []
+    if slug is not None:
+        stage_outcomes = task_stage_outcomes(root, task_id, slug)
+    else:
+        stage_outcomes = []
     return {
         "task_id": task_id,
         "title": title,
@@ -101,7 +104,10 @@ def _format_pool_task_report_line(
     entry,
 ):
     stage_outcomes = [str(item) for item in entry.get("stage_outcomes", [])]
-    stage_outcomes_label = ", ".join(stage_outcomes) if stage_outcomes else "-"
+    if stage_outcomes:
+        stage_outcomes_label = ", ".join(stage_outcomes)
+    else:
+        stage_outcomes_label = "-"
     line = (
         f"{label}: {entry['task_id']} {entry['title']} status={entry['final_task_status']} "
         f"pipeline_status={entry['pipeline_status']} stage_outcomes={stage_outcomes_label}"

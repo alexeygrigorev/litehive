@@ -43,9 +43,10 @@ class SubprocessHookRunner(HookRunner):
         self.extra_env = dict(extra_env or {})
 
     def run(self, spec: HookSpec, state: TaskState) -> subprocess.CompletedProcess[str] | None:
-        execution_root = (
-            self.workspace_root if self.execution_root_resolver is None else Path(self.execution_root_resolver(state))
-        )
+        if self.execution_root_resolver is None:
+            execution_root = self.workspace_root
+        else:
+            execution_root = Path(self.execution_root_resolver(state))
         env = {
             **os.environ,
             **self.extra_env,
@@ -116,11 +117,10 @@ def _reject(point: PipelineState, spec: HookSpec, result: subprocess.CompletedPr
     warning = "\n".join(parts)
     log.warning("%s", warning)
     previous = state.last_hook_reject_fingerprint
-    same_hook_rejects = (
-        state.consecutive_same_hook_rejects + 1
-        if previous is not None and previous.fingerprint == hook["fingerprint"]
-        else 1
-    )
+    if previous is not None and previous.fingerprint == hook["fingerprint"]:
+        same_hook_rejects = state.consecutive_same_hook_rejects + 1
+    else:
+        same_hook_rejects = 1
     reason = f"Runner hook rejected at `{point}`: `{spec.command}`."
     if description:
         reason += f" Description: {description}"

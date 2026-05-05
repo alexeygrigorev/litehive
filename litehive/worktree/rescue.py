@@ -61,7 +61,10 @@ def collect_rescue_candidates(root: Path) -> list[RescueCandidate]:
         worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
         if worktree_path is None or worktree_rel is None:
             continue
-        commit_shas = _worktree_commits_ahead_of_main(root, worktree_path) if worktree_path.exists() else []
+        if worktree_path.exists():
+            commit_shas = _worktree_commits_ahead_of_main(root, worktree_path)
+        else:
+            commit_shas = []
         candidates.append(
             RescueCandidate(
                 task_id=task.id,

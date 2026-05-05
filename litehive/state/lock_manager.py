@@ -18,7 +18,9 @@ class WorkspaceLockManager:
     fsync_writes: bool = False
 
     def _is_held_in_process(self) -> bool:
-        return False if self.held_in_process is None else self.held_in_process()
+        if self.held_in_process is None:
+            return False
+        return self.held_in_process()
 
     def _parse_metadata_text(self, text: str, strict: bool) -> dict[str, object] | None:
         if not text.strip():
@@ -49,7 +51,9 @@ class WorkspaceLockManager:
     def read_locked_metadata(self, handle: TextIO) -> dict[str, object]:
         handle.seek(0)
         payload = self._parse_metadata_text(handle.read(), strict=False)
-        return {} if payload is None else payload
+        if payload is None:
+            return {}
+        return payload
 
     def write_locked_metadata(self, handle: TextIO, payload: Mapping[str, object]) -> None:
         handle.seek(0)

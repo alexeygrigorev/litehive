@@ -216,7 +216,10 @@ class FailedRunRecord:
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "FailedRunRecord":
         retry_limit = payload.get("retry_limit")
-        retry_limit_value = None if retry_limit in (None, "") else int(retry_limit)
+        if retry_limit in (None, ""):
+            retry_limit_value = None
+        else:
+            retry_limit_value = int(retry_limit)
         return cls(
             stage=str(payload.get("stage") or ""),
             failure_shape=str(payload.get("failure_shape") or ""),
@@ -552,8 +555,14 @@ class SqlitePersistence:
         except TaskNotFound:
             previous = None
         with connect_workspace_db(self.workspace_root) as connection:
-            preserved_failed_runs = {} if previous is None else previous.failed_run_history
-            preserved_recovery_history = [] if previous is None else previous.recovery_history
+            if previous is None:
+                preserved_failed_runs = {}
+            else:
+                preserved_failed_runs = previous.failed_run_history
+            if previous is None:
+                preserved_recovery_history = []
+            else:
+                preserved_recovery_history = previous.recovery_history
             if (
                 previous is None
                 or not preserve_run_memory

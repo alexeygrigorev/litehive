@@ -52,8 +52,14 @@ class MergeAgent(RoleAgent):
 
     def build_prompt(self, state: TaskState) -> dict[str, Any]:
         base = super().build_prompt(state)
-        conflict_files = list(state.merge_context.conflict_files) if state.merge_context is not None else []
-        merge_attempt = state.merge_context.merge_attempt if state.merge_context is not None else 1
+        if state.merge_context is not None:
+            conflict_files = list(state.merge_context.conflict_files)
+        else:
+            conflict_files = []
+        if state.merge_context is not None:
+            merge_attempt = state.merge_context.merge_attempt
+        else:
+            merge_attempt = 1
         base.update(
             {
                 "conflict_files": conflict_files,

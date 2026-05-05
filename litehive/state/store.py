@@ -228,7 +228,10 @@ class RuntimeStore:
         audit_entries: list[TaskAuditEntry],
     ) -> None:
         logged_task_ids: set[str] = set()
-        workspace_payload = None if workspace_state is None else workspace_state.model_dump(mode="json")
+        if workspace_state is None:
+            workspace_payload = None
+        else:
+            workspace_payload = workspace_state.model_dump(mode="json")
 
         def payload_for_task(task_id: str) -> dict[str, object]:
             payload: dict[str, object] = {}
@@ -428,7 +431,10 @@ class RuntimeStore:
             "SELECT COALESCE(MAX(entry_index) + 1, 0) AS next_index FROM task_journal WHERE task_id = ?",
             (task_id,),
         ).fetchone()
-        entry_index = 0 if row is None else int(row["next_index"])
+        if row is None:
+            entry_index = 0
+        else:
+            entry_index = int(row["next_index"])
         metadata = "{}"
         connection.execute(
             """

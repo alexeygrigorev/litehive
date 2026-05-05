@@ -62,7 +62,10 @@ def status_porcelain(root: Path) -> list[str]:
 
 def has_non_litehive_changes(root: Path) -> bool:
     for line in status_porcelain(root):
-        path = line[3:] if len(line) > 3 else ""
+        if len(line) > 3:
+            path = line[3:]
+        else:
+            path = ""
         if path and not path.startswith(".litehive/"):
             return True
     return False

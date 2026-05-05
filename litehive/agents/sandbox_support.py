@@ -42,7 +42,10 @@ def forced_engine_rw_state_dirs(
     if isinstance(setenv, dict):
         effective_env.update(setenv)
     home_override = effective_env.get("HOME")
-    home = Path(home_override).expanduser() if home_override else Path.home()
+    if home_override:
+        home = Path(home_override).expanduser()
+    else:
+        home = Path.home()
 
     candidates: list[Path] = []
     if engine_name == "codex":

@@ -17,7 +17,9 @@ def _worktree_workspace_dir(root: Path) -> Path | None:
         if part == ".litehive" and i + 2 < len(parts) and parts[i + 1] == "worktrees":
             return Path(*parts[: i + 3]) / ".litehive"
     registered_root = registered_workspace_root(resolved)
-    return None if registered_root is None else workspace_dir(registered_root)
+    if registered_root is None:
+        return None
+    return workspace_dir(registered_root)
 
 
 def tasks_root(root: Path, bootstrap: bool = True) -> Path:

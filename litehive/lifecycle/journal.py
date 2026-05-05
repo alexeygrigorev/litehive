@@ -255,7 +255,10 @@ class SqliteJournal(PipelineJournal):
                 """,
                 (task_id, task_id),
             ).fetchone()
-        max_seq = row["max_seq"] if row and row["max_seq"] is not None else -1
+        if row and row["max_seq"] is not None:
+            max_seq = row["max_seq"]
+        else:
+            max_seq = -1
         return max_seq + 1
 
     def load_transitions(self, task_id: str) -> list[dict[str, Any]]:
