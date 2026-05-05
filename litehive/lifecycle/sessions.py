@@ -22,6 +22,7 @@ class Session:
     conversation_id: str | None = None
 
     def resumable(self) -> bool:
+        """Return True when the session has at least one engine-issued continuation handle so the AgentNode can pass ``--continue``/``--resume`` on the next turn instead of starting a fresh conversation."""
         return self.engine_session_id is not None or self.conversation_id is not None
 
 
@@ -34,11 +35,17 @@ class SessionStore(Protocol):
     shared persistent store.
     """
 
-    def get_or_create(self, task_id: str, node_name: PipelineState, engine_name: str) -> Session: ...
+    def get_or_create(self, task_id: str, node_name: PipelineState, engine_name: str) -> Session:
+        """Return the persisted session for ``(task_id, node_name, engine_name)`` or a fresh empty ``Session`` if none exists yet; AgentNode calls this before every engine turn so retries on the same engine reuse continuation handles and engine switches start clean."""
+        ...
 
-    def persist(self, task_id: str, node_name: PipelineState, engine_name: str, session: Session) -> None: ...
+    def persist(self, task_id: str, node_name: PipelineState, engine_name: str, session: Session) -> None:
+        """Write the session's continuation handles back to storage after the engine adapter has filled them in on the first turn; AgentNode calls this immediately after the turn so a crash before the next turn does not lose the resume token."""
+        ...
 
-    def clear_node_sessions(self, task_id: str, node_name: PipelineState) -> None: ...
+    def clear_node_sessions(self, task_id: str, node_name: PipelineState) -> None:
+        """Drop every engine's session for one ``(task_id, node_name)`` so the next entry to that stage starts conversations from scratch; called when the orchestrator decides the node's prior conversations are no longer relevant (e.g. recovery hijack, stage reset)."""
+        ...
 
 
 class SqliteSessionStore:
@@ -51,9 +58,11 @@ class SqliteSessionStore:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """Bind the store to a workspace so every method below uses one shared sqlite connection factory; one ``SqliteSessionStore`` per workspace is the expected shape because the schema lives in the workspace's ``data.db``."""
         self.workspace = workspace
 
     def get_or_create(self, task_id: str, node_name: PipelineState, engine_name: str) -> Session:
+        """Look up the ``pipeline_sessions`` row for this triple and rehydrate a ``Session``, returning a brand-new empty one when no row exists; deliberately does not write so a session that is created and never used does not leave a row behind."""
         with self.workspace.connect() as connection:
             row = connection.execute(
                 """
@@ -71,6 +80,7 @@ class SqliteSessionStore:
         )
 
     def persist(self, task_id: str, node_name: PipelineState, engine_name: str, session: Session) -> None:
+        """Upsert the session's continuation handles plus an ``updated_at`` timestamp; the ON CONFLICT clause makes repeated writes for the same ``(task, node, engine)`` cheap so AgentNode can call this every turn without reading first."""
         with self.workspace.connect() as connection:
             connection.execute(
                 """
@@ -95,6 +105,7 @@ class SqliteSessionStore:
             connection.commit()
 
     def clear_node_sessions(self, task_id: str, node_name: PipelineState) -> None:
+        """Delete every engine's session row for ``(task_id, node_name)`` in one statement so the next entry to that stage starts conversations from scratch; the per-engine breadth is intentional because a stage reset invalidates whichever engine had been mid-conversation."""
         with self.workspace.connect() as connection:
             connection.execute(
                 "DELETE FROM pipeline_sessions WHERE task_id = ? AND node_name = ?",

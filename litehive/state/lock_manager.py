@@ -25,11 +25,24 @@ class WorkspaceLockManager:
     fsync_writes: bool = False
 
     def _is_held_in_process(self) -> bool:
+        """Ask the per-subsystem callback whether the lock is already held by this process.
+
+        Lets ``is_active`` short-circuit the flock probe in cases where the
+        current Python process is the holder — flock is per-file-descriptor,
+        so a re-entrant ``acquire`` from the same process would otherwise
+        succeed and confuse ownership tracking.
+        """
         if self.held_in_process is None:
             return False
         return self.held_in_process()
 
     def _parse_metadata_text(self, text: str, strict: bool) -> dict[str, object] | None:
+        """Decode the lockfile JSON envelope, returning ``None`` for "do not trust this file".
+
+        Treating empty/null payloads as ``{}`` lets callers distinguish a
+        present-but-uninitialized lockfile from a corrupt one; ``strict=True``
+        re-raises so callers that just wrote the file can spot a write failure.
+        """
         if not text.strip():
             return {}
         try:
@@ -98,10 +111,21 @@ class WorkspaceLockManager:
         return self.path.open("a+", encoding="utf-8")
 
     def lock(self, handle: TextIO, nonblocking: bool) -> None:
+        """Take an exclusive flock on ``handle``; raises ``BlockingIOError`` in nonblocking mode if contended.
+
+        Thin wrapper that ``acquire`` and ``is_active`` route through so the
+        flock-mode flag is normalized in one place and tests can swap the
+        behaviour by subclassing.
+        """
         mode = fcntl.LOCK_EX | (fcntl.LOCK_NB if nonblocking else 0)
         fcntl.flock(handle.fileno(), mode)
 
     def unlock(self, handle: TextIO) -> None:
+        """Release the flock on ``handle``; the symmetric pair to ``lock``.
+
+        Kept as a method (instead of inlining ``fcntl.flock``) so subclasses
+        and tests can intercept release without monkey-patching ``fcntl``.
+        """
         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
     def acquire(self, nonblocking: bool, cleanup_stale_inode: bool = False) -> TextIO:
@@ -159,6 +183,12 @@ class WorkspaceLockManager:
             handle.close()
 
     def _pid_is_live(self, metadata: Mapping[str, object] | None) -> bool:
+        """Return True only if ``metadata`` names a PID that the OS still considers alive.
+
+        Callers (``metadata_status``, ``clear_metadata_if_unlocked``) use this
+        to decide whether a non-zero metadata blob represents a live owner or
+        leftover state that's safe to scrub.
+        """
         if not metadata:
             return False
         pid = metadata.get(self.pid_field)

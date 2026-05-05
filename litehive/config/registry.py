@@ -30,6 +30,7 @@ def workspace_registry_path() -> Path:
 
 
 def _int_env(name: str, default: int) -> int:
+    """Read a non-negative integer from the named env var, falling back to ``default`` for unset or unparseable values; used by the registry tunables (lock retries, busy timeout) so operators can override locking behaviour without editing code."""
     raw = os.environ.get(name)
     if raw is None:
         return default
@@ -40,22 +41,27 @@ def _int_env(name: str, default: int) -> int:
 
 
 def _registry_lock_retries() -> int:
+    """Number of extra ``database is locked`` retries the registry tolerates beyond the SQLite busy timeout; consumed by ``_locked_registry_operation`` and tunable via env so CI can crank it up without code changes."""
     return _int_env("LITEHIVE_REGISTRY_LOCK_RETRIES", _DEFAULT_LOCK_RETRIES)
 
 
 def _registry_busy_timeout_ms() -> int:
+    """SQLite ``PRAGMA busy_timeout`` value in milliseconds, clamped to at least 1ms; used by the connection opener to bound how long a writer waits on a contended registry."""
     return max(_int_env("LITEHIVE_REGISTRY_BUSY_TIMEOUT_MS", _DEFAULT_BUSY_TIMEOUT_MS), 1)
 
 
 def _registry_busy_timeout_seconds() -> float:
+    """Same busy timeout as :func:`_registry_busy_timeout_ms` but in seconds, for the ``sqlite3.connect(timeout=…)`` parameter which uses seconds rather than milliseconds."""
     return _registry_busy_timeout_ms() / 1000
 
 
 def _registry_lock_retry_delay_seconds() -> float:
+    """Sleep duration between ``_locked_registry_operation`` retry attempts; small by default so the worst case is a brief stall rather than a fast spin."""
     return _int_env("LITEHIVE_REGISTRY_LOCK_RETRY_DELAY_MS", _DEFAULT_LOCK_RETRY_DELAY_MS) / 1000
 
 
 def _open_registry_connection(path: Path) -> sqlite3.Connection:
+    """Open an autocommit sqlite connection to the registry with WAL (or in-memory journals when ``LITEHIVE_SKIP_FSYNC`` is set for tests), creating the parent directory if needed; the single chokepoint that all registry reads/writes go through so pragmas stay consistent."""
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path, timeout=_registry_busy_timeout_seconds(), isolation_level=None)
     connection.row_factory = sqlite3.Row
@@ -70,6 +76,7 @@ def _open_registry_connection(path: Path) -> sqlite3.Connection:
 
 
 def _ensure_registry_schema(connection: sqlite3.Connection) -> None:
+    """Create the registry table and its ``registered_at`` index on first contact; called by every read/write helper so a freshly-quarantined or never-existed registry rebuilds itself transparently on the next access."""
     connection.execute(
         f"""
         CREATE TABLE IF NOT EXISTS {_REGISTRY_TABLE} (
@@ -87,6 +94,7 @@ def _ensure_registry_schema(connection: sqlite3.Connection) -> None:
 
 
 def _registry_quick_check(connection: sqlite3.Connection) -> None:
+    """Run ``PRAGMA quick_check`` and raise ``DatabaseError`` if SQLite reports anything other than ``ok``; called by :func:`workspace_registry_error` so corruption can be surfaced through a structured exception path rather than silent breakage."""
     row = connection.execute("PRAGMA quick_check").fetchone()
     if row is None:
         return
@@ -115,6 +123,7 @@ def quarantine_corrupt_workspace_registry(reason: str) -> Path | None:
 
 
 def _backup_corrupt_registry_file(path: Path, reason: str, label: str) -> Path | None:
+    """Atomically rename a corrupt sqlite file to a ``.corrupt-<UTC timestamp>`` sibling and log the reason; the single rename helper used by :func:`quarantine_corrupt_workspace_registry` so the on-disk artifact format is consistent across registry types."""
     if not path.exists():
         return None
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -129,6 +138,7 @@ def _backup_corrupt_registry_file(path: Path, reason: str, label: str) -> Path |
 
 
 def _canonical_workspace_root(root: Path | str) -> Path | None:
+    """Expand ``~`` and resolve symlinks so two registry rows pointing at the same physical directory deduplicate to one; returns None on filesystem errors so a single broken row cannot poison the whole listing."""
     try:
         return Path(root).expanduser().resolve()
     except OSError:
@@ -136,6 +146,7 @@ def _canonical_workspace_root(root: Path | str) -> Path | None:
 
 
 def _locked_registry_operation(operation, path: Path):
+    """Run a registry callable, retrying through ``database is locked``/``busy`` errors up to ``_registry_lock_retries`` times before surfacing a ``TimeoutError``; wraps every public registry read/write so contention with another process becomes a bounded wait, not an immediate failure."""
     retries_remaining = _registry_lock_retries()
     retry_delay_seconds = _registry_lock_retry_delay_seconds()
     while True:
@@ -153,6 +164,7 @@ def _locked_registry_operation(operation, path: Path):
 
 
 def _read_registered_workspace_paths(connection: sqlite3.Connection) -> list[Path]:
+    """SELECT all workspace roots newest-first and canonicalize each one, dropping unresolvable or duplicate entries; the inner SQL+canonicalization step that :func:`list_registered_workspace_paths` wraps with locking and self-healing."""
     rows = connection.execute(
         f"""
         SELECT root
@@ -193,6 +205,7 @@ def list_registered_workspace_paths() -> list[Path]:
 
 
 def _list_registered_workspace_paths(path: Path) -> list[Path]:
+    """Open a connection, ensure schema, and read all registered roots; the lock-protected callable that :func:`list_registered_workspace_paths` hands to ``_locked_registry_operation``."""
     with _open_registry_connection(path) as connection:
         _ensure_registry_schema(connection)
         return _read_registered_workspace_paths(connection)
@@ -223,6 +236,7 @@ def register_workspace_path(root: Path) -> None:
 
 
 def _register_workspace_path(path: Path, root: Path) -> None:
+    """Upsert one workspace root inside an immediate transaction so concurrent registrations from sibling workspaces serialize cleanly; the lock-protected callable :func:`register_workspace_path` hands to ``_locked_registry_operation``."""
     with _open_registry_connection(path) as connection:
         _ensure_registry_schema(connection)
         connection.execute("BEGIN IMMEDIATE")

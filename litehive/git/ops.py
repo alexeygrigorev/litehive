@@ -34,6 +34,12 @@ class RollbackCheckpoint:
 
 
 def _run_git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run a git subprocess against ``root`` capturing stdout/stderr without raising.
+
+    The shared bottom of every wrapper in this module: callers branch on
+    ``returncode`` and ``stderr`` to translate git failures into domain
+    errors, so we never let CalledProcessError leak past the git layer.
+    """
     return subprocess.run(
         ["git", *args],
         cwd=str(root),
@@ -689,11 +695,23 @@ def default_commit_message(task_id: str, slug: str) -> str:
 
 
 def _clean_commit_text(value: str) -> str:
+    """Normalize a stretch of user-authored task text for inclusion in a commit message body.
+
+    Stripping trailing whitespace per line and the surrounding blank lines
+    keeps the generated commit message stable across edits — important
+    because ``_uses_generated_commit_message`` does an exact-string compare.
+    """
     lines = [line.rstrip() for line in value.strip().splitlines()]
     return "\n".join(lines).strip()
 
 
 def _metadata_body(task: TaskRecord) -> list[str]:
+    """Build the trailer-style body lines that summarize ``task`` inside a generated commit message.
+
+    Used by ``generated_completion_commit_message`` so completion commits
+    carry a self-contained record of which task they implemented and what
+    its acceptance criteria were, even if the original task is later deleted.
+    """
     lines = [
         f"Task: {task.id}",
         f"Title: {task.title}",
@@ -721,12 +739,24 @@ def generated_completion_commit_message(task: TaskRecord, detail: str | None = N
 
 
 def _with_attempt_suffix(message: str, attempt: int) -> str:
+    """Append an "(attempt N)" suffix to the subject line of a commit message.
+
+    Used by ``checkpoint_message`` and ``rollback_message`` so retries land
+    as distinct commits with attempt-tagged subjects, making the recovery
+    history obvious in ``git log --oneline``.
+    """
     subject, separator, body = message.partition("\n")
     subject = CHECKPOINT_ATTEMPT_SUFFIX_TEMPLATE.format(base=subject, attempt=attempt)
     return subject + separator + body
 
 
 def _uses_generated_commit_message(task: TaskRecord) -> bool:
+    """Report whether the task is still riding the auto-generated commit message.
+
+    Used by the commit-stage code to decide whether to overwrite
+    ``task.git.commit_message`` with a freshly generated one when metadata
+    changes — if the operator has hand-edited it we leave the override alone.
+    """
     message = task.git.commit_message
     if message is None:
         return True

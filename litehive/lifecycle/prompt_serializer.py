@@ -261,6 +261,12 @@ def _trim_activity_for_prompt(
         activity = [entry for entry in activity if not _matches_last_rejection(entry, last_rejection)]
 
     def _last_where(**match: str) -> dict[str, Any] | None:
+        """Local closure: scan ``activity`` newest-first for the first entry that equals every kwarg.
+
+        Used by the per-stage selection branches of ``_select_activity_entries``
+        so each "give me the latest grooming pass" / "give me the latest QA
+        reject" lookup reads as one line in the surrounding flow.
+        """
         for e in reversed(activity):
             if all(e.get(k) == v for k, v in match.items()):
                 return e

@@ -40,6 +40,7 @@ class RuntimeStore:
     """Small repository-style API over the workspace runtime database."""
 
     def __init__(self, root: Path) -> None:
+        """Pin the store to a workspace root; constructed via the ``runtime_store`` module factory so tests can monkey-patch a single symbol instead of every call site."""
         self.root = root
         self.workspace = Workspace.from_path(root)
 
@@ -56,6 +57,7 @@ class RuntimeStore:
             rebuild_sqlite_from_task_event_log(self.workspace)
 
     def _should_rebuild_from_task_event_log(self) -> bool:
+        """True when the SQLite task tables are empty but the append-only event log has events; ``bootstrap`` uses this signal to replay the log so a wiped/corrupted DB heals itself on the next workspace open."""
         from litehive.tasks.event_log import sqlite_task_tables_empty, task_event_log_has_events  # noqa: PLC0415
 
         return task_event_log_has_events(self.workspace) and sqlite_task_tables_empty(self.workspace)
@@ -268,6 +270,7 @@ class RuntimeStore:
         task_journal_entries: dict[str, list[dict[str, object]]],
         audit_entries: list[TaskAuditEntry],
     ) -> None:
+        """Write the replay-event tail of ``save_runtime_transaction`` so each touched task gets exactly one event with the full diff, audit-driven events take priority, and a workspace-only mutation still emits one ``workspace_state_saved`` row when no per-task event covers it."""
         logged_task_ids: set[str] = set()
         if workspace_state is None:
             workspace_payload = None
@@ -275,6 +278,7 @@ class RuntimeStore:
             workspace_payload = workspace_state.model_dump(mode="json")
 
         def payload_for_task(task_id: str) -> dict[str, object]:
+            """Build the per-task event payload that bundles every record in this transaction touching ``task_id`` (intent, state, journal, workspace) so a replay sees the same atomic snapshot the original write produced."""
             payload: dict[str, object] = {}
             if task_id in task_intents:
                 payload["task_intent"] = task_intents[task_id].model_dump(mode="json")
@@ -691,6 +695,7 @@ def _load_task_state_for_intent_columns(
     connection: sqlite3.Connection,
     task_id: str,
 ) -> TaskStateRecord | None:
+    """Read just enough of the live ``task_state`` row to compute the lifecycle/pipeline status mirrored onto ``task_intent``; used by ``_save_task_intent`` so an intent rewrite does not stomp the in-flight status from a concurrent state transition."""
     row = connection.execute("SELECT payload FROM task_state WHERE task_id = ?", (task_id,)).fetchone()
     if row is None:
         return None
@@ -706,6 +711,7 @@ def _task_intent_column_values(
     intent: TaskIntentRecord,
     state: TaskStateRecord | None = None,
 ) -> dict[str, str]:
+    """Project a ``TaskIntentRecord`` (and the optional live state) onto the flat denormalized columns of ``task_intent``; the single producer of those column values so list/filter queries see the same shape regardless of which call path wrote the row."""
     return {
         "slug": intent.slug,
         "title": intent.title,
@@ -726,12 +732,14 @@ def _task_intent_column_values(
 
 
 def _optional_str(value: object) -> str | None:
+    """Coerce a ``runtime_process_state`` payload field to ``str`` while preserving ``None``; the denormalized columns on that table are nullable, so callers must not turn missing keys into the literal ``"None"`` string."""
     if value is None:
         return None
     return str(value)
 
 
 def _optional_int(value: object) -> int | None:
+    """Coerce a ``runtime_process_state`` payload field to ``int`` while preserving ``None``; matches ``_optional_str`` for the pid column so a malformed payload entry yields ``NULL`` rather than blowing up the daemon registry write."""
     if value is None:
         return None
     try:

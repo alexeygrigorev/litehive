@@ -46,6 +46,7 @@ class MergeConflict(Exception):
     ``git diff --name-only --diff-filter=U`` reported."""
 
     def __init__(self, conflict_files: list[str]) -> None:
+        """Stash the unresolved file list on the exception so the commit-stage node can surface it in the ``MergeConflictDetected`` event without re-running ``git diff``."""
         super().__init__(f"{len(conflict_files)} unresolved file(s)")
         self.conflict_files = conflict_files
 
@@ -61,10 +62,13 @@ class SystemNode(Node):
     node_type = NodeType.SYSTEM
 
     def __init__(self, name: PipelineState) -> None:
+        """Bind the node's pipeline-stage label, which the runner uses for transition lookups and event log entries."""
         self.name = name
 
     @abstractmethod
-    def run(self, state: TaskState) -> Event: ...
+    def run(self, state: TaskState) -> Event:
+        """Inspect ``state`` and emit the typed ``Event`` the runner uses to drive the next transition; concrete subclasses implement the actual probe/sync/merge logic."""
+        ...
 
 
 class ReadyNode(SystemNode):
@@ -85,10 +89,12 @@ class ReadyNode(SystemNode):
         self,
         probes: "list[Callable[[TaskState], bool]] | None" = None,
     ) -> None:
+        """Register the probe callables that decide whether the entry stage needs pre-exec recovery; production wiring injects a worktree-existence probe."""
         super().__init__(PipelineState.READY)
         self.probes = list(probes or [])
 
     def run(self, state: TaskState) -> Event:
+        """Run every registered probe and route to ``NeedsPreExecRecovery`` if any fires (or raises), else emit ``CleanState`` so the pipeline advances to its first stage."""
         for probe in self.probes:
             try:
                 if probe(state):
@@ -129,9 +135,11 @@ class WorktreeSyncNode(SystemNode):
     """
 
     def __init__(self) -> None:
+        """Anchor the node at the worktree-sync pipeline stage so the runner can dispatch to it after ``ReadyNode`` reports a clean entry."""
         super().__init__(PipelineState.WORKTREE_SYNC)
 
     def run(self, state: TaskState) -> Event:
+        """Translate ``self.sync()`` outcomes into the rule-table events: ``Pass`` on success, ``Reject(source="system")`` for merge conflicts, ``Crash(GitError)`` for any other git failure."""
         try:
             self.sync(state)
         except MergeConflict as exc:
@@ -156,6 +164,7 @@ class NoopWorktreeSyncNode(WorktreeSyncNode):
     """Always-pass variant — use when worktrees aren't in play (tests, dry runs)."""
 
     def sync(self, state: TaskState) -> bool:
+        """No-op stand-in: report no changes so the worktree-sync stage always passes when worktrees are not wired up."""
         del state
         return False
 
@@ -179,12 +188,14 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         worktree_resolver: "WorktreeResolver",
         main_ref: str = "origin/main",
     ) -> None:
+        """Wire the node to the workspace root, the per-task worktree resolver, and the upstream branch (default ``origin/main``) used as the merge source during sync."""
         super().__init__()
         self.workspace_root = Path(workspace_root)
         self.worktree_resolver = worktree_resolver
         self.main_ref = main_ref
 
     def sync(self, state: TaskState) -> bool:
+        """Provision-or-rebase the task worktree onto local main and merge ``main_ref`` when present; raise ``MergeConflict``/``GitError`` so the base ``run`` can convert them to typed events."""
         from litehive.worktree import WorktreeMergeConflict, WorktreeService  # noqa: PLC0415
 
         try:
@@ -220,10 +231,12 @@ class PreExecRecoveryNode(SystemNode):
         self,
         repairs: "list[Callable[[TaskState], None]] | None" = None,
     ) -> None:
+        """Register the best-effort repair callables this node will run before the pipeline enters its first stage; the repair list is what subclasses inject worktree/database fixers into."""
         super().__init__("recovering_pre_exec")
         self.repairs = list(repairs or [])
 
     def run(self, state: TaskState) -> Event:
+        """Honour the pre-exec recovery budget, run each repair (swallowing exceptions to stderr so one bad fixer cannot wedge the pipeline), and emit ``PreExecRecoverySucceeded`` with the resume stage the rule table needs."""
         if state.pre_exec_recovery_attempt > 1:
             return PreExecRecoveryBudgetHit()
         for repair in self.repairs:
@@ -260,9 +273,11 @@ class CommitNode(SystemNode):
     """
 
     def __init__(self) -> None:
+        """Anchor the node at the ``commit`` pipeline stage so the runner dispatches the automatic merge here once the agent stages have all passed."""
         super().__init__("commit")
 
     def run(self, state: TaskState) -> Event:
+        """Drive ``_merge_worktree`` and translate its outcomes into the rule-table events: ``Pass`` on success, ``MergeConflictDetected`` for unresolved files, ``Crash(GitError)`` otherwise."""
         try:
             metadata = self._merge_worktree(state) or {}
             return Pass(metadata=metadata)
@@ -283,6 +298,7 @@ class StubCommitNode(CommitNode):
     """
 
     def _merge_worktree(self, state: TaskState) -> dict[str, object] | None:
+        """Test stub — pretend the merge succeeded and let the base class emit ``Pass`` so the rule table can be exercised without touching git."""
         del state
         return None
 
@@ -389,12 +405,14 @@ class GitCommitNode(CommitNode):
         worktree_resolver: WorktreeResolver,
         task_resolver: TaskResolver | None = None,
     ) -> None:
+        """Wire the node to the main repo root, the per-task worktree resolver, and an optional task resolver used to render rich auto-commit messages."""
         super().__init__()
         self.main_repo_root = Path(main_repo_root)
         self.worktree_resolver = worktree_resolver
         self.task_resolver = task_resolver
 
     def _merge_worktree(self, state: TaskState) -> dict[str, object] | None:
+        """Run the real commit-stage merge: auto-commit any uncommitted SWE edits, short-circuit when the worktree branch is already on main, then ``git merge --no-edit`` and surface unresolved conflicts/dirty checkouts as ``MergeConflict`` so the base class can route to ``MergeAgent``."""
         worktree = self.worktree_resolver(state)
         self.autocommit_worktree_changes(worktree, state)
         local_only_paths = self._worktree_local_only_paths(worktree)
@@ -640,9 +658,11 @@ class GitCommitNode(CommitNode):
         return files
 
     def _merge_in_progress(self) -> bool:
+        """True when ``.git/MERGE_HEAD`` exists, meaning a previous commit-stage attempt left the repo mid-merge; ``_merge_worktree`` resumes that merge instead of starting a fresh one."""
         return rev_parse_verify(self.main_repo_root, "MERGE_HEAD") is not None
 
     def _conclude_in_progress_merge(self) -> None:
+        """Finish a leftover merge whose conflicts have already been resolved on disk by running ``git commit --no-edit``; called from ``_merge_worktree`` when ``_merge_in_progress`` is true and ``_unresolved_conflicts`` is empty."""
         commit_no_edit(self.main_repo_root)
 
     def worktree_patch_already_on_main(self, worktree_head: str, main_head: str | None) -> bool:
@@ -655,7 +675,9 @@ class GitCommitNode(CommitNode):
         return bool(lines) and all(line.startswith("-") for line in lines)
 
     def _unresolved_conflicts(self) -> list[str]:
+        """Return the unmerged files (``git diff --name-only --diff-filter=U``) so ``_merge_worktree`` can decide between raising ``MergeConflict`` and concluding a clean merge."""
         return unmerged_files(self.main_repo_root)
 
     def _abort_merge(self) -> None:
+        """Run ``git merge --abort`` to clean up after a non-conflict failure (bad ref, missing commit) so the next commit-stage attempt isn't poisoned by a half-applied merge."""
         merge_abort(self.main_repo_root)

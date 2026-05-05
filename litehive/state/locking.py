@@ -221,6 +221,12 @@ def runner_heartbeat(
     stop_event = threading.Event()
 
     def _heartbeat_loop() -> None:
+        """Background-thread body: refresh ``runner_status`` every ``interval_seconds`` until ``stop_event`` fires.
+
+        The single closure inside ``runner_heartbeat``: holding it as a
+        method so the daemon thread name is stable in stack traces and the
+        ``stop_event`` / ``active_task_id`` capture are explicit.
+        """
         while not stop_event.wait(interval_seconds):
             touch_runner_status(root, active_task_id=active_task_id)
 

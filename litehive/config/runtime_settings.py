@@ -38,6 +38,7 @@ class RuntimeSettingAuditEntry:
 
 
 def _read_config_layer(path: Path) -> dict[str, Any]:
+    """Load one ``config.yaml`` layer (global or workspace) into a dict, returning ``{}`` for missing files and raising ``ValueError`` for non-mapping payloads; consumed by :func:`_bootstrap_config_data` so the two layers can be merged uniformly."""
     if not path.exists():
         return {}
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -47,6 +48,7 @@ def _read_config_layer(path: Path) -> dict[str, Any]:
 
 
 def _merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> dict[str, Any]:
+    """Deep-merge two config dicts so workspace YAML overrides global YAML override dataclass defaults at the leaf level; called by :func:`_bootstrap_config_data` to compose the runtime-settings seed without losing nested structure."""
     merged = dict(base)
     for key, value in overlay.items():
         current = merged.get(key)
@@ -58,16 +60,19 @@ def _merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) ->
 
 
 def _bootstrap_config_data(workspace: Workspace) -> dict[str, Any]:
+    """Compose the three-layer config snapshot (dataclass defaults < global YAML < workspace YAML) used to seed runtime settings on first access; called by :func:`bootstrap_runtime_settings` so the database starts out with the same values an operator would see by reading the YAML files directly."""
     config = asdict(LitehiveConfig())
     config = _merge_config_layers(config, _read_config_layer(litehive_root() / "config.yaml"))
     return _merge_config_layers(config, _read_config_layer(config_path(workspace.root)))
 
 
 def _json_dumps(value: Any) -> str:
+    """Serialise a runtime-setting value with sorted keys so two semantically-equal dicts always produce byte-equal JSON; this is what makes the no-op short-circuit in :func:`set_runtime_setting` reliable."""
     return json.dumps(value, sort_keys=True)
 
 
 def _json_loads(raw: str | None) -> Any:
+    """Decode a stored ``value_json`` column tolerantly, returning None for both NULL rows and malformed JSON; lets the audit-log readers and the no-op check survive a single corrupt row instead of erroring on every read."""
     if raw is None:
         return None
     try:
@@ -77,6 +82,7 @@ def _json_loads(raw: str | None) -> Any:
 
 
 def _sequence_value(raw_value: Any, field_name: str) -> list[str]:
+    """Coerce an engine-preference-shaped value into a normalised list of engine names, rejecting strings or non-sequence inputs up front; called by :func:`_runtime_values_from_config` so a typo in YAML fails loudly at bootstrap rather than silently at engine-selection time."""
     if raw_value is None:
         return []
     if isinstance(raw_value, str) or not isinstance(raw_value, Sequence):
@@ -85,6 +91,7 @@ def _sequence_value(raw_value: Any, field_name: str) -> list[str]:
 
 
 def _freeze_value(raw_value: Any) -> dict[str, str]:
+    """Coerce a freeze-map-shaped value into ``{engine: iso_string}``, raising on non-mappings; called by :func:`_runtime_values_from_config` and the freeze CLI helpers so the in-memory freeze map always has predictable types regardless of the YAML author's intent."""
     if raw_value is None:
         return {}
     if not isinstance(raw_value, Mapping):
@@ -93,6 +100,7 @@ def _freeze_value(raw_value: Any) -> dict[str, str]:
 
 
 def _runtime_values_from_config(config_data: Mapping[str, Any]) -> dict[str, Any]:
+    """Project a merged config dict down to the three audited keys (``default_engine``, ``engine_preference``, ``engine_freeze``), normalising each through its type coercer; the seed value source for :func:`bootstrap_runtime_settings`."""
     defaults = LitehiveConfig()
     return {
         "default_engine": str(config_data.get("default_engine", defaults.default_engine)),
@@ -105,6 +113,7 @@ def _runtime_values_from_config(config_data: Mapping[str, Any]) -> dict[str, Any
 
 
 def _load_setting_rows(connection: sqlite3.Connection) -> dict[str, Any]:
+    """Read every row from the ``runtime_settings`` table into a ``{key: parsed_value}`` dict, tolerating malformed JSON as None; the shared row reader behind :func:`load_runtime_settings` and :func:`apply_runtime_settings_to_config_data`."""
     rows = connection.execute("SELECT key, value_json FROM runtime_settings").fetchall()
     return {str(row["key"]): _json_loads(str(row["value_json"])) for row in rows}
 

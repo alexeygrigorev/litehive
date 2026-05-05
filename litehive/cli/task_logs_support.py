@@ -143,6 +143,7 @@ def follow_active_subagent(root: Path, task_id: str | None = None) -> int:
 
 
 def _latest_daemon_log_path(latest_dir: Path | None) -> Path | None:
+    """Pick the file ``show_latest_daemon_log`` should tail: prefers the canonical ``*-run.log`` produced by the runner so the output matches what the daemon emitted, and only falls back to a free-form file when the run log is missing."""
     if latest_dir is None or not latest_dir.exists():
         return None
     preferred = sorted(latest_dir.glob("*-run.log"))
@@ -155,6 +156,7 @@ def _latest_daemon_log_path(latest_dir: Path | None) -> Path | None:
 
 
 def _tail_text(text: str, lines: int = _DEFAULT_TAIL_LINES) -> str:
+    """Return only the trailing ``lines`` lines of ``text``; ``show_latest_daemon_log`` uses this so the operator default does not dump a whole multi-megabyte daemon log to the terminal."""
     text = text.rstrip("\n")
     if not text:
         return ""
@@ -162,6 +164,7 @@ def _tail_text(text: str, lines: int = _DEFAULT_TAIL_LINES) -> str:
 
 
 def _print_follow_chunk(stdout_path: Path, position: int) -> int:
+    """Print the bytes of ``stdout_path`` past ``position`` and return the new file length; the inner step of ``follow_active_subagent``'s polling loop so each iteration only emits the unwritten tail."""
     if not stdout_path.exists():
         return position
     content = stdout_path.read_text(encoding="utf-8")
@@ -191,6 +194,7 @@ def _session_outcome(directory: Path) -> str:
 
 
 def _format_session_timestamp(name: str) -> str:
+    """Convert a ``YYYYmmddTHHMMSSZ`` log directory name into an ISO-8601 string for ``list_daemon_sessions``; returns ``-`` for any directory whose name is not in that exact shape so a stray directory cannot break the listing."""
     try:
         return datetime.strptime(name, "%Y%m%dT%H%M%SZ").isoformat() + "Z"
     except ValueError:
@@ -198,6 +202,7 @@ def _format_session_timestamp(name: str) -> str:
 
 
 def _latest_subagent_ref(task):
+    """Pick the subagent that ``follow_active_subagent`` should attach to: prefers the runtime's currently-active subagent (so ``--follow`` lands on the live process) and falls back to the most recent ref so a just-finished task is still followable."""
     preferred_ids: list[str] = []
     if task.runtime.execution.active_subagent is not None:
         preferred_ids.append(task.runtime.execution.active_subagent.id)
@@ -239,6 +244,7 @@ def _pick_value(runtime_state, session: dict[str, object], *keys: str):
 
 
 def _format_duration(started_at: str | datetime | None, completed_at: str | datetime | None) -> str:
+    """Render the elapsed time between two ISO timestamps as ``Ns``; ``list_task_subagents`` uses it for the duration column and falls back to ``-`` whenever either side is missing or unparseable so the table still renders for partial data."""
     if not started_at or not completed_at:
         return "-"
     try:
@@ -269,6 +275,7 @@ def load_task_with_runtime(root: Path, task_id: str):
 
 
 def _coerce_datetime(value: str | datetime) -> datetime:
+    """Accept either an already-parsed datetime or an ISO string (with the SQLite-style ``Z`` suffix) and return a datetime; ``_format_duration`` routes both runtime and persisted timestamps through this so the duration math doesn't need to care which form it got."""
     if isinstance(value, datetime):
         return value
     return datetime.fromisoformat(value.replace("Z", "+00:00"))

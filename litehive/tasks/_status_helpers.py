@@ -91,6 +91,13 @@ def _queue_task(state: WorkspaceState, task_id: str, front: bool = False) -> Non
 
 
 def _apply_cancelled_task_state(task: TaskRecord, reason: str) -> None:
+    """Project a task into the closed/cancelled shape used by the abandon flow.
+
+    Called from the abandon-task transition: clears any in-flight run, marks
+    the task ``closed`` with ``execution_cancelled`` so downstream surfaces
+    can distinguish CLI-cancelled from user-closed tasks, and stamps a
+    last_outcome that future status views display.
+    """
     clear_task_run_activity(task, execution_status="cancelled")
     task.status = TaskStatus.CLOSED
     task.close_reason = "execution_cancelled"
@@ -113,6 +120,13 @@ def _apply_close_task_state(
     follow_up_task_id: str | None = None,
     pipeline_status: str | None = None,
 ) -> str:
+    """Project a task into the appropriate done/closed shape and return the journal message.
+
+    The ``litehive task close`` flow funnels every closure outcome
+    (``done``/``wont_do``/``deferred``/``duplicate``) through here so the
+    status, pipeline_status, last_outcome, and journal text are all decided
+    from one rule set. Returns the journal text the caller should record.
+    """
     if outcome == "done":
         execution_status = "done"
     else:
@@ -144,5 +158,11 @@ def _apply_close_task_state(
 
 
 def _apply_parked_task_state(task: TaskRecord) -> None:
+    """Project a task into the parked shape used by the park-task flow.
+
+    Called from the park transition: clears in-flight runtime so the runner
+    won't pick the task up, then flips the task to ``parked`` so the operator
+    can revisit it later via ``litehive task resume``.
+    """
     clear_task_run_activity(task, execution_status="paused")
     task.status = TaskStatus.PARKED

@@ -331,6 +331,7 @@ class TaskState:
     limits: Limits = field(default_factory=Limits)
 
     def __post_init__(self) -> None:
+        """Canonicalize all PipelineState fields right after construction so guards/effects/persistence comparing stage names by equality never see a raw string side-by-side with an enum member."""
         self.stage = canonical_pipeline_state(self.stage)
         if self.entry_stage is not None:
             self.entry_stage = canonical_pipeline_state(self.entry_stage)
@@ -342,6 +343,7 @@ class TaskState:
         }
 
     def recovery_attempts_for_origin(self, origin_stage: PipelineState) -> int:
+        """Count completed plus in-flight recovery attempts that originated at ``origin_stage``; the recovery-budget guard uses this to decide whether the origin stage has already used its allotment."""
         count = sum(1 for outcome in self._budget_recovery_history() if outcome.trigger.origin_stage == origin_stage)
         if self.active_recovery_trigger is not None and self.active_recovery_trigger.origin_stage == origin_stage:
             count += 1
@@ -354,15 +356,24 @@ class TaskState:
         return all(outcome.trigger.budget_key() != trigger.budget_key() for outcome in self._budget_recovery_history())
 
     def _budget_recovery_history(self) -> list[RecoveryOutcome]:
+        """Slice of ``recovery_history`` that counts toward the current budget window; pre-recovery outcomes preserved across a budget reset (e.g. after a successful operator override) are excluded so they cannot exhaust the new window."""
         return self.recovery_history[max(0, self.recovery_budget_history_start) :]
 
 
 class Persistence(Protocol):
-    def save(self, state: TaskState) -> None: ...
-    def load(self, task_id: str) -> TaskState: ...
+    """Structural type the runner depends on so tests can substitute an in-memory persistence without inheriting from ``SqlitePersistence``."""
+
+    def save(self, state: TaskState) -> None:
+        """Persist the lifecycle cursor for one task; tests may swap a no-op implementation, the production binding writes ``pipeline_task_state``."""
+        ...
+
+    def load(self, task_id: str) -> TaskState:
+        """Return the persisted cursor for a task; tests may return an in-memory record, the production binding reads ``pipeline_task_state`` and raises ``TaskNotFound`` for unknown ids."""
+        ...
 
 
 def _string_list(value: Any) -> list[str]:
+    """Coerce a json field into a deduped, stripped list of non-empty strings; used by ``LastReport.from_payload`` to defend report-rebuild against payloads with stray empty entries or non-string items."""
     if not isinstance(value, list):
         return []
     normalized: list[str] = []
@@ -380,6 +391,7 @@ def _string_list(value: Any) -> list[str]:
 
 
 def _state_payload(state: TaskState) -> dict[str, Any]:
+    """Serialize the non-column fields of ``TaskState`` into the json blob ``SqlitePersistence.save`` writes to ``pipeline_task_state.payload``; the inverse of ``_state_from_row`` and the only producer of that column shape."""
     return {
         "entry_stage": None if state.entry_stage is None else str(state.entry_stage),
         "stage_retry": {str(stage): count for stage, count in state.stage_retry.items()},
@@ -416,6 +428,7 @@ def _state_from_row(
     payload: dict[str, Any],
     limits: Limits,
 ) -> TaskState:
+    """Rebuild a ``TaskState`` from one ``pipeline_task_state`` row; the inverse of ``_state_payload``, called by ``SqlitePersistence.load`` so the runner can resume from where the previous launch left off."""
     last_report_data = payload.get("last_report") or {}
     last_rejections_data = payload.get("last_rejection_by_stage") or {}
     failed_run_history_data = payload.get("failed_run_history") or {}
@@ -495,6 +508,7 @@ class SqlitePersistence:
     """
 
     def __init__(self, workspace: Workspace, limits: Limits | None = None) -> None:
+        """Bind the persistence to a workspace plus a (re-injected on every load) ``Limits`` config; constructed once per runner launch so every save/load against this task uses the same retry budget configuration."""
         self.workspace = workspace
         self.limits = limits or Limits()
 

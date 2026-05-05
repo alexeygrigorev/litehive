@@ -62,12 +62,24 @@ class Transition:
 
 class NoTransitionError(RuntimeError):
     def __init__(self, current: str | PipelineState, event: Event) -> None:
+        """Build a ``NoTransitionError`` capturing the unmatched (state, event) pair for diagnostics.
+
+        Raised by ``evaluate`` when none of the rules accept the current
+        state/event combo; the runner reports the captured fields so we
+        can spot a missing rule from a stack trace alone.
+        """
         super().__init__(f"no transition rule matched: current={current!r} event={type(event).__name__}")
         self.current = current
         self.event = event
 
 
 def _matches_from(pattern, current: PipelineState) -> bool:
+    """Test whether a rule's ``from_state`` pattern accepts ``current``.
+
+    The rule table mixes single states, frozensets, ``Stage`` enums, and
+    raw strings; centralizing the comparison here keeps ``evaluate`` short
+    and lets new pattern shapes drop in without rewriting the matcher.
+    """
     if isinstance(pattern, frozenset):
         return current in pattern
     if isinstance(pattern, Stage):
@@ -76,10 +88,22 @@ def _matches_from(pattern, current: PipelineState) -> bool:
 
 
 def _matches_event(pattern: type[Event], event: Event) -> bool:
+    """Test whether ``event`` is an instance of the rule's ``on_event`` class.
+
+    Trivial wrapper so the ``evaluate`` loop reads symmetrically with
+    ``_matches_from``: every rule has both a state matcher and an event
+    matcher, written the same way.
+    """
     return isinstance(event, pattern)
 
 
 def _resolve_to(to: ToSpec, state: TaskState, event: Event) -> PipelineState:
+    """Resolve a rule's ``transition_to`` (state, ``Stage``, or callable) to a concrete ``PipelineState``.
+
+    Used by ``evaluate`` so callable destinations (``resume_from_origin``,
+    ``entry_from_worktree_sync``, etc.) can decide the next state from
+    runtime context while static destinations stay as plain enum members.
+    """
     if callable(to) and not isinstance(to, Stage):
         return canonical_pipeline_state(to(state, event))
     if isinstance(to, Stage):

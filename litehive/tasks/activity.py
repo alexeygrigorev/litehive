@@ -41,6 +41,13 @@ def load_task_activity(workspace: Workspace, task: TaskRecord) -> list[TaskActiv
 
 
 def _save_task_activity_to_db(workspace: Workspace, task_id: str, activity: list[TaskActivityEntry]) -> None:
+    """Replace ``task_activity`` rows and emit a ``task_reported`` event in one transaction.
+
+    The single low-level write used by both ``save_task_activity`` and
+    ``append_task_activity``: deleting + reinserting the whole feed is
+    simpler than tracking per-row diffs and the activity feed is small
+    enough that the cost is negligible.
+    """
     with workspace.connect() as connection:
         connection.execute("DELETE FROM task_activity WHERE task_id = ?", (task_id,))
         for entry_index, entry in enumerate(activity):
@@ -104,6 +111,12 @@ def latest_task_activity_entry(
 
 
 def _parse_created_at(value: str) -> datetime:
+    """Parse the ``created_at`` ISO string, normalizing trailing ``Z`` to ``+00:00`` and naive datetimes to UTC.
+
+    Used by ``latest_task_activity_entry`` so the ``after`` filter can
+    compare entries written by older code (no timezone) against newer
+    UTC-aware writers without raising.
+    """
     if value.endswith("Z"):
         value = value[:-1] + "+00:00"
     dt = datetime.fromisoformat(value)

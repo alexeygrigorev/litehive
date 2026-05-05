@@ -88,6 +88,7 @@ class _ReplayState:
 
     @classmethod
     def empty(cls) -> "_ReplayState":
+        """Construct a fresh replay accumulator with all per-table dicts/lists pre-seeded; the replay loop calls this once before walking the JSONL log so every collection it appends to already exists."""
         return cls(
             workspace_state=None,
             task_intents={},
@@ -316,6 +317,7 @@ def _apply_event(replay_state: _ReplayState, event: dict[str, Any]) -> None:
 
 
 def _delete_task_scoped_replay_state(replay_state: _ReplayState, task_id: str) -> None:
+    """Drop every replay-state collection scoped to ``task_id`` so a ``task_deleted`` / ``task_removed`` event can rebuild SQLite without leaving stale rows for the gone task."""
     replay_state.task_intents.pop(task_id, None)
     replay_state.task_states.pop(task_id, None)
     replay_state.task_journal.pop(task_id, None)
@@ -334,6 +336,7 @@ def _delete_task_scoped_replay_state(replay_state: _ReplayState, task_id: str) -
 
 
 def _rewrite_latest_stage_report(replay_state: _ReplayState, report: dict[str, Any]) -> None:
+    """Replace the most recent stage report for the same (task_id, pipeline_state) pair instead of appending a duplicate, so a stage that was retried in-place during the original run shows up exactly once after replay."""
     task_id = str(report.get("task_id") or "")
     pipeline_state = str(report.get("pipeline_state") or report.get("stage") or "")
     for index in range(len(replay_state.stage_reports) - 1, -1, -1):
@@ -346,11 +349,13 @@ def _rewrite_latest_stage_report(replay_state: _ReplayState, report: dict[str, A
 
 
 def _clear_replay_tables(connection: sqlite3.Connection) -> None:
+    """Wipe every SQLite table the replay rebuilds, called inside a transaction by the replay driver so the rewrite from the JSONL log starts from a known-empty state."""
     for table_name in _REPLAY_CLEARED_TABLES:
         connection.execute(f"DELETE FROM {table_name}")
 
 
 def _write_replay_state(connection: sqlite3.Connection, replay_state: _ReplayState) -> None:
+    """Flush the in-memory replay accumulator into SQLite by dispatching to the per-table ``_insert_*`` helpers; called once after the JSONL walk completes so a partial replay never leaks half-written rows."""
     workspace_state = _workspace_state_payload(replay_state)
     _insert_workspace_state(connection, workspace_state)
     for task_id, intent in sorted(replay_state.task_intents.items()):
@@ -383,6 +388,7 @@ def _workspace_state_payload(replay_state: _ReplayState) -> dict[str, Any]:
 
 
 def _highest_task_number(replay_state: _ReplayState) -> int:
+    """Return the largest ``T-NNNN`` task number observed during replay so ``_workspace_state_payload`` can advance ``next_task_number`` past every rebuilt task and avoid ID collisions on the next ``litehive new``."""
     highest = 0
     for task_id in set(replay_state.task_intents) | set(replay_state.task_states):
         try:
@@ -393,6 +399,7 @@ def _highest_task_number(replay_state: _ReplayState) -> int:
 
 
 def _insert_workspace_state(connection: sqlite3.Connection, payload: dict[str, Any]) -> None:
+    """Upsert the singleton ``pool_state`` row plus the queue snapshot during replay; split from the queue payload because the queue lives in its own table and the two are written atomically inside the replay transaction."""
     now = utcnow()
     state_payload = WorkspaceState.model_validate(payload).model_dump(mode="json")
     queue_payload = json.dumps(state_payload.pop("queue"), sort_keys=True)
@@ -419,6 +426,7 @@ def _insert_workspace_state(connection: sqlite3.Connection, payload: dict[str, A
 
 
 def _insert_task_intent(connection: sqlite3.Connection, task_id: str, payload: dict[str, Any]) -> None:
+    """Upsert one task's intent row (denormalized columns + JSON payload) during replay so list/filter queries hit indexed columns instead of parsing JSON; called by ``_write_replay_state`` for every replayed task."""
     intent = TaskIntentRecord.model_validate(payload)
     updated_at = str(payload.get("updated_at") or intent.created_at or utcnow())
     column_values = _task_intent_column_values(intent)
@@ -477,6 +485,7 @@ def _insert_task_intent(connection: sqlite3.Connection, task_id: str, payload: d
 
 
 def _insert_task_state(connection: sqlite3.Connection, task_id: str, payload: dict[str, Any]) -> None:
+    """Upsert one task's runtime state row during replay AND mirror the lifecycle/pipeline status onto the matching ``task_intent`` row so list views see consistent statuses without a join."""
     state = TaskStateRecord.model_validate(payload)
     updated_at = state.updated_at or utcnow()
     connection.execute(
@@ -500,6 +509,7 @@ def _insert_task_state(connection: sqlite3.Connection, task_id: str, payload: di
 
 
 def _insert_task_journal(connection: sqlite3.Connection, task_id: str, journal: list[dict[str, Any]]) -> None:
+    """Upsert every journal entry for a task during replay, preferring the persisted ``entry_index`` over the loop counter so re-replays stay idempotent under ``INSERT OR REPLACE``."""
     for fallback_index, entry in enumerate(journal):
         entry_index = int(entry.get("entry_index") if entry.get("entry_index") is not None else fallback_index)
         created_at = str(entry.get("created_at") or utcnow())
@@ -519,6 +529,7 @@ def _insert_task_journal(connection: sqlite3.Connection, task_id: str, journal: 
 
 
 def _insert_task_activity(connection: sqlite3.Connection, task_id: str, activity: list[dict[str, Any]]) -> None:
+    """Append every activity entry for a task during replay; the table is wiped first by ``_clear_replay_tables`` so simple ``INSERT`` is safe and the entry index can come from the loop counter."""
     for entry_index, entry in enumerate(activity):
         created_at = str(entry.get("created_at") or utcnow())
         connection.execute(
@@ -531,6 +542,7 @@ def _insert_task_activity(connection: sqlite3.Connection, task_id: str, activity
 
 
 def _insert_stage_report(connection: sqlite3.Connection, report: dict[str, Any]) -> None:
+    """Append a stage report row during replay, accepting either ``pipeline_state`` (current schema) or ``stage`` (legacy) keys so old event-log lines still index into the same column."""
     task_id = str(report.get("task_id") or "")
     pipeline_state = str(report.get("pipeline_state") or report.get("stage") or "")
     created_at = str(report.get("created_at") or utcnow())
@@ -544,6 +556,7 @@ def _insert_stage_report(connection: sqlite3.Connection, report: dict[str, Any])
 
 
 def _insert_recovery_report(connection: sqlite3.Connection, report: dict[str, Any]) -> None:
+    """Append a recovery report row during replay, normalizing the ``trigger_event_kind`` enum (which serializes as either ``Enum`` or string in old logs) to a plain string for the indexed column."""
     task_id = str(report.get("task_id") or "")
     origin_stage = _optional_str(report.get("origin_stage"))
     trigger = report.get("trigger_event_kind")
@@ -562,6 +575,7 @@ def _insert_recovery_report(connection: sqlite3.Connection, report: dict[str, An
 
 
 def _insert_task_audit_entry(connection: sqlite3.Connection, entry: dict[str, Any]) -> None:
+    """Append one audit-log row during replay; the before/after status fields go through ``_optional_str`` / ``_optional_int`` so legitimate ``None`` values stay distinct from the literal string ``"None"`` in the indexed columns."""
     connection.execute(
         """
         INSERT INTO task_audit_log (
@@ -598,6 +612,7 @@ def _insert_task_audit_entry(connection: sqlite3.Connection, entry: dict[str, An
 
 
 def _insert_pipeline_task_state(connection: sqlite3.Connection, task_id: str, row: dict[str, Any]) -> None:
+    """Upsert the per-task pipeline-state row during replay so the rule engine can resume each task at the exact stage/mode it was at when the workspace last shut down."""
     connection.execute(
         """
         INSERT INTO pipeline_task_state (task_id, stage, pipeline_mode, payload, updated_at)
@@ -619,6 +634,7 @@ def _insert_pipeline_task_state(connection: sqlite3.Connection, task_id: str, ro
 
 
 def _insert_pipeline_transition(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
+    """Append one rule-engine transition row during replay (from_stage / event / to_stage / delta) so the observability views and `litehive status` history can reconstruct the exact transition sequence."""
     connection.execute(
         """
         INSERT INTO pipeline_transitions (
@@ -642,6 +658,7 @@ def _insert_pipeline_transition(connection: sqlite3.Connection, row: dict[str, A
 
 
 def _insert_pipeline_journal(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
+    """Append one pipeline-journal row during replay; the journal is the human-readable narrative behind `pipeline_transitions` and is what the report renderer pulls per-task lifecycle messages from."""
     connection.execute(
         """
         INSERT INTO pipeline_journal (task_id, seq, created_at, kind, payload)
@@ -658,18 +675,21 @@ def _insert_pipeline_journal(connection: sqlite3.Connection, row: dict[str, Any]
 
 
 def _optional_str(value: object) -> str | None:
+    """Coerce a JSON-decoded value to ``str``, preserving ``None`` so the audit-log replay doesn't substitute the literal text ``"None"`` for missing before/after status fields."""
     if value is None:
         return None
     return str(value)
 
 
 def _optional_int(value: object) -> int | None:
+    """Coerce a JSON-decoded value to ``int``, preserving ``None`` for absent queue-position fields in the audit-log replay (zero is a real position; ``None`` means "not in the queue at all")."""
     if value is None:
         return None
     return int(value)
 
 
 def _task_intent_column_values(intent: TaskIntentRecord) -> dict[str, str]:
+    """Project a ``TaskIntentRecord`` onto the denormalized columns of ``task_intent`` so ``_insert_task_intent`` can bind them to the prepared statement; keeps the JSON-vs-column projection in one place."""
     return {
         "slug": intent.slug,
         "title": intent.title,

@@ -22,6 +22,13 @@ class ProcessLockManager:
     lock_manager: WorkspaceLockManager = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
+        """Build the inner ``WorkspaceLockManager`` from the dataclass fields after ``__init__``.
+
+        Splits process-lock policy (this class) from the underlying flock
+        plumbing (``WorkspaceLockManager``); using ``__post_init__`` lets
+        callers construct ``ProcessLockManager`` with kwargs while we still
+        forward the right subset to the lock manager.
+        """
         self.lock_manager = WorkspaceLockManager(
             path=self.lock_path,
             pid_is_alive=self.pid_is_alive,

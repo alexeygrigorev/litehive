@@ -128,6 +128,7 @@ class SubagentStartupError(RuntimeError):
     """Unexpected failure before the engine subprocess started."""
 
     def __init__(self, exc: Exception) -> None:
+        """Wrap the original launch-time exception so the caller (``HeruEngineAdapter._handle_startup_failure``) can both inspect the underlying cause and read a pre-formatted ``startup_message`` for the recovery prompt."""
         self.original = exc
         self.startup_message = f"{type(exc).__name__}: {exc}"
         super().__init__(self.startup_message)
@@ -137,6 +138,7 @@ class SubagentManager(SessionMixin):
     """Run external CLI subagents inside a task-scoped folder."""
 
     def __init__(self, root: Path, execution_root: Path) -> None:
+        """Bind the manager to a workspace plus an execution cwd; ``HeruEngineAdapter.run_turn`` constructs one fresh per agent turn so the cwd reflects the role-appropriate checkout (worktree for SWE/QA, litehive source for recovery)."""
         self.root = root.resolve()
         self.execution_root = execution_root.resolve()
         self.workspace = Workspace.from_path(self.root)
@@ -146,6 +148,7 @@ class SubagentManager(SessionMixin):
 
     @staticmethod
     def _merged_warnings(base: list[str], extra: list[str]) -> list[str]:
+        """Stable-merge two warning lists deduping by string equality; ``_write_session_finish`` uses it so callback warnings (live-update bookkeeping failures) are appended onto the parsed StageReport's own warnings without duplicating identical lines."""
         merged = list(base)
         for warning in extra:
             if warning not in merged:
@@ -159,6 +162,7 @@ class SubagentManager(SessionMixin):
         exc: Exception,
         warnings: list[str],
     ) -> None:
+        """Trap an exception from the engine's ``on_started``/``on_update`` callbacks and turn it into a non-fatal warning so a transient bookkeeping error (e.g. SQLite write race) cannot kill the running subagent process."""
         warning = f"runner {phase} bookkeeping failed: {type(exc).__name__}: {exc}"
         if warning not in warnings:
             warnings.append(warning)
@@ -235,6 +239,7 @@ class SubagentManager(SessionMixin):
         engine_started = False
 
         def _safe_on_started(pid: int) -> None:
+            """Engine ``on_started`` callback: record the subagent pid (so the runner can kill it on abort) and mark ``engine_started`` so a later failure is no longer treated as a startup error."""
             nonlocal engine_started
             engine_started = True
             try:
@@ -248,6 +253,7 @@ class SubagentManager(SessionMixin):
                 )
 
         def _safe_on_update(execution: CLIExecutionResult) -> None:
+            """Engine ``on_update`` callback: persist a live progress snapshot so an operator watching ``litehive status`` sees the running subagent's transcript before the process exits."""
             nonlocal engine_started
             if execution.pid is not None:
                 engine_started = True
@@ -447,6 +453,7 @@ class SubagentManager(SessionMixin):
         )
 
     def _next_subagent_id(self, task: TaskRecord) -> str:
+        """Allocate the next ``SA-NNNN`` id by max-ing the existing in-memory refs against on-disk subagent folders so a previously-aborted run that left a directory behind cannot collide with the new id."""
         next_number = 1
         for ref in task.subagents:
             match = re.match(r"^SA-(\d{4})$", ref.id)
@@ -477,6 +484,7 @@ class SubagentManager(SessionMixin):
         continuation,
         extra_warnings: list[str],
     ) -> None:
+        """End-of-run snapshot writer called once from ``run`` after the engine exits; persists the parsed StageReport, snapshot files, stream artifacts, and the ``subagent_finished`` event so downstream readers (lifecycle verdict reader, status display) see a single consistent terminal record for this subagent."""
         report_stage = self._report_stage_for_task(task, ref.role)
         report = self._parse_execution_report(
             task=task,
@@ -646,6 +654,7 @@ class SubagentManager(SessionMixin):
         execution: CLIExecutionResult | None,
         transcript: str,
     ) -> StageReport:
+        """Single helper that ``_write_session_finish`` and ``write_session_progress`` route through to construct a ``StageReport`` from the engine's transcript so the live-progress and finish paths produce reports of the same shape."""
         return stage_report_from_subagent(
             task,
             stage,

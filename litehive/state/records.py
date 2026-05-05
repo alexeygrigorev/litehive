@@ -45,6 +45,7 @@ class TaskStateMissingError(RuntimeError):
 
 
 def _highest_task_number_in_store(root: Path) -> int:
+    """Return the largest ``T-NNNN`` numeric prefix actually present in the store; ``_reserve_next_task_numbers`` consults this whenever the in-memory ``next_task_number`` is missing/zero so a freshly bootstrapped workspace cannot reuse an existing id."""
     return runtime_store(root).highest_task_number()
 
 
@@ -60,6 +61,7 @@ def _reserve_next_task_numbers(root, state, count: int = 1) -> list[int]:
 
 
 def _task_creation_stage(root: Path, current_task_id: str | None) -> str | None:
+    """Resolve the stage of the agent that's creating a sibling task: prefers ``LITEHIVE_STAGE`` from the subagent env, falls back to the parent task's runtime stage, then its pipeline status; ``_default_task_creation_source`` records this as provenance so follow-up audits know which stage spawned the new task."""
     env_stage = (os.environ.get("LITEHIVE_STAGE") or "").strip()
     if env_stage:
         return env_stage
@@ -78,6 +80,7 @@ def _task_creation_stage(root: Path, current_task_id: str | None) -> str | None:
 
 
 def _default_task_creation_source(root: Path) -> TaskCreationSource:
+    """Build the provenance attached to a new task at create time: detects whether an agent is calling (via ``LITEHIVE_AGENT_ROLE``) and stamps the parent task/stage/role so audit logs can later answer ``where did this task come from`` for any agent-spawned task."""
     agent_role = (os.environ.get("LITEHIVE_AGENT_ROLE") or "").strip()
     current_task_id = (os.environ.get("LITEHIVE_TASK_ID") or "").strip() or None
     if not agent_role:
@@ -160,6 +163,7 @@ def _normalize_task_commit_sha_state(task: TaskRecord) -> None:
 
 
 def _normalize_task_flag_reason(task: TaskRecord) -> None:
+    """Reconcile a task's terminal state and ensure ``flag_reason`` is populated when the task is flagged (defaulting to the last outcome's reason_code, then ``"unknown"``); ``task_state_for_storage`` calls this so the persisted row never shows ``status=flagged`` with an empty reason."""
     canonicalize_task_terminal_state(task)
     if task.status == TaskStatus.FLAGGED:
         task.flag_reason = task.flag_reason or task.runtime.pipeline.last_outcome.reason_code or "unknown"
@@ -175,6 +179,7 @@ def _create_task_runtime_dirs(base: Path) -> None:
 
 
 def _cleanup_created_task_dirs(paths: list[Path]) -> list[OSError]:
+    """Best-effort rollback of on-disk task directories when ``_persist_created_tasks`` fails after them; collects (rather than raises) any cleanup errors so the caller can surface both the original DB failure and the cleanup damage in a single ExceptionGroup."""
     errors: list[OSError] = []
     for path in reversed(paths):
         try:
@@ -208,6 +213,7 @@ def _persist_created_tasks(
     try:
 
         def callback() -> None:
+            """Single-shot SQLite write for the ``write_atomic_files_and_then`` rollback flow; pulling the runtime_store call into a closure lets the file-write step finish first so the DB transaction (which cannot be undone) only fires once the on-disk artifacts are safely in place."""
             runtime_store(root).save_runtime_transaction(
                 task_intents={task.id: task.to_intent_record() for task in tasks},
                 task_states={task.id: task_state_for_storage(task) for task in tasks},
@@ -510,6 +516,7 @@ def list_tasks_state_first(
     seen: set[str] = set()
 
     def add(task_id: str | None) -> None:
+        """Append a task id to the running ordering once, skipping unknown/duplicate ids; ``list_tasks_state_first`` uses it so the active task, queued tasks, and id-sorted leftovers can be appended in priority order without each pass re-checking for duplicates."""
         if task_id is None or task_id in seen or task_id not in task_by_id:
             return
         seen.add(task_id)

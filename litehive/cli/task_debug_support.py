@@ -54,6 +54,7 @@ def debug_latest(root: Path, task):
 
 
 def _print_lifecycle_evidence(root: Path, task) -> None:
+    """Print the lifecycle-state slice of the evidence view (stage, failed reason, active recovery trigger, recovery history); ``render_task_evidence`` calls this so an operator triaging a stuck task can see what the state machine thinks the task is doing."""
     try:
         from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound  # noqa: PLC0415
 
@@ -97,6 +98,7 @@ def _print_lifecycle_evidence(root: Path, task) -> None:
 
 
 def _print_latest_report(root: Path, task) -> None:
+    """Print the most recent ``StageReport`` (stage, verdict, source, summary first line); part of the compact evidence view so the operator can confirm what the last agent submitted without opening the report file."""
     report = latest_stage_report(Workspace.from_path(root), task)
     if report is None:
         print("latest_stage_report: none")
@@ -109,6 +111,7 @@ def _print_latest_report(root: Path, task) -> None:
 
 
 def _print_latest_activity(root: Path, task) -> None:
+    """Print the last task_activity entry (stage, role, verdict, message first line); part of the evidence view so the operator can see the latest agent verdict regardless of whether a stage report was also written."""
     activity = load_task_activity(Workspace.from_path(root), task)
     if not activity:
         print("latest_activity: none")
@@ -122,6 +125,7 @@ def _print_latest_activity(root: Path, task) -> None:
 
 
 def _print_latest_subagent(root: Path, task) -> None:
+    """Print the most recent subagent's identity, exit code, timestamps, and whether it produced any output; the evidence view's primary signal for ``did the engine actually run`` when triaging stuck or empty tasks."""
     if not task.subagents:
         print("latest_subagent: none")
         return
@@ -177,6 +181,7 @@ def debug_worktree(root: Path, task):
 
 
 def _print_worktree_evidence(root: Path, task) -> None:
+    """Print the task's worktree state (existence, uncommitted file count, committed-ahead-of-main file count); used by both the full evidence view and ``debug_worktree`` so the operator can tell at a glance whether the task has uncommitted work."""
     inspection = WorktreeService(root).inspect_task_worktree(task)
     if not inspection.worktree_rel:
         print("worktree: none")
@@ -206,6 +211,7 @@ def _read_exit_code(root: Path, task_id: str, subagent_id: str) -> int | None:
 
 
 def _enum_value(value) -> str | None:
+    """Return the underlying ``.value`` of an enum or ``str(value)`` of anything else; ``_print_lifecycle_evidence`` uses it so a ``FailedReason`` enum and a legacy bare string both render identically in evidence output."""
     if value is None:
         return None
     if hasattr(value, "value"):
@@ -214,6 +220,7 @@ def _enum_value(value) -> str | None:
 
 
 def _first_line(value: str, limit: int = 180) -> str:
+    """Take the first non-empty line of a multi-line message and truncate it with an ellipsis; the evidence view uses this so summary/message fields stay one screen line even when the underlying text is paragraphs long."""
     if value.strip():
         text = value.strip().splitlines()[0]
     else:
@@ -224,6 +231,7 @@ def _first_line(value: str, limit: int = 180) -> str:
 
 
 def _compact_paths(paths: list[str], limit: int = 6) -> str:
+    """Render a long path list as the first ``limit`` entries plus an overflow count; used by the worktree evidence printer so a task with hundreds of changed files does not flood the evidence output."""
     shown = paths[:limit]
     if len(paths) <= limit:
         suffix = ""

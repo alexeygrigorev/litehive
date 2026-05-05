@@ -23,14 +23,33 @@ class WorkspaceBackup:
 
 
 def _backup_timestamp(when: datetime) -> str:
+    """Format a datetime as the hour-resolution UTC timestamp embedded in backup filenames.
+
+    The hourly granularity is what makes ``create_scheduled_workspace_backup``
+    idempotent across the day's first run plus retries: the same hour cannot
+    yield two different filenames.
+    """
     return when.astimezone(UTC).strftime("%Y-%m-%dT%H")
 
 
 def _backup_path(root: Path, when: datetime) -> Path:
+    """Compute the canonical ``backups/data-<timestamp>.db.gz`` path for a given moment.
+
+    Used by ``create_workspace_backup`` to derive the destination from the
+    snapshot moment so listing/parsing helpers can work backwards from the
+    filename to a datetime.
+    """
     return workspace_path(root, "backups") / f"data-{_backup_timestamp(when)}.db.gz"
 
 
 def _parse_backup_path(path: Path) -> WorkspaceBackup | None:
+    """Decode a candidate backup file path into a ``WorkspaceBackup``, or ``None`` if it doesn't match.
+
+    Used by ``list_workspace_backups`` and ``create_workspace_backup``: any
+    file in ``backups/`` that doesn't match the canonical naming pattern is
+    treated as foreign and silently ignored, keeping the listing safe to point
+    at directories with mixed content.
+    """
     match = _BACKUP_NAME_RE.match(path.name)
     if match is None or not path.is_file():
         return None

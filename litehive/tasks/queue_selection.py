@@ -65,6 +65,13 @@ def _normalize_stale_pipeline_statuses(
     state: WorkspaceState,
     tasks_by_id: dict[str, TaskRecord],
 ) -> list[TaskRecord]:
+    """Reset queued non-active tasks back to ``backlog`` when their pipeline_status is stale.
+
+    Called by ``_resolve_next_task_from_state`` before queue selection: a queued
+    task that still claims an in-flight stage from a prior run would be picked
+    up at that stage and skip the proper kickoff. Returns the list of mutated
+    tasks so the caller can persist them in a single transaction.
+    """
     active_stage = _live_active_pipeline_stage(state, tasks_by_id)
     mutated: list[TaskRecord] = []
     for task in tasks_by_id.values():
@@ -272,6 +279,12 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
 
 
 def _dependent_task_count(task_id: str, queue: list[str], tasks_by_id: dict[str, TaskRecord]) -> int:
+    """Count how many other queued tasks transitively depend on ``task_id``.
+
+    Feeds the queue selection key in ``_task_selection_key``: tasks that unblock
+    more downstream work win ties so the queue drains breadth-first instead of
+    starving siblings behind a popular dependency.
+    """
     eligible_task_ids = {
         queued_id
         for queued_id in queue
@@ -303,6 +316,12 @@ def _task_selection_key(
     queue: list[str],
     tasks_by_id: dict[str, TaskRecord],
 ) -> tuple[int | str, ...]:
+    """Build the sort key the queue selector uses to break ties between ready candidates.
+
+    Called once per ready task in ``_resolve_next_task_from_snapshot``: prefers
+    earlier queue position, then more-blocked-on tasks, then interrupted tasks
+    over fresh ones, then stable-by-id. Tuple ordering encodes runner policy.
+    """
     if _is_interrupted_task(task):
         interrupted_rank = 0
     else:
@@ -318,7 +337,13 @@ def _task_selection_key(
 def _resolve_next_task_from_state(
     root: Path, state: WorkspaceState
 ) -> tuple[TaskRecord | None, list[BlockedTask], bool, list[TaskRecord]]:
+    """Load tasks from disk, normalize stale stages, then resolve the next runnable task.
 
+    The disk-touching wrapper around ``_resolve_next_task_from_snapshot``
+    shared by peek/dequeue/plan: also enforces that every queued task id has a
+    matching SQLite intent row, raising ``TaskLaunchFailure`` so the runner
+    surfaces missing-intent corruption instead of silently dropping the task.
+    """
     tasks_by_id = {task.id: task for task in list_tasks(root, strict=False)}
     store = runtime_store(root)
     for queued_task_id in state.queue:
@@ -340,6 +365,13 @@ def restore_missing_queued_tasks(
     state: WorkspaceState,
     tasks_by_id: dict[str, TaskRecord],
 ) -> list[str]:
+    """Push resumable tasks that fell off the queue back to its front.
+
+    Called from ``_resolve_next_task_from_snapshot`` before candidate scoring:
+    if a task is mid-execution or carries a resume marker but is not in
+    ``state.queue``, it must be reinstated at the head or the runner will
+    pick a fresh task and leave unfinished work stranded.
+    """
     restored_front: list[str] = []
     queued_ids = set(state.queue)
     for task_id, task in tasks_by_id.items():
@@ -361,6 +393,13 @@ def _resolve_next_task_from_snapshot(
     state: WorkspaceState,
     tasks_by_id: dict[str, TaskRecord],
 ) -> tuple[TaskRecord | None, list[BlockedTask], bool]:
+    """Pure-snapshot version of next-task resolution; honors active task, blockers, and tie-break order.
+
+    The shared core for peek/dequeue/plan: walks an in-memory ``state`` plus
+    ``tasks_by_id`` map and returns the chosen task, the blocked diagnostics,
+    and whether the snapshot was mutated. Splitting it out lets ``plan_task_selections``
+    simulate dequeues against a deep copy without touching disk.
+    """
     mutated = False
     blocked: list[BlockedTask] = []
     blocked_task_ids: set[str] = set()

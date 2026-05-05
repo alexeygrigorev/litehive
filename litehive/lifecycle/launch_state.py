@@ -44,6 +44,13 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
         recovery_history: list | None = None,
         recovery_budget_history_start: int = 0,
     ) -> TaskState:
+        """Local closure: build and persist a fresh ``TaskState`` from the captured task fields.
+
+        Closes over ``fresh_state_kwargs`` and ``persistence`` so both the
+        no-prior-state and the reset-stale-state branches build identical
+        rows; the optional kwargs let the reset branch carry forward the
+        prior failure history.
+        """
         state = TaskState(
             **fresh_state_kwargs,
             recovery_history=[] if recovery_history is None else recovery_history,
@@ -61,6 +68,13 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
             return _fresh_state()
 
     def _initialize_fresh_state() -> TaskState:
+        """Local closure: rebuild a stale ``TaskState`` while preserving the prior recovery/failure memory.
+
+        Used by the stale-state branch above: a resumed task whose persisted
+        row drifted from the launch request needs a clean re-entry, but its
+        ``failed_run_history`` and ``recovery_history`` must survive so the
+        recovery agent and budget tracker keep their context across resets.
+        """
         preserved_failed_runs: dict[str, FailedRunRecord] = {}
         preserved_recovery_history = []
         recovery_budget_history_start = 0

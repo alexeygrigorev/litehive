@@ -209,6 +209,7 @@ def run_once(
 
 
 def _existing_consecutive_task_failure_stop(workspace: Path) -> _RunCommandIteration | None:
+    """Short-circuit ``run_once`` when the pool is already in the consecutive-failure stop state so the runner doesn't dequeue another task into a known-bad pool; returns the synthetic iteration result that ``run_once`` would otherwise produce after the failure."""
     state = load_state(workspace)
     if state.pool_stop_reason != CONSECUTIVE_TASK_FAILURE_STOP_REASON:
         return None
@@ -222,6 +223,7 @@ def _existing_consecutive_task_failure_stop(workspace: Path) -> _RunCommandItera
 
 
 def _emit_consecutive_task_failure_stop(consecutive_task_failures: int) -> None:
+    """Print the operator-visible critical-status banner when the pool stops after repeated failures; floors at 3 so a stale counter cannot show ``stopped after 0`` and confuse the operator."""
     failure_count = max(3, int(consecutive_task_failures))
     print(f"critical_status: stopped after {failure_count} consecutive task failures")
 
@@ -231,6 +233,7 @@ def _run_single(
     engine: str | None = None,
     model: str | None = None,
 ) -> int:
+    """Single-shot ``litehive run`` path: dispatch one ``run_once`` and surface either the pool-stopped banner or the no-queued-task message; the operator default when neither ``--drain`` nor ``--dry-run`` is given."""
     iteration = run_once(workspace, engine=engine, model=model)
     if iteration.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
         print(f"Pool stopped: {CONSECUTIVE_TASK_FAILURE_STOP_REASON}")
@@ -245,6 +248,7 @@ def _preview_single(
     engine: str | None = None,
     model: str | None = None,
 ) -> int:
+    """Implement ``litehive run --dry-run`` by peeking the queue selector and the engine selector without launching the task; lets an operator confirm which task and engine the next run would pick before committing."""
     selection = peek_next_task_selection(workspace)
     if selection.task is None:
         state = load_state(workspace)
@@ -272,6 +276,7 @@ def _preview_single(
 
 
 def _workspace_has_dirty_non_litehive_changes(workspace: Path) -> bool:
+    """True when the workspace's git tree has uncommitted user-owned changes (ignoring litehive's own runtime files); used by the drain loop's ``--stop-on-dirty-git`` policy so the pool refuses to run on top of in-flight operator edits."""
     if not is_git_repo(workspace):
         return False
     return has_non_litehive_changes(workspace)
@@ -285,6 +290,7 @@ def _run_drain(
     max_tasks: int | None,
     stop_on_dirty_git: bool,
 ) -> int:
+    """Drive ``litehive run --drain``: loop ``run_once`` until the queue empties, the failure cap is hit, ``max_tasks`` is reached, or the workspace turns dirty; records the chosen stop reason on the pool so subsequent invocations and status displays explain why the pool quit."""
     tasks_run = 0
     while True:
         if stop_on_dirty_git and _workspace_has_dirty_non_litehive_changes(workspace):

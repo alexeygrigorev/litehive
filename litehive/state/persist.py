@@ -174,6 +174,14 @@ def _merge_queue_preserving_future_changes(
     latest_queue: list[str],
     protected_task_ids: list[str] | tuple[str, ...],
 ) -> list[str]:
+    """Splice protected task ids into the latest persisted queue at the positions the in-flight write picked.
+
+    Used by the persist path when another writer (CLI ``queue add`` etc.)
+    has reordered the queue between the time the runner read state and the
+    time it tries to write back: the runner only protects ids it just
+    promoted, so unrelated concurrent edits survive instead of being
+    overwritten by a stale copy.
+    """
     protected: list[str] = []
     seen_protected: set[str] = set()
     for task_id in protected_task_ids:

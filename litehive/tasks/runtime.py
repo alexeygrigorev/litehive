@@ -26,6 +26,12 @@ def idle_stage_state(updated_at: str, stage: str | None = None) -> RuntimeStageS
 
 
 def _running_stage_state(stage: str, started_at: str) -> RuntimeStageState:
+    """Build the runtime marker that says a stage is currently executing.
+
+    Used by ``mark_stage_started`` to seed ``runtime.pipeline.current_stage``
+    so status surfaces and the operator UI can show "running ``<stage>``"
+    until the stage finishes and resets back to ``idle``.
+    """
     return RuntimeStageState(
         stage=stage,
         status="running",
@@ -45,6 +51,13 @@ def _runtime_subagent_state(
     interruption_reason: str = "",
     continuation: RuntimeEngineContinuation | None = None,
 ) -> RuntimeSubagentState:
+    """Project a SubagentRef plus run-time fields into the persisted RuntimeSubagentState shape.
+
+    The single helper used by ``mark_subagent_started`` /
+    ``mark_subagent_progress`` / ``mark_subagent_finished`` so every subagent
+    state transition shares the same field mapping (and so adding a new
+    subagent field only requires editing one place).
+    """
     return RuntimeSubagentState(
         id=ref.id,
         role=ref.role,
@@ -166,12 +179,22 @@ def _apply_task_retry_state(
     retry_count: int,
     retry_limit: int,
 ) -> None:
+    """In-memory half of ``set_task_retry_state``: bumps retry counters and the updated_at marker without persisting.
+
+    Split out so ``apply_task_outcome`` can update retry numbers as part of a
+    larger atomic in-memory mutation without triggering its own disk write.
+    """
     task.runtime.pipeline.updated_at = utcnow()
     task.runtime.pipeline.retry_count = retry_count
     task.runtime.pipeline.retry_limit = retry_limit
 
 
 def _clear_task_outcome(task: TaskRecord) -> None:
+    """In-memory half of ``clear_task_outcome``: zeroes ``last_outcome`` without persisting.
+
+    Lets ``apply_task_outcome`` and the recovery flow scrub stale verdicts as
+    part of a larger mutation that is persisted in one transaction by the caller.
+    """
     task.runtime.pipeline.updated_at = utcnow()
     task.runtime.pipeline.last_outcome = TaskOutcomeState()
 

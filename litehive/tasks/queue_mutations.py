@@ -51,7 +51,12 @@ def enqueue_task_front(root: Path, task_id: str) -> WorkspaceState:
 
 
 def _enqueue_task(root: Path, task_id: str, front: bool) -> WorkspaceState:
+    """Shared body of ``enqueue_task`` / ``enqueue_task_front``: dedupes, inserts, and audits.
 
+    Splits the front/back enqueue parameter out so both wrappers share the
+    same locking, audit-entry shape, and runner-guard handling. Both wrappers
+    are currently dead code, but this helper is preserved alongside them.
+    """
     with workspace_lock(root):
         state = load_state(root)
         ensure_future_task_mutation_allowed(root, [task_id], state=state)
@@ -204,6 +209,13 @@ def reset_task_for_recovery(
 
 
 def enqueue_recovered_task(state: WorkspaceState, task_id: str) -> None:
+    """Move a recovered task to the back of the queue, ensuring it appears exactly once.
+
+    Recovery flows (``restore_untouched_active_task`` and the flagged-task
+    auto-recovery in ``dequeue_next_task_selection``) call this so a task
+    that was rolled back to ``queued`` lands at the tail without showing up
+    twice if it had also been left in the queue.
+    """
     state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
     state.queue.append(task_id)
 

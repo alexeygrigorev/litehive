@@ -79,6 +79,13 @@ def _record_hook_warnings(
     phase: str,
     warnings: list[str],
 ) -> None:
+    """Persist a "passed with warnings" hook outcome as a stage report, activity entry, and journal line.
+
+    Called by ``record_hook_event`` when a runner hook returns
+    ``HookOk(warnings=...)``: the stage hasn't failed, but operators need
+    to see the warnings everywhere reports surface (status, activity feed,
+    journal) so we fan out the same content to all three sinks.
+    """
     report_stage = _report_stage_for_phase(phase)
     summary = f"Runner hooks at `{phase}` completed with warnings."
     feedback = "\n\n".join(warnings)
@@ -124,6 +131,13 @@ def _record_hook_reject(
     hook: dict[str, str] | None,
     consecutive_same_hook_rejects: int | None,
 ) -> None:
+    """Persist a hook rejection as a stage report, activity entry, and journal line.
+
+    Twin of ``_record_hook_warnings`` for the failure path: emits the
+    rejection across all observability sinks with ``failure_classification=
+    "hook_reject"`` plus the hook fingerprint so the recovery agent can
+    detect repeated hits of the same hook.
+    """
     report_stage = _report_stage_for_phase(phase)
     summary = f"Runner hook at `{phase}` rejected the stage."
     feedback_parts = [reason, *warnings]

@@ -79,6 +79,7 @@ class _NullSelector:
     happens — the adapter shells Codex itself)."""
 
     def select(self, state, node_name, excluded):
+        """Stub selector method: the direct-recovery handoff only needs ``RecoveryAgent`` to render its prompt, so no real engine pick is performed."""
         del state, node_name, excluded
         return None
 
@@ -89,10 +90,12 @@ class _NullSessions:
     ``SubagentManager`` entirely."""
 
     def get_or_create(self, task_id, node_name, engine_name):
+        """Return a throwaway ``Session``: the direct-recovery turn shells Codex itself instead of going through SubagentManager, so no real session needs to be tracked."""
         del task_id, node_name, engine_name
         return Session()
 
     def persist(self, task_id, node_name, engine_name, session):
+        """No-op session persist: the direct-recovery bypass does not produce a continuation we want to remember, so the call is intentionally swallowed."""
         del task_id, node_name, engine_name, session
 
 
@@ -369,6 +372,7 @@ class HeruEngineAdapter:
         workspace_root: Path,
         model_name: str | None = None,
     ) -> None:
+        """Pin a heru-backed engine to a workspace plus an optional model override; constructed by ``heru_engine_factory`` per pick so multiple selectors using the same engine don't share mutable adapter state."""
         self.name = engine_name
         self.workspace_root = Path(workspace_root)
         self.model_name = model_name
@@ -500,6 +504,7 @@ class HeruEngineAdapter:
 
     @classmethod
     def _crash_resume_prompt(cls, prompt_text: str) -> str:
+        """Prepend the crash-resume preamble to the original prompt; used by ``_run_with_crash_resume`` so a resumed session sees an explicit ``continue where you left off`` instruction before the role's prompt body."""
         return f"{cls.CRASH_RESUME_PROMPT_PREFIX}{prompt_text}"
 
     def _handle_startup_failure(
@@ -734,6 +739,7 @@ def heru_engine_factory(workspace_root: Path):
     root = Path(workspace_root)
 
     def _factory(engine_name: str) -> Engine:
+        """Per-name factory closure handed to ``ConfigBackedEngineSelector``; constructs a fresh adapter so picks of the same engine across stages don't share continuation state."""
         return HeruEngineAdapter(engine_name, root)
 
     return _factory

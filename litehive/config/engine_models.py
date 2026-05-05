@@ -21,6 +21,7 @@ from litehive.workspace import Workspace
 
 
 def _engine_attempt_order(initial_engine_names: list[str], engine_preference: list[str]) -> list[str]:
+    """Concatenate the task's initial engine list with the workspace preference and dedupe in first-seen order; the canonical "fallback chain" computation reused by :func:`select_engine` and :func:`resolve_engine_attempt_order` so previews and execution agree."""
     seen: set[str] = set()
     ordered: list[str] = []
     for engine_name in list(initial_engine_names) + engine_preference:
@@ -47,6 +48,7 @@ class EngineSelection:
 
 
 def _parse_datetime_utc(value: str | None) -> datetime | None:
+    """Parse the freeze-map's stored timestamps (ISO 8601 with optional ``Z`` plus the legacy ``YYYY-MM-DD`` form) into a UTC-aware datetime, returning None for any unparseable input; used by every freeze-window check so the storage format can evolve without callers caring."""
     if not value:
         return None
     normalized = value.strip()
@@ -77,6 +79,7 @@ def parse_engine_freeze_until(value: str | None) -> str | None:
 
 
 def _dedupe_engine_names(engine_names: list[str]) -> list[str]:
+    """Preserve first-seen order while dropping duplicate engine names; called by :func:`select_engine` when the caller passes an explicit engine list, so callers can be sloppy about dedup without breaking the attempt loop."""
     seen: set[str] = set()
     ordered: list[str] = []
     for engine_name in engine_names:
@@ -152,6 +155,7 @@ def _persist_engine_freeze(
     engine_name: str,
     freeze_until: datetime,
 ) -> None:
+    """Write a quota-driven freeze through the audited store and mirror it on the in-memory ``LitehiveConfig``, but only when the new ISO value differs from the existing one so we don't spam the audit log with no-op writes; called by :func:`select_engine` when an engine returns ``limit_reached`` with a reset time."""
     freeze_iso = freeze_until.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     if config.engine_freeze.get(engine_name) == freeze_iso:
         return
@@ -160,11 +164,13 @@ def _persist_engine_freeze(
 
 
 def _clear_engine_freeze(root: Path, config: LitehiveConfig, engine_name: str) -> None:
+    """Drop a freeze entry from both the audited store and the in-memory config; called by :func:`select_engine` when a previously-frozen engine's window has lapsed and the quota check now passes, so the freeze map self-cleans without a separate sweeper."""
     clear_persisted_engine_freeze(root, engine_name=engine_name, actor="system", source="quota")
     config.engine_freeze.pop(engine_name, None)
 
 
 def _quota_checker(engine_name: str):
+    """Return the heru ``check_*_quota`` function for the engine, or None for engines that have no quota probe (e.g. ``gemini``); the dispatch table that lets :func:`engine_quota_block` stay generic across engines."""
     if engine_name == "codex":
         return check_codex_quota
     if engine_name == "claude":
@@ -177,10 +183,12 @@ def _quota_checker(engine_name: str):
 
 
 def _quota_status_uses_unified_shape(status: object) -> bool:
+    """Detect heru's "unified" quota status object by the presence of both ``short_term`` and ``long_term`` windows; lets :func:`_quota_block_reason` ignore legacy/error shapes that don't carry enough info to act on."""
     return getattr(status, "short_term", None) is not None and getattr(status, "long_term", None) is not None
 
 
 def _preferred_quota_reset_at(status: object) -> str | None:
+    """Ask heru for the most informative reset timestamp on a quota status, swallowing ``AttributeError`` from older status shapes; called by :func:`_quota_block_reason` so the freeze message can include a "resets …" hint when one is available."""
     try:
         return preferred_reset_at(status, include_short_term_fallback=True)
     except AttributeError:
@@ -188,6 +196,7 @@ def _preferred_quota_reset_at(status: object) -> str | None:
 
 
 def _quota_block_reason(engine_name: str, status: object) -> tuple[str | None, str | None]:
+    """Translate a heru quota status into a human-readable skip reason plus the reset-at ISO string the caller will use for the freeze; returns ``(None, None)`` whenever the status is errored, legacy-shaped, or not actually limit-reached so :func:`engine_quota_block` falls through to "engine is fine"."""
     if getattr(status, "error", None) is not None:
         return None, None
     if not _quota_status_uses_unified_shape(status):
@@ -386,6 +395,7 @@ def resolve_task_retry_policy(task: TaskRecord, config: LitehiveConfig) -> int:
 
 
 def _resolve_stage_retry_limit(task: TaskRecord, config: LitehiveConfig) -> int:
+    """Return the per-stage retry budget, falling back to the workspace default when the task has not pinned its own; orchestrator-internal sibling of :func:`resolve_task_retry_policy` that bounds attempts within a single pipeline stage rather than across the whole task."""
     if task.retry_policy.stage_retry_limit is not None:
         return task.retry_policy.stage_retry_limit
     return config.default_stage_retry_limit
@@ -399,6 +409,7 @@ def resolve_task_rejection_loop_limit(task: TaskRecord, config: LitehiveConfig) 
 
 
 def _is_recovery_run(task: TaskRecord) -> bool:
+    """Return True when the task is currently in a recovery posture (active interruption or a flagged/interrupted last outcome); consumed by :func:`_role_for_stage` so engine selection can pick the recovery role's preference list instead of the normal stage-owner role."""
     return task.runtime.execution.interruption is not None or task.runtime.pipeline.last_outcome.kind in {
         "flagged",
         "interrupted",
@@ -421,6 +432,7 @@ _ENGINE_SELECTION_ROLE_BY_STAGE: dict[TaskStage, str] = {
 
 
 def _role_for_stage(stage: str, task: TaskRecord | None = None) -> str:
+    """Map a pipeline stage to the engine-selection role (``planner``/``swe``/``qa``/``reviewer``/``recovery``), redirecting agent-driven stages to ``recovery`` when the task is mid-recovery; module-private because the canonical mapping lives on ``TaskStage.owner_role`` and this one is intentionally narrower (only the four stages engine selection actually picks for)."""
     if task is not None and stage in _RECOVERY_HIJACKABLE_STAGES and _is_recovery_run(task):
         return "recovery"
     try:

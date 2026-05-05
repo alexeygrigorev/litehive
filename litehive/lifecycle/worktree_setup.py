@@ -76,6 +76,12 @@ def _worktree_missing_probe(root: Path):
     service = WorktreeService(root)
 
     def _probe(state) -> bool:
+        """Probe closure used by the pre-exec recovery flow to detect a recorded-but-missing worktree.
+
+        Captured by ``_worktree_missing_probe`` so the runner can ask the
+        machine "should this task re-run worktree setup before launch?"
+        without each call site reaching into ``WorktreeService`` directly.
+        """
         return service.task_has_missing_recorded_worktree(state.task_id)
 
     return _probe
@@ -86,6 +92,13 @@ def _worktree_metadata_repair(root: Path):
     service = WorktreeService(root)
 
     def _repair(state) -> None:
+        """Repair closure used by the pre-exec recovery flow to clear the stale worktree record.
+
+        Twin of ``_probe``: when the probe says a recorded worktree is gone,
+        the machine calls this to wipe the stale path on the task record so
+        the next launch creates a fresh worktree instead of failing the
+        existence check.
+        """
         service.clear_missing_recorded_worktree(state.task_id)
 
     return _repair

@@ -15,6 +15,11 @@ _FILES_CHANGED_PLACEHOLDERS = {"none", "n/a", "-", ""}
 
 
 def append_activity_entry(root: Path, task: TaskRecord, entry: TaskActivityEntry) -> None:
+    """Path-based shim around ``append_task_activity`` for callers that don't yet hold a Workspace.
+
+    Used by stage controllers that only have ``root`` in scope; lets them
+    record an activity entry without first plumbing a Workspace handle through.
+    """
     append_task_activity(Workspace.from_path(root), task, entry)
 
 

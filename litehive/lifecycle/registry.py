@@ -51,6 +51,12 @@ HOOK_PHASES: tuple[PipelineState, ...] = (
 
 
 def _phase_hook_node(name: PipelineState, hooks: list[HookSpec], runner: HookRunner) -> HookNode:
+    """Build the ``HookNode`` for one phase boundary; trivial factory called once per phase by ``build_registry``.
+
+    Kept as a named helper so the registration loop reads one operation per
+    line and so future variations (per-phase timeouts, alternate runners)
+    have a single place to land.
+    """
     return HookNode(name, hooks=hooks, runner=runner)
 
 

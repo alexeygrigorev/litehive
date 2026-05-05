@@ -73,6 +73,7 @@ class WorktreeService:
     """Owns git/worktree decisions shared by lifecycle, recovery, and CLI."""
 
     def __init__(self, root: Path) -> None:
+        """Bind the service to a single workspace root; every method below scopes its git operations under this directory so callers can hold one ``WorktreeService`` per workspace and forget about path threading."""
         self.root = Path(root)
 
     def sync_task_worktree(
@@ -222,11 +223,13 @@ class WorktreeService:
         worktree_resolver: "Callable[[object], Path] | None",
         resolver_state: object | None,
     ) -> Path:
+        """Pick the worktree path :func:`sync_task_worktree` should operate on, preferring an injected lifecycle resolver when one is provided so tests can redirect to a sandbox; falls back to the path recorded on the task otherwise."""
         if worktree_resolver is None:
             return recorded
         return Path(worktree_resolver(resolver_state))
 
     def _rebase_existing_worktree_onto_local_main(self, worktree: Path) -> bool:
+        """Rebase a reused task worktree onto the workspace's current main HEAD before lifecycle pre-exec runs, returning True when HEAD actually moved; raises ``WorktreeMergeConflict`` for unresolved conflicts so the caller can surface them, and skips no-op rebases of the main checkout itself."""
         if worktree.resolve() == self.root.resolve():
             return False
         main_head = current_head(self.root)
@@ -244,6 +247,7 @@ class WorktreeService:
         raise GitError(f"worktree_sync rebase onto local main {main_head[:8]} failed")
 
     def _merge_origin_main(self, worktree: Path, main_ref: str) -> bool:
+        """Fetch and merge ``origin/<main>`` into the worktree, stashing local edits around the merge so an in-flight agent's working changes survive; returns True when the merge actually moved HEAD, raises ``WorktreeMergeConflict`` for unresolved conflicts, and aborts the merge before re-raising on other failures so the worktree is never left half-merged."""
         stash_ref = self._stash_local_changes(worktree)
         restored_stash = False
         try:
@@ -273,22 +277,27 @@ class WorktreeService:
 
     @staticmethod
     def _head(worktree: Path) -> str | None:
+        """Return the worktree's current HEAD SHA or None if undetermined; thin alias to ``current_head`` so the rebase flow can compare before/after without importing git ops directly."""
         return current_head(worktree)
 
     @staticmethod
     def _is_dirty(worktree: Path) -> bool:
+        """Return True when the worktree has any tracked-file modifications; gates :func:`sync_task_worktree`'s decision to skip the origin merge so we don't clobber an agent's in-flight edits."""
         return has_changes(worktree)
 
     @staticmethod
     def _has_origin(worktree: Path) -> bool:
+        """Return True when the worktree has an ``origin`` remote configured; gates :func:`sync_task_worktree`'s origin-merge step so workspaces without a remote are silently no-ops instead of erroring."""
         return remote_url(worktree, "origin") is not None
 
     @staticmethod
     def _unresolved(worktree: Path) -> list[str]:
+        """Return paths git considers unmerged in the worktree; used by :func:`_rebase_existing_worktree_onto_local_main` and :func:`_merge_origin_main` to distinguish a real merge conflict (raise ``WorktreeMergeConflict``) from a generic git error."""
         return unmerged_files(worktree)
 
     @staticmethod
     def _stash_local_changes(worktree: Path) -> str | None:
+        """Stash dirty entries (including untracked) and return the new ``refs/stash`` SHA so :func:`_merge_origin_main` can pop exactly that stash later, or None when there was nothing to stash; raises ``GitError`` on stash failure rather than silently dropping work."""
         if not status_porcelain_untracked(worktree):
             return None
         before_ref = rev_parse_verify(worktree, "refs/stash") or ""
@@ -301,6 +310,7 @@ class WorktreeService:
         return after_ref
 
     def _restore_local_changes(self, worktree: Path, stash_ref: str | None) -> None:
+        """Pop the stash entry created by :func:`_stash_local_changes` after a successful origin merge; promotes a conflicted pop into ``WorktreeMergeConflict`` so the caller can surface the conflicting paths instead of leaving the agent staring at a silent stash."""
         if not stash_ref:
             return
         ok, message = stash_pop(worktree, ref=stash_ref, with_index=True)

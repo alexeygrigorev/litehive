@@ -91,11 +91,13 @@ def _rejection_from_event(state: TaskState, event: Event) -> LastRejection | Non
 
 
 def _normalized_failure_text(value: str | None) -> str:
+    """Squash whitespace, lowercase, and cap a free-text failure description so two equivalent error messages produce the same fingerprint string; used by ``_event_failure_shape`` to keep ``failed_run`` rows clusterable."""
     text = " ".join(str(value or "").lower().split())
     return text[:160] or "unknown"
 
 
 def _event_failure_shape(event: Event) -> str:
+    """Project a failure event onto a stable ``source:detail`` fingerprint that ``_stage_retry_exhausted_record`` writes into ``FailedRunRecord.failure_shape`` so retries that share a cause can be grouped without re-deriving the shape later."""
     if isinstance(event, Reject):
         hook = _hook_fingerprint_from_event(event)
         if hook is not None:
@@ -118,6 +120,7 @@ def _stage_retry_exhausted_record(
     failed_reason: FailedReason,
     message: str,
 ) -> FailedRunRecord | None:
+    """Emit the ``FailedRunRecord`` written when a stage burns its full retry budget on semantic rejects, so the next run's ``has_blocking_failed_run_history`` check can refuse to requeue a task that will only fail the same way; called by the terminal ``fail`` effect for that one specific reason."""
     if failed_reason != FailedReason.SEMANTIC_REJECT:
         return None
     counter_stage = _retry_counter_stage(state.stage)
@@ -164,6 +167,7 @@ def _reason_code_from_event(state: TaskState, event: Event) -> str | None:
 
 
 def _trigger_event_kind(event: Event) -> TriggerEventKind:
+    """Map a failure ``Event`` onto the small ``TriggerEventKind`` enum the recovery agent prompt branches on; ``recovery_trigger_from_event`` uses this so the agent sees ``REJECT`` vs ``SEMANTIC_REJECT`` vs ``CRASH`` rather than a Python class name."""
     if isinstance(event, Reject):
         if event.classification == SEMANTIC_REJECT_CLASSIFICATION:
             return TriggerEventKind.SEMANTIC_REJECT
@@ -182,6 +186,7 @@ def _trigger_event_kind(event: Event) -> TriggerEventKind:
 
 
 def _fingerprint_from_event(state: TaskState, event: Event) -> FailureFingerprint:
+    """Build the ``FailureFingerprint`` used to key the per-trigger recovery budget so the same fingerprint cannot loop forever; called by ``recovery_trigger_from_event`` whenever a failure event is being lifted into a ``RecoveryTrigger``."""
     hook = _hook_fingerprint_from_event(event)
     if hook is not None:
         return FailureFingerprint(
@@ -445,6 +450,7 @@ def _retry_counter_stage(origin_stage: str | None) -> PipelineState | None:
 
 
 def _hook_recovery_made_progress(trigger: RecoveryTrigger | None, event: Event) -> bool:
+    """True when a recovery agent invoked specifically to break a hook-reject loop has returned a resume target that actually moves the task off the looping stage (or to ``done``); ``record_recovery_success`` uses this to decide whether to clear the hook-reject tracking or keep it sticky."""
     if trigger is None or trigger.reason_code != "hook_reject_loop" or not isinstance(event, RecoverySucceeded):
         return False
     target_stage = _pipeline_stage_key(event.resume)
@@ -494,6 +500,7 @@ class inc_stage_retry:
     retry_target_stage: PipelineState | None = None
 
     def __call__(self, state: TaskState, event: Event) -> StateDelta:
+        """Effect entry point invoked by the rule engine; delegates to ``_rejection_tracking_delta`` with ``increment_retry=True`` so the stage retry counter advances alongside the captured rejection."""
         return _rejection_tracking_delta(
             state,
             event,
@@ -511,6 +518,7 @@ class remember_rejection:
     retry_target_stage: PipelineState | None = None
 
     def __call__(self, state: TaskState, event: Event) -> StateDelta:
+        """Effect entry point invoked by the rule engine; delegates to ``_rejection_tracking_delta`` with ``increment_retry=False`` so the rejection is remembered for the next prompt without burning a retry slot."""
         return _rejection_tracking_delta(
             state,
             event,
@@ -559,6 +567,7 @@ class fail_rejection_loop:
     retry_target_stage: PipelineState
 
     def __call__(self, state: TaskState, event: Event) -> StateDelta:
+        """Effect entry point invoked by the rule engine when ``rejection_loop_detected`` fires; remembers the final rejection on the looping stage and fails the task with ``REJECTION_LOOP_DETECTED`` so it stops bouncing."""
         rejection = _rejection_from_event(state, event)
         if rejection is not None:
             set_rej = (self.stage, rejection)
@@ -622,10 +631,12 @@ class fail:
     reason: FailedReason
 
     def __post_init__(self) -> None:
+        """Coerce a string reason passed by older rule rows into the ``FailedReason`` enum so downstream effect application sees a single, validated type even on a frozen dataclass."""
         if not isinstance(self.reason, FailedReason):
             object.__setattr__(self, "reason", FailedReason(self.reason))
 
     def __call__(self, state: TaskState, event: Event) -> StateDelta:
+        """Effect entry point invoked by the rule engine for terminal-failure rows; assembles the failed reason / message, reconstructs hook-reject tracking, and (when failing inside RECOVERING) records the terminated ``RecoveryOutcome`` plus a human-readable explanation."""
         rejection = _rejection_from_event(state, event)
         if rejection is not None:
             set_rej = (state.stage, rejection)
@@ -713,6 +724,7 @@ def exhaust_recovery_budget(state: TaskState, event: Event) -> StateDelta:
 
 
 def _recovery_verdict_for_terminal_event(event: Event, reason: FailedReason) -> str:
+    """Pick the short verdict label persisted on ``RecoveryOutcome`` when a task dies inside recovering; the terminal ``fail`` effect uses this so timeline views can distinguish "agent failed" from "budget hit" from "crashed inside recovery"."""
     if isinstance(event, RecoveryFailed):
         return "failed"
     if isinstance(event, RecoveryBudgetHit):

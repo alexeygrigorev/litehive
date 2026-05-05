@@ -73,6 +73,7 @@ class MigrationApplyError(RuntimeError):
     """Raised when a schema migration fails."""
 
     def __init__(self, migration: Migration, cause: Exception) -> None:
+        """Wrap the SQL error from a single failed migration with the migration metadata so the ``litehive db migrate`` CLI can show which migration name+version blew up rather than only the underlying SQLite error string."""
         super().__init__(f"migration {migration.name} failed: {cause}")
         self.migration = migration
         self.cause = cause
@@ -108,6 +109,7 @@ def _task_intent_column_values(
 
 
 def _sync_task_intent_columns(connection: sqlite3.Connection) -> None:
+    """Backfill the denormalized ``task_intent`` columns from each row's JSON payload; called after migration 7 runs so list/filter queries see the new columns populated for every existing task instead of needing a one-shot operator step."""
     rows = connection.execute(
         """
         SELECT intent.task_id, intent.payload AS intent_payload, state.payload AS state_payload
@@ -164,6 +166,7 @@ def _sync_task_intent_columns(connection: sqlite3.Connection) -> None:
 
 
 def _migration_resources():
+    """Locate the bundled migration directory through ``importlib.resources``; isolated as a one-liner so tests can monkey-patch a single symbol when they need to substitute a fixture set of migrations."""
     return importlib.resources.files(MIGRATIONS_PACKAGE)
 
 
@@ -223,6 +226,7 @@ def _applied_versions(connection: sqlite3.Connection) -> set[int]:
 
 
 def _applied_migration_rows(connection: sqlite3.Connection) -> list[tuple[int, str]]:
+    """Return ``(version, name)`` for each applied migration in order; ``_database_requires_rebuild`` uses the names (not just versions) to detect a renamed migration that would otherwise look already-applied by version alone."""
     _ensure_schema_migrations_table(connection)
     rows = connection.execute("SELECT version, name FROM schema_migrations ORDER BY version").fetchall()
     return [(int(row["version"]), str(row["name"])) for row in rows]
@@ -232,6 +236,7 @@ def _has_required_baseline_tables(
     connection: sqlite3.Connection,
     applied_versions: set[int],
 ) -> bool:
+    """Confirm every table the applied migrations should have created is actually present; ``_database_requires_rebuild`` consults this so a partially-applied or table-dropped DB is treated as needing a rebuild rather than silently limping forward."""
     rows = connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
     tables = {str(row["name"]) for row in rows}
     required_tables = set(_BASELINE_REQUIRED_TABLES)
@@ -245,6 +250,7 @@ def _migration_history_matches_prefix(
     applied: list[tuple[int, str]],
     available: tuple[Migration, ...],
 ) -> bool:
+    """Return whether the DB's applied-migration log is a strict prefix of the bundled migrations; used by ``_database_requires_rebuild`` to detect a renamed/reordered/diverged history that cannot be reconciled by patching forward."""
     if len(applied) > len(available):
         return False
     expected_prefix = [(migration.version, migration.name) for migration in available[: len(applied)]]
@@ -360,6 +366,7 @@ REBUILT_DB_PATHS: set[str] = set()
 
 
 def _db_cache_key(db_path: Path) -> str:
+    """Canonical cache key for ``MIGRATED_DB_PATHS``/``REBUILT_DB_PATHS``; resolves the path so two callers entering through different cwd-relative paths share one cache slot."""
     return str(db_path.resolve())
 
 
