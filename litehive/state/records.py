@@ -24,7 +24,6 @@ from litehive.state.locking import workspace_lock, workspace_mutation_guard
 from litehive.state.persist import (
     load_state,
     save_state_without_runner_guard,
-    workspace_transition_writes,
     write_atomic_files_and_then,
 )
 from litehive.tasks.audit import (
@@ -201,7 +200,6 @@ def _persist_created_tasks(
     *,
     tasks: list[TaskRecord],
     state: WorkspaceState,
-    writes: dict[Path, str],
     task_journal_messages: dict[str, str] | None = None,
     cleanup_dirs: list[Path],
     audit_entries: list[TaskAuditEntry] | None = None,
@@ -229,7 +227,7 @@ def _persist_created_tasks(
                 audit_entries=audit_entries,
             )
 
-        write_atomic_files_and_then(writes, callback)
+        write_atomic_files_and_then({}, callback)
     except Exception as exc:
         cleanup_errors = _cleanup_created_task_dirs(cleanup_dirs)
         if cleanup_errors:
@@ -310,7 +308,6 @@ def create_task(
         base = task_dir(root, task, bootstrap=False)
         _create_task_runtime_dirs(base)
         state.queue.append(task.id)
-        writes: dict[Path, str] = {}
         actor = "operator"
         source = "manual"
         if task.created_from is not None and task.created_from.source == "agent":
@@ -327,7 +324,6 @@ def create_task(
             root,
             tasks=[task],
             state=state,
-            writes=writes,
             task_journal_messages={task.id: "Task created."},
             cleanup_dirs=[base],
             audit_entries=[
@@ -369,7 +365,6 @@ def create_follow_up_tasks(
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root, bootstrap=False)
         reserved_numbers = _reserve_next_task_numbers(root, state, count=len(follow_ups))
-        writes: dict[Path, str] = {}
 
         for next_number, follow_up in zip(reserved_numbers, follow_ups):
             task_id = f"T-{next_number:04d}"
@@ -403,7 +398,6 @@ def create_follow_up_tasks(
             root,
             tasks=created_tasks,
             state=state,
-            writes=writes,
             task_journal_messages={
                 task.id: (
                     "Task created.\n\n"
@@ -572,9 +566,8 @@ def save_task(root: Path, task: TaskRecord) -> None:
     """Persist both the intent and runtime sides of a task atomically, refreshing ``updated_at``; the stage transition helpers and CLI mutators (status edits, retry resets) call this when they need a single-task write that respects the workspace mutation guard."""
     task.updated_at = utcnow()
     with workspace_mutation_guard(root):
-        writes = workspace_transition_writes(root, tasks=[task])
         write_atomic_files_and_then(
-            writes,
+            {},
             lambda: runtime_store(root).save_runtime_transaction(
                 task_intents={task.id: task.to_intent_record()},
                 task_states={task.id: task_state_for_storage(task)},

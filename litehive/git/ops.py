@@ -1,36 +1,17 @@
 """Git integration helpers."""
 
-import logging
-import re
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
 
 from litehive.domain.task import TaskRecord
-from litehive.fs_cleanup import remove_tree_logged
-
-logger = logging.getLogger(__name__)
 
 DEFAULT_CHECKPOINT_SUBJECT_TEMPLATE = "litehive: complete {task_id} {slug}"
 CHECKPOINT_ATTEMPT_SUFFIX_TEMPLATE = "{base} (attempt {attempt})"
-ROLLBACK_SUBJECT_TEMPLATE = "litehive: rollback {task_id} {slug} (attempt {attempt})"
 COMPLETION_SUBJECT_TEMPLATE = "litehive {task_id}: {title}"
 
 
 class GitError(RuntimeError):
     """Raised when git operations fail."""
-
-
-@dataclass(slots=True)
-class CommitCheckpoint:
-    commit_sha: str
-    base_sha: str | None
-    message: str
-
-
-@dataclass(slots=True)
-class RollbackCheckpoint:
-    rolled_back_sha: str
 
 
 def _run_git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -377,13 +358,6 @@ def add_worktree(root: Path, path: Path, ref: str = "HEAD") -> None:
         raise GitError(proc.stderr.strip() or "git worktree add failed")
 
 
-def move_worktree(root: Path, source: Path, destination: Path) -> None:
-    """Relocate a worktree directory atomically via git so the worktree registry stays consistent with the new path."""
-    proc = _run_git(root, "worktree", "move", str(source), str(destination))
-    if proc.returncode != 0:
-        raise GitError(proc.stderr.strip() or "git worktree move failed")
-
-
 def prune_worktrees(root: Path, expire_now: bool = False) -> None:
     """Run ``git worktree prune``, optionally with ``--expire now``.
 
@@ -427,17 +401,6 @@ def list_worktrees_porcelain(root: Path) -> str:
     if proc.returncode != 0:
         raise GitError(f"git worktree list failed: {proc.stderr.strip() or proc.stdout.strip()}")
     return proc.stdout
-
-
-def merge_commit(root: Path, commit_sha: str) -> str:
-    """Fast-forward main onto ``commit_sha``; ``--ff-only`` enforces the invariant that worktree commits always replay linearly onto main."""
-    proc = _run_git(root, "merge", "--ff-only", commit_sha)
-    if proc.returncode != 0:
-        raise GitError(proc.stderr.strip() or "git merge --ff-only failed")
-    head = current_head(root)
-    if head is None:
-        raise GitError("git merge completed but HEAD could not be resolved")
-    return head
 
 
 def diff_name_status(cwd: Path, *args: str) -> list[tuple[str, str]]:
@@ -672,23 +635,6 @@ def rebase_worktree_onto(worktree: Path, target_ref: str) -> bool:
     return True
 
 
-def cherry_pick_commit(root: Path, commit_sha: str) -> str:
-    """Atomic cherry-pick: on conflict it auto-aborts so the workspace doesn't stay mid-pick, then re-raises so the caller treats the apply as failed."""
-    proc = _run_git(root, "cherry-pick", commit_sha)
-    if proc.returncode != 0:
-        abort = _run_git(root, "cherry-pick", "--abort")
-        if abort.returncode != 0:
-            raise GitError(
-                (proc.stderr.strip() or "git cherry-pick failed")
-                + f"; additionally failed to abort cherry-pick: {abort.stderr.strip() or 'unknown error'}"
-            )
-        raise GitError(proc.stderr.strip() or "git cherry-pick failed")
-    head = current_head(root)
-    if head is None:
-        raise GitError("git cherry-pick completed but HEAD could not be resolved")
-    return head
-
-
 def default_commit_message(task_id: str, slug: str) -> str:
     """Stable subject string used to seed ``TaskRecord.git.commit_message`` so the rest of the system can detect "still on the generated message" via equality compare."""
     return DEFAULT_CHECKPOINT_SUBJECT_TEMPLATE.format(task_id=task_id, slug=slug)
@@ -741,9 +687,9 @@ def generated_completion_commit_message(task: TaskRecord, detail: str | None = N
 def _with_attempt_suffix(message: str, attempt: int) -> str:
     """Append an "(attempt N)" suffix to the subject line of a commit message.
 
-    Used by ``checkpoint_message`` and ``rollback_message`` so retries land
-    as distinct commits with attempt-tagged subjects, making the recovery
-    history obvious in ``git log --oneline``.
+    Used by ``checkpoint_message`` so retries land as distinct commits with
+    attempt-tagged subjects, making the recovery history obvious in
+    ``git log --oneline``.
     """
     subject, separator, body = message.partition("\n")
     subject = CHECKPOINT_ATTEMPT_SUFFIX_TEMPLATE.format(base=subject, attempt=attempt)
@@ -775,106 +721,3 @@ def checkpoint_message(task: TaskRecord, attempt: int | None = None) -> str:
     return base
 
 
-def rollback_message(task: TaskRecord, attempt: int) -> str:
-    """Deterministic subject for rollback commits so :func:`find_commit_by_subject` can locate the right one when a task is rolled back twice."""
-    return ROLLBACK_SUBJECT_TEMPLATE.format(task_id=task.id, slug=task.slug, attempt=attempt)
-
-
-def find_commit_by_subject(root: Path, subject: str) -> str | None:
-    """Locate a commit by exact subject match — the rollback path uses this to find the checkpoint commit it needs to revert without trusting in-memory state to still hold the sha."""
-    proc = _run_git(root, "log", "--format=%H%x00%s")
-    if proc.returncode != 0:
-        raise GitError(proc.stderr.strip() or "git log failed")
-
-    for line in proc.stdout.splitlines():
-        sha, _, message = line.partition("\x00")
-        if message == subject:
-            return sha
-    return None
-
-
-def commit_task(root: Path, message: str, paths: list[str] | None = None) -> CommitCheckpoint | None:
-    """Stage-and-commit helper for a task checkpoint: returns ``None`` (not an error) when there's nothing to commit so callers don't need to pre-check; ``paths`` scopes the add when only specific paths should land."""
-    if not is_git_repo(root):
-        return None
-
-    base_sha = current_head(root)
-    if paths:
-        add_proc = _run_git(root, "add", "--", *paths)
-    else:
-        if not has_changes(root):
-            return None
-        add_proc = _run_git(root, "add", "-A")
-    if add_proc.returncode != 0:
-        raise GitError(add_proc.stderr.strip() or "git add failed")
-
-    staged_proc = _run_git(root, "diff", "--cached", "--quiet", "--exit-code")
-    if staged_proc.returncode == 0:
-        return None
-    if staged_proc.returncode not in {0, 1}:
-        raise GitError(staged_proc.stderr.strip() or "git diff --cached failed")
-
-    commit_proc = _run_git(root, "commit", "-m", message)
-    if commit_proc.returncode != 0:
-        raise GitError(commit_proc.stderr.strip() or "git commit failed")
-
-    rev_proc = _run_git(root, "rev-parse", "HEAD")
-    if rev_proc.returncode != 0:
-        raise GitError(rev_proc.stderr.strip() or "git rev-parse failed")
-    return CommitCheckpoint(commit_sha=rev_proc.stdout.strip(), base_sha=base_sha, message=message)
-
-
-def rollback_task(root: Path, task: TaskRecord) -> RollbackCheckpoint:
-    """Stage a ``git revert --no-commit`` of the task's last checkpoint; refuses to run if the worktree has user edits because reverting on top of dirty paths would entangle them with the rollback diff."""
-    if has_non_litehive_changes(root):
-        raise GitError("Workspace has uncommitted changes; rollback requires a clean worktree")
-    if task.git.checkpoint_attempts < 1:
-        raise GitError(f"Task {task.id} has no checkpoint commit to roll back")
-    if not is_git_repo(root):
-        raise GitError("Workspace is not a git repository")
-
-    checkpoint_sha = find_commit_by_subject(
-        root,
-        checkpoint_message(task, attempt=task.git.checkpoint_attempts),
-    )
-    if checkpoint_sha is None:
-        raise GitError(f"Unable to locate checkpoint commit for task {task.id}")
-
-    # Try plain revert first; if the commit is a merge, retry with -m 1
-    revert_proc = _run_git(root, "revert", "--no-commit", checkpoint_sha)
-    if revert_proc.returncode != 0:
-        if "is a merge" in (revert_proc.stderr or ""):
-            _run_git(root, "reset", "--hard", "HEAD")  # clean up failed revert
-            revert_proc = _run_git(root, "revert", "--no-commit", "-m", "1", checkpoint_sha)
-        if revert_proc.returncode != 0:
-            raise GitError(revert_proc.stderr.strip() or "git revert failed")
-    return RollbackCheckpoint(rolled_back_sha=checkpoint_sha)
-
-
-def abort_revert(root: Path) -> None:
-    """Cancel an in-progress revert and clear out untracked-file conflicts that would otherwise leave the workspace stuck in MERGING; loops because removing one conflict path can expose the next one git complains about."""
-    proc = _run_git(root, "revert", "--abort")
-    if proc.returncode == 0:
-        return
-
-    for _ in range(16):
-        conflict_paths = re.findall(
-            r"Untracked working tree file '([^']+)' would be overwritten by merge\.",
-            proc.stderr,
-        )
-        if not conflict_paths:
-            break
-        for relative_path in conflict_paths:
-            conflict_path = root / relative_path
-            if conflict_path.is_dir():
-                try:
-                    remove_tree_logged(conflict_path, logger=logger, target_label="git conflict directory")
-                except OSError as exc:
-                    logger.warning("Failed to remove conflict path %s: %s", conflict_path, exc)
-            elif conflict_path.exists():
-                conflict_path.unlink()
-        proc = _run_git(root, "revert", "--abort")
-        if proc.returncode == 0:
-            return
-
-    raise GitError(proc.stderr.strip() or "git revert --abort failed")

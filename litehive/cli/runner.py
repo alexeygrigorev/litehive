@@ -637,16 +637,3 @@ def db_settings_audit(
         print(f"new_value: {json.dumps(entry.new_value, sort_keys=True)}")
         print(f"context: {json.dumps(entry.context, sort_keys=True)}")
     return 0
-
-
-cmd_run = run_command
-cmd_report = report_command
-cmd_backup_create = backup_create
-cmd_backup_list = backup_list
-cmd_backup_restore = backup_restore
-cmd_db_status = db_status
-cmd_db_migrate = db_migrate
-cmd_db_rebuild_from_events = db_rebuild_from_events
-cmd_db_audit = db_audit
-cmd_db_settings = db_settings
-cmd_db_settings_audit = db_settings_audit

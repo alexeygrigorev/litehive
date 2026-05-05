@@ -268,11 +268,6 @@ def _require_role(allowed: set[str]) -> str:
     return role
 
 
-def require_agent_role(allowed: set[str]) -> str:
-    """Public re-export of the role gate so callers outside this module can authorize agent-restricted entry points; currently no external callers (candidate for removal)."""
-    return _require_role(allowed)
-
-
 @dataclass(frozen=True)
 class AgentTaskMutationTarget:
     role: str

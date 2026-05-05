@@ -189,23 +189,14 @@ class WorkspaceLockManager:
     def _pid_is_live(self, metadata: Mapping[str, object] | None) -> bool:
         """Return True only if ``metadata`` names a PID that the OS still considers alive.
 
-        Callers (``metadata_status``, ``clear_metadata_if_unlocked``) use this
-        to decide whether a non-zero metadata blob represents a live owner or
-        leftover state that's safe to scrub.
+        ``clear_metadata_if_unlocked`` uses this to decide whether a non-zero
+        metadata blob represents a live owner or leftover state that's safe to
+        scrub.
         """
         if not metadata:
             return False
         pid = metadata.get(self.pid_field)
         return isinstance(pid, int) and self.pid_is_alive(pid)
-
-    def metadata_status(self) -> tuple[dict[str, object] | None, str]:
-        """Classify the lock as stopped/running/stale by combining flock probe and PID liveness."""
-        metadata = self.read_metadata()
-        if not metadata:
-            return None, "stopped"
-        if self.is_active() or self._pid_is_live(metadata):
-            return dict(metadata), "running"
-        return dict(metadata), "stale"
 
     def pid_is_stale(self) -> bool:
         """Return True only when the lockfile names a PID that no longer exists.

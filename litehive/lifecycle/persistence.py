@@ -346,13 +346,6 @@ class TaskState:
             canonical_pipeline_state(stage): rejection for stage, rejection in self.last_rejection_by_stage.items()
         }
 
-    def recovery_attempts_for_origin(self, origin_stage: PipelineState) -> int:
-        """Count completed plus in-flight recovery attempts that originated at ``origin_stage``; the recovery-budget guard uses this to decide whether the origin stage has already used its allotment."""
-        count = sum(1 for outcome in self._budget_recovery_history() if outcome.trigger.origin_stage == origin_stage)
-        if self.active_recovery_trigger is not None and self.active_recovery_trigger.origin_stage == origin_stage:
-            count += 1
-        return count
-
     def recovery_budget_available(self, trigger: RecoveryTrigger) -> bool:
         """Decide whether the lifecycle rules may dispatch another recovery turn for this trigger; consulted by the ``recovery_budget_available`` guard before routing a Reject into recovery."""
         if trigger.reason_code == "hook_reject_loop":

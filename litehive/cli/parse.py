@@ -1,5 +1,3 @@
-from heru import ENGINE_CHOICES
-
 from litehive.tasks.normalization import (
     normalize_acceptance_criteria,
     normalize_task_text_list,
@@ -38,50 +36,6 @@ def parse_dependency_ids(
         seen.add(dependency_id)
         normalized.append(dependency_id)
     return normalized
-
-
-def parse_engine_int_map(raw_values, option_name):
-    """Parse repeated `ENGINE=N` CLI options into `{engine: int}`; rejects unknown engines and negative values so bad operator input fails at parse time rather than producing nonsense limits."""
-    if not raw_values:
-        return {}
-
-    mapping = {}
-    for raw_value in raw_values:
-        engine_name, separator, raw_int = raw_value.partition("=")
-        if separator != "=":
-            raise ValueError(f"{option_name} entries must use ENGINE=VALUE")
-        engine_name = engine_name.strip()
-        raw_int = raw_int.strip()
-        if engine_name not in ENGINE_CHOICES:
-            raise ValueError(f"{option_name} engine must be one of: {', '.join(ENGINE_CHOICES)}")
-        try:
-            value = int(raw_int)
-        except ValueError as exc:
-            raise ValueError(f"{option_name} value for {engine_name} must be an integer") from exc
-        if value < 0:
-            raise ValueError(f"{option_name} value for {engine_name} must be 0 or greater")
-        mapping[engine_name] = value
-    return mapping
-
-
-def parse_runner_hooks(
-    raw_values,
-    option_name,
-):
-    """Parse repeated `HOOK_POINT=COMMAND` CLI options into a `{point: [command, ...]}` mapping with order preserved so multiple hooks at the same point fire in declaration order."""
-    if not raw_values:
-        return {}
-
-    hooks = {}
-    for raw_value in raw_values:
-        point, separator, remainder = raw_value.partition("=")
-        if separator != "=":
-            raise ValueError(f"{option_name} entries must use HOOK_POINT=COMMAND")
-        command = remainder.strip()
-        if not point.strip() or not command:
-            raise ValueError(f"{option_name} entries must use HOOK_POINT=COMMAND")
-        hooks.setdefault(point.strip(), []).append(command)
-    return hooks
 
 
 def parse_acceptance_criteria(

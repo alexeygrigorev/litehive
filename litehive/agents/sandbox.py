@@ -250,6 +250,14 @@ class SandboxLauncher:
                     self._bind_mount_spec(host_path, PurePosixPath(str(host_path)), read_only=True),
                 ]
             )
+        extra_rw_binds = self._resolved_extra_rw_binds(engine_name, policy, invocation.env)
+        for host_path in extra_rw_binds:
+            argv.extend(
+                [
+                    "--mount",
+                    self._bind_mount_spec(host_path, PurePosixPath(str(host_path)), read_only=False),
+                ]
+            )
         if policy is None:
             credential_inputs: list = []
         else:

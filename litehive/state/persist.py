@@ -165,17 +165,6 @@ def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
         return state
 
 
-def workspace_transition_writes(
-    root: Path,
-    tasks: list[TaskRecord] | tuple[TaskRecord, ...] = (),
-    state: WorkspaceState | None = None,
-    journal_messages: dict[str, str] | None = None,
-) -> dict[Path, str]:
-    """Vestigial hook from the file-based era: returns no file writes now that SQLite owns transitions. Kept as the call-site shape so legacy callers continue to compose with the atomic-batch helpers without behaviour change."""
-    del root, tasks, state, journal_messages
-    return {}
-
-
 def _merge_queue_preserving_future_changes(
     desired_queue: list[str],
     latest_queue: list[str],

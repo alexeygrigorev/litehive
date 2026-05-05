@@ -327,8 +327,3 @@ def quota_health(
     else:
         quota_status_label = "ok"
     return _QuotaHealth(engine, quota_status_label, summary, limit_reached)
-
-
-cmd_status = status_command
-cmd_health = health_command
-cmd_repair = repair_command

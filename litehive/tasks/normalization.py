@@ -1,7 +1,5 @@
 """Normalization and validation helpers for task fields."""
 
-import re
-
 from litehive.domain.common import PipelineStatus, TaskStage
 from litehive.domain.task import TaskRecord
 
@@ -23,36 +21,6 @@ def normalize_acceptance_criteria(items: list[str] | None) -> list[str]:
 def normalize_task_text_list(items: list[str] | None) -> list[str]:
     """Public alias for the criteria scrubber, kept under a generic name so the `--constraints`/`--plan` CLI parsers can apply the same rule without depending on the criteria-specific symbol; the indirection is the contract, not the body."""
     return normalize_acceptance_criteria(items)
-
-
-def extract_report_line(text: str, key: str) -> str | None:
-    """Pull a single `KEY: value` line out of an agent-emitted report; used by report parsers to read scalar fields without deserializing the whole stage report."""
-    match = re.search(rf"^{key}:\s*(.+)$", text, re.MULTILINE)
-    if match:
-        return match.group(1).strip()
-    return None
-
-
-def extract_report_list_section(text: str, key: str) -> list[str]:
-    """Pull a `KEY:`-headed bullet list out of a free-form agent report, stopping at the next `KEY:` header so adjacent sections do not bleed into each other; the simple parser used wherever an agent writes a structured-but-not-JSON section."""
-    items: list[str] = []
-    capture = False
-    header = f"{key}:"
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped == header:
-            capture = True
-            continue
-        if capture and re.match(r"^[A-Z_]+:", stripped):
-            break
-        if capture and line.lstrip().startswith("- "):
-            items.append(line.split("- ", 1)[1].strip())
-    return items
-
-
-def task_requires_acceptance_criteria(task: TaskRecord) -> bool:
-    """Return true when a task is "weighty enough" (dependencies, explicit goal, high priority, or multi-step plan) that it must carry structured acceptance criteria before implementation; the gating predicate exposed for callers that only need the boolean."""
-    return bool(_acceptance_criteria_requirement_signals(task))
 
 
 def missing_acceptance_criteria_reason(task: TaskRecord) -> str | None:
@@ -144,31 +112,3 @@ def _acceptance_criteria_requirement_signals(task: TaskRecord) -> list[str]:
     return signals
 
 
-def infer_acceptance_criteria(task: TaskRecord) -> list[str]:
-    """Synthesize a best-effort criteria list from the task's goal/plan/dependencies when the operator did not supply any; the fallback used by tooling that needs *something* to seed grooming with rather than leaving the field empty."""
-    if task.acceptance_criteria:
-        return list(task.acceptance_criteria)
-
-    inferred: list[str] = []
-    anchored = False
-    goal = task.goal.strip()
-    if goal and goal != task.title.strip():
-        inferred.append(f"The delivered change achieves the stated goal: {goal}.")
-        anchored = True
-
-    if task.plan:
-        if len(task.plan) == 1:
-            inferred.append(f"The implementation completes the planned work: {task.plan[0]}.")
-        else:
-            inferred.append("The implementation covers the defined plan end-to-end without broad unrelated changes.")
-        anchored = True
-
-    if task.depends_on and anchored:
-        dependency_list = ", ".join(task.depends_on)
-        inferred.append(f"The result aligns with the prerequisite task context needed from: {dependency_list}.")
-
-    if not inferred:
-        return []
-
-    inferred.append("Focused verification demonstrates the targeted behavior works as intended.")
-    return normalize_acceptance_criteria(inferred)

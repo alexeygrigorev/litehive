@@ -1,13 +1,6 @@
 from litehive.domain.common import TaskStatus
 
 
-def format_engine_int_map(values):
-    """Render an `{engine: int}` mapping as a stable comma-separated string for status output; returns `-` when empty so the column never collapses."""
-    if not values:
-        return "-"
-    return ", ".join(f"{engine}={limit}" for engine, limit in sorted(values.items()))
-
-
 def format_retry_on(config):
     """Format the `retry_on` failure-kind list for the status header; returns `-` when retries are disabled so the line stays human-readable."""
     if not config.retry_on:
@@ -57,12 +50,3 @@ def task_interruption_label(task):
     if interruption is not None and interruption.reason:
         label += f" reason={interruption.reason}"
     return label
-
-
-def cli_override_or_default(value, default):
-    """Pick CLI-supplied `value` over `default`, but treat a `False` flag as "no override" when the default is boolean so a user who did not pass `--flag` does not accidentally turn an enabled-by-default behavior off."""
-    if value is None:
-        return default
-    if isinstance(default, bool) and value is False:
-        return default
-    return value
