@@ -136,6 +136,39 @@ def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
         return state
 
 
+def _prioritize_audit_entries(
+    task_ids: list[str],
+    queued_tasks: dict,
+    before_tasks: dict,
+    queue_before: list[str],
+    queue_after: list[str],
+) -> list:
+    """
+    Build the per-task ``queue_prioritized`` audit entries.
+
+    Threads the before/after queue snapshots into each entry so
+    diagnostics can reconstruct the exact queue change without
+    looking up sibling rows. Caller:
+    :func:`prioritize_queued_tasks`.
+    """
+    entries: list = []
+    for task_id in task_ids:
+        entries.append(
+            build_task_audit_entry(
+                task_id=task_id,
+                action="queue_prioritized",
+                actor="operator",
+                source="queue",
+                before_task=before_tasks[task_id],
+                after_task=queued_tasks[task_id],
+                before_queue=queue_before,
+                after_queue=queue_after,
+                context={"requested_order": list(task_ids)},
+            )
+        )
+    return entries
+
+
 def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
     """
     Hoist the given queued tasks to the front of the queue, in order.
@@ -169,23 +202,17 @@ def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
         before_tasks = {task_id: snapshot_task_audit_state(task) for task_id, task in queued_tasks.items()}
         remaining = [queued_id for queued_id in state.queue if queued_id not in task_ids]
         state.queue = [*task_ids, *remaining]
+        audit_entries = _prioritize_audit_entries(
+            task_ids=task_ids,
+            queued_tasks=queued_tasks,
+            before_tasks=before_tasks,
+            queue_before=queue_before,
+            queue_after=state.queue,
+        )
         save_state_without_runner_guard(
             root,
             state,
-            audit_entries=[
-                build_task_audit_entry(
-                    task_id=task_id,
-                    action="queue_prioritized",
-                    actor="operator",
-                    source="queue",
-                    before_task=before_tasks[task_id],
-                    after_task=queued_tasks[task_id],
-                    before_queue=queue_before,
-                    after_queue=state.queue,
-                    context={"requested_order": list(task_ids)},
-                )
-                for task_id in task_ids
-            ],
+            audit_entries=audit_entries,
         )
         return state
 

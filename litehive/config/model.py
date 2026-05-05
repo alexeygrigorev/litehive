@@ -399,13 +399,30 @@ def normalize_runner_hooks(
             raise ValueError(f"runner_hooks key must be one of: {allowed}")
         if not hooks:
             continue
-        normalized[point] = [
+        normalized[point] = _normalize_runner_hook_list(point, hooks)
+    return normalized
+
+
+def _normalize_runner_hook_list(
+    point: str,
+    hooks,
+) -> list[dict[str, object]]:
+    """
+    Normalize each hook entry under one runner-hook point.
+
+    Threads ``point`` and the per-entry index into the field path
+    so a malformed hook surfaces as
+    ``runner_hooks[after_implementing][2]`` instead of an opaque
+    error. Caller: :func:`_normalize_runner_hooks`.
+    """
+    normalized: list[dict[str, object]] = []
+    for index, hook in enumerate(hooks):
+        normalized.append(
             _normalize_runner_hook(
                 hook,
                 field_name=f"runner_hooks[{point}][{index}]",
             )
-            for index, hook in enumerate(hooks)
-        ]
+        )
     return normalized
 
 
@@ -458,6 +475,63 @@ def _normalize_bind_list(raw_binds: list[str], field_name: str) -> list[str]:
     return normalized
 
 
+def _normalize_sandbox_credential_inputs(
+    raw_inputs: object,
+    field_name: str,
+) -> list[SandboxCredentialInput]:
+    """
+    Normalize each entry of a sandbox ``credential_inputs`` list.
+
+    Iterates the operator-supplied iterable, threading per-index
+    field paths so a malformed entry surfaces as
+    ``credential_inputs[2].env_var ...`` rather than a flat error.
+    Caller: :func:`_normalize_external_engine_sandbox_policy`.
+    """
+    iterable = _as_iterable(raw_inputs, field_name=field_name)
+    credentials: list[SandboxCredentialInput] = []
+    for index, item in enumerate(iterable):
+        credential = _normalize_sandbox_credential_input(
+            item,
+            field_name=f"{field_name}[{index}]",
+        )
+        credentials.append(credential)
+    return credentials
+
+
+def _stripped_bind_strings(raw_binds: object, field_name: str) -> list[str]:
+    """
+    Coerce a sandbox bind list to stripped strings.
+
+    Pre-pass for :func:`_normalize_bind_list`: the operator's YAML
+    can mix ints, paths, and stray whitespace, so each entry is
+    stringified and trimmed before later validation enforces
+    absolute-path rules. Caller:
+    :func:`_normalize_external_engine_sandbox_policy`.
+    """
+    iterable = _as_iterable(raw_binds, field_name=field_name)
+    binds: list[str] = []
+    for item in iterable:
+        binds.append(str(item).strip())
+    return binds
+
+
+def _stringify_setenv_mapping(raw_setenv: object, field_name: str) -> dict[str, str]:
+    """
+    Stringify both keys and values of a sandbox ``setenv`` map.
+
+    Operator config may type either as numeric or non-string values
+    (e.g. an integer port). The downstream env-name regex check
+    needs a string key, and docker's ``-e`` accepts only string
+    values. Caller:
+    :func:`_normalize_external_engine_sandbox_policy`.
+    """
+    mapping = _as_mapping(raw_setenv, field_name=field_name)
+    setenv: dict[str, str] = {}
+    for key, value in mapping.items():
+        setenv[str(key)] = str(value)
+    return setenv
+
+
 def _normalize_external_engine_sandbox_policy(
     raw_policy: object,
     field_name: str,
@@ -487,16 +561,22 @@ def _normalize_external_engine_sandbox_policy(
             network_mode=network_mode_arg,
             workspace_mode=workspace_mode_arg,
             environment=[str(item) for item in _as_iterable(raw_policy.get("environment"), field_name=f"{field_name}.environment")],
-            credential_inputs=[
-                _normalize_sandbox_credential_input(
-                    item,
-                    field_name=f"{field_name}.credential_inputs[{index}]",
-                )
-                for index, item in enumerate(_as_iterable(raw_policy.get("credential_inputs"), field_name=f"{field_name}.credential_inputs"))
-            ],
-            extra_ro_binds=[str(item).strip() for item in _as_iterable(raw_policy.get("extra_ro_binds"), field_name=f"{field_name}.extra_ro_binds")],
-            extra_rw_binds=[str(item).strip() for item in _as_iterable(raw_policy.get("extra_rw_binds"), field_name=f"{field_name}.extra_rw_binds")],
-            setenv={str(key): str(value) for key, value in _as_mapping(raw_policy.get("setenv"), field_name=f"{field_name}.setenv").items()},
+            credential_inputs=_normalize_sandbox_credential_inputs(
+                raw_policy.get("credential_inputs"),
+                field_name=f"{field_name}.credential_inputs",
+            ),
+            extra_ro_binds=_stripped_bind_strings(
+                raw_policy.get("extra_ro_binds"),
+                field_name=f"{field_name}.extra_ro_binds",
+            ),
+            extra_rw_binds=_stripped_bind_strings(
+                raw_policy.get("extra_rw_binds"),
+                field_name=f"{field_name}.extra_rw_binds",
+            ),
+            setenv=_stringify_setenv_mapping(
+                raw_policy.get("setenv"),
+                field_name=f"{field_name}.setenv",
+            ),
         )
     else:
         raise ValueError(f"{field_name} must be a mapping or ExternalEngineSandboxPolicy")
@@ -515,6 +595,33 @@ def _normalize_external_engine_sandbox_policy(
     policy.extra_ro_binds = _normalize_bind_list(policy.extra_ro_binds, field_name=f"{field_name}.extra_ro_binds")
     policy.extra_rw_binds = _normalize_bind_list(policy.extra_rw_binds, field_name=f"{field_name}.extra_rw_binds")
     return policy
+
+
+def _normalize_engine_policies_map(
+    raw_engine_policies: object,
+) -> dict[str, ExternalEngineSandboxPolicy]:
+    """
+    Normalize the per-engine sandbox-policy mapping.
+
+    Ensures every engine-name key is a string and every value is
+    a fully-validated :class:`ExternalEngineSandboxPolicy`. Threads
+    the engine-name into the field path so a malformed entry shows
+    up as ``engine_policies[claude].extra_ro_binds`` rather than a
+    flat error. Caller:
+    :func:`normalize_external_engine_sandbox_config`.
+    """
+    mapping = _as_mapping(
+        raw_engine_policies,
+        field_name="external_engine_sandbox.engine_policies",
+    )
+    policies: dict[str, ExternalEngineSandboxPolicy] = {}
+    for engine_name, policy in mapping.items():
+        engine_key = str(engine_name)
+        policies[engine_key] = _normalize_external_engine_sandbox_policy(
+            policy,
+            field_name=f"external_engine_sandbox.engine_policies[{engine_key}]",
+        )
+    return policies
 
 
 def normalize_external_engine_sandbox_config(
@@ -549,13 +656,7 @@ def normalize_external_engine_sandbox_config(
             drop_capabilities=bool(raw_config.get("drop_capabilities", True)),
             no_new_privileges=bool(raw_config.get("no_new_privileges", True)),
             tmpfs=[str(item) for item in _as_iterable(raw_config.get("tmpfs", ["/tmp"]), field_name="external_engine_sandbox.tmpfs")],
-            engine_policies={
-                str(engine_name): _normalize_external_engine_sandbox_policy(
-                    policy,
-                    field_name=f"external_engine_sandbox.engine_policies[{engine_name}]",
-                )
-                for engine_name, policy in _as_mapping(raw_config.get("engine_policies"), field_name="external_engine_sandbox.engine_policies").items()
-            },
+            engine_policies=_normalize_engine_policies_map(raw_config.get("engine_policies")),
         )
     if config.backend not in VALID_SANDBOX_BACKENDS:
         allowed = ", ".join(sorted(VALID_SANDBOX_BACKENDS))

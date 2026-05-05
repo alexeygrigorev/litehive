@@ -413,7 +413,22 @@ class TaskState:
         """
         if trigger.reason_code == "hook_reject_loop":
             return not self.hook_reject_recovery_invoked
-        return all(outcome.trigger.budget_key() != trigger.budget_key() for outcome in self._budget_recovery_history())
+        return self._budget_window_unconsumed_for(trigger)
+
+    def _budget_window_unconsumed_for(self, trigger: RecoveryTrigger) -> bool:
+        """
+        Test whether the current budget window has no recovery for this trigger.
+
+        Linear scan over :meth:`_budget_recovery_history`: if any past
+        outcome shares the trigger's budget fingerprint, the slot is
+        already spent for this failure shape. Caller:
+        :meth:`recovery_budget_available_for`.
+        """
+        candidate_key = trigger.budget_key()
+        for outcome in self._budget_recovery_history():
+            if outcome.trigger.budget_key() == candidate_key:
+                return False
+        return True
 
     def _budget_recovery_history(self) -> list[RecoveryOutcome]:
         """
@@ -526,6 +541,73 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
     }
 
 
+def _decode_stage_retry_map(raw) -> dict[PipelineState, int]:
+    """
+    Decode the persisted ``stage_retry`` map for one task.
+
+    Each stage name is canonicalized so legacy spellings round-trip
+    onto the current :class:`PipelineState` enum, and retry counts
+    are coerced to ``int``. Caller: :func:`_state_from_row`.
+    """
+    decoded: dict[PipelineState, int] = {}
+    if not isinstance(raw, dict):
+        return decoded
+    for stage_name, retry_count in raw.items():
+        decoded[canonical_pipeline_state(stage_name)] = int(retry_count)
+    return decoded
+
+
+def _decode_recovery_history(raw) -> list[RecoveryOutcome]:
+    """
+    Decode the persisted ``recovery_history`` list of trigger outcomes.
+
+    Skips entries that are not dicts so a malformed row cannot
+    crash a task load — the failure here is "recovery audit row
+    missing", which the journal still records, vs. losing the
+    whole task state. Caller: :func:`_state_from_row`.
+    """
+    items = list(raw or [])
+    decoded: list[RecoveryOutcome] = []
+    for item in items:
+        if isinstance(item, dict):
+            decoded.append(RecoveryOutcome.from_payload(dict(item)))
+    return decoded
+
+
+def _decode_last_rejection_by_stage(
+    raw: dict[str, Any],
+) -> dict[PipelineState, LastRejection]:
+    """
+    Decode the per-stage ``last_rejection_by_stage`` map.
+
+    Stage keys are canonicalized so the in-memory map is
+    enum-keyed even for legacy persisted spellings. Caller:
+    :func:`_state_from_row`.
+    """
+    decoded: dict[PipelineState, LastRejection] = {}
+    for stage_name, rej in raw.items():
+        decoded[canonical_pipeline_state(stage_name)] = LastRejection.from_payload(rej)
+    return decoded
+
+
+def _decode_failed_run_history(
+    raw: dict[str, Any],
+) -> dict[str, FailedRunRecord]:
+    """
+    Decode the ``failed_run_history`` map keyed by failure shape.
+
+    Drops malformed (non-dict) records the same way
+    :func:`_decode_recovery_history` does — a corrupted slot
+    must not block reloading the rest of the task state. Caller:
+    :func:`_state_from_row`.
+    """
+    decoded: dict[str, FailedRunRecord] = {}
+    for key, record in raw.items():
+        if isinstance(record, dict):
+            decoded[str(key)] = FailedRunRecord.from_payload(dict(record))
+    return decoded
+
+
 def _state_from_row(
     task_id: str,
     stage: str | PipelineState,
@@ -582,29 +664,17 @@ def _state_from_row(
         stage=canonical_pipeline_state(stage),
         pipeline_mode=PipelineMode(pipeline_mode),
         entry_stage=entry_stage_value,
-        stage_retry={
-            canonical_pipeline_state(stage_name): int(retry_count)
-            for stage_name, retry_count in (payload.get("stage_retry") or {}).items()
-        },
+        stage_retry=_decode_stage_retry_map(payload.get("stage_retry")),
         active_recovery_trigger=active_recovery_trigger_value,
-        recovery_history=[
-            RecoveryOutcome.from_payload(dict(item)) for item in list(recovery_history or []) if isinstance(item, dict)
-        ],
+        recovery_history=_decode_recovery_history(recovery_history),
         recovery_budget_history_start=int(payload.get("recovery_budget_history_start") or 0),
         pre_exec_recovery_attempt=int(payload.get("pre_exec_recovery_attempt") or 0),
         agent_elapsed_seconds=float(payload.get("agent_elapsed_seconds") or 0.0),
         merge_context=merge_context_value,
         commit_result=commit_result_value,
         last_report=LastReport.from_payload(last_report_data),
-        last_rejection_by_stage={
-            canonical_pipeline_state(stage_name): LastRejection.from_payload(rej)
-            for stage_name, rej in last_rejections_data.items()
-        },
-        failed_run_history={
-            str(key): FailedRunRecord.from_payload(dict(record))
-            for key, record in failed_run_history_data.items()
-            if isinstance(record, dict)
-        },
+        last_rejection_by_stage=_decode_last_rejection_by_stage(last_rejections_data),
+        failed_run_history=_decode_failed_run_history(failed_run_history_data),
         rejection_loop=rejection_loop_value,
         consecutive_same_hook_rejects=int(payload.get("consecutive_same_hook_rejects") or 0),
         last_hook_reject_fingerprint=last_hook_reject_fingerprint_value,

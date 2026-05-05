@@ -63,10 +63,28 @@ def render_operational_issue_lines(issues: list[StatusIssue]) -> list[str]:
     """
     if not status_has_problems(issues):
         return []
+    issue_lines = _terse_operational_issue_lines(issues)
     return [
-        *(f"{issue.key}: {_operational_issue_message(issue.message)}" for issue in issues),
+        *issue_lines,
         render_health_summary(issues),
     ]
+
+
+def _terse_operational_issue_lines(issues: list) -> list[str]:
+    """
+    Render one ``key: short-message`` line per operational issue.
+
+    Drops the verbose remediation tail through
+    :func:`_operational_issue_message` so the default
+    ``status`` block stays scannable; the long form is reserved
+    for ``litehive health``. Caller:
+    :func:`render_operational_issue_block`.
+    """
+    lines: list[str] = []
+    for issue in issues:
+        short_message = _operational_issue_message(issue.message)
+        lines.append(f"{issue.key}: {short_message}")
+    return lines
 
 
 def _operational_issue_message(message: str) -> str:

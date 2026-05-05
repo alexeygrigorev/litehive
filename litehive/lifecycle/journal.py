@@ -37,6 +37,33 @@ def _event_payload(event: Event) -> dict[str, Any]:
     return {}
 
 
+def _decode_transition_rows(rows: list) -> list[dict[str, Any]]:
+    """
+    Project ``pipeline_transitions`` SQL rows to plain replay dicts.
+
+    The two JSON columns (``event_payload`` and ``delta``) are
+    decoded here so the diagnostics CLI / recovery agent can read
+    structured payloads instead of opaque strings. Caller:
+    :meth:`SqlitePipelineJournal.load_transitions`.
+    """
+    decoded: list[dict[str, Any]] = []
+    for row in rows:
+        decoded.append({
+            "seq": row["seq"],
+            "created_at": row["created_at"],
+            "from_stage": row["from_stage"],
+            "event_type": row["event_type"],
+            "event_payload": json.loads(row["event_payload"]),
+            "to_stage": row["to_stage"],
+            "rule_description": row["rule_description"],
+            "delta": json.loads(row["delta"]),
+        })
+    return decoded
+
+
+_DELTA_DEFAULT_VALUES: tuple[Any, ...] = (None, False, (), [], {})
+
+
 def _delta_payload(delta: StateDelta) -> dict[str, Any]:
     """
     Drop default/empty fields from a ``StateDelta`` before journaling.
@@ -45,7 +72,11 @@ def _delta_payload(delta: StateDelta) -> dict[str, Any]:
     so replay diffs stay readable; without this, every row would carry
     every dormant ``StateDelta`` field as ``None``/``False``/empty.
     """
-    return {k: v for k, v in asdict(delta).items() if v not in (None, False, (), [], {})}
+    payload: dict[str, Any] = {}
+    for key, value in asdict(delta).items():
+        if value not in _DELTA_DEFAULT_VALUES:
+            payload[key] = value
+    return payload
 
 
 # Kinds recorded in the journal. Keep this list tight — adding a kind is a
@@ -402,19 +433,7 @@ class SqliteJournal(PipelineJournal):
                 """,
                 (task_id,),
             ).fetchall()
-        return [
-            {
-                "seq": row["seq"],
-                "created_at": row["created_at"],
-                "from_stage": row["from_stage"],
-                "event_type": row["event_type"],
-                "event_payload": json.loads(row["event_payload"]),
-                "to_stage": row["to_stage"],
-                "rule_description": row["rule_description"],
-                "delta": json.loads(row["delta"]),
-            }
-            for row in rows
-        ]
+        return _decode_transition_rows(rows)
 
     def load_lifecycle(self, task_id: str) -> list[dict[str, Any]]:
         """

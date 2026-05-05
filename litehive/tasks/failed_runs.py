@@ -117,11 +117,28 @@ def failed_run_block_message(task: TaskRecord, records: list[RuntimeFailedRunRec
     failing task; emitted by ``requeue`` and ``reset`` when a blocking
     record is found.
     """
-    details = "; ".join(
-        (f"{record.stage} shape={record.failure_shape} count={record.count} latest_at={record.latest_at or '-'}")
-        for record in records
-    )
+    details = _failed_run_record_details(records)
     return (
         f"Task {task.id} repeatedly exhausted the same stage retry budget: {details}. "
         "Use --force to record an operator override and requeue anyway."
     )
+
+
+def _failed_run_record_details(records: list[RuntimeFailedRunRecord]) -> str:
+    """
+    Render the per-record summary substring for the refusal message.
+
+    Each record becomes a ``stage shape=… count=… latest_at=…``
+    fragment, joined by ``;`` so the operator sees every blocking
+    failure shape in one line. Missing ``latest_at`` falls back to
+    ``-`` so the column count is consistent across records. Caller:
+    :func:`failed_run_block_message`.
+    """
+    fragments: list[str] = []
+    for record in records:
+        latest_at_label = record.latest_at or "-"
+        fragments.append(
+            f"{record.stage} shape={record.failure_shape}"
+            f" count={record.count} latest_at={latest_at_label}"
+        )
+    return "; ".join(fragments)

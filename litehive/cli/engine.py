@@ -163,10 +163,29 @@ def _parse_engine_preference(value: str | None) -> list[str] | None:
     """
     if value is None:
         return None
-    engines = [part.strip() for part in value.replace(",", " ").split() if part.strip()]
+    engines = _split_engine_preference_string(value)
     if not engines:
         return None
     return normalize_engine_sequence(engines, field_name="engine_preference")
+
+
+def _split_engine_preference_string(value: str) -> list[str]:
+    """
+    Split an operator-typed engine list into trimmed names.
+
+    The operator may type ``"claude, codex"`` or ``"claude codex"``,
+    so commas are first folded into spaces before splitting; empty
+    fragments (from doubled separators) are dropped. Returned to
+    :func:`_parse_engine_preference` for canonical normalization.
+    """
+    flattened = value.replace(",", " ")
+    raw_parts = flattened.split()
+    engines: list[str] = []
+    for part in raw_parts:
+        trimmed = part.strip()
+        if trimmed:
+            engines.append(trimmed)
+    return engines
 
 
 def _engine_list_label(value: object) -> str:
@@ -231,7 +250,7 @@ def _render_engine_status_lines(root: Path) -> list[str]:
     lines = [
         f"default_engine: {config.default_engine}",
         f"engine_preference: {engine_preference_label}",
-        f"engine_freeze: {', '.join(f'{k}={v}' for k, v in sorted(config.engine_freeze.items())) or '-'}",
+        f"engine_freeze: {_engine_freeze_summary_line(config.engine_freeze)}",
     ]
     for engine_name in ENGINE_CHOICES:
         caps = get_engine(engine_name).capabilities
@@ -260,6 +279,24 @@ def _render_engine_status_lines(root: Path) -> list[str]:
             ]
         )
     return lines
+
+
+def _engine_freeze_summary_line(engine_freeze: dict[str, str]) -> str:
+    """
+    Format the persisted engine-freeze map for ``engine status``.
+
+    Returns ``"-"`` when nothing is frozen so the operator sees an
+    obvious placeholder; otherwise emits ``engine=until`` pairs in
+    sorted order so consecutive runs of ``engine status`` are
+    diffable. Caller: :func:`_render_engine_status_lines`.
+    """
+    if not engine_freeze:
+        return "-"
+    sorted_items = sorted(engine_freeze.items())
+    pairs: list[str] = []
+    for engine_name, until in sorted_items:
+        pairs.append(f"{engine_name}={until}")
+    return ", ".join(pairs)
 
 
 def _collect_quota_statuses() -> dict[str, object]:

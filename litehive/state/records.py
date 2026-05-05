@@ -502,6 +502,63 @@ def create_task(
         return task
 
 
+def _follow_up_journal_messages(
+    created_tasks: list[TaskRecord],
+    follow_ups: list[FollowUpTaskSpec],
+    parent_task: TaskRecord,
+    stage: str,
+) -> dict[str, str]:
+    """
+    Build the per-follow-up "Task created" journal entries.
+
+    Each entry records the parent task and originating stage so
+    the journal of the new task explains its provenance even if
+    the parent record is later deleted. Caller:
+    :func:`create_follow_up_tasks`.
+    """
+    messages: dict[str, str] = {}
+    for task, follow_up in zip(created_tasks, follow_ups):
+        messages[task.id] = (
+            "Task created.\n\n"
+            f"Created as a follow-up from `{parent_task.id}` during `{stage}`.\n"
+            f"Rationale: {follow_up.rationale}"
+        )
+    return messages
+
+
+def _follow_up_audit_entries(
+    created_tasks: list[TaskRecord],
+    queue_after: list[str],
+) -> list:
+    """
+    Build the ``"created"`` audit entry for each new follow-up task.
+
+    Threads the post-creation queue snapshot so each entry records
+    the queue ordering at the moment the follow-up was created;
+    consistent with how :func:`create_task` audits a single task.
+    Caller: :func:`create_follow_up_tasks`.
+    """
+    entries: list = []
+    for task in created_tasks:
+        entries.append(
+            build_task_audit_entry(
+                task_id=task.id,
+                action="created",
+                actor="system",
+                source="follow_up",
+                after_task=task,
+                after_queue=queue_after,
+                context={
+                    "title": task.title,
+                    "priority": task.priority,
+                    "pipeline_mode": str(task.pipeline_mode),
+                    "created_from": _created_from_payload(task),
+                },
+            )
+        )
+    return entries
+
+
 def create_follow_up_tasks(
     root: Path,
     parent_task: TaskRecord,
@@ -556,36 +613,20 @@ def create_follow_up_tasks(
             state.queue.append(task.id)
             created_tasks.append(task)
 
+        journal_messages = _follow_up_journal_messages(
+            created_tasks=created_tasks,
+            follow_ups=follow_ups,
+            parent_task=parent_task,
+            stage=stage,
+        )
+        audit_entries = _follow_up_audit_entries(created_tasks, state.queue)
         _persist_created_tasks(
             root,
             tasks=created_tasks,
             state=state,
-            task_journal_messages={
-                task.id: (
-                    "Task created.\n\n"
-                    f"Created as a follow-up from `{parent_task.id}` during `{stage}`.\n"
-                    f"Rationale: {follow_up.rationale}"
-                )
-                for task, follow_up in zip(created_tasks, follow_ups)
-            },
+            task_journal_messages=journal_messages,
             cleanup_dirs=created_dirs,
-            audit_entries=[
-                build_task_audit_entry(
-                    task_id=task.id,
-                    action="created",
-                    actor="system",
-                    source="follow_up",
-                    after_task=task,
-                    after_queue=state.queue,
-                    context={
-                        "title": task.title,
-                        "priority": task.priority,
-                        "pipeline_mode": str(task.pipeline_mode),
-                        "created_from": _created_from_payload(task),
-                    },
-                )
-                for task in created_tasks
-            ],
+            audit_entries=audit_entries,
         )
         ensure_runtime_ignored(root)
     return created_tasks

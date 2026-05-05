@@ -618,7 +618,24 @@ def validate_single_active_task(root: Path, state: WorkspaceState | None = None)
     markers = active_task_markers(root, state)
     if len(markers) <= 1:
         return
-    details = "; ".join(f"{task_id} ({', '.join(task_markers)})" for task_id, task_markers in sorted(markers.items()))
+    details = _format_active_task_markers(markers)
     raise WorkspaceConflictError(
         f"workspace has multiple active tasks: {details}. Clear the stale active task state before running again."
     )
+
+
+def _format_active_task_markers(markers: dict[str, list[str]]) -> str:
+    """
+    Render the per-task marker list for the conflict error message.
+
+    Each task is formatted as ``T-NNNN (marker1, marker2)`` and
+    joined by ``;`` so the operator can see every task plus the
+    flags that mark it active. Sorting on task id keeps the
+    message stable across runs. Caller:
+    :func:`validate_single_active_task`.
+    """
+    fragments: list[str] = []
+    for task_id, task_markers in sorted(markers.items()):
+        joined_markers = ", ".join(task_markers)
+        fragments.append(f"{task_id} ({joined_markers})")
+    return "; ".join(fragments)

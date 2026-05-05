@@ -337,7 +337,10 @@ def _applied_migration_rows(connection: sqlite3.Connection) -> list[tuple[int, s
     """
     _ensure_schema_migrations_table(connection)
     rows = connection.execute("SELECT version, name FROM schema_migrations ORDER BY version").fetchall()
-    return [(int(row["version"]), str(row["name"])) for row in rows]
+    applied: list[tuple[int, str]] = []
+    for row in rows:
+        applied.append((int(row["version"]), str(row["name"])))
+    return applied
 
 
 def _has_required_baseline_tables(

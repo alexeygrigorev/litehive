@@ -19,6 +19,21 @@ if TYPE_CHECKING:
     from .prompt_types import AgentPrompt, RecoveryPrompt
 
 
+def _bullet_block(items: list[str]) -> str:
+    """
+    Format a list of strings as ``"- item"`` lines joined by newlines.
+
+    Shared by the section builders that emit acceptance criteria,
+    plans, constraints, and conflict-file blocks; extracted so the
+    bullet shape stays consistent and the call sites read as
+    domain language ("render this as a bullet block").
+    """
+    lines: list[str] = []
+    for item in items:
+        lines.append(f"- {item}")
+    return "\n".join(lines)
+
+
 def _header_section(prompt: "AgentPrompt", task_record: TaskRecord | None) -> str:
     """
     Identify the task and pipeline coordinates.
@@ -77,7 +92,7 @@ def _acceptance_criteria_section(task_record: TaskRecord | None) -> str:
     """Render the acceptance bullets the accepting stage will check this work against — the SWE prompt uses them as the contract for ``pass``."""
     if task_record is None or not task_record.acceptance_criteria:
         return "Acceptance criteria:\n- (none defined)"
-    bullets = "\n".join(f"- {c}" for c in task_record.acceptance_criteria)
+    bullets = _bullet_block(task_record.acceptance_criteria)
     return f"Acceptance criteria:\n{bullets}"
 
 
@@ -85,7 +100,7 @@ def _plan_section(task_record: TaskRecord | None) -> str:
     """Render the plan steps grooming committed to so later stages execute against the same plan instead of re-deriving one mid-stream."""
     if task_record is None or not task_record.plan:
         return "Plan:\n- (no plan)"
-    bullets = "\n".join(f"- {step}" for step in task_record.plan)
+    bullets = _bullet_block(task_record.plan)
     return f"Plan:\n{bullets}"
 
 
@@ -99,7 +114,7 @@ def _constraints_section(task_record: TaskRecord | None) -> str:
     """
     if task_record is None or not task_record.constraints:
         return "Constraints:\n- Keep changes scoped to the task."
-    bullets = "\n".join(f"- {c}" for c in task_record.constraints)
+    bullets = _bullet_block(task_record.constraints)
     return f"Constraints:\n{bullets}"
 
 
@@ -430,7 +445,7 @@ def _merge_conflict_section(conflict_files: list[str], merge_attempt: int | None
     along so the agent can see whether this is a fresh conflict or a
     retry after a previous resolution failure.
     """
-    bullets = "\n".join(f"- {f}" for f in conflict_files)
+    bullets = _bullet_block(conflict_files)
     if merge_attempt is not None:
         extra = f"\nMerge attempt: {merge_attempt}"
     else:

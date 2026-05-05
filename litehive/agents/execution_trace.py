@@ -121,9 +121,25 @@ def event_stream_from_events(
     if not events:
         return None
     event_stream = LiveTimeline(engine=engine_name, task_id=task_id, subagent_id=subagent_id)
-    event_stream.events = [LiveEvent.model_validate(event.model_dump(mode="python")) for event in events]
+    event_stream.events = _rehydrate_live_events(events)
     event_stream.recompute_counts()
     return event_stream
+
+
+def _rehydrate_live_events(events) -> list[LiveEvent]:
+    """
+    Round-trip parsed events through ``LiveEvent`` validation.
+
+    The fallback timeline assembled by :func:`render_execution_trace_from_events`
+    needs ``LiveEvent`` instances even when the parser produced a
+    different concrete type, so each event is dumped to a plain dict
+    and revalidated to land on the canonical pydantic shape.
+    """
+    rehydrated: list[LiveEvent] = []
+    for event in events:
+        payload = event.model_dump(mode="python")
+        rehydrated.append(LiveEvent.model_validate(payload))
+    return rehydrated
 
 
 def render_execution_trace_from_streams(stdout: str, stderr: str) -> str:

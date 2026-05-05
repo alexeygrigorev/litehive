@@ -90,6 +90,21 @@ def _terminal_reject_rules(from_state, when=None, reason: FailedReason = FailedR
     ]
 
 
+def _epoch_terminal_reject_rules(epoch) -> list[Rule]:
+    """
+    Expand ``_terminal_reject_rules`` over every stage in an epoch.
+
+    Used by the grooming and commit blocks of ``RULES``: each
+    epoch is a tuple of pipeline states, and every state in the
+    tuple should reject straight to ``FAILED``. Flattening here
+    keeps the spread sites in ``RULES`` readable.
+    """
+    rules: list[Rule] = []
+    for stage in epoch:
+        rules.extend(_terminal_reject_rules(stage))
+    return rules
+
+
 RULES: list[Rule] = [
     # ── entry ─────────────────────────────────────────────
     Rule(
@@ -251,7 +266,7 @@ RULES: list[Rule] = [
     *_recovery_rules(S.MERGE_RESOLVING, Crash),
     *_recovery_rules(S.MERGE_RESOLVING, Timeout),
     # ── rejections: grooming (no retry) ─────────────────────────────────────────────
-    *[rule for p in S.GROOMING_EPOCH for rule in _terminal_reject_rules(p)],
+    *_epoch_terminal_reject_rules(S.GROOMING_EPOCH),
     # ── rejections: implementing / testing / accepting (retry then fail or override) ─────────────────────────────────────────────
     *retry_epoch_rules(
         S.IMPLEMENTING,
@@ -279,7 +294,7 @@ RULES: list[Rule] = [
         exhausted_reason=FailedReason.SEMANTIC_REJECT,
     ),
     # ── rejections: commit (no retry) ─────────────────────────────────────────────
-    *[rule for p in S.COMMIT_EPOCH for rule in _terminal_reject_rules(p)],
+    *_epoch_terminal_reject_rules(S.COMMIT_EPOCH),
     # ── blocked ─────────────────────────────────────────────
     *_recovery_rules(S.GROOMING, Blocked),
     *_recovery_rules(S.IMPLEMENTING, Blocked),

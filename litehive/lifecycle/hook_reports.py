@@ -79,10 +79,29 @@ def hook_specs_from_config(config) -> dict[PipelineState, list[HookSpec]]:
     """
     out: dict[PipelineState, list[HookSpec]] = {}
     for phase, hooks in (getattr(config, "runner_hooks", None) or {}).items():
-        specs = [_build_hook_spec(_normalize_hook_spec_data(hook)) for hook in hooks or []]
+        specs = _build_hook_specs_for_phase(hooks)
         if specs:
             out[PipelineState(phase) if not isinstance(phase, PipelineState) else phase] = specs
     return out
+
+
+def _build_hook_specs_for_phase(hooks) -> list[HookSpec]:
+    """
+    Materialize the ``HookSpec`` list for one pipeline phase.
+
+    Treats a missing/None ``hooks`` value as an empty list so the
+    caller can pass straight through ``runner_hooks[phase]`` without
+    a None-guard, and runs each hook entry through the data
+    normalizer before building its spec. Caller:
+    :func:`hook_specs_from_config`.
+    """
+    if not hooks:
+        return []
+    specs: list[HookSpec] = []
+    for hook in hooks:
+        normalized = _normalize_hook_spec_data(hook)
+        specs.append(_build_hook_spec(normalized))
+    return specs
 
 
 def _report_stage_for_phase(phase: str | PipelineState) -> ReportPipelineState:

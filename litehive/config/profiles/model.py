@@ -15,6 +15,22 @@ from dataclasses import dataclass
 from typing import Any
 
 
+def _copy_stage_bullet_map(raw: dict[str, Any]) -> dict[str, list[str]]:
+    """
+    Shallow-copy a profile stage→bullets mapping for the dataclass.
+
+    Wraps each bullet list in ``list(...)`` so the loader's merged
+    structure cannot be mutated through the resolved
+    :class:`ProcessProfile` (the dataclass is frozen, but its
+    list values would otherwise still be aliased). Caller:
+    :meth:`ProcessProfile.from_dict`.
+    """
+    copied: dict[str, list[str]] = {}
+    for stage, bullets in raw.items():
+        copied[stage] = list(bullets)
+    return copied
+
+
 @dataclass(frozen=True)
 class ProcessProfile:
     """Resolved process profile consumed by rendering and prompt assembly.
@@ -113,9 +129,7 @@ class ProcessProfile:
             tool_usage=list(data["tool_usage"]),
             workspace_overlay=list(data["workspace_overlay"]),
             specifics=list(data.get("specifics", [])),
-            stage_instructions={
-                stage: list(bullets) for stage, bullets in data.get("stage_instructions", {}).items()
-            },
-            stage_overlay={stage: list(bullets) for stage, bullets in data.get("stage_overlay", {}).items()},
+            stage_instructions=_copy_stage_bullet_map(data.get("stage_instructions", {})),
+            stage_overlay=_copy_stage_bullet_map(data.get("stage_overlay", {})),
             specifics_heading=data.get("specifics_heading"),
         )

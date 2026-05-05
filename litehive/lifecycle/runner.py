@@ -27,6 +27,24 @@ _COMMIT_REACHED_PHASES = frozenset(
 )
 
 
+def _normalize_report_string_list(items: list) -> list[str]:
+    """
+    Coerce a metadata list into stripped non-empty strings.
+
+    The runner's ``Pass`` metadata can carry path-like or
+    test-result entries that are :class:`pathlib.Path` instances,
+    ``None``, or empty strings; this normalizer trims and drops
+    blanks so the persisted ``LastReport`` only stores meaningful
+    rows. Caller: :meth:`StateMachineRunner._update_last_report`.
+    """
+    cleaned: list[str] = []
+    for item in items:
+        text = str(item).strip()
+        if text:
+            cleaned.append(text)
+    return cleaned
+
+
 class StateMachineRunner:
     """Drives a task through the state machine.
 
@@ -195,7 +213,7 @@ class StateMachineRunner:
         files_changed = meta.get("files_changed")
         if isinstance(files_changed, list):
             state.last_report.files_changed = len(files_changed)
-            state.last_report.changed_files = [str(path).strip() for path in files_changed if str(path).strip()]
+            state.last_report.changed_files = _normalize_report_string_list(files_changed)
         elif isinstance(files_changed, int):
             state.last_report.files_changed = files_changed
         tests_added = meta.get("tests_added")
@@ -205,10 +223,10 @@ class StateMachineRunner:
         if isinstance(last_report, dict):
             changed_files = last_report.get("changed_files")
             if isinstance(changed_files, list):
-                state.last_report.changed_files = [str(path).strip() for path in changed_files if str(path).strip()]
+                state.last_report.changed_files = _normalize_report_string_list(changed_files)
             test_results = last_report.get("test_results")
             if isinstance(test_results, list):
-                state.last_report.test_results = [str(item).strip() for item in test_results if str(item).strip()]
+                state.last_report.test_results = _normalize_report_string_list(test_results)
         commit_result = meta.get("commit_result")
         if isinstance(commit_result, dict):
             head_sha = commit_result.get("head_sha")

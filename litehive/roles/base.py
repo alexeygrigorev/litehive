@@ -41,7 +41,28 @@ def _bulletize(lines: list[str]) -> str:
     cross-role layers could format bullets differently and produce
     spurious diffs.
     """
-    return "\n".join(f"- {line}" for line in lines)
+    bullets: list[str] = []
+    for line in lines:
+        bullets.append(f"- {line}")
+    return "\n".join(bullets)
+
+
+def _stage_hook_summaries(raw_hooks: list) -> list[dict[str, Any]]:
+    """
+    Project after-stage hook config into a ``{command, description}`` summary list.
+
+    Stringifies both fields so the agent prompt always shows
+    well-typed values even if the operator's YAML supplied
+    integers / ``None``. Caller:
+    :meth:`RoleAgent._runner_hooks_for_stage`.
+    """
+    summaries: list[dict[str, Any]] = []
+    for hook in raw_hooks:
+        summaries.append({
+            "command": str(hook.get("command", "")),
+            "description": str(hook.get("description", "") or ""),
+        })
+    return summaries
 
 
 class RoleAgent(AgentNode):
@@ -175,13 +196,7 @@ class RoleAgent(AgentNode):
         except (OSError, TypeError, ValidationError, ValueError, yaml.YAMLError):
             return []
         raw_hooks = (config.runner_hooks or {}).get(after_phase, [])
-        return [
-            {
-                "command": str(hook.get("command", "")),
-                "description": str(hook.get("description", "") or ""),
-            }
-            for hook in raw_hooks
-        ]
+        return _stage_hook_summaries(raw_hooks)
 
     def _assemble_instruction_layers(self, last_rejection: LastRejection | None) -> tuple[list[tuple[str, str]], str]:
         """Compose the ordered (label, text) instruction layers and the fresh/retry variant for this turn.
@@ -287,8 +302,10 @@ def _last_rejection_payload(last_rejection: LastRejection) -> dict[str, str]:
 
 def _failed_run_history_payload(state: TaskState) -> list[dict[str, Any]]:
     """Flatten the failed-run history map into a stably-ordered list for the agent prompt so retry decisions can use it as context — sorted on key so the same history renders identically across runs."""
-    return [
-        {
+    sorted_items = sorted(state.failed_run_history.items())
+    payload: list[dict[str, Any]] = []
+    for key, record in sorted_items:
+        payload.append({
             "key": key,
             "stage": record.stage,
             "failure_shape": record.failure_shape,
@@ -301,16 +318,31 @@ def _failed_run_history_payload(state: TaskState) -> list[dict[str, Any]]:
             "retry_limit": record.retry_limit,
             "failed_reason": record.failed_reason,
             "operator_override_count": record.operator_override_count,
-        }
-        for key, record in sorted(state.failed_run_history.items())
-    ]
+        })
+    return payload
 
 
-_IMPLEMENTING_RETRY_ORIGIN_BY_PHASE: dict[str, PipelineState] = {
-    f"{prefix}{stage.value}": PipelineState(stage.value)
-    for stage in (TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING)
-    for prefix in ("before_", "", "after_")
-}
+def _build_implementing_retry_origin_by_phase() -> dict[str, PipelineState]:
+    """
+    Enumerate every phase name that maps back to its retry-origin stage.
+
+    Implementing-stage retries can be entered from the
+    ``before_/<bare>/after_`` triplet of three stages
+    (implementing, testing, accepting); this expander generates
+    every combination so :func:`_latest_reject_stage_for_implementing`
+    can reverse-lookup phase → stage in O(1) instead of parsing
+    the prefix at the call site.
+    """
+    mapping: dict[str, PipelineState] = {}
+    stages = (TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING)
+    prefixes = ("before_", "", "after_")
+    for stage in stages:
+        for prefix in prefixes:
+            mapping[f"{prefix}{stage.value}"] = PipelineState(stage.value)
+    return mapping
+
+
+_IMPLEMENTING_RETRY_ORIGIN_BY_PHASE: dict[str, PipelineState] = _build_implementing_retry_origin_by_phase()
 
 
 def _latest_reject_stage_for_implementing(root: Path, task_id: str) -> PipelineState | None:

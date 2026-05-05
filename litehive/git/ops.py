@@ -862,8 +862,12 @@ def _clean_commit_text(value: str) -> str:
     does an exact-string compare to decide whether the operator
     has overridden the message.
     """
-    lines = [line.rstrip() for line in value.strip().splitlines()]
-    return "\n".join(lines).strip()
+    stripped = value.strip()
+    raw_lines = stripped.splitlines()
+    cleaned: list[str] = []
+    for line in raw_lines:
+        cleaned.append(line.rstrip())
+    return "\n".join(cleaned).strip()
 
 
 def _metadata_body(task: TaskRecord) -> list[str]:
@@ -885,8 +889,25 @@ def _metadata_body(task: TaskRecord) -> list[str]:
         lines.extend(["", "Goal:", goal])
     if task.acceptance_criteria:
         lines.extend(["", "Acceptance criteria:"])
-        lines.extend(f"- {_clean_commit_text(item)}" for item in task.acceptance_criteria if _clean_commit_text(item))
+        lines.extend(_acceptance_criteria_bullets(task.acceptance_criteria))
     return lines
+
+
+def _acceptance_criteria_bullets(criteria: list[str]) -> list[str]:
+    """
+    Format task acceptance criteria as commit-body bullet lines.
+
+    Each criterion runs through :func:`_clean_commit_text` to
+    normalize whitespace, and any criterion that goes empty after
+    cleaning is dropped so the commit body never has a stray
+    ``"- "`` placeholder. Caller: :func:`_metadata_body`.
+    """
+    bullets: list[str] = []
+    for item in criteria:
+        cleaned = _clean_commit_text(item)
+        if cleaned:
+            bullets.append(f"- {cleaned}")
+    return bullets
 
 
 def generated_completion_commit_message(task: TaskRecord, detail: str | None = None) -> str:

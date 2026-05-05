@@ -95,7 +95,8 @@ def _switch_activity_entry_message(
     ]
     if prior_work_paths:
         lines.append("prior_work:")
-        lines.extend(f"- {path}" for path in prior_work_paths)
+        for path in prior_work_paths:
+            lines.append(f"- {path}")
     else:
         lines.append("prior_work: no prior subagent artifacts recorded")
     return "\n".join(lines)

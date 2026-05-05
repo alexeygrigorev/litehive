@@ -195,7 +195,11 @@ def _load_setting_rows(connection: sqlite3.Connection) -> dict[str, Any]:
     rather than at each call site.
     """
     rows = connection.execute("SELECT key, value_json FROM runtime_settings").fetchall()
-    return {str(row["key"]): _json_loads(str(row["value_json"])) for row in rows}
+    parsed: dict[str, Any] = {}
+    for row in rows:
+        key = str(row["key"])
+        parsed[key] = _json_loads(str(row["value_json"]))
+    return parsed
 
 
 def bootstrap_runtime_settings(workspace: Workspace, config_data: Mapping[str, Any] | None = None) -> None:

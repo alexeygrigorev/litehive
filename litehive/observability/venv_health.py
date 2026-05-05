@@ -137,11 +137,29 @@ def daemon_broken_venv_message(workspace_root: Path, findings: list[BrokenVenvEx
     operator sees every broken venv plus a fix for each in
     one block.
     """
+    bullets = _broken_venv_bullets(workspace_root, findings)
     lines = [
         "broken virtualenv entrypoints blocked pool start:",
-        *[f"- {broken_venv_issue_message(workspace_root, finding)}" for finding in findings],
+        *bullets,
     ]
     return "\n".join(lines)
+
+
+def _broken_venv_bullets(
+    workspace_root: Path,
+    findings: list[BrokenVenvExecutable],
+) -> list[str]:
+    """
+    Format each broken-venv finding as a bullet line.
+
+    Threads ``workspace_root`` so :func:`broken_venv_issue_message`
+    can produce paths relative to the workspace where useful.
+    Caller: :func:`daemon_broken_venv_message`.
+    """
+    bullets: list[str] = []
+    for finding in findings:
+        bullets.append(f"- {broken_venv_issue_message(workspace_root, finding)}")
+    return bullets
 
 
 def _venv_bin_dir(venv_path: Path) -> Path:

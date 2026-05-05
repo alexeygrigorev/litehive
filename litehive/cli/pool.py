@@ -14,10 +14,11 @@ def task_stage_outcomes(root, task_id, slug):
     but unused — the SQLite report store keys reports by task id.
     """
     del slug
-    return [
-        f"{report.pipeline_state}={report.verdict}"
-        for report in load_stage_reports_for_task_id(Workspace.from_path(root), task_id)
-    ]
+    reports = load_stage_reports_for_task_id(Workspace.from_path(root), task_id)
+    outcomes: list[str] = []
+    for report in reports:
+        outcomes.append(f"{report.pipeline_state}={report.verdict}")
+    return outcomes
 
 
 def _pool_task_report_entry(

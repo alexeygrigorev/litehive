@@ -209,12 +209,30 @@ def _unexpected_dirty_paths(
         if "$tmpdir" in raw or raw.startswith("/tmp/"):
             continue
         if raw.startswith(".litehive/"):
-            if not any(raw == str(path) or raw.startswith(f"{path}/") for path in allowed_paths):
+            if not _path_is_within_allowed_paths(raw, allowed_paths):
                 continue
-        if any(raw == str(path) or raw.startswith(f"{path}/") for path in allowed_paths):
+        if _path_is_within_allowed_paths(raw, allowed_paths):
             continue
         unexpected.append(raw)
     return unexpected
+
+
+def _path_is_within_allowed_paths(raw: str, allowed_paths) -> bool:
+    """
+    True when ``raw`` exactly equals or sits beneath any allowed path.
+
+    Compares each ``allowed_paths`` entry as both an exact match and
+    a directory prefix so ``foo/bar`` is recognized as inside an
+    allowed ``foo`` entry. Caller:
+    :func:`_unexpected_dirty_paths_outside_task_scope`.
+    """
+    for path in allowed_paths:
+        path_str = str(path)
+        if raw == path_str:
+            return True
+        if raw.startswith(f"{path_str}/"):
+            return True
+    return False
 
 
 def _task_can_resume_with_owned_dirty_paths(
