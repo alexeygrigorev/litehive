@@ -485,38 +485,38 @@ def record_recovery_success(state: TaskState, event: Event) -> StateDelta:
     )
 
 
-def inc_stage_retry(stage: PipelineState, retry_target_stage: PipelineState | None = None) -> EffectFn:
-    """Effect for reject-retry rules.
+@dataclass(frozen=True)
+class inc_stage_retry:
+    """Bump the stage's retry counter AND capture the rejection so the next agent visit can surface it in its prompt."""
 
-    Bumps the stage's retry counter AND captures the rejection so the next
-    agent visit can surface it in its prompt.
-    """
+    stage: PipelineState
+    retry_target_stage: PipelineState | None = None
 
-    def _effect(state: TaskState, event: Event) -> StateDelta:
+    def __call__(self, state: TaskState, event: Event) -> StateDelta:
         return _rejection_tracking_delta(
             state,
             event,
-            stage=stage,
+            stage=self.stage,
             increment_retry=True,
-            retry_target_stage=retry_target_stage,
+            retry_target_stage=self.retry_target_stage,
         )
 
-    return _effect
 
-
-def remember_rejection(stage: PipelineState, retry_target_stage: PipelineState | None = None) -> EffectFn:
+@dataclass(frozen=True)
+class remember_rejection:
     """Capture a rejection for a downstream prompt without bumping retries."""
 
-    def _effect(state: TaskState, event: Event) -> StateDelta:
+    stage: PipelineState
+    retry_target_stage: PipelineState | None = None
+
+    def __call__(self, state: TaskState, event: Event) -> StateDelta:
         return _rejection_tracking_delta(
             state,
             event,
-            stage=stage,
+            stage=self.stage,
             increment_retry=False,
-            retry_target_stage=retry_target_stage,
+            retry_target_stage=self.retry_target_stage,
         )
-
-    return _effect
 
 
 def _rejection_tracking_delta(
@@ -550,19 +550,22 @@ def _rejection_tracking_delta(
     )
 
 
-def fail_rejection_loop(stage: PipelineState, retry_target_stage: PipelineState) -> EffectFn:
-    """Effect factory for the rule that fires when reviewer rejects keep
-    bouncing the task back to implementing without progress. Records the
-    final rejection, advances the loop counter one last time, and marks
-    the task failed with `rejection_loop_detected`. Wired in by
-    `retry_epoch_rules` for testing/accepting."""
-    def _effect(state: TaskState, event: Event) -> StateDelta:
+@dataclass(frozen=True)
+class fail_rejection_loop:
+    """Mark the task failed when reviewer rejects keep bouncing it back without progress; wired in by ``retry_epoch_rules`` for testing/accepting."""
+
+    stage: PipelineState
+    retry_target_stage: PipelineState
+
+    def __call__(self, state: TaskState, event: Event) -> StateDelta:
         rejection = _rejection_from_event(state, event)
         if rejection is not None:
-            set_rej = (stage, rejection)
+            set_rej = (self.stage, rejection)
         else:
             set_rej = None
-        rejection_loop_delta = _rejection_loop_delta(state, event, retry_target_stage=retry_target_stage)
+        rejection_loop_delta = _rejection_loop_delta(
+            state, event, retry_target_stage=self.retry_target_stage
+        )
         if isinstance(event, Reject):
             message = event.reason
         else:
@@ -574,8 +577,6 @@ def fail_rejection_loop(stage: PipelineState, retry_target_stage: PipelineState)
             failed_reason=FailedReason.REJECTION_LOOP_DETECTED,
             failed_message=message,
         )
-
-    return _effect
 
 
 def clear_completed_rejection_loop(state: TaskState, event: Event) -> StateDelta:
@@ -613,19 +614,17 @@ def stash_conflict_files(state: TaskState, event: Event) -> StateDelta:
     )
 
 
-def fail(reason: FailedReason) -> EffectFn:
-    """Effect factory for every rule that drives the task into `FAILED`.
-    Captures the reviewer's last verdict, records a stage-retry-exhausted
-    failure summary when applicable, and — if the failure happened while
-    the recovery agent was running — appends a terminated `RecoveryOutcome`
-    plus a human-readable explanation. Used for terminal rejects, retry
-    exhaustion, time budget hits, and recovery-agent failures."""
-    if isinstance(reason, FailedReason):
-        normalized_reason = reason
-    else:
-        normalized_reason = FailedReason(reason)
+@dataclass(frozen=True)
+class fail:
+    """Drive the task into ``FAILED`` and record the cause; used for terminal rejects, retry exhaustion, time-budget hits, and recovery-agent failures."""
 
-    def _effect(state: TaskState, event: Event) -> StateDelta:
+    reason: FailedReason
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.reason, FailedReason):
+            object.__setattr__(self, "reason", FailedReason(self.reason))
+
+    def __call__(self, state: TaskState, event: Event) -> StateDelta:
         rejection = _rejection_from_event(state, event)
         if rejection is not None:
             set_rej = (state.stage, rejection)
@@ -659,24 +658,24 @@ def fail(reason: FailedReason) -> EffectFn:
             if trigger is not None:
                 outcome = RecoveryOutcome(
                     trigger=trigger,
-                    recovery_verdict=_recovery_verdict_for_terminal_event(event, normalized_reason),
+                    recovery_verdict=_recovery_verdict_for_terminal_event(event, self.reason),
                     disposition=RecoveryDisposition.TERMINATED,
-                    reason_code=normalized_reason.value,
+                    reason_code=self.reason.value,
                     message=message,
                 )
-                explanation = _recovery_failure_explanation(trigger, normalized_reason, message)
+                explanation = _recovery_failure_explanation(trigger, self.reason, message)
         return StateDelta(
             set_last_rejection=set_rej,
             set_consecutive_same_hook_rejects=hook_delta.set_consecutive_same_hook_rejects,
             set_last_hook_reject_fingerprint=hook_delta.set_last_hook_reject_fingerprint,
             clear_hook_reject_tracking=hook_delta.clear_hook_reject_tracking,
             set_hook_reject_recovery_invoked=hook_delta.set_hook_reject_recovery_invoked,
-            failed_reason=normalized_reason,
+            failed_reason=self.reason,
             failed_message=message,
             record_failed_run=_stage_retry_exhausted_record(
                 state,
                 event,
-                failed_reason=normalized_reason,
+                failed_reason=self.reason,
                 message=message,
             ),
             append_recovery_outcome=outcome,
@@ -684,8 +683,6 @@ def fail(reason: FailedReason) -> EffectFn:
             clear_rejection_loop=True,
             set_recovery_failure_explanation=explanation,
         )
-
-    return _effect
 
 
 def exhaust_recovery_budget(state: TaskState, event: Event) -> StateDelta:
