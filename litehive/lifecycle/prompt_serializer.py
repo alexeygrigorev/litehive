@@ -61,23 +61,23 @@ SECTION_SEP = "\n"
 def serialize_prompt(
     prompt: AgentPrompt,
     task_record: TaskRecord | None,
-    workspace_root: Path | None = None,
+    workspace_root: Path,
 ) -> str:
     """Render the typed prompt + task record into the engine-facing string.
 
     ``task_record`` is optional so tests don't need to construct one;
     if ``None``, the goal/acceptance/plan/constraints sections are
-    omitted with placeholders. ``workspace_root`` is optional and used
-    for two things: (1) fall back to ``get_task()`` if the caller
-    didn't already resolve the TaskRecord, and (2) load the task's
-    activity history so the next agent visit sees previous stage
-    verdicts.
+    omitted with placeholders. ``workspace_root`` is the repo root and
+    is used for two things: (1) fall back to ``get_task()`` if the
+    caller didn't already resolve the TaskRecord, and (2) load the
+    task's activity history so the next agent visit sees previous
+    stage verdicts.
     """
-    if task_record is None and workspace_root is not None:
+    if task_record is None:
         task_record = get_task(workspace_root, prompt.task_id)
 
     activity = prompt.activity or []
-    if not activity and workspace_root is not None and task_record is not None:
+    if not activity and task_record is not None:
         activity = _load_task_activity_history(workspace_root, task_record)
 
     sections: list[str] = []

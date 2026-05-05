@@ -97,25 +97,21 @@ class RecoveryAgent(RoleAgent):
         failed_subagent_diagnostics: dict[str, Any] | None = None
         scope_analysis: dict[str, Any] | None = None
 
-        if task_record is None and self.prompt_context and self.prompt_context.workspace_root:
-            task_record = get_task_record(self.prompt_context.workspace_root, state.task_id)
-        if self.prompt_context is None:
-            root = None
-        else:
-            root = self.prompt_context.workspace_root
-        if root is not None:
-            try:
-                litehive_source_path, recovery_execution_root = _recovery_source_checkout(root)
-            except (OSError, ValueError) as exc:
-                recovery_execution_root = str(root)
-                recovery_config_diagnostic = _recovery_source_checkout_diagnostic(root, exc)
-        failed_subagent_diagnostics = _failed_subagent_diagnostics_payload(root, task_record)
+        root = self.prompt_context.workspace_root
+        if task_record is None:
+            task_record = get_task_record(root, state.task_id)
+        try:
+            litehive_source_path, recovery_execution_root = _recovery_source_checkout(root)
+        except (OSError, ValueError) as exc:
+            recovery_execution_root = str(root)
+            recovery_config_diagnostic = _recovery_source_checkout_diagnostic(root, exc)
+        if task_record is not None:
+            failed_subagent_diagnostics = _failed_subagent_diagnostics_payload(root, task_record)
         recovery_history = _merged_recovery_history_payload(state, task_record)
         repeated_recovery_fingerprint = _repeated_recovery_fingerprint_payload(trigger, recovery_history)
 
         # Analyze scope changes to distinguish operator cleanup from SWE scope creep
-        if root is not None:
-            scope_analysis = analyze_scope_changes(root)
+        scope_analysis = analyze_scope_changes(root)
 
         return RecoveryPrompt(
             role=base.role,
@@ -279,7 +275,7 @@ def _repeated_recovery_fingerprint_payload(
     }
 
 
-def _recovery_source_checkout(root: Path | None) -> tuple[str | None, str | None]:
+def _recovery_source_checkout(root: Path) -> tuple[str | None, str | None]:
     """Resolve the Litehive source checkout the recovery agent should patch in, separate from the task workspace.
 
     Recovery fixes Litehive infrastructure bugs, not the task code, so it
@@ -287,8 +283,6 @@ def _recovery_source_checkout(root: Path | None) -> tuple[str | None, str | None
     is set. Returns the raw configured value plus the directory the agent
     should treat as its execution root.
     """
-    if root is None:
-        return None, None
     config = load_config(root)
     raw_source = str(config.litehive_source_path or "").strip() or None
     if raw_source is None:
@@ -317,7 +311,7 @@ def _recovery_source_checkout_diagnostic(root: Path, exc: OSError | ValueError) 
     }
 
 
-def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) -> dict[str, Any] | None:
+def _failed_subagent_diagnostics_payload(root: Path, task_record: Any) -> dict[str, Any] | None:
     """Collect the failed subagent's session, report, transcript, stdout, stderr, and exit code for the recovery prompt.
 
     Recovery diagnosis depends on knowing exactly what the prior agent
@@ -325,8 +319,6 @@ def _failed_subagent_diagnostics_payload(root: Path | None, task_record: Any) ->
     together the runtime state, the persisted SubagentRef, and the
     on-disk artifacts under the latest subagent base directory.
     """
-    if root is None or task_record is None:
-        return None
     subagent_base = latest_subagent_base(root, task_record)
     if subagent_base is None or not subagent_base.exists():
         return None

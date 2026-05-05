@@ -135,9 +135,9 @@ class SubagentStartupError(RuntimeError):
 class SubagentManager(SessionMixin):
     """Run external CLI subagents inside a task-scoped folder."""
 
-    def __init__(self, root: Path, execution_root: Path | None = None) -> None:
+    def __init__(self, root: Path, execution_root: Path) -> None:
         self.root = root.resolve()
-        self.execution_root = (execution_root or root).resolve()
+        self.execution_root = execution_root.resolve()
         self.config = load_config(self.root)
         self.sandbox = SandboxLauncher(self.root, self.config)
         self._stream_offsets: dict[str, int] = {}

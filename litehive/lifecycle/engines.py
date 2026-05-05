@@ -55,24 +55,19 @@ class ConfigBackedEngineSelector:
         self,
         config: LitehiveConfig,
         engine_factory: EngineFactory,
-        workspace_root: Path | None = None,
+        workspace_root: Path,
         engine_override: str | None = None,
         model_override: str | None = None,
         check_quota: bool = True,
     ) -> None:
         self.config = config
         self.engine_factory = engine_factory
-        if workspace_root is not None:
-            self.workspace_root = workspace_root.resolve()
-        else:
-            self.workspace_root = None
+        self.workspace_root = workspace_root.resolve()
         self.engine_override = engine_override
         self.model_override = model_override
         self.check_quota = check_quota
 
     def _selection_task(self, state: TaskState, node_name: PipelineState) -> TaskRecord | None:
-        if self.workspace_root is None:
-            return None
         if getattr(state, "task_id", None):
             task = get_task(self.workspace_root, state.task_id)
             if task is not None:

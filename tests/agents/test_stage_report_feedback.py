@@ -146,7 +146,7 @@ def test_subagent_manager_keeps_full_transcript_artifacts(
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Keep full transcript artifacts")
-    manager = SubagentManager(tmp_path)
+    manager = SubagentManager(tmp_path, execution_root=tmp_path)
     transcript = "full transcript\n" + ("z" * (FEEDBACK_CAP + 400))
 
     class FakeEngine:

@@ -26,7 +26,7 @@ class PromptContext:
       django, …) that can add per-stage instruction blocks.
     """
 
-    workspace_root: Path | None = None
+    workspace_root: Path
     startup_guidance: dict[str, list[str]] = field(default_factory=dict)
     profile_overlay: ProcessProfile | None = None
 
@@ -72,7 +72,7 @@ class RoleAgent(AgentNode):
         self,
         selector: EngineSelector,
         session_provider: SessionProvider,
-        prompt_context: PromptContext | None = None,
+        prompt_context: PromptContext,
         retry_budget: int = 3,
         retry_on: tuple[str, ...] = ("execution_limit", "timeout"),
         retry_backoff_seconds: float = 0.0,
@@ -91,7 +91,7 @@ class RoleAgent(AgentNode):
             retry_backoff_multiplier=retry_backoff_multiplier,
             grace_period_seconds=grace_period_seconds,
         )
-        self.prompt_context = prompt_context or PromptContext()
+        self.prompt_context = prompt_context
 
     def build_prompt(self, state: TaskState) -> AgentPrompt:
         """Assemble the typed prompt payload every stage agent receives at turn start.
@@ -131,8 +131,6 @@ class RoleAgent(AgentNode):
         if self.NODE_NAME != PipelineState.IMPLEMENTING:
             return fallback
         root = self.prompt_context.workspace_root
-        if root is None:
-            return fallback
         rejection_stage = _latest_reject_stage_for_implementing(root, state.task_id)
         if rejection_stage is None:
             return fallback
@@ -146,8 +144,6 @@ class RoleAgent(AgentNode):
         """
         after_phase = f"after_{self.NODE_NAME}"
         root = self.prompt_context.workspace_root
-        if root is None:
-            return []
         try:
             from litehive.config.loading import load_config  # noqa: PLC0415
 
@@ -224,8 +220,6 @@ class RoleAgent(AgentNode):
     def _load_overlay_md(self, key: str) -> str | None:
         """Read the per-workspace ``.litehive/agents/{key}.md`` overlay if present; this file fully replaces startup guidance for that key."""
         root = self.prompt_context.workspace_root
-        if root is None:
-            return None
         md_path = root / ".litehive" / "agents" / f"{key}.md"
         if not md_path.is_file():
             return None
