@@ -22,7 +22,7 @@ from typing import Any
 from pydantic import ValidationError
 import yaml
 
-from litehive.domain.common import PipelineState, TaskStage
+from litehive.domain.common import PipelineState, TaskStage, pipeline_stage_key
 from litehive.domain.task import TaskRecord
 from litehive.state.records import get_task
 from litehive.tasks.activity import load_task_activity
@@ -482,18 +482,6 @@ def _compact_list(items: list[str], *, limit: int, separator: str = ", ") -> str
     return f"{shown}{separator}+{len(items) - limit} more"
 
 
-def _pipeline_stage_key(name: str | None) -> str | None:
-    if name in {"before_grooming", "grooming", "after_grooming"}:
-        return TaskStage.GROOMING
-    if name in {"before_implementing", "implementing", "after_implementing"}:
-        return TaskStage.IMPLEMENTING
-    if name in {"before_testing", "testing", "after_testing"}:
-        return TaskStage.TESTING
-    if name in {"before_accepting", "accepting", "after_accepting"}:
-        return TaskStage.ACCEPTING
-    if name in {"before_commit", "commit", "after_commit", "merge_resolving"}:
-        return TaskStage.COMMIT_TO_GIT
-    return name
 
 
 def _entry_sources(entry: dict[str, Any]) -> set[str]:
@@ -520,8 +508,8 @@ def _matches_last_rejection(entry: dict[str, Any], last_rejection: dict[str, Any
     if rejection_source and rejection_source not in _entry_sources(entry):
         return False
 
-    rejection_stage = _pipeline_stage_key(str(last_rejection.get("raised_at_phase") or "").strip() or None)
-    entry_stage = _pipeline_stage_key(str(entry.get("stage") or "").strip() or None)
+    rejection_stage = pipeline_stage_key(str(last_rejection.get("raised_at_phase") or "").strip() or None)
+    entry_stage = pipeline_stage_key(str(entry.get("stage") or "").strip() or None)
     if rejection_stage and entry_stage and rejection_stage != entry_stage:
         return False
 

@@ -4,7 +4,7 @@ from typing import Any
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_report, load_subagent_session
 from litehive.config.loading import load_config
-from litehive.domain.common import PipelineState, pipeline_stage_key as _pipeline_stage_key
+from litehive.domain.common import PipelineState, pipeline_stage_key
 from litehive.domain.runtime import RuntimeRecoveryOutcome
 from litehive.lifecycle.events import Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
 from litehive.lifecycle.nodes.agent import AgentVerdict
@@ -189,8 +189,8 @@ def _merged_recovery_history_payload(state: TaskState, task_record: Any) -> list
 
 
 def _same_recovery_path(current_trigger: Any, prior: dict[str, Any]) -> bool:
-    current_origin = _pipeline_stage_key(current_trigger.origin_stage)
-    prior_origin = _pipeline_stage_key(prior.get("origin_stage"))
+    current_origin = pipeline_stage_key(current_trigger.origin_stage)
+    prior_origin = pipeline_stage_key(prior.get("origin_stage"))
     current_fingerprint = str(current_trigger.failure_fingerprint.fingerprint or "")
     prior_fingerprint = str(prior.get("fingerprint") or "")
     if current_origin != prior_origin:
