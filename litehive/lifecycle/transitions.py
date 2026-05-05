@@ -109,7 +109,9 @@ def evaluate(rules: list[Rule], current: str | PipelineState, event: Event, stat
 
 
 def resume_from_origin(state: TaskState, event: Event) -> PipelineState:
-    e: RecoverySucceeded = event  # type: ignore[assignment]
+    if not isinstance(event, RecoverySucceeded):
+        raise TypeError(f"resume_from_origin expects RecoverySucceeded, got {type(event).__name__}")
+    e = event
     if e.resume == "done":
         return PipelineState.DONE
     if not e.resume:
@@ -123,7 +125,9 @@ def resume_from_origin(state: TaskState, event: Event) -> PipelineState:
 
 
 def resume_from_pre_exec(state: TaskState, event: Event) -> PipelineState:
-    e: PreExecRecoverySucceeded = event  # type: ignore[assignment]
+    if not isinstance(event, PreExecRecoverySucceeded):
+        raise TypeError(f"resume_from_pre_exec expects PreExecRecoverySucceeded, got {type(event).__name__}")
+    e = event
     if e.resume_stage in STAGES:
         return _entry_phase(e.resume_stage)
     return canonical_pipeline_state(e.resume_stage)

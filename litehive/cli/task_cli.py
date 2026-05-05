@@ -27,7 +27,7 @@ from litehive.cli.task_logs_support import (
     show_task_journal,
 )
 from litehive.config.workspace import ensure_workspace
-from litehive.state.records import create_task, get_task, list_tasks as load_tasks, require_task
+from litehive.state.records import create_task, get_task, list_tasks, require_task
 from litehive.domain.common import TaskStatus
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
@@ -53,7 +53,7 @@ def _show_dependency_label(root, task) -> str:
     if not task.depends_on:
         return "-"
 
-    active_statuses = {record.id: record.status for record in load_tasks(root, include_runtime=True, strict=False)}
+    active_statuses = {record.id: record.status for record in list_tasks(root, include_runtime=True, strict=False)}
     labels: list[str] = []
     for dependency_id in task.depends_on:
         if dependency_id in active_statuses:
@@ -185,12 +185,12 @@ def logs(
 
 
 @app.command("list", help="Compact task listing")
-def list_tasks(
+def list_tasks_command(
     workspace: WorkspaceOption = Path.cwd(),
     show_all: Annotated[bool, typer.Option("--all", help="Include done tasks")] = False,
 ) -> int:
     ensure_workspace(workspace)
-    tasks = load_tasks(workspace, strict=False)
+    tasks = list_tasks(workspace, strict=False)
     filtered = []
     for task in tasks:
         if not show_all and task.status == TaskStatus.DONE:

@@ -48,7 +48,6 @@ from litehive.state.records import get_task, list_tasks_state_first
 from litehive.state.persist import load_state
 from litehive.state.records import list_tasks
 from litehive.domain.task_ops import WorkspaceConflictError, WorkspaceRepairSummary
-from litehive.state.persist import load_state as load_runtime_state
 from litehive.worktree.cleanup import collect_managed_worktrees
 from litehive.worktree.inspection import inspect_dirty_worktree_gate
 
@@ -161,7 +160,7 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     end_time = time.perf_counter()
     duration_ms = (end_time - start_time) * 1000
 
-    state = load_runtime_state(workspace)
+    state = load_state(workspace)
     for line in repair_summary_lines(
         summary,
         result_label="repaired",
