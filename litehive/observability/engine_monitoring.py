@@ -22,7 +22,7 @@ from litehive.domain.engine import (
     EngineUsageWindow,
     WorkspaceEngineMonitoring,
 )
-from litehive.state.locking import workspace_mutation_guard
+from litehive.state.locking import workspace_mutation_guard_for_workspace
 from litehive.workspace import Workspace
 
 
@@ -49,7 +49,7 @@ def save_engine_monitoring(workspace: Workspace, monitoring: WorkspaceEngineMoni
     delete + reinsert under that lock is the simplest correct
     way to keep the in-memory aggregate as the source of truth.
     """
-    with workspace_mutation_guard(workspace.root):
+    with workspace_mutation_guard_for_workspace(workspace):
         _save_engine_monitoring_to_db(workspace, monitoring)
 
 
