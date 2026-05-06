@@ -9,8 +9,8 @@ from pathlib import Path
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.common import PipelineState, utcnow
 from litehive.domain.task import TaskRecord, WorkspaceState
-from litehive.state.locking import workspace_lock, workspace_mutation_guard, workspace_mutation_guard_for_workspace
-from litehive.state.store import runtime_store, runtime_store_for_workspace
+from litehive.state.locking import workspace_lock, workspace_mutation_guard_for_workspace
+from litehive.state.store import runtime_store_for_workspace
 from litehive.tasks.audit import TaskAuditEntry
 from litehive.workspace import Workspace
 
@@ -201,6 +201,21 @@ def save_state_without_runner_guard(
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     """
+    Path-based compatibility wrapper for unguarded workspace state persistence.
+    """
+    save_state_without_runner_guard_for_workspace(
+        Workspace.from_path(root),
+        state,
+        audit_entries=audit_entries,
+    )
+
+
+def save_state_without_runner_guard_for_workspace(
+    workspace: Workspace,
+    state: WorkspaceState,
+    audit_entries: list[TaskAuditEntry] | None = None,
+) -> None:
+    """
     Persist workspace state assuming the caller already holds the runner guard.
 
     Used on the runner's hot path so nested mutations do not re-acquire
@@ -208,13 +223,14 @@ def save_state_without_runner_guard(
     entries land in the same SQLite transaction so observers see the
     workspace and the audit advance together.
     """
+    store = runtime_store_for_workspace(workspace)
     if audit_entries:
-        runtime_store(root).save_runtime_transaction(
+        store.save_runtime_transaction(
             workspace_state=state,
             audit_entries=audit_entries,
         )
         return
-    runtime_store(root).save_workspace_state(state)
+    store.save_workspace_state(state)
 
 
 def record_task_completion(root: Path, final_stage: PipelineState | None) -> tuple[int, str | None]:
@@ -312,6 +328,21 @@ def merged_state_for_runner_owned_write(
     protected_task_ids: list[str] | tuple[str, ...] = (),
 ) -> WorkspaceState:
     """
+    Path-based compatibility wrapper for runner-owned state rebasing.
+    """
+    return merged_state_for_runner_owned_write_for_workspace(
+        Workspace.from_path(root),
+        state,
+        protected_task_ids=protected_task_ids,
+    )
+
+
+def merged_state_for_runner_owned_write_for_workspace(
+    workspace: Workspace,
+    state: WorkspaceState,
+    protected_task_ids: list[str] | tuple[str, ...] = (),
+) -> WorkspaceState:
+    """
     Rebase in-memory workspace state onto whatever the persisted state shows.
 
     Preserves the runner's edits to protected tasks while picking up
@@ -319,7 +350,7 @@ def merged_state_for_runner_owned_write(
     rebase prevents the runner from clobbering operator edits that
     landed while a task was in flight.
     """
-    latest_state = load_state(root)
+    latest_state = load_state_for_workspace(workspace)
     merged_state = state.model_copy(deep=True)
     merged_state.queue = _merge_queue_preserving_future_changes(
         desired_queue=state.queue,
@@ -339,6 +370,27 @@ def persist_task_and_state(
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     """
+    Path-based compatibility wrapper for single-task state persistence.
+    """
+    persist_task_and_state_for_workspace(
+        Workspace.from_path(root),
+        task=task,
+        state=state,
+        journal_message=journal_message,
+        protected_task_ids=protected_task_ids,
+        audit_entries=audit_entries,
+    )
+
+
+def persist_task_and_state_for_workspace(
+    workspace: Workspace,
+    task: TaskRecord,
+    state: WorkspaceState,
+    journal_message: str | None = None,
+    protected_task_ids: list[str] | tuple[str, ...] = (),
+    audit_entries: list[TaskAuditEntry] | None = None,
+) -> None:
+    """
     Single-task convenience over ``persist_tasks_and_state``.
 
     The common case used by stage transitions that mutate exactly one
@@ -350,8 +402,8 @@ def persist_task_and_state(
         journal_messages: dict[str, str] | None = {task.id: journal_message}
     else:
         journal_messages = None
-    persist_tasks_and_state(
-        root,
+    persist_tasks_and_state_for_workspace(
+        workspace,
         tasks=[task],
         state=state,
         journal_messages=journal_messages,
@@ -362,6 +414,27 @@ def persist_task_and_state(
 
 def persist_tasks_and_state(
     root: Path,
+    tasks: list[TaskRecord] | tuple[TaskRecord, ...],
+    state: WorkspaceState,
+    journal_messages: dict[str, str] | None = None,
+    protected_task_ids: list[str] | tuple[str, ...] = (),
+    audit_entries: list[TaskAuditEntry] | None = None,
+) -> None:
+    """
+    Path-based compatibility wrapper for task plus workspace state persistence.
+    """
+    persist_tasks_and_state_for_workspace(
+        Workspace.from_path(root),
+        tasks=tasks,
+        state=state,
+        journal_messages=journal_messages,
+        protected_task_ids=protected_task_ids,
+        audit_entries=audit_entries,
+    )
+
+
+def persist_tasks_and_state_for_workspace(
+    workspace: Workspace,
     tasks: list[TaskRecord] | tuple[TaskRecord, ...],
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
@@ -381,24 +454,45 @@ def persist_tasks_and_state(
 
     for task in tasks:
         task.updated_at = utcnow()
-    with workspace_mutation_guard(root):
-        merged_state = merged_state_for_runner_owned_write(
-            root,
+    with workspace_mutation_guard_for_workspace(workspace):
+        merged_state = merged_state_for_runner_owned_write_for_workspace(
+            workspace,
             state=state,
             protected_task_ids=[*protected_task_ids, *[task.id for task in tasks]],
         )
-        runtime_store(root).save_runtime_transaction(
+        runtime_store_for_workspace(workspace).save_runtime_transaction(
             task_intents={task.id: task.to_intent_record() for task in tasks},
             task_states={task.id: task_state_for_storage(task) for task in tasks},
             workspace_state=merged_state,
             task_journal_messages=journal_messages,
             audit_entries=audit_entries,
         )
-        ensure_runtime_ignored(root)
+        ensure_runtime_ignored(workspace.root)
 
 
 def persist_tasks_and_state_without_runner_guard(
     root: Path,
+    tasks: list[TaskRecord] | tuple[TaskRecord, ...],
+    state: WorkspaceState,
+    journal_messages: dict[str, str] | None = None,
+    protected_task_ids: list[str] | tuple[str, ...] = (),
+    audit_entries: list[TaskAuditEntry] | None = None,
+) -> None:
+    """
+    Path-based compatibility wrapper for unguarded task plus state persistence.
+    """
+    persist_tasks_and_state_without_runner_guard_for_workspace(
+        Workspace.from_path(root),
+        tasks=tasks,
+        state=state,
+        journal_messages=journal_messages,
+        protected_task_ids=protected_task_ids,
+        audit_entries=audit_entries,
+    )
+
+
+def persist_tasks_and_state_without_runner_guard_for_workspace(
+    workspace: Workspace,
     tasks: list[TaskRecord] | tuple[TaskRecord, ...],
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
@@ -418,23 +512,44 @@ def persist_tasks_and_state_without_runner_guard(
 
     for task in tasks:
         task.updated_at = utcnow()
-    merged_state = merged_state_for_runner_owned_write(
-        root,
+    merged_state = merged_state_for_runner_owned_write_for_workspace(
+        workspace,
         state=state,
         protected_task_ids=[*protected_task_ids, *[task.id for task in tasks]],
     )
-    runtime_store(root).save_runtime_transaction(
+    runtime_store_for_workspace(workspace).save_runtime_transaction(
         task_intents={task.id: task.to_intent_record() for task in tasks},
         task_states={task.id: task_state_for_storage(task) for task in tasks},
         workspace_state=merged_state,
         task_journal_messages=journal_messages,
         audit_entries=audit_entries,
     )
-    ensure_runtime_ignored(root)
+    ensure_runtime_ignored(workspace.root)
 
 
 def persist_task_and_state_without_runner_guard(
     root: Path,
+    task: TaskRecord,
+    state: WorkspaceState,
+    journal_message: str | None = None,
+    protected_task_ids: list[str] | tuple[str, ...] = (),
+    audit_entries: list[TaskAuditEntry] | None = None,
+) -> None:
+    """
+    Path-based compatibility wrapper for unguarded single-task persistence.
+    """
+    persist_task_and_state_without_runner_guard_for_workspace(
+        Workspace.from_path(root),
+        task=task,
+        state=state,
+        journal_message=journal_message,
+        protected_task_ids=protected_task_ids,
+        audit_entries=audit_entries,
+    )
+
+
+def persist_task_and_state_without_runner_guard_for_workspace(
+    workspace: Workspace,
     task: TaskRecord,
     state: WorkspaceState,
     journal_message: str | None = None,
@@ -452,8 +567,8 @@ def persist_task_and_state_without_runner_guard(
         journal_messages: dict[str, str] | None = {task.id: journal_message}
     else:
         journal_messages = None
-    persist_tasks_and_state_without_runner_guard(
-        root,
+    persist_tasks_and_state_without_runner_guard_for_workspace(
+        workspace,
         tasks=[task],
         state=state,
         journal_messages=journal_messages,

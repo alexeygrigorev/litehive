@@ -28,11 +28,9 @@ from litehive.state.locking import (
     workspace_mutation_guard_for_workspace,
 )
 from litehive.state.persist import (
-    load_state,
     load_state_for_workspace,
-    persist_task_and_state,
-    persist_tasks_and_state,
-    save_state,
+    persist_task_and_state_for_workspace,
+    persist_tasks_and_state_for_workspace,
     save_state_for_workspace,
 )
 from litehive.state.records import (
@@ -122,7 +120,7 @@ def set_active_task(workspace: Workspace, task_id: str | None) -> WorkspaceState
         task = require_task(workspace.root, task_id)
         if task.status == TaskStatus.QUEUED:
             task.status = TaskStatus.IN_PROGRESS
-        persist_task_and_state(workspace.root, task=task, state=state)
+        persist_task_and_state_for_workspace(workspace, task=task, state=state)
         return state
 
 
@@ -153,7 +151,7 @@ def peek_next_task_selection(workspace: Workspace) -> TaskSelection:
         next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace, state)
         if mutated:
             if normalized_tasks:
-                persist_tasks_and_state(workspace.root, tasks=normalized_tasks, state=state)
+                persist_tasks_and_state_for_workspace(workspace, tasks=normalized_tasks, state=state)
             else:
                 save_state_for_workspace(workspace, state)
         return TaskSelection(task=next_task, blocked=blocked)
@@ -190,7 +188,7 @@ def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
         if next_task is None:
             if mutated:
                 if normalized_tasks:
-                    persist_tasks_and_state(workspace.root, tasks=normalized_tasks, state=state)
+                    persist_tasks_and_state_for_workspace(workspace, tasks=normalized_tasks, state=state)
                 else:
                     save_state_for_workspace(workspace, state)
             return TaskSelection(task=None, blocked=blocked)
@@ -243,15 +241,15 @@ def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
             if normalized_tasks:
                 tasks_to_persist = {task.id: task for task in normalized_tasks}
                 tasks_to_persist[next_task.id] = next_task
-                persist_tasks_and_state(
-                    workspace.root,
+                persist_tasks_and_state_for_workspace(
+                    workspace,
                     tasks=list(tasks_to_persist.values()),
                     state=state,
                     protected_task_ids=queue_additions,
                 )
             else:
-                persist_task_and_state(
-                    workspace.root,
+                persist_task_and_state_for_workspace(
+                    workspace,
                     task=next_task,
                     state=state,
                     protected_task_ids=queue_additions,
@@ -489,8 +487,8 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
             task.status = TaskStatus.QUEUED
             enqueue_recovered_task(state, task.id)
             state.active_task_id = None
-            persist_task_and_state(
-                root,
+            persist_task_and_state_for_workspace(
+                workspace,
                 task=task,
                 state=state,
                 journal_message=interruption_journal_message(task),
@@ -505,8 +503,8 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
             task.status = TaskStatus.QUEUED
             enqueue_recovered_task(state, task.id)
             state.active_task_id = None
-            persist_task_and_state(
-                root,
+            persist_task_and_state_for_workspace(
+                workspace,
                 task=task,
                 state=state,
                 journal_message=f"Restored untouched active task to queue at `{task.pipeline_status}`.",
@@ -525,8 +523,8 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
                 task.status = TaskStatus.QUEUED
                 enqueue_recovered_task(state, task.id)
             state.active_task_id = None
-            persist_task_and_state(
-                root,
+            persist_task_and_state_for_workspace(
+                workspace,
                 task=task,
                 state=state,
                 journal_message=interruption_journal_message(task),
