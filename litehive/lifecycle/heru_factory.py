@@ -36,7 +36,7 @@ from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.container import build_container, build_subagent_manager, build_workspace
 from litehive.domain.agent import EngineFailure
-from litehive.domain.common import OutcomeReasonCode, PipelineState, TaskStage, cap_feedback
+from litehive.domain.common import OutcomeReasonCode, PipelineState, TaskStage, Verdict, cap_feedback
 from litehive.domain.reports import StageReport, TaskActivityStage, canonical_report_pipeline_state
 from litehive.domain.lifecycle_deltas import recovery_trigger_from_event
 from litehive.git.ops import GitError, is_git_repo, status_porcelain
@@ -128,13 +128,13 @@ class _NullSessions:
         del task_id, node_name, engine_name, session
 
 
-def _allowed_verdicts_for_stage(stage: TaskActivityStage) -> set[str]:
+def _allowed_verdicts_for_stage(stage: TaskActivityStage) -> set[Verdict]:
     """Verdict vocabularies the journal reader accepts when scanning for the
     agent's submission. Recovery has its own routing verbs (resume/advance/...);
     every other stage only emits pass/reject."""
     if stage == PipelineState.RECOVERING:
-        return {"resume", "advance", "done", "budget_hit", "reject"}
-    return {"pass", "reject"}
+        return {Verdict.RESUME, Verdict.ADVANCE, Verdict.DONE, Verdict.BUDGET_HIT, Verdict.REJECT}
+    return {Verdict.PASS, Verdict.REJECT}
 
 
 def _execution_checkout_path(workspace_root: Path, task) -> Path:
@@ -280,7 +280,7 @@ def _rewrite_hallucinated_implementing_pass(
         ),
     )
     return AgentVerdict(
-        outcome="reject",
+        outcome=Verdict.REJECT,
         reason=reason,
         metadata={
             "reason_code": reason_code,
@@ -358,7 +358,7 @@ def latest_verdict_after(
     if latest is None:
         return None
     changed_files = normalized_files_changed(latest.files_changed)
-    if stage == TaskStage.IMPLEMENTING and latest.verdict == "pass":
+    if stage == TaskStage.IMPLEMENTING and latest.verdict == Verdict.PASS:
         checkout, worktree_status = execution_checkout_status(workspace_root, task)
         if worktree_status == [] and changed_files:
             return _rewrite_hallucinated_implementing_pass(
@@ -376,7 +376,7 @@ def latest_verdict_after(
             "test_results": _extract_test_results(latest.message or ""),
         },
     }
-    if latest.verdict == "reject":
+    if latest.verdict == Verdict.REJECT:
         classification = latest.verdict_classification
     else:
         classification = None

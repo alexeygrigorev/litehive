@@ -6,6 +6,7 @@ from typing import Iterable
 
 from pydantic import ValidationError
 
+from litehive.domain.common import Verdict
 from litehive.domain.reports import TaskActivityEntry, TaskActivityStage
 from litehive.domain.task import TaskRecord
 from litehive.tasks.event_log import append_task_event
@@ -105,7 +106,7 @@ def latest_task_activity_entry(
     role: str | None = None,
     stage: TaskActivityStage | None = None,
     source_subagent_id: str | None = None,
-    verdicts: Iterable[str] | None = None,
+    verdicts: Iterable[str | Verdict] | None = None,
     after: datetime | None = None,
 ) -> TaskActivityEntry | None:
     """
@@ -118,7 +119,7 @@ def latest_task_activity_entry(
     if verdicts is None:
         allowed_verdicts = None
     else:
-        allowed_verdicts = set(verdicts)
+        allowed_verdicts = {str(verdict) for verdict in verdicts}
     for entry in reversed(load_task_activity(workspace, task)):
         if role is not None and entry.role != role:
             continue
