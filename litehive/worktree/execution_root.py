@@ -51,7 +51,9 @@ def resolve_task_execution_root(
     if not is_git_repo(root):
         return root
 
-    workspace = build_container(root).workspace
+    container = build_container(root)
+    workspace = container.workspace
+    merge_config = config or container.config
     recorded_path = get_task_worktree_path(task)
     worktree_path = resolve_recorded_worktree_path(root, recorded_path)
     if worktree_path is not None:
@@ -68,7 +70,7 @@ def resolve_task_execution_root(
                         task,
                         f"[worktree] Rebase onto {main_head[:8]} failed. Launching merge agent.",
                     )
-                    run_worktree_merge_agent(workspace, worktree_path, task, main_head, config=config)
+                    run_worktree_merge_agent(workspace, worktree_path, task, main_head, config=merge_config)
             return worktree_path
 
     worktree_path = task_worktree_path(root, task)
