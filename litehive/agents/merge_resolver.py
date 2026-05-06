@@ -9,8 +9,8 @@ agent-running stays in one place. All git plumbing goes through
 from pathlib import Path
 
 from litehive.agents.manager import SubagentManager
-from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
+from litehive.container import build_container
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import GitError, merge_abort, merge_no_edit, unmerged_files
 from litehive.tasks.journal import append_journal
@@ -69,7 +69,7 @@ def run_worktree_merge_agent(
         task,
         f"[worktree] Merge conflict on {len(conflicts)} file(s). Launching merge agent.",
     )
-    cfg = config or load_config(root)
+    cfg = config or build_container(root).config
     try:
         engine_name, model = resolve_recovery_engine(root, task, cfg)
     except GitError as exc:
