@@ -19,11 +19,11 @@ from litehive.cli.task_debug_support import (
     render_task_evidence_for_workspace,
 )
 from litehive.cli.task_logs_support import (
-    follow_active_subagent,
-    list_daemon_sessions,
+    follow_active_subagent_for_workspace,
+    list_daemon_sessions_for_workspace,
     list_task_subagents_for_workspace,
-    load_task_with_runtime,
-    show_latest_daemon_log,
+    load_task_with_runtime_for_workspace,
+    show_latest_daemon_log_for_workspace,
     show_latest_subagent_for_workspace,
     show_task_journal_for_workspace,
 )
@@ -254,22 +254,22 @@ def logs(
     inside the task branch.
     """
     ensure_workspace(workspace)
+    workspace_obj = build_workspace(workspace)
     if follow:
-        return follow_active_subagent(workspace, task_id=task_id)
+        return follow_active_subagent_for_workspace(workspace_obj, task_id=task_id)
     if daemon:
-        return list_daemon_sessions(workspace)
+        return list_daemon_sessions_for_workspace(workspace_obj)
     if task_id:
-        task = load_task_with_runtime(workspace, task_id)
+        task = load_task_with_runtime_for_workspace(workspace_obj, task_id)
         if task is None:
             print(f"task not found: {task_id}")
             return 1
-        workspace_obj = build_workspace(workspace)
         if agent:
             if all_:
                 return list_task_subagents_for_workspace(workspace_obj, task)
             return show_latest_subagent_for_workspace(workspace_obj, task)
         return show_task_journal_for_workspace(workspace_obj, task)
-    return show_latest_daemon_log(workspace)
+    return show_latest_daemon_log_for_workspace(workspace_obj)
 
 
 @app.command("list", help="Compact task listing")

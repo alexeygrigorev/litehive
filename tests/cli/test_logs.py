@@ -285,8 +285,9 @@ def test_logs_follow_streams_active_stdout_until_subagent_finishes(
 
     resolve_calls = 0
 
-    def fake_resolve_follow_task(root: Path, *, task_id: str | None):
-        del root, task_id
+    def fake_resolve_follow_task(workspace: Workspace, *, task_id: str | None):
+        del task_id
+        assert workspace.root == tmp_path.resolve()
         nonlocal resolve_calls
         resolve_calls += 1
         if resolve_calls == 1:
@@ -298,7 +299,7 @@ def test_logs_follow_streams_active_stdout_until_subagent_finishes(
         task.runtime.execution.active_subagent = None
         return task
 
-    monkeypatch.setattr("litehive.cli.task_logs_support.resolve_follow_task", fake_resolve_follow_task)
+    monkeypatch.setattr("litehive.cli.task_logs_support.resolve_follow_task_for_workspace", fake_resolve_follow_task)
 
     exit_code = _cmd_logs(_ns(tmp_path, follow=True))
     output = capsys.readouterr().out

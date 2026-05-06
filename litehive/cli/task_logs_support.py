@@ -28,6 +28,13 @@ FOLLOW_POLL_SECONDS = 0.1
 
 def show_latest_daemon_log(root: Path) -> int:
     """
+    Path-based compatibility wrapper for latest daemon log display.
+    """
+    return show_latest_daemon_log_for_workspace(Workspace.from_path(root))
+
+
+def show_latest_daemon_log_for_workspace(workspace: Workspace) -> int:
+    """
     Tail the most recent daemon run log.
 
     Operator default for ``task logs`` without a task id; lets the
@@ -35,6 +42,7 @@ def show_latest_daemon_log(root: Path) -> int:
     a session timestamp. Tails the last 40 lines so the output
     fits a terminal page even when the underlying log is large.
     """
+    root = workspace.root
     latest_dir = latest_run_all_log_dir(root)
     log_path = _latest_daemon_log_path(latest_dir)
     if log_path is None:
@@ -48,6 +56,13 @@ def show_latest_daemon_log(root: Path) -> int:
 
 def list_daemon_sessions(root: Path) -> int:
     """
+    Path-based compatibility wrapper for daemon session listing.
+    """
+    return list_daemon_sessions_for_workspace(Workspace.from_path(root))
+
+
+def list_daemon_sessions_for_workspace(workspace: Workspace) -> int:
+    """
     List recent pool sessions with their stop reasons.
 
     Capped at five so the listing stays scannable when many runs
@@ -56,6 +71,7 @@ def list_daemon_sessions(root: Path) -> int:
     the parsed ISO timestamp so log directories can be sorted by
     eye instead of by the compact ``YYYYmmddTHHMMSSZ`` form.
     """
+    root = workspace.root
     logs_root = workspace_path(root.resolve(), "logs", "run-all")
     if not logs_root.exists():
         print("No daemon run logs found.")
@@ -134,6 +150,13 @@ def list_task_subagents_for_workspace(workspace: Workspace, task: TaskRecord) ->
 
 def follow_active_subagent(root: Path, task_id: str | None = None) -> int:
     """
+    Path-based compatibility wrapper for live subagent stdout following.
+    """
+    return follow_active_subagent_for_workspace(Workspace.from_path(root), task_id=task_id)
+
+
+def follow_active_subagent_for_workspace(workspace: Workspace, task_id: str | None = None) -> int:
+    """
     ``tail -f`` analogue for the live subagent stdout.
 
     Lets the operator watch a running stage without leaving the
@@ -143,7 +166,8 @@ def follow_active_subagent(root: Path, task_id: str | None = None) -> int:
     own writer is not synchronous-flushed; a tighter poll just
     burns CPU.
     """
-    task = resolve_follow_task(root, task_id=task_id)
+    root = workspace.root
+    task = resolve_follow_task_for_workspace(workspace, task_id=task_id)
     if task is None:
         ref = None
     else:
@@ -175,7 +199,7 @@ def follow_active_subagent(root: Path, task_id: str | None = None) -> int:
 
     while True:
         position = _print_follow_chunk(stdout_path, position)
-        task = resolve_follow_task(root, task_id=task_id)
+        task = resolve_follow_task_for_workspace(workspace, task_id=task_id)
         if task is None or task.runtime.execution.active_subagent is None:
             position = _print_follow_chunk(stdout_path, position)
             break
@@ -381,6 +405,13 @@ def _format_duration(started_at: object, completed_at: object) -> str:
 
 def resolve_follow_task(root: Path, task_id: str | None) -> TaskRecord | None:
     """
+    Path-based compatibility wrapper for follow-target resolution.
+    """
+    return resolve_follow_task_for_workspace(Workspace.from_path(root), task_id=task_id)
+
+
+def resolve_follow_task_for_workspace(workspace: Workspace, task_id: str | None) -> TaskRecord | None:
+    """
     Pick the task whose stdout ``--follow`` should attach to.
 
     Precedence: explicit id > task with an active subagent > most
@@ -389,6 +420,7 @@ def resolve_follow_task(root: Path, task_id: str | None) -> TaskRecord | None:
     mid-run and land on the obviously interesting task without
     typing its id.
     """
+    root = workspace.root
     if task_id is not None:
         return get_task_record(root, task_id)
     tasks = list_tasks(root, strict=False)
@@ -400,6 +432,13 @@ def resolve_follow_task(root: Path, task_id: str | None) -> TaskRecord | None:
 
 def load_task_with_runtime(root: Path, task_id: str) -> TaskRecord | None:
     """
+    Path-based compatibility wrapper for tolerant task lookup.
+    """
+    return load_task_with_runtime_for_workspace(Workspace.from_path(root), task_id)
+
+
+def load_task_with_runtime_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | None:
+    """
     Tolerant task lookup used by ``task logs <id>``.
 
     Returns ``None`` on missing-runtime/missing-task instead of
@@ -408,7 +447,7 @@ def load_task_with_runtime(root: Path, task_id: str) -> TaskRecord | None:
     the seam where richer runtime hydration can land if the logs
     surface needs it.
     """
-    return get_task_record(root, task_id)
+    return get_task_record(workspace.root, task_id)
 
 
 def _coerce_datetime(value: str | datetime) -> datetime:
