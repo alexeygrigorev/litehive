@@ -12,6 +12,7 @@ status code never accidentally mutates state.
 
 from pathlib import Path, PurePosixPath
 
+from litehive.container import build_container
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
 from litehive.domain.task import TaskRecord
@@ -51,7 +52,7 @@ def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
         return DirtyWorktreeGateReport()
 
     tasks = list_tasks(root, strict=False)
-    workspace = Workspace.from_path(root)
+    workspace = build_container(root).workspace
     if dirty_entries:
         owners = [task for task in tasks if _task_can_resume_with_owned_dirty_paths(workspace, task, dirty_entries)]
         finding = DirtyWorktreeFinding(

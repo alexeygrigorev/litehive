@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import TypedDict
 
 from litehive.attention import append_attention_log
+from litehive.container import build_container
 from litehive.domain.task import TaskRecord
-from litehive.workspace import Workspace
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.domain.worktree import ManagedWorktree
 from litehive.git.ops import GitError, delete_branch, remove_worktree, status_porcelain
@@ -137,7 +137,7 @@ def remove_cleanable_worktrees(root: Path, dry_run: bool = False) -> WorktreeCle
     failures = []
     removed = []
     deferred = []
-    workspace = Workspace.from_path(root)
+    workspace = build_container(root).workspace
 
     for item in candidates:
         try:

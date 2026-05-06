@@ -13,6 +13,7 @@ from pathlib import Path
 
 from litehive.agents.merge_resolver import run_worktree_merge_agent
 from litehive.config.model import LitehiveConfig
+from litehive.container import build_container
 from litehive.domain.task import TaskRecord
 from litehive.fs_cleanup import remove_tree_logged
 from litehive.git.ops import add_worktree, current_head, is_git_repo, rebase_worktree_onto
@@ -22,7 +23,6 @@ from litehive.state.records import (
     set_task_worktree_path,
 )
 from litehive.tasks.journal import append_journal
-from litehive.workspace import Workspace
 from litehive.worktree.paths import (
     ensure_worktree_venv_link,
     resolve_recorded_worktree_path,
@@ -51,7 +51,7 @@ def resolve_task_execution_root(
     if not is_git_repo(root):
         return root
 
-    workspace = Workspace.from_path(root)
+    workspace = build_container(root).workspace
     recorded_path = get_task_worktree_path(task)
     worktree_path = resolve_recorded_worktree_path(root, recorded_path)
     if worktree_path is not None:
