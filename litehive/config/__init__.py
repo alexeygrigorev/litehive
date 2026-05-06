@@ -22,6 +22,6 @@ load the rest of the package, hiding real import dependencies.
 - ``runtime_settings`` — audited per-workspace settings persisted in
   SQLite.
 - ``engine_models`` — engine selection and freeze logic
-  (`select_engine`, `active_engine_freezes`).
+  (`select_engine_for_workspace`, `active_engine_freezes`).
 - ``profiles/`` — process profile loaders, defaults, and rendering.
 """

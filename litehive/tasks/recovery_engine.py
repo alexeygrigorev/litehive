@@ -1,14 +1,13 @@
 """Engine selection for merge-resolution and recovery-style follow-ups."""
 
-from pathlib import Path
-
 from litehive.config.model import LitehiveConfig
 from litehive.git.ops import GitError
 from litehive.domain.task import TaskRecord
+from litehive.workspace import Workspace
 
 
 def resolve_recovery_engine(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     config: LitehiveConfig | None,
 ) -> tuple[str, str | None]:
@@ -21,10 +20,10 @@ def resolve_recovery_engine(
     so an unreachable engine fails loudly instead of silently swapping for
     a different model.
     """
-    # inline: kept so tests can monkey-patch ``select_engine`` on the
+    # inline: kept so tests can monkey-patch ``select_engine_for_workspace`` on the
     # config.engine_models module (the canonical home) and have callers
     # here see it.
-    from litehive.config.engine_models import select_engine  # noqa: PLC0415
+    from litehive.config.engine_models import select_engine_for_workspace  # noqa: PLC0415
 
     if config is None:
         return "codex", None
@@ -33,8 +32,8 @@ def resolve_recovery_engine(
     if config.recovery_engine and config.recovery_engine != "auto":
         engine_override = config.recovery_engine
 
-    selection = select_engine(
-        root,
+    selection = select_engine_for_workspace(
+        workspace,
         task,
         config,
         engine_override=engine_override,

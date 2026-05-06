@@ -69,7 +69,7 @@ def run_worktree_merge_agent(
         f"[worktree] Merge conflict on {len(conflicts)} file(s). Launching merge agent.",
     )
     try:
-        engine_name, model = resolve_recovery_engine(root, task, config)
+        engine_name, model = resolve_recovery_engine(workspace, task, config)
     except GitError as exc:
         append_journal(workspace, task, f"[worktree] Merge agent unavailable: {exc}")
         return

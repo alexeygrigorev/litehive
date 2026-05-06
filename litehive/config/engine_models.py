@@ -11,7 +11,6 @@ freeze map drives both selection and operator-facing displays.
 from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import cast
 
 from heru import get_engine
@@ -36,8 +35,9 @@ def _engine_attempt_order(initial_engine_names: list[str], engine_preference: li
 
     Concatenates the task's initial engine list with the workspace
     preference and dedupes in first-seen order. Reused by
-    :func:`select_engine` and :func:`resolve_engine_attempt_order`
-    so the CLI preview and the actual execution path see the
+    :func:`select_engine_for_workspace` and
+    :func:`resolve_engine_attempt_order` so the CLI preview and the
+    actual execution path see the
     same chain — divergence here would let the operator preview
     one chain and watch a different one run.
     """
@@ -117,7 +117,7 @@ def _dedupe_engine_names(engine_names: list[str]) -> list[str]:
     """
     Preserve first-seen order while dropping duplicates.
 
-    Called by :func:`select_engine` when the caller hands in an
+    Called by :func:`select_engine_for_workspace` when the caller hands in an
     explicit engine list. Callers can be sloppy about dedup
     (e.g. concat'ing overrides with a default) without breaking
     the attempt loop or producing a misleading "tried engine X
@@ -167,31 +167,6 @@ def active_engine_freezes(config: LitehiveConfig) -> dict[str, datetime]:
     return result
 
 
-def persist_engine_freeze_iso(
-    root: Path,
-    engine_name: str,
-    freeze_iso: str,
-    actor: str = "system",
-    source: str = "runtime",
-    reason: str | None = None,
-) -> None:
-    """
-    Write a freeze entry to the audited runtime-settings store.
-
-    Path-based compatibility wrapper. Callers that already have a
-    :class:`Workspace` should use
-    :func:`persist_engine_freeze_iso_for_workspace`.
-    """
-    persist_engine_freeze_iso_for_workspace(
-        Workspace.from_path(root),
-        engine_name=engine_name,
-        freeze_iso=freeze_iso,
-        actor=actor,
-        source=source,
-        reason=reason,
-    )
-
-
 def persist_engine_freeze_iso_for_workspace(
     workspace: Workspace,
     engine_name: str,
@@ -220,29 +195,6 @@ def persist_engine_freeze_iso_for_workspace(
         actor=actor,
         source=source,
         context=context,
-    )
-
-
-def clear_persisted_engine_freeze(
-    root: Path,
-    engine_name: str,
-    actor: str = "system",
-    source: str = "runtime",
-    reason: str | None = None,
-) -> bool:
-    """
-    Remove a freeze entry through the audited store.
-
-    Path-based compatibility wrapper. Callers that already have a
-    :class:`Workspace` should use
-    :func:`clear_persisted_engine_freeze_for_workspace`.
-    """
-    return clear_persisted_engine_freeze_for_workspace(
-        Workspace.from_path(root),
-        engine_name=engine_name,
-        actor=actor,
-        source=source,
-        reason=reason,
     )
 
 
@@ -287,7 +239,7 @@ def _persist_engine_freeze(
 
     Skips the write when the new ISO value matches the existing
     one so we don't spam the audit log with no-op rows on every
-    selection pass. Called by :func:`select_engine` when an
+    selection pass. Called by :func:`select_engine_for_workspace` when an
     engine returns ``limit_reached`` with a reset time; mirroring
     on ``LitehiveConfig`` keeps subsequent selection within the
     same call seeing the freeze without re-reading the database.
@@ -309,7 +261,7 @@ def _clear_engine_freeze(workspace: Workspace, config: LitehiveConfig, engine_na
     """
     Drop a freeze entry from both the audited store and the live config.
 
-    Called by :func:`select_engine` when a previously-frozen
+    Called by :func:`select_engine_for_workspace` when a previously-frozen
     engine's window has lapsed and the quota check now passes;
     the freeze map self-cleans during normal selection so we
     avoid maintaining a separate freeze sweeper. The audited
@@ -410,38 +362,6 @@ def engine_quota_block(
     status = checker()
     reason, reset_at = _quota_block_reason(engine_name, status)
     return reason, _parse_datetime_utc(reset_at)
-
-
-def select_engine(
-    root: Path,
-    task: TaskRecord,
-    config: LitehiveConfig,
-    engine_override: str | None = None,
-    model_override: str | None = None,
-    engine_names: list[str] | None = None,
-    excluded_engine_names: Collection[str] = (),
-    require_available: bool = False,
-    check_quota: bool = True,
-) -> EngineSelection:
-    """
-    Pick the engine and model the next stage will use.
-
-    Path-based compatibility wrapper. Callers that already have a
-    :class:`Workspace` should use :func:`select_engine_for_workspace`
-    so quota freeze persistence does not rebuild workspace
-    dependencies.
-    """
-    return select_engine_for_workspace(
-        Workspace.from_path(root),
-        task,
-        config,
-        engine_override=engine_override,
-        model_override=model_override,
-        engine_names=engine_names,
-        excluded_engine_names=excluded_engine_names,
-        require_available=require_available,
-        check_quota=check_quota,
-    )
 
 
 def select_engine_for_workspace(

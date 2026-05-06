@@ -16,10 +16,8 @@ from typer.testing import CliRunner
 from litehive.cli.app import app
 from litehive.config.engine_models import (
     EngineSelection,
-    clear_persisted_engine_freeze,
     clear_persisted_engine_freeze_for_workspace,
     parse_engine_freeze_until,
-    persist_engine_freeze_iso,
     persist_engine_freeze_iso_for_workspace,
     select_engine_for_workspace,
 )
@@ -408,11 +406,11 @@ def test_engine_freeze_helpers_persist_and_clear_workspace_config(tmp_path: Path
     assert parse_engine_freeze_until("2099-06-15") == "2099-06-15T00:00:00Z"
     assert parse_engine_freeze_until("2099-06-15 14:30") is None
 
-    persist_engine_freeze_iso(tmp_path, engine_name="codex", freeze_iso="2099-06-15T00:00:00Z")
+    persist_engine_freeze_iso_for_workspace(workspace, engine_name="codex", freeze_iso="2099-06-15T00:00:00Z")
     assert load_config(tmp_path).engine_freeze["codex"] == "2099-06-15T00:00:00Z"
 
-    assert clear_persisted_engine_freeze(tmp_path, engine_name="gemini") is False
-    assert clear_persisted_engine_freeze(tmp_path, engine_name="codex") is True
+    assert clear_persisted_engine_freeze_for_workspace(workspace, engine_name="gemini") is False
+    assert clear_persisted_engine_freeze_for_workspace(workspace, engine_name="codex") is True
     assert "codex" not in load_config(tmp_path).engine_freeze
 
     persist_engine_freeze_iso_for_workspace(
@@ -497,7 +495,7 @@ def test_select_engine_records_quota_freeze_and_falls_back(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.config.engine_models import select_engine
+    from litehive.config.engine_models import select_engine_for_workspace
 
     freeze_until = (datetime.now(timezone.utc) + timedelta(days=30)).replace(microsecond=0)
     freeze_iso = freeze_until.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -515,7 +513,7 @@ def test_select_engine_records_quota_freeze_and_falls_back(
 
     monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
 
-    selection = select_engine(tmp_path, task, config)
+    selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config)
 
     assert selection.engine_name == "gemini"
     reloaded = load_config(tmp_path)
@@ -593,7 +591,12 @@ def test_select_engine_skips_current_heru_quota_status_shape(
     monkeypatch.setattr(engine_models, "check_codex_quota", lambda: status)
     monkeypatch.setattr(engine_models, "check_claude_quota", lambda: UsageStatus())
 
-    selection = engine_models.select_engine(tmp_path, task, config, engine_names=["codex", "claude"])
+    selection = engine_models.select_engine_for_workspace(
+        Workspace.from_path(tmp_path),
+        task,
+        config,
+        engine_names=["codex", "claude"],
+    )
 
     assert selection.engine_name == "claude"
     assert [(item.engine_name, item.reason) for item in selection.skipped] == [
@@ -606,7 +609,7 @@ def test_select_engine_skips_active_freeze_without_quota_call(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.config.engine_models import select_engine
+    from litehive.config.engine_models import select_engine_for_workspace
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     ensure_workspace(
@@ -627,7 +630,7 @@ def test_select_engine_skips_active_freeze_without_quota_call(
 
     monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
 
-    selection = select_engine(tmp_path, task, config)
+    selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config)
 
     assert selection.engine_name == "gemini"
     assert quota_calls == ["gemini"]
@@ -637,7 +640,7 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.config.engine_models import select_engine
+    from litehive.config.engine_models import select_engine_for_workspace
 
     past = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
     refreshed = (datetime.now(timezone.utc) + timedelta(days=7)).replace(microsecond=0)
@@ -662,7 +665,7 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
 
     monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
 
-    selection = select_engine(tmp_path, task, config)
+    selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config)
 
     assert selection.engine_name == "gemini"
     assert quota_calls[0] == "codex"
@@ -673,7 +676,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from litehive.config.engine_models import select_engine
+    from litehive.config.engine_models import select_engine_for_workspace
 
     past = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
     ensure_workspace(
@@ -694,7 +697,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
 
     monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
 
-    selection = select_engine(tmp_path, task, config)
+    selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config)
 
     assert selection.engine_name == "codex"
     assert quota_calls == ["codex"]
@@ -786,8 +789,8 @@ def test_recovery_engine_uses_shared_select_engine(
     task = create_task(tmp_path, title="Recovery selection")
     config = load_config(tmp_path)
 
-    def fake_select_engine(root: Path, task: TaskRecord, config: LitehiveConfig, **kwargs) -> EngineSelection:
-        captured["root"] = root
+    def fake_select_engine(workspace: Workspace, task: TaskRecord, config: LitehiveConfig, **kwargs) -> EngineSelection:
+        captured["workspace"] = workspace
         captured["task"] = task
         captured["config"] = config
         captured["kwargs"] = kwargs
@@ -798,20 +801,21 @@ def test_recovery_engine_uses_shared_select_engine(
             skipped=[],
         )
 
-    monkeypatch.setattr("litehive.config.engine_models.select_engine", fake_select_engine)
+    monkeypatch.setattr("litehive.config.engine_models.select_engine_for_workspace", fake_select_engine)
 
-    engine_name, model_name = resolve_recovery_engine(tmp_path, task, config)
+    workspace = Workspace.from_path(tmp_path)
+    engine_name, model_name = resolve_recovery_engine(workspace, task, config)
 
     assert engine_name == "gemini"
     assert model_name == "gemini-2.5-pro"
-    assert captured["root"] == tmp_path
+    assert captured["workspace"] == workspace
     assert captured["task"] == task
     assert captured["config"] == config
     assert captured["kwargs"] == expected_kwargs
 
 
 def test_recovery_auto_engine_respects_shared_selector_blocked_result(tmp_path: Path) -> None:
-    from litehive.config.engine_models import select_engine
+    from litehive.config.engine_models import select_engine_for_workspace
     from litehive.tasks.recovery_engine import resolve_recovery_engine
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -827,13 +831,13 @@ def test_recovery_auto_engine_respects_shared_selector_blocked_result(tmp_path: 
     task = create_task(tmp_path, title="Recovery freeze repro")
     config = load_config(tmp_path)
 
-    selection = select_engine(tmp_path, task, config, require_available=True)
+    selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config, require_available=True)
 
     assert selection.engine_name is None
     assert selection.blocked_reason == "all candidate engines are frozen"
 
     with pytest.raises(GitError, match="all candidate engines are frozen"):
-        resolve_recovery_engine(tmp_path, task, config)
+        resolve_recovery_engine(Workspace.from_path(tmp_path), task, config)
 
 
 @pytest.mark.parametrize(
@@ -849,7 +853,7 @@ def test_recovery_non_auto_branches_skip_frozen_engines(
     default_engine: str,
     selector_kwargs: dict[str, Any],
 ) -> None:
-    from litehive.config.engine_models import select_engine
+    from litehive.config.engine_models import select_engine_for_workspace
     from litehive.tasks.recovery_engine import resolve_recovery_engine
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -865,8 +869,8 @@ def test_recovery_non_auto_branches_skip_frozen_engines(
     task = create_task(tmp_path, title=f"Recovery branch {recovery_engine!r}")
     config = load_config(tmp_path)
 
-    selection = select_engine(tmp_path, task, config, require_available=True, **selector_kwargs)
-    engine_name, _model_name = resolve_recovery_engine(tmp_path, task, config)
+    selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config, require_available=True, **selector_kwargs)
+    engine_name, _model_name = resolve_recovery_engine(Workspace.from_path(tmp_path), task, config)
 
     assert selection.engine_name == "gemini"
     assert engine_name == "gemini"
