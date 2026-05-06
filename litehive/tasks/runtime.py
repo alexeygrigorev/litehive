@@ -23,9 +23,9 @@ from litehive.domain.runtime import (
 from litehive.domain.task import TaskRecord
 
 from litehive.state.records import write_task_runtime, save_task_runtime
-from litehive.state.locking import workspace_lock, workspace_mutation_guard
-from litehive.state.persist import load_state
-from litehive.state.persist import persist_task_and_state
+from litehive.state.locking import workspace_lock, workspace_mutation_guard_for_workspace
+from litehive.state.persist import load_state_for_workspace, persist_task_and_state_for_workspace
+from litehive.workspace import Workspace
 
 
 def idle_stage_state(updated_at: str, stage: str | None = None) -> RuntimeStageState:
@@ -168,6 +168,17 @@ def apply_flag_count_auto_defer(task: TaskRecord) -> None:
 
 def finish_task_run_transition(root: Path, task: TaskRecord, final_status: TaskExecutionStatus | str) -> TaskRecord:
     """
+    Path-based compatibility wrapper for the end-of-run transition.
+    """
+    return finish_task_run_transition_for_workspace(Workspace.from_path(root), task, final_status)
+
+
+def finish_task_run_transition_for_workspace(
+    workspace: Workspace,
+    task: TaskRecord,
+    final_status: TaskExecutionStatus | str,
+) -> TaskRecord:
+    """
     End-of-run transition that reconciles task and queue under one lock.
 
     Called by the orchestration loop when a run terminates (done, paused,
@@ -175,13 +186,14 @@ def finish_task_run_transition(root: Path, task: TaskRecord, final_status: TaskE
     happen atomically rather than leaving the queue and the task record
     briefly disagreeing about who is active.
     """
-    with workspace_mutation_guard(root), workspace_lock(root):
+    root = workspace.root
+    with workspace_mutation_guard_for_workspace(workspace), workspace_lock(root):
         canonical_final_status = (
             final_status if isinstance(final_status, TaskExecutionStatus) else TaskExecutionStatus(final_status)
         )
         apply_flag_count_auto_defer(task)
         clear_task_run_activity(task, execution_status=canonical_final_status)
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         state_changed = False
         if state.active_task_id == task.id:
             state.active_task_id = None
@@ -206,7 +218,7 @@ def finish_task_run_transition(root: Path, task: TaskRecord, final_status: TaskE
         ):
             write_task_runtime(root, task)
             return task
-        persist_task_and_state(root, task=task, state=state)
+        persist_task_and_state_for_workspace(workspace, task=task, state=state)
         return task
 
 
