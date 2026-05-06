@@ -1,8 +1,8 @@
 """Task orchestration entry point.
 
-One function — ``run_task(root, task)`` — that wires up the pipeline
-end-to-end and drives one task through the state machine. It is the
-single boundary the daemon and CLI both go through to start a task.
+``run_task_for_workspace`` wires injected workspace dependencies into the
+pipeline and drives one task through the state machine. ``run_task`` remains
+the path-based process-boundary wrapper used by older callers.
 
 What it does, in order:
 
@@ -24,6 +24,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from litehive.container import build_container
+from litehive.config.model import LitehiveConfig
 from litehive.config.engine_models import resolve_task_rejection_loop_limit, resolve_task_retry_policy
 from litehive.git.ops import GitError
 from litehive.domain.common import PipelineState
@@ -74,6 +75,7 @@ __all__ = [
     "hook_specs_from_config",
     "reconcile_terminal_commit_sha",
     "run_task",
+    "run_task_for_workspace",
 ]
 
 
@@ -118,10 +120,29 @@ def run_task(
     that produces fake ``Engine`` instances and the pipeline will use
     it in place of the real ``heru_engine_factory``.
     """
-    root = root.resolve()
-    container = build_container(root)
-    config = container.config
-    workspace = container.workspace
+    container = build_container(root.resolve())
+    return run_task_for_workspace(
+        container.workspace,
+        container.config,
+        task,
+        engine_factory=engine_factory,
+        engine_override=engine_override,
+        model_override=model_override,
+    )
+
+
+def run_task_for_workspace(
+    workspace: Workspace,
+    config: LitehiveConfig,
+    task: TaskRecord,
+    engine_factory: EngineFactory | None = None,
+    engine_override: str | None = None,
+    model_override: str | None = None,
+) -> ExecutionResult:
+    """
+    Run a single task through the state machine using injected dependencies.
+    """
+    root = workspace.root
 
     with workspace_runner_guard(workspace):
         persistence = SqlitePersistence(
