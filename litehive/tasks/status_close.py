@@ -8,6 +8,7 @@ so the operator can resume later).
 
 from pathlib import Path
 
+from litehive.container import build_container
 from litehive.domain.common import TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import StopTaskSummary
@@ -55,9 +56,7 @@ def _abandon_task_transition(
     """
 
     with workspace_lock(root):
-        from litehive.workspace import Workspace  # noqa: PLC0415
-
-        workspace = Workspace.from_path(root)
+        workspace = build_container(root).workspace
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
         state = load_state(root)
@@ -131,9 +130,7 @@ def _close_task_transition(
     _terminate_subagent_pid(task_id, active_subagent_pid)
     _terminate_subagent_pid(task_id, runner_pid)
     with workspace_lock(root):
-        from litehive.workspace import Workspace  # noqa: PLC0415
-
-        workspace = Workspace.from_path(root)
+        workspace = build_container(root).workspace
         task = get_task_record(root, task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
