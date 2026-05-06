@@ -158,10 +158,16 @@ Rule: there is one allowed home for git invocation,
 `litehive/git/ops.py` (R9). Every other module should call into it.
 The recording explicitly called out the `worktree.py` situation.
 
-Today the usage is the opposite of that rule: `git/ops.py` exists
-but is bypassed almost everywhere git is called.
+Current status: done. The remaining direct
+`subprocess.run(["git", ...])` calls are in `litehive/git/ops.py`,
+with `litehive/sandbox/git_wrapper.py` only checking for the `git`
+binary before it delegates. Do not reintroduce raw git subprocess
+calls outside `litehive/git/ops.py`; add missing helpers there instead.
 
-Direct subprocess git calls to migrate:
+Original finding: the usage was the opposite of that rule; `git/ops.py`
+existed but was bypassed almost everywhere git was called.
+
+Original direct subprocess git calls that were migrated:
 
 - `litehive/worktree.py` — ~25 separate `subprocess.run(["git", ...])`
   invocations covering worktree add/list/prune, fetch, merge,
@@ -363,7 +369,12 @@ explicitly; the others are similar density):
 Rule: SQLite is the source of truth. No more file-based attention
 log (recording quote about `attention.py`).
 
-Sites:
+Current status: done. `litehive/attention.py` reads and writes the
+SQLite `attention_log` table, and daemon/worktree/sandbox diagnostics
+append through that module. Keep new attention surfaces on the DB path;
+do not recreate `.litehive/attention/` file writes.
+
+Original sites:
 
 - `litehive/attention.py` — central file.
 - `.litehive/attention/` directory writes (gitignored, per
@@ -495,15 +506,17 @@ The recording asked for "step by step, never break things". Order:
     them. Remaining `Workspace.from_path` / `load_config` hits are the
     container, config loading, workspace config caching, and
     `runtime_store(root)` factory boundaries.
-7. **Centralize git.** Bring all subprocess git calls behind
-   `litehive/git/ops.py` (P5). One module of callers per commit.
-8. **Move attention to DB** (P12).
+7. **Centralize git.** Done. Raw git subprocess calls now live behind
+   `litehive/git/ops.py` (P5).
+8. **Move attention to DB**. Done. Attention writes/readbacks now use
+   the SQLite `attention_log` table (P12).
 9. **Move merge-resolver agent out of `worktree.py`** (P10).
 10. **Split `worktree.py` into a package** (P6).
 11. **Prompt extraction** (P9). Templates first, builder second.
-12. **String-typed domain values** (P4). Migrate file by file,
-    starting with the small ones (`tasks/normalization.py`,
-    `tasks/status.py`) before tackling
+12. **String-typed domain values** (P4). In progress. The small task
+    normalization/status outcome slices have been migrated to typed
+    `PipelineStatus`, `OutcomeKind`, and `OutcomeReasonCode` values.
+    Continue file by file before tackling
     `lifecycle/prompt_serializer.py`.
 
 Each step lands as its own commit. Tests must be green between
