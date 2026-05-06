@@ -113,7 +113,7 @@ def collect_status_snapshot_for_workspace(workspace: Workspace) -> StatusSnapsho
         *_probe_pool_stop_reason(state),
         *_probe_origin_divergence(root, state),
         *_probe_task_index_references(root, state, state_issues),
-        *_probe_task_status_damage(root, state, runner, state_issues),
+        *_probe_task_status_damage(workspace, state, runner, state_issues),
     ]
     return StatusSnapshot(
         config=config,

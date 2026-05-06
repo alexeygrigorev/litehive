@@ -17,7 +17,6 @@ from typing import Mapping
 
 from pydantic import ValidationError
 
-from litehive.container import build_workspace
 from litehive.config.paths import workspace_path
 from litehive.config.registry import workspace_registry_error, workspace_registry_path
 from litehive.daemon.logs import latest_run_all_log_dir
@@ -343,7 +342,7 @@ def _probe_task_index_references(
 
 
 def _probe_task_status_damage(
-    root: Path,
+    workspace: Workspace,
     state: WorkspaceState,
     runner: RunnerStatusState,
     state_issues: list[StatusIssue],
@@ -357,6 +356,7 @@ def _probe_task_status_damage(
     is nothing to walk safely. Sorts the per-task issues by
     task id so successive runs produce a stable diff.
     """
+    root = workspace.root
     if any(issue.key in _TASKS_UNAVAILABLE_KEYS for issue in state_issues):
         return []
     if not workspace_path(root, "data.db").exists():
@@ -381,7 +381,6 @@ def _probe_task_status_damage(
     active_task_id = runner.active_task_id or state.active_task_id
     active_stage = _live_active_pipeline_stage(active_task_id, tasks)
     queued_ids = set(state.queue)
-    workspace = build_workspace(root)
 
     for task in sorted(tasks, key=lambda candidate: candidate.id):
         recovery_issue = _recovery_failure_issue(workspace, task)
