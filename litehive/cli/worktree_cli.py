@@ -32,7 +32,7 @@ def ls(workspace: WorkspaceOption = Path.cwd()) -> int:
     workspace_obj = build_workspace(workspace)
     service = WorktreeService(workspace_obj)
     worktrees = service.collect_managed_worktrees()
-    print(f"workspace: {workspace}")
+    print(f"workspace: {workspace_obj.root}")
     print(f"worktree_count: {len(worktrees)}")
     if not worktrees:
         print("worktrees: none")
@@ -80,7 +80,7 @@ def clean(
         dry_run_label = "yes"
     else:
         dry_run_label = "no"
-    print(f"workspace: {workspace}")
+    print(f"workspace: {workspace_obj.root}")
     print(f"dry_run: {dry_run_label}")
 
     for item in candidates:
@@ -126,7 +126,7 @@ def rescue(
     service = WorktreeService(workspace_obj)
     candidates = service.collect_rescue_candidates()
 
-    print(f"workspace: {workspace}")
+    print(f"workspace: {workspace_obj.root}")
     print(f"candidate_count: {len(candidates)}")
     if not candidates:
         print("rescues: none")
