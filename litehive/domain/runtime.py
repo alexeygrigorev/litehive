@@ -31,6 +31,7 @@ from .common import (
     OutcomeKind,
     OutcomeReasonCode,
     RunnerExecutionStatus,
+    RuntimeStageStatus,
     SubagentStatus,
     TaskExecutionStatus,
     utcnow,
@@ -77,7 +78,7 @@ class RuntimeStageState(BaseModel):
     """
 
     stage: str | None = None  # Pipeline stage being executed
-    status: str = "idle"  # Execution status (idle, running, completed, failed)
+    status: RuntimeStageStatus | str = RuntimeStageStatus.IDLE  # Execution status (idle, running, completed, failed)
     started_at: str | None = None  # When stage execution started
     updated_at: str | None = None  # Last status update timestamp
     duration_seconds: int = 0  # How long the stage has been running

@@ -9,6 +9,7 @@ from litehive.domain.common import (
     OutcomeKind,
     OutcomeReasonCode,
     PipelineStatus,
+    RuntimeStageStatus,
     TaskExecutionStatus,
     TaskStatus,
     utcnow,
@@ -190,7 +191,7 @@ def _set_interruption_metadata(
     task.runtime.pipeline.current_stage = task.runtime.pipeline.current_stage.model_copy(
         update={
             "stage": stage,
-            "status": "interrupted",
+            "status": RuntimeStageStatus.INTERRUPTED,
             "started_at": started_at,
             "updated_at": now,
             "duration_seconds": duration_seconds(started_at, now),

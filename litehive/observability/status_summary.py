@@ -13,7 +13,7 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Any
 
-from litehive.domain.common import TaskExecutionStatus, TaskStage, TaskStatus
+from litehive.domain.common import RuntimeStageStatus, TaskExecutionStatus, TaskStage, TaskStatus
 from litehive.domain.reports import ExecutionEstimate
 from litehive.domain.task import TaskRecord
 from litehive.tasks.report_storage import load_workspace_stage_reports
@@ -238,13 +238,13 @@ def render_task_summary(task: TaskRecord, active: bool, workspace: Workspace) ->
     if (
         runtime.pipeline.execution_status != TaskExecutionStatus.IDLE
         or runtime.pipeline.current_stage.stage
-        or runtime.pipeline.current_stage.status != "idle"
+        or runtime.pipeline.current_stage.status != RuntimeStageStatus.IDLE
     ):
         parts = [f"run={runtime.pipeline.execution_status}"]
         parts.append(f"retries={runtime.pipeline.retry_count}/{runtime.pipeline.retry_limit}")
         if runtime.pipeline.run_started_at:
             parts.append(f"started={runtime.pipeline.run_started_at}")
-        if runtime.pipeline.current_stage.status != "idle":
+        if runtime.pipeline.current_stage.status != RuntimeStageStatus.IDLE:
             parts.append(f"stage_status={runtime.pipeline.current_stage.status}")
         if runtime.pipeline.current_stage.stage:
             stage_duration = _duration_label(

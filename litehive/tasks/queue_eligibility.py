@@ -8,7 +8,14 @@ information. They are the leaf module of the queue split — both
 
 from pathlib import Path
 
-from litehive.domain.common import OutcomeKind, PipelineStatus, TaskExecutionStatus, TaskStage, TaskStatus
+from litehive.domain.common import (
+    OutcomeKind,
+    PipelineStatus,
+    RuntimeStageStatus,
+    TaskExecutionStatus,
+    TaskStage,
+    TaskStatus,
+)
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.records import list_tasks
 from litehive.tasks.failed_runs import has_blocking_failed_run_history
@@ -27,7 +34,12 @@ _TERMINAL_OUTCOME_KINDS = {
     OutcomeKind.DEFERRED,
     OutcomeKind.WONT_DO,
 }
-_TRUSTED_STAGE_MARKER_STATUSES = {"idle", "paused", "interrupted", "running"}
+_TRUSTED_STAGE_MARKER_STATUSES = {
+    RuntimeStageStatus.IDLE,
+    "paused",
+    RuntimeStageStatus.INTERRUPTED,
+    RuntimeStageStatus.RUNNING,
+}
 _RESUMABLE_PIPELINE_STAGES: frozenset[TaskStage] = frozenset(
     {TaskStage.GROOMING, TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING, TaskStage.COMMIT_TO_GIT}
 )
@@ -87,7 +99,7 @@ def resumable_running_stage(task: TaskRecord) -> str | None:
     to the queued-stage heuristics.
     """
     current_stage = task.runtime.pipeline.current_stage
-    if current_stage.status == "running":
+    if current_stage.status == RuntimeStageStatus.RUNNING:
         normalized = _normalize_resumable_stage_name(current_stage.stage)
         if normalized is not None:
             return normalized
@@ -360,7 +372,7 @@ def _live_active_pipeline_stage(state: WorkspaceState, tasks_by_id: dict[str, Ta
     current_stage = active_task.runtime.pipeline.current_stage
     if (
         active_task.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING
-        or current_stage.status == "running"
+        or current_stage.status == RuntimeStageStatus.RUNNING
     ):
         return current_stage.stage or active_task.pipeline_status
     return None

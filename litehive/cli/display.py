@@ -1,4 +1,4 @@
-from litehive.domain.common import TaskStatus
+from litehive.domain.common import RuntimeStageStatus, TaskStatus
 
 
 def format_retry_on(config):
@@ -60,7 +60,10 @@ def task_interruption_label(task):
     same line as the task itself, without having to drill into
     ``task show``.
     """
-    if task.status != TaskStatus.INTERRUPTED or task.runtime.pipeline.current_stage.status != "interrupted":
+    if (
+        task.status != TaskStatus.INTERRUPTED
+        or task.runtime.pipeline.current_stage.status != RuntimeStageStatus.INTERRUPTED
+    ):
         return ""
     interruption = task.runtime.execution.interruption
     if interruption is not None and interruption.resume_stage is not None:

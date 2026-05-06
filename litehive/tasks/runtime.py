@@ -6,6 +6,7 @@ from litehive.domain.common import (
     OutcomeKind,
     OutcomeReasonCode,
     PipelineStatus,
+    RuntimeStageStatus,
     TaskExecutionStatus,
     TaskStatus,
     utcnow,
@@ -35,7 +36,7 @@ def idle_stage_state(updated_at: str, stage: str | None = None) -> RuntimeStageS
     explicit ``idle`` snapshot rather than inferring idleness from the
     absence of a ``running`` marker.
     """
-    return RuntimeStageState(stage=stage, updated_at=updated_at)
+    return RuntimeStageState(stage=stage, status=RuntimeStageStatus.IDLE, updated_at=updated_at)
 
 
 def _running_stage_state(stage: str, started_at: str) -> RuntimeStageState:
@@ -48,7 +49,7 @@ def _running_stage_state(stage: str, started_at: str) -> RuntimeStageState:
     """
     return RuntimeStageState(
         stage=stage,
-        status="running",
+        status=RuntimeStageStatus.RUNNING,
         started_at=started_at,
         updated_at=started_at,
     )

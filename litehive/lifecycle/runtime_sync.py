@@ -15,6 +15,7 @@ from litehive.domain.common import (
     OutcomeReasonCode,
     PipelineState,
     PipelineStatus,
+    RuntimeStageStatus,
     TaskExecutionStatus,
     TaskStatus,
     pipeline_status_for_pipeline_state,
@@ -175,7 +176,7 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
         task_record.runtime.pipeline.current_stage = task_record.runtime.pipeline.current_stage.model_copy(
             update={
                 "stage": None,
-                "status": "idle",
+                "status": RuntimeStageStatus.IDLE,
                 "started_at": None,
                 "updated_at": now,
             }
@@ -190,7 +191,7 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
     task_record.runtime.pipeline.current_stage = current_stage.model_copy(
         update={
             "stage": state.stage,
-            "status": "running",
+            "status": RuntimeStageStatus.RUNNING,
             "started_at": started_at,
             "updated_at": now,
         }

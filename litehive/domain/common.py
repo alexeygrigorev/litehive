@@ -313,6 +313,21 @@ class TaskExecutionStatus(StringEnum):
     FLAGGED = "flagged"  # The run ended by flagging the task
 
 
+class RuntimeStageStatus(StringEnum):
+    """
+    Fine-grained status for ``TaskRuntime.pipeline.current_stage``.
+
+    This differs from ``TaskExecutionStatus``: the task run can be queued or
+    done while the current stage marker is just idle/running/interrupted.
+    """
+
+    IDLE = "idle"  # No stage is actively running
+    RUNNING = "running"  # A stage is currently running
+    INTERRUPTED = "interrupted"  # The stage was interrupted and may resume
+    COMPLETED = "completed"  # The stage completed
+    FAILED = "failed"  # The stage failed
+
+
 class PipelineStatus(StringEnum):
     """
     Operator-facing projection of pipeline progress.
@@ -502,6 +517,7 @@ __all__ = [
     "PipelineStatus",
     "RunnerStatus",
     "RunnerExecutionStatus",
+    "RuntimeStageStatus",
     "SubagentStatus",
     "TaskExecutionStatus",
     "TaskStage",

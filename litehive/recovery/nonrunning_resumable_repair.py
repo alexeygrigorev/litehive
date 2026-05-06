@@ -9,7 +9,7 @@ a resumable stage); the running-task counterpart lives in
 import sqlite3
 from typing import TypedDict
 
-from litehive.domain.common import TaskExecutionStatus, TaskStatus
+from litehive.domain.common import RuntimeStageStatus, TaskExecutionStatus, TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.workspace import Workspace
@@ -80,7 +80,7 @@ def normalize_nonrunning_resumable_tasks(
             or task.runtime.pipeline.execution_status != TaskExecutionStatus.IDLE
             or task.pipeline_status != stage
             or task.runtime.pipeline.current_stage.stage != stage
-            or task.runtime.pipeline.current_stage.status != "idle"
+            or task.runtime.pipeline.current_stage.status != RuntimeStageStatus.IDLE
             or task.id == state.active_task_id
             or not queue_contains_task
         )
