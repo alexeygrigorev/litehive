@@ -11,8 +11,8 @@ from litehive.cli.display import (
     task_interruption_label,
     task_model_label,
 )
-from litehive.config.loading import load_config
 from litehive.config.workspace import ensure_workspace
+from litehive.container import build_container
 from litehive.git.ops import GitError, checkpoint_message
 from litehive.recovery.execution_recovery import recover_stale_runner_state
 from litehive.tasks.completed_task_recovery import recover_completed_task
@@ -44,13 +44,15 @@ def queue_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> 
     """
     if ctx.invoked_subcommand is not None:
         return None
-    config = load_config(workspace)
-    recover_stale_runner_state(workspace)
-    state = load_state(workspace)
-    tasks = list_tasks(workspace)
+    container = build_container(workspace)
+    root = container.workspace.root
+    config = container.config
+    recover_stale_runner_state(root)
+    state = load_state(root)
+    tasks = list_tasks(root)
     print(f"active_task_id: {state.active_task_id}")
     if state.active_task_id is not None:
-        active_task = require_task(workspace, state.active_task_id)
+        active_task = require_task(root, state.active_task_id)
         print(
             f"active: {active_task.id} [{active_task.status}/{active_task.pipeline_status}] "
             f"priority={active_task.priority} engine={task_engine_label(None, config.default_engine)} "
@@ -60,7 +62,7 @@ def queue_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> 
         )
     print(f"queue_length: {len(state.queue)}")
     for index, queued_task_id in enumerate(state.queue, start=1):
-        task = require_task(workspace, queued_task_id)
+        task = require_task(root, queued_task_id)
         print(
             f"{index}. {task.id} [{task.status}/{task.pipeline_status}] "
             f"priority={task.priority} engine={task_engine_label(None, config.default_engine)} "

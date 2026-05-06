@@ -18,13 +18,14 @@ from litehive.config.engine_models import (
     parse_engine_freeze_until,
     persist_engine_freeze_iso,
 )
-from litehive.config.loading import load_config
+from litehive.config.model import LitehiveConfig
 from litehive.config.model import normalize_engine_sequence
 from litehive.config.runtime_settings import (
     load_runtime_setting_audit_entries,
     set_default_engine,
     set_engine_preference,
 )
+from litehive.container import build_container
 from litehive.workspace import Workspace
 
 
@@ -51,16 +52,17 @@ def engine_command(
     can be reused across subcommands without exposing six near-
     duplicate command signatures.
     """
-    load_config(workspace)
+    container = build_container(workspace)
+    root = container.workspace.root
     if action == "status":
         if name:
             print("engine status: does not take positional arguments")
             return 1
-        for line in _render_engine_status_lines(workspace.resolve()):
+        for line in _render_engine_status_lines(container.config):
             print(line)
         return 0
     if action == "audit":
-        for line in _render_engine_audit_lines(workspace.resolve(), key=name, limit=limit):
+        for line in _render_engine_audit_lines(container.workspace, key=name, limit=limit):
             print(line)
         return 0
     if action == "default":
@@ -72,7 +74,7 @@ def engine_command(
         else:
             default_context = None
         change = set_default_engine(
-            Workspace.from_path(workspace),
+            container.workspace,
             name,
             actor="operator",
             source="cli",
@@ -100,7 +102,7 @@ def engine_command(
             preference_context = None
         try:
             change = set_engine_preference(
-                Workspace.from_path(workspace),
+                container.workspace,
                 preference,
                 actor="operator",
                 source="cli",
@@ -125,7 +127,7 @@ def engine_command(
             print("engine freeze: --until must be ISO date YYYY-MM-DD")
             return 1
         persist_engine_freeze_iso(
-            workspace,
+            root,
             engine_name=name,
             freeze_iso=freeze_iso,
             actor="operator",
@@ -139,7 +141,7 @@ def engine_command(
         print(f"engine_frozen: {name} until {freeze_iso}" + reason_part)
         return 0
     if not clear_persisted_engine_freeze(
-        workspace,
+        root,
         engine_name=name,
         actor="operator",
         source="cli",
@@ -203,7 +205,7 @@ def _engine_list_label(value: object) -> str:
     return str(value)
 
 
-def _render_engine_audit_lines(root: Path, key: str | None, limit: int) -> list[str]:
+def _render_engine_audit_lines(workspace: Workspace, key: str | None, limit: int) -> list[str]:
     """
     Render the audit log block shown by ``engine audit``.
 
@@ -213,7 +215,7 @@ def _render_engine_audit_lines(root: Path, key: str | None, limit: int) -> list[
     this output to reconstruct who changed an engine setting and
     why, so the layout is intentionally script-friendly.
     """
-    entries = load_runtime_setting_audit_entries(Workspace.from_path(root), key=key, limit=limit)
+    entries = load_runtime_setting_audit_entries(workspace, key=key, limit=limit)
     lines = [f"setting_audit_entries: {len(entries)}"]
     for entry in entries:
         lines.extend(
@@ -231,7 +233,7 @@ def _render_engine_audit_lines(root: Path, key: str | None, limit: int) -> list[
     return lines
 
 
-def _render_engine_status_lines(root: Path) -> list[str]:
+def _render_engine_status_lines(config: LitehiveConfig) -> list[str]:
     """
     Build the per-engine status block shown by ``engine status``.
 
@@ -240,7 +242,6 @@ def _render_engine_status_lines(root: Path) -> list[str]:
     one quota probe per provider. The operator uses this to decide
     whether to flip the default engine before queueing more work.
     """
-    config = load_config(root)
     active_freezes = active_engine_freezes(config)
     quota_statuses = _collect_quota_statuses()
     if config.engine_preference:
