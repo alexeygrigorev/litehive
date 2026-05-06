@@ -122,10 +122,11 @@ def promote(
     have to call ``resume`` then ``move`` separately.
     """
     ensure_workspace(workspace)
+    workspace_obj = build_workspace(workspace)
     try:
         task = require_task(workspace, task_id)
         if task.status in {TaskStatus.INTERRUPTED, TaskStatus.PARKED, TaskStatus.FLAGGED, TaskStatus.CLOSED}:
-            task = resume_task_for_workspace(build_workspace(workspace), task_id, front=True)
+            task = resume_task_for_workspace(workspace_obj, task_id, front=True)
             print(f"task: {task.id} {task.title}")
             print("status: queued")
             print(f"pipeline_stage: {task.pipeline_status}")
@@ -226,8 +227,9 @@ def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
     a "no runner to signal" cleanup apart from a real interruption.
     """
     ensure_workspace(workspace)
+    workspace_obj = build_workspace(workspace)
     try:
-        summary = stop_current_task(build_workspace(workspace))
+        summary = stop_current_task(workspace_obj)
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"stop failed: {exc}")
         return 1
