@@ -1,9 +1,9 @@
 """Task status transitions for taking a task out of the active queue.
 
 Covers ``close_task`` (terminal verdict: done/wont_do/deferred/duplicate/
-execution_cancelled), ``abandon_task`` (operator-initiated kill of an
-in-flight or parked task), and ``park_task`` (set aside without closing
-so the operator can resume later).
+execution_cancelled), ``abandon_task_for_workspace`` (operator-initiated
+kill of an in-flight or parked task), and ``park_task_for_workspace``
+(set aside without closing so the operator can resume later).
 """
 
 from pathlib import Path
@@ -221,29 +221,6 @@ def _park_task_transition(
         return task
 
 
-def abandon_task(
-    root: Path,
-    task_id: str,
-    reason: str = "Task abandoned via CLI.",
-    audit_actor: str = "operator",
-    audit_source: str = "cli",
-) -> TaskRecord:
-    """
-    Public CLI/agent entry for the operator-initiated kill path.
-
-    Signals the live subagent and marks the task cancelled; thin wrapper
-    around ``_abandon_task_transition`` so the public surface stays
-    importable from ``litehive.tasks.status``.
-    """
-    return abandon_task_for_workspace(
-        build_workspace(root),
-        task_id,
-        reason=reason,
-        audit_actor=audit_actor,
-        audit_source=audit_source,
-    )
-
-
 def abandon_task_for_workspace(
     workspace: Workspace,
     task_id: str,
@@ -309,29 +286,6 @@ def close_task_for_workspace(
         outcome=outcome,
         reason=reason,
         follow_up_task_id=follow_up_task_id,
-        audit_actor=audit_actor,
-        audit_source=audit_source,
-    )
-
-
-def park_task(
-    root: Path,
-    task_id: str,
-    reason: str = "Task parked via CLI.",
-    audit_actor: str = "operator",
-    audit_source: str = "cli",
-) -> TaskRecord:
-    """
-    Public CLI/agent entry for parking a task without closing it.
-
-    Removes the task from the queue but keeps it resumable so the operator
-    can pick it up again later via ``litehive task resume``; thin wrapper
-    around ``_park_task_transition`` for the public surface.
-    """
-    return park_task_for_workspace(
-        build_workspace(root),
-        task_id,
-        reason=reason,
         audit_actor=audit_actor,
         audit_source=audit_source,
     )
