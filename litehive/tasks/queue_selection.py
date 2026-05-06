@@ -113,7 +113,7 @@ def set_active_task(workspace: Workspace, task_id: str | None) -> WorkspaceState
         state.active_task_id = task_id
         if task_id is not None and task_id in state.queue:
             state.queue = [item for item in state.queue if item != task_id]
-        validate_single_active_task(workspace.root, state)
+        validate_single_active_task_for_workspace(workspace, state)
         if task_id is None:
             save_state(workspace.root, state)
             return state
@@ -147,7 +147,7 @@ def peek_next_task_selection(workspace: Workspace) -> TaskSelection:
     recover_stale_runner_state_for_workspace(workspace)
     with workspace_mutation_guard_for_workspace(workspace), workspace_lock(workspace.root):
         state = load_state(workspace.root)
-        validate_single_active_task(workspace.root, state)
+        validate_single_active_task_for_workspace(workspace, state)
         next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace, state)
         if mutated:
             if normalized_tasks:
@@ -183,7 +183,7 @@ def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
     with workspace_mutation_guard_for_workspace(workspace), workspace_lock(workspace.root):
         state = load_state(workspace.root)
         original_queue = list(state.queue)
-        validate_single_active_task(workspace.root, state)
+        validate_single_active_task_for_workspace(workspace, state)
         next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace, state)
         if next_task is None:
             if mutated:
@@ -471,7 +471,7 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
     root = workspace.root
     with workspace_mutation_guard_for_workspace(workspace), workspace_lock(root):
         state = load_state(root)
-        validate_single_active_task(root, state)
+        validate_single_active_task_for_workspace(workspace, state)
         if state.active_task_id is None:
             return state
 
@@ -538,6 +538,13 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
 
 def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict[str, list[str]]:
     """
+    Path-based compatibility wrapper for active-task marker collection.
+    """
+    return active_task_markers_for_workspace(Workspace.from_path(root), state)
+
+
+def active_task_markers_for_workspace(workspace: Workspace, state: WorkspaceState | None = None) -> dict[str, list[str]]:
+    """
     Collect every signal that says "this task is active", keyed by task id.
 
     Underpins the single-active-task invariant: the workspace lock and the
@@ -545,6 +552,7 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
     or ``running`` at once, and to spell out which signal disagrees when
     they do (so the conflict message names the failing slot).
     """
+    root = workspace.root
     markers: dict[str, list[str]] = {}
     current_state = state or load_state(root)
     tasks = list_tasks(root, strict=False)
@@ -576,13 +584,20 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
 
 def validate_single_active_task(root: Path, state: WorkspaceState | None = None) -> None:
     """
+    Path-based compatibility wrapper for the single-active-task guard.
+    """
+    validate_single_active_task_for_workspace(Workspace.from_path(root), state)
+
+
+def validate_single_active_task_for_workspace(workspace: Workspace, state: WorkspaceState | None = None) -> None:
+    """
     Raise ``WorkspaceConflictError`` if more than one task is currently active.
 
     Hot-path guard: every queue mutation, runner pickup, and stop flow
     calls this before touching state so a corrupted workspace fails loudly
     instead of silently launching two runners against the same worktree.
     """
-    markers = active_task_markers(root, state)
+    markers = active_task_markers_for_workspace(workspace, state)
     if len(markers) <= 1:
         return
     details = _format_active_task_markers(markers)

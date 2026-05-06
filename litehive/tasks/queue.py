@@ -56,6 +56,7 @@ from litehive.tasks.queue_selection import (
     _resolve_next_task_from_state,
     _task_selection_key,
     active_task_markers,
+    active_task_markers_for_workspace,
     clear_active_task,
     dequeue_next_task,
     dequeue_next_task_selection,
@@ -65,6 +66,7 @@ from litehive.tasks.queue_selection import (
     restore_untouched_active_task,
     set_active_task,
     validate_single_active_task,
+    validate_single_active_task_for_workspace,
 )
 
 # ``idle_stage_state`` is defined in ``litehive.tasks.runtime`` but external
@@ -97,6 +99,7 @@ __all__ = [
     "_task_blockers",
     "_task_selection_key",
     "active_task_markers",
+    "active_task_markers_for_workspace",
     "canonicalize_resumable_queue_task",
     "clear_active_task",
     "dequeue_next_task",
@@ -120,6 +123,7 @@ __all__ = [
     "set_active_task",
     "task_has_resume_marker",
     "validate_single_active_task",
+    "validate_single_active_task_for_workspace",
     "validate_task_dependencies",
     "validate_task_dependencies_for_workspace",
 ]

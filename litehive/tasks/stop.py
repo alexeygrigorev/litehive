@@ -32,11 +32,11 @@ from litehive.state.persist import load_state, persist_task_and_state_without_ru
 from litehive.state.records import get_task_record, require_task
 from litehive.tasks._process_signals import terminate_subagent_pid
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
-from litehive.tasks.queue import active_task_markers, validate_single_active_task
+from litehive.tasks.queue import active_task_markers_for_workspace, validate_single_active_task_for_workspace
 from litehive.workspace import Workspace
 
 
-def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
+def _active_task_id_for_stop(workspace: Workspace, state: WorkspaceState) -> str:
     """
     Resolve which task ``litehive queue stop`` should target.
 
@@ -45,15 +45,15 @@ def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
     workspace shows multiple actives, since the latter is a bug we want
     surfaced loudly rather than papered over.
     """
-    markers = active_task_markers(root, state)
+    markers = active_task_markers_for_workspace(workspace, state)
     if not markers:
         raise ValueError("No active task to stop")
     if len(markers) > 1:
-        validate_single_active_task(root, state)
+        validate_single_active_task_for_workspace(workspace, state)
     return next(iter(sorted(markers)))
 
 
-def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskRecord:
+def _stop_active_task_without_runner_guard(workspace: Workspace, task_id: str) -> TaskRecord:
     """
     Park the active task and clear runtime markers under the workspace lock.
 
@@ -62,9 +62,10 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
     used by ``stop_current_task`` once the runner is no longer in the way
     so the parking step itself does not deadlock on the runner guard.
     """
+    root = workspace.root
     with workspace_lock(root):
         state = load_state(root)
-        active_task_id = _active_task_id_for_stop(root, state)
+        active_task_id = _active_task_id_for_stop(workspace, state)
         if active_task_id != task_id:
             raise WorkspaceConflictError(f"task {task_id} is no longer the active task in this workspace")
         task = get_task_record(root, task_id)
@@ -148,7 +149,7 @@ def stop_current_task(
     root = workspace.root
     state = load_state(root)
     try:
-        active_task_id = _active_task_id_for_stop(root, state)
+        active_task_id = _active_task_id_for_stop(workspace, state)
     except ValueError:
         metadata = read_runner_lock_metadata(root)
         if runner_lock_is_held(root) and metadata.active_task_id:
@@ -188,7 +189,7 @@ def stop_current_task(
                     )
             recover_stale_runner_state_for_workspace(workspace)
             state = load_state(root)
-            markers = active_task_markers(root, state)
+            markers = active_task_markers_for_workspace(workspace, state)
             if active_task_id not in markers:
                 return StopTaskSummary(
                     task=require_task(root, active_task_id),
@@ -200,5 +201,5 @@ def stop_current_task(
                 f"runner for task {active_task_id} is active but has no live PID to signal cleanly"
             )
 
-    task = _stop_active_task_without_runner_guard(root, active_task_id)
+    task = _stop_active_task_without_runner_guard(workspace, active_task_id)
     return StopTaskSummary(task=task, runner_pid=runner_pid, signal_sent=runner_pid is not None)
