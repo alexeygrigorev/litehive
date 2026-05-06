@@ -458,7 +458,7 @@ class HeruEngineAdapter:
         stage = prompt.stage
         report_stage = canonical_report_pipeline_state(stage.value)
         role = prompt.role
-        prompt_text = serialize_prompt(prompt, task_record=task, workspace_root=self.workspace_root)
+        prompt_text = serialize_prompt(prompt, task_record=task, workspace=self.workspace)
         execution_root = _agent_execution_root(self.workspace_root, task, role=role)
 
         before_turn = datetime.now(UTC)
@@ -656,7 +656,7 @@ class HeruEngineAdapter:
             prompt_context=PromptContext(workspace=self.workspace, config=self.config),
         )
         prompt = recovery_agent.build_prompt(recovery_state)
-        return serialize_prompt(prompt, task_record=task, workspace_root=self.workspace_root)
+        return serialize_prompt(prompt, task_record=task, workspace=self.workspace)
 
     def _direct_recovery_state(self, state: TaskState, startup_message: str) -> TaskState:
         """Project the live ``TaskState`` into a recovering state so the

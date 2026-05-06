@@ -20,13 +20,11 @@ activity history rendering stays here because it's tightly coupled to the
 ``load_task_activity`` data path tests monkey-patch on this module.
 """
 
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import ValidationError
 import yaml
 
-from litehive.container import build_workspace
 from litehive.domain.common import PipelineState, TaskStage, Verdict, pipeline_stage_key
 from litehive.domain.task import TaskRecord
 from litehive.lifecycle.prompt_sections import (
@@ -53,9 +51,7 @@ from litehive.lifecycle.prompt_sections import (
 )
 from litehive.lifecycle.prompt_types import AgentPrompt, RecoveryPrompt
 from litehive.tasks.activity import load_task_activity
-
-if TYPE_CHECKING:
-    from litehive.workspace import Workspace
+from litehive.workspace import Workspace
 
 
 SECTION_SEP = "\n"
@@ -65,7 +61,7 @@ def serialize_prompt(
     prompt: AgentPrompt,
     *,
     task_record: TaskRecord | None,
-    workspace_root: Path,
+    workspace: Workspace,
 ) -> str:
     """Render the typed prompt + task record into the engine-facing string.
 
@@ -74,13 +70,13 @@ def serialize_prompt(
     itself; it may still be ``None`` for callers that legitimately have
     no task (tests, the no-record fallback path), in which case the
     goal/acceptance/plan/constraints sections render placeholders.
-    ``workspace_root`` is the repo root and is used to load the task's
-    activity history so the next agent visit sees previous stage
-    verdicts.
+    ``workspace`` is injected by the caller and is used to load the
+    task's activity history so the next agent visit sees previous
+    stage verdicts.
     """
     activity = prompt.activity or []
     if not activity and task_record is not None:
-        activity = _load_task_activity_history(build_workspace(workspace_root), task_record)
+        activity = _load_task_activity_history(workspace, task_record)
 
     sections: list[str] = []
     sections.append(_header_section(prompt, task_record))
