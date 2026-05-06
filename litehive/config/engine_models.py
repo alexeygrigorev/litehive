@@ -24,10 +24,10 @@ from heru.quota import (
     check_zai_quota,
     preferred_reset_at,
 )
+from litehive.container import build_container
 from litehive.config.model import LitehiveConfig
 from litehive.config.runtime_settings import clear_engine_freeze, set_engine_freeze
 from litehive.domain.task import TaskRecord
-from litehive.workspace import Workspace
 
 
 def _engine_attempt_order(initial_engine_names: list[str], engine_preference: list[str]) -> list[str]:
@@ -189,7 +189,7 @@ def persist_engine_freeze_iso(
     else:
         context = None
     set_engine_freeze(
-        Workspace.from_path(root),
+        build_container(root).workspace,
         engine_name=engine_name,
         freeze_iso=freeze_iso,
         actor=actor,
@@ -219,7 +219,13 @@ def clear_persisted_engine_freeze(
         context = {"reason": reason}
     else:
         context = None
-    return clear_engine_freeze(Workspace.from_path(root), engine_name=engine_name, actor=actor, source=source, context=context).changed
+    return clear_engine_freeze(
+        build_container(root).workspace,
+        engine_name=engine_name,
+        actor=actor,
+        source=source,
+        context=context,
+    ).changed
 
 
 def _persist_engine_freeze(
