@@ -562,23 +562,32 @@ def workspace_runner_guard(workspace: Workspace):
 
 
 @contextmanager
-def workspace_mutation_guard(root: Path):
+def workspace_mutation_guard_for_workspace(workspace: Workspace):
     """
-    Wrap individual workspace writes with reentrant guard semantics.
+    Wrap individual workspace writes with injected workspace dependencies.
 
     A no-op when the current thread already owns the runner guard;
     otherwise acquires the runner guard for the duration of the
     mutation. CLI mutation commands rely on this so they can run
     correctly with or without an active runner.
     """
-    root = root.resolve()
+    root = workspace.root
     owner_thread_id = threading.get_ident()
     with RUNNER_LOCKS_MUTEX:
         existing = RUNNER_LOCKS.get(root)
     if existing is not None and existing.owner_thread_id == owner_thread_id:
         yield
         return
-    with workspace_runner_guard(Workspace.from_path(root)):
+    with workspace_runner_guard(workspace):
+        yield
+
+
+@contextmanager
+def workspace_mutation_guard(root: Path):
+    """
+    Path-based wrapper for callers not yet migrated to ``Workspace``.
+    """
+    with workspace_mutation_guard_for_workspace(Workspace.from_path(root)):
         yield
 
 
