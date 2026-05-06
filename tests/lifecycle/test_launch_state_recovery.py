@@ -10,7 +10,7 @@ from litehive.lifecycle.nodes.system import StubCommitNode
 from litehive.lifecycle.orchestration import ExecutionResult, _load_or_initialize, _sync_back, run_task
 from litehive.lifecycle.persistence import FailedRunRecord, SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
-from litehive.recovery.execution_recovery import recover_stale_runner_state
+from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, save_task
 from litehive.tasks.completed_task_recovery import recover_completed_task
@@ -86,7 +86,7 @@ def test_run_task_restarts_recovered_stale_runner_task_from_ready(tmp_path: Path
     state.active_task_id = task.id
     save_state(tmp_path, state)
 
-    assert recover_stale_runner_state(tmp_path) is True
+    assert recover_stale_runner_state_for_workspace(Workspace.from_path(tmp_path)) is True
     result, calls, routes = _run_recovered_task(tmp_path, monkeypatch, task.id)
 
     assert result.final_stage == "done"

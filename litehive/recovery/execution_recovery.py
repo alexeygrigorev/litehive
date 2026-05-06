@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-from litehive.container import build_workspace
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.recovery.interrupted_subagent import mark_interrupted_subagent
 from litehive.recovery.interruption_state import (
@@ -38,25 +37,9 @@ __all__ = [
     "interruption_journal_message",
     "mark_interrupted_subagent",
     "prepare_interrupted_task",
-    "recover_stale_runner_state",
     "recover_stale_runner_state_for_workspace",
     "stale_interruption_reason",
 ]
-
-
-def recover_stale_runner_state(
-    root: Path,
-    summary: WorkspaceRepairSummary | None = None,
-) -> bool:
-    """
-    Top-level entry for "is the workspace stuck because a previous runner died?".
-
-    Invoked by the queue, daemon, ``litehive stop``, and the CLI repair
-    flows. Returns whether anything was mutated; takes the workspace
-    lock and only acts when no live runner owns the runner lock, so a
-    live runner cannot be repaired out from under itself.
-    """
-    return recover_stale_runner_state_for_workspace(build_workspace(root.resolve()), summary=summary)
 
 
 def recover_stale_runner_state_for_workspace(
@@ -64,11 +47,11 @@ def recover_stale_runner_state_for_workspace(
     summary: WorkspaceRepairSummary | None = None,
 ) -> bool:
     """
-    Workspace-based implementation for stale-runner recovery.
+    Recover stale runner state for an injected workspace.
 
-    ``recover_stale_runner_state`` is the public path boundary; callers
-    that already have a ``Workspace`` use this helper so recovery does not
-    rebuild the workspace dependency graph.
+    Returns whether anything was mutated; takes the workspace lock and
+    only acts when no live runner owns the runner lock, so a live runner
+    cannot be repaired out from under itself.
     """
     root = workspace.root
     with workspace_lock(root):

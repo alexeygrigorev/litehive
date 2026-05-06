@@ -16,11 +16,11 @@ from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.domain.task_ops import BlockedTask, TaskPlan, TaskSelection, WorkspaceConflictError
 from litehive.lifecycle.persistence import SqlitePersistence
+from litehive.container import build_workspace
 from litehive.recovery.detection import TaskLaunchFailure
 from litehive.recovery.execution_recovery import (
     interruption_journal_message,
     prepare_interrupted_task,
-    recover_stale_runner_state,
     recover_stale_runner_state_for_workspace,
     stale_interruption_reason,
 )
@@ -167,7 +167,7 @@ def plan_task_selections(root: Path) -> TaskPlan:
     CLI surface this was written for never landed. Safe to remove unless
     the surface is being revived.
     """
-    recover_stale_runner_state(root)
+    recover_stale_runner_state_for_workspace(build_workspace(root))
     with workspace_mutation_guard(root), workspace_lock(root):
         state = load_state(root)
         validate_single_active_task(root, state)

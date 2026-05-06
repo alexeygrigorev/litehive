@@ -21,7 +21,8 @@ from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStag
 from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.domain.task_ops import StopTaskSummary, WorkspaceConflictError
-from litehive.recovery.execution_recovery import recover_stale_runner_state
+from litehive.container import build_workspace
+from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
 from litehive.state.locking import (
     read_runner_lock_metadata,
     runner_lock_is_held,
@@ -184,7 +185,7 @@ def stop_current_task(
                         wait_timeout_seconds=wait_timeout_seconds,
                         poll_interval_seconds=poll_interval_seconds,
                     )
-            recover_stale_runner_state(root)
+            recover_stale_runner_state_for_workspace(build_workspace(root))
             state = load_state(root)
             markers = active_task_markers(root, state)
             if active_task_id not in markers:

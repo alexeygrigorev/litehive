@@ -14,7 +14,7 @@ from litehive.cli.display import (
 from litehive.config.workspace import ensure_workspace
 from litehive.container import build_container, build_workspace
 from litehive.git.ops import GitError, checkpoint_message
-from litehive.recovery.execution_recovery import recover_stale_runner_state
+from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
 from litehive.tasks.completed_task_recovery import recover_completed_task
 from litehive.state.records import get_task_record, list_tasks, require_task
 from litehive.domain.common import PipelineStatus, TaskStatus
@@ -47,7 +47,7 @@ def queue_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> 
     container = build_container(workspace)
     root = container.workspace.root
     config = container.config
-    recover_stale_runner_state(root)
+    recover_stale_runner_state_for_workspace(container.workspace)
     state = load_state(root)
     tasks = list_tasks(root)
     print(f"active_task_id: {state.active_task_id}")

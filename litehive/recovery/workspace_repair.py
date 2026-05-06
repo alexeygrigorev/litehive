@@ -10,6 +10,7 @@ from litehive.domain.common import (
     utcnow,
 )
 from litehive.domain.task_ops import WorkspaceRepairSummary
+from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
 from litehive.state.locking import workspace_lock
 from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
 from litehive.state.records import get_task_record
@@ -18,9 +19,6 @@ from litehive.tasks.queue import idle_stage_state
 from litehive.tasks.report_storage import latest_stage_report
 from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
 from litehive.workspace import Workspace
-
-from .execution_recovery import recover_stale_runner_state
-
 
 _TERMINAL_REPAIR_STAGES = frozenset({TaskStage.ACCEPTING, TaskStage.COMMIT_TO_GIT})
 
@@ -35,7 +33,7 @@ def repair_workspace_state(workspace: Workspace) -> WorkspaceRepairSummary:
     pass report shows it actually finished.
     """
     summary = WorkspaceRepairSummary()
-    summary.stale_runner_recovered = recover_stale_runner_state(workspace.root, summary=summary)
+    summary.stale_runner_recovered = recover_stale_runner_state_for_workspace(workspace, summary=summary)
     summary.mutated = summary.stale_runner_recovered
     normalized = _normalize_stale_terminal_tasks(workspace, summary=summary)
     summary.mutated = summary.mutated or normalized

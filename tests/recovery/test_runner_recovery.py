@@ -8,7 +8,7 @@ from litehive.agents.session_store import load_subagent_report, load_subagent_se
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.runtime import RuntimeStageState, RuntimeSubagentState
-from litehive.recovery.execution_recovery import prepare_interrupted_task, recover_stale_runner_state
+from litehive.recovery.execution_recovery import prepare_interrupted_task, recover_stale_runner_state_for_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, save_task
 from litehive.workspace import Workspace
@@ -73,7 +73,7 @@ def _assert_runtime_stage_has_no_removed_fields(stage: RuntimeStageState) -> Non
 def test_recover_stale_runner_state_requeues_running_task(tmp_path: Path, stage: str, active: bool) -> None:
     task_id, expected_stage = _seed_running_task(tmp_path, stage=stage, active=active)
 
-    assert recover_stale_runner_state(tmp_path) is True
+    assert recover_stale_runner_state_for_workspace(Workspace.from_path(tmp_path)) is True
 
     refreshed = get_task(tmp_path, task_id)
     assert refreshed is not None
@@ -96,7 +96,7 @@ def test_recover_stale_runner_state_does_not_use_flat_runtime_payload(tmp_path: 
     task_id, _ = _seed_running_task(tmp_path, stage="implementing", active=True)
     _rewrite_runtime_payload_as_legacy_flat(tmp_path, task_id)
 
-    assert recover_stale_runner_state(tmp_path) is False
+    assert recover_stale_runner_state_for_workspace(Workspace.from_path(tmp_path)) is False
 
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         get_task(tmp_path, task_id)
@@ -118,7 +118,7 @@ def test_recover_stale_runner_state_preserves_runtime_stage_when_pipeline_status
     task.pipeline_status = PipelineStatus.BACKLOG
     save_task(tmp_path, task)
 
-    assert recover_stale_runner_state(tmp_path) is True
+    assert recover_stale_runner_state_for_workspace(Workspace.from_path(tmp_path)) is True
 
     refreshed = get_task(tmp_path, task_id)
     assert refreshed is not None
@@ -156,7 +156,7 @@ def test_recover_stale_runner_state_canonicalizes_nonrunning_stranded_task(
     state.queue = []
     save_state(tmp_path, state)
 
-    assert recover_stale_runner_state(tmp_path) is True
+    assert recover_stale_runner_state_for_workspace(Workspace.from_path(tmp_path)) is True
 
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
@@ -192,7 +192,7 @@ def test_recover_stale_runner_state_canonicalizes_queued_interrupted_marker(
     state.queue = [task.id]
     save_state(tmp_path, state)
 
-    assert recover_stale_runner_state(tmp_path) is True
+    assert recover_stale_runner_state_for_workspace(Workspace.from_path(tmp_path)) is True
 
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
@@ -219,7 +219,7 @@ def test_recover_stale_runner_state_clears_non_running_active_task_id(tmp_path: 
     state.active_task_id = task.id
     save_state(tmp_path, state)
 
-    assert recover_stale_runner_state(tmp_path) is True
+    assert recover_stale_runner_state_for_workspace(Workspace.from_path(tmp_path)) is True
     assert get_task(tmp_path, task.id).runtime.pipeline.execution_status == "idle"  # type: ignore[union-attr]
     assert load_state(tmp_path).active_task_id is None
 
