@@ -29,6 +29,76 @@ class TaskActivityLog:
     workspace: Workspace
     task: TaskRecord
 
+    def load(self) -> list[TaskActivityEntry]:
+        """
+        Read this task's persisted activity feed.
+
+        Malformed rows are skipped rather than raised so a single
+        corrupt entry cannot blank out the whole feed for lifecycle
+        code, prompt builders, or task-log renderers.
+        """
+        with self.workspace.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT payload
+                FROM task_activity
+                WHERE task_id = ?
+                ORDER BY entry_index
+                """,
+                (self.task.id,),
+            ).fetchall()
+
+        activity: list[TaskActivityEntry] = []
+        for row in rows:
+            try:
+                payload = json.loads(str(row["payload"]))
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            try:
+                activity.append(TaskActivityEntry(**payload))
+            except ValidationError:
+                continue
+        return activity
+
+    def save(self, activity: list[TaskActivityEntry]) -> None:
+        """
+        Replace this task's activity feed wholesale.
+
+        Used by retraction paths that rewrite an existing entry in
+        place rather than appending a new entry.
+        """
+        with self.workspace.connect() as connection:
+            connection.execute("DELETE FROM task_activity WHERE task_id = ?", (self.task.id,))
+            for entry_index, entry in enumerate(activity):
+                payload = json.dumps(entry.model_dump(mode="json"))
+                connection.execute(
+                    """
+                    INSERT INTO task_activity (task_id, entry_index, created_at, payload)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (self.task.id, entry_index, entry.created_at, payload),
+                )
+            append_task_event(
+                self.workspace,
+                event_type="task_reported",
+                task_id=self.task.id,
+                payload={"activity": [entry.model_dump(mode="json") for entry in activity]},
+            )
+            connection.commit()
+
+    def append(self, entry: TaskActivityEntry) -> None:
+        """
+        Append one verdict or report entry to this task's activity feed.
+
+        Pays the load+rewrite cost on every append so persisted row
+        order tracks arrival order without callers managing indexes.
+        """
+        activity = self.load()
+        activity.append(entry)
+        self.save(activity)
+
     def latest_entry(
         self,
         role: str | None = None,
@@ -48,7 +118,7 @@ class TaskActivityLog:
             allowed_verdicts = None
         else:
             allowed_verdicts = {str(verdict) for verdict in verdicts}
-        for entry in reversed(load_task_activity(self.workspace, self.task)):
+        for entry in reversed(self.load()):
             if role is not None and entry.role != role:
                 continue
             if stage is not None and entry.stage != stage:
@@ -66,89 +136,48 @@ class TaskActivityLog:
 
 def load_task_activity(workspace: Workspace, task: TaskRecord) -> list[TaskActivityEntry]:
     """
-    Read the persisted activity feed (agent verdicts and reports) for a task.
-
-    Malformed rows are skipped rather than raised so a single corrupt entry
-    cannot blank out the whole feed for the lifecycle code that consumes it
-    (stage builders, retraction logic, the task-logs renderer).
+    Compatibility wrapper for loading a task's persisted activity feed.
     """
-    with workspace.connect() as connection:
-        rows = connection.execute(
-            """
-            SELECT payload
-            FROM task_activity
-            WHERE task_id = ?
-            ORDER BY entry_index
-            """,
-            (task.id,),
-        ).fetchall()
-
-    activity: list[TaskActivityEntry] = []
-    for row in rows:
-        try:
-            payload = json.loads(str(row["payload"]))
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(payload, dict):
-            continue
-        try:
-            activity.append(TaskActivityEntry(**payload))
-        except ValidationError:
-            continue
-    return activity
-
-
-def _save_task_activity_to_db(workspace: Workspace, task_id: str, activity: list[TaskActivityEntry]) -> None:
-    """
-    Replace ``task_activity`` rows and emit a ``task_reported`` event atomically.
-
-    The single low-level write used by both ``save_task_activity`` and
-    ``append_task_activity``; deleting and reinserting the whole feed is
-    simpler than tracking per-row diffs and the activity feed is small
-    enough that the cost is negligible.
-    """
-    with workspace.connect() as connection:
-        connection.execute("DELETE FROM task_activity WHERE task_id = ?", (task_id,))
-        for entry_index, entry in enumerate(activity):
-            payload = json.dumps(entry.model_dump(mode="json"))
-            connection.execute(
-                """
-                INSERT INTO task_activity (task_id, entry_index, created_at, payload)
-                VALUES (?, ?, ?, ?)
-                """,
-                (task_id, entry_index, entry.created_at, payload),
-            )
-        append_task_event(
-            workspace,
-            event_type="task_reported",
-            task_id=task_id,
-            payload={"activity": [entry.model_dump(mode="json") for entry in activity]},
-        )
-        connection.commit()
+    return TaskActivityLog(workspace, task).load()
 
 
 def save_task_activity(workspace: Workspace, task: TaskRecord, activity: list[TaskActivityEntry]) -> None:
     """
-    Replace the task's activity feed wholesale.
-
-    Used by the retraction path that needs to rewrite an existing entry's
-    message in place (e.g. marking a pass entry as retracted after the
-    requeue-time filesystem check) rather than appending a new entry.
+    Compatibility wrapper for replacing a task's activity feed.
     """
-    _save_task_activity_to_db(workspace, task.id, activity)
+    TaskActivityLog(workspace, task).save(activity)
 
 
 def append_task_activity(workspace: Workspace, task: TaskRecord, entry: TaskActivityEntry) -> None:
     """
-    Append one verdict or report entry; the common write path for activity.
-
-    Pays the load+rewrite cost on every append so the on-disk ordering tracks
-    arrival order without requiring callers to track entry indexes themselves.
-    Reached by every stage controller and by the recovery report path.
+    Compatibility wrapper for appending one activity entry.
     """
-    activity = load_task_activity(workspace, task)
-    activity.append(entry)
-    save_task_activity(workspace, task, activity)
+    TaskActivityLog(workspace, task).append(entry)
+
+
+def latest_task_activity_entry(
+    workspace: Workspace,
+    task: TaskRecord,
+    role: str | None = None,
+    stage: TaskActivityStage | str | None = None,
+    source_subagent_id: SubagentId | str | None = None,
+    verdicts: Iterable[str | Verdict] | None = None,
+    after: datetime | None = None,
+) -> TaskActivityEntry | None:
+    """
+    Compatibility wrapper for querying the most recent matching activity entry.
+    """
+    if source_subagent_id is None:
+        canonical_source_subagent_id = None
+    else:
+        canonical_source_subagent_id = SubagentId(source_subagent_id)
+    return TaskActivityLog(workspace, task).latest_entry(
+        role=role,
+        stage=stage,
+        source_subagent_id=canonical_source_subagent_id,
+        verdicts=verdicts,
+        after=after,
+    )
 
 
 def _parse_created_at(value: str) -> datetime:

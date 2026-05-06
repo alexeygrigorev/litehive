@@ -23,7 +23,7 @@ import sqlite3
 from litehive.config.workspace import normalize_workspace_root
 from litehive.domain.common import TaskStatus, utcnow
 from litehive.domain.task import TaskRecord
-from litehive.state.persist import load_state
+from litehive.state.persist import load_state_for_workspace
 from litehive.state.records import list_tasks
 from litehive.workspace import Workspace
 
@@ -125,6 +125,15 @@ def read_attention_log(workspace: Workspace, limit: int | None = None) -> list[A
 
 def collect_operator_needed_state(root: Path) -> OperatorNeededState:
     """
+    Path-based compatibility wrapper for operator-attention projection.
+    """
+    return collect_operator_needed_state_for_workspace(
+        Workspace.from_path(normalize_workspace_root(root, source="collect_operator_needed_state"))
+    )
+
+
+def collect_operator_needed_state_for_workspace(workspace: Workspace) -> OperatorNeededState:
+    """
     Project the current attention requirement from authoritative SQLite state.
 
     Reads flagged tasks and the pool stop reason and filters the
@@ -134,8 +143,8 @@ def collect_operator_needed_state(root: Path) -> OperatorNeededState:
     rendering and by the daemon's pool gate before deciding
     whether to iterate.
     """
-    root = normalize_workspace_root(root, source="collect_operator_needed_state")
-    state = load_state(root, bootstrap=False)
+    root = workspace.root
+    state = load_state_for_workspace(workspace, bootstrap=False)
     flagged_tasks = tuple(
         sorted(
             (task for task in list_tasks(root, strict=False) if task.status == TaskStatus.FLAGGED),
@@ -150,6 +159,17 @@ def collect_operator_needed_state(root: Path) -> OperatorNeededState:
 
 def waiting_for_you_lines(root: Path, limit: int = 5, reconcile: bool = True) -> list[str]:
     """
+    Path-based compatibility wrapper for the "waiting on you" status block.
+    """
+    return waiting_for_you_lines_for_workspace(
+        Workspace.from_path(normalize_workspace_root(root, source="waiting_for_you_lines")),
+        limit=limit,
+        reconcile=reconcile,
+    )
+
+
+def waiting_for_you_lines_for_workspace(workspace: Workspace, limit: int = 5, reconcile: bool = True) -> list[str]:
+    """
     Render the "waiting on you" status block.
 
     Consumed by ``litehive status`` and the operator dashboard.
@@ -160,7 +180,7 @@ def waiting_for_you_lines(root: Path, limit: int = 5, reconcile: bool = True) ->
     """
     del reconcile
     try:
-        state = collect_operator_needed_state(root)
+        state = collect_operator_needed_state_for_workspace(workspace)
     except (OSError, sqlite3.DatabaseError, ValueError) as exc:
         return [f"operator_needed: unavailable ({type(exc).__name__}: {exc})"]
 
