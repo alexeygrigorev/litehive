@@ -1,6 +1,13 @@
 """Workspace repair entrypoint used by the daemon and repair CLI."""
 
-from litehive.domain.common import PipelineStatus, TaskStage, TaskStatus, utcnow
+from litehive.domain.common import (
+    OutcomeKind,
+    OutcomeReasonCode,
+    PipelineStatus,
+    TaskStage,
+    TaskStatus,
+    utcnow,
+)
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.state.locking import workspace_lock
 from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
@@ -68,9 +75,9 @@ def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepa
             task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage="done")
             apply_task_outcome(
                 task,
-                kind="done",
+                kind=OutcomeKind.DONE,
                 stage="done",
-                reason_code="done",
+                reason_code=OutcomeReasonCode.DONE,
                 reason="Recovered stale terminal task state from the latest pass report.",
                 retry_count=task.runtime.pipeline.retry_count,
                 retry_limit=task.runtime.pipeline.retry_limit,

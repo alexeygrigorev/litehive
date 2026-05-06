@@ -5,7 +5,13 @@ line that explains why the task is paused; paired with ``interrupted_subagent``
 which handles the subagent-side snapshot.
 """
 
-from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
+from litehive.domain.common import (
+    OutcomeKind,
+    OutcomeReasonCode,
+    PipelineStatus,
+    TaskStatus,
+    utcnow,
+)
 from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.domain.task import TaskRecord
 from litehive.recovery.interrupted_subagent import mark_interrupted_subagent
@@ -156,9 +162,9 @@ def _set_interruption_metadata(
     interrupted_subagent = mark_interrupted_subagent(workspace, task, reason=reason, stage=stage)
     apply_task_outcome(
         task,
-        kind="interrupted",
+        kind=OutcomeKind.INTERRUPTED,
         stage=stage,
-        reason_code="execution_interrupted",
+        reason_code=OutcomeReasonCode.EXECUTION_INTERRUPTED,
         reason=summary,
         retry_count=task.runtime.pipeline.retry_count,
         retry_limit=task.runtime.pipeline.retry_limit,

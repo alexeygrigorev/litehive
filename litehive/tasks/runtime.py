@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
+from litehive.domain.common import OutcomeKind, OutcomeReasonCode, PipelineStatus, TaskStatus, utcnow
 from litehive.domain.reports import StageReport
 from litehive.domain.runtime import (
     RuntimeEngineContinuation,
@@ -261,9 +261,9 @@ def _clear_task_outcome(task: TaskRecord) -> None:
 def mark_task_outcome(
     root: Path,
     task: TaskRecord,
-    kind: str,
+    kind: OutcomeKind | str,
     stage: str,
-    reason_code: str,
+    reason_code: OutcomeReasonCode | str,
     reason: str,
     retry_count: int,
     retry_limit: int,
@@ -296,9 +296,9 @@ def mark_task_outcome(
 
 def apply_task_outcome(
     task: TaskRecord,
-    kind: str,
+    kind: OutcomeKind | str,
     stage: str,
-    reason_code: str,
+    reason_code: OutcomeReasonCode | str,
     reason: str,
     retry_count: int,
     retry_limit: int,
@@ -315,11 +315,15 @@ def apply_task_outcome(
     entries the batch already covers.
     """
     now = utcnow()
+    outcome_kind = kind if isinstance(kind, OutcomeKind) else OutcomeKind(kind)
+    outcome_reason_code = (
+        reason_code if isinstance(reason_code, OutcomeReasonCode) else OutcomeReasonCode(reason_code)
+    )
     task.runtime.pipeline.updated_at = now
     task.runtime.pipeline.last_outcome = TaskOutcomeState(
-        kind=kind,
+        kind=outcome_kind,
         stage=stage,
-        reason_code=reason_code,
+        reason_code=outcome_reason_code,
         reason=reason,
         failure_classification=failure_classification,
         failure_diagnostics=dict(failure_diagnostics or {}),

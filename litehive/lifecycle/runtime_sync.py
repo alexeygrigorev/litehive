@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 
 from litehive.container import build_workspace
 from litehive.domain.common import (
+    OutcomeKind,
+    OutcomeReasonCode,
     PipelineState,
     PipelineStatus,
     TaskStatus,
@@ -405,9 +407,9 @@ def _sync_recovery_follow_up(workspace: Workspace, task_record: TaskRecord, stat
         diagnostics_budget_key = None
     apply_task_outcome(
         task_record,
-        kind="flagged",
+        kind=OutcomeKind.FLAGGED,
         stage=trigger_stage,
-        reason_code="stage_exception",
+        reason_code=OutcomeReasonCode.STAGE_EXCEPTION,
         reason=state.failed_message or latest.message or "Recovery escalated to a follow-up task.",
         retry_count=task_record.runtime.pipeline.retry_count,
         retry_limit=task_record.runtime.pipeline.retry_limit,
