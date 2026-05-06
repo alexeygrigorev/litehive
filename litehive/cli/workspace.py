@@ -51,6 +51,7 @@ from litehive.state.records import list_tasks
 from litehive.domain.task_ops import WorkspaceConflictError, WorkspaceRepairSummary
 from litehive.worktree.cleanup import collect_managed_worktrees
 from litehive.worktree.inspection import inspect_dirty_worktree_gate
+from litehive.workspace import Workspace
 
 
 def register_root_commands(app: typer.Typer) -> None:
@@ -302,7 +303,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(line)
 
     print()
-    daemon_status, daemon_pid = health_daemon_status(root)
+    daemon_status, daemon_pid = health_daemon_status_for_workspace(ws)
     for line in render_health_daemon_lines(daemon_status, daemon_pid):
         print(line)
 
@@ -319,6 +320,13 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 def health_daemon_status(root: Path) -> tuple[str, str]:
     """
+    Path-based compatibility wrapper for daemon health status.
+    """
+    return health_daemon_status_for_workspace(build_workspace(root))
+
+
+def health_daemon_status_for_workspace(workspace: Workspace) -> tuple[str, str]:
+    """
     Return a ``(status, pid)`` pair for the workspace daemon.
 
     Renders the same shape the health command uses so tests can
@@ -327,7 +335,7 @@ def health_daemon_status(root: Path) -> tuple[str, str]:
     record is present so the caller can render the row without
     branching.
     """
-    entry = daemon_metadata(root)
+    entry = daemon_metadata(workspace.root)
     if entry is None or entry.get("status") != "running":
         return ("stopped", "-")
     pid = entry.get("pid")
