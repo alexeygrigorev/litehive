@@ -10,6 +10,7 @@ must not reach into.
 import logging
 from pathlib import Path
 
+from litehive.container import build_container
 from litehive.domain.common import PipelineStatus, TaskStage, TaskStatus, utcnow
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.recovery import TriggerEventKind
@@ -491,7 +492,7 @@ def clear_active_task(root: Path) -> WorkspaceState:
     flows that already null out ``state.active_task_id`` themselves.
     Candidate for removal.
     """
-    return set_active_task(Workspace.from_path(root), None)
+    return set_active_task(build_container(root).workspace, None)
 
 
 def restore_untouched_active_task(root: Path) -> WorkspaceState:
@@ -503,7 +504,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
     looks like a leftover from before workspace-repair owned this concern.
     """
     with workspace_mutation_guard(root), workspace_lock(root):
-        local_workspace = Workspace.from_path(root)
+        local_workspace = build_container(root).workspace
         state = load_state(root)
         validate_single_active_task(root, state)
         if state.active_task_id is None:
