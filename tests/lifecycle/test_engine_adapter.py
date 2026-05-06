@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 
 from heru.base import CLIExecutionResult
-from litehive.domain.agent import EngineFailure, SubagentResult
+from litehive.domain.agent import EngineFailure, SubagentId, SubagentResult
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport, TaskActivityEntry
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.agents.manager import SubagentStartupError
@@ -22,6 +22,10 @@ from litehive.tasks.activity import load_task_activity
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.tasks.report_storage import load_stage_reports
 from heru.types import RuntimeEngineContinuation, SubagentRef, SubagentStatus
+
+_SOURCE_SUBAGENT_ID = SubagentId("SA-0001")
+_OTHER_SUBAGENT_ID = SubagentId("SA-0002")
+_DIRECT_RECOVERY_SUBAGENT_ID = SubagentId("direct-recovery")
 
 
 class _StubManager:
@@ -857,6 +861,7 @@ def test_latest_verdict_after_allows_clean_implementing_noop(tmp_path, monkeypat
             verdict="pass",
             message="implemented nothing",
             files_changed=[],
+            source_subagent_id=_SOURCE_SUBAGENT_ID,
         ),
     )
     monkeypatch.setattr(
@@ -869,6 +874,7 @@ def test_latest_verdict_after_allows_clean_implementing_noop(tmp_path, monkeypat
         task.id,
         TaskStage.IMPLEMENTING,
         datetime.now(UTC) - timedelta(minutes=1),
+        source_subagent_id=_SOURCE_SUBAGENT_ID,
     )
 
     assert verdict is not None
@@ -888,6 +894,7 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
             verdict="pass",
             message="implemented foo.py",
             files_changed=["foo.py"],
+            source_subagent_id=_SOURCE_SUBAGENT_ID,
         ),
     )
     record = StageReport(
@@ -912,6 +919,7 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
         task.id,
         TaskStage.IMPLEMENTING,
         datetime.now(UTC) - timedelta(minutes=1),
+        source_subagent_id=_SOURCE_SUBAGENT_ID,
     )
 
     assert verdict is not None
@@ -951,6 +959,7 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
             verdict="pass",
             message="implemented change",
             files_changed=["foo.py"],
+            source_subagent_id=_SOURCE_SUBAGENT_ID,
         ),
     )
     monkeypatch.setattr(
@@ -963,6 +972,7 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
         task.id,
         TaskStage.IMPLEMENTING,
         datetime.now(UTC) - timedelta(minutes=1),
+        source_subagent_id=_SOURCE_SUBAGENT_ID,
     )
 
     assert verdict is not None
@@ -982,6 +992,7 @@ def test_latest_verdict_after_returns_semantic_reject_classification(tmp_path) -
             verdict="reject",
             verdict_classification=SEMANTIC_REJECT_CLASSIFICATION,
             message="acceptance evidence is incomplete",
+            source_subagent_id=_SOURCE_SUBAGENT_ID,
         ),
     )
 
@@ -990,6 +1001,7 @@ def test_latest_verdict_after_returns_semantic_reject_classification(tmp_path) -
         task.id,
         TaskStage.ACCEPTING,
         datetime.now(UTC) - timedelta(minutes=1),
+        source_subagent_id=_SOURCE_SUBAGENT_ID,
     )
 
     assert verdict is not None
@@ -1010,7 +1022,7 @@ def test_latest_verdict_after_can_filter_to_source_subagent_id(tmp_path) -> None
             stage=PipelineState.IMPLEMENTING,
             verdict="pass",
             message="wrong session",
-            source_subagent_id="SA-0002",
+            source_subagent_id=_OTHER_SUBAGENT_ID,
         ),
     )
     append_activity_entry(
@@ -1021,7 +1033,7 @@ def test_latest_verdict_after_can_filter_to_source_subagent_id(tmp_path) -> None
             stage=PipelineState.IMPLEMENTING,
             verdict="reject",
             message="current session",
-            source_subagent_id="SA-0001",
+            source_subagent_id=_SOURCE_SUBAGENT_ID,
         ),
     )
 
@@ -1030,7 +1042,7 @@ def test_latest_verdict_after_can_filter_to_source_subagent_id(tmp_path) -> None
         task.id,
         TaskStage.IMPLEMENTING,
         datetime.now(UTC) - timedelta(minutes=1),
-        source_subagent_id="SA-0001",
+        source_subagent_id=_SOURCE_SUBAGENT_ID,
     )
 
     assert verdict is not None
@@ -1057,6 +1069,7 @@ def test_latest_verdict_after_includes_retry_summary_metadata(tmp_path, monkeypa
                 "litehive/lifecycle/prompt_serializer.py",
                 "tests/lifecycle/test_prompt_serializer.py",
             ],
+            source_subagent_id=_SOURCE_SUBAGENT_ID,
         ),
     )
     monkeypatch.setattr(
@@ -1069,6 +1082,7 @@ def test_latest_verdict_after_includes_retry_summary_metadata(tmp_path, monkeypa
         task.id,
         TaskStage.IMPLEMENTING,
         datetime.now(UTC) - timedelta(minutes=1),
+        source_subagent_id=_SOURCE_SUBAGENT_ID,
     )
 
     assert verdict is not None
@@ -1098,6 +1112,7 @@ def test_latest_verdict_after_accepts_recovery_resume(tmp_path) -> None:
             target_stage="testing",
             verdict="resume",
             message="fixed the runner bug",
+            source_subagent_id=_DIRECT_RECOVERY_SUBAGENT_ID,
         ),
     )
 
@@ -1106,6 +1121,7 @@ def test_latest_verdict_after_accepts_recovery_resume(tmp_path) -> None:
         task.id,
         PipelineState.RECOVERING,
         datetime.now(UTC) - timedelta(minutes=1),
+        source_subagent_id=_DIRECT_RECOVERY_SUBAGENT_ID,
     )
 
     assert verdict is not None
@@ -1127,6 +1143,7 @@ def test_latest_verdict_after_preserves_recovery_advance_target_stage(tmp_path) 
             target_stage="accepting",
             verdict="advance",
             message="skip ahead to acceptance",
+            source_subagent_id=_DIRECT_RECOVERY_SUBAGENT_ID,
         ),
     )
 
@@ -1135,6 +1152,7 @@ def test_latest_verdict_after_preserves_recovery_advance_target_stage(tmp_path) 
         task.id,
         PipelineState.RECOVERING,
         datetime.now(UTC) - timedelta(minutes=1),
+        source_subagent_id=_DIRECT_RECOVERY_SUBAGENT_ID,
     )
 
     assert verdict is not None
