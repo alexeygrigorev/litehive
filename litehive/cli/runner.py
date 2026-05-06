@@ -751,9 +751,9 @@ def db_rebuild_from_events(workspace: WorkspaceOption = Path.cwd()) -> int:
     older than the latest events.
     """
     workspace = normalize_workspace_root(workspace, source="--workspace")
-    container = build_container(workspace)
+    workspace_obj = build_workspace(workspace)
     try:
-        summary = rebuild_sqlite_from_task_event_log(container.workspace)
+        summary = rebuild_sqlite_from_task_event_log(workspace_obj)
     except Exception as exc:
         print(f"db rebuild-from-events failed: {exc}")
         return 1
@@ -787,8 +787,8 @@ def db_audit(
     targeted investigations.
     """
     workspace = normalize_workspace_root(workspace, source="--workspace")
-    container = build_container(workspace)
-    entries = load_task_audit_entries(container.workspace, task_id=task_id, action=action, limit=limit)
+    workspace_obj = build_workspace(workspace)
+    entries = load_task_audit_entries(workspace_obj, task_id=task_id, action=action, limit=limit)
     print(f"workspace: {workspace}")
     print(f"audit_entries: {len(entries)}")
     for entry in entries:
@@ -815,8 +815,8 @@ def db_settings(workspace: WorkspaceOption = Path.cwd()) -> int:
     settings render unambiguously.
     """
     workspace = normalize_workspace_root(workspace, source="--workspace")
-    container = build_container(workspace)
-    settings = load_runtime_settings(container.workspace)
+    workspace_obj = build_workspace(workspace)
+    settings = load_runtime_settings(workspace_obj)
     print(f"workspace: {workspace}")
     for key in sorted(settings):
         print(f"{key}: {json.dumps(settings[key], sort_keys=True)}")
@@ -837,8 +837,8 @@ def db_settings_audit(
     argument narrows the output to one setting.
     """
     workspace = normalize_workspace_root(workspace, source="--workspace")
-    container = build_container(workspace)
-    entries = load_runtime_setting_audit_entries(container.workspace, key=key, limit=limit)
+    workspace_obj = build_workspace(workspace)
+    entries = load_runtime_setting_audit_entries(workspace_obj, key=key, limit=limit)
     print(f"workspace: {workspace}")
     print(f"setting_audit_entries: {len(entries)}")
     for entry in entries:
