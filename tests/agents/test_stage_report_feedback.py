@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
 
-from litehive.agents.manager import SubagentManager
+from litehive.container import build_subagent_manager
 from litehive.agents.parsing import stage_report_from_subagent
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.agent import EngineFailure, SubagentResult
@@ -156,7 +156,7 @@ def test_subagent_manager_keeps_full_transcript_artifacts(
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Keep full transcript artifacts")
-    manager = SubagentManager(tmp_path, execution_root=tmp_path)
+    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
     transcript = "full transcript\n" + ("z" * (FEEDBACK_CAP + 400))
 
     class FakeEngine:

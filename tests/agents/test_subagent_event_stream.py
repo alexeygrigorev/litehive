@@ -6,7 +6,7 @@ import pytest
 from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
 
-from litehive.agents.manager import SubagentManager
+from litehive.container import build_subagent_manager
 from litehive.agents.session_store import load_subagent_report, load_subagent_event_stream
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
@@ -23,7 +23,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
 ) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
     task = create_task(tmp_path, title="Claude live restart summary", auto_commit=False)
-    manager = SubagentManager(tmp_path, execution_root=tmp_path)
+    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
 
     ref = SubagentRef(
         id="SA-0001",
@@ -82,7 +82,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
 def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Event stream live progress test")
-    manager = SubagentManager(tmp_path, execution_root=tmp_path)
+    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
 
     partial_stdout = (
         '{"kind":"message","engine":"opencode","sequence":0,'
@@ -156,7 +156,7 @@ def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monke
 def test_subagent_skips_event_stream_when_no_events(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="No event stream test")
-    manager = SubagentManager(tmp_path, execution_root=tmp_path)
+    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
 
     class FakeEngine:
         name = "codex"

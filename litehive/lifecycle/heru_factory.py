@@ -35,6 +35,7 @@ from typing import Any
 from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.config.loading import load_config
+from litehive.container import build_subagent_manager
 from litehive.domain.agent import EngineFailure
 from litehive.domain.common import OutcomeReasonCode, PipelineState, TaskStage, cap_feedback
 from litehive.domain.reports import StageReport, TaskActivityStage, canonical_report_pipeline_state
@@ -456,7 +457,11 @@ class HeruEngineAdapter:
 
         before_turn = datetime.now(UTC)
         try:
-            manager = SubagentManager(self.workspace_root, execution_root=execution_root)
+            manager = build_subagent_manager(
+                self.workspace_root,
+                execution_root=execution_root,
+                manager_cls=SubagentManager,
+            )
         except Exception as exc:
             return self._handle_startup_failure(
                 state=state,

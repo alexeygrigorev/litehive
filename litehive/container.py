@@ -46,3 +46,28 @@ def build_workspace(root: Path) -> Workspace:
     :func:`build_container`.
     """
     return Workspace.from_path(root)
+
+
+def build_subagent_manager(root: Path, execution_root: Path, manager_cls=None):
+    """
+    Assemble a ``SubagentManager`` for one agent turn.
+
+    Kept in the container so ``SubagentManager.__init__`` only receives
+    ready collaborators and never builds workspace/config/sandbox itself.
+    """
+    from litehive.agents.manager import SubagentManager  # noqa: PLC0415
+    from litehive.agents.sandbox import SandboxLauncher  # noqa: PLC0415
+
+    if manager_cls is not None and manager_cls is not SubagentManager:
+        return manager_cls(root, execution_root=execution_root)
+
+    container = build_container(root)
+    sandbox = SandboxLauncher(container.workspace.root, container.config)
+    manager_type = manager_cls or SubagentManager
+    return manager_type(
+        container.workspace.root,
+        execution_root=execution_root,
+        workspace=container.workspace,
+        config=container.config,
+        sandbox=sandbox,
+    )

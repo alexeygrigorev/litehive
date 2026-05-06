@@ -17,6 +17,7 @@ from heru.adapters import (
 )
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from litehive.agents.sandbox import SandboxError, SandboxLauncher
+from litehive.config.model import LitehiveConfig
 from litehive.observability.events import append_event
 from heru.types import SubagentRef
 from litehive.domain.reports import REPORT_VERDICT_KINDS, ReportPipelineState, StageReport
@@ -148,7 +149,15 @@ class SubagentStartupError(RuntimeError):
 class SubagentManager(SessionMixin):
     """Run external CLI subagents inside a task-scoped folder."""
 
-    def __init__(self, root: Path, execution_root: Path) -> None:
+    def __init__(
+        self,
+        root: Path,
+        execution_root: Path,
+        *,
+        workspace: Workspace,
+        config: LitehiveConfig,
+        sandbox: SandboxLauncher,
+    ) -> None:
         """
         Bind the manager to a workspace plus an execution cwd.
 
@@ -159,9 +168,9 @@ class SubagentManager(SessionMixin):
         """
         self.root = root.resolve()
         self.execution_root = execution_root.resolve()
-        self.workspace = Workspace.from_path(self.root)
-        self.config = self.workspace.config()
-        self.sandbox = SandboxLauncher(self.root, self.config)
+        self.workspace = workspace
+        self.config = config
+        self.sandbox = sandbox
         self._stream_offsets: dict[str, int] = {}
 
     @staticmethod
