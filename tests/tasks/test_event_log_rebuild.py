@@ -20,7 +20,7 @@ from litehive.tasks.event_log import (
     task_event_log_path,
 )
 from litehive.tasks.report_storage import load_stage_reports, record_stage_report
-from litehive.tasks.status import close_task, requeue_task, update_task
+from litehive.tasks.status import close_task_for_workspace, requeue_task, update_task
 from litehive.domain.common import PipelineStatus, TaskStatus
 
 
@@ -74,7 +74,7 @@ def test_task_event_log_records_lifecycle_transition_types_outside_sqlite(tmp_pa
     )
     assert report.exit_code == 0, report.output
 
-    close_task(tmp_path, task.id, outcome="duplicate", reason="same work")
+    close_task_for_workspace(Workspace.from_path(tmp_path), task.id, outcome="duplicate", reason="same work")
     requeue_task(tmp_path, task.id, force=True)
     task = require_task(tmp_path, task.id)
     task.status = TaskStatus.DONE
@@ -160,7 +160,7 @@ def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_
             duration_seconds=12,
         ),
     )
-    close_task(tmp_path, done.id, outcome="done", reason="verified")
+    close_task_for_workspace(Workspace.from_path(tmp_path), done.id, outcome="done", reason="verified")
 
     _clear_task_tables(tmp_path)
 

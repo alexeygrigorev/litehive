@@ -116,7 +116,7 @@ def test_completed_task_recovery_then_close_reconciles_all_state_layers(tmp_path
     """Test that recovery+close operations maintain consistency across all persistence layers."""
     from litehive.state.records import get_task_record
     from litehive.state.store import runtime_store
-    from litehive.tasks.status import close_task
+    from litehive.tasks.status import close_task_for_workspace
 
     _init_workspace_git_repo(tmp_path)
 
@@ -157,7 +157,12 @@ def test_completed_task_recovery_then_close_reconciles_all_state_layers(tmp_path
     assert task_state_after_recovery.pipeline_status == "implementing"
 
     # Close the recovered task as done
-    closed_task = close_task(tmp_path, task.id, outcome="done", reason="Task completed successfully")
+    closed_task = close_task_for_workspace(
+        Workspace.from_path(tmp_path),
+        task.id,
+        outcome="done",
+        reason="Task completed successfully",
+    )
 
     # Verify task status is properly closed with outcome "done"
     assert closed_task.status == "done"

@@ -1,14 +1,12 @@
 """Task status transitions for taking a task out of the active queue.
 
-Covers ``close_task`` (terminal verdict: done/wont_do/deferred/duplicate/
-execution_cancelled), ``abandon_task_for_workspace`` (operator-initiated
-kill of an in-flight or parked task), and ``park_task_for_workspace``
-(set aside without closing so the operator can resume later).
+Covers ``close_task_for_workspace`` (terminal verdict:
+done/wont_do/deferred/duplicate/execution_cancelled),
+``abandon_task_for_workspace`` (operator-initiated kill of an
+in-flight or parked task), and ``park_task_for_workspace`` (set aside
+without closing so the operator can resume later).
 """
 
-from pathlib import Path
-
-from litehive.container import build_workspace
 from litehive.domain.common import OutcomeReasonCode, TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import StopTaskSummary
@@ -235,34 +233,6 @@ def abandon_task_for_workspace(
         workspace,
         task_id,
         reason=reason,
-        audit_actor=audit_actor,
-        audit_source=audit_source,
-    )
-
-
-def close_task(
-    root: Path,
-    task_id: str,
-    outcome: str,
-    reason: str | None = None,
-    follow_up_task_id: str | None = None,
-    audit_actor: str = "operator",
-    audit_source: str = "cli",
-) -> TaskRecord:
-    """
-    Public CLI/agent entry for terminating a task with a deliberate verdict.
-
-    Accepts ``done``, ``wont_do``, ``deferred``, ``duplicate``, or
-    ``execution_cancelled`` as outcome plus an optional follow-up task
-    reference; thin wrapper around ``_close_task_transition`` so the public
-    surface stays importable from ``litehive.tasks.status``.
-    """
-    return close_task_for_workspace(
-        build_workspace(root),
-        task_id,
-        outcome=outcome,
-        reason=reason,
-        follow_up_task_id=follow_up_task_id,
         audit_actor=audit_actor,
         audit_source=audit_source,
     )

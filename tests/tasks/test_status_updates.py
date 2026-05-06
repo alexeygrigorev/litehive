@@ -14,7 +14,6 @@ from litehive.state.persist import load_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.state.store import runtime_store
 from litehive.tasks.status import (
-    close_task,
     close_task_for_workspace,
     park_task_for_workspace,
     update_task,
@@ -205,7 +204,12 @@ def test_close_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path)
     ensure_workspace(tmp_path)
     _save_intent_only_task(tmp_path)
 
-    close_task(tmp_path, "T-0001", outcome="duplicate", reason="duplicate umbrella")
+    close_task_for_workspace(
+        Workspace.from_path(tmp_path),
+        "T-0001",
+        outcome="duplicate",
+        reason="duplicate umbrella",
+    )
 
     refreshed = require_task(tmp_path, "T-0001")
     assert refreshed.status == "closed"
@@ -226,7 +230,12 @@ def test_close_task_resets_pipeline_state_row(tmp_path: Path) -> None:
     state.stage = PipelineState.RECOVERING
     persistence.save(state)
 
-    close_task(tmp_path, task.id, outcome="duplicate", reason="duplicate umbrella")
+    close_task_for_workspace(
+        Workspace.from_path(tmp_path),
+        task.id,
+        outcome="duplicate",
+        reason="duplicate umbrella",
+    )
 
     refreshed = require_task(tmp_path, task.id)
     assert refreshed.status == "closed"
