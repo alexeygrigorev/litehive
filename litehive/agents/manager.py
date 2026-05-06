@@ -8,7 +8,6 @@ import sys
 import time
 from typing import Callable, cast
 
-from litehive.config.loading import load_config
 from heru import get_engine, resume_safe_model_override
 from heru.adapters import (
     EngineError,
@@ -161,7 +160,7 @@ class SubagentManager(SessionMixin):
         self.root = root.resolve()
         self.execution_root = execution_root.resolve()
         self.workspace = Workspace.from_path(self.root)
-        self.config = load_config(self.root)
+        self.config = self.workspace.config()
         self.sandbox = SandboxLauncher(self.root, self.config)
         self._stream_offsets: dict[str, int] = {}
 

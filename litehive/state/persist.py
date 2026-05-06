@@ -12,6 +12,7 @@ from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.locking import workspace_lock, workspace_mutation_guard
 from litehive.state.store import runtime_store
 from litehive.tasks.audit import TaskAuditEntry
+from litehive.workspace import Workspace
 
 _MISSING = object()
 _SKIP_BOOTSTRAP_LOAD_STATE: ContextVar[bool] = ContextVar(
@@ -39,7 +40,7 @@ def skip_bootstrap_load_state():
         _SKIP_BOOTSTRAP_LOAD_STATE.reset(token)
 
 
-def load_state(root: Path, bootstrap: bool = True) -> WorkspaceState:
+def load_state(workspace: Workspace, bootstrap: bool = True) -> WorkspaceState:
     """
     Return the workspace state, materialising an empty row on first read.
 
@@ -48,8 +49,8 @@ def load_state(root: Path, bootstrap: bool = True) -> WorkspaceState:
     a fresh workspace usable without a separate ``init`` step.
     """
     if bootstrap and not _SKIP_BOOTSTRAP_LOAD_STATE.get():
-        ensure_workspace(root)
-    store = runtime_store(root)
+        ensure_workspace(workspace.root)
+    store = runtime_store(workspace.root)
     state = store.load_workspace_state()
     if state is None:
         state = WorkspaceState()

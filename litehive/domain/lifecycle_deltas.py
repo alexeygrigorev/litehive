@@ -203,12 +203,13 @@ def _reason_code_from_event(state: TaskState, event: Event) -> str | None:
     ``RecoveryTrigger`` and when fingerprinting the failure for budget
     bookkeeping.
     """
-    if isinstance(event, Reject) and _hook_reject_loop_detected(state, event):
+    if not isinstance(event, Reject):
+        return None
+    if _hook_reject_loop_detected(state, event):
         return "hook_reject_loop"
-    if isinstance(event, Reject):
-        reason_code = event.metadata.get("reason_code") or event.classification
-        if isinstance(reason_code, str) and reason_code.strip():
-            return reason_code.strip()
+    reason_code = event.metadata.get("reason_code") or event.classification
+    if isinstance(reason_code, str) and reason_code.strip():
+        return reason_code.strip()
     return None
 
 
