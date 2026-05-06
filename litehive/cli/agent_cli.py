@@ -258,13 +258,14 @@ def agent_report_command(
     except ValueError as exc:
         print(f"report failed: {exc}")
         raise SystemExit(1)
+    workspace_obj = build_workspace(root)
+    root = workspace_obj.root
     if not tid:
         state = load_state(root)
         tid = state.active_task_id
     if not tid:
         print("report failed: no task id")
         raise SystemExit(1)
-    workspace_obj = build_workspace(root)
     task = get_task_record(root, tid)
     if task is None:
         print(f"report failed: task {tid} not found")
