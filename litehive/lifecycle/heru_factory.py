@@ -331,7 +331,7 @@ def _extract_test_results(message: str) -> list[str]:
 
 
 def latest_verdict_after(
-    workspace_root: Path,
+    workspace: Workspace,
     task_id: str,
     stage: TaskActivityStage,
     after_ts: datetime,
@@ -342,10 +342,10 @@ def latest_verdict_after(
 
     Returns ``None`` when nothing newer landed — caller raises ``NudgeRequired``.
     """
+    workspace_root = workspace.root
     task = get_task(workspace_root, task_id)
     if task is None:
         return None
-    workspace = build_workspace(workspace_root)
     latest = latest_task_activity_entry(
         workspace,
         task,
@@ -497,10 +497,10 @@ class HeruEngineAdapter:
 
         # Did the agent submit a verdict during this turn?
         verdict = latest_verdict_after(
-            self.workspace_root,
-            state.task_id,
-            report_stage,
-            before_turn,
+                self.workspace,
+                state.task_id,
+                report_stage,
+                before_turn,
             source_subagent_id=result.ref.id,
         )
         if verdict is None:
@@ -636,7 +636,7 @@ class HeruEngineAdapter:
         if state.stage != PipelineState.RECOVERING:
             return None
         return latest_verdict_after(
-            self.workspace_root,
+            self.workspace,
             state.task_id,
             PipelineState.RECOVERING,
             after_ts,

@@ -865,7 +865,7 @@ def test_latest_verdict_after_allows_clean_implementing_noop(tmp_path, monkeypat
     )
 
     verdict = latest_verdict_after(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task.id,
         TaskStage.IMPLEMENTING,
         datetime.now(UTC) - timedelta(minutes=1),
@@ -908,7 +908,7 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
     )
 
     verdict = latest_verdict_after(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task.id,
         TaskStage.IMPLEMENTING,
         datetime.now(UTC) - timedelta(minutes=1),
@@ -959,7 +959,7 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
     )
 
     verdict = latest_verdict_after(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task.id,
         TaskStage.IMPLEMENTING,
         datetime.now(UTC) - timedelta(minutes=1),
@@ -986,7 +986,7 @@ def test_latest_verdict_after_returns_semantic_reject_classification(tmp_path) -
     )
 
     verdict = latest_verdict_after(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task.id,
         TaskStage.ACCEPTING,
         datetime.now(UTC) - timedelta(minutes=1),
@@ -1026,7 +1026,7 @@ def test_latest_verdict_after_can_filter_to_source_subagent_id(tmp_path) -> None
     )
 
     verdict = latest_verdict_after(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task.id,
         TaskStage.IMPLEMENTING,
         datetime.now(UTC) - timedelta(minutes=1),
@@ -1065,7 +1065,7 @@ def test_latest_verdict_after_includes_retry_summary_metadata(tmp_path, monkeypa
     )
 
     verdict = latest_verdict_after(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task.id,
         TaskStage.IMPLEMENTING,
         datetime.now(UTC) - timedelta(minutes=1),
@@ -1102,7 +1102,7 @@ def test_latest_verdict_after_accepts_recovery_resume(tmp_path) -> None:
     )
 
     verdict = latest_verdict_after(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task.id,
         PipelineState.RECOVERING,
         datetime.now(UTC) - timedelta(minutes=1),
@@ -1131,7 +1131,7 @@ def test_latest_verdict_after_preserves_recovery_advance_target_stage(tmp_path) 
     )
 
     verdict = latest_verdict_after(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task.id,
         PipelineState.RECOVERING,
         datetime.now(UTC) - timedelta(minutes=1),
