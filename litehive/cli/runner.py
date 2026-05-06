@@ -27,7 +27,7 @@ from litehive.db.schema import MigrationApplyError, apply_pending_migrations, mi
 from litehive.git.ops import has_non_litehive_changes, is_git_repo
 from litehive.domain.common import PipelineState
 from litehive.domain.reports import TaskActivityEntry, TaskActivityVerdict
-from litehive.lifecycle.orchestration import run_task
+from litehive.lifecycle.orchestration import ExecutionResult, run_task_for_workspace
 from litehive.state.backup import create_workspace_backup, list_workspace_backups, restore_workspace_backup
 from litehive.state.records import get_task
 from litehive.domain.task_ops import WorkspaceConflictError
@@ -194,6 +194,28 @@ class _RunCommandIteration:
     pool_stop_reason: str | None = None
 
 
+def run_task(
+    container: LitehiveContainer,
+    task,
+    engine_override: str | None = None,
+    model_override: str | None = None,
+) -> ExecutionResult:
+    """
+    CLI runner seam around injected task orchestration.
+
+    Tests monkey-patch this module-level name to avoid spinning up the
+    pipeline; production passes the already-built container through so the
+    orchestration layer does not rebuild workspace dependencies.
+    """
+    return run_task_for_workspace(
+        container.workspace,
+        container.config,
+        task,
+        engine_override=engine_override,
+        model_override=model_override,
+    )
+
+
 def run_once(
     container: LitehiveContainer,
     engine: str | None = None,
@@ -237,7 +259,7 @@ def run_once(
 
         try:
             result = run_task(
-                root,
+                container,
                 task,
                 engine_override=engine,
                 model_override=model,
