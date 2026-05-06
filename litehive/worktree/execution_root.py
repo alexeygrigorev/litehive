@@ -13,7 +13,7 @@ from pathlib import Path
 
 from litehive.agents.merge_resolver import run_worktree_merge_agent
 from litehive.config.model import LitehiveConfig
-from litehive.container import build_container
+from litehive.container import build_workspace
 from litehive.domain.task import TaskRecord
 from litehive.fs_cleanup import remove_tree_logged
 from litehive.git.ops import add_worktree, current_head, is_git_repo, rebase_worktree_onto
@@ -29,6 +29,7 @@ from litehive.worktree.paths import (
     serialize_worktree_path,
     task_worktree_path,
 )
+from litehive.workspace import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,21 @@ def resolve_task_execution_root(
     """
     Pick the directory the task's subagent should run in.
 
+    Path-based compatibility wrapper. Callers that already have a
+    :class:`Workspace` should use
+    :func:`resolve_task_execution_root_for_workspace`.
+    """
+    return resolve_task_execution_root_for_workspace(build_workspace(root), task, config=config)
+
+
+def resolve_task_execution_root_for_workspace(
+    workspace: Workspace,
+    task: TaskRecord,
+    config: LitehiveConfig | None = None,
+) -> Path:
+    """
+    Pick the directory the task's subagent should run in using an injected workspace.
+
     Used by the runner before spawning a subagent: in a non-git
     workspace this is just ``root``; in a git workspace it's the
     task's dedicated worktree (created on first call, reused on
@@ -48,12 +64,11 @@ def resolve_task_execution_root(
     on top of fresh code). A failed rebase lands in the merge-resolver
     agent rather than aborting the task.
     """
+    root = workspace.root
     if not is_git_repo(root):
         return root
 
-    container = build_container(root)
-    workspace = container.workspace
-    merge_config = config or container.config
+    merge_config = config or workspace.config()
     recorded_path = get_task_worktree_path(task)
     worktree_path = resolve_recorded_worktree_path(root, recorded_path)
     if worktree_path is not None:

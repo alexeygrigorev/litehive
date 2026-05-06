@@ -9,8 +9,9 @@ from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task, save_task
 from litehive.domain.common import TaskStatus
 from litehive.worktree.cleanup import remove_cleanable_worktrees
-from litehive.worktree.execution_root import resolve_task_execution_root
+from litehive.worktree.execution_root import resolve_task_execution_root, resolve_task_execution_root_for_workspace
 from litehive.worktree.paths import ensure_worktree_venv_link, task_worktree_path
+from litehive.workspace import Workspace
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -53,6 +54,25 @@ def test_resolve_task_execution_root_links_worktree_venv_to_workspace_venv(tmp_p
 
     assert worktree.joinpath(".venv").is_symlink()
     assert worktree.joinpath(".venv").resolve() == workspace.joinpath(".venv").resolve()
+
+
+def test_resolve_task_execution_root_accepts_injected_workspace(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _git_ok(workspace, "init", "-b", "main")
+    _configure_repo(workspace)
+    ensure_workspace(workspace)
+
+    (workspace / "app.txt").write_text("base\n", encoding="utf-8")
+    _git_ok(workspace, "add", "app.txt")
+    _git_ok(workspace, "commit", "-m", "initial")
+
+    task = create_task(workspace, title="Resolve execution root from workspace")
+
+    worktree = resolve_task_execution_root_for_workspace(Workspace.from_path(workspace), task)
+
+    assert worktree == task_worktree_path(workspace, task)
+    assert worktree.exists()
 
 
 def test_ensure_worktree_venv_link_logs_target_and_raises_on_cleanup_failure(
