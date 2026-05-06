@@ -44,7 +44,7 @@ def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Pat
     message = "summary line\n\n" + ("y" * (FEEDBACK_CAP + 250))
 
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(
             role="swe",
@@ -72,7 +72,7 @@ def test_stage_report_from_subagent_preserves_semantic_reject_classification(tmp
     task = create_task(tmp_path, title="Classified reviewer reject")
 
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(
             role="reviewer",

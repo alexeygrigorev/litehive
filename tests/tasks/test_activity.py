@@ -30,7 +30,7 @@ def test_append_activity_entry_persists_to_sqlite(tmp_path: Path) -> None:
     task = create_task(tmp_path, title="Activity")
 
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(role="swe", stage="implementing", verdict="pass", message="new"),
     )
@@ -54,7 +54,7 @@ def test_load_task_activity_ignores_stale_filesystem_activity(tmp_path: Path) ->
     (source_dir / ("thread" + ".yaml")).write_text("- message: stale legacy\n", encoding="utf-8")
 
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(role="qa", stage="testing", verdict="comment", message="canonical db entry"),
     )

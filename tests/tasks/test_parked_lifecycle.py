@@ -156,7 +156,7 @@ def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
         acceptance_criteria=["allow resume with owned dirty paths"],
     )
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(
             role="swe",

@@ -88,7 +88,7 @@ def test_task_evidence_renders_minimal_recovery_routing_state(
     (sa_dir / "stdout.txt").write_text("very verbose output that should not be printed\n", encoding="utf-8")
     _write_session_record(tmp_path, task.id, exit_code=17)
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(role="swe", stage="implementing", verdict="reject", message="agent report failed"),
     )

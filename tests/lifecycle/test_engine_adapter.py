@@ -345,7 +345,7 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_on_pre_start_subagent
             captured["cwd"] = cwd
             captured["extra_env"] = extra_env
             append_activity_entry(
-                tmp_path,
+                Workspace.from_path(tmp_path),
                 task,
                 TaskActivityEntry(
                     role="recovery",
@@ -427,7 +427,7 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_when_engine_is_unavai
             captured["cwd"] = cwd
             captured["extra_env"] = extra_env
             append_activity_entry(
-                tmp_path,
+                Workspace.from_path(tmp_path),
                 task,
                 TaskActivityEntry(
                     role="recovery",
@@ -568,7 +568,7 @@ def test_heru_engine_adapter_returns_direct_recovery_verdict_during_recovering_s
             assert extra_env is not None
             captured["prompt"] = prompt
             append_activity_entry(
-                tmp_path,
+                Workspace.from_path(tmp_path),
                 task,
                 TaskActivityEntry(
                     role="recovery",
@@ -849,7 +849,7 @@ def test_latest_verdict_after_allows_clean_implementing_noop(tmp_path, monkeypat
 
     task = create_task(tmp_path, title="empty pass")
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(
             role="swe",
@@ -880,7 +880,7 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
 
     task = create_task(tmp_path, title="hallucinated pass")
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(
             role="swe",
@@ -943,7 +943,7 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
 
     task = create_task(tmp_path, title="real pass")
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(
             role="swe",
@@ -974,7 +974,7 @@ def test_latest_verdict_after_returns_semantic_reject_classification(tmp_path) -
 
     task = create_task(tmp_path, title="semantic reviewer reject")
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(
             role="reviewer",
@@ -1003,7 +1003,7 @@ def test_latest_verdict_after_can_filter_to_source_subagent_id(tmp_path) -> None
 
     task = create_task(tmp_path, title="source-bound verdict")
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(
             role="swe",
@@ -1014,7 +1014,7 @@ def test_latest_verdict_after_can_filter_to_source_subagent_id(tmp_path) -> None
         ),
     )
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(
             role="swe",
@@ -1043,7 +1043,7 @@ def test_latest_verdict_after_includes_retry_summary_metadata(tmp_path, monkeypa
 
     task = create_task(tmp_path, title="retry summary")
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(
             role="swe",
@@ -1090,7 +1090,7 @@ def test_latest_verdict_after_accepts_recovery_resume(tmp_path) -> None:
 
     task = create_task(tmp_path, title="recovery resume")
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(
             role="recovery",
@@ -1119,7 +1119,7 @@ def test_latest_verdict_after_preserves_recovery_advance_target_stage(tmp_path) 
 
     task = create_task(tmp_path, title="recovery advance target stage")
     append_activity_entry(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         TaskActivityEntry(
             role="recovery",

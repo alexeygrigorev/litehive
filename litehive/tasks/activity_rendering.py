@@ -1,28 +1,27 @@
 """Task activity rendering and retraction helpers."""
 
-from pathlib import Path
 from typing import Iterable
 
-from litehive.container import build_container
 from litehive.domain.common import TaskStage, Verdict
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.tasks.activity import append_task_activity, load_task_activity
+from litehive.workspace import Workspace
 
 RETRACTED_FILESYSTEM_MARKER = "[retracted - filesystem check shows no changes landed]"
 _RETRACTABLE_STEPS: frozenset[TaskStage] = frozenset({TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING})
 _FILES_CHANGED_PLACEHOLDERS = {"none", "n/a", "-", ""}
 
 
-def append_activity_entry(root: Path, task: TaskRecord, entry: TaskActivityEntry) -> None:
+def append_activity_entry(workspace: Workspace, task: TaskRecord, entry: TaskActivityEntry) -> None:
     """
-    Path-based shim around ``append_task_activity`` for non-Workspace callers.
+    Append one task activity entry through the injected workspace.
 
-    Used by stage controllers that only have ``root`` in scope; lets them
-    record an activity entry without first plumbing a ``Workspace`` handle
-    through every intermediate function on the call path.
+    This helper keeps activity-call sites paired with rendering helpers
+    while avoiding hidden root-to-workspace conversion inside the task
+    layer.
     """
-    append_task_activity(build_container(root).workspace, task, entry)
+    append_task_activity(workspace, task, entry)
 
 
 def normalized_files_changed(paths: Iterable[str]) -> list[str]:
@@ -89,7 +88,7 @@ def retract_activity_entry(entry: TaskActivityEntry) -> bool:
     return True
 
 
-def render_task_activity(root: Path, task: TaskRecord, for_prompt: bool = False) -> str:
+def render_task_activity(workspace: Workspace, task: TaskRecord, for_prompt: bool = False) -> str:
     """
     Render the activity feed for operator inspection or prompt context.
 
@@ -98,7 +97,7 @@ def render_task_activity(root: Path, task: TaskRecord, for_prompt: bool = False)
     operator-facing renders show the full text so a human can audit what was
     retracted and why.
     """
-    activity_entries = load_task_activity(build_container(root).workspace, task)
+    activity_entries = load_task_activity(workspace, task)
     if not activity_entries:
         return ""
     lines = ["Task activity:"]

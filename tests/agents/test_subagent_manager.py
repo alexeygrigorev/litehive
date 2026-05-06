@@ -116,7 +116,7 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
         ) -> CLIExecutionResult:
             assert extra_env is not None
             append_activity_entry(
-                tmp_path,
+                Workspace.from_path(tmp_path),
                 task,
                 TaskActivityEntry(
                     role="planner",
@@ -180,7 +180,7 @@ def test_subagent_manager_uses_recovering_stage_for_recovery_cli_verdict(
         ) -> CLIExecutionResult:
             assert extra_env is not None
             append_activity_entry(
-                tmp_path,
+                Workspace.from_path(tmp_path),
                 task,
                 TaskActivityEntry(
                     role="recovery",
