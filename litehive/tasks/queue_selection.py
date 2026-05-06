@@ -1,4 +1,4 @@
-"""Queue read/selection: dequeue, peek, plan, active-task pinning, and the
+"""Queue read/selection: dequeue, peek, active-task pinning, and the
 single-active-task invariant.
 
 These functions intersect with both the ``runtime_store`` (SQLite-backed
@@ -14,9 +14,8 @@ from litehive.domain.common import OutcomeKind, PipelineStatus, TaskExecutionSta
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.task import TaskRecord, WorkspaceState
-from litehive.domain.task_ops import BlockedTask, TaskPlan, TaskSelection, WorkspaceConflictError
+from litehive.domain.task_ops import BlockedTask, TaskSelection, WorkspaceConflictError
 from litehive.lifecycle.persistence import SqlitePersistence
-from litehive.container import build_workspace
 from litehive.recovery.detection import TaskLaunchFailure
 from litehive.recovery.execution_recovery import (
     interruption_journal_message,
@@ -156,39 +155,6 @@ def peek_next_task_selection(workspace: Workspace) -> TaskSelection:
             else:
                 save_state(workspace.root, state)
         return TaskSelection(task=next_task, blocked=blocked)
-
-
-def plan_task_selections(root: Path) -> TaskPlan:
-    """
-    Simulate dequeue iterations to preview the runner's plan.
-
-    Walks a deep copy of state and ``tasks_by_id`` so the simulation never
-    mutates real workspace state; no callers, because the ``litehive plan``
-    CLI surface this was written for never landed. Safe to remove unless
-    the surface is being revived.
-    """
-    recover_stale_runner_state_for_workspace(build_workspace(root))
-    with workspace_mutation_guard(root), workspace_lock(root):
-        state = load_state(root)
-        validate_single_active_task(root, state)
-        tasks_by_id = {task.id: task.model_copy(deep=True) for task in list_tasks(root, strict=False)}
-
-        planned: list[TaskRecord] = []
-        simulated_state = state.model_copy(deep=True)
-        while True:
-            next_task, blocked, _ = _resolve_next_task_from_snapshot(
-                simulated_state,
-                tasks_by_id,
-            )
-            if next_task is None:
-                return TaskPlan(tasks=planned, blocked=blocked)
-
-            planned.append(next_task.model_copy(deep=True))
-            simulated_state.active_task_id = None
-            simulated_state.queue = [item for item in simulated_state.queue if item != next_task.id]
-            simulated_task = tasks_by_id[next_task.id]
-            simulated_task.status = TaskStatus.DONE
-            simulated_task.pipeline_status = PipelineStatus.DONE
 
 
 def dequeue_next_task(workspace: Workspace) -> TaskRecord | None:
@@ -415,10 +381,8 @@ def _resolve_next_task_from_snapshot(
     """
     Pure-snapshot next-task resolution honouring active, blocked, and tie-break order.
 
-    The shared core for peek/dequeue/plan: walks an in-memory ``state``
-    plus ``tasks_by_id`` and returns ``(chosen_task, blocked, mutated)``.
-    Keeping this snapshot-only lets ``plan_task_selections`` simulate
-    dequeues against a deep copy without touching disk.
+    The shared core for peek/dequeue: walks an in-memory ``state`` plus
+    ``tasks_by_id`` and returns ``(chosen_task, blocked, mutated)``.
     """
     mutated = False
     blocked: list[BlockedTask] = []

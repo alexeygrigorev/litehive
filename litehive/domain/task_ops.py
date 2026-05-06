@@ -69,22 +69,6 @@ class TaskSelection:
 
 
 @dataclass(slots=True)
-class TaskPlan:
-    """
-    Whole-queue view in dependency-respecting order.
-
-    Distinct from ``TaskSelection``: that returns the *next* task,
-    while this returns *every* task plus the blocked summaries so the
-    operator's plan command can render a full topology. The CLI
-    builds it once per invocation rather than walking dependencies
-    twice.
-    """
-
-    tasks: list[TaskRecord]  # All tasks in dependency-respecting order
-    blocked: list[BlockedTask]  # Tasks blocked by dependencies
-
-
-@dataclass(slots=True)
 class WorkspaceRepairSummary:
     """
     Per-invocation report from the workspace-repair flow.

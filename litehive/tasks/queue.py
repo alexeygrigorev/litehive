@@ -5,7 +5,7 @@ The implementation is split across sibling modules:
 * ``litehive.tasks.queue_eligibility`` — pure predicates and stage helpers.
 * ``litehive.tasks.queue_mutations`` — workspace-state mutations
   (enqueue, move, prioritize, reset/recovery resets).
-* ``litehive.tasks.queue_selection`` — dequeue/peek/plan, active-task
+* ``litehive.tasks.queue_selection`` — dequeue/peek, active-task
   pinning, runtime-store interactions, and the single-active-task invariant.
 
 This module re-exports the names existing call sites import from
@@ -60,7 +60,6 @@ from litehive.tasks.queue_selection import (
     dequeue_next_task_selection,
     peek_next_task,
     peek_next_task_selection,
-    plan_task_selections,
     restore_missing_queued_tasks,
     restore_untouched_active_task,
     set_active_task,
@@ -110,7 +109,6 @@ __all__ = [
     "move_queued_task",
     "peek_next_task",
     "peek_next_task_selection",
-    "plan_task_selections",
     "prepare_completed_task_for_recovery",
     "prioritize_queued_tasks",
     "reset_task_for_recovery",
