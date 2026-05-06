@@ -1,16 +1,67 @@
 """Task activity boundary over the SQLite-backed store."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
 from typing import Iterable
 
 from pydantic import ValidationError
 
+from litehive.domain.agent import SubagentId
 from litehive.domain.common import Verdict
 from litehive.domain.reports import TaskActivityEntry, TaskActivityStage
 from litehive.domain.task import TaskRecord
 from litehive.tasks.event_log import append_task_event
 from litehive.workspace import Workspace
+
+
+@dataclass(frozen=True, slots=True)
+class TaskActivityLog:
+    """
+    Workspace-scoped activity feed for one task.
+
+    Owns query operations that need both the persisted task activity
+    rows and the task identity. Callers that already hold a
+    ``Workspace`` should get one through ``workspace.task_activity``
+    instead of passing both objects to loose query helpers.
+    """
+
+    workspace: Workspace
+    task: TaskRecord
+
+    def latest_entry(
+        self,
+        role: str | None = None,
+        stage: TaskActivityStage | None = None,
+        source_subagent_id: SubagentId | None = None,
+        verdicts: Iterable[str | Verdict] | None = None,
+        after: datetime | None = None,
+    ) -> TaskActivityEntry | None:
+        """
+        Find the most recent persisted activity entry matching the filters.
+
+        Used by post-turn readers that need the verdict submitted through
+        ``litehive agent report`` for a specific task, stage, and
+        subagent session.
+        """
+        if verdicts is None:
+            allowed_verdicts = None
+        else:
+            allowed_verdicts = {str(verdict) for verdict in verdicts}
+        for entry in reversed(load_task_activity(self.workspace, self.task)):
+            if role is not None and entry.role != role:
+                continue
+            if stage is not None and entry.stage != stage:
+                continue
+            if source_subagent_id is not None and entry.source_subagent_id != source_subagent_id:
+                continue
+            entry_verdict = str(entry.verdict)
+            if allowed_verdicts is not None and entry_verdict not in allowed_verdicts:
+                continue
+            if after is not None and _parse_created_at(entry.created_at) <= after:
+                continue
+            return entry
+        return None
 
 
 def load_task_activity(workspace: Workspace, task: TaskRecord) -> list[TaskActivityEntry]:
@@ -100,48 +151,12 @@ def append_task_activity(workspace: Workspace, task: TaskRecord, entry: TaskActi
     save_task_activity(workspace, task, activity)
 
 
-def latest_task_activity_entry(
-    workspace: Workspace,
-    task: TaskRecord,
-    role: str | None = None,
-    stage: TaskActivityStage | None = None,
-    source_subagent_id: str | None = None,
-    verdicts: Iterable[str | Verdict] | None = None,
-    after: datetime | None = None,
-) -> TaskActivityEntry | None:
-    """
-    Find the most recent activity entry matching the given filter.
-
-    Used by the stage-report builder to locate the verdict an agent submitted
-    via ``litehive agent report`` for the just-finished subagent run, so the
-    report payload can be paired with the correct activity row.
-    """
-    if verdicts is None:
-        allowed_verdicts = None
-    else:
-        allowed_verdicts = {str(verdict) for verdict in verdicts}
-    for entry in reversed(load_task_activity(workspace, task)):
-        if role is not None and entry.role != role:
-            continue
-        if stage is not None and entry.stage != stage:
-            continue
-        if source_subagent_id is not None and entry.source_subagent_id != source_subagent_id:
-            continue
-        entry_verdict = str(entry.verdict)
-        if allowed_verdicts is not None and entry_verdict not in allowed_verdicts:
-            continue
-        if after is not None and _parse_created_at(entry.created_at) <= after:
-            continue
-        return entry
-    return None
-
-
 def _parse_created_at(value: str) -> datetime:
     """
     Parse the ``created_at`` ISO string into a UTC-aware datetime.
 
     Normalises trailing ``Z`` to ``+00:00`` and naive datetimes to UTC so
-    ``latest_task_activity_entry``'s ``after`` filter can compare entries
+    ``TaskActivityLog.latest_entry``'s ``after`` filter can compare entries
     written by older code (no timezone) against newer UTC-aware writers
     without raising on the mixed-shape comparison.
     """
