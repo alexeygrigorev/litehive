@@ -355,6 +355,29 @@ def test_queue_switch_cli_queues_task_for_new_engine(tmp_path: Path) -> None:
     assert entries[0].context["reason"] == "Need larger context window"
 
 
+def test_switch_task_engine_accepts_injected_workspace(tmp_path: Path) -> None:
+    from litehive.tasks.switch_engine import switch_task_engine_for_workspace
+
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    task = _prepare_runnable_task(tmp_path, "Switch engines with injected workspace")
+    workspace = Workspace.from_path(tmp_path)
+
+    summary = switch_task_engine_for_workspace(
+        workspace,
+        task.id,
+        engine="gemini",
+        reason="Need larger context window",
+    )
+
+    assert summary.previous_engine == "codex"
+    assert summary.new_engine == "gemini"
+    assert summary.task.status == "queued"
+    refreshed = get_task_record(tmp_path, task.id)
+    assert refreshed is not None
+    assert refreshed.runtime.execution.last_engine_switch is not None
+    assert refreshed.runtime.execution.last_engine_switch.to_engine == "gemini"
+
+
 def test_queue_switch_subcommand_still_works(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     task = _prepare_runnable_task(tmp_path, "Switch engines via queue subcommand")
