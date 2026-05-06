@@ -31,7 +31,7 @@ from litehive.tasks.normalization import (
     normalize_task_text_list,
     reroute_stage_for_acceptance_criteria,
 )
-from litehive.tasks.queue import validate_task_dependencies
+from litehive.tasks.queue import validate_task_dependencies_for_workspace
 from litehive.tasks.status_close import abandon_task_for_workspace, close_task_for_workspace, park_task_for_workspace
 from litehive.tasks.status_resume import requeue_task_for_workspace
 
@@ -126,7 +126,7 @@ def _update_task_transition(
 
         if depends_on is not ...:
             depends_on_list = cast(list[str], depends_on)
-            validate_task_dependencies(root, task_id=task.id, depends_on=list(depends_on_list))
+            validate_task_dependencies_for_workspace(workspace, task_id=task.id, depends_on=list(depends_on_list))
             task.depends_on = list(depends_on_list)
 
         if title is not ...:

@@ -35,6 +35,7 @@ from litehive.tasks.queue_eligibility import (
     resumable_running_stage,
     task_has_resume_marker,
     validate_task_dependencies,
+    validate_task_dependencies_for_workspace,
 )
 from litehive.tasks.queue_mutations import (
     _enqueue_task,
@@ -120,4 +121,5 @@ __all__ = [
     "task_has_resume_marker",
     "validate_single_active_task",
     "validate_task_dependencies",
+    "validate_task_dependencies_for_workspace",
 ]

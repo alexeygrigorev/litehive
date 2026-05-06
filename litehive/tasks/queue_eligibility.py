@@ -20,6 +20,7 @@ from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.records import list_tasks
 from litehive.tasks.failed_runs import has_blocking_failed_run_history
 from litehive.tasks.normalization import implementation_entry_stage
+from litehive.workspace import Workspace
 
 _TERMINAL_EXECUTION_STATUSES = {
     TaskExecutionStatus.DONE,
@@ -296,6 +297,13 @@ def _task_blockers(task: TaskRecord, tasks_by_id: dict[str, TaskRecord]) -> list
 
 def validate_task_dependencies(root: Path, task_id: str, depends_on: list[str]) -> None:
     """
+    Path-based compatibility wrapper for dependency validation.
+    """
+    validate_task_dependencies_for_workspace(Workspace.from_path(root), task_id=task_id, depends_on=depends_on)
+
+
+def validate_task_dependencies_for_workspace(workspace: Workspace, task_id: str, depends_on: list[str]) -> None:
+    """
     Reject a self-referential, missing, or cyclic ``depends_on`` list.
 
     Called when persisting a new task and when ``litehive update`` rewrites
@@ -303,7 +311,7 @@ def validate_task_dependencies(root: Path, task_id: str, depends_on: list[str]) 
     selector's blocked-task graph from ever observing a cycle and looping
     forever during selection.
     """
-    tasks_by_id = {task.id: task for task in list_tasks(root, strict=False)}
+    tasks_by_id = {task.id: task for task in list_tasks(workspace.root, strict=False)}
     seen: set[str] = set()
     for dependency_id in depends_on:
         if dependency_id in seen:
