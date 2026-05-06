@@ -133,7 +133,7 @@ def run_task(
         )
         _load_or_initialize(task.id, root, persistence)
 
-        factory = engine_factory or heru_engine_factory(root)
+        factory = engine_factory or heru_engine_factory(workspace, config)
         selector = ConfigBackedEngineSelector(
             config,
             factory,

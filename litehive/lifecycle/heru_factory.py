@@ -1,6 +1,6 @@
 """HeruEngineFactory — produces ``Engine`` instances backed by heru.
 
-The factory takes a workspace root and returns a callable
+The factory takes an injected workspace/config pair and returns a callable
 ``Callable[[str], Engine]`` suitable for the ``ConfigBackedEngineSelector``.
 Each call to the inner callable produces a fresh ``HeruEngineAdapter`` for
 the requested engine name.
@@ -34,7 +34,7 @@ from typing import Any
 
 from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
-from litehive.container import build_container, build_subagent_manager, build_workspace
+from litehive.container import build_subagent_manager
 from litehive.config.model import LitehiveConfig
 from litehive.domain.agent import EngineFailure
 from litehive.domain.common import OutcomeReasonCode, PipelineState, TaskStage, Verdict, cap_feedback
@@ -43,6 +43,7 @@ from litehive.domain.lifecycle_deltas import recovery_trigger_from_event
 from litehive.git.ops import GitError, is_git_repo, status_porcelain
 from litehive.roles.base import PromptContext
 from litehive.roles.recovery import RecoveryAgent
+from litehive.workspace import Workspace
 from litehive.state.records import get_task, get_task_worktree_path
 from litehive.tasks.activity import latest_task_activity_entry, load_task_activity, save_task_activity
 from litehive.tasks.journal import append_journal
@@ -798,12 +799,11 @@ def _is_retryable_failure(exc: Exception) -> bool:
     return cls_name in {"RetryableExecutionFailure", "TimeoutError", "ConnectionError"}
 
 
-def heru_engine_factory(workspace_root: Path):
-    """Return a callable that produces ``HeruEngineAdapter`` instances. Suitable as the ``engine_factory`` argument for ``ConfigBackedEngineSelector``."""
-    root = Path(workspace_root)
-    container = build_container(root)
+def heru_engine_factory(workspace: Workspace, config: LitehiveConfig):
+    """Return a callable that produces ``HeruEngineAdapter`` instances."""
+    root = workspace.root
 
     def _factory(engine_name: str) -> Engine:
-        return HeruEngineAdapter(engine_name, root, workspace=container.workspace, config=container.config)
+        return HeruEngineAdapter(engine_name, root, workspace=workspace, config=config)
 
     return _factory
