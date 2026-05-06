@@ -151,14 +151,12 @@ def _execution_checkout_path(workspace_root: Path, task) -> Path:
     )
 
 
-def _recovery_execution_root(workspace_root: Path) -> Path:
+def _recovery_execution_root(workspace_root: Path, config: LitehiveConfig | None) -> Path:
     """Recovery agents edit litehive's own source tree, not the user's task
     worktree. Resolve ``litehive_source_path`` from config and run the recovery
     turn there; fall back to the workspace if the source path is unset or
     unreadable."""
-    try:
-        config = build_container(workspace_root).config
-    except Exception:
+    if config is None:
         return workspace_root
     raw_source = str(config.litehive_source_path or "").strip()
     if not raw_source:
@@ -175,12 +173,12 @@ def _recovery_execution_root(workspace_root: Path) -> Path:
     return workspace_root
 
 
-def _agent_execution_root(workspace_root: Path, task, role: str) -> Path:
+def _agent_execution_root(workspace_root: Path, task, role: str, config: LitehiveConfig | None) -> Path:
     """Pick the cwd for the subagent based on role: recovery agents fix
     litehive itself (source tree), every other role works inside the task's
     worktree."""
     if role == "recovery":
-        return _recovery_execution_root(workspace_root)
+        return _recovery_execution_root(workspace_root, config)
     return _execution_checkout_path(workspace_root, task)
 
 
@@ -459,7 +457,7 @@ class HeruEngineAdapter:
         report_stage = canonical_report_pipeline_state(stage.value)
         role = prompt.role
         prompt_text = serialize_prompt(prompt, task_record=task, workspace=self.workspace)
-        execution_root = _agent_execution_root(self.workspace_root, task, role=role)
+        execution_root = _agent_execution_root(self.workspace_root, task, role=role, config=self.config)
 
         before_turn = datetime.now(UTC)
         try:
@@ -613,7 +611,7 @@ class HeruEngineAdapter:
         submitted. Returns ``None`` if the task isn't actually in recovery so
         the caller falls back to the original exception."""
         recovery_prompt = self._direct_recovery_prompt(task=task, state=state, startup_message=startup_message)
-        recovery_execution_root = _agent_execution_root(self.workspace_root, task, role="recovery")
+        recovery_execution_root = _agent_execution_root(self.workspace_root, task, role="recovery", config=self.config)
         after_ts = datetime.min.replace(tzinfo=UTC)
         if state.stage == PipelineState.RECOVERING:
             previous_recovery = latest_task_activity_entry(
