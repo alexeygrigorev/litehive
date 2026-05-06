@@ -46,17 +46,17 @@ class RuntimeStore:
     inventing its own SQL.
     """
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, workspace: Workspace) -> None:
         """
-        Pin the store to a workspace root.
+        Pin the store to a workspace.
 
         Constructed via the ``runtime_store`` module factory so tests can
         monkey-patch a single symbol instead of every call site; binding
         the workspace once means the store does not have to look it up
         on every call.
         """
-        self.root = root
-        self.workspace = Workspace.from_path(root)
+        self.workspace = workspace
+        self.root = workspace.root
 
     def bootstrap(self) -> None:
         """
@@ -830,7 +830,7 @@ def runtime_store(root: Path) -> RuntimeStore:
     monkey-patch a single symbol; without the factory each call site
     would have to be patched independently when redirecting the store.
     """
-    return RuntimeStore(root)
+    return RuntimeStore(Workspace.from_path(root))
 
 
 def _load_task_state_for_intent_columns(
