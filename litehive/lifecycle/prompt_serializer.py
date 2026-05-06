@@ -27,7 +27,7 @@ from pydantic import ValidationError
 import yaml
 
 from litehive.container import build_workspace
-from litehive.domain.common import PipelineState, TaskStage, pipeline_stage_key
+from litehive.domain.common import PipelineState, TaskStage, Verdict, pipeline_stage_key
 from litehive.domain.task import TaskRecord
 from litehive.lifecycle.prompt_sections import (
     _acceptance_criteria_section,
@@ -236,7 +236,7 @@ def _matches_last_rejection(entry: dict[str, Any], last_rejection: dict[str, Any
     seeing the same entry again under "Task activity" would just push
     real context out of the prompt window for no benefit.
     """
-    if entry.get("verdict") != "reject":
+    if entry.get("verdict") != Verdict.REJECT:
         return False
 
     rejection_source = str(last_rejection.get("source") or "").strip()
@@ -276,7 +276,7 @@ def _trim_activity_for_prompt(
     - Cap each individual message to 500 chars.
     """
     # Filter out recovery bookkeeping entries.
-    activity = [e for e in activity if not (e.get("role") == "recovery" and e.get("verdict") == "comment")]
+    activity = [e for e in activity if not (e.get("role") == "recovery" and e.get("verdict") == Verdict.COMMENT)]
 
     if not activity:
         return []
@@ -285,7 +285,7 @@ def _trim_activity_for_prompt(
     if last_rejection:
         activity = [entry for entry in activity if not _matches_last_rejection(entry, last_rejection)]
 
-    def _last_where(**match: str) -> dict[str, Any] | None:
+    def _last_where(**match: str | Verdict) -> dict[str, Any] | None:
         """Local closure: scan ``activity`` newest-first for the first entry that equals every kwarg.
 
         Used by the per-stage selection branches of ``_select_activity_entries``
@@ -303,14 +303,14 @@ def _trim_activity_for_prompt(
         pass  # no activity context needed
 
     elif current_stage == TaskStage.IMPLEMENTING:
-        g = _last_where(stage=TaskStage.GROOMING.value, verdict="pass")
+        g = _last_where(stage=TaskStage.GROOMING.value, verdict=Verdict.PASS)
         if g:
             kept.append(g)
         # On retry, the rejection is rendered in the dedicated last_rejection
         # section; do not repeat older reject entries in the activity section.
         if not last_rejection:
             for e in reversed(activity):
-                if e.get("verdict") == "reject" and e.get("stage") in (
+                if e.get("verdict") == Verdict.REJECT and e.get("stage") in (
                     TaskStage.TESTING.value,
                     TaskStage.ACCEPTING.value,
                     TaskStage.IMPLEMENTING.value,
@@ -319,31 +319,31 @@ def _trim_activity_for_prompt(
                     break
 
     elif current_stage == TaskStage.TESTING:
-        p = _last_where(stage=TaskStage.IMPLEMENTING.value, verdict="pass")
+        p = _last_where(stage=TaskStage.IMPLEMENTING.value, verdict=Verdict.PASS)
         if p:
             kept.append(p)
 
     elif current_stage == TaskStage.ACCEPTING:
-        p = _last_where(stage=TaskStage.IMPLEMENTING.value, verdict="pass")
+        p = _last_where(stage=TaskStage.IMPLEMENTING.value, verdict=Verdict.PASS)
         if p:
             kept.append(p)
-        t = _last_where(stage=TaskStage.TESTING.value, verdict="pass")
+        t = _last_where(stage=TaskStage.TESTING.value, verdict=Verdict.PASS)
         if t:
             kept.append(t)
 
     elif current_stage == PipelineState.RECOVERING:
-        p = _last_where(stage=TaskStage.IMPLEMENTING.value, verdict="pass")
+        p = _last_where(stage=TaskStage.IMPLEMENTING.value, verdict=Verdict.PASS)
         if p:
             kept.append(p)
         # The crash or rejection that triggered recovery
         for e in reversed(activity):
-            if e.get("verdict") in ("reject", "blocked"):
+            if e.get("verdict") in {Verdict.REJECT, Verdict.BLOCKED}:
                 kept.append(e)
                 break
 
     else:
         # Fallback: grooming pass + last per (stage, verdict)
-        g = _last_where(stage=TaskStage.GROOMING.value, verdict="pass")
+        g = _last_where(stage=TaskStage.GROOMING.value, verdict=Verdict.PASS)
         if g:
             kept.append(g)
         seen: set[tuple[str, str]] = set()
@@ -387,4 +387,3 @@ def _activity_section(
         message = entry.get("message", "")
         blocks.append(f"[{stage}] {role} ({verdict_label}): {message}")
     return "Task activity:\n" + "\n".join(blocks)
-
