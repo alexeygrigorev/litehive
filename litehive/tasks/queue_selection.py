@@ -10,7 +10,6 @@ must not reach into.
 import logging
 from pathlib import Path
 
-from litehive.container import build_container
 from litehive.domain.common import OutcomeKind, PipelineStatus, TaskExecutionStatus, TaskStage, TaskStatus, utcnow
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.recovery import TriggerEventKind
@@ -484,7 +483,7 @@ def _resolve_next_task_from_snapshot(
     return None, blocked, mutated
 
 
-def clear_active_task(root: Path) -> WorkspaceState:
+def clear_active_task(workspace: Workspace) -> WorkspaceState:
     """
     Detach whichever task currently sits in the active slot.
 
@@ -492,10 +491,10 @@ def clear_active_task(root: Path) -> WorkspaceState:
     flows that already null out ``state.active_task_id`` themselves.
     Candidate for removal.
     """
-    return set_active_task(build_container(root).workspace, None)
+    return set_active_task(workspace, None)
 
 
-def restore_untouched_active_task(root: Path) -> WorkspaceState:
+def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
     """
     Push the active task back onto the queue if it was never actually started.
 
@@ -503,8 +502,8 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
     ``recovery.execution_recovery`` and ``restore_missing_queued_tasks``;
     looks like a leftover from before workspace-repair owned this concern.
     """
+    root = workspace.root
     with workspace_mutation_guard(root), workspace_lock(root):
-        local_workspace = build_container(root).workspace
         state = load_state(root)
         validate_single_active_task(root, state)
         if state.active_task_id is None:
@@ -513,7 +512,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
         task = get_task(root, state.active_task_id)
         if task is not None and _should_requeue_commit_stage_task(task):
             prepare_interrupted_task(
-                local_workspace,
+                workspace,
                 task,
                 stage=TaskStage.COMMIT_TO_GIT.value,
                 summary="Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`.",
@@ -548,7 +547,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
 
         if task is not None and is_task_eligible_for_execution(task):
             prepare_interrupted_task(
-                local_workspace,
+                workspace,
                 task,
                 stage=task.pipeline_status,
                 summary=f"Interrupted run recovered. Resume from `{task.pipeline_status}`.",
