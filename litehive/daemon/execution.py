@@ -37,7 +37,7 @@ from litehive.observability.status import (
 )
 from litehive.observability.venv_health import daemon_broken_venv_message, probe_broken_venv_executables
 from litehive.state.backup import create_scheduled_workspace_backup
-from litehive.state.persist import load_state, set_pool_stop_reason
+from litehive.state.persist import load_state, load_state_for_workspace, set_pool_stop_reason
 from litehive.state.locking import runner_pid_is_alive, runner_status
 from litehive.workspace import Workspace
 
@@ -771,6 +771,13 @@ def stop_workspace_daemon(workspace: Path) -> dict[str, object] | None:
 
 def daemon_status_lines(workspace: Path) -> list[str]:
     """
+    Path-based compatibility wrapper for daemon status rendering.
+    """
+    return daemon_status_lines_for_workspace(build_workspace(workspace))
+
+
+def daemon_status_lines_for_workspace(workspace: Workspace) -> list[str]:
+    """
     Render the daemon-side block of ``litehive status`` / ``litehive daemon status``.
 
     Combines the daemon registration row, the runner liveness line,
@@ -779,9 +786,9 @@ def daemon_status_lines(workspace: Path) -> list[str]:
     the workspace tree. Failing to surface the latest log dir here
     is the difference between "I can debug" and "I have to grep".
     """
-    workspace = workspace.resolve()
-    entry = daemon_metadata(workspace)
-    lines = [f"workspace: {workspace}"]
+    root = workspace.root
+    entry = daemon_metadata(root)
+    lines = [f"workspace: {root}"]
     if entry is None or entry.get("status") != "running":
         lines.append("daemon_status: stopped")
     else:
@@ -789,10 +796,10 @@ def daemon_status_lines(workspace: Path) -> list[str]:
         lines.append(f"pid: {entry.get('pid')}")
         lines.append(f"started_at: {entry.get('started_at')}")
         lines.append(f"log_dir: {entry.get('log_dir')}")
-    runner = runner_status(workspace)
-    state = load_state(workspace)
+    runner = runner_status(root)
+    state = load_state_for_workspace(workspace)
     lines.append(render_runner_status_line(runner, state))
-    latest_dir = latest_run_all_log_dir(workspace)
+    latest_dir = latest_run_all_log_dir(root)
     if latest_dir is not None:
         latest_dir_label = latest_dir
     else:
