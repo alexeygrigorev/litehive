@@ -65,7 +65,7 @@ def dispatch_status(argv: list[str]) -> int:
         print(f"status failed: {exc}")
         return 1
     status = collect_task_pipeline_status(workspace, read_only=True)
-    for line in render_task_pipeline_status_lines(status, workspace=workspace, mode="fast"):
+    for line in render_task_pipeline_status_lines(status, workspace=workspace, mode="summary"):
         print(line)
     if status_has_problems(status.issues):
         print()

@@ -1098,7 +1098,7 @@ def test_latest_verdict_after_accepts_recovery_resume(tmp_path) -> None:
     verdict = latest_verdict_after(
         tmp_path,
         task.id,
-        "recovering",
+        PipelineState.RECOVERING,
         datetime.now(UTC) - timedelta(minutes=1),
     )
 
@@ -1127,7 +1127,7 @@ def test_latest_verdict_after_preserves_recovery_advance_target_stage(tmp_path) 
     verdict = latest_verdict_after(
         tmp_path,
         task.id,
-        "recovering",
+        PipelineState.RECOVERING,
         datetime.now(UTC) - timedelta(minutes=1),
     )
 

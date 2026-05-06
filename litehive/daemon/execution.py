@@ -185,7 +185,7 @@ def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
     """
     status = collect_task_pipeline_status(workspace, read_only=True)
     state = status.state.model_dump(mode="python")
-    lines = render_task_pipeline_status_lines(status, workspace=workspace, mode="fast")
+    lines = render_task_pipeline_status_lines(status, workspace=workspace, mode="summary")
     return state, "\n".join(lines) + "\n"
 
 

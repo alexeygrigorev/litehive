@@ -47,20 +47,19 @@ def probe_registry_files() -> list[StatusIssue]:
     no signal pointing at the registry file. Returns an empty
     list when the registry is healthy or absent.
     """
-    issues: list[StatusIssue] = []
     registry_error = workspace_registry_error()
-    if registry_error is not None:
-        issues.append(
-            StatusIssue(
-                key="registry",
-                severity="ERROR",
-                message=(
-                    f"BROKEN at {workspace_registry_path()} ({registry_error})"
-                    " — restore or remove the global workspace registry database so Litehive can rebuild it."
-                ),
-            )
+    if registry_error is None:
+        return []
+    return [
+        StatusIssue(
+            key="registry",
+            severity="ERROR",
+            message=(
+                f"BROKEN at {workspace_registry_path()} ({registry_error})"
+                " — restore or remove the global workspace registry database so Litehive can rebuild it."
+            ),
         )
-    return issues
+    ]
 
 
 def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusState) -> list[StatusIssue]:
@@ -412,8 +411,8 @@ def _live_active_pipeline_stage(active_task_id: str | None, tasks: list[TaskReco
     if active_task is None:
         return None
     current_stage = active_task.runtime.pipeline.current_stage
-    if str(active_task.runtime.pipeline.execution_status) == "running" or current_stage.status == "running":
-        return str(current_stage.stage or active_task.pipeline_status)
+    if active_task.runtime.pipeline.execution_status == "running" or current_stage.status == "running":
+        return current_stage.stage or active_task.pipeline_status
     return None
 
 
@@ -489,7 +488,7 @@ def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureC
     if trigger is None and state.recovery_history:
         trigger = state.recovery_history[-1].trigger
     if trigger is not None and trigger.origin_stage is not None:
-        context.origin_stage = str(trigger.origin_stage)
+        context.origin_stage = trigger.origin_stage
     return context
 
 
@@ -602,7 +601,7 @@ def _task_has_resume_marker(task: TaskRecord) -> bool:
     tasks the scheduler can legitimately resume — false alarms
     that would erode operator trust in the diagnostics.
     """
-    stage = str(task.pipeline_status)
+    stage = task.pipeline_status
     current_stage = task.runtime.pipeline.current_stage
     if current_stage.stage == stage and current_stage.status in _TRUSTED_STAGE_MARKER_STATUSES:
         return True

@@ -122,7 +122,7 @@ def test_daemon_status_snapshot_uses_shared_status_collector(tmp_path: Path, mon
         active_task=None,
         queue_head="T-0002",
         waiting_lines=[],
-        fast_runner_status="never_started",
+        runner_state_label="never_started",
     )
     captured: dict[str, object] = {}
 
@@ -152,7 +152,7 @@ def test_daemon_status_snapshot_uses_shared_status_collector(tmp_path: Path, mon
         "read_only": True,
         "status": shared_status,
         "render_workspace": tmp_path,
-        "mode": "fast",
+        "mode": "summary",
         "retry_on_label": None,
     }
 

@@ -629,7 +629,7 @@ def _insert_task_state(connection: sqlite3.Connection, task_id: str, payload: di
         SET lifecycle_status = ?, pipeline_status = ?
         WHERE task_id = ?
         """,
-        (str(state.status), str(state.pipeline_status), task_id),
+        (state.status.value, state.pipeline_status.value, task_id),
     )
 
 

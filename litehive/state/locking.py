@@ -119,7 +119,7 @@ def _save_runner_process_state(root: Path, status: RunnerStatusState) -> None:
     """
     runtime_store(root).save_process_state(
         "runner",
-        status=str(status.status or RunnerStatus.RUNNING),
+        status=status.status or RunnerStatus.RUNNING,
         payload=status.model_dump(mode="json"),
     )
 

@@ -60,11 +60,7 @@ def resumable_queue_stage(task: TaskRecord) -> str | None:
     if current_stage.status in _TRUSTED_STAGE_MARKER_STATUSES:
         candidates.append(current_stage.stage)
     for candidate in candidates:
-        if candidate is None:
-            candidate_str = None
-        else:
-            candidate_str = str(candidate)
-        normalized = _normalize_resumable_stage_name(candidate_str)
+        normalized = _normalize_resumable_stage_name(candidate)
         if normalized is not None:
             return normalized
     return None
@@ -81,11 +77,7 @@ def resumable_running_stage(task: TaskRecord) -> str | None:
     """
     current_stage = task.runtime.pipeline.current_stage
     if current_stage.status == "running":
-        if current_stage.stage is None:
-            current_stage_str = None
-        else:
-            current_stage_str = str(current_stage.stage)
-        normalized = _normalize_resumable_stage_name(current_stage_str)
+        normalized = _normalize_resumable_stage_name(current_stage.stage)
         if normalized is not None:
             return normalized
     return resumable_queue_stage(task)
@@ -156,7 +148,7 @@ def _has_terminal_execution_status(task: TaskRecord) -> bool:
     whose runner already finished from accidentally re-queueing itself
     on the next selection pass.
     """
-    return str(task.runtime.pipeline.execution_status) in _TERMINAL_EXECUTION_STATUSES
+    return task.runtime.pipeline.execution_status in _TERMINAL_EXECUTION_STATUSES
 
 
 def _has_terminal_outcome_kind(task: TaskRecord) -> bool:
@@ -169,7 +161,7 @@ def _has_terminal_outcome_kind(task: TaskRecord) -> bool:
     been bumped to match.
     """
     kind = task.runtime.pipeline.last_outcome.kind
-    return kind is not None and str(kind) in _TERMINAL_OUTCOME_KINDS
+    return kind is not None and kind in _TERMINAL_OUTCOME_KINDS
 
 
 def task_has_resume_marker(task: TaskRecord) -> bool:
@@ -181,7 +173,7 @@ def task_has_resume_marker(task: TaskRecord) -> bool:
     task with a trustworthy stage marker or a matching interruption record
     must be left alone so it can resume in place rather than restart.
     """
-    stage = str(task.pipeline_status)
+    stage = task.pipeline_status
     current_stage = task.runtime.pipeline.current_stage
     if current_stage.stage == stage and current_stage.status in _TRUSTED_STAGE_MARKER_STATUSES:
         return True
@@ -355,6 +347,6 @@ def _live_active_pipeline_stage(state: WorkspaceState, tasks_by_id: dict[str, Ta
     if active_task is None:
         return None
     current_stage = active_task.runtime.pipeline.current_stage
-    if str(active_task.runtime.pipeline.execution_status) == "running" or current_stage.status == "running":
-        return str(current_stage.stage or active_task.pipeline_status)
+    if active_task.runtime.pipeline.execution_status == "running" or current_stage.status == "running":
+        return current_stage.stage or active_task.pipeline_status
     return None

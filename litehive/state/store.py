@@ -8,7 +8,7 @@ from pathlib import Path
 
 from litehive.config.paths import workspace_path
 from litehive.db.schema import consume_rebuilt_database_marker
-from litehive.domain.common import utcnow
+from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
 from litehive.domain.runtime import TaskRuntime
 from litehive.domain.task import TaskIntentRecord, TaskStateRecord, WorkspaceState
 from litehive.tasks.audit import TaskAuditEntry, insert_task_audit_entries
@@ -512,7 +512,7 @@ class RuntimeStore:
             SET lifecycle_status = ?, pipeline_status = ?
             WHERE task_id = ?
             """,
-            (str(state.status), str(state.pipeline_status), task_id),
+            (state.status.value, state.pipeline_status.value, task_id),
         )
 
     def _save_task_intent(
@@ -873,11 +873,11 @@ def _task_intent_column_values(
     else:
         provenance_payload = intent.created_from.model_dump(mode="json")
     if state is None:
-        lifecycle_status = "queued"
-        pipeline_status = "backlog"
+        lifecycle_status = TaskStatus.QUEUED.value
+        pipeline_status = PipelineStatus.BACKLOG.value
     else:
-        lifecycle_status = str(state.status)
-        pipeline_status = str(state.pipeline_status)
+        lifecycle_status = state.status.value
+        pipeline_status = state.pipeline_status.value
     return {
         "slug": intent.slug,
         "title": intent.title,

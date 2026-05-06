@@ -114,15 +114,15 @@ def _report_stage_for_phase(phase: str | PipelineState) -> ReportPipelineState:
     """
     state = canonical_pipeline_state(phase)
     if state == PipelineState.MERGE_RESOLVING:
-        return PipelineState.MERGE_RESOLVING.value
+        return PipelineState.MERGE_RESOLVING
     if state == PipelineState.RECOVERING:
-        return PipelineState.RECOVERING.value
+        return PipelineState.RECOVERING
     task_stage = task_stage_for_pipeline_state(state)
     if task_stage is None:
         # No task-stage projection exists; fall back to the report
         # converter, which raises if the value is also not a valid
         # report stage.
-        return canonical_report_pipeline_state(str(state))
+        return canonical_report_pipeline_state(state.value)
     return task_stage
 
 

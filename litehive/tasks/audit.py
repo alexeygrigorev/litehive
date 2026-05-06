@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from litehive.domain.common import utcnow
+from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
 from litehive.domain.task import TaskRecord
 from litehive.tasks.event_log import append_task_event, task_event_type_for_audit_action
 from litehive.workspace import Workspace
@@ -22,8 +22,8 @@ class TaskAuditState:
     modified by the same code path that's mutating the live task afterwards.
     """
 
-    status: str
-    pipeline_status: str
+    status: TaskStatus
+    pipeline_status: PipelineStatus
 
 
 class TaskAuditEntry(BaseModel):
@@ -64,7 +64,7 @@ def snapshot_task_audit_state(task: TaskRecord | None) -> TaskAuditState | None:
     """
     if task is None:
         return None
-    return TaskAuditState(status=str(task.status), pipeline_status=str(task.pipeline_status))
+    return TaskAuditState(status=task.status, pipeline_status=task.pipeline_status)
 
 
 def queue_position(queue: list[str] | tuple[str, ...], task_id: str) -> int | None:
@@ -104,14 +104,14 @@ def build_task_audit_entry(
         task_status_before = None
         pipeline_status_before = None
     else:
-        task_status_before = str(before_task.status)
-        pipeline_status_before = str(before_task.pipeline_status)
+        task_status_before = before_task.status
+        pipeline_status_before = before_task.pipeline_status
     if after_task is None:
         task_status_after = None
         pipeline_status_after = None
     else:
-        task_status_after = str(after_task.status)
-        pipeline_status_after = str(after_task.pipeline_status)
+        task_status_after = after_task.status
+        pipeline_status_after = after_task.pipeline_status
     if before_queue is None:
         queue_position_before = None
     else:

@@ -11,7 +11,7 @@ from litehive.domain.task import WorkspaceState
 from litehive.observability.status import (
     collect_task_pipeline_status,
     render_active_task_detail_lines,
-    render_full_status_header_lines,
+    render_detailed_status_header_lines,
     render_health_active_task_lines,
     render_health_daemon_lines,
     render_health_flagged_task_lines,
@@ -142,10 +142,10 @@ def test_collect_task_pipeline_status_prefers_runner_active_task_id(tmp_path: Pa
     assert status.active_task is active_task
     assert status.queue_head == "T-0382"
     assert status.waiting_lines == ["operator_needed: unavailable"]
-    assert status.fast_runner_status == "running"
+    assert status.runner_state_label == "running"
 
 
-def test_render_runner_status_and_full_header_lines(tmp_path: Path) -> None:
+def test_render_runner_status_and_detailed_header_lines(tmp_path: Path) -> None:
     config = LitehiveConfig(
         default_engine="codex",
         litehive_source_path="/src/litehive",
@@ -161,7 +161,7 @@ def test_render_runner_status_and_full_header_lines(tmp_path: Path) -> None:
     )
 
     runner_line = render_runner_status_line(runner)
-    lines = render_full_status_header_lines(tmp_path, config, state, runner)
+    lines = render_detailed_status_header_lines(tmp_path, config, state, runner)
 
     assert runner_line == (
         "runner_status: running pid=123 "
@@ -170,7 +170,7 @@ def test_render_runner_status_and_full_header_lines(tmp_path: Path) -> None:
         "active_task_id=T-0001"
     )
     assert lines[0] == f"workspace: {tmp_path}"
-    assert "status_read_mode: full" in lines
+    assert "status_read_mode: detailed" in lines
     assert "default_engine: codex" in lines
     assert "litehive_source_path: /src/litehive" in lines
     assert "active_task_id: T-0001" in lines
@@ -180,7 +180,7 @@ def test_render_runner_status_and_full_header_lines(tmp_path: Path) -> None:
     assert len(lines) == 9
 
 
-def test_render_full_status_header_prefers_live_runner_active_task_id(tmp_path: Path) -> None:
+def test_render_detailed_status_header_prefers_live_runner_active_task_id(tmp_path: Path) -> None:
     config = LitehiveConfig(default_engine="codex", litehive_source_path="/src/litehive")
     state = WorkspaceState(active_task_id=None, queue=["T-0002"])
     runner = RunnerStatusState(
@@ -191,7 +191,7 @@ def test_render_full_status_header_prefers_live_runner_active_task_id(tmp_path: 
         active_task_id="T-0381",
     )
 
-    lines = render_full_status_header_lines(tmp_path, config, state, runner)
+    lines = render_detailed_status_header_lines(tmp_path, config, state, runner)
 
     assert "active_task_id: T-0381" in lines
 

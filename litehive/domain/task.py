@@ -32,20 +32,19 @@ def canonicalize_task_terminal_state(task: "TaskRecord") -> None:
     "closed without a reason" depending on which write path produced
     the record. Called from every persistence path that ends a task.
     """
-    status = str(task.status)
-    if status == "closed":
+    if task.status == TaskStatus.CLOSED:
         outcome_reason_code = task.runtime.pipeline.last_outcome.reason_code
         if outcome_reason_code is None:
             outcome_reason_code_label = None
         else:
-            outcome_reason_code_label = str(outcome_reason_code)
+            outcome_reason_code_label = outcome_reason_code.value
         task.close_reason = task.close_reason or outcome_reason_code_label or "unknown"
-    elif status == "done":
+    elif task.status == TaskStatus.DONE:
         task.close_reason = task.close_reason or "done"
     else:
         task.close_reason = None
 
-    if str(task.status) in {"closed", "done"}:
+    if task.status in {TaskStatus.CLOSED, TaskStatus.DONE}:
         task.flag_reason = None
 
 

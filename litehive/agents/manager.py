@@ -35,7 +35,7 @@ from heru.engine_detection import (
     supports_on_started,
 )
 from litehive.domain.agent import EngineFailure, SubagentInactivityTimeout, SubagentResult
-from litehive.agents.parsing import stage_report_from_subagent
+from litehive.agents.parsing import MissingVerdictError, stage_report_from_subagent
 from litehive.agents.sandbox import SandboxedAdapter
 from litehive.agents.session import SessionMixin
 from litehive.state.records import save_task
@@ -264,9 +264,9 @@ class SubagentManager(SessionMixin):
         """
         stage = cls._agent_stage_for_task(task, role)
         if stage is PipelineState.RECOVERING:
-            return "recovering"
+            return PipelineState.RECOVERING
         if stage is PipelineState.MERGE_RESOLVING:
-            return "merge_resolving"
+            return PipelineState.MERGE_RESOLVING
         if isinstance(stage, TaskStage):
             return stage
         return TaskStage.IMPLEMENTING
@@ -616,14 +616,6 @@ class SubagentManager(SessionMixin):
             execution=execution,
             transcript=transcript,
         )
-        report = report.model_copy(update={"warnings": self._merged_warnings(report.warnings, extra_warnings)})
-        files_changed = _latest_report_files_changed(
-            self.workspace,
-            task,
-            report.pipeline_state,
-            source_subagent_id=ref.id,
-        )
-        record_stage_report(self.workspace, task, report)
         if execution is None:
             execution_stdout = ""
             execution_stderr = ""
@@ -636,15 +628,44 @@ class SubagentManager(SessionMixin):
             continuation_payload = None
         else:
             continuation_payload = continuation.model_dump(mode="python")
-        self.write_session_snapshot(
-            task,
-            base,
-            ref,
-            prompt=prompt,
-            transcript=transcript + "\n",
-            stdout=execution_stdout,
-            stderr=execution_stderr,
-            report_payload={
+        if report is None:
+            # Agent finished without submitting a verdict. We do NOT call
+            # record_stage_report here — recording a synthetic "reject" would
+            # lie about what happened. The lifecycle's NudgeRequired path
+            # will reissue the turn and the next run will produce a real
+            # verdict (or exhaust the nudge budget and crash). The snapshot
+            # still records the run for observability with merged warnings
+            # so an operator watching `litehive status` can see why no
+            # report was written.
+            missing_verdict_warning = (
+                "Agent did not submit verdict via `litehive agent report` CLI; "
+                "lifecycle will nudge the agent."
+            )
+            warnings = self._merged_warnings([missing_verdict_warning], extra_warnings)
+            report_payload = {
+                "status": ref.status,
+                "summary": (
+                    f"{report_stage}: agent did not submit verdict via litehive agent report CLI"
+                ),
+                "files_changed": [],
+                "tests": {"added": 0, "passing": 0},
+                "warnings": warnings,
+                "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
+                "interruption_reason": interruption_reason,
+                "continuation": continuation_payload,
+            }
+        else:
+            report = report.model_copy(
+                update={"warnings": self._merged_warnings(report.warnings, extra_warnings)}
+            )
+            files_changed = _latest_report_files_changed(
+                self.workspace,
+                task,
+                report.pipeline_state,
+                source_subagent_id=ref.id,
+            )
+            record_stage_report(self.workspace, task, report)
+            report_payload = {
                 "status": ref.status,
                 "summary": report.summary,
                 "files_changed": files_changed,
@@ -653,7 +674,16 @@ class SubagentManager(SessionMixin):
                 "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
                 "interruption_reason": interruption_reason,
                 "continuation": continuation_payload,
-            },
+            }
+        self.write_session_snapshot(
+            task,
+            base,
+            ref,
+            prompt=prompt,
+            transcript=transcript + "\n",
+            stdout=execution_stdout,
+            stderr=execution_stderr,
+            report_payload=report_payload,
             exit_code=exit_code,
             pid=execution_pid,
             interruption_reason=interruption_reason,
@@ -761,20 +791,38 @@ class SubagentManager(SessionMixin):
                 continuation_payload = None
             else:
                 continuation_payload = continuation.model_dump(mode="python")
-            report_payload = {
-                "status": ref.status,
-                "summary": report.summary,
-                "files_changed": _latest_report_files_changed(
-                    self.workspace,
-                    task,
-                    report.pipeline_state,
-                    source_subagent_id=ref.id,
-                ),
-                "tests": report.tests,
-                "warnings": report.warnings,
-                "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
-                "continuation": continuation_payload,
-            }
+            if report is None:
+                # Live progress: the running agent has not yet called
+                # `litehive agent report`. That's expected mid-turn — we
+                # surface a clear placeholder summary so an operator
+                # watching status can tell the agent is mid-flight, but
+                # we do not record a stage-report row.
+                report_payload = {
+                    "status": ref.status,
+                    "summary": (
+                        f"{report_stage}: agent did not submit verdict via litehive agent report CLI"
+                    ),
+                    "files_changed": [],
+                    "tests": {"added": 0, "passing": 0},
+                    "warnings": [],
+                    "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
+                    "continuation": continuation_payload,
+                }
+            else:
+                report_payload = {
+                    "status": ref.status,
+                    "summary": report.summary,
+                    "files_changed": _latest_report_files_changed(
+                        self.workspace,
+                        task,
+                        report.pipeline_state,
+                        source_subagent_id=ref.id,
+                    ),
+                    "tests": report.tests,
+                    "warnings": report.warnings,
+                    "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
+                    "continuation": continuation_payload,
+                }
         self.write_session_snapshot(
             task,
             base,
@@ -799,28 +847,39 @@ class SubagentManager(SessionMixin):
         ref: SubagentRef,
         execution: CLIExecutionResult | None,
         transcript: str,
-    ) -> StageReport:
+    ) -> StageReport | None:
         """
         Construct a ``StageReport`` from the engine's transcript.
 
-        Both ``_write_session_finish`` and ``write_session_progress``
-        route through this single helper so the live-progress and
-        finish paths produce reports of the same shape — without one
-        helper, the live snapshot and the final snapshot could drift
+        Returns ``None`` when the agent finished without submitting a
+        verdict via ``litehive agent report``: the runner should skip
+        recording a stage-report row in that case (the lifecycle's
+        ``NudgeRequired`` path produces the real verdict on the next
+        turn). Both ``_write_session_finish`` and
+        ``write_session_progress`` route through this single helper so
+        the live-progress and finish paths produce reports of the same
+        shape — without one helper, the live snapshot and the final
+        snapshot could drift
         apart on field naming.
         """
         if execution is None:
             execution_exit_code = 0
         else:
             execution_exit_code = execution.exit_code
-        return stage_report_from_subagent(
-            task,
-            stage,
-            SubagentResult(
-                ref=ref,
-                execution=execution,
-                execution_trace=transcript,
-                exit_code=execution_exit_code,
-            ),
-            root=self.root,
-        )
+        try:
+            return stage_report_from_subagent(
+                task,
+                stage,
+                SubagentResult(
+                    ref=ref,
+                    execution=execution,
+                    execution_trace=transcript,
+                    exit_code=execution_exit_code,
+                ),
+                root=self.root,
+            )
+        except MissingVerdictError:
+            # Agent finished without calling `litehive agent report`. The
+            # lifecycle layer will raise NudgeRequired and re-issue the turn;
+            # no stage-report row is written for this snapshot.
+            return None

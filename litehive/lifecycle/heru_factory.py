@@ -132,7 +132,7 @@ def _allowed_verdicts_for_stage(stage: TaskActivityStage) -> set[str]:
     """Verdict vocabularies the journal reader accepts when scanning for the
     agent's submission. Recovery has its own routing verbs (resume/advance/...);
     every other stage only emits pass/reject."""
-    if stage == "recovering":
+    if stage == PipelineState.RECOVERING:
         return {"resume", "advance", "done", "budget_hit", "reject"}
     return {"pass", "reject"}
 
@@ -358,7 +358,7 @@ def latest_verdict_after(
     if latest is None:
         return None
     changed_files = normalized_files_changed(latest.files_changed)
-    if stage == PipelineState.IMPLEMENTING.value and latest.verdict == "pass":
+    if stage == TaskStage.IMPLEMENTING and latest.verdict == "pass":
         checkout, worktree_status = execution_checkout_status(workspace_root, task)
         if worktree_status == [] and changed_files:
             return _rewrite_hallucinated_implementing_pass(
@@ -607,8 +607,8 @@ class HeruEngineAdapter:
             previous_recovery = latest_task_activity_entry(
                 Workspace.from_path(self.workspace_root),
                 task,
-                stage="recovering",
-                verdicts=_allowed_verdicts_for_stage("recovering"),
+                stage=PipelineState.RECOVERING,
+                verdicts=_allowed_verdicts_for_stage(PipelineState.RECOVERING),
             )
             if previous_recovery is not None:
                 created_at = previous_recovery.created_at
@@ -628,7 +628,7 @@ class HeruEngineAdapter:
         return latest_verdict_after(
             self.workspace_root,
             state.task_id,
-            "recovering",
+            PipelineState.RECOVERING,
             after_ts,
             source_subagent_id=source_subagent_id,
         )

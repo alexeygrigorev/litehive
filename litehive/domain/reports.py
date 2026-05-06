@@ -18,6 +18,7 @@ from .common import (
     FEEDBACK_CAP,
     OutcomeKind,
     OutcomeReasonCode,
+    PipelineState,
     PipelineStatus,
     TaskStage,
     TRUNCATION_MARKER,
@@ -31,7 +32,7 @@ from .recovery import TriggerEventKind
 # internal PipelineState. Agent-authored reports belong to executable role
 # stages; hook/system states are represented by their owning role stage, except
 # merge and recovery reports which need their own explicit labels.
-ReportPipelineState: TypeAlias = TaskStage | Literal["merge_resolving", "recovering"]
+ReportPipelineState: TypeAlias = TaskStage | Literal[PipelineState.MERGE_RESOLVING, PipelineState.RECOVERING]
 # Activity entries can be authored at every stage a report can be authored at,
 # plus the operator-facing pipeline buckets (``backlog``, ``done``, ``flagged``)
 # the runner stamps on entries that aren't tied to an executable stage. The
@@ -100,26 +101,25 @@ REPORT_VERDICT_KINDS: frozenset[TaskActivityVerdict] = frozenset(
 )
 
 
-_REPORT_PIPELINE_STATE_LITERALS: frozenset[str] = frozenset({"merge_resolving", "recovering"})
-
-
 def canonical_report_pipeline_state(value: str | TaskStage) -> ReportPipelineState:
     """
     Convert a stage label to the typed ``ReportPipelineState``.
 
     Accepts the string spelling used by submitting callers
     (``"implementing"``, ``"merge_resolving"``) and returns either the
-    matching :class:`TaskStage` member or one of the two literal
-    extensions allowed on stage reports (``merge_resolving``,
-    ``recovering``). Raises ``ValueError`` on unknown spellings —
+    matching :class:`TaskStage` member or one of the two ``PipelineState``
+    extensions allowed on stage reports (``MERGE_RESOLVING``,
+    ``RECOVERING``). Raises ``ValueError`` on unknown spellings —
     there is no "unknown" fallback because storing a bad value would
     silently break every consumer that filters by stage.
     """
     if isinstance(value, TaskStage):
         return value
     text = str(value)
-    if text in _REPORT_PIPELINE_STATE_LITERALS:
-        return text  # type: ignore[return-value]  # narrowed to literal by membership check
+    if text == PipelineState.MERGE_RESOLVING.value:
+        return PipelineState.MERGE_RESOLVING
+    if text == PipelineState.RECOVERING.value:
+        return PipelineState.RECOVERING
     return TaskStage(text)
 
 

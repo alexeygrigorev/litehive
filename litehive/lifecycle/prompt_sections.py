@@ -13,6 +13,7 @@ builders.
 
 from typing import TYPE_CHECKING, Any
 
+from litehive.domain.common import PipelineState
 from litehive.domain.task import TaskRecord
 
 if TYPE_CHECKING:
@@ -528,7 +529,7 @@ def _compact_list(items: list[str], limit: int, separator: str = ", ") -> str:
     return f"{shown}{separator}+{len(items) - limit} more"
 
 
-def _runner_hooks_section(stage: str | None, hooks: list[dict[str, Any]]) -> str:
+def _runner_hooks_section(stage: PipelineState | None, hooks: list[dict[str, Any]]) -> str:
     """
     Warn the agent which post-stage hooks will gate the verdict.
 
@@ -605,8 +606,8 @@ def _label_to_heading(label: str) -> str:
     return label.title()
 
 
-def _human_stage_label(stage: str | None) -> str:
+def _human_stage_label(stage: PipelineState | None) -> str:
     """De-snake stage names for the runner-hooks heading, falling back to a generic label when no stage is set so the heading still parses."""
-    if not stage:
+    if stage is None:
         return "this stage"
-    return stage.replace("_", " ")
+    return stage.value.replace("_", " ")

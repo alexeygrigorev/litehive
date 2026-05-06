@@ -224,7 +224,7 @@ def _recovery_origin_stage(origin_stage: str | None) -> str | None:
         return origin_stage
     if task_stage is None:
         return origin_stage
-    return str(task_stage)
+    return task_stage.value
 
 
 def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | None:
@@ -378,7 +378,7 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
         Workspace.from_path(root),
         task_record,
         role="recovery",
-        stage="recovering",
+        stage=PipelineState.RECOVERING,
         verdicts={"reject"},
     )
     if latest is None or not latest.follow_up_task_id:

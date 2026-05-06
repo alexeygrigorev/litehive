@@ -29,6 +29,7 @@ from typing import TypeAlias
 from pydantic import ValidationError
 
 from litehive.config.paths import workspace_path
+from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.task import TaskIntentRecord, TaskStateRecord
 from litehive.state.rebuild_safety import assert_database_rebuild_safe, backup_database_before_rebuild
 
@@ -139,11 +140,11 @@ def _task_intent_column_values(
     else:
         provenance_payload = intent.created_from.model_dump(mode="json")
     if state is None:
-        lifecycle_status = "queued"
-        pipeline_status = "backlog"
+        lifecycle_status = TaskStatus.QUEUED.value
+        pipeline_status = PipelineStatus.BACKLOG.value
     else:
-        lifecycle_status = str(state.status)
-        pipeline_status = str(state.pipeline_status)
+        lifecycle_status = state.status.value
+        pipeline_status = state.pipeline_status.value
     return {
         "slug": intent.slug,
         "title": intent.title,

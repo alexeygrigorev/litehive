@@ -153,7 +153,7 @@ def status_command(
         for line in render_task_pipeline_status_lines(
             status,
             workspace=workspace,
-            mode="full",
+            mode="detailed",
             retry_on_label=format_retry_on(status.config),
         ):
             print(line)

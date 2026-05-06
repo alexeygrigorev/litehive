@@ -99,7 +99,7 @@ def _task_creation_stage(root: Path, current_task_id: str | None) -> str | None:
     runtime_stage = current_task.runtime.pipeline.current_stage.stage
     if runtime_stage:
         return runtime_stage
-    pipeline_stage = str(current_task.pipeline_status).strip()
+    pipeline_stage = current_task.pipeline_status
     if pipeline_stage and pipeline_stage != PipelineStatus.BACKLOG:
         return pipeline_stage
     return None

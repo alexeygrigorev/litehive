@@ -79,8 +79,8 @@ __all__ = [
     "render_active_task_detail_lines",
     "render_active_task_section",
     "render_active_tasks_section",
+    "render_detailed_status_header_lines",
     "render_engine_availability_lines",
-    "render_full_status_header_lines",
     "render_health_active_task_lines",
     "render_health_daemon_lines",
     "render_health_flagged_task_lines",
@@ -98,7 +98,7 @@ __all__ = [
 ]
 
 
-StatusRenderMode = Literal["fast", "full"]
+StatusRenderMode = Literal["summary", "detailed"]
 
 
 @dataclass(slots=True)
@@ -113,7 +113,7 @@ class TaskPipelineStatusData:
     active_task: TaskRecord | None
     queue_head: str | None
     waiting_lines: list[str]
-    fast_runner_status: str
+    runner_state_label: str
 
 
 def collect_task_pipeline_status(
@@ -163,7 +163,7 @@ def collect_task_pipeline_status(
         active_task=active_task,
         queue_head=_first_or_none(snapshot.state.queue),
         waiting_lines=waiting_lines,
-        fast_runner_status=_fast_runner_state_label(resolved_root, snapshot.runner),
+        runner_state_label=_runner_state_label(resolved_root, snapshot.runner),
     )
 
 
@@ -180,13 +180,13 @@ def render_task_pipeline_status_lines(
     daemon's periodic status writer. The ``mode`` switch keeps
     both surfaces sharing one renderer instead of two parallel
     formatters that would drift over time. ``retry_on_label`` is
-    required in ``full`` mode because the runtime-policy block
+    required in ``detailed`` mode because the runtime-policy block
     needs the caller's preformatted label; refusing to default
     it makes the missing data the call site's problem rather
     than producing misleading output.
     """
-    if mode == "full":
-        lines = render_full_status_header_lines(workspace, status.config, status.state, status.runner)
+    if mode == "detailed":
+        lines = render_detailed_status_header_lines(workspace, status.config, status.state, status.runner)
     else:
         if status.active_task_id is not None:
             active_task_id_label = status.active_task_id
@@ -209,8 +209,8 @@ def render_task_pipeline_status_lines(
     if status.queue_head is not None:
         lines.append(f"queue_head: {status.queue_head}")
 
-    if mode == "fast":
-        lines.append(f"runner_status: {status.fast_runner_status}")
+    if mode == "summary":
+        lines.append(f"runner_status: {status.runner_state_label}")
         if status.runner.pid is not None:
             lines.append(f"runner_pid: {status.runner.pid}")
         if status.runner.started_at:
@@ -221,9 +221,9 @@ def render_task_pipeline_status_lines(
     lines.extend(render_active_task_detail_lines(status.active_task, status.config.default_engine))
     lines.extend(render_engine_availability_lines(status.config, status.monitoring))
 
-    if mode == "full":
+    if mode == "detailed":
         if retry_on_label is None:
-            raise ValueError("retry_on_label is required when rendering full status output")
+            raise ValueError("retry_on_label is required when rendering detailed status output")
         lines.extend(render_runtime_policy_lines(status.config, retry_on_label))
 
     return lines
@@ -243,12 +243,12 @@ def _first_or_none(items):
     return None
 
 
-def _fast_runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
+def _runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
     """
     Distinguish never-started workspaces from stopped or dead runners.
 
-    The full status path reads liveness from the runner record
-    alone, but the fast path also needs to tell operators "you
+    The detailed status path reads liveness from the runner record
+    alone, but the summary path also needs to tell operators "you
     have not run litehive yet here" apart from "the runner died"
     — that distinction matters when an operator is debugging an
     apparently-stopped workspace. Probes the on-disk lockfile to
@@ -325,7 +325,7 @@ def render_active_task_detail_lines(task: TaskRecord | None, default_engine: str
     """
     Render the flat active-task detail block.
 
-    Used by both the fast and full CLI status outputs so the
+    Used by both the summary and detailed CLI status outputs so the
     "what is the active task doing right now?" lines are
     identical between modes. Returns an empty list when no task
     is active so the caller's ``lines.extend(...)`` is a no-op.
@@ -363,17 +363,17 @@ def render_runner_status_line(runner: RunnerStatusState, state: WorkspaceState |
     return f"{base_status} active_task_id={runner.active_task_id or '-'}"
 
 
-def render_full_status_header_lines(
+def render_detailed_status_header_lines(
     workspace: Path,
     config: LitehiveConfig,
     state: WorkspaceState,
     runner: RunnerStatusState,
 ) -> list[str]:
     """
-    Emit the workspace/engine/runner/queue header for full-mode status.
+    Emit the workspace/engine/runner/queue header for detailed-mode status.
 
     Called by :func:`render_task_pipeline_status_lines` for the
-    full path; kept as a separate function so tests can exercise
+    detailed path; kept as a separate function so tests can exercise
     the header independently and so the daemon can render just
     the header for shorter health snapshots without dragging in
     the rest of the status body.
@@ -381,7 +381,7 @@ def render_full_status_header_lines(
     active_task_id = runner.active_task_id or state.active_task_id
     lines = [
         f"workspace: {workspace}",
-        "status_read_mode: full",
+        "status_read_mode: detailed",
         f"default_engine: {config.default_engine}",
     ]
     freezes = active_engine_freezes(config)

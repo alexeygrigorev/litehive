@@ -31,15 +31,15 @@ def main(argv: list[str], real_git_path: str, workspace_root: str) -> int:
     sees no shim at all.
     """
     reason = rejection_reason(argv)
-    if reason is not None:
-        append_attention_log(
-            Workspace.from_path(Path(workspace_root)),
-            f"merge-resolver git wrapper rejected `{_format_cmd(argv)}`: {reason}",
-        )
-        print(f"litehive git wrapper: blocked destructive git command: {reason}", file=sys.stderr)
-        return 2
-    os.execv(real_git_path, [real_git_path, *argv])
-    return 1
+    if reason is None:
+        os.execv(real_git_path, [real_git_path, *argv])
+        return 1
+    append_attention_log(
+        Workspace.from_path(Path(workspace_root)),
+        f"merge-resolver git wrapper rejected `{_format_cmd(argv)}`: {reason}",
+    )
+    print(f"litehive git wrapper: blocked destructive git command: {reason}", file=sys.stderr)
+    return 2
 
 
 def rejection_reason(argv: list[str], cwd: Path | None = None) -> str | None:

@@ -495,7 +495,7 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
     if state.entry_stage is None:
         entry_stage_payload = None
     else:
-        entry_stage_payload = str(state.entry_stage)
+        entry_stage_payload = state.entry_stage.value
     if state.active_recovery_trigger is not None:
         active_recovery_trigger_payload = state.active_recovery_trigger.to_payload()
     else:
@@ -518,7 +518,7 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
         last_hook_reject_fingerprint_payload = None
     return {
         "entry_stage": entry_stage_payload,
-        "stage_retry": {str(stage): count for stage, count in state.stage_retry.items()},
+        "stage_retry": {stage.value: count for stage, count in state.stage_retry.items()},
         "active_recovery_trigger": active_recovery_trigger_payload,
         "recovery_history": [outcome.to_payload() for outcome in state.recovery_history],
         "recovery_budget_history_start": state.recovery_budget_history_start,
@@ -528,7 +528,7 @@ def _state_payload(state: TaskState) -> dict[str, Any]:
         "commit_result": commit_result_payload,
         "last_report": state.last_report.to_payload(),
         "last_rejection_by_stage": {
-            str(stage): rej.to_payload() for stage, rej in state.last_rejection_by_stage.items()
+            stage.value: rej.to_payload() for stage, rej in state.last_rejection_by_stage.items()
         },
         "failed_run_history": {key: record.to_payload() for key, record in state.failed_run_history.items()},
         "rejection_loop": rejection_loop_payload,
@@ -747,7 +747,7 @@ class SqlitePersistence:
                 """,
                 (
                     state.task_id,
-                    str(state.stage),
+                    state.stage.value,
                     state.pipeline_mode.value,
                     payload_json,
                     updated_at,
@@ -760,7 +760,7 @@ class SqlitePersistence:
                 payload={
                     "pipeline_task_state": {
                         "task_id": state.task_id,
-                        "stage": str(state.stage),
+                        "stage": state.stage.value,
                         "pipeline_mode": state.pipeline_mode.value,
                         "payload": payload,
                         "updated_at": updated_at,
@@ -843,7 +843,7 @@ class SqlitePersistence:
                     WHERE task_id = ?
                     """,
                     (
-                        str(reset_state.stage),
+                        reset_state.stage.value,
                         reset_state.pipeline_mode.value,
                         json.dumps(payload, sort_keys=True),
                         utcnow(),
