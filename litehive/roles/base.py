@@ -1,17 +1,20 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 import yaml
 
+from litehive.container import build_container, build_workspace
 from litehive.config.profiles.model import ProcessProfile
 from litehive.domain.common import PipelineState, TaskStage
 from litehive.lifecycle.nodes.agent import AgentNode, EngineSelector, SessionProvider
 from litehive.lifecycle.persistence import LastRejection, TaskState
 from litehive.lifecycle.prompt_types import AgentPrompt
-from litehive.workspace import Workspace
 from .guidance import default_startup_guidance
+
+if TYPE_CHECKING:
+    from litehive.workspace import Workspace
 
 
 @dataclass
@@ -173,7 +176,7 @@ class RoleAgent(AgentNode):
         if self.NODE_NAME != PipelineState.IMPLEMENTING:
             return fallback
         root = self.prompt_context.workspace_root
-        rejection_stage = _latest_reject_stage_for_implementing(Workspace.from_path(root), state.task_id)
+        rejection_stage = _latest_reject_stage_for_implementing(build_workspace(root), state.task_id)
         if rejection_stage is None:
             return fallback
         return state.last_rejection_by_stage.get(rejection_stage) or fallback
@@ -190,9 +193,7 @@ class RoleAgent(AgentNode):
         after_phase = f"after_{self.NODE_NAME}"
         root = self.prompt_context.workspace_root
         try:
-            from litehive.config.loading import load_config  # noqa: PLC0415
-
-            config = load_config(root)
+            config = build_container(root).config
         except (OSError, TypeError, ValidationError, ValueError, yaml.YAMLError):
             return []
         raw_hooks = (config.runner_hooks or {}).get(after_phase, [])
