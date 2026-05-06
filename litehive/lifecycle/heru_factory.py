@@ -34,8 +34,7 @@ from typing import Any
 
 from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
-from litehive.config.loading import load_config
-from litehive.container import build_subagent_manager
+from litehive.container import build_container, build_subagent_manager, build_workspace
 from litehive.domain.agent import EngineFailure
 from litehive.domain.common import OutcomeReasonCode, PipelineState, TaskStage, cap_feedback
 from litehive.domain.reports import StageReport, TaskActivityStage, canonical_report_pipeline_state
@@ -157,7 +156,7 @@ def _recovery_execution_root(workspace_root: Path) -> Path:
     turn there; fall back to the workspace if the source path is unset or
     unreadable."""
     try:
-        config = load_config(workspace_root)
+        config = build_container(workspace_root).config
     except Exception:
         return workspace_root
     raw_source = str(config.litehive_source_path or "").strip()
@@ -347,7 +346,7 @@ def latest_verdict_after(
     task = get_task(workspace_root, task_id)
     if task is None:
         return None
-    workspace = Workspace.from_path(workspace_root)
+    workspace = build_workspace(workspace_root)
     latest = latest_task_activity_entry(
         workspace,
         task,
@@ -400,6 +399,8 @@ class HeruEngineAdapter:
         self,
         engine_name: str,
         workspace_root: Path,
+        *,
+        workspace: Workspace,
         model_name: str | None = None,
     ) -> None:
         """
@@ -411,7 +412,7 @@ class HeruEngineAdapter:
         """
         self.name = engine_name
         self.workspace_root = Path(workspace_root)
-        self.workspace = Workspace.from_path(self.workspace_root)
+        self.workspace = workspace
         self.model_name = model_name
 
     def with_model(self, model_name: str | None) -> "HeruEngineAdapter":
@@ -426,6 +427,7 @@ class HeruEngineAdapter:
         return HeruEngineAdapter(
             self.name,
             self.workspace_root,
+            workspace=self.workspace,
             model_name=model_name,
         )
 
@@ -797,8 +799,9 @@ def _is_retryable_failure(exc: Exception) -> bool:
 def heru_engine_factory(workspace_root: Path):
     """Return a callable that produces ``HeruEngineAdapter`` instances. Suitable as the ``engine_factory`` argument for ``ConfigBackedEngineSelector``."""
     root = Path(workspace_root)
+    workspace = build_workspace(root)
 
     def _factory(engine_name: str) -> Engine:
-        return HeruEngineAdapter(engine_name, root)
+        return HeruEngineAdapter(engine_name, root, workspace=workspace)
 
     return _factory

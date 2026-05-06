@@ -16,6 +16,7 @@ from litehive.lifecycle.types import PipelineMode
 from litehive.lifecycle.events import Pass
 from litehive.state.records import create_task, get_task_worktree_path, require_task
 from litehive.state.store import runtime_store
+from litehive.workspace import Workspace
 from litehive.worktree.paths import resolve_recorded_worktree_path, task_worktree_branch, task_worktree_path
 
 
@@ -120,7 +121,7 @@ def test_agent_and_commit_use_persisted_worktree_path(
     )
     assert sync_node.sync(_state(task.id, PipelineState.WORKTREE_SYNC)) is True
 
-    adapter = HeruEngineAdapter("codex", workspace)
+    adapter = HeruEngineAdapter("codex", workspace, workspace=Workspace.from_path(workspace))
     session = Session()
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(
