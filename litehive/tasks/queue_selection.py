@@ -29,9 +29,11 @@ from litehive.state.locking import (
 )
 from litehive.state.persist import (
     load_state,
+    load_state_for_workspace,
     persist_task_and_state,
     persist_tasks_and_state,
     save_state,
+    save_state_for_workspace,
 )
 from litehive.state.records import (
     get_task,
@@ -109,13 +111,13 @@ def set_active_task(workspace: Workspace, task_id: str | None) -> WorkspaceState
     bookkeeping run.
     """
     with workspace_mutation_guard_for_workspace(workspace), workspace_lock(workspace.root):
-        state = load_state(workspace.root)
+        state = load_state_for_workspace(workspace)
         state.active_task_id = task_id
         if task_id is not None and task_id in state.queue:
             state.queue = [item for item in state.queue if item != task_id]
         validate_single_active_task_for_workspace(workspace, state)
         if task_id is None:
-            save_state(workspace.root, state)
+            save_state_for_workspace(workspace, state)
             return state
         task = require_task(workspace.root, task_id)
         if task.status == TaskStatus.QUEUED:
@@ -146,14 +148,14 @@ def peek_next_task_selection(workspace: Workspace) -> TaskSelection:
     """
     recover_stale_runner_state_for_workspace(workspace)
     with workspace_mutation_guard_for_workspace(workspace), workspace_lock(workspace.root):
-        state = load_state(workspace.root)
+        state = load_state_for_workspace(workspace)
         validate_single_active_task_for_workspace(workspace, state)
         next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace, state)
         if mutated:
             if normalized_tasks:
                 persist_tasks_and_state(workspace.root, tasks=normalized_tasks, state=state)
             else:
-                save_state(workspace.root, state)
+                save_state_for_workspace(workspace, state)
         return TaskSelection(task=next_task, blocked=blocked)
 
 
@@ -181,7 +183,7 @@ def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
     """
     recover_stale_runner_state_for_workspace(workspace)
     with workspace_mutation_guard_for_workspace(workspace), workspace_lock(workspace.root):
-        state = load_state(workspace.root)
+        state = load_state_for_workspace(workspace)
         original_queue = list(state.queue)
         validate_single_active_task_for_workspace(workspace, state)
         next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace, state)
@@ -190,7 +192,7 @@ def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
                 if normalized_tasks:
                     persist_tasks_and_state(workspace.root, tasks=normalized_tasks, state=state)
                 else:
-                    save_state(workspace.root, state)
+                    save_state_for_workspace(workspace, state)
             return TaskSelection(task=None, blocked=blocked)
         if state.active_task_id != next_task.id:
             state.active_task_id = next_task.id
@@ -202,7 +204,7 @@ def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
                     if state.active_task_id == next_task.id:
                         state.active_task_id = None
                     if mutated:
-                        save_state(workspace.root, state)
+                        save_state_for_workspace(workspace, state)
                     return TaskSelection(task=None, blocked=blocked)
                 recovery_stage = _auto_recovery_stage_for_flagged_task(next_task)
                 record_recovery_report(
@@ -470,7 +472,7 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
     """
     root = workspace.root
     with workspace_mutation_guard_for_workspace(workspace), workspace_lock(root):
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         validate_single_active_task_for_workspace(workspace, state)
         if state.active_task_id is None:
             return state
@@ -532,7 +534,7 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
             return state
 
         state.active_task_id = None
-        save_state(root, state)
+        save_state_for_workspace(workspace, state)
         return state
 
 
@@ -554,7 +556,7 @@ def active_task_markers_for_workspace(workspace: Workspace, state: WorkspaceStat
     """
     root = workspace.root
     markers: dict[str, list[str]] = {}
-    current_state = state or load_state(root)
+    current_state = state or load_state_for_workspace(workspace)
     tasks = list_tasks(root, strict=False)
     tasks_by_id = {task.id: task for task in tasks}
     if current_state.active_task_id is None:

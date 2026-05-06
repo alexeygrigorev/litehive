@@ -9,9 +9,10 @@ from pathlib import Path
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.common import PipelineState, utcnow
 from litehive.domain.task import TaskRecord, WorkspaceState
-from litehive.state.locking import workspace_lock, workspace_mutation_guard
-from litehive.state.store import runtime_store
+from litehive.state.locking import workspace_lock, workspace_mutation_guard, workspace_mutation_guard_for_workspace
+from litehive.state.store import runtime_store, runtime_store_for_workspace
 from litehive.tasks.audit import TaskAuditEntry
+from litehive.workspace import Workspace
 
 _MISSING = object()
 _SKIP_BOOTSTRAP_LOAD_STATE: ContextVar[bool] = ContextVar(
@@ -41,15 +42,23 @@ def skip_bootstrap_load_state():
 
 def load_state(root: Path, bootstrap: bool = True) -> WorkspaceState:
     """
+    Path-based compatibility wrapper for workspace state loading.
+    """
+    return load_state_for_workspace(Workspace.from_path(root), bootstrap=bootstrap)
+
+
+def load_state_for_workspace(workspace: Workspace, bootstrap: bool = True) -> WorkspaceState:
+    """
     Return the workspace state, materialising an empty row on first read.
 
     The canonical reader used everywhere the runner, CLI, or dashboards
     need queue/runner pointers; bootstrapping on first read is what makes
     a fresh workspace usable without a separate ``init`` step.
     """
+    root = workspace.root
     if bootstrap and not _SKIP_BOOTSTRAP_LOAD_STATE.get():
         ensure_workspace(root)
-    store = runtime_store(root)
+    store = runtime_store_for_workspace(workspace)
     state = store.load_workspace_state()
     if state is None:
         state = WorkspaceState()
@@ -169,14 +178,21 @@ def write_atomic_files_and_then(writes: dict[Path, str], callback) -> None:
 
 def save_state(root: Path, state: WorkspaceState) -> None:
     """
+    Path-based compatibility wrapper for workspace state persistence.
+    """
+    save_state_for_workspace(Workspace.from_path(root), state)
+
+
+def save_state_for_workspace(workspace: Workspace, state: WorkspaceState) -> None:
+    """
     Persist workspace state under the mutation guard.
 
     The path used by CLI commands that change queue/pool settings outside
     an active runner; taking the guard here means a CLI mutation cannot
     race a runner that's also rewriting workspace state.
     """
-    with workspace_mutation_guard(root):
-        runtime_store(root).save_workspace_state(state)
+    with workspace_mutation_guard_for_workspace(workspace):
+        runtime_store_for_workspace(workspace).save_workspace_state(state)
 
 
 def save_state_without_runner_guard(
