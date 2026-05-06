@@ -14,9 +14,9 @@ from heru.quota import (
 from litehive.cli.common import WorkspaceOption, choice
 from litehive.config.engine_models import (
     active_engine_freezes,
-    clear_persisted_engine_freeze,
+    clear_persisted_engine_freeze_for_workspace,
     parse_engine_freeze_until,
-    persist_engine_freeze_iso,
+    persist_engine_freeze_iso_for_workspace,
 )
 from litehive.config.model import LitehiveConfig
 from litehive.config.model import normalize_engine_sequence
@@ -53,7 +53,6 @@ def engine_command(
     duplicate command signatures.
     """
     container = build_container(workspace)
-    root = container.workspace.root
     if action == "status":
         if name:
             print("engine status: does not take positional arguments")
@@ -126,8 +125,8 @@ def engine_command(
         if freeze_iso is None:
             print("engine freeze: --until must be ISO date YYYY-MM-DD")
             return 1
-        persist_engine_freeze_iso(
-            root,
+        persist_engine_freeze_iso_for_workspace(
+            container.workspace,
             engine_name=name,
             freeze_iso=freeze_iso,
             actor="operator",
@@ -140,8 +139,8 @@ def engine_command(
             reason_part = ""
         print(f"engine_frozen: {name} until {freeze_iso}" + reason_part)
         return 0
-    if not clear_persisted_engine_freeze(
-        root,
+    if not clear_persisted_engine_freeze_for_workspace(
+        container.workspace,
         engine_name=name,
         actor="operator",
         source="cli",
