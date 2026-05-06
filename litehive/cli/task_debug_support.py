@@ -13,7 +13,6 @@ import sqlite3
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_session
-from litehive.container import build_workspace
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,
@@ -23,18 +22,6 @@ from litehive.tasks.activity import load_task_activity
 from litehive.tasks.report_storage import latest_stage_report
 from litehive.workspace import Workspace
 from litehive.worktree.service import WorktreeService
-
-
-def render_task_evidence(root: Path, task) -> int:
-    """
-    Render the compact evidence needed to route or recover a task.
-
-    Composes the five evidence sections (lifecycle, latest report,
-    latest activity, latest subagent, worktree) so an operator
-    triaging a stuck task gets one screen of verdict-grade signal
-    instead of a sprawling ``task show``.
-    """
-    return render_task_evidence_for_workspace(build_workspace(root), task)
 
 
 def render_task_evidence_for_workspace(workspace: Workspace, task) -> int:
@@ -52,18 +39,6 @@ def render_task_evidence_for_workspace(workspace: Workspace, task) -> int:
     _print_latest_subagent(root, workspace, task)
     _print_worktree_evidence(root, task)
     return 0
-
-
-def debug_all(root: Path, task):
-    """
-    List every subagent attached to a task with a one-line summary.
-
-    Used by ``task debug --all`` when the operator wants to see
-    the full subagent history for a task rather than only the
-    most recent run; per-row status and exit code make it cheap
-    to spot which subagent is the failing one.
-    """
-    return debug_all_for_workspace(build_workspace(root), task)
 
 
 def debug_all_for_workspace(workspace: Workspace, task):
@@ -86,15 +61,15 @@ def debug_all_for_workspace(workspace: Workspace, task):
     return 0
 
 
-def debug_latest(root: Path, task):
+def debug_latest_for_workspace(workspace: Workspace, task):
     """
     Compatibility entrypoint for the compact task evidence view.
 
     Routes the older ``task debug`` (no flags) muscle memory to
-    :func:`render_task_evidence`. Kept as a thin wrapper so the
+    :func:`render_task_evidence_for_workspace`. Kept as a thin wrapper so the
     public Typer signature in ``task_cli`` does not change.
     """
-    return render_task_evidence(root, task)
+    return render_task_evidence_for_workspace(workspace, task)
 
 
 def _print_lifecycle_evidence(workspace: Workspace, task) -> None:
@@ -269,6 +244,13 @@ def debug_worktree(root: Path, task):
     print(f"task: {task.id}")
     _print_worktree_evidence(root, task)
     return 0
+
+
+def debug_worktree_for_workspace(workspace: Workspace, task):
+    """
+    Render the worktree-only evidence view from an injected workspace.
+    """
+    return debug_worktree(workspace.root, task)
 
 
 def _print_worktree_evidence(root: Path, task) -> None:

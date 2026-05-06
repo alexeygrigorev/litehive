@@ -13,9 +13,8 @@ from pathlib import Path
 import time
 
 from litehive.agents.session_store import load_subagent_session
-from litehive.cli.task_debug_support import render_task_evidence
+from litehive.cli.task_debug_support import render_task_evidence_for_workspace
 from litehive.config.paths import workspace_path
-from litehive.container import build_workspace
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.domain.task import TaskRecord
 from litehive.state.records import get_task_record, list_tasks
@@ -75,19 +74,6 @@ def list_daemon_sessions(root: Path) -> int:
     return 0
 
 
-def show_task_journal(root: Path, task: TaskRecord) -> int:
-    """
-    Default ``task logs <id>`` view: the per-task narrative journal.
-
-    Renders stage transitions and verdicts as a story rather than
-    raw subagent stdout, which is usually the right grain for
-    "what happened to this task?". Operators who need raw output
-    can pass ``--agent`` to drop into the subagent evidence view
-    instead.
-    """
-    return show_task_journal_for_workspace(build_workspace(root), task)
-
-
 def show_task_journal_for_workspace(workspace: Workspace, task: TaskRecord) -> int:
     """
     Render a task journal from an injected workspace.
@@ -103,7 +89,7 @@ def show_task_journal_for_workspace(workspace: Workspace, task: TaskRecord) -> i
     return 0
 
 
-def show_latest_subagent(root: Path, task: TaskRecord) -> int:
+def show_latest_subagent_for_workspace(workspace: Workspace, task: TaskRecord) -> int:
     """
     One-screen view of the most recent subagent run for a task.
 
@@ -113,19 +99,7 @@ def show_latest_subagent(root: Path, task: TaskRecord) -> int:
     ``task evidence`` and don't have to learn two different
     layouts.
     """
-    return render_task_evidence(root, task)
-
-
-def list_task_subagents(root: Path, task: TaskRecord) -> int:
-    """
-    Tabular summary of every subagent run on a task.
-
-    Reverse-chronological so the most recent run (usually the one
-    the operator wants) lands at the top. Combines runtime and
-    persisted session data so a still-active subagent shows live
-    fields instead of stale on-disk values.
-    """
-    return list_task_subagents_for_workspace(build_workspace(root), task)
+    return render_task_evidence_for_workspace(workspace, task)
 
 
 def list_task_subagents_for_workspace(workspace: Workspace, task: TaskRecord) -> int:

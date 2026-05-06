@@ -13,19 +13,19 @@ from litehive.cli.parse import (
     parse_text_list_option,
 )
 from litehive.cli.task_debug_support import (
-    debug_all,
-    debug_latest,
-    debug_worktree,
-    render_task_evidence,
+    debug_all_for_workspace,
+    debug_latest_for_workspace,
+    debug_worktree_for_workspace,
+    render_task_evidence_for_workspace,
 )
 from litehive.cli.task_logs_support import (
     follow_active_subagent,
     list_daemon_sessions,
-    list_task_subagents,
+    list_task_subagents_for_workspace,
     load_task_with_runtime,
     show_latest_daemon_log,
-    show_latest_subagent,
-    show_task_journal,
+    show_latest_subagent_for_workspace,
+    show_task_journal_for_workspace,
 )
 from litehive.config.workspace import ensure_workspace
 from litehive.container import build_workspace
@@ -200,7 +200,8 @@ def evidence(
     except ValueError:
         print(f"task not found: {task_id}")
         return 1
-    return render_task_evidence(workspace, task)
+    workspace_obj = build_workspace(workspace)
+    return render_task_evidence_for_workspace(workspace_obj, task)
 
 
 @app.command("debug", help="Compatibility alias for `task evidence`")
@@ -225,11 +226,12 @@ def debug(
     except ValueError:
         print(f"task not found: {task_id}")
         return 1
+    workspace_obj = build_workspace(workspace)
     if worktree:
-        return debug_worktree(workspace, task)
+        return debug_worktree_for_workspace(workspace_obj, task)
     if all_:
-        return debug_all(workspace, task)
-    return debug_latest(workspace, task)
+        return debug_all_for_workspace(workspace_obj, task)
+    return debug_latest_for_workspace(workspace_obj, task)
 
 
 @app.command("logs", help="Show daemon logs, task journal, and compact subagent evidence")
@@ -261,11 +263,12 @@ def logs(
         if task is None:
             print(f"task not found: {task_id}")
             return 1
+        workspace_obj = build_workspace(workspace)
         if agent:
             if all_:
-                return list_task_subagents(workspace, task)
-            return show_latest_subagent(workspace, task)
-        return show_task_journal(workspace, task)
+                return list_task_subagents_for_workspace(workspace_obj, task)
+            return show_latest_subagent_for_workspace(workspace_obj, task)
+        return show_task_journal_for_workspace(workspace_obj, task)
     return show_latest_daemon_log(workspace)
 
 
