@@ -227,7 +227,7 @@ def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
     """
     ensure_workspace(workspace)
     try:
-        summary = stop_current_task(workspace)
+        summary = stop_current_task(build_workspace(workspace))
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"stop failed: {exc}")
         return 1

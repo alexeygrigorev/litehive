@@ -54,7 +54,7 @@ def test_stop_current_task_marks_active_work_as_parked(tmp_path: Path) -> None:
     state.queue = []
     save_state(tmp_path, state)
 
-    summary = stop_current_task(tmp_path)
+    summary = stop_current_task(Workspace.from_path(tmp_path))
 
     assert summary.task.status == "parked"
     assert summary.task.pipeline_status == "implementing"

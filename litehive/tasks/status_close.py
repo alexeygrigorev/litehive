@@ -127,7 +127,7 @@ def _close_task_transition(
     else:
         runner_metadata = None
     if state.active_task_id == task_id or (runner_metadata is not None and runner_metadata.active_task_id == task_id):
-        stop_summary = stop_current_task(root)
+        stop_summary = stop_current_task(workspace)
     if stop_summary is None:
         runner_pid = None
     else:

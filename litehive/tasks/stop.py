@@ -21,7 +21,6 @@ from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStag
 from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.domain.task_ops import StopTaskSummary, WorkspaceConflictError
-from litehive.container import build_workspace
 from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
 from litehive.state.locking import (
     read_runner_lock_metadata,
@@ -34,6 +33,7 @@ from litehive.state.records import get_task_record, require_task
 from litehive.tasks._process_signals import terminate_subagent_pid
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.queue import active_task_markers, validate_single_active_task
+from litehive.workspace import Workspace
 
 
 def _active_task_id_for_stop(root: Path, state: WorkspaceState) -> str:
@@ -132,7 +132,7 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
 
 
 def stop_current_task(
-    root: Path,
+    workspace: Workspace,
     wait_timeout_seconds: float = 5.0,
     poll_interval_seconds: float = 0.1,
 ) -> StopTaskSummary:
@@ -145,6 +145,7 @@ def stop_current_task(
     ``litehive queue stop`` and by the engine-switch flow when it must
     interrupt the active task first.
     """
+    root = workspace.root
     state = load_state(root)
     try:
         active_task_id = _active_task_id_for_stop(root, state)
@@ -185,7 +186,7 @@ def stop_current_task(
                         wait_timeout_seconds=wait_timeout_seconds,
                         poll_interval_seconds=poll_interval_seconds,
                     )
-            recover_stale_runner_state_for_workspace(build_workspace(root))
+            recover_stale_runner_state_for_workspace(workspace)
             state = load_state(root)
             markers = active_task_markers(root, state)
             if active_task_id not in markers:

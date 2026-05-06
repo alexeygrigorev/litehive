@@ -143,7 +143,7 @@ def switch_task_engine_for_workspace(
     runner_pid: int | None = None
     signal_sent = False
     if was_active:
-        stop_summary = stop_current_task(root)
+        stop_summary = stop_current_task(workspace)
         task = stop_summary.task
         runner_pid = stop_summary.runner_pid
         signal_sent = stop_summary.signal_sent
