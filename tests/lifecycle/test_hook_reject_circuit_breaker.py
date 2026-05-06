@@ -6,6 +6,7 @@ import pytest
 import yaml
 
 from litehive.cli.runner import run_once
+from litehive.container import build_container
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.config.workspace_files import config_path
@@ -240,7 +241,8 @@ def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_p
         ),
     )
 
-    first = run_once(tmp_path)
+    container = build_container(tmp_path)
+    first = run_once(container)
     broken_refreshed = get_task(tmp_path, broken.id)
     pipeline_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(broken.id)
     state_after_first = load_state(tmp_path)
@@ -263,7 +265,7 @@ def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_p
     assert broken.id not in state_after_first.queue
     assert runnable.id in state_after_first.queue
 
-    second = run_once(tmp_path)
+    second = run_once(container)
     runnable_refreshed = get_task(tmp_path, runnable.id)
 
     assert second.exit_code == 0
