@@ -20,6 +20,7 @@ from a single path:
 from pathlib import Path
 
 from litehive.container import build_workspace
+from litehive.workspace import Workspace
 # Re-exported public API. Imports kept in `status_diagnostics` so existing
 # `from litehive.observability.status_diagnostics import ...` callers keep working.
 from litehive.observability.status_loaders import _load_runner_status_for_status  # noqa: F401
@@ -55,7 +56,9 @@ __all__ = [
     "StatusIssue",
     "StatusSeverity",
     "StatusSnapshot",
+    "collect_operational_status_snapshot_for_workspace",
     "collect_operational_status_snapshot",
+    "collect_status_snapshot_for_workspace",
     "collect_status_snapshot",
     "probe_registry_files",
     "render_health_summary",
@@ -76,8 +79,18 @@ def collect_status_snapshot(root: Path) -> StatusSnapshot:
     damage). Distinct from :func:`collect_operational_status_snapshot`
     because the full sweep is too heavy for routine status reads.
     """
-    root = root.resolve()
-    workspace = build_workspace(root)
+    return collect_status_snapshot_for_workspace(build_workspace(root.resolve()))
+
+
+def collect_status_snapshot_for_workspace(workspace: Workspace) -> StatusSnapshot:
+    """
+    Build the full diagnostic snapshot from an injected workspace.
+
+    Path-based callers use ``collect_status_snapshot``; status code
+    that already has a ``Workspace`` uses this variant to avoid
+    rebuilding workspace dependencies during read-only diagnostics.
+    """
+    root = workspace.root
     registry_issues = probe_registry_files()
     config, config_issues = _load_config_for_status(root)
     state, state_issues = _load_state_for_status(root)
@@ -122,8 +135,18 @@ def collect_operational_status_snapshot(root: Path) -> StatusSnapshot:
     who needs them runs ``litehive health`` or
     ``litehive status --full``.
     """
-    root = root.resolve()
-    workspace = build_workspace(root)
+    return collect_operational_status_snapshot_for_workspace(build_workspace(root.resolve()))
+
+
+def collect_operational_status_snapshot_for_workspace(workspace: Workspace) -> StatusSnapshot:
+    """
+    Collect the small read-only status view from an injected workspace.
+
+    This is the routine status path; keeping the workspace dependency
+    explicit avoids a hidden root-to-workspace conversion on every
+    status render.
+    """
+    root = workspace.root
     config, config_issues = _load_config_for_status(root)
     state, state_issues = _load_state_for_status(root)
     runner, runner_issue = _load_runner_status_for_status(root)

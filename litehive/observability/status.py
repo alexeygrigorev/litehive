@@ -23,6 +23,7 @@ from litehive.attention import waiting_for_you_lines
 from litehive.config.engine_models import active_engine_freezes
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import workspace_path
+from litehive.container import build_workspace
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskIntentRecord, TaskRecord, TaskStateRecord, WorkspaceState
@@ -38,8 +39,8 @@ from litehive.observability.status_dashboard import (
 )
 from litehive.observability.status_diagnostics import (
     StatusIssue,
-    collect_operational_status_snapshot,
-    collect_status_snapshot,
+    collect_operational_status_snapshot_for_workspace,
+    collect_status_snapshot_for_workspace,
 )
 from litehive.observability.status_health import (
     render_health_active_task_lines,
@@ -67,6 +68,9 @@ from litehive.observability.status_summary import (
     render_task_summary,
 )
 from litehive.state.records import get_task
+
+collect_operational_status_snapshot = collect_operational_status_snapshot_for_workspace
+collect_status_snapshot = collect_status_snapshot_for_workspace
 
 __all__ = [
     "StatusIssue",
@@ -133,10 +137,11 @@ def collect_task_pipeline_status(
     every status print.
     """
     resolved_root = root.resolve()
+    workspace = build_workspace(resolved_root)
     if diagnostics:
-        snapshot = collect_status_snapshot(resolved_root)
+        snapshot = collect_status_snapshot(workspace)
     else:
-        snapshot = collect_operational_status_snapshot(resolved_root)
+        snapshot = collect_operational_status_snapshot(workspace)
     active_task_id = snapshot.runner.active_task_id or snapshot.state.active_task_id
     if read_only:
         if active_task_id:
