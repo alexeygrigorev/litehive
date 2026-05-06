@@ -5,12 +5,12 @@ from pathlib import Path
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import GitError
-from litehive.state.persist import load_state
+from litehive.state.persist import load_state_for_workspace
 from litehive.tasks.normalization import implementation_entry_stage
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.queue import prepare_completed_task_for_recovery
 from litehive.state.locking import workspace_lock, workspace_mutation_guard_for_workspace
-from litehive.state.persist import persist_task_and_state
+from litehive.state.persist import persist_task_and_state_for_workspace
 from litehive.workspace import Workspace
 
 
@@ -54,12 +54,12 @@ def recover_completed_task_for_workspace(workspace: Workspace, task_id: str) -> 
         require_completed_task(task, action="recover")
         recovery_stage = implementation_entry_stage(task)
         prepare_completed_task_for_recovery(task, recovery_stage=recovery_stage)
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         queue_before = list(state.queue)
         drop_task_from_workspace_state(state, task.id)
         state.queue.append(task.id)
-        persist_task_and_state(
-            root,
+        persist_task_and_state_for_workspace(
+            workspace,
             task=task,
             state=state,
             journal_message="Task recovered for another implementation pass.",
