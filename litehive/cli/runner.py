@@ -556,6 +556,8 @@ def report_command(
     except ValueError as exc:
         print(f"report failed: {exc}")
         return 1
+    workspace_obj = build_workspace(root)
+    root = workspace_obj.root
     if not task_id:
         state = load_state(root)
         task_id = state.active_task_id
@@ -577,7 +579,6 @@ def report_command(
         message=message,
         files_changed=list(files_changed or []),
     )
-    workspace_obj = build_workspace(root)
     append_task_activity(workspace_obj, task, entry)
     print(f"task: {task.id}")
     print(f"stage: {stage}")
