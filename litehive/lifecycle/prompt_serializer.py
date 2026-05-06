@@ -8,8 +8,8 @@ representation: a section-based document an engine adapter can pipe to
 ``codex run`` or ``claude run`` etc.
 
 The serializer:
-  - reads the SQLite-backed ``TaskRecord`` for goal / acceptance / plan / constraints
-    (the prompt only carries task_id; the rest comes from the task store)
+  - reads the caller-resolved ``TaskRecord`` for goal / acceptance / plan / constraints
+    (the prompt no longer carries task_id; the agent never sees internal IDs)
   - composes the selected instruction layers from the prompt
   - surfaces ``last_rejection`` as context for retry prompts
   - surfaces ``recovery_trigger`` for recovery agents
@@ -51,7 +51,6 @@ from litehive.lifecycle.prompt_sections import (
     _verdict_instructions_section,
 )
 from litehive.lifecycle.prompt_types import AgentPrompt, RecoveryPrompt
-from litehive.state.records import get_task
 from litehive.tasks.activity import load_task_activity
 from litehive.workspace import Workspace
 
@@ -61,22 +60,21 @@ SECTION_SEP = "\n"
 
 def serialize_prompt(
     prompt: AgentPrompt,
+    *,
     task_record: TaskRecord | None,
     workspace_root: Path,
 ) -> str:
     """Render the typed prompt + task record into the engine-facing string.
 
-    ``task_record`` is optional so tests don't need to construct one;
-    if ``None``, the goal/acceptance/plan/constraints sections are
-    omitted with placeholders. ``workspace_root`` is the repo root and
-    is used for two things: (1) fall back to ``get_task()`` if the
-    caller didn't already resolve the TaskRecord, and (2) load the
-    task's activity history so the next agent visit sees previous
-    stage verdicts.
+    ``task_record`` is a required keyword argument resolved by the
+    caller (engine adapter) so the serializer never has to look it up
+    itself; it may still be ``None`` for callers that legitimately have
+    no task (tests, the no-record fallback path), in which case the
+    goal/acceptance/plan/constraints sections render placeholders.
+    ``workspace_root`` is the repo root and is used to load the task's
+    activity history so the next agent visit sees previous stage
+    verdicts.
     """
-    if task_record is None:
-        task_record = get_task(workspace_root, prompt.task_id)
-
     activity = prompt.activity or []
     if not activity and task_record is not None:
         activity = _load_task_activity_history(workspace_root, task_record)

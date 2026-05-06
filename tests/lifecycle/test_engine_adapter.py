@@ -213,10 +213,10 @@ class _StartupFailureManager(_StubManager):
 
 
 def _heru_prompt(task_id: str) -> AgentPrompt:
+    del task_id  # task identity is now sourced from the TaskState the engine adapter receives
     return AgentPrompt(
         role="swe",
         stage=PipelineState.IMPLEMENTING,
-        task_id=task_id,
         pipeline_mode=PipelineMode.FULL,
         stage_retry=0,
         instruction_variant="fresh",
@@ -254,10 +254,10 @@ def _subagent_result(
 
 
 def _recovery_prompt(task_id: str) -> AgentPrompt:
+    del task_id  # task identity is now sourced from the TaskState the engine adapter receives
     return AgentPrompt(
         role="recovery",
         stage=PipelineState.RECOVERING,
-        task_id=task_id,
         pipeline_mode=PipelineMode.FULL,
         stage_retry=0,
         instruction_variant="fresh",

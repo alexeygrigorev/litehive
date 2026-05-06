@@ -46,11 +46,6 @@ class AgentPrompt:
     is used by activity trimming so each stage sees only the prior context
     that matters to it."""
 
-    task_id: str
-    """Identifier of the task this turn is working on. The serializer uses
-    it to fetch the ``TaskRecord`` for goal/acceptance/plan/constraints when
-    the caller did not pre-resolve one."""
-
     pipeline_mode: PipelineMode
     """Whether the lifecycle is in ``full`` or ``single`` mode. Rendered in
     the header so the agent knows which contract is in effect for verdict

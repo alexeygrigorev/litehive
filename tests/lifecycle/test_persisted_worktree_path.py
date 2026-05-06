@@ -133,7 +133,6 @@ def test_agent_and_commit_use_persisted_worktree_path(
         AgentPrompt(
             role="swe",
             stage=PipelineState.IMPLEMENTING,
-            task_id=task.id,
             pipeline_mode=PipelineMode.FULL,
             stage_retry=0,
             instruction_variant="fresh",

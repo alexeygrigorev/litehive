@@ -73,10 +73,10 @@ class _HeruPromptAgent(AgentNode):
     """AgentNode that emits the prompt shape expected by HeruEngineAdapter."""
 
     def build_prompt(self, state: TaskState) -> AgentPrompt:
+        del state  # task identity is sourced from the TaskState passed to run_turn
         return AgentPrompt(
             role="swe",
             stage=PipelineState(self.name),
-            task_id=state.task_id,
             pipeline_mode=PipelineMode.FULL,
             stage_retry=0,
             instruction_variant="fresh",

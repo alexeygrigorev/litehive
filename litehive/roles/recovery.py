@@ -121,7 +121,6 @@ class RecoveryAgent(RoleAgent):
         return RecoveryPrompt(
             role=base.role,
             stage=base.stage,
-            task_id=base.task_id,
             pipeline_mode=base.pipeline_mode,
             stage_retry=base.stage_retry,
             instruction_variant=base.instruction_variant,

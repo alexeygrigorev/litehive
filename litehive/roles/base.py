@@ -149,7 +149,6 @@ class RoleAgent(AgentNode):
         return AgentPrompt(
             role=self.ROLE,
             stage=self.NODE_NAME,
-            task_id=state.task_id,
             pipeline_mode=state.pipeline_mode,
             stage_retry=state.stage_retry.get(self.NODE_NAME, 0),
             instruction_variant=instruction_variant,

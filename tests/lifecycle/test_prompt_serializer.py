@@ -75,10 +75,10 @@ def make_prompt(
     runner_hooks=None,
 ) -> AgentPrompt:
     """Build an ``AgentPrompt`` from the trimmed dict shape these tests historically used."""
+    del task_id  # task identity is sourced from the TaskRecord passed to serialize_prompt
     return AgentPrompt(
         role=role,
         stage=stage,  # type: ignore[arg-type]
-        task_id=task_id,
         pipeline_mode=pipeline_mode,
         stage_retry=0,
         instruction_variant="fresh",
@@ -132,8 +132,9 @@ def test_serialize_includes_header_goal_acceptance_plan(workspace: Path) -> None
 
     assert prompt.stage is PipelineState.IMPLEMENTING
     assert text.startswith("You are the SWE.")
-    assert f"Task: {task.id}" in text
-    assert "Add prompt serializer" in text
+    # task.id is a Litehive-internal identifier and should not leak into the agent prompt.
+    assert task.id not in text
+    assert "Task: Add prompt serializer" in text
     assert "Stage: implementing" in text
     # Role identity is now the opening sentence; the legacy "Role: swe" header line is gone.
     assert "Role: swe" not in text
@@ -719,7 +720,9 @@ def test_serialize_works_without_task_record(workspace: Path) -> None:
     state = make_state("T-XYZ", stage=PipelineState.GROOMING)
     text = serialize_prompt(agent.build_prompt(state), task_record=None, workspace_root=workspace)
 
-    assert "Task: T-XYZ" in text
+    # task identifiers are not exposed to the agent: missing-record falls back to a placeholder header.
+    assert "T-XYZ" not in text
+    assert "Task: (task record not loaded)" in text
     assert "Goal:\n(task record not loaded)" in text
     assert "Acceptance criteria:\n- (none defined)" in text
     assert 'litehive agent report --verdict pass --message "your report text"' in text

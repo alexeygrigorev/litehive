@@ -192,6 +192,20 @@ class PipelineState(StringEnum):
     DONE = "done"
     FAILED = "failed"
 
+    @property
+    def human_label(self) -> str:
+        """
+        Operator-readable phrase for this state ("before grooming", "implementing", …).
+
+        Used by prompt builders that surface the state to the agent in
+        prose ("After <state>, these checks will run:") — keeping the
+        de-snake-case mapping on the enum stops prompt code from
+        hand-rolling ``state.value.replace("_", " ")`` in multiple places
+        and gives us one location to special-case any state whose
+        underlying spelling does not read well as plain English.
+        """
+        return self.value.replace("_", " ")
+
 
 class TaskStage(StringEnum):
     """

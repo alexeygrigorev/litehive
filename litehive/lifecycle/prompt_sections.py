@@ -6,9 +6,8 @@ prompt. They are kept separate from the orchestrator in
 section-level changes don't churn the activity-handling code.
 
 Small formatting helpers (``_compact_list``, ``_string_list``,
-``_label_to_heading``, ``_human_stage_label``, ``_compact_failure_signal``,
-``_single_line``) live here too because they're only used by the section
-builders.
+``_label_to_heading``, ``_compact_failure_signal``, ``_single_line``)
+live here too because they're only used by the section builders.
 """
 
 from typing import TYPE_CHECKING, Any
@@ -64,18 +63,20 @@ def _header_section(prompt: "AgentPrompt", task_record: TaskRecord | None) -> st
     Identify the agent's role first, then the task and pipeline coordinates.
 
     The role identity sentence opens the prompt so the model anchors on
-    "who am I" before reading task IDs or stage names. Always rendered
-    first so the agent's response can be attributed to a specific run;
-    the retry counter only appears once the task has actually retried so
-    a fresh attempt does not start with noise about a missing prior pass.
+    "who am I" before reading the task title and stage. The agent never
+    sees the internal ``task_id`` — it is a Litehive-internal identifier
+    and the agent works against the task's title/goal/acceptance contract
+    instead. The retry counter only appears once the task has actually
+    retried so a fresh attempt does not start with noise about a missing
+    prior pass.
     """
     if task_record is not None:
-        title_suffix = f" — {task_record.title}"
+        task_line = f"Task: {task_record.title}"
     else:
-        title_suffix = ""
+        task_line = "Task: (task record not loaded)"
     lines = [
         _role_identity_sentence(prompt.role),
-        f"Task: {prompt.task_id}{title_suffix}",
+        task_line,
         f"Stage: {prompt.stage}",
         f"Pipeline mode: {prompt.pipeline_mode.value}",
     ]
@@ -538,7 +539,10 @@ def _runner_hooks_section(stage: PipelineState | None, hooks: list[dict[str, Any
     the rate of hook-rejected verdicts that would otherwise trigger a
     retry cycle.
     """
-    stage_label = _human_stage_label(stage)
+    if stage is None:
+        stage_label = "this stage"
+    else:
+        stage_label = stage.human_label
     lines = [f"After {stage_label}, these checks will run:"]
     for hook in hooks:
         cmd = hook.get("command", "")
@@ -606,8 +610,3 @@ def _label_to_heading(label: str) -> str:
     return label.title()
 
 
-def _human_stage_label(stage: PipelineState | None) -> str:
-    """De-snake stage names for the runner-hooks heading, falling back to a generic label when no stage is set so the heading still parses."""
-    if stage is None:
-        return "this stage"
-    return stage.value.replace("_", " ")

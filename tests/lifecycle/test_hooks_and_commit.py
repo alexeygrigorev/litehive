@@ -680,7 +680,7 @@ class _RecordingPassEngine:
                 "stage": state.stage,
                 "role": prompt.role,
                 "pipeline_mode": prompt.pipeline_mode.value,
-                "task_id": prompt.task_id,
+                "task_id": state.task_id,
             }
         )
         return AgentVerdict(outcome="pass")
