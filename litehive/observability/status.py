@@ -139,9 +139,9 @@ def collect_task_pipeline_status(
     resolved_root = root.resolve()
     workspace = build_workspace(resolved_root)
     if diagnostics:
-        snapshot = collect_status_snapshot(workspace)
+        snapshot = collect_status_snapshot_for_workspace(workspace)
     else:
-        snapshot = collect_operational_status_snapshot(workspace)
+        snapshot = collect_operational_status_snapshot_for_workspace(workspace)
     active_task_id = snapshot.runner.active_task_id or snapshot.state.active_task_id
     if read_only:
         if active_task_id:

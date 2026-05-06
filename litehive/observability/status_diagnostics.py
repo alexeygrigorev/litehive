@@ -17,9 +17,6 @@ from a single path:
   ``render_*`` helpers.
 """
 
-from pathlib import Path
-
-from litehive.container import build_workspace
 from litehive.workspace import Workspace
 # Re-exported public API. Imports kept in `status_diagnostics` so existing
 # `from litehive.observability.status_diagnostics import ...` callers keep working.
@@ -57,9 +54,7 @@ __all__ = [
     "StatusSeverity",
     "StatusSnapshot",
     "collect_operational_status_snapshot_for_workspace",
-    "collect_operational_status_snapshot",
     "collect_status_snapshot_for_workspace",
-    "collect_status_snapshot",
     "probe_registry_files",
     "render_health_summary",
     "render_issue_lines",
@@ -68,27 +63,12 @@ __all__ = [
 ]
 
 
-def collect_status_snapshot(root: Path) -> StatusSnapshot:
-    """
-    Build the full diagnostic snapshot.
-
-    Used by ``litehive health`` and by the diagnostic mode of
-    ``litehive status`` to surface every probe finding (registry
-    files, daemon liveness, recent cycle health, heru link,
-    origin divergence, task index references, task status
-    damage). Distinct from :func:`collect_operational_status_snapshot`
-    because the full sweep is too heavy for routine status reads.
-    """
-    return collect_status_snapshot_for_workspace(build_workspace(root.resolve()))
-
-
 def collect_status_snapshot_for_workspace(workspace: Workspace) -> StatusSnapshot:
     """
     Build the full diagnostic snapshot from an injected workspace.
 
-    Path-based callers use ``collect_status_snapshot``; status code
-    that already has a ``Workspace`` uses this variant to avoid
-    rebuilding workspace dependencies during read-only diagnostics.
+    Status code receives an injected workspace so diagnostics do
+    not rebuild dependencies during read-only status collection.
     """
     root = workspace.root
     registry_issues = probe_registry_files()
@@ -122,20 +102,6 @@ def collect_status_snapshot_for_workspace(workspace: Workspace) -> StatusSnapsho
         monitoring=monitoring,
         issues=issues,
     )
-
-
-def collect_operational_status_snapshot(root: Path) -> StatusSnapshot:
-    """
-    Collect the small read-only status view used by default status output.
-
-    Runs a strict subset of probes — the ones cheap enough to
-    fire on every status read without contending with the
-    runner. The diagnostic-only probes (origin divergence, task
-    index, status damage) are intentionally omitted; an operator
-    who needs them runs ``litehive health`` or
-    ``litehive status --full``.
-    """
-    return collect_operational_status_snapshot_for_workspace(build_workspace(root.resolve()))
 
 
 def collect_operational_status_snapshot_for_workspace(workspace: Workspace) -> StatusSnapshot:

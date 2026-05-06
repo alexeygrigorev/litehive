@@ -23,8 +23,8 @@ from litehive.main import dispatch_status
 from litehive.observability.engine_monitoring import record_engine_execution
 from litehive.observability.status_diagnostics import (
     _load_runner_status_for_status,
-    collect_operational_status_snapshot,
-    collect_status_snapshot,
+    collect_operational_status_snapshot_for_workspace,
+    collect_status_snapshot_for_workspace,
 )
 from litehive.state.records import create_task, save_task
 from litehive.state.persist import save_state
@@ -49,7 +49,7 @@ def test_status_snapshot_does_not_bootstrap_missing_database(tmp_path: Path) -> 
     (workspace_dir(tmp_path) / "config.yaml").write_text("{}", encoding="utf-8")
     state_db = workspace_path(tmp_path, "data.db")
 
-    snapshot = collect_status_snapshot(tmp_path)
+    snapshot = collect_status_snapshot_for_workspace(Workspace.from_path(tmp_path))
 
     assert snapshot.state.queue == []
     assert not state_db.exists()
@@ -74,7 +74,7 @@ def test_operational_status_snapshot_does_not_run_doctor_style_probes(tmp_path: 
         lambda root, state, state_issues: (_ for _ in ()).throw(AssertionError("task index probe should not run")),
     )
 
-    snapshot = collect_operational_status_snapshot(tmp_path)
+    snapshot = collect_operational_status_snapshot_for_workspace(Workspace.from_path(tmp_path))
 
     assert snapshot.state.queue == []
 

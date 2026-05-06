@@ -124,8 +124,8 @@ def test_collect_task_pipeline_status_prefers_runner_active_task_id(tmp_path: Pa
     # patching the callees at their original locations no longer hits the
     # bindings the function uses — patch the local re-imports here.
     monkeypatch.setattr(
-        "litehive.observability.status.collect_operational_status_snapshot",
-        lambda root: snapshot,
+        "litehive.observability.status.collect_operational_status_snapshot_for_workspace",
+        lambda workspace: snapshot,
     )
     monkeypatch.setattr(
         "litehive.observability.status.waiting_for_you_lines",
