@@ -18,8 +18,9 @@ import threading
 from typing import TextIO
 
 from litehive.config.paths import workspace_path
-from litehive.state.process_lock import ProcessLockManager
+from litehive.state.lock_manager import WorkspaceLockManager
 from litehive.state.locking import runner_pid_is_alive
+from litehive.state.process_lock import ProcessLockManager
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +66,13 @@ def _daemon_lock_manager(workspace: Path) -> ProcessLockManager:
     """
     workspace = workspace.resolve()
     return ProcessLockManager(
-        lock_path=daemon_lock_path(workspace),
         process_name="daemon",
-        pid_is_alive=runner_pid_is_alive,
-        held_in_process=lambda: _daemon_lock_is_held_in_process(workspace),
-        fsync_writes=True,
+        lock_manager=WorkspaceLockManager(
+            path=daemon_lock_path(workspace),
+            pid_is_alive=runner_pid_is_alive,
+            held_in_process=lambda: _daemon_lock_is_held_in_process(workspace),
+            fsync_writes=True,
+        ),
     )
 
 

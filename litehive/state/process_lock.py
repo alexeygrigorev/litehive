@@ -1,8 +1,8 @@
 """Shared process lock management for runners and daemons."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
@@ -17,32 +17,13 @@ class ProcessLockManager:
 
     Adds process-policy semantics (named slot, PID-based liveness, runtime
     process registry mirroring) on top of the raw flock plumbing in
-    ``WorkspaceLockManager``; one instance per (lock_path, process_name)
-    so the runner and daemon get distinct namespaces.
+    ``WorkspaceLockManager``; the factory that creates this class wires
+    the process-specific lock primitive so the constructor only receives
+    ready collaborators.
     """
 
-    lock_path: Path
     process_name: str
-    pid_is_alive: Callable[[object], bool]
-    held_in_process: Callable[[], bool] | None = None
-    fsync_writes: bool = False
-    lock_manager: WorkspaceLockManager = field(init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        """
-        Build the inner ``WorkspaceLockManager`` from the dataclass fields.
-
-        Splits process-lock policy (this class) from the underlying flock
-        plumbing (``WorkspaceLockManager``); using ``__post_init__`` lets
-        callers construct ``ProcessLockManager`` with keyword arguments
-        while only the right subset is forwarded to the lock manager.
-        """
-        self.lock_manager = WorkspaceLockManager(
-            path=self.lock_path,
-            pid_is_alive=self.pid_is_alive,
-            held_in_process=self.held_in_process,
-            fsync_writes=self.fsync_writes,
-        )
+    lock_manager: WorkspaceLockManager
 
     def is_active(self) -> bool:
         """Probe whether the lock is currently held by any process."""

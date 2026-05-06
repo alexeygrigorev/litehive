@@ -64,10 +64,12 @@ def _runner_lock_manager(
     caller.
     """
     return ProcessLockManager(
-        lock_path=runner_lock_path(root),
         process_name="runner",
-        pid_is_alive=runner_pid_is_alive,
-        held_in_process=held_in_process,
+        lock_manager=WorkspaceLockManager(
+            path=runner_lock_path(root),
+            pid_is_alive=runner_pid_is_alive,
+            held_in_process=held_in_process,
+        ),
     )
 
 
@@ -101,9 +103,11 @@ def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> Non
     ``runner_conflict_message`` informative instead of just "lock held".
     """
     ProcessLockManager(
-        lock_path=Path(handle.name),
         process_name="runner",
-        pid_is_alive=runner_pid_is_alive,
+        lock_manager=WorkspaceLockManager(
+            path=Path(handle.name),
+            pid_is_alive=runner_pid_is_alive,
+        ),
     ).write_locked_metadata(
         handle,
         status.model_dump(mode="json"),
