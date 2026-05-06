@@ -13,6 +13,7 @@ import sqlite3
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_session
+from litehive.container import build_container
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,
@@ -37,10 +38,12 @@ def render_task_evidence(root: Path, task) -> int:
     print(f"title: {task.title}")
     print(f"status: {task.status}")
     print(f"pipeline_status: {task.pipeline_status}")
-    _print_lifecycle_evidence(root, task)
-    _print_latest_report(root, task)
-    _print_latest_activity(root, task)
-    _print_latest_subagent(root, task)
+    container = build_container(root)
+    workspace = container.workspace
+    _print_lifecycle_evidence(workspace, task)
+    _print_latest_report(workspace, task)
+    _print_latest_activity(workspace, task)
+    _print_latest_subagent(root, workspace, task)
     _print_worktree_evidence(root, task)
     return 0
 
@@ -60,8 +63,9 @@ def debug_all(root: Path, task):
 
     print(f"{task.id}: {len(task.subagents)} subagent(s)")
     print()
+    workspace = build_container(root).workspace
     for ref in task.subagents:
-        exit_code = _read_exit_code(root, task.id, ref.id)
+        exit_code = _read_exit_code(workspace, task.id, ref.id)
         if exit_code is not None:
             exit_str = str(exit_code)
         else:
@@ -81,7 +85,7 @@ def debug_latest(root: Path, task):
     return render_task_evidence(root, task)
 
 
-def _print_lifecycle_evidence(root: Path, task) -> None:
+def _print_lifecycle_evidence(workspace: Workspace, task) -> None:
     """
     Print the lifecycle-state slice of the evidence view.
 
@@ -94,7 +98,7 @@ def _print_lifecycle_evidence(root: Path, task) -> None:
     from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound  # noqa: PLC0415
 
     try:
-        state = SqlitePersistence(Workspace.from_path(root)).load(task.id)
+        state = SqlitePersistence(workspace).load(task.id)
     except TaskNotFound:
         print("lifecycle_state: not found")
         return
@@ -133,7 +137,7 @@ def _print_lifecycle_evidence(root: Path, task) -> None:
         )
 
 
-def _print_latest_report(root: Path, task) -> None:
+def _print_latest_report(workspace: Workspace, task) -> None:
     """
     Print the most recent stage report, summarized to one line.
 
@@ -143,7 +147,7 @@ def _print_latest_report(root: Path, task) -> None:
     compact evidence view so the entire triage screen stays
     readable.
     """
-    report = latest_stage_report(Workspace.from_path(root), task)
+    report = latest_stage_report(workspace, task)
     if report is None:
         print("latest_stage_report: none")
         return
@@ -154,7 +158,7 @@ def _print_latest_report(root: Path, task) -> None:
     )
 
 
-def _print_latest_activity(root: Path, task) -> None:
+def _print_latest_activity(workspace: Workspace, task) -> None:
     """
     Print the last entry from the task activity log.
 
@@ -163,7 +167,7 @@ def _print_latest_activity(root: Path, task) -> None:
     stage reports). Showing both surfaces in evidence covers the
     case where an agent posted feedback without a verdict change.
     """
-    activity = load_task_activity(Workspace.from_path(root), task)
+    activity = load_task_activity(workspace, task)
     if not activity:
         print("latest_activity: none")
         return
@@ -175,7 +179,7 @@ def _print_latest_activity(root: Path, task) -> None:
     )
 
 
-def _print_latest_subagent(root: Path, task) -> None:
+def _print_latest_subagent(root: Path, workspace: Workspace, task) -> None:
     """
     Print the most recent subagent's identity and execution evidence.
 
@@ -203,7 +207,7 @@ def _print_latest_subagent(root: Path, task) -> None:
         started_at = runtime_sa.started_at
         completed_at = runtime_sa.completed_at
     else:
-        session_data = load_subagent_session(Workspace.from_path(root), task.id, ref.id)
+        session_data = load_subagent_session(workspace, task.id, ref.id)
         if session_data:
             exit_code = session_data.get("exit_code")
             started_at = session_data.get("created_at")
@@ -213,9 +217,7 @@ def _print_latest_subagent(root: Path, task) -> None:
     trace = None
     if sa_base.exists():
         is_active = bool(task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id)
-        trace = load_subagent_execution_trace(
-            Workspace.from_path(root), task, ref, active=is_active, runtime_state=runtime_sa
-        )
+        trace = load_subagent_execution_trace(workspace, task, ref, active=is_active, runtime_state=runtime_sa)
         produced_output = trace is not None and bool(trace.text.strip())
         for filename in ("stdout.txt", "stdout.log", "stderr.txt", "stderr.log"):
             path = resolve_artifact_path(sa_base, filename)
@@ -287,7 +289,7 @@ def _print_worktree_evidence(root: Path, task) -> None:
         print(f"worktree_committed_ahead_of_main: {_compact_paths(inspection.committed_ahead_of_main)}")
 
 
-def _read_exit_code(root: Path, task_id: str, subagent_id: str) -> int | None:
+def _read_exit_code(workspace: Workspace, task_id: str, subagent_id: str) -> int | None:
     """
     Read a subagent's exit code from the persisted session row.
 
@@ -297,7 +299,7 @@ def _read_exit_code(root: Path, task_id: str, subagent_id: str) -> int | None:
     or non-integer so the caller can render ``-`` instead of a
     fake zero.
     """
-    session = load_subagent_session(Workspace.from_path(root), task_id, subagent_id)
+    session = load_subagent_session(workspace, task_id, subagent_id)
     value = session.get("exit_code")
     if isinstance(value, int):
         return value
