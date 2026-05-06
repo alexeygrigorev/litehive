@@ -38,7 +38,7 @@ from litehive.state.records import (
     list_tasks,
     require_task,
 )
-from litehive.state.store import runtime_store
+from litehive.state.store import runtime_store_for_workspace
 from litehive.tasks.queue_eligibility import (
     _auto_recovery_stage_for_flagged_task,
     _is_parked_task,
@@ -148,7 +148,7 @@ def peek_next_task_selection(workspace: Workspace) -> TaskSelection:
     with workspace_mutation_guard_for_workspace(workspace), workspace_lock(workspace.root):
         state = load_state(workspace.root)
         validate_single_active_task(workspace.root, state)
-        next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace.root, state)
+        next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace, state)
         if mutated:
             if normalized_tasks:
                 persist_tasks_and_state(workspace.root, tasks=normalized_tasks, state=state)
@@ -184,7 +184,7 @@ def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
         state = load_state(workspace.root)
         original_queue = list(state.queue)
         validate_single_active_task(workspace.root, state)
-        next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace.root, state)
+        next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace, state)
         if next_task is None:
             if mutated:
                 if normalized_tasks:
@@ -317,7 +317,7 @@ def _task_selection_key(
 
 
 def _resolve_next_task_from_state(
-    root: Path, state: WorkspaceState
+    workspace: Workspace, state: WorkspaceState
 ) -> tuple[TaskRecord | None, list[BlockedTask], bool, list[TaskRecord]]:
     """
     Load tasks from disk, normalise stale stages, resolve the next runnable task.
@@ -328,8 +328,9 @@ def _resolve_next_task_from_state(
     runner surfaces missing-intent corruption instead of silently dropping
     the task.
     """
+    root = workspace.root
     tasks_by_id = {task.id: task for task in list_tasks(root, strict=False)}
-    store = runtime_store(root)
+    store = runtime_store_for_workspace(workspace)
     for queued_task_id in state.queue:
         if queued_task_id in tasks_by_id:
             continue
