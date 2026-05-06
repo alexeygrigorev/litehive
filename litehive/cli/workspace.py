@@ -18,6 +18,7 @@ from litehive.cli.engine import engine_command
 from litehive.cli.display import format_retry_on
 from litehive.cli.common import WorkspaceOption
 from litehive.config.workspace import ensure_workspace
+from litehive.container import build_container
 from litehive.daemon.registry import daemon_metadata
 from litehive.domain.common import TaskStatus
 from litehive.observability.status import (
@@ -48,7 +49,6 @@ from litehive.state.records import get_task, list_tasks_state_first
 from litehive.state.persist import load_state
 from litehive.state.records import list_tasks
 from litehive.domain.task_ops import WorkspaceConflictError, WorkspaceRepairSummary
-from litehive.workspace import Workspace
 from litehive.worktree.cleanup import collect_managed_worktrees
 from litehive.worktree.inspection import inspect_dirty_worktree_gate
 
@@ -146,7 +146,8 @@ def status_command(
     debugging — kept off by default so the common operator view
     fits one screen.
     """
-    ws = Workspace.from_path(workspace)
+    container = build_container(workspace)
+    ws = container.workspace
     root = ws.root
     status = collect_task_pipeline_status(root, diagnostics=full)
     if full:
@@ -211,9 +212,10 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     the operator can also force a full reconciliation pass.
     """
     ensure_workspace(workspace)
+    container = build_container(workspace)
     start_time = time.perf_counter()
     try:
-        summary = repair_workspace_state(Workspace.from_path(workspace))
+        summary = repair_workspace_state(container.workspace)
     except WorkspaceConflictError as exc:
         print(f"repair failed: {exc}")
         return 1
@@ -259,7 +261,8 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     command and ``status``, which is the broader interactive view.
     """
     ensure_workspace(workspace)
-    ws = Workspace.from_path(workspace)
+    container = build_container(workspace)
+    ws = container.workspace
     root = ws.root
     state = load_state(root)
     tasks = list_tasks_state_first(root, state=state, include_runtime=True)
