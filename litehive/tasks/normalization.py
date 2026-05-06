@@ -1,6 +1,6 @@
 """Normalization and validation helpers for task fields."""
 
-from litehive.domain.common import PipelineStatus, TaskStage
+from litehive.domain.common import PipelineMode, PipelineStatus
 from litehive.domain.task import TaskRecord
 
 
@@ -72,7 +72,7 @@ def missing_acceptance_criteria_cli_warning(task: TaskRecord) -> str | None:
     )
 
 
-def implementation_entry_stage(task: TaskRecord) -> str:
+def implementation_entry_stage(task: TaskRecord) -> PipelineStatus:
     """
     Decide which stage a freshly (re-)queued task should re-enter at.
 
@@ -81,11 +81,11 @@ def implementation_entry_stage(task: TaskRecord) -> str:
     so requeue cannot bypass the grooming gate by sending an under-specified
     task straight back to implementation.
     """
-    if getattr(task, "pipeline_mode", "full") == "single":
-        return TaskStage.IMPLEMENTING.value
+    if task.pipeline_mode == PipelineMode.SINGLE:
+        return PipelineStatus.IMPLEMENTING
     if missing_acceptance_criteria_reason(task) is not None:
-        return TaskStage.GROOMING.value
-    return TaskStage.IMPLEMENTING.value
+        return PipelineStatus.GROOMING
+    return PipelineStatus.IMPLEMENTING
 
 
 def needs_normalization(task: TaskRecord) -> str | None:
@@ -97,7 +97,7 @@ def needs_normalization(task: TaskRecord) -> str | None:
     criteria. Single-mode tasks skip normalization entirely because they
     have no grooming stage to bounce back to.
     """
-    if getattr(task, "pipeline_mode", "full") == "single":
+    if task.pipeline_mode == PipelineMode.SINGLE:
         return None
     if task.pipeline_status in {PipelineStatus.BACKLOG, PipelineStatus.GROOMING}:
         return None
@@ -128,7 +128,7 @@ def reroute_stage_for_acceptance_criteria(task: TaskRecord) -> PipelineStatus:
     past the grooming gate; returns the original stage when criteria are
     present so the call site is safe to invoke unconditionally.
     """
-    if getattr(task, "pipeline_mode", "full") == "single":
+    if task.pipeline_mode == PipelineMode.SINGLE:
         return task.pipeline_status
     if task.pipeline_status in _ACCEPTANCE_REROUTE_STATUSES:
         if missing_acceptance_criteria_reason(task) is not None:
@@ -156,5 +156,4 @@ def _acceptance_criteria_requirement_signals(task: TaskRecord) -> list[str]:
     if len(task.plan) >= 2:
         signals.append("a multi-step plan")
     return signals
-
 

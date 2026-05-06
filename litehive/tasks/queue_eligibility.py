@@ -222,7 +222,7 @@ def is_task_eligible_for_execution(task: TaskRecord) -> bool:
     return False
 
 
-def _auto_recovery_stage_for_flagged_task(task: TaskRecord) -> str:
+def _auto_recovery_stage_for_flagged_task(task: TaskRecord) -> PipelineStatus:
     """
     Pick the resume stage when a flagged task is rescued back into the queue.
 
@@ -232,7 +232,7 @@ def _auto_recovery_stage_for_flagged_task(task: TaskRecord) -> str:
     from a known-good baseline.
     """
     if task.pipeline_status == PipelineStatus.COMMIT_TO_GIT:
-        return TaskStage.COMMIT_TO_GIT.value
+        return PipelineStatus.COMMIT_TO_GIT
     return implementation_entry_stage(task)
 
 
