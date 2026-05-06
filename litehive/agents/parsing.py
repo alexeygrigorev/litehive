@@ -7,6 +7,7 @@ from litehive.domain.reports import (
     canonical_report_pipeline_state,
     canonical_stage_report_verdict,
 )
+from litehive.domain.common import Verdict
 from litehive.domain.task import TaskRecord
 
 from litehive.domain.agent import SubagentResult
@@ -70,7 +71,7 @@ def stage_report_from_subagent(
     if latest is None:
         raise MissingVerdictError(pipeline_state=pipeline_state, subagent_id=result.ref.id)
 
-    if latest.verdict == "reject":
+    if latest.verdict == Verdict.REJECT:
         failure_classification = latest.verdict_classification
     else:
         failure_classification = None

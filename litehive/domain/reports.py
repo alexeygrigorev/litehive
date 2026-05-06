@@ -22,6 +22,7 @@ from .common import (
     PipelineStatus,
     TaskStage,
     TRUNCATION_MARKER,
+    Verdict,
     cap_feedback,
     utcnow,
 )
@@ -52,16 +53,16 @@ TaskActivityVerdict: TypeAlias = Literal[
 
 SEMANTIC_REJECT_CLASSIFICATION = "semantic_reject"
 SEMANTIC_REJECT_ROLES = frozenset({"qa", "reviewer"})
-_STAGE_REPORT_VERDICT_ALIASES: dict[str, StageReportVerdict] = {
-    "pass": "pass",
-    "accept": "pass",
-    "resume": "pass",
-    "advance": "pass",
-    "done": "pass",
-    "reject": "reject",
-    "fail": "reject",
-    "blocked": "blocked",
-    "budget_hit": "blocked",
+_STAGE_REPORT_VERDICT_ALIASES: dict[Verdict, StageReportVerdict] = {
+    Verdict.PASS: "pass",
+    Verdict.ACCEPT: "pass",
+    Verdict.RESUME: "pass",
+    Verdict.ADVANCE: "pass",
+    Verdict.DONE: "pass",
+    Verdict.REJECT: "reject",
+    Verdict.FAIL: "reject",
+    Verdict.BLOCKED: "blocked",
+    Verdict.BUDGET_HIT: "blocked",
 }
 
 
@@ -80,7 +81,7 @@ def classify_task_activity_verdict(role: str, verdict: str) -> str | None:
     return None
 
 
-def canonical_stage_report_verdict(verdict: str) -> StageReportVerdict | None:
+def canonical_stage_report_verdict(verdict: Verdict | str) -> StageReportVerdict | None:
     """
     Map a submitted activity verdict to the canonical StageReport verdict.
 
@@ -90,7 +91,11 @@ def canonical_stage_report_verdict(verdict: str) -> StageReportVerdict | None:
     verdict has no report mapping (e.g. ``comment``) so the caller can
     distinguish "report this" from "log this for humans only".
     """
-    return _STAGE_REPORT_VERDICT_ALIASES.get(verdict.strip().lower())
+    try:
+        verdict_kind = verdict if isinstance(verdict, Verdict) else Verdict(verdict.strip().lower())
+    except ValueError:
+        return None
+    return _STAGE_REPORT_VERDICT_ALIASES.get(verdict_kind)
 
 
 # Activity-entry verdicts that count as a CLI-submitted stage report.
