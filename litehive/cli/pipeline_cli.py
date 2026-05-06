@@ -131,7 +131,7 @@ def pipeline_journal_command(
 
     print(f"task: {task_id}")
     print(f"stage: {state.stage}")
-    task = get_task_record(workspace, task_id)
+    task = get_task_record(workspace_obj.root, task_id)
     if task is not None:
         stage_report = latest_stage_report(workspace_obj, task)
         if stage_report is not None:
