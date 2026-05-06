@@ -32,7 +32,7 @@ class TaskActivityLog:
     def latest_entry(
         self,
         role: str | None = None,
-        stage: TaskActivityStage | None = None,
+        stage: TaskActivityStage | str | None = None,
         source_subagent_id: SubagentId | None = None,
         verdicts: Iterable[str | Verdict] | None = None,
         after: datetime | None = None,
