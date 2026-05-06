@@ -1,7 +1,8 @@
 from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
-from litehive.container import build_container
+from litehive.container import build_workspace
 from litehive.state.records import list_tasks
 from litehive.tasks.report_storage import load_stage_reports_for_task_id
+from litehive.workspace import Workspace
 
 
 def task_stage_outcomes(root, task_id, slug):
@@ -14,8 +15,14 @@ def task_stage_outcomes(root, task_id, slug):
     but unused — the SQLite report store keys reports by task id.
     """
     del slug
-    container = build_container(root)
-    reports = load_stage_reports_for_task_id(container.workspace, task_id)
+    return task_stage_outcomes_for_workspace(build_workspace(root), task_id)
+
+
+def task_stage_outcomes_for_workspace(workspace: Workspace, task_id: str) -> list[str]:
+    """
+    Flatten a task's stored stage reports using an injected workspace.
+    """
+    reports = load_stage_reports_for_task_id(workspace, task_id)
     outcomes: list[str] = []
     for report in reports:
         outcomes.append(f"{report.pipeline_state}={report.verdict}")
@@ -62,6 +69,40 @@ def _pool_task_report_entry(
     }
 
 
+def _pool_task_report_entry_for_workspace(
+    workspace: Workspace,
+    task_id,
+    title,
+    status,
+    pipeline_status,
+    slug=None,
+    reason_code=None,
+    reason=None,
+    follow_up_task_id=None,
+    close_reason=None,
+    flag_reason=None,
+):
+    """
+    Shared pool report entry builder from an injected workspace.
+    """
+    if slug is not None:
+        stage_outcomes = task_stage_outcomes_for_workspace(workspace, task_id)
+    else:
+        stage_outcomes = []
+    return {
+        "task_id": task_id,
+        "title": title,
+        "final_task_status": status,
+        "pipeline_status": pipeline_status,
+        "stage_outcomes": stage_outcomes,
+        "reason_code": reason_code,
+        "reason": reason,
+        "follow_up_task_id": follow_up_task_id,
+        "close_reason": close_reason,
+        "flag_reason": flag_reason,
+    }
+
+
 def _pending_pool_tasks(root):
     """
     Collect tasks the pool did not complete on this run.
@@ -71,12 +112,20 @@ def _pending_pool_tasks(root):
     under ``remaining``/``skipped`` so operators see what work is
     still queued without having to read ``litehive queue``.
     """
+    return _pending_pool_tasks_for_workspace(build_workspace(root))
+
+
+def _pending_pool_tasks_for_workspace(workspace: Workspace):
+    """
+    Collect pending pool tasks from an injected workspace.
+    """
+    root = workspace.root
     pending = []
     for task in list_tasks(root):
         if task.status in {TaskStatus.QUEUED, TaskStatus.IN_PROGRESS} and task.pipeline_status != PipelineStatus.DONE:
             pending.append(
-                _pool_task_report_entry(
-                    root,
+                _pool_task_report_entry_for_workspace(
+                    workspace,
                     task_id=task.id,
                     title=task.title,
                     status=task.status,
@@ -98,6 +147,14 @@ def _resumable_pool_tasks(root):
     reason so the operator can decide whether a resume is even
     appropriate.
     """
+    return _resumable_pool_tasks_for_workspace(build_workspace(root))
+
+
+def _resumable_pool_tasks_for_workspace(workspace: Workspace):
+    """
+    Collect resumable pool tasks from an injected workspace.
+    """
+    root = workspace.root
     resumable = []
     for task in list_tasks(root):
         if (
@@ -106,8 +163,8 @@ def _resumable_pool_tasks(root):
         ):
             continue
         resumable.append(
-            _pool_task_report_entry(
-                root,
+            _pool_task_report_entry_for_workspace(
+                workspace,
                 task_id=task.id,
                 title=task.title,
                 status=task.status,
@@ -130,13 +187,21 @@ def _closed_pool_tasks(root):
     closed tasks would silently disappear from the visible work
     list and the operator would have to chase them down.
     """
+    return _closed_pool_tasks_for_workspace(build_workspace(root))
+
+
+def _closed_pool_tasks_for_workspace(workspace: Workspace):
+    """
+    Collect closed pool tasks from an injected workspace.
+    """
+    root = workspace.root
     closed = []
     for task in list_tasks(root):
         if task.status != TaskStatus.CLOSED:
             continue
         closed.append(
-            _pool_task_report_entry(
-                root,
+            _pool_task_report_entry_for_workspace(
+                workspace,
                 task_id=task.id,
                 title=task.title,
                 status=task.status,
@@ -293,9 +358,28 @@ def _pool_summary_report_data(
     typed seam for the eventual machine-readable summary surface
     rather than rebuilding it from the printed text.
     """
-    remaining = _pending_pool_tasks(root)
-    resumable = _resumable_pool_tasks(root)
-    closed = _closed_pool_tasks(root)
+    return _pool_summary_report_data_for_workspace(
+        build_workspace(root),
+        completed=completed,
+        flagged=flagged,
+        stop_reason=stop_reason,
+        tasks_run=tasks_run,
+    )
+
+
+def _pool_summary_report_data_for_workspace(
+    workspace: Workspace,
+    completed,
+    flagged,
+    stop_reason,
+    tasks_run=None,
+):
+    """
+    Build the structured pool-summary payload from an injected workspace.
+    """
+    remaining = _pending_pool_tasks_for_workspace(workspace)
+    resumable = _resumable_pool_tasks_for_workspace(workspace)
+    closed = _closed_pool_tasks_for_workspace(workspace)
     progress_status, summary = _pool_no_useful_progress_report(stop_reason)
     if tasks_run is not None:
         tasks_run_value = tasks_run
