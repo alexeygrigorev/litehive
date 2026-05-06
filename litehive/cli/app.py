@@ -14,7 +14,7 @@ from litehive.cli.task_cli import app as task_app
 from litehive.cli.workspace import register_root_commands as register_workspace_commands, status_command
 from litehive.cli.worktree_cli import app as worktree_app
 from litehive.container import build_container
-from litehive.lifecycle.orchestration import run_task
+from litehive.lifecycle.orchestration import run_task_for_workspace
 from litehive.tasks.queue import dequeue_next_task
 
 app = make_typer()
@@ -35,7 +35,7 @@ def _run_next_task(root: Path):
     task = dequeue_next_task(container.workspace)
     if task is None:
         return None
-    return run_task(root, task)
+    return run_task_for_workspace(container.workspace, container.config, task)
 
 
 @app.callback(invoke_without_command=True)
