@@ -131,20 +131,22 @@ def _event_failure_shape(event: Event) -> str:
     blocking-history checks ask "have we already given up on this
     shape?" without re-parsing the original event each time.
     """
-    if isinstance(event, Reject):
-        hook = _hook_fingerprint_from_event(event)
-        if hook is not None:
-            return f"hook:{_normalized_failure_text(hook.fingerprint)}"
-        classification = event.classification or event.metadata.get("verdict_classification")
-        reason_code = event.metadata.get("reason_code")
-        if isinstance(classification, str) and classification.strip():
-            return f"{event.source}:{_normalized_failure_text(classification)}"
-        if isinstance(reason_code, str) and reason_code.strip():
-            return f"{event.source}:{_normalized_failure_text(reason_code)}"
-        return f"{event.source}:{_normalized_failure_text(event.reason)}"
-    if isinstance(event, StageRetryLimitHit):
-        return "system:stage_retry_limit"
-    return _normalized_failure_text(type(event).__name__)
+    match event:
+        case Reject():
+            hook = _hook_fingerprint_from_event(event)
+            if hook is not None:
+                return f"hook:{_normalized_failure_text(hook.fingerprint)}"
+            classification = event.classification or event.metadata.get("verdict_classification")
+            reason_code = event.metadata.get("reason_code")
+            if isinstance(classification, str) and classification.strip():
+                return f"{event.source}:{_normalized_failure_text(classification)}"
+            if isinstance(reason_code, str) and reason_code.strip():
+                return f"{event.source}:{_normalized_failure_text(reason_code)}"
+            return f"{event.source}:{_normalized_failure_text(event.reason)}"
+        case StageRetryLimitHit():
+            return "system:stage_retry_limit"
+        case _:
+            return _normalized_failure_text(type(event).__name__)
 
 
 def _stage_retry_exhausted_record(

@@ -168,7 +168,7 @@ def write_atomic_files_and_then(writes: dict[Path, str], callback) -> None:
         raise
 
 
-def save_state(root: Path, state: WorkspaceState) -> None:
+def save_state(workspace: Workspace, state: WorkspaceState) -> None:
     """
     Persist workspace state under the mutation guard.
 
@@ -176,12 +176,12 @@ def save_state(root: Path, state: WorkspaceState) -> None:
     an active runner; taking the guard here means a CLI mutation cannot
     race a runner that's also rewriting workspace state.
     """
-    with workspace_mutation_guard(root):
-        runtime_store(root).save_workspace_state(state)
+    with workspace_mutation_guard(workspace.root):
+        runtime_store(workspace.root).save_workspace_state(state)
 
 
 def save_state_without_runner_guard(
-    root: Path,
+    workspace: Workspace,
     state: WorkspaceState,
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
@@ -194,15 +194,15 @@ def save_state_without_runner_guard(
     workspace and the audit advance together.
     """
     if audit_entries:
-        runtime_store(root).save_runtime_transaction(
+        runtime_store(workspace.root).save_runtime_transaction(
             workspace_state=state,
             audit_entries=audit_entries,
         )
         return
-    runtime_store(root).save_workspace_state(state)
+    runtime_store(workspace.root).save_workspace_state(state)
 
 
-def record_task_completion(root: Path, final_stage: PipelineState | None) -> tuple[int, str | None]:
+def record_task_completion(workspace: Workspace, final_stage: PipelineState | None) -> tuple[int, str | None]:
     """
     Update the consecutive-failure counter and trigger pool stop at the limit.
 
@@ -211,19 +211,19 @@ def record_task_completion(root: Path, final_stage: PipelineState | None) -> tup
     gate a misconfigured environment would burn through the whole queue
     before an operator noticed.
     """
-    with workspace_lock(root):
-        state = load_state(root)
+    with workspace_lock(workspace.root):
+        state = load_state(workspace)
         if final_stage == PipelineState.DONE:
             state.consecutive_task_failures = 0
         else:
             state.consecutive_task_failures = max(0, int(state.consecutive_task_failures)) + 1
             if state.consecutive_task_failures >= CONSECUTIVE_TASK_FAILURE_LIMIT:
                 state.pool_stop_reason = CONSECUTIVE_TASK_FAILURE_STOP_REASON
-        save_state_without_runner_guard(root, state)
+        save_state_without_runner_guard(workspace, state)
         return state.consecutive_task_failures, state.pool_stop_reason
 
 
-def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
+def set_pool_stop_reason(workspace: Workspace, stop_reason: str | None) -> WorkspaceState:
     """
     Set or clear the pool's stop reason.
 
@@ -232,12 +232,12 @@ def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
     leftover counter would re-trigger the same stop after one more
     failure.
     """
-    with workspace_lock(root):
-        state = load_state(root)
+    with workspace_lock(workspace.root):
+        state = load_state(workspace)
         if stop_reason is None and state.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
             state.consecutive_task_failures = 0
         state.pool_stop_reason = stop_reason
-        save_state_without_runner_guard(root, state)
+        save_state_without_runner_guard(workspace, state)
         return state
 
 
@@ -292,7 +292,7 @@ def _merge_queue_preserving_future_changes(
 
 
 def merged_state_for_runner_owned_write(
-    root: Path,
+    workspace: Workspace,
     state: WorkspaceState,
     protected_task_ids: list[str] | tuple[str, ...] = (),
 ) -> WorkspaceState:
@@ -304,7 +304,7 @@ def merged_state_for_runner_owned_write(
     rebase prevents the runner from clobbering operator edits that
     landed while a task was in flight.
     """
-    latest_state = load_state(root)
+    latest_state = load_state(workspace)
     merged_state = state.model_copy(deep=True)
     merged_state.queue = _merge_queue_preserving_future_changes(
         desired_queue=state.queue,
@@ -316,7 +316,7 @@ def merged_state_for_runner_owned_write(
 
 
 def persist_task_and_state(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     state: WorkspaceState,
     journal_message: str | None = None,
@@ -336,7 +336,7 @@ def persist_task_and_state(
     else:
         journal_messages = None
     persist_tasks_and_state(
-        root,
+        workspace,
         tasks=[task],
         state=state,
         journal_messages=journal_messages,
@@ -346,7 +346,7 @@ def persist_task_and_state(
 
 
 def persist_tasks_and_state(
-    root: Path,
+    workspace: Workspace,
     tasks: list[TaskRecord] | tuple[TaskRecord, ...],
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
@@ -366,24 +366,24 @@ def persist_tasks_and_state(
 
     for task in tasks:
         task.updated_at = utcnow()
-    with workspace_mutation_guard(root):
+    with workspace_mutation_guard(workspace.root):
         merged_state = merged_state_for_runner_owned_write(
-            root,
+            workspace,
             state=state,
             protected_task_ids=[*protected_task_ids, *[task.id for task in tasks]],
         )
-        runtime_store(root).save_runtime_transaction(
+        runtime_store(workspace.root).save_runtime_transaction(
             task_intents={task.id: task.to_intent_record() for task in tasks},
             task_states={task.id: task_state_for_storage(task) for task in tasks},
             workspace_state=merged_state,
             task_journal_messages=journal_messages,
             audit_entries=audit_entries,
         )
-        ensure_runtime_ignored(root)
+        ensure_runtime_ignored(workspace)
 
 
 def persist_tasks_and_state_without_runner_guard(
-    root: Path,
+    workspace: Workspace,
     tasks: list[TaskRecord] | tuple[TaskRecord, ...],
     state: WorkspaceState,
     journal_messages: dict[str, str] | None = None,
@@ -404,22 +404,22 @@ def persist_tasks_and_state_without_runner_guard(
     for task in tasks:
         task.updated_at = utcnow()
     merged_state = merged_state_for_runner_owned_write(
-        root,
+        workspace,
         state=state,
         protected_task_ids=[*protected_task_ids, *[task.id for task in tasks]],
     )
-    runtime_store(root).save_runtime_transaction(
+    runtime_store(workspace.root).save_runtime_transaction(
         task_intents={task.id: task.to_intent_record() for task in tasks},
         task_states={task.id: task_state_for_storage(task) for task in tasks},
         workspace_state=merged_state,
         task_journal_messages=journal_messages,
         audit_entries=audit_entries,
     )
-    ensure_runtime_ignored(root)
+    ensure_runtime_ignored(workspace)
 
 
 def persist_task_and_state_without_runner_guard(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     state: WorkspaceState,
     journal_message: str | None = None,
@@ -438,7 +438,7 @@ def persist_task_and_state_without_runner_guard(
     else:
         journal_messages = None
     persist_tasks_and_state_without_runner_guard(
-        root,
+        workspace,
         tasks=[task],
         state=state,
         journal_messages=journal_messages,

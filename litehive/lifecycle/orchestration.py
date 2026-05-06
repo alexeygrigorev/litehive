@@ -241,31 +241,31 @@ def _observe_transition(
     task = get_task(workspace.root, state.task_id)
     if task is None:
         return
-    if isinstance(event, HookOk) and event.warnings:
-        _record_hook_warnings(
-            workspace,
-            task,
-            phase=from_stage,
-            warnings=event.warnings,
-        )
-        return
-    if isinstance(event, Reject) and event.source == "hook":
-        hook = event.metadata.get("hook")
-        if isinstance(hook, dict):
-            hook_arg = hook
-        else:
-            hook_arg = None
-        consecutive_same_hook_rejects = event.metadata.get("consecutive_same_hook_rejects")
-        if isinstance(consecutive_same_hook_rejects, int):
-            consecutive_same_hook_rejects_arg = consecutive_same_hook_rejects
-        else:
-            consecutive_same_hook_rejects_arg = None
-        _record_hook_reject(
-            workspace,
-            task,
-            phase=from_stage,
-            reason=event.reason,
-            warnings=[str(item) for item in event.metadata.get("warnings", [])],
-            hook=hook_arg,
-            consecutive_same_hook_rejects=consecutive_same_hook_rejects_arg,
-        )
+    match event:
+        case HookOk(warnings=warnings) if warnings:
+            _record_hook_warnings(
+                workspace,
+                task,
+                phase=from_stage,
+                warnings=warnings,
+            )
+        case Reject(source="hook"):
+            hook = event.metadata.get("hook")
+            if isinstance(hook, dict):
+                hook_arg = hook
+            else:
+                hook_arg = None
+            consecutive_same_hook_rejects = event.metadata.get("consecutive_same_hook_rejects")
+            if isinstance(consecutive_same_hook_rejects, int):
+                consecutive_same_hook_rejects_arg = consecutive_same_hook_rejects
+            else:
+                consecutive_same_hook_rejects_arg = None
+            _record_hook_reject(
+                workspace,
+                task,
+                phase=from_stage,
+                reason=event.reason,
+                warnings=[str(item) for item in event.metadata.get("warnings", [])],
+                hook=hook_arg,
+                consecutive_same_hook_rejects=consecutive_same_hook_rejects_arg,
+            )

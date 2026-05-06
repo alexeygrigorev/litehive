@@ -29,6 +29,25 @@ Guidance for AI coding agents working in this repository.
   you are about to refactor, add a characterization-test commit
   first.
 
+## Ongoing migrations to advance opportunistically
+
+When you touch a class for any other reason, look for these
+patterns and fix them in the same change:
+
+- **Constructor-side wiring (DI).** Constructors that build their
+  collaborators inside ``__init__`` (e.g. ``self.workspace =
+  Workspace.from_path(self.root)``, ``self.config = load_config(...)``,
+  ``self.sandbox = SandboxLauncher(...)``) hide wiring from the
+  callers and make the class hard to test. The target shape: the
+  constructor takes every collaborator as a parameter, and one
+  container module assembles the graph at the CLI / process entry
+  boundary. See ``docs/code-style.md`` "Dependency Injection".
+- **`root: Path` parameters on internal helpers.** The R12 step C
+  migration is incomplete; many internal helpers still take
+  ``root: Path`` and call ``Workspace.from_path(root)`` inline.
+  Push the conversion up to the caller; internals receive
+  ``Workspace`` directly.
+
 ## Domain primer
 
 - `litehive/domain/` defines the canonical enums and dataclasses

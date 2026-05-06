@@ -169,6 +169,35 @@ from tests.support.helpers import make_workspace, run_cli
   into smaller classes that *interact with each other*. Do not
   keep the outer class as a façade in front of free functions.
 
+## Dependency Injection
+
+- **Do not initialize collaborators inside `__init__`.** A
+  constructor that calls `Workspace.from_path(root)`,
+  `load_config(root)`, `SandboxLauncher(root, config)`, or any
+  other factory to build the things it depends on is hiding
+  wiring inside the class. That makes the class hard to test
+  (every test has to satisfy every transitive dependency the
+  constructor reaches for) and turns every refactor of a
+  collaborator into a hunt across `__init__` bodies.
+- Constructors take their dependencies as parameters. The class
+  trusts them; it does not validate, build, or replace them.
+- One module owns the wiring. There is one container (a
+  factory module or a small typed dataclass) that knows how to
+  build the long-lived graph from a workspace path and exposes
+  the ready-to-use objects. Tests build the container with fakes;
+  production builds it with real adapters.
+- One initialization point. The CLI / process entry builds the
+  container once at startup and threads its handles into every
+  command handler. After that point no code calls
+  `Workspace.from_path` or `load_config` — they read the cached
+  values out of the container.
+
+This is an incremental migration: the codebase still has many
+``__init__`` bodies that do their own wiring (SubagentManager,
+RuntimeStore, HeruEngineAdapter, etc.). When you touch one of
+those classes for any other reason, take the opportunity to
+hoist the wiring out of `__init__` into the container.
+
 ## Package `__init__.py`
 
 - `__init__.py` files hold no behavior — no typer apps, no CLI
