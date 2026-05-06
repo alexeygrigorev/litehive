@@ -1,7 +1,5 @@
 """Helpers that snapshot a still-running subagent into an ``interrupted`` record."""
 
-from pathlib import Path
-
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import (
     load_subagent_report,
@@ -15,7 +13,9 @@ from litehive.tasks.runtime import summarize_transcript
 from litehive.workspace import Workspace
 
 
-def mark_interrupted_subagent(root: Path, task: TaskRecord, reason: str, stage: str) -> RuntimeSubagentState | None:
+def mark_interrupted_subagent(
+    workspace: Workspace, task: TaskRecord, reason: str, stage: str
+) -> RuntimeSubagentState | None:
     """
     Promote the task's running subagent to ``interrupted`` and persist artifacts.
 
@@ -42,7 +42,7 @@ def mark_interrupted_subagent(root: Path, task: TaskRecord, reason: str, stage: 
                 break
     snippet = source.execution_trace_snippet
     if active is not None or not snippet:
-        snippet = _interrupted_subagent_snippet(root, task, source)
+        snippet = _interrupted_subagent_snippet(workspace, task, source)
     interrupted = source.model_copy(
         update={
             "status": "interrupted",
@@ -53,11 +53,13 @@ def mark_interrupted_subagent(root: Path, task: TaskRecord, reason: str, stage: 
         }
     )
     task.runtime.execution.active_subagent = None
-    _write_interrupted_subagent_artifacts(root, task, interrupted, resume_stage=stage)
+    _write_interrupted_subagent_artifacts(workspace, task, interrupted, resume_stage=stage)
     return interrupted
 
 
-def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeSubagentState) -> str:
+def _interrupted_subagent_snippet(
+    workspace: Workspace, task: TaskRecord, active: RuntimeSubagentState
+) -> str:
     """
     Pick the best available transcript snippet for the interrupted record.
 
@@ -66,7 +68,7 @@ def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeS
     empty; an empty snippet would render as a missing reason in the
     operator-facing interruption journal.
     """
-    report = load_subagent_report(Workspace.from_path(root), task.id, active.id)
+    report = load_subagent_report(workspace, task.id, active.id)
     if report:
         summary = str(report.get("summary") or "").strip()
         if summary:
@@ -74,7 +76,7 @@ def _interrupted_subagent_snippet(root: Path, task: TaskRecord, active: RuntimeS
     ref = next((candidate for candidate in reversed(task.subagents) if candidate.id == active.id), None)
     if ref is None:
         return active.execution_trace_snippet or "runner interrupted before subagent completion"
-    trace = load_subagent_execution_trace(root, task, ref, active=True, runtime_state=active)
+    trace = load_subagent_execution_trace(workspace, task, ref, active=True, runtime_state=active)
     if trace is None:
         snippet = ""
     else:
@@ -109,7 +111,7 @@ def _interrupted_subagent_reason(task: TaskRecord, reason: str) -> str:
 
 
 def _write_interrupted_subagent_artifacts(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     subagent: RuntimeSubagentState,
     resume_stage: str,
@@ -123,7 +125,6 @@ def _write_interrupted_subagent_artifacts(
     between memory and disk would mean resume picks the wrong action.
     """
     now = utcnow()
-    workspace = Workspace.from_path(root)
     session_payload = load_subagent_session(workspace, task.id, subagent.id)
     report_payload = load_subagent_report(workspace, task.id, subagent.id)
     if subagent.continuation is None:

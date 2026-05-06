@@ -51,8 +51,9 @@ def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
         return DirtyWorktreeGateReport()
 
     tasks = list_tasks(root, strict=False)
+    workspace = Workspace.from_path(root)
     if dirty_entries:
-        owners = [task for task in tasks if _task_can_resume_with_owned_dirty_paths(root, task, dirty_entries)]
+        owners = [task for task in tasks if _task_can_resume_with_owned_dirty_paths(workspace, task, dirty_entries)]
         finding = DirtyWorktreeFinding(
             location_kind="main-checkout",
             ownership="main-checkout",
@@ -166,7 +167,7 @@ def worktree_committed_changes(root: Path, worktree_path: Path) -> list[str]:
     return sorted(set(git_stdout_lines(worktree_path, "diff", "--name-only", fork_point, "HEAD")))
 
 
-def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
+def _allowed_commit_paths(workspace: Workspace, task: TaskRecord) -> set[PurePosixPath]:
     """
     Compute the paths an interrupted task may legitimately leave dirty.
 
@@ -178,7 +179,7 @@ def _allowed_commit_paths(root: Path, task: TaskRecord) -> set[PurePosixPath]:
     """
     paths: set[PurePosixPath] = set()
     paths.add(PurePosixPath(".litehive") / "tasks" / f"{task.id}-{task.slug}")
-    for entry in load_task_activity(Workspace.from_path(root), task):
+    for entry in load_task_activity(workspace, task):
         for changed_file in normalized_files_changed(entry.files_changed):
             paths.add(PurePosixPath(changed_file))
     return paths
@@ -236,7 +237,7 @@ def _path_is_within_allowed_paths(raw: str, allowed_paths) -> bool:
 
 
 def _task_can_resume_with_owned_dirty_paths(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     dirty_entries: list[str],
 ) -> bool:
@@ -253,4 +254,4 @@ def _task_can_resume_with_owned_dirty_paths(
         return False
     if task.pipeline_status in {PipelineStatus.BACKLOG, PipelineStatus.DONE}:
         return False
-    return not _unexpected_dirty_paths(dirty_entries, _allowed_commit_paths(root, task))
+    return not _unexpected_dirty_paths(dirty_entries, _allowed_commit_paths(workspace, task))

@@ -191,7 +191,7 @@ def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue
 
 
 def _load_engine_monitoring_for_status(
-    root: Path,
+    workspace: Workspace,
 ) -> tuple[WorkspaceEngineMonitoring, list[StatusIssue]]:
     """
     Load engine usage statistics for the status snapshot.
@@ -203,7 +203,7 @@ def _load_engine_monitoring_for_status(
     workspace.
     """
     try:
-        return load_engine_monitoring(Workspace.from_path(root)), []
+        return load_engine_monitoring(workspace), []
     except (OSError, sqlite3.DatabaseError, ValueError, ValidationError) as exc:
         issue = StatusIssue(
             key="engine_monitoring",

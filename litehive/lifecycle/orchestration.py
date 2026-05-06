@@ -177,7 +177,7 @@ def run_task(
             journal=journal,
             state_sync=lambda state: _sync_back_no_return(state, root),
             transition_observer=lambda state, from_stage, event, trans: _observe_transition(
-                root,
+                workspace,
                 state,
                 from_stage,
                 event,
@@ -223,7 +223,7 @@ def run_task(
 
 
 def _observe_transition(
-    root: Path,
+    workspace: Workspace,
     state: TaskState,
     from_stage: str,
     event: object,
@@ -239,12 +239,12 @@ def _observe_transition(
     as agent verdicts.
     """
     del trans
-    task = get_task(root, state.task_id)
+    task = get_task(workspace.root, state.task_id)
     if task is None:
         return
     if isinstance(event, HookOk) and event.warnings:
         _record_hook_warnings(
-            root,
+            workspace,
             task,
             phase=from_stage,
             warnings=event.warnings,
@@ -262,7 +262,7 @@ def _observe_transition(
         else:
             consecutive_same_hook_rejects_arg = None
         _record_hook_reject(
-            root,
+            workspace,
             task,
             phase=from_stage,
             reason=event.reason,

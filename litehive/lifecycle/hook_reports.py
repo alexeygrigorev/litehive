@@ -5,8 +5,6 @@ through these helpers so observability surfaces (`litehive status`,
 report files, journal) see the same shape as engine-emitted reports.
 """
 
-from pathlib import Path
-
 from litehive.domain.common import (
     PipelineState,
     canonical_pipeline_state,
@@ -127,7 +125,7 @@ def _report_stage_for_phase(phase: str | PipelineState) -> ReportPipelineState:
 
 
 def _record_hook_warnings(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     phase: str,
     warnings: list[str],
@@ -155,9 +153,8 @@ def _record_hook_warnings(
             "source": "hook",
         },
     )
-    workspace = Workspace.from_path(root)
     report_path = record_stage_report(workspace, task, report)
-    message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(root)}"
+    message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(workspace.root)}"
     append_task_activity(
         workspace,
         task,
@@ -171,12 +168,12 @@ def _record_hook_warnings(
     append_journal(
         workspace,
         task,
-        (f"Runner hooks at `{phase}` reported warnings.\nreport: `{report_path.relative_to(root)}`"),
+        (f"Runner hooks at `{phase}` reported warnings.\nreport: `{report_path.relative_to(workspace.root)}`"),
     )
 
 
 def _record_hook_reject(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     phase: str,
     reason: str,
@@ -220,9 +217,8 @@ def _record_hook_reject(
         failure_classification="hook_reject",
         failure_diagnostics=failure_diagnostics,
     )
-    workspace = Workspace.from_path(root)
     report_path = record_stage_report(workspace, task, report)
-    message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(root)}"
+    message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(workspace.root)}"
     append_task_activity(
         workspace,
         task,
@@ -236,5 +232,5 @@ def _record_hook_reject(
     append_journal(
         workspace,
         task,
-        (f"Runner hook at `{phase}` rejected the stage.\nreport: `{report_path.relative_to(root)}`"),
+        (f"Runner hook at `{phase}` rejected the stage.\nreport: `{report_path.relative_to(workspace.root)}`"),
     )

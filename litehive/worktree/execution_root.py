@@ -51,6 +51,7 @@ def resolve_task_execution_root(
     if not is_git_repo(root):
         return root
 
+    workspace = Workspace.from_path(root)
     recorded_path = get_task_worktree_path(task)
     worktree_path = resolve_recorded_worktree_path(root, recorded_path)
     if worktree_path is not None:
@@ -63,11 +64,11 @@ def resolve_task_execution_root(
                 rebased = rebase_worktree_onto(worktree_path, main_head)
                 if not rebased:
                     append_journal(
-                        Workspace.from_path(root),
+                        workspace,
                         task,
                         f"[worktree] Rebase onto {main_head[:8]} failed. Launching merge agent.",
                     )
-                    run_worktree_merge_agent(root, worktree_path, task, main_head, config=config)
+                    run_worktree_merge_agent(workspace, worktree_path, task, main_head, config=config)
             return worktree_path
 
     worktree_path = task_worktree_path(root, task)
@@ -82,5 +83,5 @@ def resolve_task_execution_root(
     ensure_worktree_venv_link(root, worktree_path)
     set_task_worktree_path(task, serialize_worktree_path(worktree_path))
     save_task(root, task)
-    append_journal(Workspace.from_path(root), task, f"Created task worktree at `{get_task_worktree_path(task)}`.")
+    append_journal(workspace, task, f"Created task worktree at `{get_task_worktree_path(task)}`.")
     return worktree_path

@@ -5,8 +5,6 @@ line that explains why the task is paused; paired with ``interrupted_subagent``
 which handles the subagent-side snapshot.
 """
 
-from pathlib import Path
-
 from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
 from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.domain.task import TaskRecord
@@ -15,10 +13,11 @@ from litehive.tasks.runtime import (
     apply_task_outcome,
     duration_seconds,
 )
+from litehive.workspace import Workspace
 
 
 def prepare_interrupted_task(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     stage: str,
     summary: str,
@@ -42,7 +41,7 @@ def prepare_interrupted_task(
     task.runtime.pipeline.updated_at = now
     _set_interruption_metadata(
         task,
-        root=root,
+        workspace=workspace,
         stage=stage,
         summary=summary,
         reason=interruption_reason,
@@ -135,7 +134,7 @@ def _interruption_timestamps(task: TaskRecord, now: str) -> dict[str, str | None
 
 def _set_interruption_metadata(
     task: TaskRecord,
-    root: Path,
+    workspace: Workspace,
     stage: str,
     summary: str,
     reason: str,
@@ -154,7 +153,7 @@ def _set_interruption_metadata(
     — without the centralisation, the layers tended to drift after
     schema changes.
     """
-    interrupted_subagent = mark_interrupted_subagent(root, task, reason=reason, stage=stage)
+    interrupted_subagent = mark_interrupted_subagent(workspace, task, reason=reason, stage=stage)
     apply_task_outcome(
         task,
         kind="interrupted",

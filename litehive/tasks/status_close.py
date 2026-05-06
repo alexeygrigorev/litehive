@@ -55,6 +55,9 @@ def _abandon_task_transition(
     """
 
     with workspace_lock(root):
+        from litehive.workspace import Workspace  # noqa: PLC0415
+
+        workspace = Workspace.from_path(root)
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
         state = load_state(root)
@@ -84,7 +87,7 @@ def _abandon_task_transition(
             before_queue=queue_before,
             context={"reason": reason},
         )
-        _reset_pipeline_state(root, task.id)
+        _reset_pipeline_state(workspace, task.id)
         return task
 
 
@@ -128,6 +131,9 @@ def _close_task_transition(
     _terminate_subagent_pid(task_id, active_subagent_pid)
     _terminate_subagent_pid(task_id, runner_pid)
     with workspace_lock(root):
+        from litehive.workspace import Workspace  # noqa: PLC0415
+
+        workspace = Workspace.from_path(root)
         task = get_task_record(root, task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
@@ -168,7 +174,7 @@ def _close_task_transition(
                 "follow_up_task_id": follow_up_task_id,
             },
         )
-        _reset_pipeline_state(root, task.id)
+        _reset_pipeline_state(workspace, task.id)
         return task
 
 

@@ -212,6 +212,9 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
     """
     recover_stale_runner_state(root)
     with workspace_mutation_guard(root), workspace_lock(root):
+        from litehive.workspace import Workspace  # noqa: PLC0415
+
+        workspace = Workspace.from_path(root)
         state = load_state(root)
         original_queue = list(state.queue)
         validate_single_active_task(root, state)
@@ -237,7 +240,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                     return TaskSelection(task=None, blocked=blocked)
                 recovery_stage = _auto_recovery_stage_for_flagged_task(next_task)
                 record_recovery_report(
-                    root,
+                    workspace,
                     next_task,
                     trigger_event_kind=TriggerEventKind.FLAGGED_TASK,
                     origin_stage=next_task.pipeline_status,
@@ -266,9 +269,8 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                 # and looping forever. Transition/journal history remains the
                 # source for prior-attempt metrics.
                 from litehive.lifecycle.persistence import SqlitePersistence  # noqa: PLC0415
-                from litehive.workspace import Workspace  # noqa: PLC0415
 
-                SqlitePersistence(Workspace.from_path(root)).reset_current_lifecycle_state(
+                SqlitePersistence(workspace).reset_current_lifecycle_state(
                     next_task.id, preserve_run_memory=True
                 )
             if next_task.status in {TaskStatus.QUEUED, TaskStatus.INTERRUPTED}:
@@ -506,6 +508,9 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
     looks like a leftover from before workspace-repair owned this concern.
     """
     with workspace_mutation_guard(root), workspace_lock(root):
+        from litehive.workspace import Workspace  # noqa: PLC0415
+
+        local_workspace = Workspace.from_path(root)
         state = load_state(root)
         validate_single_active_task(root, state)
         if state.active_task_id is None:
@@ -514,7 +519,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
         task = get_task(root, state.active_task_id)
         if task is not None and _should_requeue_commit_stage_task(task):
             prepare_interrupted_task(
-                root,
+                local_workspace,
                 task,
                 stage=TaskStage.COMMIT_TO_GIT.value,
                 summary="Interrupted `commit_to_git` run recovered. Resume from `commit_to_git`.",
@@ -549,7 +554,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
 
         if task is not None and is_task_eligible_for_execution(task):
             prepare_interrupted_task(
-                root,
+                local_workspace,
                 task,
                 stage=task.pipeline_status,
                 summary=f"Interrupted run recovered. Resume from `{task.pipeline_status}`.",

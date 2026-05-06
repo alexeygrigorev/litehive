@@ -1,6 +1,5 @@
 """Recovery report application service."""
 
-from pathlib import Path
 from typing import Literal
 
 from litehive.domain.recovery import TriggerEventKind
@@ -16,7 +15,7 @@ RecoveryRunnableState = Literal["runnable", "parked", "blocked"]
 
 
 def record_recovery_report(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     trigger_event_kind: TriggerEventKind,
     origin_stage: str | None,
@@ -43,11 +42,10 @@ def record_recovery_report(
         failure_classification=failure_classification,
         runnable_state=runnable_state,
         blocker=blocker,
-        evidence=collect_recovery_evidence(root, task, stage=origin_stage),
+        evidence=collect_recovery_evidence(workspace, task, stage=origin_stage),
         actions=list(actions or []),
         warnings=list(warnings or []),
     )
-    workspace = Workspace.from_path(root)
     ref = insert_recovery_report(workspace, task, report)
     latest_report = latest_stage_report(workspace, task)
     if latest_report is not None:

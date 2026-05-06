@@ -159,7 +159,7 @@ def sleep_with_stop(seconds: float, stop_requested_fn) -> None:
         time.sleep(min(remaining, 1.0))
 
 
-def _append_attention_log(workspace: Path, message: str) -> None:
+def _append_attention_log(workspace_root: Path, message: str) -> None:
     """
     Persist a daemon-side attention entry through the canonical store.
 
@@ -170,7 +170,7 @@ def _append_attention_log(workspace: Path, message: str) -> None:
     name when they want to assert the daemon raised a specific
     attention message without standing up the full SQLite path.
     """
-    append_attention_log(Workspace.from_path(workspace), message)
+    append_attention_log(Workspace.from_path(workspace_root), message)
 
 
 def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:

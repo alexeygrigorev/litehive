@@ -39,7 +39,7 @@ _CLOSE_REASON_CODE_LABELS: dict[str, str] = {
 }
 
 
-def _reset_pipeline_state(root: Path, task_id: str, preserve_run_memory: bool = False) -> None:
+def _reset_pipeline_state(workspace: Workspace, task_id: str, preserve_run_memory: bool = False) -> None:
     """
     Wipe the SQLite-side lifecycle/runtime rows before a new attempt.
 
@@ -48,7 +48,7 @@ def _reset_pipeline_state(root: Path, task_id: str, preserve_run_memory: bool = 
     flag the task starts truly clean (used by ``recover``-style operator
     actions).
     """
-    SqlitePersistence(Workspace.from_path(root)).reset_current_lifecycle_state(
+    SqlitePersistence(workspace).reset_current_lifecycle_state(
         task_id, preserve_run_memory=preserve_run_memory
     )
 

@@ -15,6 +15,7 @@ from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport,
 from litehive.state.records import create_task
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 from litehive.tasks.activity_rendering import append_activity_entry
+from litehive.workspace import Workspace
 
 
 def _subagent_result(
@@ -58,7 +59,7 @@ def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Pat
         task,
         TaskStage.IMPLEMENTING,
         _subagent_result(execution_trace="x" * (FEEDBACK_CAP + 500)),
-        root=tmp_path,
+        workspace=Workspace.from_path(tmp_path),
     )
 
     assert report.submitted_via_cli is True
@@ -87,7 +88,7 @@ def test_stage_report_from_subagent_preserves_semantic_reject_classification(tmp
         task,
         TaskStage.ACCEPTING,
         _subagent_result(execution_trace="reviewer submitted reject"),
-        root=tmp_path,
+        workspace=Workspace.from_path(tmp_path),
     )
 
     assert report.submitted_via_cli is True

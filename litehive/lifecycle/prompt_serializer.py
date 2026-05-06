@@ -77,7 +77,7 @@ def serialize_prompt(
     """
     activity = prompt.activity or []
     if not activity and task_record is not None:
-        activity = _load_task_activity_history(workspace_root, task_record)
+        activity = _load_task_activity_history(Workspace.from_path(workspace_root), task_record)
 
     sections: list[str] = []
     sections.append(_header_section(prompt, task_record))
@@ -145,7 +145,7 @@ def serialize_prompt(
     return (SECTION_SEP * 2).join(s for s in sections if s).strip() + "\n"
 
 
-def _load_task_activity_history(workspace_root: Path, task_record: TaskRecord) -> list[dict[str, Any]]:
+def _load_task_activity_history(workspace: Workspace, task_record: TaskRecord) -> list[dict[str, Any]]:
     """
     Read the task's persisted activity entries for the prompt.
 
@@ -156,7 +156,7 @@ def _load_task_activity_history(workspace_root: Path, task_record: TaskRecord) -
     ``prompt_sections``.
     """
     try:
-        activity_entries = load_task_activity(Workspace.from_path(workspace_root), task_record)
+        activity_entries = load_task_activity(workspace, task_record)
     except (OSError, ValidationError, yaml.YAMLError):
         return []
     return [

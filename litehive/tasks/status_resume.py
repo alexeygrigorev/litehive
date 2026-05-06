@@ -101,6 +101,7 @@ def _requeue_task_transition(
             raise ValueError(str(exc)) from exc
 
     with workspace_lock(root):
+        workspace = Workspace.from_path(root)
         task = get_task_record(root, task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
@@ -113,7 +114,7 @@ def _requeue_task_transition(
         if blocked_failed_runs and not force:
             raise ValueError(failed_run_block_message(task, blocked_failed_runs))
         if blocked_failed_runs and force:
-            failed_run_overrides = mark_failed_run_operator_override(root, task, blocked_failed_runs)
+            failed_run_overrides = mark_failed_run_operator_override(workspace, task, blocked_failed_runs)
         state = load_state(root)
         queue_before = list(state.queue)
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
@@ -122,7 +123,6 @@ def _requeue_task_transition(
         main_ref = current_head(root)
         if main_ref is not None:
             checkout_path = _task_checkout_path(task)
-            workspace = Workspace.from_path(root)
             activity_entries = load_task_activity(workspace, task)
             changed = False
             for entry in activity_entries:
@@ -140,7 +140,7 @@ def _requeue_task_transition(
             pipeline_status=implementation_entry_stage(task),
             clear_last_outcome=task.status not in {TaskStatus.FLAGGED, TaskStatus.PARKED},
         )
-        _reset_pipeline_state(root, task.id, preserve_run_memory=True)
+        _reset_pipeline_state(workspace, task.id, preserve_run_memory=True)
         _queue_task(state, task.id, front=front)
         _persist_transition(
             root,
@@ -172,6 +172,7 @@ def _resume_task_transition(root: Path, task_id: str, front: bool = False) -> Ta
     """
 
     with workspace_lock(root):
+        workspace = Workspace.from_path(root)
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
         state = load_state(root)
@@ -207,7 +208,7 @@ def _resume_task_transition(root: Path, task_id: str, front: bool = False) -> Ta
             and not stranded_in_progress
             and not already_queued_resumable,
         )
-        _reset_pipeline_state(root, task.id)
+        _reset_pipeline_state(workspace, task.id)
         _queue_task(state, task.id, front=front)
         _persist_transition(
             root,

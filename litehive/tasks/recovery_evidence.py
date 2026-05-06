@@ -24,7 +24,7 @@ from litehive.workspace import Workspace
 
 
 def collect_recovery_evidence(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     stage: str | None = None,
 ) -> list[RecoveryEvidenceItem]:
@@ -39,7 +39,7 @@ def collect_recovery_evidence(
     hand.
     """
     evidence: list[RecoveryEvidenceItem] = []
-    workspace = Workspace.from_path(root)
+    root = workspace.root
     activity_entries = load_task_activity(workspace, task)
     task_events = read_events(workspace, task)
     latest_report = latest_stage_report(workspace, task)
@@ -140,7 +140,7 @@ def collect_recovery_evidence(
             trace_view = None
         else:
             trace_view = load_subagent_execution_trace(
-                root,
+                workspace,
                 task,
                 subagent_ref,
                 active=runtime_state is not None and runtime_state.status == "running",

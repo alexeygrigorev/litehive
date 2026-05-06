@@ -65,7 +65,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
     interrupted = mark_interrupted_subagent(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         refreshed,
         reason="runner interrupted before subagent completion",
         stage="implementing",

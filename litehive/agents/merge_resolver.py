@@ -32,7 +32,7 @@ _MERGE_PROMPT_TEMPLATE = (
 
 
 def run_worktree_merge_agent(
-    root: Path,
+    workspace: Workspace,
     worktree_path: Path,
     task: TaskRecord,
     main_head: str,
@@ -48,7 +48,7 @@ def run_worktree_merge_agent(
     aborted so the worktree is left in its pre-merge state instead
     of half-resolved.
     """
-    workspace = Workspace.from_path(root)
+    root = workspace.root
     merged, message = merge_no_edit(worktree_path, main_head)
     if merged:
         append_journal(workspace, task, "[worktree] Merged main into worktree.")

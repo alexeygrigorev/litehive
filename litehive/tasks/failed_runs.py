@@ -1,7 +1,5 @@
 """Helpers for cross-run failed-run history projections."""
 
-from pathlib import Path
-
 from litehive.domain.common import PipelineState, utcnow
 from litehive.domain.runtime import RuntimeFailedRunRecord
 from litehive.domain.task import TaskRecord
@@ -42,7 +40,7 @@ def has_blocking_failed_run_history(task: TaskRecord) -> bool:
 
 
 def mark_failed_run_operator_override(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     records: list[RuntimeFailedRunRecord] | None = None,
 ) -> list[dict[str, object]]:
@@ -57,7 +55,6 @@ def mark_failed_run_operator_override(
     now = utcnow()
     acknowledged: list[dict[str, object]] = []
     pipeline_state = None
-    workspace = Workspace.from_path(root)
     try:
         pipeline_state = SqlitePersistence(workspace).load(task.id)
     except TaskNotFound:

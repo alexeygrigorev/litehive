@@ -213,7 +213,9 @@ def _print_latest_subagent(root: Path, task) -> None:
     trace = None
     if sa_base.exists():
         is_active = bool(task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id)
-        trace = load_subagent_execution_trace(root, task, ref, active=is_active, runtime_state=runtime_sa)
+        trace = load_subagent_execution_trace(
+            Workspace.from_path(root), task, ref, active=is_active, runtime_state=runtime_sa
+        )
         produced_output = trace is not None and bool(trace.text.strip())
         for filename in ("stdout.txt", "stdout.log", "stderr.txt", "stderr.log"):
             path = resolve_artifact_path(sa_base, filename)

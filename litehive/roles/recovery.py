@@ -365,7 +365,6 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
     if not subagent_id:
         return None
 
-    workspace = Workspace.from_path(root)
     session_payload = load_subagent_session(workspace, task_record.id, subagent_id)
     report_payload = load_subagent_report(workspace, task_record.id, subagent_id)
     trace_ref = runtime_state or subagent_ref
@@ -373,7 +372,7 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
         execution_trace_view = None
     else:
         execution_trace_view = load_subagent_execution_trace(
-                root,
+                workspace,
                 task_record,
                 trace_ref,
                 active=runtime_state is not None and runtime_state.status == "running",

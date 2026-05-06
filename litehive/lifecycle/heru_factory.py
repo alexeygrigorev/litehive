@@ -210,7 +210,7 @@ def _display_path(root: Path, path: Path) -> str:
 
 
 def _rewrite_hallucinated_implementing_pass(
-    workspace_root: Path,
+    workspace: Workspace,
     task,
     latest,
     claimed_files: list[str],
@@ -221,7 +221,7 @@ def _rewrite_hallucinated_implementing_pass(
     stage report with a reject, and journals the hallucination so downstream
     routing treats it as a real reject. Called by the implementing-pass guard
     inside ``latest_verdict_after``."""
-    checkout_display = _display_path(workspace_root, checkout)
+    checkout_display = _display_path(workspace.root, checkout)
     claimed = ", ".join(claimed_files)
     reason_code = OutcomeReasonCode.HALLUCINATED_COMPLETION.value
     reason = (
@@ -236,7 +236,6 @@ def _rewrite_hallucinated_implementing_pass(
         f"claimed_files_changed: {claimed}"
     )
 
-    workspace = Workspace.from_path(workspace_root)
     activity_entries = load_task_activity(workspace, task)
     for entry in reversed(activity_entries):
         if entry.created_at != latest.created_at:
@@ -277,7 +276,7 @@ def _rewrite_hallucinated_implementing_pass(
             "Rejected implementing pass as hallucinated completion.\n"
             f"reason_code: `{reason_code}`\n"
             f"`git status --porcelain` in `{checkout_display}` returned no changes, but the SWE claimed: {claimed}\n"
-            f"report: `{report_path.relative_to(workspace_root)}`"
+            f"report: `{report_path.relative_to(workspace.root)}`"
         ),
     )
     return AgentVerdict(
@@ -347,8 +346,9 @@ def latest_verdict_after(
     task = get_task(workspace_root, task_id)
     if task is None:
         return None
+    workspace = Workspace.from_path(workspace_root)
     latest = latest_task_activity_entry(
-        Workspace.from_path(workspace_root),
+        workspace,
         task,
         stage=stage,
         source_subagent_id=source_subagent_id,
@@ -362,7 +362,7 @@ def latest_verdict_after(
         checkout, worktree_status = execution_checkout_status(workspace_root, task)
         if worktree_status == [] and changed_files:
             return _rewrite_hallucinated_implementing_pass(
-                workspace_root,
+                workspace,
                 task,
                 latest=latest,
                 claimed_files=changed_files,
@@ -410,6 +410,7 @@ class HeruEngineAdapter:
         """
         self.name = engine_name
         self.workspace_root = Path(workspace_root)
+        self.workspace = Workspace.from_path(self.workspace_root)
         self.model_name = model_name
 
     def with_model(self, model_name: str | None) -> "HeruEngineAdapter":
@@ -605,7 +606,7 @@ class HeruEngineAdapter:
         after_ts = datetime.min.replace(tzinfo=UTC)
         if state.stage == PipelineState.RECOVERING:
             previous_recovery = latest_task_activity_entry(
-                Workspace.from_path(self.workspace_root),
+                self.workspace,
                 task,
                 stage=PipelineState.RECOVERING,
                 verdicts=_allowed_verdicts_for_stage(PipelineState.RECOVERING),
@@ -699,7 +700,7 @@ class HeruEngineAdapter:
         from litehive.agents.session_store import save_subagent_artifacts  # noqa: PLC0415
 
         save_subagent_artifacts(
-            Workspace.from_path(self.workspace_root),
+            self.workspace,
             task_id,
             source_subagent_id,
             session={

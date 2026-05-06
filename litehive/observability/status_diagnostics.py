@@ -75,12 +75,15 @@ def collect_status_snapshot(root: Path) -> StatusSnapshot:
     damage). Distinct from :func:`collect_operational_status_snapshot`
     because the full sweep is too heavy for routine status reads.
     """
+    from litehive.workspace import Workspace  # noqa: PLC0415
+
     root = root.resolve()
+    workspace = Workspace.from_path(root)
     registry_issues = probe_registry_files()
     config, config_issues = _load_config_for_status(root)
     state, state_issues = _load_state_for_status(root)
     runner, runner_issue = _load_runner_status_for_status(root)
-    monitoring, monitoring_issues = _load_engine_monitoring_for_status(root)
+    monitoring, monitoring_issues = _load_engine_monitoring_for_status(workspace)
     if runner_issue is not None:
         runner_issues_list: list = [runner_issue]
     else:
@@ -120,11 +123,14 @@ def collect_operational_status_snapshot(root: Path) -> StatusSnapshot:
     who needs them runs ``litehive health`` or
     ``litehive status --full``.
     """
+    from litehive.workspace import Workspace  # noqa: PLC0415
+
     root = root.resolve()
+    workspace = Workspace.from_path(root)
     config, config_issues = _load_config_for_status(root)
     state, state_issues = _load_state_for_status(root)
     runner, runner_issue = _load_runner_status_for_status(root)
-    monitoring, monitoring_issues = _load_engine_monitoring_for_status(root)
+    monitoring, monitoring_issues = _load_engine_monitoring_for_status(workspace)
     if runner_issue is not None:
         runner_issues_list: list = [runner_issue]
     else:

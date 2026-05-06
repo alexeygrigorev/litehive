@@ -316,11 +316,12 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
     task_record = get_task(workspace_root, state.task_id)
     if task_record is None:
         return None
+    workspace = Workspace.from_path(workspace_root)
     before_task = snapshot_task_audit_state(task_record)
     before_last_outcome = task_record.runtime.pipeline.last_outcome.model_copy(deep=True)
     _sync_runtime_fields(task_record, state)
     journal_message = _sync_terminal_status(task_record, state)
-    _sync_recovery_follow_up(workspace_root, task_record, state)
+    _sync_recovery_follow_up(workspace, task_record, state)
     audit_entries = []
     if before_task is not None and (
         before_task.status != task_record.status
@@ -360,7 +361,7 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
     return task_record
 
 
-def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskState) -> None:
+def _sync_recovery_follow_up(workspace: Workspace, task_record: TaskRecord, state: TaskState) -> None:
     """When recovery exhausts and escalates to a follow-up task, mirror that escalation onto the original task's last_outcome.
 
     Only fires for the recovery-exhausted exit path; other failure shapes are
@@ -375,7 +376,7 @@ def _sync_recovery_follow_up(root: Path, task_record: TaskRecord, state: TaskSta
     if failed_reason != "recovery_exhausted":
         return
     latest = latest_task_activity_entry(
-        Workspace.from_path(root),
+        workspace,
         task_record,
         role="recovery",
         stage=PipelineState.RECOVERING,

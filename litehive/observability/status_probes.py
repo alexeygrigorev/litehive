@@ -36,6 +36,7 @@ from litehive.observability.status_types import (
     _RecoveryFailureContext,
 )
 from litehive.state.locking import runner_metadata_present, runner_pid_is_alive
+from litehive.workspace import Workspace
 
 
 def probe_registry_files() -> list[StatusIssue]:
@@ -375,13 +376,16 @@ def _probe_task_status_damage(
             )
         ]
 
+    from litehive.workspace import Workspace  # noqa: PLC0415
+
     issues: list[StatusIssue] = []
     active_task_id = runner.active_task_id or state.active_task_id
     active_stage = _live_active_pipeline_stage(active_task_id, tasks)
     queued_ids = set(state.queue)
+    workspace = Workspace.from_path(root)
 
     for task in sorted(tasks, key=lambda candidate: candidate.id):
-        recovery_issue = _recovery_failure_issue(root, task)
+        recovery_issue = _recovery_failure_issue(workspace, task)
         if recovery_issue is not None:
             issues.append(recovery_issue)
         backlog_issue = _backlog_damage_issue(
@@ -416,7 +420,7 @@ def _live_active_pipeline_stage(active_task_id: str | None, tasks: list[TaskReco
     return None
 
 
-def _recovery_failure_issue(root: Path, task: TaskRecord) -> StatusIssue | None:
+def _recovery_failure_issue(workspace: Workspace, task: TaskRecord) -> StatusIssue | None:
     """
     Build a recovery-failure issue for a task whose recovery is exhausted.
 
@@ -430,7 +434,7 @@ def _recovery_failure_issue(root: Path, task: TaskRecord) -> StatusIssue | None:
         flag_reason = None
     else:
         flag_reason = str(task.flag_reason)
-    context = _recovery_failure_context(root, task)
+    context = _recovery_failure_context(workspace, task)
     if flag_reason not in _RECOVERY_FAILURE_FLAG_REASONS and context.failed_reason is None:
         return None
 
@@ -452,7 +456,7 @@ def _recovery_failure_issue(root: Path, task: TaskRecord) -> StatusIssue | None:
     )
 
 
-def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureContext:
+def _recovery_failure_context(workspace: Workspace, task: TaskRecord) -> _RecoveryFailureContext:
     """
     Pull recovery failure reason, explanation, and origin stage.
 
@@ -464,10 +468,9 @@ def _recovery_failure_context(root: Path, task: TaskRecord) -> _RecoveryFailureC
     """
     context = _RecoveryFailureContext()
     from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound  # noqa: PLC0415
-    from litehive.workspace import Workspace  # noqa: PLC0415
 
     try:
-        state = SqlitePersistence(Workspace.from_path(root)).load(task.id)
+        state = SqlitePersistence(workspace).load(task.id)
     except TaskNotFound:
         return context
     except (OSError, sqlite3.DatabaseError, ValueError, ValidationError) as exc:

@@ -137,6 +137,7 @@ def remove_cleanable_worktrees(root: Path, dry_run: bool = False) -> WorktreeCle
     failures = []
     removed = []
     deferred = []
+    workspace = Workspace.from_path(root)
 
     for item in candidates:
         try:
@@ -148,7 +149,7 @@ def remove_cleanable_worktrees(root: Path, dry_run: bool = False) -> WorktreeCle
                     save_task(root, task)
                 except WorkspaceConflictError:
                     append_attention_log(
-                        Workspace.from_path(root),
+                        workspace,
                         (f"deferred worktree metadata clearing for {item.task_id}: workspace locked by active runner"),
                     )
                     deferred.append(item)

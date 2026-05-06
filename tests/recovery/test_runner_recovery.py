@@ -256,7 +256,7 @@ def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> N
     )
 
     prepare_interrupted_task(
-        tmp_path,
+        Workspace.from_path(tmp_path),
         task,
         stage="implementing",
         summary="Interrupted run recovered. Resume from `implementing`.",

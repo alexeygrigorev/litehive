@@ -1,7 +1,5 @@
 """Stage report parsing from subagent results."""
 
-from pathlib import Path
-
 from litehive.domain.reports import (
     REPORT_VERDICT_KINDS,
     ReportPipelineState,
@@ -47,7 +45,7 @@ def stage_report_from_subagent(
     task: TaskRecord,
     stage: ReportPipelineState,
     result: SubagentResult,
-    root: Path,
+    workspace: Workspace,
 ) -> StageReport:
     """
     Build a :class:`StageReport` for a single subagent run.
@@ -63,7 +61,7 @@ def stage_report_from_subagent(
     """
     pipeline_state: ReportPipelineState = canonical_report_pipeline_state(stage)
     latest = latest_task_activity_entry(
-        Workspace.from_path(root),
+        workspace,
         task,
         stage=pipeline_state,
         source_subagent_id=result.ref.id,

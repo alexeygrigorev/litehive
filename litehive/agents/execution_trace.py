@@ -184,7 +184,7 @@ def render_execution_trace_from_event_stream_payload(payload: dict[str, Any], st
 
 
 def load_subagent_execution_trace(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     ref: SubagentRef | RuntimeSubagentState,
     active: bool,
@@ -201,7 +201,7 @@ def load_subagent_execution_trace(
     truncated or lost.
     """
 
-    base = task_dir(root, task) / ref.path
+    base = task_dir(workspace.root, task) / ref.path
     if not active and ref.status != "running":
         cached = resolve_artifact_path(base, "execution_trace.md")
         if cached is not None:
@@ -216,7 +216,7 @@ def load_subagent_execution_trace(
         stderr_text = ""
     else:
         stderr_text = stderr.text
-    event_stream = load_subagent_event_stream(Workspace.from_path(root), task.id, ref.id)
+    event_stream = load_subagent_event_stream(workspace, task.id, ref.id)
     event_trace = render_execution_trace_from_event_stream_payload(
         event_stream,
         stderr=stderr_text,

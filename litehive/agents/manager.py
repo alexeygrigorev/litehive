@@ -876,7 +876,7 @@ class SubagentManager(SessionMixin):
                     execution_trace=transcript,
                     exit_code=execution_exit_code,
                 ),
-                root=self.root,
+                workspace=self.workspace,
             )
         except MissingVerdictError:
             # Agent finished without calling `litehive agent report`. The

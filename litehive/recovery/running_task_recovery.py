@@ -263,7 +263,7 @@ def _record_stale_recovery(
     operators would see only one of the two surfaces.
     """
     record_recovery_report(
-        workspace.root,
+        workspace,
         task,
         trigger_event_kind=TriggerEventKind.STALE_RUNNER_RECOVERY,
         origin_stage=stage,
@@ -311,7 +311,7 @@ def _recover_stale_running_task(
     if stage is None:
         return False, None, False
     prepare_interrupted_task(
-        workspace.root,
+        workspace,
         task,
         stage=stage,
         summary=f"Interrupted run recovered after stale runner detection. Resume from `{stage}`.",

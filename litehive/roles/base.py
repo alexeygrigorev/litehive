@@ -10,6 +10,7 @@ from litehive.domain.common import PipelineState, TaskStage
 from litehive.lifecycle.nodes.agent import AgentNode, EngineSelector, SessionProvider
 from litehive.lifecycle.persistence import LastRejection, TaskState
 from litehive.lifecycle.prompt_types import AgentPrompt
+from litehive.workspace import Workspace
 from .guidance import default_startup_guidance
 
 
@@ -172,7 +173,7 @@ class RoleAgent(AgentNode):
         if self.NODE_NAME != PipelineState.IMPLEMENTING:
             return fallback
         root = self.prompt_context.workspace_root
-        rejection_stage = _latest_reject_stage_for_implementing(root, state.task_id)
+        rejection_stage = _latest_reject_stage_for_implementing(Workspace.from_path(root), state.task_id)
         if rejection_stage is None:
             return fallback
         return state.last_rejection_by_stage.get(rejection_stage) or fallback
@@ -344,7 +345,7 @@ def _build_implementing_retry_origin_by_phase() -> dict[str, PipelineState]:
 _IMPLEMENTING_RETRY_ORIGIN_BY_PHASE: dict[str, PipelineState] = _build_implementing_retry_origin_by_phase()
 
 
-def _latest_reject_stage_for_implementing(root: Path, task_id: str) -> PipelineState | None:
+def _latest_reject_stage_for_implementing(workspace: Workspace, task_id: str) -> PipelineState | None:
     """Find which stage actually rejected the task and routed it back to implementing this turn.
 
     Implementing can be re-entered from implementing, testing, or accepting,
@@ -355,9 +356,8 @@ def _latest_reject_stage_for_implementing(root: Path, task_id: str) -> PipelineS
     """
     try:
         from litehive.lifecycle.journal import SqliteJournal  # noqa: PLC0415
-        from litehive.workspace import Workspace  # noqa: PLC0415
 
-        transitions = SqliteJournal(Workspace.from_path(root)).load_transitions(task_id)
+        transitions = SqliteJournal(workspace).load_transitions(task_id)
     except Exception:
         return None
 
