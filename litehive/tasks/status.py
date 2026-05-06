@@ -5,7 +5,7 @@ place. The implementations now live in focused sibling modules:
 
 * ``litehive.tasks.status_resume`` -- ``requeue_task``, ``resume_task_for_workspace``
 * ``litehive.tasks.status_close`` -- ``close_task_for_workspace``, ``park_task_for_workspace``, ``abandon_task_for_workspace``
-* ``litehive.tasks.status_update`` -- ``update_task``
+* ``litehive.tasks.status_update`` -- ``update_task_for_workspace``
 * ``litehive.tasks.stop`` -- ``stop_current_task``
 * ``litehive.tasks.switch_engine`` -- ``switch_task_engine_for_workspace``
 * ``litehive.tasks._status_helpers`` -- shared audit/journal/state helpers
@@ -20,7 +20,7 @@ from litehive.tasks.status_close import (
     park_task_for_workspace,
 )
 from litehive.tasks.status_resume import requeue_task, requeue_task_for_workspace, resume_task_for_workspace
-from litehive.tasks.status_update import update_task, update_task_for_workspace
+from litehive.tasks.status_update import update_task_for_workspace
 from litehive.tasks.stop import stop_current_task
 from litehive.tasks.switch_engine import switch_task_engine_for_workspace
 
@@ -33,6 +33,5 @@ __all__ = [
     "resume_task_for_workspace",
     "stop_current_task",
     "switch_task_engine_for_workspace",
-    "update_task",
     "update_task_for_workspace",
 ]

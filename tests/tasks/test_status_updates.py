@@ -16,7 +16,6 @@ from litehive.state.store import runtime_store
 from litehive.tasks.status import (
     close_task_for_workspace,
     park_task_for_workspace,
-    update_task,
     update_task_for_workspace,
 )
 from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
@@ -48,7 +47,7 @@ def _save_intent_only_task(root: Path, task_id: str = "T-0001", *, goal: str = "
 
 
 def test_update_task_signature_excludes_removed_engine_kwarg() -> None:
-    assert "engine" not in inspect.signature(update_task).parameters
+    assert "engine" not in inspect.signature(update_task_for_workspace).parameters
 
 
 def test_update_task_rejects_removed_engine_kwarg(tmp_path: Path) -> None:
@@ -58,9 +57,9 @@ def test_update_task_rejects_removed_engine_kwarg(tmp_path: Path) -> None:
     # Hide the kwarg behind a callable indirection so the static type
     # checker cannot see the removed `engine` keyword and still has a
     # plain Callable to verify; the test asserts the runtime TypeError.
-    callable_update_task: Callable[..., object] = update_task
+    callable_update_task: Callable[..., object] = update_task_for_workspace
     with pytest.raises(TypeError, match="engine"):
-        callable_update_task(tmp_path, task.id, engine="gemini")
+        callable_update_task(Workspace.from_path(tmp_path), task.id, engine="gemini")
 
 
 def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None:
@@ -71,8 +70,8 @@ def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None
     state.stage = PipelineState.RECOVERING
     persistence.save(state)
 
-    update_task(
-        tmp_path,
+    update_task_for_workspace(
+        Workspace.from_path(tmp_path),
         task.id,
         outcome="wont_do",
         outcome_reason="not worth it",
@@ -103,7 +102,7 @@ def test_update_task_parks_task_with_structured_action(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Park me")
 
-    update_task(tmp_path, task.id, action="park")
+    update_task_for_workspace(Workspace.from_path(tmp_path), task.id, action="park")
 
     refreshed = require_task(tmp_path, task.id)
     state = load_state(tmp_path)
@@ -127,7 +126,7 @@ def test_update_task_requeues_task_with_structured_action(tmp_path: Path) -> Non
     failed_state.stage = PipelineState.FAILED
     persistence.save(failed_state)
 
-    update_task(tmp_path, task.id, action="requeue")
+    update_task_for_workspace(Workspace.from_path(tmp_path), task.id, action="requeue")
 
     refreshed = require_task(tmp_path, task.id)
     state = load_state(tmp_path)
@@ -150,7 +149,7 @@ def test_update_task_abandons_task_with_structured_action(tmp_path: Path) -> Non
     task.pipeline_status = PipelineStatus.TESTING
     save_task(tmp_path, task)
 
-    update_task(tmp_path, task.id, action="abandon")
+    update_task_for_workspace(Workspace.from_path(tmp_path), task.id, action="abandon")
 
     refreshed = require_task(tmp_path, task.id)
     state = load_state(tmp_path)
@@ -173,7 +172,7 @@ def test_update_task_ignores_unrelated_missing_runtime_rows(tmp_path: Path) -> N
 
     _save_intent_only_task(tmp_path, "T-0002")
 
-    update_task(tmp_path, task.id, goal="Updated safely")
+    update_task_for_workspace(Workspace.from_path(tmp_path), task.id, goal="Updated safely")
 
     refreshed = require_task(tmp_path, task.id)
     assert refreshed.goal == "Updated safely"
@@ -183,7 +182,7 @@ def test_update_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path
     ensure_workspace(tmp_path)
     _save_intent_only_task(tmp_path, goal="Original goal")
 
-    update_task(tmp_path, "T-0001", goal="Updated safely")
+    update_task_for_workspace(Workspace.from_path(tmp_path), "T-0001", goal="Updated safely")
 
     refreshed = require_task(tmp_path, "T-0001")
     assert refreshed.goal == "Updated safely"

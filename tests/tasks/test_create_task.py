@@ -15,7 +15,8 @@ from litehive.db.schema import connect_workspace_db
 from litehive.domain.reports import FollowUpTaskSpec
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_follow_up_tasks, create_task, get_task, list_tasks, save_task
-from litehive.tasks.status import update_task
+from litehive.tasks.status import update_task_for_workspace
+from litehive.workspace import Workspace
 
 
 def _task_intent_payload(root: Path, task_id: str) -> dict:
@@ -390,7 +391,7 @@ def test_create_task_rejects_dependency_cycle(tmp_path: Path) -> None:
     save_task(tmp_path, first)
 
     with pytest.raises(ValueError, match=rf"Task {second.id} dependency cycle detected via {first.id}"):
-        update_task(tmp_path, second.id, depends_on=[first.id])
+        update_task_for_workspace(Workspace.from_path(tmp_path), second.id, depends_on=[first.id])
 
 
 def test_create_follow_up_tasks_persists_queue_and_creation_source(tmp_path: Path) -> None:

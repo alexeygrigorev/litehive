@@ -1,15 +1,13 @@
 """Task metadata edits and operator-intent routing.
 
-``update_task`` is the public entry that either edits task metadata in
-place or, when an ``outcome``/``action`` is supplied, dispatches to one
-of the terminal transitions in ``status_close``/``status_resume``.
+``update_task_for_workspace`` edits task metadata in place or, when an
+``outcome``/``action`` is supplied, dispatches to one of the terminal
+transitions in ``status_close``/``status_resume``.
 """
 
 import threading
-from pathlib import Path
 from typing import cast
 
-from litehive.container import build_workspace
 from litehive.domain.common import PipelineStatus
 from litehive.domain.task import TaskRecord
 from litehive.workspace import Workspace
@@ -206,58 +204,6 @@ def _update_task_transition(
             ],
         )
         return task
-
-
-def update_task(
-    root: Path,
-    task_id: str,
-    title: str | object = ...,
-    depends_on: list[str] | object = ...,
-    model: str | None | object = ...,
-    retry_limit: int | None | object = ...,
-    priority: str | object = ...,
-    goal: str | object = ...,
-    acceptance_criteria: list[str] | object = ...,
-    constraints: list[str] | object = ...,
-    plan: list[str] | object = ...,
-    auto_commit: bool | object = ...,
-    outcome: str | None | object = ...,
-    outcome_reason: str | None | object = ...,
-    action: str | None | object = ...,
-    allow_active_agent_task_mutation: bool = False,
-    journal_message: str | None = None,
-    audit_actor: str = "operator",
-    audit_source: str = "cli",
-) -> TaskRecord:
-    """
-    Public CLI/agent entry for task edits and intent routing.
-
-    Either edits task metadata in place or routes the operator's intent
-    into the matching terminal transition (close/park/requeue/abandon); thin
-    shim around ``_update_task_transition`` so the public surface is
-    importable from ``litehive.tasks.status``.
-    """
-    return update_task_for_workspace(
-        build_workspace(root),
-        task_id,
-        title=title,
-        depends_on=depends_on,
-        model=model,
-        retry_limit=retry_limit,
-        priority=priority,
-        goal=goal,
-        acceptance_criteria=acceptance_criteria,
-        constraints=constraints,
-        plan=plan,
-        auto_commit=auto_commit,
-        outcome=outcome,
-        outcome_reason=outcome_reason,
-        action=action,
-        allow_active_agent_task_mutation=allow_active_agent_task_mutation,
-        journal_message=journal_message,
-        audit_actor=audit_actor,
-        audit_source=audit_source,
-    )
 
 
 def update_task_for_workspace(
