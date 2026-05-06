@@ -34,7 +34,7 @@ from litehive.tasks.queue import move_queued_task
 from litehive.tasks.runtime import mark_engine_switch
 
 
-def _effective_task_engine(root: Path, task: TaskRecord) -> str:
+def _effective_task_engine(default_engine: str, task: TaskRecord) -> str:
     """
     Determine which engine the task is currently running under.
 
@@ -48,7 +48,7 @@ def _effective_task_engine(root: Path, task: TaskRecord) -> str:
         return task.runtime.execution.active_subagent.engine
     if task.subagents:
         return task.subagents[-1].engine
-    return build_container(root).config.default_engine
+    return default_engine
 
 
 def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
@@ -130,6 +130,7 @@ def switch_task_engine(
     if not reason.strip():
         raise ValueError("Switch reason must not be empty")
 
+    container = build_container(root)
     task = require_task(root, task_id)
     before_task = snapshot_task_audit_state(task)
     if task.pipeline_status == PipelineStatus.DONE:
@@ -151,7 +152,7 @@ def switch_task_engine(
         if task is None:
             raise ValueError(f"Task {task_id} not found")
 
-    previous_engine = _effective_task_engine(root, task)
+    previous_engine = _effective_task_engine(container.config.default_engine, task)
     mark_engine_switch(
         root,
         task,
@@ -172,9 +173,8 @@ def switch_task_engine(
 
     prior_work_paths = _switch_prior_work_paths(root, task)
 
-    workspace = build_container(root).workspace
     append_task_activity(
-        workspace,
+        container.workspace,
         task,
         TaskActivityEntry(
             role="operator",
@@ -190,7 +190,7 @@ def switch_task_engine(
         ),
     )
     append_task_audit_entries(
-        workspace,
+        container.workspace,
         [
             build_task_audit_entry(
                 task_id=task.id,
