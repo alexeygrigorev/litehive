@@ -34,7 +34,7 @@ from typing import Any
 
 from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
-from litehive.container import build_subagent_manager
+from litehive.container import build_subagent_manager_for_workspace
 from litehive.config.model import LitehiveConfig
 from litehive.domain.agent import EngineFailure
 from litehive.domain.common import OutcomeReasonCode, PipelineState, TaskStage, Verdict, cap_feedback
@@ -458,12 +458,14 @@ class HeruEngineAdapter:
         report_stage = canonical_report_pipeline_state(stage.value)
         role = prompt.role
         prompt_text = serialize_prompt(prompt, task_record=task, workspace=self.workspace)
-        execution_root = _agent_execution_root(self.workspace_root, task, role=role, config=self.config)
+        config = self.config or self.workspace.config()
+        execution_root = _agent_execution_root(self.workspace_root, task, role=role, config=config)
 
         before_turn = datetime.now(UTC)
         try:
-            manager = build_subagent_manager(
-                self.workspace_root,
+            manager = build_subagent_manager_for_workspace(
+                self.workspace,
+                config,
                 execution_root=execution_root,
                 manager_cls=SubagentManager,
             )

@@ -48,9 +48,14 @@ def build_workspace(root: Path) -> Workspace:
     return Workspace.from_path(root)
 
 
-def build_subagent_manager(root: Path, execution_root: Path, manager_cls=None):
+def build_subagent_manager_for_workspace(
+    workspace: Workspace,
+    config: LitehiveConfig,
+    execution_root: Path,
+    manager_cls=None,
+):
     """
-    Assemble a ``SubagentManager`` for one agent turn.
+    Assemble a ``SubagentManager`` from injected workspace dependencies.
 
     Kept in the container so ``SubagentManager.__init__`` only receives
     ready collaborators and never builds workspace/config/sandbox itself.
@@ -59,15 +64,31 @@ def build_subagent_manager(root: Path, execution_root: Path, manager_cls=None):
     from litehive.agents.sandbox import SandboxLauncher  # noqa: PLC0415
 
     if manager_cls is not None and manager_cls is not SubagentManager:
-        return manager_cls(root, execution_root=execution_root)
+        return manager_cls(workspace.root, execution_root=execution_root)
 
-    container = build_container(root)
-    sandbox = SandboxLauncher(container.workspace.root, container.config)
+    sandbox = SandboxLauncher(workspace.root, config)
     manager_type = manager_cls or SubagentManager
     return manager_type(
-        container.workspace.root,
+        workspace.root,
         execution_root=execution_root,
-        workspace=container.workspace,
-        config=container.config,
+        workspace=workspace,
+        config=config,
         sandbox=sandbox,
+    )
+
+
+def build_subagent_manager(root: Path, execution_root: Path, manager_cls=None):
+    """
+    Assemble a ``SubagentManager`` for one agent turn from a raw path.
+
+    Process boundaries and tests can use this wrapper; internal callers
+    that already have workspace dependencies should call
+    :func:`build_subagent_manager_for_workspace`.
+    """
+    container = build_container(root)
+    return build_subagent_manager_for_workspace(
+        container.workspace,
+        container.config,
+        execution_root=execution_root,
+        manager_cls=manager_cls,
     )
