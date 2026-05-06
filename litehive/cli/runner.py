@@ -728,8 +728,9 @@ def db_rebuild_from_events(workspace: WorkspaceOption = Path.cwd()) -> int:
     older than the latest events.
     """
     workspace = normalize_workspace_root(workspace, source="--workspace")
+    container = build_container(workspace)
     try:
-        summary = rebuild_sqlite_from_task_event_log(Workspace.from_path(workspace))
+        summary = rebuild_sqlite_from_task_event_log(container.workspace)
     except Exception as exc:
         print(f"db rebuild-from-events failed: {exc}")
         return 1
@@ -763,7 +764,8 @@ def db_audit(
     targeted investigations.
     """
     workspace = normalize_workspace_root(workspace, source="--workspace")
-    entries = load_task_audit_entries(Workspace.from_path(workspace), task_id=task_id, action=action, limit=limit)
+    container = build_container(workspace)
+    entries = load_task_audit_entries(container.workspace, task_id=task_id, action=action, limit=limit)
     print(f"workspace: {workspace}")
     print(f"audit_entries: {len(entries)}")
     for entry in entries:
@@ -790,7 +792,8 @@ def db_settings(workspace: WorkspaceOption = Path.cwd()) -> int:
     settings render unambiguously.
     """
     workspace = normalize_workspace_root(workspace, source="--workspace")
-    settings = load_runtime_settings(Workspace.from_path(workspace))
+    container = build_container(workspace)
+    settings = load_runtime_settings(container.workspace)
     print(f"workspace: {workspace}")
     for key in sorted(settings):
         print(f"{key}: {json.dumps(settings[key], sort_keys=True)}")
@@ -811,7 +814,8 @@ def db_settings_audit(
     argument narrows the output to one setting.
     """
     workspace = normalize_workspace_root(workspace, source="--workspace")
-    entries = load_runtime_setting_audit_entries(Workspace.from_path(workspace), key=key, limit=limit)
+    container = build_container(workspace)
+    entries = load_runtime_setting_audit_entries(container.workspace, key=key, limit=limit)
     print(f"workspace: {workspace}")
     print(f"setting_audit_entries: {len(entries)}")
     for entry in entries:
