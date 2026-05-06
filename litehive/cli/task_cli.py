@@ -379,8 +379,9 @@ def abandon(task_id: Annotated[str, typer.Argument(help="Task id")], workspace: 
     surface when a reason and follow-up matter.
     """
     ensure_workspace(workspace)
+    workspace_obj = build_workspace(workspace)
     try:
-        task = abandon_task_for_workspace(build_workspace(workspace), task_id)
+        task = abandon_task_for_workspace(workspace_obj, task_id)
     except ValueError as exc:
         print(f"abandon failed: {exc}")
         return 1
