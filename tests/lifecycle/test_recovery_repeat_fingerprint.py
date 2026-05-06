@@ -9,7 +9,7 @@ from litehive.lifecycle.nodes.agent import AgentVerdict, UnrecoverableError
 from litehive.lifecycle.orchestration import run_task as run_pipeline_task
 from litehive.state.records import create_task, get_task
 from litehive.tasks.activity import append_task_activity
-from litehive.tasks.status import requeue_task
+from litehive.tasks.status import requeue_task_for_workspace
 from litehive.workspace import Workspace
 
 pytestmark = pytest.mark.integration
@@ -92,7 +92,11 @@ def test_recovery_repeat_fingerprint_escalates_after_requeue(tmp_path: Path) -> 
     assert len(first_refreshed.runtime.pipeline.recovery_history) == 2
     assert follow_up_ids == []
 
-    second = _run_with_repeat_engine(tmp_path, requeue_task(tmp_path, task.id), follow_up_ids)
+    second = _run_with_repeat_engine(
+        tmp_path,
+        requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id),
+        follow_up_ids,
+    )
     second_refreshed = get_task(tmp_path, task.id)
     assert second.final_stage == "failed"
     assert second_refreshed is not None

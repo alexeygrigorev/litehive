@@ -1,15 +1,14 @@
 """Task status transitions for re-entering a task after a stop or failure.
 
-Covers ``requeue_task`` (start over from the implementation entry
-stage) and ``resume_task_for_workspace`` (continue from the stage
-that was last in flight). Both push a task back onto the workspace
-queue; they differ in what prior progress they preserve and how they
-pick the re-entry stage.
+Covers ``requeue_task_for_workspace`` (start over from the implementation
+entry stage) and ``resume_task_for_workspace`` (continue from the stage
+that was last in flight). Both push a task back onto the workspace queue;
+they differ in what prior progress they preserve and how they pick the
+re-entry stage.
 """
 
 from pathlib import Path
 
-from litehive.container import build_workspace
 from litehive.git.ops import GitError, current_head, path_differs_at_ref
 from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStage, TaskStatus
 from litehive.domain.task import TaskRecord
@@ -230,31 +229,6 @@ def _resume_task_transition(workspace: Workspace, task_id: str, front: bool = Fa
             },
         )
         return task
-
-
-def requeue_task(
-    root: Path,
-    task_id: str,
-    front: bool = False,
-    force: bool = False,
-    audit_actor: str = "operator",
-    audit_source: str = "cli",
-) -> TaskRecord:
-    """
-    Public CLI/agent entry for requeueing a flagged/parked/closed task.
-
-    Sends the task back to the implementation queue for another pass; the
-    public-surface shim around ``_requeue_task_transition`` so existing
-    imports of ``requeue_task`` from ``litehive.tasks.status`` keep working.
-    """
-    return requeue_task_for_workspace(
-        build_workspace(root),
-        task_id,
-        front=front,
-        force=force,
-        audit_actor=audit_actor,
-        audit_source=audit_source,
-    )
 
 
 def requeue_task_for_workspace(

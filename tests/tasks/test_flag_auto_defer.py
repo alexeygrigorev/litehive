@@ -11,7 +11,7 @@ from litehive.workspace import Workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.runtime import finish_task_run_transition
-from litehive.tasks.status import requeue_task
+from litehive.tasks.status import requeue_task_for_workspace
 
 from tests.support.helpers import _cmd_requeue_task
 from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
@@ -36,7 +36,7 @@ def test_flag_count_increments_on_each_flagged_transition(tmp_path: Path) -> Non
     assert updated.flag_count == 1
 
     # Requeue and flag again
-    requeue_task(tmp_path, task.id, force=True)
+    requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id, force=True)
     _flag_task(tmp_path, task.id)
     updated = get_task(tmp_path, task.id)
     assert updated is not None
@@ -55,7 +55,7 @@ def test_auto_defer_after_three_flags(tmp_path: Path) -> None:
     assert t.flag_count == 1
 
     # Flag 2
-    requeue_task(tmp_path, task.id, force=True)
+    requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id, force=True)
     _flag_task(tmp_path, task.id)
     t = get_task(tmp_path, task.id)
     assert t is not None
@@ -63,7 +63,7 @@ def test_auto_defer_after_three_flags(tmp_path: Path) -> None:
     assert t.flag_count == 2
 
     # Flag 3 -> manual-review flag reason
-    requeue_task(tmp_path, task.id, force=True)
+    requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id, force=True)
     _flag_task(tmp_path, task.id)
     t = get_task(tmp_path, task.id)
     assert t is not None
@@ -92,7 +92,7 @@ def test_requeue_blocked_without_force_after_three_flags(tmp_path: Path) -> None
 
     # Now try to requeue without --force
     with pytest.raises(ValueError, match="flagged 3 times.*--force"):
-        requeue_task(tmp_path, task.id)
+        requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id)
 
 
 def test_requeue_with_force_succeeds_after_three_flags(tmp_path: Path) -> None:
@@ -109,7 +109,7 @@ def test_requeue_with_force_succeeds_after_three_flags(tmp_path: Path) -> None:
     save_task(tmp_path, t)
 
     # Requeue with --force should work
-    result = requeue_task(tmp_path, task.id, force=True)
+    result = requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id, force=True)
     assert result.status == "queued"
     assert result.flag_count == 3  # flag_count is NOT reset
 
@@ -125,7 +125,7 @@ def test_flag_count_not_reset_by_requeue(tmp_path: Path) -> None:
     assert t.flag_count == 1
 
     # Requeue
-    requeue_task(tmp_path, task.id)
+    requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id)
     t = get_task(tmp_path, task.id)
     assert t is not None
     assert t.flag_count == 1  # not reset
@@ -144,7 +144,7 @@ def test_requeue_task_resets_sticky_pipeline_failure_state(tmp_path: Path) -> No
     failed_state.stage = PipelineState.FAILED
     persistence.save(failed_state)
 
-    requeue_task(tmp_path, task.id)
+    requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id)
 
     with pytest.raises(TaskNotFound):
         persistence.load(task.id)

@@ -8,7 +8,8 @@ from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
-from litehive.tasks.status import requeue_task
+from litehive.tasks.status import requeue_task_for_workspace
+from litehive.workspace import Workspace
 from litehive.domain.common import PipelineStatus, TaskStatus
 
 
@@ -19,7 +20,7 @@ def test_requeue_writes_durable_audit_row_to_workspace_db(tmp_path: Path) -> Non
     task.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, task)
 
-    requeue_task(tmp_path, task.id, front=True, force=True)
+    requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id, front=True, force=True)
 
     with sqlite3.connect(workspace_path(tmp_path, "data.db")) as connection:
         row = connection.execute(
@@ -50,7 +51,7 @@ def test_db_audit_cli_shows_requeue_entry_for_done_task(tmp_path: Path) -> None:
     task.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, task)
 
-    requeue_task(tmp_path, task.id, front=True)
+    requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id, front=True)
     completed = require_task(tmp_path, task.id)
     completed.status = TaskStatus.DONE
     completed.pipeline_status = PipelineStatus.DONE
