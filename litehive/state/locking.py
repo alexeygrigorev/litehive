@@ -16,7 +16,7 @@ from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.lock_manager import WorkspaceLockManager
 from litehive.state.process_lock import ProcessLockManager
-from litehive.state.store import runtime_store
+from litehive.state.store import runtime_store, runtime_store_for_workspace
 from litehive.workspace import Workspace
 
 from litehive.tasks.constants import (
@@ -648,6 +648,23 @@ def persist_future_task_update(
     audit_entries: list["TaskAuditEntry"] | None = None,
 ) -> None:
     """
+    Path-based compatibility wrapper for future-task persistence.
+    """
+    persist_future_task_update_for_workspace(
+        Workspace.from_path(root),
+        task,
+        journal_message=journal_message,
+        audit_entries=audit_entries,
+    )
+
+
+def persist_future_task_update_for_workspace(
+    workspace: Workspace,
+    task: TaskRecord,
+    journal_message: str | None = None,
+    audit_entries: list["TaskAuditEntry"] | None = None,
+) -> None:
+    """
     Save a single task edit without touching workspace-level state.
 
     Used by CLI edit commands after ``ensure_future_task_mutation_allowed``
@@ -663,10 +680,10 @@ def persist_future_task_update(
         task_journal_messages = None
     else:
         task_journal_messages = {task.id: journal_message}
-    runtime_store(root).save_runtime_transaction(
+    runtime_store_for_workspace(workspace).save_runtime_transaction(
         task_intents={task.id: task.to_intent_record()},
         task_states={task.id: task_state_for_storage(task)},
         task_journal_messages=task_journal_messages,
         audit_entries=audit_entries,
     )
-    ensure_runtime_ignored(root)
+    ensure_runtime_ignored(workspace.root)

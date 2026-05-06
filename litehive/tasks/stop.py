@@ -28,7 +28,10 @@ from litehive.state.locking import (
     runner_pid_is_alive,
     workspace_lock,
 )
-from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
+from litehive.state.persist import (
+    load_state_for_workspace,
+    persist_task_and_state_without_runner_guard_for_workspace,
+)
 from litehive.state.records import get_task_record, require_task
 from litehive.tasks._process_signals import terminate_subagent_pid
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
@@ -64,7 +67,7 @@ def _stop_active_task_without_runner_guard(workspace: Workspace, task_id: str) -
     """
     root = workspace.root
     with workspace_lock(root):
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         active_task_id = _active_task_id_for_stop(workspace, state)
         if active_task_id != task_id:
             raise WorkspaceConflictError(f"task {task_id} is no longer the active task in this workspace")
@@ -110,8 +113,8 @@ def _stop_active_task_without_runner_guard(workspace: Workspace, task_id: str) -
             state.queue.insert(0, task.id)
 
         journal_message = f"Task execution stopped via CLI from `{stage}` stage. Status: {task.status}."
-        persist_task_and_state_without_runner_guard(
-            root,
+        persist_task_and_state_without_runner_guard_for_workspace(
+            workspace,
             task=task,
             state=state,
             journal_message=journal_message,
@@ -147,7 +150,7 @@ def stop_current_task(
     interrupt the active task first.
     """
     root = workspace.root
-    state = load_state(root)
+    state = load_state_for_workspace(workspace)
     try:
         active_task_id = _active_task_id_for_stop(workspace, state)
     except ValueError:
@@ -188,7 +191,7 @@ def stop_current_task(
                         poll_interval_seconds=poll_interval_seconds,
                     )
             recover_stale_runner_state_for_workspace(workspace)
-            state = load_state(root)
+            state = load_state_for_workspace(workspace)
             markers = active_task_markers_for_workspace(workspace, state)
             if active_task_id not in markers:
                 return StopTaskSummary(

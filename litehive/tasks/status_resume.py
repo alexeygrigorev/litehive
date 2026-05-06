@@ -22,7 +22,7 @@ from litehive.state.locking import (
     ensure_future_task_mutation_allowed,
     workspace_lock,
 )
-from litehive.state.persist import load_state
+from litehive.state.persist import load_state_for_workspace
 from litehive.state.records import get_task_record, require_task
 from litehive.tasks.activity import (
     load_task_activity,
@@ -116,7 +116,7 @@ def _requeue_task_transition(
             raise ValueError(failed_run_block_message(task, blocked_failed_runs))
         if blocked_failed_runs and force:
             failed_run_overrides = mark_failed_run_operator_override(workspace, task, blocked_failed_runs)
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         queue_before = list(state.queue)
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if task.status not in {TaskStatus.FLAGGED, TaskStatus.PARKED, *CLOSED_TASK_STATUSES}:
@@ -176,7 +176,7 @@ def _resume_task_transition(workspace: Workspace, task_id: str, front: bool = Fa
     with workspace_lock(root):
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         queue_before = list(state.queue)
         resumed_stage = resumable_queue_stage(task)
         stranded_in_progress = (

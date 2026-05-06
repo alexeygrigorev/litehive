@@ -19,10 +19,10 @@ from litehive.tasks.constants import (
 )
 from litehive.state.locking import (
     ensure_future_task_mutation_allowed,
-    persist_future_task_update,
+    persist_future_task_update_for_workspace,
     workspace_lock,
 )
-from litehive.state.persist import load_state
+from litehive.state.persist import load_state_for_workspace
 from litehive.state.records import get_task_record
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.normalization import (
@@ -108,7 +108,7 @@ def _update_task_transition(
         raise ValueError(f"Unsupported action '{action}'")
 
     with workspace_lock(root):
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         task = get_task_record(root, task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
@@ -185,8 +185,8 @@ def _update_task_transition(
             journal_message = "Task metadata updated via CLI."
         if task.pipeline_status == PipelineStatus.GROOMING and missing_acceptance_criteria_reason(task) is not None:
             journal_message += " Rerouted to `grooming` until structured acceptance criteria are added."
-        persist_future_task_update(
-            root,
+        persist_future_task_update_for_workspace(
+            workspace,
             task,
             journal_message=journal_message,
             audit_entries=[
