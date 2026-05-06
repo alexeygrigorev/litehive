@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from litehive.container import build_workspace
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.recovery.interrupted_subagent import mark_interrupted_subagent
 from litehive.recovery.interruption_state import (
@@ -30,7 +31,6 @@ from litehive.state.persist import (
     save_state_without_runner_guard,
 )
 from litehive.state.records import list_tasks
-from litehive.workspace import Workspace
 
 
 __all__ = [
@@ -55,7 +55,7 @@ def recover_stale_runner_state(
     live runner cannot be repaired out from under itself.
     """
     root = root.resolve()
-    workspace = Workspace.from_path(root)
+    workspace = build_workspace(root)
     with workspace_lock(root):
         state = load_workspace_state(root)
         running_task_ids = _running_task_ids(workspace)

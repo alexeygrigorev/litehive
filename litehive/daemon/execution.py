@@ -24,11 +24,11 @@ import threading
 import time
 from typing import TextIO
 
+from litehive.container import build_workspace
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.attention import append_attention_log
 from litehive.db.schema import apply_pending_migrations
-from litehive.workspace import Workspace
 from litehive.git.ops import fetch, is_ancestor, list_remote_names, rev_parse_verify
 from litehive.observability.status import (
     collect_task_pipeline_status,
@@ -170,7 +170,7 @@ def _append_attention_log(workspace_root: Path, message: str) -> None:
     name when they want to assert the daemon raised a specific
     attention message without standing up the full SQLite path.
     """
-    append_attention_log(Workspace.from_path(workspace_root), message)
+    append_attention_log(build_workspace(workspace_root), message)
 
 
 def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
