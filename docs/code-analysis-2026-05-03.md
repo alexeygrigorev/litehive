@@ -202,9 +202,11 @@ take an explicit `cwd: Path` so we never `os.chdir`.
 Rule: break up files that have grown past readable size. The
 recording singled out `worktree.py` (~1400 lines).
 
-Top offenders (`wc -l` over `litehive/**`):
+Original offenders (`wc -l` over `litehive/**`):
 
-- `litehive/worktree.py` — 1404
+- `litehive/worktree.py` — 1404. Done: this is now the
+  `litehive/worktree/` package (`paths`, `inspection`, `cleanup`,
+  `rescue`, `service`, `execution_root`).
 - `litehive/tasks/status.py` — 1280
 - `litehive/lifecycle/orchestration.py` — 895
 - `litehive/tasks/queue.py` — 873
@@ -220,12 +222,10 @@ Top offenders (`wc -l` over `litehive/**`):
 Plan: convert each to a package (`litehive/<name>/`). Suggested
 splits:
 
-- `worktree.py` → `worktree/{__init__.py, manager.py, sync.py,
-  branches.py, cherry_pick.py, locks.py}`. Move
-  merge-resolver-agent code out into `litehive/agents/`. Move git
-  calls into `litehive/git/ops.py` (P5). Move dataclasses into
-  `litehive/domain/` if they describe domain state, or into the
-  new sub-modules if they're internal.
+- `worktree.py` → done. The package is split across focused modules
+  under `litehive/worktree/`, merge-resolver code lives under
+  `litehive/agents/`, and raw git subprocess calls live in
+  `litehive/git/ops.py`.
 - `tasks/status.py` → split status mutation, status query, and
   resume/recovery into separate modules.
 - `lifecycle/orchestration.py` → split orchestration-loop
@@ -259,6 +259,10 @@ touching surrounding code.
 
 Rule: do not delete debug artifacts on the success path (R6).
 
+Status: done. Prior-attempt artifact pruning is gone; the remaining
+artifact deletions are format-flip cleanup for a single logical file
+(`.txt` ↔ `.txt.gz`) or explicit caller-requested removal.
+
 Sites (`litehive/agents/artifacts.py`):
 
 - Line 16: `compressed_path.unlink()` when content is empty after a
@@ -276,17 +280,12 @@ subagent attempt starts.
 
 Plan:
 
-1. Stop calling `prune_superseded_subagent_artifacts` from
-   `manager.py`. Keep the file's prior-attempt artifacts.
-2. Either delete `prune_superseded_subagent_artifacts` outright (no
-   callers other than the ones we are removing) or leave it behind
-   guarded only by an explicit retention policy in config. Default
-   is "keep".
-3. The `.unlink()` calls in `write_*` functions exist to reconcile
-   format flips (gzip ↔ plain). Those are fine to keep — they're
-   not deleting subagent debug evidence, they're switching the
-   storage form for a single artifact. Leave them as is, but add a
-   docstring saying so.
+1. Done: `manager.py` no longer calls
+   `prune_superseded_subagent_artifacts`; prior-attempt artifacts are
+   retained.
+2. Done: `prune_superseded_subagent_artifacts` has been deleted.
+3. Done: `write_*` docstrings now explain that `.unlink()` calls only
+   reconcile format flips for the current artifact.
 
 ## P9. Prompts living in code
 
@@ -295,10 +294,13 @@ Rule: long prompt bodies move to templates, build via a typed
 
 Affected files:
 
-- `litehive/agents/prompts.py` (372 lines, mostly literal scaffold
-  lines and per-stage logic). Primary target.
-- `litehive/lifecycle/prompt_serializer.py` (699 lines, also
-  string-heavy).
+- Original primary target `litehive/agents/prompts.py` no longer
+  exists. The current prompt surface is split across
+  `litehive/lifecycle/prompt_types.py`,
+  `litehive/lifecycle/prompt_serializer.py`, and
+  `litehive/lifecycle/prompt_sections.py`.
+- `litehive/lifecycle/prompt_serializer.py` and
+  `litehive/lifecycle/prompt_sections.py` are still string-heavy.
 - `litehive/roles/*.py` (`base.py` 11 stage strings,
   `recovery.py` 10) — also build text fragments inline.
 
@@ -309,20 +311,19 @@ Plan (sequenced, do not bundle):
    its own commit with a regression test that asserts the rendered
    text matches the previous baseline (golden file).
 3. Once all stages are extracted, refactor the inputs into a
-   typed `PromptBuilder` (rename existing `stage_prompt(...)` to
-   `PromptBuilder(...).render(stage)`).
-4. Delete the now-empty branches in `agents/prompts.py`.
+   typed `PromptBuilder` that takes the current `AgentPrompt` /
+   `RecoveryPrompt` objects plus the resolved `TaskRecord`.
+4. Delete the string-heavy section builders once their templates own
+   the rendered text.
 
-Until step 1 lands, `agents/prompts.py` should at least:
+Interim cleanup status:
 
-- get docstrings on each helper explaining what the field is for
-  (R8 — cross-references P11);
-- drop the `task_type` field from the prompt (the recording flagged
-  this as useless);
-- replace `workspace_content: str` with a typed object (a small
-  dataclass that knows how to render itself);
-- move `_stage_owner_for_stage` (the prose lookup) onto
-  `TaskStage` as a property — `TaskStage.GROOMING.owner_label`.
+- Done: the prompt no longer carries `task_type`.
+- Done: the old raw `workspace_content: str` prompt field is gone;
+  task content now enters rendering through typed `TaskRecord` data.
+- Done: the stage-owner mapping lives on `TaskStage.owner_role`.
+- Remaining: keep shrinking prompt prose out of code into templates,
+  one section at a time, with golden serializer tests.
 
 ## P10. Agent-related code outside `litehive/agents/`
 
@@ -331,10 +332,10 @@ agents (R10).
 
 Concrete site flagged by the recording:
 
-- `litehive/worktree.py` invokes the merge-resolver agent inline.
-  Extract to `litehive/agents/merge_resolver.py` (or wherever the
-  other roles already live — check `litehive/roles/`); have
-  `worktree.py` call into it.
+- Done. `litehive/agents/merge_resolver.py` owns
+  `run_worktree_merge_agent`; `litehive/worktree/execution_root.py`
+  calls into it when rebase/merge conflicts need the resolver. The
+  old inline `worktree.py` merge-resolver invocation no longer exists.
 
 Worth reviewing in the same pass:
 
@@ -351,13 +352,12 @@ solve?" (R8).
 Highest-priority files (recording flagged the first one
 explicitly; the others are similar density):
 
-- `litehive/agents/artifacts.py` — every public function has zero
-  documentation. Add one-line docstrings before doing any other
-  work in this file (it gates the deletion-removal cleanup in P8,
-  because we need to know which ones are dead).
-- `litehive/agents/parsing.py` — `stage_report_from_subagent`
-  needs a real docstring. The current first-line comment is OK but
-  it's not a docstring.
+- Done: `litehive/agents/artifacts.py` public helpers now explain
+  which artifact they write/remove and why format-flip cleanup is
+  allowed.
+- Done: `litehive/agents/parsing.py` gives
+  `stage_report_from_subagent` a real docstring explaining the
+  missing-verdict path.
 - `litehive/agents/prompts.py` — the `_runner_hook_*` and
   `_stage_*` helpers are unclear (recording quote: "Format runner
   hook prompt entry hook top section — what is this?").
