@@ -8,14 +8,19 @@ information. They are the leaf module of the queue split — both
 
 from pathlib import Path
 
-from litehive.domain.common import PipelineStatus, TaskStage, TaskStatus
+from litehive.domain.common import OutcomeKind, PipelineStatus, TaskStage, TaskStatus
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.records import list_tasks
 from litehive.tasks.failed_runs import has_blocking_failed_run_history
 from litehive.tasks.normalization import implementation_entry_stage
 
 _TERMINAL_EXECUTION_STATUSES = {"done", "cancelled", "failed", "blocked", "interrupted"}
-_TERMINAL_OUTCOME_KINDS = {"closed", "duplicate", "deferred", "wont_do"}
+_TERMINAL_OUTCOME_KINDS = {
+    OutcomeKind.CLOSED,
+    OutcomeKind.DUPLICATE,
+    OutcomeKind.DEFERRED,
+    OutcomeKind.WONT_DO,
+}
 _TRUSTED_STAGE_MARKER_STATUSES = {"idle", "paused", "interrupted", "running"}
 _RESUMABLE_PIPELINE_STAGES: frozenset[TaskStage] = frozenset(
     {TaskStage.GROOMING, TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING, TaskStage.COMMIT_TO_GIT}
