@@ -21,6 +21,7 @@ from litehive.recovery.execution_recovery import (
     interruption_journal_message,
     prepare_interrupted_task,
     recover_stale_runner_state,
+    recover_stale_runner_state_for_workspace,
     stale_interruption_reason,
 )
 from litehive.state.locking import (
@@ -144,7 +145,7 @@ def peek_next_task_selection(workspace: Workspace) -> TaskSelection:
     surfaces use the dequeue path instead. If no production caller appears,
     fold it back into the dequeue helper rather than carrying two near-copies.
     """
-    recover_stale_runner_state(workspace.root)
+    recover_stale_runner_state_for_workspace(workspace)
     with workspace_mutation_guard(workspace.root), workspace_lock(workspace.root):
         state = load_state(workspace.root)
         validate_single_active_task(workspace.root, state)
@@ -212,7 +213,7 @@ def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
     persists the workspace mutation so the runner can begin executing
     without a second round-trip.
     """
-    recover_stale_runner_state(workspace.root)
+    recover_stale_runner_state_for_workspace(workspace)
     with workspace_mutation_guard(workspace.root), workspace_lock(workspace.root):
         state = load_state(workspace.root)
         original_queue = list(state.queue)

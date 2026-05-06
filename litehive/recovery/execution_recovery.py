@@ -31,6 +31,7 @@ from litehive.state.persist import (
     save_state_without_runner_guard,
 )
 from litehive.state.records import list_tasks
+from litehive.workspace import Workspace
 
 
 __all__ = [
@@ -38,6 +39,7 @@ __all__ = [
     "mark_interrupted_subagent",
     "prepare_interrupted_task",
     "recover_stale_runner_state",
+    "recover_stale_runner_state_for_workspace",
     "stale_interruption_reason",
 ]
 
@@ -54,8 +56,21 @@ def recover_stale_runner_state(
     lock and only acts when no live runner owns the runner lock, so a
     live runner cannot be repaired out from under itself.
     """
-    root = root.resolve()
-    workspace = build_workspace(root)
+    return recover_stale_runner_state_for_workspace(build_workspace(root.resolve()), summary=summary)
+
+
+def recover_stale_runner_state_for_workspace(
+    workspace: Workspace,
+    summary: WorkspaceRepairSummary | None = None,
+) -> bool:
+    """
+    Workspace-based implementation for stale-runner recovery.
+
+    ``recover_stale_runner_state`` is the public path boundary; callers
+    that already have a ``Workspace`` use this helper so recovery does not
+    rebuild the workspace dependency graph.
+    """
+    root = workspace.root
     with workspace_lock(root):
         state = load_workspace_state(root)
         running_task_ids = _running_task_ids(workspace)
