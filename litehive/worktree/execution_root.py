@@ -13,7 +13,6 @@ from pathlib import Path
 
 from litehive.agents.merge_resolver import run_worktree_merge_agent
 from litehive.config.model import LitehiveConfig
-from litehive.container import build_workspace
 from litehive.domain.task import TaskRecord
 from litehive.fs_cleanup import remove_tree_logged
 from litehive.git.ops import add_worktree, current_head, is_git_repo, rebase_worktree_onto
@@ -32,21 +31,6 @@ from litehive.worktree.paths import (
 from litehive.workspace import Workspace
 
 logger = logging.getLogger(__name__)
-
-
-def resolve_task_execution_root(
-    root: Path,
-    task: TaskRecord,
-    config: LitehiveConfig | None = None,
-) -> Path:
-    """
-    Pick the directory the task's subagent should run in.
-
-    Path-based compatibility wrapper. Callers that already have a
-    :class:`Workspace` should use
-    :func:`resolve_task_execution_root_for_workspace`.
-    """
-    return resolve_task_execution_root_for_workspace(build_workspace(root), task, config=config)
 
 
 def resolve_task_execution_root_for_workspace(

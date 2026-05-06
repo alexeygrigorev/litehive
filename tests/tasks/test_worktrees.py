@@ -8,8 +8,8 @@ import pytest
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task, save_task
 from litehive.domain.common import TaskStatus
-from litehive.worktree.cleanup import remove_cleanable_worktrees
-from litehive.worktree.execution_root import resolve_task_execution_root, resolve_task_execution_root_for_workspace
+from litehive.worktree.cleanup import remove_cleanable_worktrees_for_workspace
+from litehive.worktree.execution_root import resolve_task_execution_root_for_workspace
 from litehive.worktree.paths import ensure_worktree_venv_link, task_worktree_path
 from litehive.workspace import Workspace
 
@@ -50,7 +50,7 @@ def test_resolve_task_execution_root_links_worktree_venv_to_workspace_venv(tmp_p
 
     task = create_task(workspace, title="Resolve execution root")
 
-    worktree = resolve_task_execution_root(workspace, task)
+    worktree = resolve_task_execution_root_for_workspace(Workspace.from_path(workspace), task)
 
     assert worktree.joinpath(".venv").is_symlink()
     assert worktree.joinpath(".venv").resolve() == workspace.joinpath(".venv").resolve()
@@ -115,7 +115,7 @@ def test_resolve_task_execution_root_logs_target_and_raises_on_worktree_cleanup_
     with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
         with caplog.at_level(logging.INFO, logger="litehive.worktree"):
             with pytest.raises(OSError, match="failed to delete task worktree directory .*permission denied"):
-                resolve_task_execution_root(workspace, task)
+                resolve_task_execution_root_for_workspace(Workspace.from_path(workspace), task)
 
     assert f"Deleting task worktree directory {stale_worktree}" in caplog.text
     assert f"Failed to delete task worktree directory {stale_worktree}" in caplog.text
@@ -136,6 +136,6 @@ def test_remove_cleanable_worktrees_includes_closed_tasks(tmp_path: Path) -> Non
     task.runtime.pipeline.git.worktree_path = str(worktree)
     save_task(workspace, task)
 
-    result = remove_cleanable_worktrees(workspace, dry_run=True)
+    result = remove_cleanable_worktrees_for_workspace(Workspace.from_path(workspace), dry_run=True)
 
     assert [item.task_id for item in result["candidates"]] == [task.id]

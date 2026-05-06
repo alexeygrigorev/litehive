@@ -109,17 +109,6 @@ class WorktreeCleanupResult(TypedDict):
     failures: list[tuple[ManagedWorktree, str]]
 
 
-def remove_cleanable_worktrees(root: Path, dry_run: bool = False) -> WorktreeCleanupResult:
-    """
-    Remove worktrees for terminal tasks and report what was touched.
-
-    Path-based compatibility wrapper. Callers that already have a
-    :class:`Workspace` should use
-    :func:`remove_cleanable_worktrees_for_workspace`.
-    """
-    return remove_cleanable_worktrees_for_workspace(Workspace.from_path(root), dry_run=dry_run)
-
-
 def remove_cleanable_worktrees_for_workspace(workspace: Workspace, dry_run: bool = False) -> WorktreeCleanupResult:
     """
     Remove worktrees for terminal tasks using an injected workspace.
