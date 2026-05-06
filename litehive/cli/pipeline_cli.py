@@ -14,7 +14,7 @@ from typing import Annotated
 import typer
 
 from litehive.cli.common import make_typer
-from litehive.container import build_container
+from litehive.container import build_workspace
 from litehive.domain.common import canonical_pipeline_state
 from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
@@ -70,8 +70,8 @@ def pipeline_set_state_command(
     :func:`canonical_pipeline_state` so persisted history stays
     enum-typed instead of carrying free-form strings.
     """
-    container = build_container(workspace)
-    store = SqlitePersistence(container.workspace)
+    workspace_obj = build_workspace(workspace)
+    store = SqlitePersistence(workspace_obj)
     try:
         state = store.load(task_id)
     except TaskNotFound:
@@ -99,8 +99,8 @@ def pipeline_reset_command(
     in a single transaction — no half-reset state on partial
     failure.
     """
-    container = build_container(workspace)
-    SqlitePersistence(container.workspace).reset_all(task_id)
+    workspace_obj = build_workspace(workspace)
+    SqlitePersistence(workspace_obj).reset_all(task_id)
     print(f"task: {task_id}")
     print("reset: ok")
 
@@ -120,8 +120,7 @@ def pipeline_journal_command(
     SQLite by hand. ``--limit`` only caps the transition log; the
     other sections are short enough to print whole.
     """
-    container = build_container(workspace)
-    workspace_obj = container.workspace
+    workspace_obj = build_workspace(workspace)
     journal = SqliteJournal(workspace_obj)
     store = SqlitePersistence(workspace_obj)
     try:
