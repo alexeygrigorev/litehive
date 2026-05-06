@@ -9,6 +9,7 @@ from litehive.domain.common import (
     OutcomeKind,
     OutcomeReasonCode,
     PipelineStatus,
+    TaskExecutionStatus,
     TaskStatus,
     utcnow,
 )
@@ -42,7 +43,7 @@ def prepare_interrupted_task(
     timestamps = _interruption_timestamps(task, now)
     task.status = TaskStatus.INTERRUPTED
     task.pipeline_status = stage if isinstance(stage, PipelineStatus) else PipelineStatus(stage)
-    task.runtime.pipeline.execution_status = "interrupted"
+    task.runtime.pipeline.execution_status = TaskExecutionStatus.INTERRUPTED
     task.runtime.pipeline.run_started_at = None
     task.runtime.pipeline.updated_at = now
     _set_interruption_metadata(

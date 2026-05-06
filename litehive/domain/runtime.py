@@ -32,6 +32,7 @@ from .common import (
     OutcomeReasonCode,
     RunnerExecutionStatus,
     SubagentStatus,
+    TaskExecutionStatus,
     utcnow,
 )
 
@@ -288,7 +289,7 @@ class PipelineRuntime(BaseModel):
     """
 
     git: RuntimeGitState = Field(default_factory=RuntimeGitState)
-    execution_status: str = "idle"
+    execution_status: TaskExecutionStatus | str = TaskExecutionStatus.IDLE
     run_started_at: str | None = None
     updated_at: str | None = None
     retry_count: int = 0
@@ -300,6 +301,13 @@ class PipelineRuntime(BaseModel):
     recovery_history: list[RuntimeRecoveryOutcome] = Field(default_factory=list)
     failed_run_history: dict[str, RuntimeFailedRunRecord] = Field(default_factory=dict)
     last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
+
+    @field_serializer("execution_status", when_used="json")
+    def _serialize_execution_status(self, value: object) -> object:
+        """
+        Persist the task execution marker as its stable string spelling.
+        """
+        return _json_enum_value(value)
 
 
 class ExecutionRuntime(BaseModel):

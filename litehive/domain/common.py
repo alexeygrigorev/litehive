@@ -291,6 +291,28 @@ class TaskStatus(StringEnum):
     FLAGGED = "flagged"  # Requires explicit operator attention
 
 
+class TaskExecutionStatus(StringEnum):
+    """
+    Per-task runner execution marker persisted on ``TaskRuntime.pipeline``.
+
+    Distinct from ``TaskStatus`` and daemon ``RunnerStatus``: this answers
+    what happened to the latest task run (idle/running/done/cancelled/etc.)
+    so queue selection and recovery can tell an active run from a stale or
+    terminal runtime row without string-comparing ad hoc literals.
+    """
+
+    IDLE = "idle"  # No task run is active
+    RUNNING = "running"  # The task is currently executing
+    PAUSED = "paused"  # The task was parked or paused
+    QUEUED = "queued"  # The task should be requeued
+    INTERRUPTED = "interrupted"  # The run stopped and may resume
+    DONE = "done"  # The run completed successfully
+    CANCELLED = "cancelled"  # The run was explicitly cancelled
+    FAILED = "failed"  # The run failed terminally
+    BLOCKED = "blocked"  # The run is blocked on external input
+    FLAGGED = "flagged"  # The run ended by flagging the task
+
+
 class PipelineStatus(StringEnum):
     """
     Operator-facing projection of pipeline progress.
@@ -481,6 +503,7 @@ __all__ = [
     "RunnerStatus",
     "RunnerExecutionStatus",
     "SubagentStatus",
+    "TaskExecutionStatus",
     "TaskStage",
     "TaskStatus",
     "TRUNCATION_MARKER",

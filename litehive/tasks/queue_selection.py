@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 
 from litehive.container import build_container
-from litehive.domain.common import OutcomeKind, PipelineStatus, TaskStage, TaskStatus, utcnow
+from litehive.domain.common import OutcomeKind, PipelineStatus, TaskExecutionStatus, TaskStage, TaskStatus, utcnow
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.task import TaskRecord, WorkspaceState
@@ -533,7 +533,7 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
         if (
             task is not None
             and is_task_eligible_for_execution(task)
-            and task.runtime.pipeline.execution_status != "running"
+            and task.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING
         ):
             task.status = TaskStatus.QUEUED
             enqueue_recovered_task(state, task.id)
@@ -591,7 +591,10 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
     if (
         active_task is not None
         and current_state.active_task_id is not None
-        and (is_task_eligible_for_execution(active_task) or active_task.runtime.pipeline.execution_status == "running")
+        and (
+            is_task_eligible_for_execution(active_task)
+            or active_task.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING
+        )
     ):
         markers.setdefault(current_state.active_task_id, []).append("workspace.active_task_id")
     for task in tasks:
@@ -601,7 +604,7 @@ def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict
             and is_task_eligible_for_execution(task)
         ):
             markers.setdefault(task.id, []).append("task.status=in_progress")
-        if task.runtime.pipeline.execution_status == "running":
+        if task.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING:
             markers.setdefault(task.id, []).append("runtime.pipeline.execution_status=running")
     return markers
 

@@ -9,7 +9,7 @@ persistence and outcome-shaping plumbing.
 
 from pathlib import Path
 
-from litehive.domain.common import OutcomeKind, OutcomeReasonCode, PipelineStatus, TaskStatus
+from litehive.domain.common import OutcomeKind, OutcomeReasonCode, PipelineStatus, TaskExecutionStatus, TaskStatus
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.state.persist import persist_task_and_state_without_runner_guard
@@ -125,7 +125,7 @@ def _apply_cancelled_task_state(task: TaskRecord, reason: str) -> None:
     CLI-cancelled task from a user-closed one, and stamps a ``last_outcome``
     that future status views display.
     """
-    clear_task_run_activity(task, execution_status="cancelled")
+    clear_task_run_activity(task, execution_status=TaskExecutionStatus.CANCELLED)
     task.status = TaskStatus.CLOSED
     task.close_reason = "execution_cancelled"
     task.flag_reason = None
@@ -157,9 +157,9 @@ def _apply_close_task_state(
     in the same audit envelope.
     """
     if outcome == OutcomeReasonCode.DONE:
-        execution_status = "done"
+        execution_status = TaskExecutionStatus.DONE
     else:
-        execution_status = "cancelled"
+        execution_status = TaskExecutionStatus.CANCELLED
     clear_task_run_activity(task, execution_status=execution_status)
     if outcome == OutcomeReasonCode.DONE:
         task.status = TaskStatus.DONE
@@ -204,5 +204,5 @@ def _apply_parked_task_state(task: TaskRecord) -> None:
     then flips the task to ``parked`` so the operator can revisit it later
     via ``litehive task resume``.
     """
-    clear_task_run_activity(task, execution_status="paused")
+    clear_task_run_activity(task, execution_status=TaskExecutionStatus.PAUSED)
     task.status = TaskStatus.PARKED

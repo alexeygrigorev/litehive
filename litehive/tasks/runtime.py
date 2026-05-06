@@ -2,7 +2,14 @@
 
 from pathlib import Path
 
-from litehive.domain.common import OutcomeKind, OutcomeReasonCode, PipelineStatus, TaskStatus, utcnow
+from litehive.domain.common import (
+    OutcomeKind,
+    OutcomeReasonCode,
+    PipelineStatus,
+    TaskExecutionStatus,
+    TaskStatus,
+    utcnow,
+)
 from litehive.domain.reports import StageReport
 from litehive.domain.runtime import (
     RuntimeEngineContinuation,
@@ -87,7 +94,7 @@ def _runtime_subagent_state(
 
 def clear_task_run_activity(
     task: TaskRecord,
-    execution_status: str,
+    execution_status: TaskExecutionStatus | str,
     updated_at: str | None = None,
     clear_interruption: bool = False,
 ) -> str:
@@ -99,7 +106,11 @@ def clear_task_run_activity(
     run-start data behind that would confuse the next pickup.
     """
     now = updated_at or utcnow()
-    task.runtime.pipeline.execution_status = execution_status
+    task.runtime.pipeline.execution_status = (
+        execution_status
+        if isinstance(execution_status, TaskExecutionStatus)
+        else TaskExecutionStatus(execution_status)
+    )
     task.runtime.pipeline.run_started_at = None
     task.runtime.pipeline.updated_at = now
     task.runtime.execution.active_subagent = None
@@ -116,7 +127,7 @@ def mark_task_run_started(root: Path, task: TaskRecord) -> None:
     observers (status panels, daemons) can see "running" the moment the
     transition happens rather than only after the first stage emits.
     """
-    now = clear_task_run_activity(task, execution_status="running", clear_interruption=True)
+    now = clear_task_run_activity(task, execution_status=TaskExecutionStatus.RUNNING, clear_interruption=True)
     task.runtime.pipeline.run_started_at = now
     task.runtime.pipeline.retry_count = 0
     task.runtime.pipeline.retry_limit = task.runtime.pipeline.retry_limit
@@ -125,7 +136,7 @@ def mark_task_run_started(root: Path, task: TaskRecord) -> None:
     save_task_runtime(root, task)
 
 
-def mark_task_run_finished(root: Path, task: TaskRecord, final_status: str) -> None:
+def mark_task_run_finished(root: Path, task: TaskRecord, final_status: TaskExecutionStatus | str) -> None:
     """
     Persist the closing ``execution_status`` for a task without touching the queue.
 
@@ -154,7 +165,7 @@ def apply_flag_count_auto_defer(task: TaskRecord) -> None:
         task.flag_reason = "flagged 3 times - needs human review"
 
 
-def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) -> TaskRecord:
+def finish_task_run_transition(root: Path, task: TaskRecord, final_status: TaskExecutionStatus | str) -> TaskRecord:
     """
     End-of-run transition that reconciles task and queue under one lock.
 
@@ -164,8 +175,11 @@ def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) 
     briefly disagreeing about who is active.
     """
     with workspace_mutation_guard(root), workspace_lock(root):
+        canonical_final_status = (
+            final_status if isinstance(final_status, TaskExecutionStatus) else TaskExecutionStatus(final_status)
+        )
         apply_flag_count_auto_defer(task)
-        clear_task_run_activity(task, execution_status=final_status)
+        clear_task_run_activity(task, execution_status=canonical_final_status)
         state = load_state(root)
         state_changed = False
         if state.active_task_id == task.id:
@@ -176,14 +190,15 @@ def finish_task_run_transition(root: Path, task: TaskRecord, final_status: str) 
             state.queue = queued_without_task
             state_changed = True
         if (
-            final_status in {"paused", "queued", "interrupted"}
+            canonical_final_status
+            in {TaskExecutionStatus.PAUSED, TaskExecutionStatus.QUEUED, TaskExecutionStatus.INTERRUPTED}
             and task.status == TaskStatus.QUEUED
             and task.pipeline_status != PipelineStatus.DONE
         ):
             state.queue.insert(0, task.id)
             state_changed = True
         if (
-            final_status == "done"
+            canonical_final_status == TaskExecutionStatus.DONE
             and task.status == TaskStatus.DONE
             and task.pipeline_status == PipelineStatus.DONE
             and not state_changed

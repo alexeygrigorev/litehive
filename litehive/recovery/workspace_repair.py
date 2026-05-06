@@ -4,6 +4,7 @@ from litehive.domain.common import (
     OutcomeKind,
     OutcomeReasonCode,
     PipelineStatus,
+    TaskExecutionStatus,
     TaskStage,
     TaskStatus,
     utcnow,
@@ -71,7 +72,12 @@ def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepa
             task.close_reason = "done"
             task.flag_reason = None
             task.pipeline_status = PipelineStatus.DONE
-            clear_task_run_activity(task, execution_status="done", updated_at=now, clear_interruption=True)
+            clear_task_run_activity(
+                task,
+                execution_status=TaskExecutionStatus.DONE,
+                updated_at=now,
+                clear_interruption=True,
+            )
             task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage="done")
             apply_task_outcome(
                 task,

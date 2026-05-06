@@ -9,7 +9,7 @@ logic lives in ``queue_selection``; pure predicates live in
 
 from pathlib import Path
 
-from litehive.domain.common import OutcomeKind, PipelineStatus, TaskStatus, utcnow
+from litehive.domain.common import OutcomeKind, PipelineStatus, TaskExecutionStatus, TaskStatus, utcnow
 from litehive.domain.runtime import TaskOutcomeState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.locking import (
@@ -240,7 +240,7 @@ def reset_task_for_recovery(
     task.close_reason = None
     task.flag_reason = None
     task.pipeline_status = canonical_pipeline_status
-    clear_task_run_activity(task, execution_status="idle", updated_at=now, clear_interruption=True)
+    clear_task_run_activity(task, execution_status=TaskExecutionStatus.IDLE, updated_at=now, clear_interruption=True)
     task.runtime.pipeline.retry_count = 0
     task.runtime.pipeline.retry_limit = 0
     task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage=canonical_pipeline_status)
@@ -321,7 +321,7 @@ def canonicalize_resumable_queue_task(task: TaskRecord, stage: str | None = None
         target_stage = resumable_queue_stage(task)
     if target_stage is None:
         return None
-    now = clear_task_run_activity(task, execution_status="idle")
+    now = clear_task_run_activity(task, execution_status=TaskExecutionStatus.IDLE)
     task.status = TaskStatus.QUEUED
     task.close_reason = None
     task.flag_reason = None
