@@ -119,9 +119,9 @@ class Workspace:
             # inline: config.loading transitively re-imports parts of
             # config/, so we keep the import local to avoid cycles when
             # this module is imported during partial init.
-            from litehive.config.loading import load_config  # noqa: PLC0415
+            from litehive.config.loading import load_config_for_workspace  # noqa: PLC0415
 
-            self._config_cache.append(load_config(self.root))
+            self._config_cache.append(load_config_for_workspace(self))
         return self._config_cache[0]
 
     def runtime_dir(self) -> Path:

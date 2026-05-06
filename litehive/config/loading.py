@@ -10,13 +10,16 @@ file-based values.
 
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
 import yaml
 from litehive.config.model import LitehiveConfig, validate_config_data
 from litehive.config.paths import litehive_root
 from litehive.config.workspace import ensure_workspace
 from litehive.config.workspace_files import config_path, context_path
+
+if TYPE_CHECKING:
+    from litehive.workspace import Workspace
 
 
 def _read_config_layer(path: Path) -> dict[str, Any]:
@@ -76,19 +79,32 @@ def load_config(root: Path) -> LitehiveConfig:
     """
     Public config entrypoint.
 
+    Path-based compatibility wrapper. Callers that already have a
+    :class:`Workspace` should use :func:`load_config_for_workspace`
+    so config loading does not rebuild workspace dependencies.
+    """
+    from litehive.workspace import Workspace  # noqa: PLC0415
+
+    return load_config_for_workspace(Workspace.from_path(root))
+
+
+def load_config_for_workspace(workspace: "Workspace") -> LitehiveConfig:
+    """
+    Load config for an injected workspace.
+
     Bootstraps the workspace if needed, layers in runtime-setting
     overrides on top of the file-based config, and returns a
     validated :class:`LitehiveConfig`. Called by every CLI command
     and the daemon at startup so config evolution stays in one
     place.
     """
+    root = workspace.root
     ensure_workspace(root)
     # inline: runtime_settings transitively pulls db.schema which loads
     # config.* back through litehive/config/__init__.py during partial init.
     from litehive.config.runtime_settings import apply_runtime_settings_to_config_data  # noqa: PLC0415
-    from litehive.workspace import Workspace  # noqa: PLC0415
 
-    data = apply_runtime_settings_to_config_data(Workspace.from_path(root), load_effective_config_data(root))
+    data = apply_runtime_settings_to_config_data(workspace, load_effective_config_data(root))
     return LitehiveConfig(**validate_config_data(data))
 
 
