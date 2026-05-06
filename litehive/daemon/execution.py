@@ -39,6 +39,7 @@ from litehive.observability.venv_health import daemon_broken_venv_message, probe
 from litehive.state.backup import create_scheduled_workspace_backup
 from litehive.state.persist import load_state, set_pool_stop_reason
 from litehive.state.locking import runner_pid_is_alive, runner_status
+from litehive.workspace import Workspace
 
 from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir
 
@@ -106,6 +107,7 @@ def check_origin_divergence(workspace: Path) -> str | None:
 
 def _halt_for_origin_divergence(
     workspace: Path,
+    attention_workspace: Workspace,
     output_stream: TextIO | None,
 ) -> bool:
     """
@@ -121,7 +123,7 @@ def _halt_for_origin_divergence(
     if divergence_reason is None:
         return False
     _write_pool_stop_reason(workspace, "diverged_from_origin")
-    _append_attention_log(workspace, divergence_reason)
+    _append_attention_log(attention_workspace, divergence_reason)
     _emit(
         "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. Halting pool: diverged_from_origin",
         stream=output_stream,
@@ -159,7 +161,7 @@ def sleep_with_stop(seconds: float, stop_requested_fn) -> None:
         time.sleep(min(remaining, 1.0))
 
 
-def _append_attention_log(workspace_root: Path, message: str) -> None:
+def _append_attention_log(workspace: Workspace, message: str) -> None:
     """
     Persist a daemon-side attention entry through the canonical store.
 
@@ -170,7 +172,7 @@ def _append_attention_log(workspace_root: Path, message: str) -> None:
     name when they want to assert the daemon raised a specific
     attention message without standing up the full SQLite path.
     """
-    append_attention_log(build_workspace(workspace_root), message)
+    append_attention_log(workspace, message)
 
 
 def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
@@ -536,6 +538,7 @@ def run_daemon_loop(
     """
     workspace = workspace.resolve()
     ensure_workspace(workspace)
+    daemon_workspace = build_workspace(workspace)
     apply_pending_migrations(workspace)
     command_prefix = default_command_prefix()
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -597,14 +600,14 @@ def run_daemon_loop(
                 sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
                 continue
 
-            if _halt_for_origin_divergence(workspace, output_stream=output_stream):
+            if _halt_for_origin_divergence(workspace, daemon_workspace, output_stream=output_stream):
                 return 0
 
             try:
                 maybe_run_workspace_backup(workspace, stream=output_stream)
             except (OSError, RuntimeError) as exc:
                 logger.exception("scheduled workspace backup failed")
-                _append_attention_log(workspace, f"scheduled backup failed: {exc}")
+                _append_attention_log(daemon_workspace, f"scheduled backup failed: {exc}")
                 _emit(f"backup_failed: {exc}", stream=output_stream)
 
             try:
