@@ -12,7 +12,7 @@ from litehive.cli.display import (
     task_model_label,
 )
 from litehive.config.workspace import ensure_workspace
-from litehive.container import build_container, build_workspace
+from litehive.container import build_workspace
 from litehive.git.ops import GitError, checkpoint_message
 from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
 from litehive.tasks.completed_task_recovery import recover_completed_task
@@ -44,10 +44,10 @@ def queue_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> 
     """
     if ctx.invoked_subcommand is not None:
         return None
-    container = build_container(workspace)
-    root = container.workspace.root
-    config = container.config
-    recover_stale_runner_state_for_workspace(container.workspace)
+    workspace_obj = build_workspace(workspace)
+    root = workspace_obj.root
+    config = workspace_obj.config()
+    recover_stale_runner_state_for_workspace(workspace_obj)
     state = load_state(root)
     tasks = list_tasks(root)
     print(f"active_task_id: {state.active_task_id}")
