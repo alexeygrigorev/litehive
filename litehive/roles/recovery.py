@@ -3,6 +3,7 @@ from typing import Any, cast
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_report, load_subagent_session
+from litehive.container import build_workspace
 from litehive.domain.common import PipelineState, pipeline_stage_key
 from litehive.domain.runtime import RuntimeRecoveryOutcome
 from litehive.workspace import Workspace
@@ -98,7 +99,7 @@ class RecoveryAgent(RoleAgent):
         scope_analysis: dict[str, Any] | None = None
 
         root = self.prompt_context.workspace_root
-        workspace = Workspace.from_path(root)
+        workspace = build_workspace(root)
         if task_record is None:
             task_record = get_task_record(root, state.task_id)
         try:
