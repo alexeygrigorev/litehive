@@ -272,7 +272,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         active_task = None
     flagged_tasks = [task for task in tasks if task.status == TaskStatus.FLAGGED]
     worktrees = collect_managed_worktrees(root)
-    dirty_report = inspect_dirty_worktree_gate(root)
+    dirty_report = inspect_dirty_worktree_gate(ws)
     quota_health = collect_quota_health()
     completed = sorted(
         (task for task in tasks if task.status == TaskStatus.DONE),

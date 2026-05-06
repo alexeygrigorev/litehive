@@ -179,7 +179,7 @@ def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
     task.status = TaskStatus.INTERRUPTED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, task)
-    interrupted_report = inspect_dirty_worktree_gate(tmp_path)
+    interrupted_report = inspect_dirty_worktree_gate(Workspace.from_path(tmp_path))
 
     assert interrupted_report.blocks_pool is False
     assert interrupted_report.findings[0].ownership == "task-owned"

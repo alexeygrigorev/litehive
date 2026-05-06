@@ -12,7 +12,6 @@ status code never accidentally mutates state.
 
 from pathlib import Path, PurePosixPath
 
-from litehive.container import build_container
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
 from litehive.domain.task import TaskRecord
@@ -31,7 +30,7 @@ from litehive.workspace import Workspace
 from litehive.worktree.paths import resolve_recorded_worktree_path
 
 
-def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
+def inspect_dirty_worktree_gate(workspace: Workspace) -> DirtyWorktreeGateReport:
     """
     Build the operator-facing dirty-worktree report.
 
@@ -42,6 +41,7 @@ def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
     interrupted-task resumption — three call sites means one helper
     instead of three.
     """
+    root = workspace.root
     if not is_git_repo(root):
         return DirtyWorktreeGateReport()
 
@@ -52,7 +52,6 @@ def inspect_dirty_worktree_gate(root: Path) -> DirtyWorktreeGateReport:
         return DirtyWorktreeGateReport()
 
     tasks = list_tasks(root, strict=False)
-    workspace = build_container(root).workspace
     if dirty_entries:
         owners = [task for task in tasks if _task_can_resume_with_owned_dirty_paths(workspace, task, dirty_entries)]
         finding = DirtyWorktreeFinding(
