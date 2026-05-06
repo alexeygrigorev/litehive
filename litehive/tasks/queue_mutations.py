@@ -299,7 +299,7 @@ def prepare_completed_task_for_recovery(task: TaskRecord, recovery_stage: str) -
     """
     reset_task_for_recovery(
         task,
-        status="queued",
+        status=TaskStatus.QUEUED,
         pipeline_status=recovery_stage,
     )
     set_task_commit_sha(task, None)

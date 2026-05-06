@@ -136,7 +136,7 @@ def _requeue_task_transition(
                 save_task_activity(workspace, task, activity_entries)
         reset_task_for_recovery(
             task,
-            status="queued",
+            status=TaskStatus.QUEUED,
             pipeline_status=implementation_entry_stage(task),
             clear_last_outcome=task.status not in {TaskStatus.FLAGGED, TaskStatus.PARKED},
         )
@@ -203,7 +203,7 @@ def _resume_task_transition(root: Path, task_id: str, front: bool = False) -> Ta
             task.pipeline_status = original_pipeline_status
         reset_task_for_recovery(
             task,
-            status="queued",
+            status=TaskStatus.QUEUED,
             pipeline_status=resumed_stage,
             clear_last_outcome=task.status not in {TaskStatus.INTERRUPTED, TaskStatus.PARKED, TaskStatus.FLAGGED}
             and not stranded_in_progress

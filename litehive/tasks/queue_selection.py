@@ -260,7 +260,7 @@ def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
                 )
                 reset_task_for_recovery(
                     next_task,
-                    status="queued",
+                    status=TaskStatus.QUEUED,
                     pipeline_status=recovery_stage,
                     clear_last_outcome=False,
                 )
