@@ -146,19 +146,18 @@ def status_command(
     debugging — kept off by default so the common operator view
     fits one screen.
     """
-    container = build_container(workspace)
-    ws = container.workspace
+    ws = build_workspace(workspace)
     root = ws.root
     status = collect_task_pipeline_status(root, diagnostics=full)
     if full:
         for line in render_task_pipeline_status_lines(
             status,
-            workspace=workspace,
+            workspace=root,
             mode="detailed",
             retry_on_label=format_retry_on(status.config),
         ):
             print(line)
-        tasks = list_tasks(workspace, strict=False)
+        tasks = list_tasks(root, strict=False)
         if tasks:
             print()
             for task in tasks:
@@ -261,8 +260,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     command and ``status``, which is the broader interactive view.
     """
     ensure_workspace(workspace)
-    container = build_container(workspace)
-    ws = container.workspace
+    ws = build_workspace(workspace)
     root = ws.root
     state = load_state(root)
     tasks = list_tasks_state_first(root, state=state, include_runtime=True)
