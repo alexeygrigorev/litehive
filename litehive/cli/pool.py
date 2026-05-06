@@ -1,21 +1,7 @@
 from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
-from litehive.container import build_workspace
 from litehive.state.records import list_tasks
 from litehive.tasks.report_storage import load_stage_reports_for_task_id
 from litehive.workspace import Workspace
-
-
-def task_stage_outcomes(root, task_id, slug):
-    """
-    Flatten a task's stored stage reports into ``state=verdict`` strings.
-
-    The pool summary embeds these per task so operators can see each
-    pipeline stage's outcome inline without opening the report files
-    on disk. ``slug`` is accepted for historical signature stability
-    but unused — the SQLite report store keys reports by task id.
-    """
-    del slug
-    return task_stage_outcomes_for_workspace(build_workspace(root), task_id)
 
 
 def task_stage_outcomes_for_workspace(workspace: Workspace, task_id: str) -> list[str]:
@@ -27,46 +13,6 @@ def task_stage_outcomes_for_workspace(workspace: Workspace, task_id: str) -> lis
     for report in reports:
         outcomes.append(f"{report.pipeline_state}={report.verdict}")
     return outcomes
-
-
-def _pool_task_report_entry(
-    root,
-    task_id,
-    title,
-    status,
-    pipeline_status,
-    slug=None,
-    reason_code=None,
-    reason=None,
-    follow_up_task_id=None,
-    close_reason=None,
-    flag_reason=None,
-):
-    """
-    Shared shape for every per-task line in the pool summary.
-
-    Forces completed, flagged, resumable, closed, and skipped
-    buckets to carry the same fields so the downstream renderer can
-    treat one entry-format and operators read consistent columns
-    across buckets. Empty fields stay set to ``None`` so callers
-    can spot the absence rather than guess at a missing key.
-    """
-    if slug is not None:
-        stage_outcomes = task_stage_outcomes(root, task_id, slug)
-    else:
-        stage_outcomes = []
-    return {
-        "task_id": task_id,
-        "title": title,
-        "final_task_status": status,
-        "pipeline_status": pipeline_status,
-        "stage_outcomes": stage_outcomes,
-        "reason_code": reason_code,
-        "reason": reason,
-        "follow_up_task_id": follow_up_task_id,
-        "close_reason": close_reason,
-        "flag_reason": flag_reason,
-    }
 
 
 def _pool_task_report_entry_for_workspace(
@@ -103,18 +49,6 @@ def _pool_task_report_entry_for_workspace(
     }
 
 
-def _pending_pool_tasks(root):
-    """
-    Collect tasks the pool did not complete on this run.
-
-    These are tasks that legitimately resume on the next pool run
-    (queued or in-progress with an unfinished pipeline). Surfaced
-    under ``remaining``/``skipped`` so operators see what work is
-    still queued without having to read ``litehive queue``.
-    """
-    return _pending_pool_tasks_for_workspace(build_workspace(root))
-
-
 def _pending_pool_tasks_for_workspace(workspace: Workspace):
     """
     Collect pending pool tasks from an injected workspace.
@@ -134,20 +68,6 @@ def _pending_pool_tasks_for_workspace(workspace: Workspace):
                 )
             )
     return pending
-
-
-def _resumable_pool_tasks(root):
-    """
-    Collect tasks parked or interrupted mid-pipeline.
-
-    Reported separately from generic remaining work so the operator
-    knows which need an explicit ``resume`` gesture rather than
-    just another pool run; a parked task without a resume signal
-    will sit forever otherwise. Carries the last interruption
-    reason so the operator can decide whether a resume is even
-    appropriate.
-    """
-    return _resumable_pool_tasks_for_workspace(build_workspace(root))
 
 
 def _resumable_pool_tasks_for_workspace(workspace: Workspace):
@@ -176,18 +96,6 @@ def _resumable_pool_tasks_for_workspace(workspace: Workspace):
             )
         )
     return resumable
-
-
-def _closed_pool_tasks(root):
-    """
-    Collect tasks deliberately closed (done/duplicate/wont_do/deferred) during the run.
-
-    Carries the ``close_reason`` so the summary explains why work
-    the operator queued is no longer in flight; without it,
-    closed tasks would silently disappear from the visible work
-    list and the operator would have to chase them down.
-    """
-    return _closed_pool_tasks_for_workspace(build_workspace(root))
 
 
 def _closed_pool_tasks_for_workspace(workspace: Workspace):
@@ -340,31 +248,6 @@ def _print_pool_summary_report(
     report = _ensure_pool_summary_report_fields(report)
     for line in _pool_summary_report_lines(report=report):
         print(line)
-
-
-def _pool_summary_report_data(
-    root,
-    completed,
-    flagged,
-    stop_reason,
-    tasks_run=None,
-):
-    """
-    Build the structured pool-summary payload.
-
-    Combines bucket counts, per-task entries, and stop semantics
-    into one dict so a renderer can emit either text or JSON from
-    the same source. Currently has no in-tree callers; kept as the
-    typed seam for the eventual machine-readable summary surface
-    rather than rebuilding it from the printed text.
-    """
-    return _pool_summary_report_data_for_workspace(
-        build_workspace(root),
-        completed=completed,
-        flagged=flagged,
-        stop_reason=stop_reason,
-        tasks_run=tasks_run,
-    )
 
 
 def _pool_summary_report_data_for_workspace(

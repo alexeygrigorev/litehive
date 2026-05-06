@@ -1,4 +1,4 @@
-from litehive.cli.pool import _write_pool_summary_report, task_stage_outcomes, task_stage_outcomes_for_workspace
+from litehive.cli.pool import _write_pool_summary_report, task_stage_outcomes_for_workspace
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.reports import StageReport
 from litehive.state.records import create_task
@@ -9,7 +9,9 @@ from litehive.workspace import Workspace
 def test_pool_reads_canonical_stage_reports(tmp_path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Pool stage metrics")
-    record_stage_report(Workspace.from_path(tmp_path),
+    workspace = Workspace.from_path(tmp_path)
+    record_stage_report(
+        workspace,
         task,
         StageReport(
             task_id=task.id,
@@ -20,8 +22,6 @@ def test_pool_reads_canonical_stage_reports(tmp_path) -> None:
         ),
     )
 
-    workspace = Workspace.from_path(tmp_path)
-    assert task_stage_outcomes(tmp_path, task.id, task.slug) == ["implementing=pass"]
     assert task_stage_outcomes_for_workspace(workspace, task.id) == ["implementing=pass"]
     assert list((tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports").glob("*.yaml")) == []
 
