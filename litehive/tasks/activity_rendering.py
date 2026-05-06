@@ -3,11 +3,11 @@
 from pathlib import Path
 from typing import Iterable
 
+from litehive.container import build_container
 from litehive.domain.common import TaskStage
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.tasks.activity import append_task_activity, load_task_activity
-from litehive.workspace import Workspace
 
 RETRACTED_FILESYSTEM_MARKER = "[retracted - filesystem check shows no changes landed]"
 _RETRACTABLE_STEPS: frozenset[TaskStage] = frozenset({TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING})
@@ -22,7 +22,7 @@ def append_activity_entry(root: Path, task: TaskRecord, entry: TaskActivityEntry
     record an activity entry without first plumbing a ``Workspace`` handle
     through every intermediate function on the call path.
     """
-    append_task_activity(Workspace.from_path(root), task, entry)
+    append_task_activity(build_container(root).workspace, task, entry)
 
 
 def normalized_files_changed(paths: Iterable[str]) -> list[str]:
@@ -98,7 +98,7 @@ def render_task_activity(root: Path, task: TaskRecord, for_prompt: bool = False)
     operator-facing renders show the full text so a human can audit what was
     retracted and why.
     """
-    activity_entries = load_task_activity(Workspace.from_path(root), task)
+    activity_entries = load_task_activity(build_container(root).workspace, task)
     if not activity_entries:
         return ""
     lines = ["Task activity:"]
