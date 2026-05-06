@@ -254,7 +254,8 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         a clean rebase + merge returns ``True`` when anything moved
         and ``False`` when the worktree was already current.
         """
-        from litehive.worktree import WorktreeMergeConflict, WorktreeService  # noqa: PLC0415
+        from litehive.domain.worktree import WorktreeMergeConflict  # noqa: PLC0415
+        from litehive.worktree.service import WorktreeService  # noqa: PLC0415
 
         try:
             result = WorktreeService(self.workspace_root).sync_task_worktree(

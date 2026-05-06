@@ -16,7 +16,7 @@ from litehive.lifecycle.types import PipelineMode
 from litehive.lifecycle.events import Pass
 from litehive.state.records import create_task, get_task_worktree_path, require_task
 from litehive.state.store import runtime_store
-from litehive.worktree import resolve_recorded_worktree_path, task_worktree_branch, task_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path, task_worktree_branch, task_worktree_path
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:

@@ -36,7 +36,7 @@ from litehive.lifecycle.persistence import Limits, SqlitePersistence
 from litehive.lifecycle.types import PipelineMode
 from litehive.domain.recovery import RecoveryTrigger
 from litehive.state.records import get_task, get_task_worktree_path
-from litehive.worktree import resolve_recorded_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path
 from tests.support.lifecycle_fakes import InMemorySessionStore
 
 from litehive.config.model import LitehiveConfig

@@ -16,7 +16,7 @@ from litehive.domain.task import UnmergedWorktree
 from litehive.state.locking import runner_lock_is_held
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, save_task
-from litehive.worktree import serialize_worktree_path, task_worktree_branch
+from litehive.worktree.paths import serialize_worktree_path, task_worktree_branch
 from litehive.domain.common import PipelineStatus, TaskStatus
 
 _RUNNER = CliRunner()

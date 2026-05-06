@@ -19,11 +19,9 @@ from litehive.state.records import (
     save_task,
     set_task_commit_sha,
 )
-from litehive.worktree import (
-    WorktreeService,
-    cleanup_terminal_task_worktree,
-    resolve_recorded_worktree_path,
-)
+from litehive.worktree.cleanup import cleanup_terminal_task_worktree
+from litehive.worktree.paths import resolve_recorded_worktree_path
+from litehive.worktree.service import WorktreeService
 
 from .nodes.system import CommitNode, GitCommitNode, GitWorktreeSyncNode
 from .persistence import SqlitePersistence, TaskNotFound, TaskState

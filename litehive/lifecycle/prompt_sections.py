@@ -34,23 +34,48 @@ def _bullet_block(items: list[str]) -> str:
     return "\n".join(lines)
 
 
+_ROLE_IDENTITY_SENTENCES = {
+    "swe": "You are the SWE.",
+    "qa": "You are the QA engineer.",
+    "planner": "You are the planner.",
+    "reviewer": "You are the reviewer.",
+    "recovery": "You are the recovery agent.",
+    "merge-resolver": "You are the merge resolver.",
+}
+
+
+def _role_identity_sentence(role: str) -> str:
+    """Map a role key to the explicit identity sentence that opens the prompt.
+
+    The first line of the engine-facing prompt names the agent's role so
+    the model anchors on identity before reading task coordinates; falls
+    back to a generic "You are the <role>." if a new role is added without
+    a matching entry here.
+    """
+    sentence = _ROLE_IDENTITY_SENTENCES.get(role)
+    if sentence is not None:
+        return sentence
+    return f"You are the {role}."
+
+
 def _header_section(prompt: "AgentPrompt", task_record: TaskRecord | None) -> str:
     """
-    Identify the task and pipeline coordinates.
+    Identify the agent's role first, then the task and pipeline coordinates.
 
-    Always rendered first so the agent's response can be attributed to
-    a specific run; the retry counter only appears once the task has
-    actually retried so a fresh attempt does not start with noise about
-    a missing prior pass.
+    The role identity sentence opens the prompt so the model anchors on
+    "who am I" before reading task IDs or stage names. Always rendered
+    first so the agent's response can be attributed to a specific run;
+    the retry counter only appears once the task has actually retried so
+    a fresh attempt does not start with noise about a missing prior pass.
     """
     if task_record is not None:
         title_suffix = f" — {task_record.title}"
     else:
         title_suffix = ""
     lines = [
+        _role_identity_sentence(prompt.role),
         f"Task: {prompt.task_id}{title_suffix}",
         f"Stage: {prompt.stage}",
-        f"Role: {prompt.role}",
         f"Pipeline mode: {prompt.pipeline_mode.value}",
     ]
     retry = prompt.stage_retry or 0

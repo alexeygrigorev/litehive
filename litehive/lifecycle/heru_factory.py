@@ -48,7 +48,7 @@ from litehive.tasks.journal import append_journal
 from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.tasks.report_storage import rewrite_latest_stage_report
 from litehive.workspace import Workspace
-from litehive.worktree import resolve_recorded_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path
 
 from .events import Crash
 from .nodes.agent import (

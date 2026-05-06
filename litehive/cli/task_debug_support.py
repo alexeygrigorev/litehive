@@ -21,7 +21,7 @@ from litehive.tasks.paths import (
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.report_storage import latest_stage_report
 from litehive.workspace import Workspace
-from litehive.worktree import WorktreeService
+from litehive.worktree.service import WorktreeService
 
 
 def render_task_evidence(root: Path, task) -> int:

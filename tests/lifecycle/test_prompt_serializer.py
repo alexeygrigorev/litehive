@@ -131,10 +131,12 @@ def test_serialize_includes_header_goal_acceptance_plan(workspace: Path) -> None
     text = serialize_prompt(prompt, task_record=task, workspace_root=workspace)
 
     assert prompt.stage is PipelineState.IMPLEMENTING
+    assert text.startswith("You are the SWE.")
     assert f"Task: {task.id}" in text
     assert "Add prompt serializer" in text
     assert "Stage: implementing" in text
-    assert "Role: swe" in text
+    # Role identity is now the opening sentence; the legacy "Role: swe" header line is gone.
+    assert "Role: swe" not in text
     assert "Goal:\nBuild the serializer" in text
     assert "- Serializer exists" in text
     assert "- Read current prompt" in text

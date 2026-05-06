@@ -19,7 +19,7 @@ from litehive.tasks.paths import (
     task_dir,
 )
 from litehive.tasks.report_storage import latest_stage_report
-from litehive.worktree import resolve_recorded_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path
 from litehive.workspace import Workspace
 
 

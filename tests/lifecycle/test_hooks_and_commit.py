@@ -29,7 +29,7 @@ from litehive.tasks.queue import dequeue_next_task
 from litehive.tasks.paths import task_dir
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.report_storage import load_stage_reports
-from litehive.worktree import serialize_worktree_path, task_worktree_branch, task_worktree_path
+from litehive.worktree.paths import serialize_worktree_path, task_worktree_branch, task_worktree_path
 from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
 
 pytestmark = pytest.mark.integration

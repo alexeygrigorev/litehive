@@ -16,7 +16,7 @@ from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.workspace import Workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, get_task_worktree_path
-from litehive.worktree import resolve_recorded_worktree_path, task_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path, task_worktree_path
 
 pytestmark = pytest.mark.integration
 

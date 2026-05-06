@@ -6,7 +6,7 @@ import typer
 from litehive.cli.common import WorkspaceOption, make_typer, require_subcommand
 from litehive.config.workspace import ensure_workspace
 from litehive.git.ops import GitError
-from litehive.worktree import WorktreeService
+from litehive.worktree.service import WorktreeService
 
 app = make_typer(invoke_without_command=True)
 

@@ -8,12 +8,9 @@ import pytest
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task, save_task
 from litehive.domain.common import TaskStatus
-from litehive.worktree import (
-    ensure_worktree_venv_link,
-    remove_cleanable_worktrees,
-    resolve_task_execution_root,
-    task_worktree_path,
-)
+from litehive.worktree.cleanup import remove_cleanable_worktrees
+from litehive.worktree.execution_root import resolve_task_execution_root
+from litehive.worktree.paths import ensure_worktree_venv_link, task_worktree_path
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:

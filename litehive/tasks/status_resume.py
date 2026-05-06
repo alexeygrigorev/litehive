@@ -51,7 +51,7 @@ from litehive.tasks._status_helpers import (
     _queue_task,
     _reset_pipeline_state,
 )
-from litehive.worktree import resolve_recorded_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path
 
 
 def _requeue_task_transition(

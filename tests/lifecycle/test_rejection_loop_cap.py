@@ -15,7 +15,7 @@ from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.workspace import Workspace
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.status import requeue_task
-from litehive.worktree import resolve_recorded_worktree_path, task_worktree_branch
+from litehive.worktree.paths import resolve_recorded_worktree_path, task_worktree_branch
 
 from tests.support.helpers import _cmd_status
 

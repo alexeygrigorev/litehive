@@ -45,20 +45,20 @@ from litehive.tasks.runtime import (
     mark_subagent_progress,
     mark_subagent_started,
 )
-from litehive.domain.common import PipelineState, TaskStage
+from litehive.domain.common import PipelineState, TaskStage, task_stage_for_pipeline_state
 from litehive.tasks.activity import latest_task_activity_entry
 from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.tasks.report_storage import record_stage_report
 from litehive.workspace import Workspace
 
-_REPORTABLE_STAGES: frozenset[str] = frozenset(stage.value for stage in TaskStage)
-_DEFAULT_STAGE_FOR_ROLE: dict[str, str] = {
-    "planner": TaskStage.GROOMING.value,
-    "swe": TaskStage.IMPLEMENTING.value,
-    "qa": TaskStage.TESTING.value,
-    "reviewer": TaskStage.ACCEPTING.value,
-    "merge-resolver": PipelineState.MERGE_RESOLVING.value,
-    "recovery": PipelineState.RECOVERING.value,
+_REPORTABLE_STAGES: frozenset[TaskStage] = frozenset(TaskStage)
+_DEFAULT_STAGE_FOR_ROLE: dict[str, TaskStage | PipelineState] = {
+    "planner": TaskStage.GROOMING,
+    "swe": TaskStage.IMPLEMENTING,
+    "qa": TaskStage.TESTING,
+    "reviewer": TaskStage.ACCEPTING,
+    "merge-resolver": PipelineState.MERGE_RESOLVING,
+    "recovery": PipelineState.RECOVERING,
 }
 
 logger = logging.getLogger(__name__)
@@ -209,7 +209,7 @@ class SubagentManager(SessionMixin):
         )
 
     @staticmethod
-    def _agent_stage_for_task(task: TaskRecord, role: str | None = None) -> str:
+    def _agent_stage_for_task(task: TaskRecord, role: str | None = None) -> TaskStage | PipelineState:
         """
         Pick the stage label exported to the subagent.
 
@@ -218,23 +218,39 @@ class SubagentManager(SessionMixin):
         to bucket the agent's report; falls back to a role-default
         when the task has no current stage yet so an agent invoked
         before the runtime was wired still sees a sensible stage.
+
+        Returns a domain enum member — either a :class:`TaskStage` for
+        the five reportable stages or :data:`PipelineState.RECOVERING`
+        / :data:`PipelineState.MERGE_RESOLVING` for the two pseudo-stages
+        that can carry an agent verdict. Callers serialize to a string
+        only at the env-var boundary.
         """
         current_stage = task.runtime.pipeline.current_stage.stage
         if current_stage:
-            return current_stage
+            try:
+                pipeline_state = PipelineState(current_stage)
+            except ValueError:
+                pipeline_state = None
+            if pipeline_state is PipelineState.RECOVERING or pipeline_state is PipelineState.MERGE_RESOLVING:
+                return pipeline_state
+            if pipeline_state is not None:
+                task_stage = task_stage_for_pipeline_state(pipeline_state)
+                if task_stage is not None:
+                    return task_stage
+            try:
+                return TaskStage(current_stage)
+            except ValueError:
+                pass
         if task.pipeline_status:
-            pipeline_stage = str(task.pipeline_status)
-        else:
-            pipeline_stage = ""
-        if (
-            pipeline_stage in _REPORTABLE_STAGES
-            or pipeline_stage == PipelineState.MERGE_RESOLVING
-            or pipeline_stage == PipelineState.RECOVERING
-        ):
-            return pipeline_stage
+            try:
+                pipeline_status_stage = TaskStage(task.pipeline_status.value)
+            except ValueError:
+                pipeline_status_stage = None
+            if pipeline_status_stage is not None and pipeline_status_stage in _REPORTABLE_STAGES:
+                return pipeline_status_stage
         if role and role in _DEFAULT_STAGE_FOR_ROLE:
             return _DEFAULT_STAGE_FOR_ROLE[role]
-        return TaskStage.IMPLEMENTING.value
+        return TaskStage.IMPLEMENTING
 
     @classmethod
     def _report_stage_for_task(cls, task: TaskRecord, role: str | None = None) -> ReportPipelineState:
@@ -247,12 +263,12 @@ class SubagentManager(SessionMixin):
         sync stage cannot accidentally land in the report storage.
         """
         stage = cls._agent_stage_for_task(task, role)
-        if stage == PipelineState.RECOVERING:
+        if stage is PipelineState.RECOVERING:
             return "recovering"
-        if stage == PipelineState.MERGE_RESOLVING:
+        if stage is PipelineState.MERGE_RESOLVING:
             return "merge_resolving"
-        if stage in _REPORTABLE_STAGES:
-            return TaskStage(stage)
+        if isinstance(stage, TaskStage):
+            return stage
         return TaskStage.IMPLEMENTING
 
     def run(
@@ -367,7 +383,7 @@ class SubagentManager(SessionMixin):
                 "LITEHIVE_WORKSPACE_ROOT": str(self.root),
                 "LITEHIVE_AGENT_ROLE": role,
                 "LITEHIVE_SUBAGENT_ID": ref.id,
-                "LITEHIVE_STAGE": self._agent_stage_for_task(task, role),
+                "LITEHIVE_STAGE": self._agent_stage_for_task(task, role).value,
                 "LITEHIVE_PYTHON_PATH": sys.executable,
             }
             effective_model = resume_safe_model_override(

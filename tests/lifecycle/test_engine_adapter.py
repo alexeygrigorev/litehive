@@ -374,7 +374,7 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_on_pre_start_subagent
         "LITEHIVE_STAGE": "recovering",
     }
     assert captured["cwd"] == tmp_path
-    assert "Role: recovery" in captured["prompt"]
+    assert "You are the recovery agent." in captured["prompt"]
     assert "Stage: recovering" in captured["prompt"]
     assert "Litehive cannot start its own subagents" in captured["prompt"]
     assert "AttributeError: clobbered heru stub" in captured["prompt"]
@@ -459,7 +459,7 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_when_engine_is_unavai
         "LITEHIVE_STAGE": "recovering",
     }
     assert captured["cwd"] == tmp_path
-    assert "Role: recovery" in captured["prompt"]
+    assert "You are the recovery agent." in captured["prompt"]
     assert "Stage: recovering" in captured["prompt"]
     assert "Litehive cannot start its own subagents" in captured["prompt"]
     assert "EngineError: Engine 'codex' is unavailable: missing binary 'missing-codex'" in captured["prompt"]
