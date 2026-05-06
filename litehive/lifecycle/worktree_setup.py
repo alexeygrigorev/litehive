@@ -9,7 +9,6 @@ SHA reconciliation).
 
 from pathlib import Path
 
-from litehive.container import build_workspace
 from litehive.domain.common import PipelineState, TaskExecutionStatus, TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import current_head
@@ -23,6 +22,7 @@ from litehive.state.records import (
 from litehive.worktree.cleanup import cleanup_terminal_task_worktree
 from litehive.worktree.paths import resolve_recorded_worktree_path
 from litehive.worktree.service import WorktreeService
+from litehive.workspace import Workspace
 
 from .nodes.system import CommitNode, GitCommitNode, GitWorktreeSyncNode
 from .persistence import SqlitePersistence, TaskNotFound, TaskState
@@ -76,15 +76,16 @@ def build_commit_node(root: Path) -> CommitNode:
     )
 
 
-def _build_worktree_sync_node(root: Path) -> GitWorktreeSyncNode:
+def _build_worktree_sync_node(workspace: Workspace) -> GitWorktreeSyncNode:
     """Return the production ``GitWorktreeSyncNode`` bound to this workspace; mirrors ``build_commit_node`` for the worktree-sync stage."""
+    root = workspace.root
     return GitWorktreeSyncNode(
-        workspace=build_workspace(root),
+        workspace=workspace,
         worktree_resolver=lambda state: _resolve_worktree(root, state),
     )
 
 
-def _worktree_missing_probe(root: Path):
+def _worktree_missing_probe(workspace: Workspace):
     """
     Build the worktree-existence probe for ``ReadyNode``.
 
@@ -94,7 +95,7 @@ def _worktree_missing_probe(root: Path):
     launch?" without every call site reaching into the service
     directly.
     """
-    service = WorktreeService(build_workspace(root))
+    service = WorktreeService(workspace)
 
     def _probe(state) -> bool:
         return service.task_has_missing_recorded_worktree(state.task_id)
@@ -102,7 +103,7 @@ def _worktree_missing_probe(root: Path):
     return _probe
 
 
-def _worktree_metadata_repair(root: Path):
+def _worktree_metadata_repair(workspace: Workspace):
     """
     Build the stale-worktree-metadata repair for ``PreExecRecoveryNode``.
 
@@ -111,7 +112,7 @@ def _worktree_metadata_repair(root: Path):
     stale path on the task record so the next launch creates a fresh
     worktree instead of failing the existence check.
     """
-    service = WorktreeService(build_workspace(root))
+    service = WorktreeService(workspace)
 
     def _repair(state) -> None:
         service.clear_missing_recorded_worktree(state.task_id)

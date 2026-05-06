@@ -149,10 +149,10 @@ def run_task(
             execution_root_resolver=lambda state: _resolve_hook_execution_root(root, state),
         )
         commit_node = build_commit_node(root)
-        worktree_sync_node = _build_worktree_sync_node(root)
-        ready_node = ReadyNode(probes=[_worktree_missing_probe(root)])
+        worktree_sync_node = _build_worktree_sync_node(workspace)
+        ready_node = ReadyNode(probes=[_worktree_missing_probe(workspace)])
         pre_exec_recovery_node = PreExecRecoveryNode(
-            repairs=[_worktree_metadata_repair(root)],
+            repairs=[_worktree_metadata_repair(workspace)],
         )
         prompt_context = PromptContext(workspace=workspace, config=config)
         hook_specs = hook_specs_from_config(config)
