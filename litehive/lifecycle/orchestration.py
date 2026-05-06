@@ -23,6 +23,7 @@ caller can render.
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from litehive.config.loading import load_config
 from litehive.config.engine_models import resolve_task_rejection_loop_limit, resolve_task_retry_policy
 from litehive.git.ops import GitError
 from litehive.domain.common import PipelineState
@@ -118,8 +119,8 @@ def run_task(
     it in place of the real ``heru_engine_factory``.
     """
     root = root.resolve()
+    config = load_config(root)
     workspace = Workspace.from_path(root)
-    config = workspace.config()
 
     with workspace_runner_guard(root):
         persistence = SqlitePersistence(
@@ -241,31 +242,31 @@ def _observe_transition(
     task = get_task(workspace.root, state.task_id)
     if task is None:
         return
-    match event:
-        case HookOk(warnings=warnings) if warnings:
-            _record_hook_warnings(
-                workspace,
-                task,
-                phase=from_stage,
-                warnings=warnings,
-            )
-        case Reject(source="hook"):
-            hook = event.metadata.get("hook")
-            if isinstance(hook, dict):
-                hook_arg = hook
-            else:
-                hook_arg = None
-            consecutive_same_hook_rejects = event.metadata.get("consecutive_same_hook_rejects")
-            if isinstance(consecutive_same_hook_rejects, int):
-                consecutive_same_hook_rejects_arg = consecutive_same_hook_rejects
-            else:
-                consecutive_same_hook_rejects_arg = None
-            _record_hook_reject(
-                workspace,
-                task,
-                phase=from_stage,
-                reason=event.reason,
-                warnings=[str(item) for item in event.metadata.get("warnings", [])],
-                hook=hook_arg,
-                consecutive_same_hook_rejects=consecutive_same_hook_rejects_arg,
-            )
+    if isinstance(event, HookOk) and event.warnings:
+        _record_hook_warnings(
+            workspace,
+            task,
+            phase=from_stage,
+            warnings=event.warnings,
+        )
+        return
+    if isinstance(event, Reject) and event.source == "hook":
+        hook = event.metadata.get("hook")
+        if isinstance(hook, dict):
+            hook_arg = hook
+        else:
+            hook_arg = None
+        consecutive_same_hook_rejects = event.metadata.get("consecutive_same_hook_rejects")
+        if isinstance(consecutive_same_hook_rejects, int):
+            consecutive_same_hook_rejects_arg = consecutive_same_hook_rejects
+        else:
+            consecutive_same_hook_rejects_arg = None
+        _record_hook_reject(
+            workspace,
+            task,
+            phase=from_stage,
+            reason=event.reason,
+            warnings=[str(item) for item in event.metadata.get("warnings", [])],
+            hook=hook_arg,
+            consecutive_same_hook_rejects=consecutive_same_hook_rejects_arg,
+        )

@@ -18,7 +18,6 @@ from litehive.domain.task import (
     canonicalize_task_terminal_state,
 )
 from litehive.state.store import runtime_store
-from litehive.workspace import Workspace
 
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
 from litehive.state.locking import workspace_lock, workspace_mutation_guard
@@ -51,7 +50,7 @@ class TaskStateMissingError(RuntimeError):
     """
 
 
-def _highest_task_number_in_store(workspace: Workspace) -> int:
+def _highest_task_number_in_store(root: Path) -> int:
     """
     Return the largest ``T-NNNN`` numeric prefix actually present in the store.
 
@@ -59,10 +58,10 @@ def _highest_task_number_in_store(workspace: Workspace) -> int:
     ``next_task_number`` is missing or zero so a freshly bootstrapped
     workspace cannot reuse an existing id when the counter was lost.
     """
-    return runtime_store(workspace.root).highest_task_number()
+    return runtime_store(root).highest_task_number()
 
 
-def _reserve_next_task_numbers(workspace: Workspace, state, count: int = 1) -> list[int]:
+def _reserve_next_task_numbers(root, state, count: int = 1) -> list[int]:
     """
     Allocate the next ``count`` task numbers and advance the workspace counter.
 
@@ -74,13 +73,13 @@ def _reserve_next_task_numbers(workspace: Workspace, state, count: int = 1) -> l
     if count < 1:
         raise ValueError("count must be 1 or greater")
     if state.next_task_number <= 0:
-        state.next_task_number = _highest_task_number_in_store(workspace)
+        state.next_task_number = _highest_task_number_in_store(root)
     start = state.next_task_number + 1
     state.next_task_number += count
     return list(range(start, start + count))
 
 
-def _task_creation_stage(workspace: Workspace, current_task_id: str | None) -> str | None:
+def _task_creation_stage(root: Path, current_task_id: str | None) -> str | None:
     """
     Resolve the stage of the agent currently creating a sibling task.
 
@@ -94,7 +93,7 @@ def _task_creation_stage(workspace: Workspace, current_task_id: str | None) -> s
         return env_stage
     if not current_task_id:
         return None
-    current_task = get_task_record(workspace, current_task_id)
+    current_task = get_task_record(root, current_task_id)
     if current_task is None:
         return None
     runtime_stage = current_task.runtime.pipeline.current_stage.stage
@@ -106,7 +105,7 @@ def _task_creation_stage(workspace: Workspace, current_task_id: str | None) -> s
     return None
 
 
-def _default_task_creation_source(workspace: Workspace) -> TaskCreationSource:
+def _default_task_creation_source(root: Path) -> TaskCreationSource:
     """
     Build the provenance attached to a new task at create time.
 
@@ -128,13 +127,13 @@ def _default_task_creation_source(workspace: Workspace) -> TaskCreationSource:
     return TaskCreationSource(
         source="agent",
         task_id=current_task_id,
-        stage=_task_creation_stage(workspace, current_task_id=current_task_id),
+        stage=_task_creation_stage(root, current_task_id=current_task_id),
         role=agent_role,
         rationale=rationale,
     )
 
 
-def ensure_runtime_ignored(workspace: Workspace) -> None:
+def ensure_runtime_ignored(root: Path) -> None:
     """
     Refresh the workspace ``.gitignore`` after any persistence write.
 
@@ -143,7 +142,7 @@ def ensure_runtime_ignored(workspace: Workspace) -> None:
     every write keeps the ignore rules in sync with whatever the latest
     layout produces.
     """
-    ignore_path = workspace_gitignore_path(workspace.root)
+    ignore_path = workspace_gitignore_path(root)
     expected = render_workspace_gitignore()
     if not ignore_path.exists() or ignore_path.read_text(encoding="utf-8") != expected:
         ignore_path.write_text(expected, encoding="utf-8")
@@ -164,7 +163,7 @@ def task_state_for_storage(task: TaskRecord) -> TaskStateRecord:
     return task.to_storage_state_record()
 
 
-def write_task_runtime(workspace: Workspace, task: TaskRecord) -> None:
+def write_task_runtime(root: Path, task: TaskRecord) -> None:
     """
     Persist a task's runtime row without entering the workspace mutation guard.
 
@@ -172,8 +171,8 @@ def write_task_runtime(workspace: Workspace, task: TaskRecord) -> None:
     raw save; entering the guard here would force re-entry on a thread
     that has already taken it via a different pathway.
     """
-    runtime_store(workspace.root).save_task_state(task.id, task_state_for_storage(task))
-    ensure_runtime_ignored(workspace)
+    runtime_store(root).save_task_state(task.id, task_state_for_storage(task))
+    ensure_runtime_ignored(root)
 
 
 def set_task_commit_sha(task: TaskRecord, commit_sha: str | None) -> None:
@@ -316,7 +315,7 @@ def _cleanup_created_task_dirs(paths: list[Path]) -> list[OSError]:
 
 
 def _persist_created_tasks(
-    workspace: Workspace,
+    root: Path,
     *,
     tasks: list[TaskRecord],
     state: WorkspaceState,
@@ -339,7 +338,7 @@ def _persist_created_tasks(
 
     with skip_bootstrap_load_state():
         merged_state = merged_state_for_runner_owned_write(
-            workspace,
+            root,
             state=state,
             protected_task_ids=[task.id for task in tasks],
         )
@@ -354,7 +353,7 @@ def _persist_created_tasks(
             cannot be undone) only fires once the on-disk artifacts are
             safely in place.
             """
-            runtime_store(workspace.root).save_runtime_transaction(
+            runtime_store(root).save_runtime_transaction(
                 task_intents={task.id: task.to_intent_record() for task in tasks},
                 task_states={task.id: task_state_for_storage(task) for task in tasks},
                 workspace_state=merged_state,
@@ -373,7 +372,7 @@ def _persist_created_tasks(
         raise
 
 
-def save_task_runtime(workspace: Workspace, task: TaskRecord) -> None:
+def save_task_runtime(root: Path, task: TaskRecord) -> None:
     """
     Persist a task's runtime row under the workspace mutation guard.
 
@@ -382,11 +381,11 @@ def save_task_runtime(workspace: Workspace, task: TaskRecord) -> None:
     change; the guard makes the snapshot safe to take while a runner is
     also touching workspace state on a different transition.
     """
-    with workspace_mutation_guard(workspace.root):
-        write_task_runtime(workspace, task)
+    with workspace_mutation_guard(root):
+        write_task_runtime(root, task)
 
 
-def _load_task_runtime(workspace: Workspace, task: TaskRecord) -> TaskRecord:
+def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
     """
     Hydrate a task's runtime row from SQLite and run the normalisers.
 
@@ -395,7 +394,7 @@ def _load_task_runtime(workspace: Workspace, task: TaskRecord) -> TaskRecord:
     the ``TaskStateMissingError`` so diagnostics can still report on a
     half-deleted task.
     """
-    store = runtime_store(workspace.root)
+    store = runtime_store(root)
     task_state = store.load_task_state(task.id)
     if task_state is None:
         raise TaskStateMissingError(f"Task {task.id} is missing its SQLite runtime state row")
@@ -406,7 +405,7 @@ def _load_task_runtime(workspace: Workspace, task: TaskRecord) -> TaskRecord:
 
 
 def create_task(
-    workspace: Workspace,
+    root: Path,
     title: str,
     depends_on: list[str] | None = None,
     pipeline_mode: str = "full",
@@ -425,7 +424,7 @@ def create_task(
     priority validation, queue insertion, and audit emission all live
     in one place rather than being duplicated across entry points.
     """
-    ensure_workspace(workspace.root)
+    ensure_workspace(root)
     if retry_limit is not None and retry_limit < 0:
         raise ValueError("Retry limit must be 0 or greater")
     try:
@@ -437,12 +436,12 @@ def create_task(
     # inline: tasks.queue top-level-imports state.records (would cycle).
     from litehive.tasks.queue import validate_task_dependencies  # noqa: PLC0415
 
-    with workspace_lock(workspace.root):
-        state = load_state(workspace, bootstrap=False)
-        task_id = f"T-{_reserve_next_task_numbers(workspace, state)[0]:04d}"
+    with workspace_lock(root):
+        state = load_state(root, bootstrap=False)
+        task_id = f"T-{_reserve_next_task_numbers(root, state)[0]:04d}"
         slug = slugify(title)
         if depends_on:
-            validate_task_dependencies(workspace, task_id=task_id, depends_on=depends_on)
+            validate_task_dependencies(root, task_id=task_id, depends_on=depends_on)
         task = TaskRecord(
             id=task_id,
             slug=slug,
@@ -454,14 +453,14 @@ def create_task(
             goal=goal,
             acceptance_criteria=normalize_acceptance_criteria(acceptance_criteria),
             retry_policy={"max_retries": retry_limit},
-            created_from=_default_task_creation_source(workspace),
+            created_from=_default_task_creation_source(root),
             git={
                 "auto_commit": auto_commit,
                 "commit_message": default_commit_message(task_id, slug),
             },
         )
 
-        base = workspace.task_dir(task, bootstrap=False)
+        base = task_dir(root, task, bootstrap=False)
         _create_task_runtime_dirs(base)
         state.queue.append(task.id)
         actor = "operator"
@@ -477,7 +476,7 @@ def create_task(
         else:
             created_from_payload = task.created_from.model_dump(mode="json")
         _persist_created_tasks(
-            workspace,
+            root,
             tasks=[task],
             state=state,
             task_journal_messages={task.id: "Task created."},
@@ -499,7 +498,7 @@ def create_task(
                 )
             ],
         )
-        ensure_runtime_ignored(workspace)
+        ensure_runtime_ignored(root)
         return task
 
 
