@@ -7,9 +7,7 @@ runtime/observability shape (``task.runtime.pipeline.*`` fields,
 """
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from litehive.container import build_workspace
 from litehive.domain.common import (
     OutcomeKind,
     OutcomeReasonCode,
@@ -34,11 +32,9 @@ from litehive.state.records import get_task, set_task_commit_sha
 from litehive.tasks.activity import latest_task_activity_entry
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.runtime import apply_task_outcome
+from litehive.workspace import Workspace
 
 from .persistence import FailedRunRecord, TaskState
-
-if TYPE_CHECKING:
-    from litehive.workspace import Workspace
 
 
 _MANUAL_REVIEW_FLAG_REASONS = {
@@ -312,7 +308,7 @@ def _sync_terminal_status(task_record: TaskRecord, state: TaskState) -> str | No
     return journal_message
 
 
-def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
+def _sync_back(state: TaskState, workspace: Workspace) -> TaskRecord | None:
     """
     Mirror the pipeline stage back to the TaskRecord.
 
@@ -321,10 +317,10 @@ def _sync_back(state: TaskState, workspace_root: Path) -> TaskRecord | None:
     operator-facing surfaces would drift from the actual lifecycle
     state until the task ends.
     """
+    workspace_root = workspace.root
     task_record = get_task(workspace_root, state.task_id)
     if task_record is None:
         return None
-    workspace = build_workspace(workspace_root)
     before_task = snapshot_task_audit_state(task_record)
     before_last_outcome = task_record.runtime.pipeline.last_outcome.model_copy(deep=True)
     _sync_runtime_fields(task_record, state)

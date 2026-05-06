@@ -230,7 +230,7 @@ def test_lifecycle_projection_overwrites_stale_runtime_failed_run_state(tmp_path
         count=1,
     )
 
-    refreshed = _sync_back(state, tmp_path)
+    refreshed = _sync_back(state, Workspace.from_path(tmp_path))
 
     assert refreshed is not None
     assert set(refreshed.runtime.pipeline.failed_run_history) == {"implementing:current"}

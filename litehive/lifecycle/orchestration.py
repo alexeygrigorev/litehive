@@ -77,7 +77,7 @@ __all__ = [
 ]
 
 
-def _sync_back_no_return(state: TaskState, root: Path) -> None:
+def _sync_back_no_return(state: TaskState, workspace: Workspace) -> None:
     """Adapter around ``_sync_back`` for the StateMachineRunner state_sync hook.
 
     ``_sync_back`` returns the updated TaskRecord for the orchestration code
@@ -85,7 +85,7 @@ def _sync_back_no_return(state: TaskState, root: Path) -> None:
     parameter is typed as ``(TaskState) -> None`` because the callback's
     return value is never consumed.
     """
-    _sync_back(state, root)
+    _sync_back(state, workspace)
 
 
 @dataclass
@@ -176,7 +176,7 @@ def run_task(
             registry,
             persistence,
             journal=journal,
-            state_sync=lambda state: _sync_back_no_return(state, root),
+            state_sync=lambda state: _sync_back_no_return(state, workspace),
             transition_observer=lambda state, from_stage, event, trans: _observe_transition(
                 workspace,
                 state,
@@ -199,7 +199,7 @@ def run_task(
                 raise
 
         # 4. Mirror terminal state back to the TaskRecord.
-        updated_task = _sync_back(final_state, root) or task
+        updated_task = _sync_back(final_state, workspace) or task
         if final_state.stage in {PipelineState.DONE, PipelineState.FAILED}:
             reconciled_task = reconcile_terminal_commit_sha(
                 root,
