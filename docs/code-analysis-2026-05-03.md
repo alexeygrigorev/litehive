@@ -516,8 +516,14 @@ The recording asked for "step by step, never break things". Order:
 12. **String-typed domain values** (P4). In progress. The small task
     normalization/status outcome slices have been migrated to typed
     `PipelineStatus`, `OutcomeKind`, and `OutcomeReasonCode` values.
-    Continue file by file before tackling
-    `lifecycle/prompt_serializer.py`.
+    Lifecycle mode and verdict routing now use the canonical domain
+    `PipelineMode` / `Verdict` enums, and the prompt activity trimmer
+    uses typed `TaskStage` / `Verdict` comparisons. Remaining raw
+    strings are mostly persisted literal fields, execution-status
+    markers without a domain enum yet, and larger prompt / adapter
+    extraction targets. Continue file by file; do not coerce persisted
+    `StageReport` / `TaskActivityEntry` literal fields to enum objects
+    unless their model types are widened first.
 
 Each step lands as its own commit. Tests must be green between
 steps. UI / CLI smoke checks (`litehive --help`,
