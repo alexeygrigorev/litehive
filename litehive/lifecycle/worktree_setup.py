@@ -12,7 +12,7 @@ from pathlib import Path
 from litehive.domain.common import PipelineState, TaskExecutionStatus, TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import current_head
-from litehive.state.persist import load_state, save_state
+from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
 from litehive.state.records import (
     get_task,
     get_task_worktree_path,
@@ -120,19 +120,20 @@ def _worktree_metadata_repair(workspace: Workspace):
     return _repair
 
 
-def _mark_task_interrupted_on_crash(root: Path, task: TaskRecord) -> None:
+def _mark_task_interrupted_on_crash(workspace: Workspace, task: TaskRecord) -> None:
     """Best-effort cleanup when run_task raises an unexpected exception.
 
     Clears active_task_id and marks the task as interrupted so the next
     runner start can resume it instead of finding stale "running" state.
     """
+    root = workspace.root
     try:
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         if state.active_task_id == task.id:
             state.active_task_id = None
             if task.id not in state.queue:
                 state.queue.insert(0, task.id)
-            save_state(root, state)
+            save_state_for_workspace(workspace, state)
         fresh = get_task(root, task.id)
         if fresh is not None and fresh.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING:
             fresh.runtime.pipeline.execution_status = TaskExecutionStatus.INTERRUPTED
@@ -142,16 +143,17 @@ def _mark_task_interrupted_on_crash(root: Path, task: TaskRecord) -> None:
         pass  # best-effort — don't mask the original crash
 
 
-def _cleanup_terminal_worktree(root: Path, task: TaskRecord | None) -> None:
+def _cleanup_terminal_worktree(workspace: Workspace, task: TaskRecord | None) -> None:
     """Tear down a finished task's worktree, but preserve worktrees for tasks flagged for manual review so an operator can inspect them."""
     if task is None:
         return
+    root = workspace.root
     fresh = get_task(root, task.id)
     if fresh is not None:
         task = fresh
     if task.status == TaskStatus.FLAGGED and task.flag_reason in _MANUAL_REVIEW_FLAG_REASONS:
         return
-    cleanup_terminal_task_worktree(root, task)
+    WorktreeService(workspace).cleanup_terminal_task_worktree(task)
 
 
 def reconcile_terminal_commit_sha(

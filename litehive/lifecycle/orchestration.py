@@ -216,7 +216,7 @@ def run_task_for_workspace(
             except BaseException:
                 # Runner crashed — mark task as interrupted so it can be
                 # resumed instead of leaving stale "running" state behind.
-                _mark_task_interrupted_on_crash(root, task)
+                _mark_task_interrupted_on_crash(workspace, task)
                 raise
 
         # 4. Mirror terminal state back to the TaskRecord.
@@ -231,7 +231,7 @@ def run_task_for_workspace(
             updated_task = reconciled_task or updated_task
             _clear_terminal_task_from_workspace_state(workspace, updated_task.id)
             try:
-                _cleanup_terminal_worktree(root, updated_task)
+                _cleanup_terminal_worktree(workspace, updated_task)
             except GitError:
                 pass
 
