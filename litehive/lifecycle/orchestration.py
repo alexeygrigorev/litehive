@@ -23,7 +23,7 @@ caller can render.
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from litehive.config.loading import load_config
+from litehive.container import build_container
 from litehive.config.engine_models import resolve_task_rejection_loop_limit, resolve_task_retry_policy
 from litehive.git.ops import GitError
 from litehive.domain.common import PipelineState
@@ -119,8 +119,9 @@ def run_task(
     it in place of the real ``heru_engine_factory``.
     """
     root = root.resolve()
-    config = load_config(root)
-    workspace = Workspace.from_path(root)
+    container = build_container(root)
+    config = container.config
+    workspace = container.workspace
 
     with workspace_runner_guard(root):
         persistence = SqlitePersistence(
