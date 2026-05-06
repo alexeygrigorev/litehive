@@ -8,10 +8,11 @@ prior progress they preserve and how they pick the re-entry stage.
 
 from pathlib import Path
 
-from litehive.container import build_container
+from litehive.container import build_workspace
 from litehive.git.ops import GitError, current_head, path_differs_at_ref
 from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStage, TaskStatus
 from litehive.domain.task import TaskRecord
+from litehive.workspace import Workspace
 
 from litehive.tasks.constants import (
     CLOSED_TASK_STATUSES,
@@ -55,7 +56,7 @@ from litehive.worktree.paths import resolve_recorded_worktree_path
 
 
 def _requeue_task_transition(
-    root: Path,
+    workspace: Workspace,
     task_id: str,
     front: bool = False,
     force: bool = False,
@@ -70,6 +71,7 @@ def _requeue_task_transition(
     is what turns the activity feed into an honest record after the task is
     requeued.
     """
+    root = workspace.root
 
     def _task_checkout_path(task: TaskRecord) -> Path:
         """
@@ -101,7 +103,6 @@ def _requeue_task_transition(
             raise ValueError(str(exc)) from exc
 
     with workspace_lock(root):
-        workspace = build_container(root).workspace
         task = get_task_record(root, task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
@@ -162,7 +163,7 @@ def _requeue_task_transition(
         return task
 
 
-def _resume_task_transition(root: Path, task_id: str, front: bool = False) -> TaskRecord:
+def _resume_task_transition(workspace: Workspace, task_id: str, front: bool = False) -> TaskRecord:
     """
     Pick the right pipeline stage and queue an interrupted/parked/flagged task.
 
@@ -171,8 +172,8 @@ def _resume_task_transition(root: Path, task_id: str, front: bool = False) -> Ta
     requested-retry shapes so the next run starts from a clean verdict.
     """
 
+    root = workspace.root
     with workspace_lock(root):
-        workspace = build_container(root).workspace
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
         state = load_state(root)
@@ -246,7 +247,7 @@ def requeue_task(
     imports of ``requeue_task`` from ``litehive.tasks.status`` keep working.
     """
     return _requeue_task_transition(
-        root,
+        build_workspace(root),
         task_id,
         front=front,
         force=force,
@@ -263,4 +264,4 @@ def resume_task(root: Path, task_id: str, front: bool = False) -> TaskRecord:
     last working on; thin shim around ``_resume_task_transition`` for the
     public surface importable via ``litehive.tasks.status``.
     """
-    return _resume_task_transition(root, task_id, front=front)
+    return _resume_task_transition(build_workspace(root), task_id, front=front)
