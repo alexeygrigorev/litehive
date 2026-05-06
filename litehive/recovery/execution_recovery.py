@@ -25,9 +25,9 @@ from litehive.state.locking import (
     workspace_lock,
 )
 from litehive.state.persist import (
-    load_state as load_workspace_state,
-    persist_tasks_and_state_without_runner_guard,
-    save_state_without_runner_guard,
+    load_state_for_workspace,
+    persist_tasks_and_state_without_runner_guard_for_workspace,
+    save_state_without_runner_guard_for_workspace,
 )
 from litehive.state.records import list_tasks
 from litehive.workspace import Workspace
@@ -55,7 +55,7 @@ def recover_stale_runner_state_for_workspace(
     """
     root = workspace.root
     with workspace_lock(root):
-        state = load_workspace_state(root)
+        state = load_state_for_workspace(workspace)
         running_task_ids = _running_task_ids(workspace)
         if _can_skip_recovery_scan(
             root,
@@ -107,14 +107,14 @@ def recover_stale_runner_state_for_workspace(
         ):
             mutated = True
         if transitioned:
-            persist_tasks_and_state_without_runner_guard(
-                root,
+            persist_tasks_and_state_without_runner_guard_for_workspace(
+                workspace,
                 tasks=transitioned,
                 state=state,
                 journal_messages=journal_messages,
             )
         elif mutated:
-            save_state_without_runner_guard(root, state)
+            save_state_without_runner_guard_for_workspace(workspace, state)
         return mutated
 
 
