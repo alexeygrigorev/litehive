@@ -18,7 +18,7 @@ from litehive.cli.engine import engine_command
 from litehive.cli.display import format_retry_on
 from litehive.cli.common import WorkspaceOption
 from litehive.config.workspace import ensure_workspace
-from litehive.container import build_container
+from litehive.container import build_container, build_workspace
 from litehive.daemon.registry import daemon_metadata
 from litehive.domain.common import TaskStatus
 from litehive.observability.status import (
@@ -212,10 +212,10 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     the operator can also force a full reconciliation pass.
     """
     ensure_workspace(workspace)
-    container = build_container(workspace)
+    workspace_obj = build_workspace(workspace)
     start_time = time.perf_counter()
     try:
-        summary = repair_workspace_state(container.workspace)
+        summary = repair_workspace_state(workspace_obj)
     except WorkspaceConflictError as exc:
         print(f"repair failed: {exc}")
         return 1
