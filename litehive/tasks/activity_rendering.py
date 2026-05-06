@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Iterable
 
 from litehive.container import build_container
-from litehive.domain.common import TaskStage
+from litehive.domain.common import TaskStage, Verdict
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.tasks.activity import append_task_activity, load_task_activity
@@ -68,7 +68,7 @@ def is_retractable_pass_entry(entry: TaskActivityEntry) -> bool:
     invalidated by an empty diff.
     """
     return (
-        entry.verdict == "pass"
+        entry.verdict == Verdict.PASS
         and entry.stage in _RETRACTABLE_STEPS
         and bool(normalized_files_changed(entry.files_changed))
     )
