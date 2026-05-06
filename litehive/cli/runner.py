@@ -42,7 +42,6 @@ from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection
 from litehive.tasks.activity import append_task_activity
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.state.locking import runner_status
-from litehive.workspace import Workspace
 
 
 def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: typer.Typer) -> None:
@@ -556,7 +555,8 @@ def report_command(
         message=message,
         files_changed=list(files_changed or []),
     )
-    append_task_activity(Workspace.from_path(root), task, entry)
+    container = build_container(root)
+    append_task_activity(container.workspace, task, entry)
     print(f"task: {task.id}")
     print(f"stage: {stage}")
     print(f"verdict: {verdict}")

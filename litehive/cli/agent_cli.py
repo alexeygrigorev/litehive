@@ -19,6 +19,7 @@ from typing import Annotated, cast
 import typer
 
 from litehive.agents.session_store import load_subagent_session
+from litehive.container import build_container
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.workspace import Workspace
 
@@ -140,7 +141,7 @@ class AgentReportIdentity:
     subagent_id: str
 
 
-def _resolve_report_identity(root: Path, task) -> AgentReportIdentity:
+def _resolve_report_identity(workspace: Workspace, task) -> AgentReportIdentity:
     """
     Resolve the verdict-submitting agent's identity from the session store.
 
@@ -156,7 +157,7 @@ def _resolve_report_identity(root: Path, task) -> AgentReportIdentity:
         print("report failed: LITEHIVE_SUBAGENT_ID not set")
         raise SystemExit(1)
 
-    session = load_subagent_session(Workspace.from_path(root), task.id, subagent_id)
+    session = load_subagent_session(workspace, task.id, subagent_id)
     if not session:
         print(f"report failed: subagent session {subagent_id} not found for task {task.id}")
         raise SystemExit(1)
@@ -263,11 +264,13 @@ def agent_report_command(
     if not tid:
         print("report failed: no task id")
         raise SystemExit(1)
+    container = build_container(root)
+    workspace_obj = container.workspace
     task = get_task_record(root, tid)
     if task is None:
         print(f"report failed: task {tid} not found")
         raise SystemExit(1)
-    identity = _resolve_report_identity(root, task)
+    identity = _resolve_report_identity(workspace_obj, task)
     agent_role = identity.role
 
     allowed = _allowed_verdicts_for_role(agent_role)
@@ -299,7 +302,7 @@ def agent_report_command(
             raise SystemExit(1)
 
     try:
-        pipeline_state = SqlitePersistence(Workspace.from_path(root)).load(tid)
+        pipeline_state = SqlitePersistence(workspace_obj).load(tid)
         pipeline_stage = pipeline_state.stage
     except TaskNotFound:
         pipeline_stage = None
@@ -320,7 +323,7 @@ def agent_report_command(
         source_subagent_id=identity.subagent_id,
         follow_up_task_id=normalized_follow_up_task,
     )
-    append_task_activity(Workspace.from_path(root), task, entry)
+    append_task_activity(workspace_obj, task, entry)
     print(f"task: {task.id}")
     print(f"stage: {actual_stage}")
     print(f"verdict: {normalized_verdict}")
