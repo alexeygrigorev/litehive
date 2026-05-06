@@ -30,6 +30,7 @@ from litehive.tasks.paths import runner_lock_path
 
 if TYPE_CHECKING:
     from litehive.tasks.audit import TaskAuditEntry
+    from litehive.workspace import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -460,7 +461,7 @@ def runner_conflict_message(root: Path) -> str:
     )
 
 
-def _auto_repair_stale_state(root: Path) -> None:
+def _auto_repair_stale_state(workspace: "Workspace") -> None:
     """
     Clear stale ``active_task_id`` and running execution statuses on startup.
 
@@ -474,7 +475,7 @@ def _auto_repair_stale_state(root: Path) -> None:
     from litehive.recovery.workspace_repair import repair_workspace_state  # noqa: PLC0415
 
     try:
-        result = repair_workspace_state(build_workspace(root))
+        result = repair_workspace_state(workspace)
         if result.mutated:
             import sys  # noqa: PLC0415
 
@@ -499,6 +500,7 @@ def workspace_runner_guard(root: Path):
     entry-point — every other guard helper layers on top of this.
     """
     root = root.resolve()
+    workspace = build_workspace(root)
     owner_thread_id = threading.get_ident()
     manager = _runner_lock_manager(root, held_in_process=lambda: root in RUNNER_LOCKS)
     with RUNNER_LOCKS_MUTEX:
@@ -533,7 +535,7 @@ def workspace_runner_guard(root: Path):
         # Auto-repair stale state left by a crashed runner.  We hold the
         # exclusive flock, so no other runner is alive — any active_task_id
         # or "running" execution_status is leftover from a dead process.
-        _auto_repair_stale_state(root)
+        _auto_repair_stale_state(workspace)
         now = utcnow()
         status = RunnerStatusState(
             status=RunnerStatus.RUNNING,
