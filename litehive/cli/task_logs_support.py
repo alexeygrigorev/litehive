@@ -15,12 +15,12 @@ import time
 from litehive.agents.session_store import load_subagent_session
 from litehive.cli.task_debug_support import render_task_evidence
 from litehive.config.paths import workspace_path
+from litehive.container import build_container
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.domain.task import TaskRecord
 from litehive.state.records import get_task_record, list_tasks
 from litehive.tasks.journal import render_task_journal
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
-from litehive.workspace import Workspace
 
 _DEFAULT_TAIL_LINES = 40
 FOLLOW_POLL_SECONDS = 0.1
@@ -84,7 +84,8 @@ def show_task_journal(root: Path, task: TaskRecord) -> int:
     can pass ``--agent`` to drop into the subagent evidence view
     instead.
     """
-    journal = render_task_journal(Workspace.from_path(root), task)
+    container = build_container(root)
+    journal = render_task_journal(container.workspace, task)
     if not journal:
         print(f"{task.id}: journal not found")
         return 0
@@ -122,7 +123,8 @@ def list_task_subagents(root: Path, task: TaskRecord) -> int:
     if task.runtime.execution.active_subagent is not None:
         runtime_by_id[task.runtime.execution.active_subagent.id] = task.runtime.execution.active_subagent
 
-    workspace = Workspace.from_path(root)
+    container = build_container(root)
+    workspace = container.workspace
     for ref in reversed(task.subagents):
         runtime_state = runtime_by_id.get(ref.id)
         session = load_subagent_session(workspace, task.id, ref.id)

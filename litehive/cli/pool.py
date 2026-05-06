@@ -1,7 +1,7 @@
 from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
+from litehive.container import build_container
 from litehive.state.records import list_tasks
 from litehive.tasks.report_storage import load_stage_reports_for_task_id
-from litehive.workspace import Workspace
 
 
 def task_stage_outcomes(root, task_id, slug):
@@ -14,7 +14,8 @@ def task_stage_outcomes(root, task_id, slug):
     but unused — the SQLite report store keys reports by task id.
     """
     del slug
-    reports = load_stage_reports_for_task_id(Workspace.from_path(root), task_id)
+    container = build_container(root)
+    reports = load_stage_reports_for_task_id(container.workspace, task_id)
     outcomes: list[str] = []
     for report in reports:
         outcomes.append(f"{report.pipeline_state}={report.verdict}")
@@ -99,7 +100,10 @@ def _resumable_pool_tasks(root):
     """
     resumable = []
     for task in list_tasks(root):
-        if task.status not in {TaskStatus.INTERRUPTED, TaskStatus.PARKED} or task.pipeline_status == PipelineStatus.DONE:
+        if (
+            task.status not in {TaskStatus.INTERRUPTED, TaskStatus.PARKED}
+            or task.pipeline_status == PipelineStatus.DONE
+        ):
             continue
         resumable.append(
             _pool_task_report_entry(
