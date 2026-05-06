@@ -9,7 +9,7 @@ SHA reconciliation).
 
 from pathlib import Path
 
-from litehive.domain.common import PipelineState, TaskStatus
+from litehive.domain.common import PipelineState, TaskExecutionStatus, TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import current_head
 from litehive.state.persist import load_state, save_state
@@ -132,8 +132,8 @@ def _mark_task_interrupted_on_crash(root: Path, task: TaskRecord) -> None:
                 state.queue.insert(0, task.id)
             save_state(root, state)
         fresh = get_task(root, task.id)
-        if fresh is not None and fresh.runtime.pipeline.execution_status == "running":
-            fresh.runtime.pipeline.execution_status = "interrupted"
+        if fresh is not None and fresh.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING:
+            fresh.runtime.pipeline.execution_status = TaskExecutionStatus.INTERRUPTED
             fresh.status = TaskStatus.QUEUED
             save_task(root, fresh)
     except Exception:

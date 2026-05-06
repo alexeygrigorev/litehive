@@ -11,6 +11,7 @@ from pathlib import Path
 from litehive.domain.common import (
     PipelineState,
     PipelineStatus,
+    TaskExecutionStatus,
     TaskStage,
     canonical_pipeline_state,
 )
@@ -155,7 +156,10 @@ def _launch_requires_fresh_pipeline_state(task_record: TaskRecord) -> bool:
     mid-flight (``running``) keep their existing pipeline state — we
     do not reset under a live runner.
     """
-    return _entry_stage_for_task(task_record) is not None and task_record.runtime.pipeline.execution_status != "running"
+    return (
+        _entry_stage_for_task(task_record) is not None
+        and task_record.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING
+    )
 
 
 def _stale_launch_state_requires_reset(

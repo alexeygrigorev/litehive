@@ -22,7 +22,7 @@ from litehive.config.paths import workspace_path
 from litehive.config.registry import workspace_registry_error, workspace_registry_path
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.daemon.registry import daemon_metadata
-from litehive.domain.common import PipelineStatus, TaskStatus
+from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStatus
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.observability.status_io import _heartbeat_age_seconds
@@ -414,7 +414,10 @@ def _live_active_pipeline_stage(active_task_id: str | None, tasks: list[TaskReco
     if active_task is None:
         return None
     current_stage = active_task.runtime.pipeline.current_stage
-    if active_task.runtime.pipeline.execution_status == "running" or current_stage.status == "running":
+    if (
+        active_task.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING
+        or current_stage.status == "running"
+    ):
         return current_stage.stage or active_task.pipeline_status
     return None
 

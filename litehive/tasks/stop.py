@@ -17,7 +17,7 @@ import signal
 import time
 from pathlib import Path
 
-from litehive.domain.common import PipelineStatus, TaskStage, TaskStatus, utcnow
+from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStage, TaskStatus, utcnow
 from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.domain.task_ops import StopTaskSummary, WorkspaceConflictError
@@ -78,7 +78,7 @@ def _stop_active_task_without_runner_guard(root: Path, task_id: str) -> TaskReco
         # Park the task - this is intentional operator action, not system interruption
         now = utcnow()
         task.status = TaskStatus.PARKED
-        task.runtime.pipeline.execution_status = "idle"
+        task.runtime.pipeline.execution_status = TaskExecutionStatus.IDLE
         task.runtime.pipeline.run_started_at = None
         task.runtime.pipeline.updated_at = now
         task.runtime.execution.active_subagent = None

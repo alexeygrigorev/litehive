@@ -10,7 +10,7 @@ from pathlib import Path
 
 from litehive.container import build_container
 from litehive.git.ops import GitError, current_head, path_differs_at_ref
-from litehive.domain.common import PipelineStatus, TaskStage, TaskStatus
+from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStage, TaskStatus
 from litehive.domain.task import TaskRecord
 
 from litehive.tasks.constants import (
@@ -180,11 +180,12 @@ def _resume_task_transition(root: Path, task_id: str, front: bool = False) -> Ta
         resumed_stage = resumable_queue_stage(task)
         stranded_in_progress = (
             task.status == TaskStatus.IN_PROGRESS
-            and task.runtime.pipeline.execution_status in {"interrupted", "idle"}
+            and task.runtime.pipeline.execution_status
+            in {TaskExecutionStatus.INTERRUPTED, TaskExecutionStatus.IDLE}
             and resumed_stage is not None
         )
         already_queued_resumable = task.status == TaskStatus.QUEUED and resumed_stage is not None
-        if state.active_task_id == task.id and task.runtime.pipeline.execution_status != "running":
+        if state.active_task_id == task.id and task.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING:
             state.active_task_id = None
         ensure_future_task_mutation_allowed(root, [task.id], state=state)
         if (

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, TextIO, cast
 
 from litehive.container import build_workspace
 from litehive.config.workspace_files import workspace_dir
-from litehive.domain.common import RunnerStatus, utcnow
+from litehive.domain.common import RunnerStatus, TaskExecutionStatus, utcnow
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.lock_manager import WorkspaceLockManager
@@ -198,7 +198,10 @@ def runner_status_needs_reconciliation(root: Path) -> bool:
     state = load_state(root)
     if state.active_task_id is not None:
         return True
-    return any(task.runtime.pipeline.execution_status == "running" for task in list_tasks(root, strict=False))
+    return any(
+        task.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING
+        for task in list_tasks(root, strict=False)
+    )
 
 
 def clear_runner_lock_metadata(root: Path) -> None:
@@ -394,7 +397,7 @@ def subagent_process_is_stale(task: "TaskRecord") -> bool:
     the runtime claims the task is running, so a deliberately-finished
     subagent does not look stale.
     """
-    if task.runtime.pipeline.execution_status != "running":
+    if task.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING:
         return False
     active = task.runtime.execution.active_subagent
     if active is None or active.pid is None:
@@ -607,13 +610,13 @@ def ensure_future_task_mutation_allowed(
             marker_set == {"workspace.active_task_id"}
             and task is not None
             and not is_task_eligible_for_execution(task)
-            and task.runtime.pipeline.execution_status != "running"
+            and task.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING
         ):
             continue
         if (
             marker_set == {"task.status=in_progress"}
             and task is not None
-            and task.runtime.pipeline.execution_status != "running"
+            and task.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING
         ):
             continue
         conflicts.append(f"{task_id} ({', '.join(markers[task_id])})")

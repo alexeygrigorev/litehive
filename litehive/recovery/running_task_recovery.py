@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 import sqlite3
 from typing import TypedDict
 
-from litehive.domain.common import PipelineStatus, TaskStatus
+from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStatus
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.task import TaskRecord
@@ -199,7 +199,7 @@ def update_active_task_after_recovery(
         or state.active_task_id in prioritized_ids
         or (
             active_task is not None
-            and active_task.runtime.pipeline.execution_status != "running"
+            and active_task.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING
             and active_task.id not in running_task_ids
             and not should_requeue_commit_stage_task(active_task)
         )
@@ -230,7 +230,7 @@ def _has_inactive_running_tasks(
     distinguish from a healthy long-running task.
     """
     for task in tasks_by_id.values():
-        if task.runtime.pipeline.execution_status != "running":
+        if task.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING:
             continue
         ts_str = last_event_timestamp(workspace, task)
         if ts_str is None:

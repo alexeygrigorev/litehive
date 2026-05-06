@@ -15,6 +15,7 @@ from litehive.domain.common import (
     OutcomeReasonCode,
     PipelineState,
     PipelineStatus,
+    TaskExecutionStatus,
     TaskStatus,
     pipeline_status_for_pipeline_state,
     task_stage_for_pipeline_state,
@@ -168,9 +169,9 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
     if state.stage in {PipelineState.DONE, PipelineState.FAILED}:
         # Set appropriate terminal execution status
         if state.stage == PipelineState.DONE:
-            task_record.runtime.pipeline.execution_status = "done"
+            task_record.runtime.pipeline.execution_status = TaskExecutionStatus.DONE
         else:  # PipelineState.FAILED
-            task_record.runtime.pipeline.execution_status = "failed"
+            task_record.runtime.pipeline.execution_status = TaskExecutionStatus.FAILED
         task_record.runtime.pipeline.current_stage = task_record.runtime.pipeline.current_stage.model_copy(
             update={
                 "stage": None,
@@ -185,7 +186,7 @@ def _sync_runtime_fields(task_record: TaskRecord, state: TaskState) -> None:
         started_at = current_stage.started_at
     else:
         started_at = now
-    task_record.runtime.pipeline.execution_status = "running"
+    task_record.runtime.pipeline.execution_status = TaskExecutionStatus.RUNNING
     task_record.runtime.pipeline.current_stage = current_stage.model_copy(
         update={
             "stage": state.stage,
