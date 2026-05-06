@@ -17,8 +17,8 @@ from litehive.state.locking import (
     workspace_lock,
 )
 from litehive.state.persist import (
-    load_state,
-    save_state_without_runner_guard,
+    load_state_for_workspace,
+    save_state_without_runner_guard_for_workspace,
 )
 from litehive.state.records import (
     require_task,
@@ -30,6 +30,7 @@ from litehive.tasks.queue_eligibility import (
     resumable_queue_stage,
 )
 from litehive.tasks.runtime import clear_task_run_activity, idle_stage_state
+from litehive.workspace import Workspace
 
 
 def enqueue_task(root: Path, task_id: str) -> WorkspaceState:
@@ -40,7 +41,14 @@ def enqueue_task(root: Path, task_id: str) -> WorkspaceState:
     ``enqueue_task_front``; queue inserts now go through ``move_queued_task``
     and ``prioritize_queued_tasks`` from the queue CLI.
     """
-    return _enqueue_task(root, task_id, front=False)
+    return enqueue_task_for_workspace(Workspace.from_path(root), task_id)
+
+
+def enqueue_task_for_workspace(workspace: Workspace, task_id: str) -> WorkspaceState:
+    """
+    Append a task to the back of the workspace queue.
+    """
+    return _enqueue_task_for_workspace(workspace, task_id, front=False)
 
 
 def enqueue_task_front(root: Path, task_id: str) -> WorkspaceState:
@@ -50,10 +58,24 @@ def enqueue_task_front(root: Path, task_id: str) -> WorkspaceState:
     No callers — see ``enqueue_task``; both wrappers look like dead weight
     that is preserved only so the legacy public surface keeps compiling.
     """
-    return _enqueue_task(root, task_id, front=True)
+    return enqueue_task_front_for_workspace(Workspace.from_path(root), task_id)
+
+
+def enqueue_task_front_for_workspace(workspace: Workspace, task_id: str) -> WorkspaceState:
+    """
+    Insert a task at the head of the workspace queue.
+    """
+    return _enqueue_task_for_workspace(workspace, task_id, front=True)
 
 
 def _enqueue_task(root: Path, task_id: str, front: bool) -> WorkspaceState:
+    """
+    Path-based compatibility wrapper for queue insertion.
+    """
+    return _enqueue_task_for_workspace(Workspace.from_path(root), task_id, front=front)
+
+
+def _enqueue_task_for_workspace(workspace: Workspace, task_id: str, front: bool) -> WorkspaceState:
     """
     Shared body of ``enqueue_task`` / ``enqueue_task_front``.
 
@@ -62,8 +84,9 @@ def _enqueue_task(root: Path, task_id: str, front: bool) -> WorkspaceState:
     wrappers are currently dead code, but this helper is preserved alongside
     them in case they are re-introduced.
     """
+    root = workspace.root
     with workspace_lock(root):
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         ensure_future_task_mutation_allowed(root, [task_id], state=state)
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
@@ -73,8 +96,8 @@ def _enqueue_task(root: Path, task_id: str, front: bool) -> WorkspaceState:
             state.queue.insert(0, task_id)
         else:
             state.queue.append(task_id)
-        save_state_without_runner_guard(
-            root,
+        save_state_without_runner_guard_for_workspace(
+            workspace,
             state,
             audit_entries=[
                 build_task_audit_entry(
@@ -95,6 +118,13 @@ def _enqueue_task(root: Path, task_id: str, front: bool) -> WorkspaceState:
 
 def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
     """
+    Path-based compatibility wrapper for queue reordering.
+    """
+    return move_queued_task_for_workspace(Workspace.from_path(root), task_id, position)
+
+
+def move_queued_task_for_workspace(workspace: Workspace, task_id: str, position: int) -> WorkspaceState:
+    """
     Reorder a queued task to a 1-based position and record an audit entry.
 
     The ``litehive queue move`` CLI calls this when an operator hand-curates
@@ -104,8 +134,9 @@ def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
     """
     if position < 1:
         raise ValueError("Queue position must be 1 or greater")
+    root = workspace.root
     with workspace_lock(root):
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         ensure_future_task_mutation_allowed(root, [task_id], state=state)
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
@@ -116,8 +147,8 @@ def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
         target_index = min(position - 1, len(queue))
         queue.insert(target_index, task_id)
         state.queue = queue
-        save_state_without_runner_guard(
-            root,
+        save_state_without_runner_guard_for_workspace(
+            workspace,
             state,
             audit_entries=[
                 build_task_audit_entry(
@@ -171,6 +202,13 @@ def _prioritize_audit_entries(
 
 def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
     """
+    Path-based compatibility wrapper for bulk queue prioritization.
+    """
+    return prioritize_queued_tasks_for_workspace(Workspace.from_path(root), task_ids)
+
+
+def prioritize_queued_tasks_for_workspace(workspace: Workspace, task_ids: list[str]) -> WorkspaceState:
+    """
     Hoist the given queued tasks to the front of the queue, in order.
 
     Called by the ``litehive queue prioritize`` CLI when an operator wants
@@ -190,8 +228,9 @@ def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
     if duplicates:
         joined = ", ".join(sorted(duplicates))
         raise ValueError(f"Task ids must be unique: {joined}")
+    root = workspace.root
     with workspace_lock(root):
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         ensure_future_task_mutation_allowed(root, task_ids, state=state)
         queue_before = list(state.queue)
         missing = [task_id for task_id in task_ids if task_id not in state.queue]
@@ -209,8 +248,8 @@ def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
             queue_before=queue_before,
             queue_after=state.queue,
         )
-        save_state_without_runner_guard(
-            root,
+        save_state_without_runner_guard_for_workspace(
+            workspace,
             state,
             audit_entries=audit_entries,
         )

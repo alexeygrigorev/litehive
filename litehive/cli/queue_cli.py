@@ -20,8 +20,8 @@ from litehive.state.records import get_task_record, list_tasks, require_task
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
-from litehive.state.persist import load_state
-from litehive.tasks.queue import move_queued_task, prioritize_queued_tasks
+from litehive.state.persist import load_state_for_workspace
+from litehive.tasks.queue import move_queued_task_for_workspace, prioritize_queued_tasks_for_workspace
 from litehive.tasks.status import (
     requeue_task_for_workspace,
     resume_task_for_workspace,
@@ -48,7 +48,7 @@ def queue_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> 
     root = workspace_obj.root
     config = workspace_obj.config()
     recover_stale_runner_state_for_workspace(workspace_obj)
-    state = load_state(root)
+    state = load_state_for_workspace(workspace_obj)
     tasks = list_tasks(root)
     print(f"active_task_id: {state.active_task_id}")
     if state.active_task_id is not None:
@@ -98,8 +98,9 @@ def move(
     behave predictably.
     """
     ensure_workspace(workspace)
+    workspace_obj = build_workspace(workspace)
     try:
-        state = move_queued_task(workspace, task_id, position)
+        state = move_queued_task_for_workspace(workspace_obj, task_id, position)
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"move failed: {exc}")
         return 1
@@ -135,7 +136,7 @@ def promote(
                 print(f"warning: {missing_criteria_reason}")
             print("position: 1")
             return 0
-        move_queued_task(workspace, task_id, 1)
+        move_queued_task_for_workspace(workspace_obj, task_id, 1)
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"promote failed: {exc}")
         return 1
@@ -171,7 +172,7 @@ def requeue(
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"requeue failed: {exc}")
         return 1
-    state = load_state(workspace)
+    state = load_state_for_workspace(workspace_obj)
     print(f"task: {task.id} {task.title}")
     print("status: queued")
     print(f"pipeline_stage: {task.pipeline_status}")
@@ -204,7 +205,7 @@ def resume(
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"resume failed: {exc}")
         return 1
-    state = load_state(workspace)
+    state = load_state_for_workspace(workspace_obj)
     print(f"task: {task.id} {task.title}")
     print("status: queued")
     print(f"pipeline_stage: {task.pipeline_status}")
@@ -260,8 +261,9 @@ def prioritize(task_ids: list[str], workspace: Path) -> int:
     they were queued before.
     """
     ensure_workspace(workspace)
+    workspace_obj = build_workspace(workspace)
     try:
-        state = prioritize_queued_tasks(workspace, task_ids)
+        state = prioritize_queued_tasks_for_workspace(workspace_obj, task_ids)
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"prioritize failed: {exc}")
         return 1
@@ -361,7 +363,7 @@ def switch(
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"switch failed: {exc}")
         return 1
-    state = load_state(workspace)
+    state = load_state_for_workspace(workspace_obj)
     print(f"task: {summary.task.id} {summary.task.title}")
     print("status: queued")
     print(f"pipeline_stage: {summary.task.pipeline_status}")
