@@ -1,6 +1,11 @@
 from enum import Enum
 
-from litehive.domain.common import PipelineState, StringEnum, canonical_pipeline_state
+from litehive.domain.common import (
+    PipelineMode as PipelineMode,
+    PipelineState,
+    StringEnum,
+    canonical_pipeline_state,
+)
 
 
 class NodeType(str, Enum):
@@ -8,11 +13,6 @@ class NodeType(str, Enum):
     HOOK = "hook"
     SYSTEM = "system"
     TERMINAL = "terminal"
-
-
-class PipelineMode(str, Enum):
-    FULL = "full"
-    SINGLE = "single"
 
 
 AGENT_STAGES: tuple[PipelineState, ...] = (

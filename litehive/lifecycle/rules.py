@@ -17,6 +17,7 @@ from litehive.domain.lifecycle_deltas import (
     record_recovery_success,
     stash_conflict_files,
 )
+from .types import PipelineMode
 from .events import (
     Blocked,
     CleanState,
@@ -190,19 +191,19 @@ RULES: list[Rule] = [
         from_state=Stages.AFTER_IMPLEMENTING,
         on_event=HookOk,
         transition_to=Stages.DONE,
-        when=mode("single") & zero_change_shortcut(),
+        when=mode(PipelineMode.SINGLE) & zero_change_shortcut(),
     ),
     Rule(
         from_state=Stages.AFTER_IMPLEMENTING,
         on_event=HookOk,
         transition_to=Stages.COMMIT,
-        when=mode("single"),
+        when=mode(PipelineMode.SINGLE),
     ),
     Rule(
         from_state=Stages.AFTER_IMPLEMENTING,
         on_event=HookOk,
         transition_to=Stages.BEFORE_TESTING,
-        when=mode("full"),
+        when=mode(PipelineMode.FULL),
     ),
     # ── testing ─────────────────────────────────────────────
     Rule(

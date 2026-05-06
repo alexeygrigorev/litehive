@@ -29,7 +29,7 @@ from .guards import (
 )
 from .persistence import TaskState
 from .stages import Stage
-from .types import FailedReason, STAGES
+from .types import FailedReason, PipelineMode, STAGES
 
 ToFn = Callable[[TaskState, Event], PipelineState]
 ToSpec = PipelineState | str | ToFn | Stage
@@ -207,7 +207,7 @@ def entry_from_worktree_sync(state: TaskState, event: Event) -> PipelineState:
         return _entry_phase(state.entry_stage)
     if state.entry_stage:
         return canonical_pipeline_state(state.entry_stage)
-    if state.pipeline_mode == "single":
+    if state.pipeline_mode == PipelineMode.SINGLE:
         return PipelineState.BEFORE_IMPLEMENTING
     return PipelineState.BEFORE_GROOMING
 
