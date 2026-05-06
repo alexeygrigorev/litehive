@@ -15,7 +15,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.container import build_workspace
 from litehive.git.ops import GitError, checkpoint_message
 from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
-from litehive.tasks.completed_task_recovery import recover_completed_task
+from litehive.tasks.completed_task_recovery import recover_completed_task_for_workspace
 from litehive.state.records import get_task_record, list_tasks, require_task
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.task_ops import WorkspaceConflictError
@@ -302,8 +302,9 @@ def recover(task_id: str, workspace: Path) -> int:
     pick the right command.
     """
     ensure_workspace(workspace)
+    workspace_obj = build_workspace(workspace)
     try:
-        task = recover_completed_task(workspace, task_id)
+        task = recover_completed_task_for_workspace(workspace_obj, task_id)
     except (GitError, WorkspaceConflictError) as exc:
         print(f"recover failed: {exc}")
         return 1

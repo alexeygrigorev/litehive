@@ -9,8 +9,9 @@ from litehive.state.persist import load_state
 from litehive.tasks.normalization import implementation_entry_stage
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.queue import prepare_completed_task_for_recovery
-from litehive.state.locking import workspace_lock, workspace_mutation_guard
+from litehive.state.locking import workspace_lock, workspace_mutation_guard_for_workspace
 from litehive.state.persist import persist_task_and_state
+from litehive.workspace import Workspace
 
 
 def require_completed_task(task: TaskRecord, action: str) -> None:
@@ -27,6 +28,13 @@ def require_completed_task(task: TaskRecord, action: str) -> None:
 
 def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
     """
+    Path-based compatibility wrapper for completed-task recovery.
+    """
+    return recover_completed_task_for_workspace(Workspace.from_path(root), task_id)
+
+
+def recover_completed_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord:
+    """
     Re-queue a finished task for another implementation pass.
 
     Resets the pipeline state to the implementation entry stage and records
@@ -34,8 +42,8 @@ def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
     see who reopened the task. Called by ``litehive recover`` when an operator
     decides a closed task needs more work.
     """
-    root = root.resolve()
-    with workspace_mutation_guard(root), workspace_lock(root):
+    root = workspace.root
+    with workspace_mutation_guard_for_workspace(workspace), workspace_lock(root):
         from litehive.state.records import get_task  # noqa: PLC0415
         from litehive.tasks.queue import drop_task_from_workspace_state  # noqa: PLC0415
 
