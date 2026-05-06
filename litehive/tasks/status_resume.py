@@ -8,6 +8,7 @@ prior progress they preserve and how they pick the re-entry stage.
 
 from pathlib import Path
 
+from litehive.container import build_container
 from litehive.git.ops import GitError, current_head, path_differs_at_ref
 from litehive.domain.common import PipelineStatus, TaskStage, TaskStatus
 from litehive.domain.task import TaskRecord
@@ -26,7 +27,6 @@ from litehive.tasks.activity import (
     load_task_activity,
     save_task_activity,
 )
-from litehive.workspace import Workspace
 from litehive.tasks.activity_rendering import (
     is_retractable_pass_entry,
     normalized_files_changed,
@@ -101,7 +101,7 @@ def _requeue_task_transition(
             raise ValueError(str(exc)) from exc
 
     with workspace_lock(root):
-        workspace = Workspace.from_path(root)
+        workspace = build_container(root).workspace
         task = get_task_record(root, task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
@@ -172,7 +172,7 @@ def _resume_task_transition(root: Path, task_id: str, front: bool = False) -> Ta
     """
 
     with workspace_lock(root):
-        workspace = Workspace.from_path(root)
+        workspace = build_container(root).workspace
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
         state = load_state(root)
