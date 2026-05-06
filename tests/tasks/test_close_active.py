@@ -41,7 +41,7 @@ def test_cmd_close_task_stops_active_runner_and_closes_task(tmp_path: Path, caps
     monkeypatch.setattr("litehive.cli.agent_cli.block_if_agent", lambda: None)
     task = create_task(tmp_path, title="Kill bad run")
     mark_task_run_started(tmp_path, task)
-    set_active_task(tmp_path, task.id)
+    set_active_task(Workspace.from_path(tmp_path), task.id)
 
     task = require_task(tmp_path, task.id)
     mark_subagent_started(
@@ -190,7 +190,7 @@ def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch
         save_task(tmp_path, task)
         task = require_task(tmp_path, task.id)
         mark_subagent_pid(tmp_path, task, sleeper.pid)
-        set_active_task(tmp_path, task.id)
+        set_active_task(Workspace.from_path(tmp_path), task.id)
 
         result = CliRunner().invoke(
             app,

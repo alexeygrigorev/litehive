@@ -723,7 +723,7 @@ def test_run_task_single_mode_executes_only_implementing_then_finishes(tmp_path:
         goal="Summarize the current workspace state",
         acceptance_criteria=["A single agent pass completes the task"],
     )
-    task = dequeue_next_task(tmp_path)
+    task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
 
     calls: list[dict[str, str]] = []
@@ -754,7 +754,7 @@ def test_run_task_flags_time_budget_exceeded_and_preserves_worktree(tmp_path: Pa
     _init_workspace_git_repo(tmp_path, config=LitehiveConfig(task_time_budget_seconds=0.01))
     first = create_task(tmp_path, title="Time budget task")
     second = create_task(tmp_path, title="Next task")
-    task = dequeue_next_task(tmp_path)
+    task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
     assert task.id == first.id
     worktree = task_worktree_path(tmp_path, task)
@@ -786,7 +786,7 @@ def test_run_task_flags_time_budget_exceeded_and_preserves_worktree(tmp_path: Pa
     assert workspace_state.active_task_id is None
     assert task.id not in workspace_state.queue
 
-    next_task = dequeue_next_task(tmp_path)
+    next_task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert next_task is not None
     assert next_task.id == second.id
 
@@ -810,7 +810,7 @@ def test_run_task_runs_after_implementing_hook_in_task_worktree(tmp_path: Path) 
         ),
     )
     create_task(tmp_path, title="After implementing hook path")
-    task = dequeue_next_task(tmp_path)
+    task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
     expected_worktree = task_worktree_path(tmp_path, task)
 
@@ -843,7 +843,7 @@ def test_run_task_runs_after_commit_hook_on_main_and_finishes(tmp_path: Path) ->
         ),
     )
     create_task(tmp_path, title="After merge pass")
-    task = dequeue_next_task(tmp_path)
+    task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
     worktree = _prepare_committed_task_worktree(tmp_path, task)
 
@@ -866,7 +866,7 @@ def test_run_task_runs_after_commit_hook_on_main_and_finishes(tmp_path: Path) ->
 def test_run_task_reconciles_noop_commit_stage_and_records_main_head(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path)
     create_task(tmp_path, title="Already landed merge")
-    task = dequeue_next_task(tmp_path)
+    task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
     worktree = _prepare_committed_task_worktree(tmp_path, task)
     worktree_head = subprocess.run(
@@ -983,7 +983,7 @@ def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path
         ),
     )
     create_task(tmp_path, title="After commit warning")
-    task = dequeue_next_task(tmp_path)
+    task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
     worktree = _prepare_committed_task_worktree(tmp_path, task)
 
@@ -1023,7 +1023,7 @@ def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path
 def test_run_task_merge_conflict_failure_journal_stays_distinct_from_noop_reconciliation(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path)
     create_task(tmp_path, title="Merge conflict failure")
-    task = dequeue_next_task(tmp_path)
+    task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
     worktree = task_worktree_path(tmp_path, task)
     worktree.parent.mkdir(parents=True, exist_ok=True)
@@ -1088,7 +1088,7 @@ def test_run_task_before_accepting_hook_retries_and_continues(
         ),
     )
     create_task(tmp_path, title="Before accepting hook warning")
-    task = dequeue_next_task(tmp_path)
+    task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
 
     result = run_task(
@@ -1155,7 +1155,7 @@ def test_run_task_retries_sequential_hooks_one_failure_at_a_time(tmp_path: Path)
         ),
     )
     create_task(tmp_path, title="Sequential first-failure stage hooks")
-    task = dequeue_next_task(tmp_path)
+    task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
 
     result = run_task(
@@ -1193,7 +1193,7 @@ def test_run_task_skips_after_commit_when_hook_not_configured(tmp_path: Path) ->
         config=LitehiveConfig(),
     )
     create_task(tmp_path, title="After commit skipped")
-    task = dequeue_next_task(tmp_path)
+    task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
     worktree = _prepare_committed_task_worktree(tmp_path, task)
 
@@ -1241,7 +1241,7 @@ def test_run_task_auto_commit_cleanup_excludes_db_and_gitignored_files(tmp_path:
     subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-qm", "seed"], cwd=tmp_path, check=True)
 
-    task = dequeue_next_task(tmp_path)
+    task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
     worktree = _prepare_committed_task_worktree(tmp_path, task)
 

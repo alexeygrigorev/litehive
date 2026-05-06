@@ -13,6 +13,7 @@ from litehive.git.ops import has_non_litehive_changes
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.queue import dequeue_next_task_selection, peek_next_task_selection
+from litehive.workspace import Workspace
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -72,7 +73,7 @@ def test_dequeue_filter_skips_terminal_runtime_execution_statuses(tmp_path: Path
     state.queue = [*zombie_ids, runnable.id]
     save_state(tmp_path, state)
 
-    selection = dequeue_next_task_selection(tmp_path)
+    selection = dequeue_next_task_selection(Workspace.from_path(tmp_path))
 
     assert selection.task is not None
     assert selection.task.id == runnable.id
@@ -97,7 +98,7 @@ def test_queued_task_with_done_execution_status_is_not_selected(tmp_path: Path) 
     state.queue = [zombie.id, runnable.id]
     save_state(tmp_path, state)
 
-    selection = dequeue_next_task_selection(tmp_path)
+    selection = dequeue_next_task_selection(Workspace.from_path(tmp_path))
 
     assert selection.task is not None
     assert selection.task.id == runnable.id
@@ -115,7 +116,7 @@ def test_dequeue_selection_skips_tasks_missing_runtime_rows(tmp_path: Path) -> N
     state.queue = [legacy.id, runnable.id]
     save_state(tmp_path, state)
 
-    selection = dequeue_next_task_selection(tmp_path)
+    selection = dequeue_next_task_selection(Workspace.from_path(tmp_path))
 
     assert selection.task is not None
     assert selection.task.id == runnable.id
@@ -143,7 +144,7 @@ def test_dequeue_filter_skips_terminal_last_outcome_kinds(tmp_path: Path) -> Non
     state.queue = [*zombie_ids, runnable.id]
     save_state(tmp_path, state)
 
-    selection = dequeue_next_task_selection(tmp_path)
+    selection = dequeue_next_task_selection(Workspace.from_path(tmp_path))
 
     assert selection.task is not None
     assert selection.task.id == runnable.id
@@ -167,7 +168,7 @@ def test_selector_resets_stale_queued_pipeline_status_to_backlog(tmp_path: Path)
     state.queue = [task.id]
     save_state(tmp_path, state)
 
-    selection = peek_next_task_selection(tmp_path)
+    selection = peek_next_task_selection(Workspace.from_path(tmp_path))
 
     assert selection.task is not None
     assert selection.task.id == task.id
@@ -347,6 +348,6 @@ def test_task_with_hook_rejection_and_recovery_has_terminal_execution_status(tmp
     save_state(workspace, state)
 
     # Verify queue selection correctly skips the completed task
-    selection = dequeue_next_task_selection(workspace)
+    selection = dequeue_next_task_selection(Workspace.from_path(workspace))
     assert selection.task is not None
     assert selection.task.id == runnable_task.id

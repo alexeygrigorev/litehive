@@ -6,6 +6,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.queue import dequeue_next_task_selection, peek_next_task_selection
+from litehive.workspace import Workspace
 from litehive.domain.common import PipelineStatus, TaskStatus
 
 
@@ -53,7 +54,7 @@ def test_dequeue_next_task_reclaims_missing_in_progress_task_before_handoff(
     state.queue = [later.id]
     save_state(tmp_path, state)
 
-    selection = dequeue_next_task_selection(tmp_path)
+    selection = dequeue_next_task_selection(Workspace.from_path(tmp_path))
 
     assert selection.task is not None
     assert selection.task.id == unfinished.id
@@ -88,7 +89,7 @@ def test_dequeue_next_task_ignores_stale_active_marker_when_reclaiming_missing_w
     state.queue = [later.id]
     save_state(tmp_path, state)
 
-    selection = dequeue_next_task_selection(tmp_path)
+    selection = dequeue_next_task_selection(Workspace.from_path(tmp_path))
 
     assert selection.task is not None
     assert selection.task.id == unfinished.id
@@ -126,7 +127,7 @@ def test_dequeue_next_task_reclaims_missing_resumable_work_before_handoff(
     state.queue = [later.id]
     save_state(tmp_path, state)
 
-    selection = dequeue_next_task_selection(tmp_path)
+    selection = dequeue_next_task_selection(Workspace.from_path(tmp_path))
 
     assert selection.task is not None
     assert selection.task.id == unfinished.id
@@ -164,7 +165,7 @@ def test_peek_next_task_restores_missing_resumable_tasks_ahead_of_later_queue_on
     state.queue = [later.id]
     save_state(tmp_path, state)
 
-    selection = peek_next_task_selection(tmp_path)
+    selection = peek_next_task_selection(Workspace.from_path(tmp_path))
 
     assert selection.task is not None
     assert selection.task.id == unfinished.id
@@ -193,7 +194,7 @@ def test_dequeue_persistence_keeps_restored_queue_additions(tmp_path: Path) -> N
     state.queue = [later.id]
     save_state(tmp_path, state)
 
-    selection = dequeue_next_task_selection(tmp_path)
+    selection = dequeue_next_task_selection(Workspace.from_path(tmp_path))
 
     assert selection.task is not None
     assert selection.task.id == first.id
@@ -232,7 +233,7 @@ def test_peek_canonicalizes_nonrunning_resumable_tasks_on_restart(tmp_path: Path
     state.queue = []
     save_state(tmp_path, state)
 
-    selection = peek_next_task_selection(tmp_path)
+    selection = peek_next_task_selection(Workspace.from_path(tmp_path))
 
     assert selection.task is not None
 
@@ -263,7 +264,7 @@ def test_done_dependency_satisfies_queued_task(tmp_path: Path) -> None:
     save_task(tmp_path, dependency)
     dependent = create_task(tmp_path, title="Depends on completed task", depends_on=[dependency.id])
 
-    selection = peek_next_task_selection(tmp_path)
+    selection = peek_next_task_selection(Workspace.from_path(tmp_path))
 
     assert selection.task is not None
     assert selection.task.id == dependent.id
@@ -286,7 +287,7 @@ def test_dequeue_skips_flagged_manual_intervention_tasks(tmp_path: Path, flag_re
     state.queue = [blocked.id, runnable.id]
     save_state(tmp_path, state)
 
-    selection = dequeue_next_task_selection(tmp_path)
+    selection = dequeue_next_task_selection(Workspace.from_path(tmp_path))
 
     assert selection.task is not None
     assert selection.task.id == runnable.id

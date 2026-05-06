@@ -14,6 +14,7 @@ from litehive.recovery.detection import TaskLaunchFailure
 from litehive.state.records import create_task, get_task, list_tasks
 from litehive.state.store import RuntimeStore
 from litehive.tasks.queue import peek_next_task
+from litehive.workspace import Workspace
 from litehive.db import schema as schema_module
 from litehive.db.schema import (
     Migration,
@@ -24,7 +25,6 @@ from litehive.db.schema import (
 )
 from litehive.state.rebuild_safety import RebuildSafetyError
 from litehive.tasks.event_log import task_event_log_path
-from litehive.workspace import Workspace
 
 
 def _install_workspace_db_schema(root: Path, *, through_version: int) -> None:
@@ -204,7 +204,7 @@ def test_migration_0005_does_not_import_deprecated_task_yaml(tmp_path: Path) -> 
     loaded = get_task(tmp_path, "T-0001")
     listed = list_tasks(tmp_path, strict=False)
     with pytest.raises(TaskLaunchFailure, match="missing from SQLite task_intent"):
-        peek_next_task(tmp_path)
+        peek_next_task(Workspace.from_path(tmp_path))
 
     assert applied_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     assert intent_rows == []
@@ -344,7 +344,8 @@ def test_connect_workspace_db_rebuilds_replaced_cached_db(tmp_path: Path) -> Non
     ensure_workspace(tmp_path)
     db_path = workspace_path(tmp_path, "data.db")
 
-    save_subagent_artifacts(Workspace.from_path(tmp_path),
+    save_subagent_artifacts(
+        Workspace.from_path(tmp_path),
         "T-0001",
         "SA-0001",
         session={"status": "running"},
@@ -354,7 +355,8 @@ def test_connect_workspace_db_rebuilds_replaced_cached_db(tmp_path: Path) -> Non
     with sqlite3.connect(db_path):
         pass
 
-    save_subagent_artifacts(Workspace.from_path(tmp_path),
+    save_subagent_artifacts(
+        Workspace.from_path(tmp_path),
         "T-0001",
         "SA-0001",
         report={"summary": "recovered"},

@@ -131,20 +131,22 @@ def _event_failure_shape(event: Event) -> str:
     blocking-history checks ask "have we already given up on this
     shape?" without re-parsing the original event each time.
     """
-    if isinstance(event, Reject):
-        hook = _hook_fingerprint_from_event(event)
-        if hook is not None:
-            return f"hook:{_normalized_failure_text(hook.fingerprint)}"
-        classification = event.classification or event.metadata.get("verdict_classification")
-        reason_code = event.metadata.get("reason_code")
-        if isinstance(classification, str) and classification.strip():
-            return f"{event.source}:{_normalized_failure_text(classification)}"
-        if isinstance(reason_code, str) and reason_code.strip():
-            return f"{event.source}:{_normalized_failure_text(reason_code)}"
-        return f"{event.source}:{_normalized_failure_text(event.reason)}"
-    if isinstance(event, StageRetryLimitHit):
-        return "system:stage_retry_limit"
-    return _normalized_failure_text(type(event).__name__)
+    match event:
+        case Reject():
+            hook = _hook_fingerprint_from_event(event)
+            if hook is not None:
+                return f"hook:{_normalized_failure_text(hook.fingerprint)}"
+            classification = event.classification or event.metadata.get("verdict_classification")
+            reason_code = event.metadata.get("reason_code")
+            if isinstance(classification, str) and classification.strip():
+                return f"{event.source}:{_normalized_failure_text(classification)}"
+            if isinstance(reason_code, str) and reason_code.strip():
+                return f"{event.source}:{_normalized_failure_text(reason_code)}"
+            return f"{event.source}:{_normalized_failure_text(event.reason)}"
+        case StageRetryLimitHit():
+            return "system:stage_retry_limit"
+        case _:
+            return _normalized_failure_text(type(event).__name__)
 
 
 def _stage_retry_exhausted_record(
@@ -203,12 +205,13 @@ def _reason_code_from_event(state: TaskState, event: Event) -> str | None:
     ``RecoveryTrigger`` and when fingerprinting the failure for budget
     bookkeeping.
     """
-    if isinstance(event, Reject) and _hook_reject_loop_detected(state, event):
+    if not isinstance(event, Reject):
+        return None
+    if _hook_reject_loop_detected(state, event):
         return "hook_reject_loop"
-    if isinstance(event, Reject):
-        reason_code = event.metadata.get("reason_code") or event.classification
-        if isinstance(reason_code, str) and reason_code.strip():
-            return reason_code.strip()
+    reason_code = event.metadata.get("reason_code") or event.classification
+    if isinstance(reason_code, str) and reason_code.strip():
+        return reason_code.strip()
     return None
 
 
@@ -735,9 +738,7 @@ class FailRejectionLoop:
             set_rej = (self.stage, rejection)
         else:
             set_rej = None
-        rejection_loop_delta = _rejection_loop_delta(
-            state, event, retry_target_stage=self.retry_target_stage
-        )
+        rejection_loop_delta = _rejection_loop_delta(state, event, retry_target_stage=self.retry_target_stage)
         if isinstance(event, Reject):
             message = event.reason
         else:

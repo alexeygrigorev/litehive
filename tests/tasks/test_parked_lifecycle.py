@@ -209,7 +209,7 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
         lambda root: StubCommitNode(),
     )
 
-    queued = dequeue_next_task(tmp_path)
+    queued = dequeue_next_task(Workspace.from_path(tmp_path))
     assert queued is not None
 
     result = run_task(
@@ -337,9 +337,7 @@ def test_queue_resume_and_requeue_keep_parked_semantics_explicit(
     # Use model_copy(update=...) to bypass pyrefly's pydantic
     # validate_assignment narrowing (the equality assertions above collapse
     # the field types to literals, so direct assignment then looks bad).
-    refreshed = refreshed.model_copy(
-        update={"status": TaskStatus.PARKED, "pipeline_status": PipelineStatus.TESTING}
-    )
+    refreshed = refreshed.model_copy(update={"status": TaskStatus.PARKED, "pipeline_status": PipelineStatus.TESTING})
     save_task(tmp_path, refreshed)
     state = load_state(tmp_path)
     state.queue = []

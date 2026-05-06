@@ -191,6 +191,16 @@ from tests.support.helpers import make_workspace, run_cli
   command handler. After that point no code calls
   `Workspace.from_path` or `load_config` — they read the cached
   values out of the container.
+- Raw `root: Path` belongs only at the outermost boundary where
+  operator input is resolved. The target shape is one conversion
+  point: `Path` → DI container. Internal functions receive the
+  container, a `Workspace`, or a narrower service/repository from
+  that container, never a raw root they can re-interpret.
+- Service objects follow the same rule as other classes:
+  constructors accept ready dependencies and store them. They do
+  not call factories, load config, open databases, or construct
+  collaborators. The DI container is the only production code that
+  performs that assembly.
 
 This is an incremental migration: the codebase still has many
 ``__init__`` bodies that do their own wiring (SubagentManager,
@@ -231,10 +241,12 @@ hoist the wiring out of `__init__` into the container.
   function is a holdover from the file-based era; SQLite is now
   the source of truth and the workspace identity should be
   explicit.
-- Until the `Workspace` object exists, treat `root: Path`
-  parameters as a placeholder for that identity. Don't make
-  them optional, and don't reconstruct workspace context inside
-  helpers — pass through what the caller already has.
+- During the remaining migration, treat any `root: Path`
+  parameter below the CLI/process boundary as temporary debt. Do
+  not add new internal `root` parameters. If a helper needs
+  workspace identity, pass `Workspace`; if it needs several
+  collaborators, pass the container or a focused service assembled
+  by the container.
 
 ## Refactoring Discipline
 

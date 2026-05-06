@@ -15,6 +15,7 @@ from litehive.domain.reports import RecoveryAction
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.domain.task_ops import BlockedTask, TaskPlan, TaskSelection, WorkspaceConflictError
+from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.recovery.detection import TaskLaunchFailure
 from litehive.recovery.execution_recovery import (
     interruption_journal_message,
@@ -57,6 +58,7 @@ from litehive.tasks.queue_mutations import (
 )
 from litehive.tasks.recovery_reports import record_recovery_report
 from litehive.tasks.runtime import idle_stage_state
+from litehive.workspace import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +99,7 @@ def _normalize_stale_pipeline_statuses(
     return mutated
 
 
-def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
+def set_active_task(workspace: Workspace, task_id: str | None) -> WorkspaceState:
     """
     Pin a specific task as the workspace's active task, bypassing selection.
 
@@ -106,23 +108,23 @@ def set_active_task(root: Path, task_id: str | None) -> WorkspaceState:
     ``dequeue_next_task_selection`` so the eligibility checks and audit
     bookkeeping run.
     """
-    with workspace_mutation_guard(root), workspace_lock(root):
-        state = load_state(root)
+    with workspace_mutation_guard(workspace.root), workspace_lock(workspace.root):
+        state = load_state(workspace.root)
         state.active_task_id = task_id
         if task_id is not None and task_id in state.queue:
             state.queue = [item for item in state.queue if item != task_id]
-        validate_single_active_task(root, state)
+        validate_single_active_task(workspace.root, state)
         if task_id is None:
-            save_state(root, state)
+            save_state(workspace.root, state)
             return state
-        task = require_task(root, task_id)
+        task = require_task(workspace.root, task_id)
         if task.status == TaskStatus.QUEUED:
             task.status = TaskStatus.IN_PROGRESS
-        persist_task_and_state(root, task=task, state=state)
+        persist_task_and_state(workspace.root, task=task, state=state)
         return state
 
 
-def peek_next_task(root: Path) -> TaskRecord | None:
+def peek_next_task(workspace: Workspace) -> TaskRecord | None:
     """
     Return the next runnable task without dequeuing it.
 
@@ -131,10 +133,10 @@ def peek_next_task(root: Path) -> TaskRecord | None:
     This thin wrapper drops that information and is a candidate for
     inlining at its one test caller.
     """
-    return peek_next_task_selection(root).task
+    return peek_next_task_selection(workspace).task
 
 
-def peek_next_task_selection(root: Path) -> TaskSelection:
+def peek_next_task_selection(workspace: Workspace) -> TaskSelection:
     """
     Return the next runnable task plus blocked-task diagnostics, queue intact.
 
@@ -142,16 +144,16 @@ def peek_next_task_selection(root: Path) -> TaskSelection:
     surfaces use the dequeue path instead. If no production caller appears,
     fold it back into the dequeue helper rather than carrying two near-copies.
     """
-    recover_stale_runner_state(root)
-    with workspace_mutation_guard(root), workspace_lock(root):
-        state = load_state(root)
-        validate_single_active_task(root, state)
-        next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(root, state)
+    recover_stale_runner_state(workspace.root)
+    with workspace_mutation_guard(workspace.root), workspace_lock(workspace.root):
+        state = load_state(workspace.root)
+        validate_single_active_task(workspace.root, state)
+        next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace.root, state)
         if mutated:
             if normalized_tasks:
-                persist_tasks_and_state(root, tasks=normalized_tasks, state=state)
+                persist_tasks_and_state(workspace.root, tasks=normalized_tasks, state=state)
             else:
-                save_state(root, state)
+                save_state(workspace.root, state)
         return TaskSelection(task=next_task, blocked=blocked)
 
 
@@ -188,7 +190,7 @@ def plan_task_selections(root: Path) -> TaskPlan:
             simulated_task.pipeline_status = PipelineStatus.DONE
 
 
-def dequeue_next_task(root: Path) -> TaskRecord | None:
+def dequeue_next_task(workspace: Workspace) -> TaskRecord | None:
     """
     Pick the next runnable task and promote it to active.
 
@@ -197,10 +199,10 @@ def dequeue_next_task(root: Path) -> TaskRecord | None:
     also need blocked-task reasons use ``dequeue_next_task_selection``
     directly so they don't have to re-walk the queue to recover them.
     """
-    return dequeue_next_task_selection(root).task
+    return dequeue_next_task_selection(workspace).task
 
 
-def dequeue_next_task_selection(root: Path) -> TaskSelection:
+def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
     """
     Pick the next runnable task, promote it to active, and report blocked siblings.
 
@@ -210,21 +212,18 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
     persists the workspace mutation so the runner can begin executing
     without a second round-trip.
     """
-    recover_stale_runner_state(root)
-    with workspace_mutation_guard(root), workspace_lock(root):
-        from litehive.workspace import Workspace  # noqa: PLC0415
-
-        workspace = Workspace.from_path(root)
-        state = load_state(root)
+    recover_stale_runner_state(workspace.root)
+    with workspace_mutation_guard(workspace.root), workspace_lock(workspace.root):
+        state = load_state(workspace.root)
         original_queue = list(state.queue)
-        validate_single_active_task(root, state)
-        next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(root, state)
+        validate_single_active_task(workspace.root, state)
+        next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace.root, state)
         if next_task is None:
             if mutated:
                 if normalized_tasks:
-                    persist_tasks_and_state(root, tasks=normalized_tasks, state=state)
+                    persist_tasks_and_state(workspace.root, tasks=normalized_tasks, state=state)
                 else:
-                    save_state(root, state)
+                    save_state(workspace.root, state)
             return TaskSelection(task=None, blocked=blocked)
         if state.active_task_id != next_task.id:
             state.active_task_id = next_task.id
@@ -236,7 +235,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                     if state.active_task_id == next_task.id:
                         state.active_task_id = None
                     if mutated:
-                        save_state(root, state)
+                        save_state(workspace.root, state)
                     return TaskSelection(task=None, blocked=blocked)
                 recovery_stage = _auto_recovery_stage_for_flagged_task(next_task)
                 record_recovery_report(
@@ -268,11 +267,7 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                 # `ready` instead of re-emitting the sticky `failed` terminal
                 # and looping forever. Transition/journal history remains the
                 # source for prior-attempt metrics.
-                from litehive.lifecycle.persistence import SqlitePersistence  # noqa: PLC0415
-
-                SqlitePersistence(workspace).reset_current_lifecycle_state(
-                    next_task.id, preserve_run_memory=True
-                )
+                SqlitePersistence(workspace).reset_current_lifecycle_state(next_task.id, preserve_run_memory=True)
             if next_task.status in {TaskStatus.QUEUED, TaskStatus.INTERRUPTED}:
                 next_task.status = TaskStatus.IN_PROGRESS
             queue_additions = [task_id for task_id in state.queue if task_id not in original_queue]
@@ -280,14 +275,14 @@ def dequeue_next_task_selection(root: Path) -> TaskSelection:
                 tasks_to_persist = {task.id: task for task in normalized_tasks}
                 tasks_to_persist[next_task.id] = next_task
                 persist_tasks_and_state(
-                    root,
+                    workspace.root,
                     tasks=list(tasks_to_persist.values()),
                     state=state,
                     protected_task_ids=queue_additions,
                 )
             else:
                 persist_task_and_state(
-                    root,
+                    workspace.root,
                     task=next_task,
                     state=state,
                     protected_task_ids=queue_additions,
@@ -496,7 +491,7 @@ def clear_active_task(root: Path) -> WorkspaceState:
     flows that already null out ``state.active_task_id`` themselves.
     Candidate for removal.
     """
-    return set_active_task(root, None)
+    return set_active_task(Workspace.from_path(root), None)
 
 
 def restore_untouched_active_task(root: Path) -> WorkspaceState:
@@ -508,8 +503,6 @@ def restore_untouched_active_task(root: Path) -> WorkspaceState:
     looks like a leftover from before workspace-repair owned this concern.
     """
     with workspace_mutation_guard(root), workspace_lock(root):
-        from litehive.workspace import Workspace  # noqa: PLC0415
-
         local_workspace = Workspace.from_path(root)
         state = load_state(root)
         validate_single_active_task(root, state)

@@ -32,6 +32,7 @@ from litehive.config.paths import litehive_root
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.common import PipelineStatus
 from litehive.config.model import VALID_ENGINE_NAMES
+from litehive.workspace import Workspace
 from heru.base import CLIExecutionResult
 
 
@@ -505,7 +506,7 @@ def prepare_smoke_session(engine_name: str, *, cwd: Path, sandboxed: bool = Fals
     task = require_task(cwd, task.id)
     task.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(cwd, task)
-    set_active_task(cwd, task.id)
+    set_active_task(Workspace.from_path(cwd), task.id)
     engine, execution = execute_engine_prompt(
         engine_name,
         prompt=smoke_prompt(engine_name),
@@ -563,7 +564,8 @@ def assert_nudge_verdict_submission(
         assert session.engine_name == engine_name, (session.engine_name, engine_name)
 
     subagent_id = "SI-nudge-swe"
-    save_subagent_artifacts(Workspace.from_path(session.cwd),
+    save_subagent_artifacts(
+        Workspace.from_path(session.cwd),
         session.task_id,
         subagent_id,
         session={"id": subagent_id, "role": "swe", "engine": engine_name, "status": "running"},

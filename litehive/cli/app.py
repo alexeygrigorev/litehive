@@ -15,6 +15,7 @@ from litehive.cli.workspace import register_root_commands as register_workspace_
 from litehive.cli.worktree_cli import app as worktree_app
 from litehive.lifecycle.orchestration import run_task
 from litehive.tasks.queue import dequeue_next_task
+from litehive.workspace import Workspace
 
 app = make_typer()
 backup_app = make_typer(invoke_without_command=True)
@@ -30,7 +31,7 @@ def _run_next_task(root: Path):
     the full pipeline. Returns ``None`` when the queue has nothing to
     drain so the caller can fall through to the status view.
     """
-    task = dequeue_next_task(root)
+    task = dequeue_next_task(Workspace.from_path(root))
     if task is None:
         return None
     return run_task(root, task)

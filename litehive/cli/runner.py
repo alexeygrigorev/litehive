@@ -215,9 +215,10 @@ def run_once(
     if stopped_iteration is not None:
         return stopped_iteration
 
+    queue_workspace = Workspace.from_path(workspace)
     while True:
         try:
-            task = dequeue_next_task(workspace)
+            task = dequeue_next_task(queue_workspace)
         except WorkspaceConflictError as exc:
             print(f"run failed: {exc}")
             return _RunCommandIteration(exit_code=1, ran_task=False)
@@ -340,7 +341,7 @@ def _preview_single(
     valuable when triaging engine quotas or freezes that may have
     pushed the choice somewhere unexpected.
     """
-    selection = peek_next_task_selection(workspace)
+    selection = peek_next_task_selection(Workspace.from_path(workspace))
     if selection.task is None:
         state = load_state(workspace)
         if state.queue:
