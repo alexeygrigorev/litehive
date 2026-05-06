@@ -123,7 +123,7 @@ def switch_task_engine_for_workspace(
     # function avoids the partial-init cycle that would otherwise
     # appear when tasks.status is imported during ``litehive
     # queue switch`` startup.
-    from litehive.tasks.status import resume_task, stop_current_task  # noqa: PLC0415
+    from litehive.tasks.status import resume_task_for_workspace, stop_current_task  # noqa: PLC0415
 
     if engine not in VALID_TASK_ENGINES:
         raise ValueError(f"Unsupported engine '{engine}'")
@@ -167,7 +167,7 @@ def switch_task_engine_for_workspace(
         move_queued_task(root, task.id, 1)
         task = require_task(root, task.id)
     elif task.status in {TaskStatus.INTERRUPTED, TaskStatus.PARKED, TaskStatus.FLAGGED, *CLOSED_TASK_STATUSES}:
-        task = resume_task(root, task.id, front=True)
+        task = resume_task_for_workspace(workspace, task.id, front=True)
     else:
         raise ValueError(f"Task {task.id} is {task.status} and cannot be switched into a queued runnable state")
 

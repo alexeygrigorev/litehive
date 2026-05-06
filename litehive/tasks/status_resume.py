@@ -1,9 +1,10 @@
 """Task status transitions for re-entering a task after a stop or failure.
 
-Covers ``requeue_task`` (start over from the implementation entry stage)
-and ``resume_task`` (continue from the stage that was last in flight).
-Both push a task back onto the workspace queue; they differ in what
-prior progress they preserve and how they pick the re-entry stage.
+Covers ``requeue_task`` (start over from the implementation entry
+stage) and ``resume_task_for_workspace`` (continue from the stage
+that was last in flight). Both push a task back onto the workspace
+queue; they differ in what prior progress they preserve and how they
+pick the re-entry stage.
 """
 
 from pathlib import Path
@@ -275,17 +276,6 @@ def requeue_task_for_workspace(
         audit_actor=audit_actor,
         audit_source=audit_source,
     )
-
-
-def resume_task(root: Path, task_id: str, front: bool = False) -> TaskRecord:
-    """
-    Public CLI/agent entry for putting a paused task back on the queue.
-
-    Resumes interrupted, parked, or stranded tasks at the stage they were
-    last working on; thin shim around ``_resume_task_transition`` for the
-    public surface importable via ``litehive.tasks.status``.
-    """
-    return resume_task_for_workspace(build_workspace(root), task_id, front=front)
 
 
 def resume_task_for_workspace(workspace: Workspace, task_id: str, front: bool = False) -> TaskRecord:

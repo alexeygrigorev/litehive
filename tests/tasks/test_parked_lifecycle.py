@@ -17,7 +17,7 @@ from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, list_tasks, save_task
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.tasks.queue import dequeue_next_task, restore_missing_queued_tasks
-from litehive.tasks.status import requeue_task_for_workspace, resume_task, resume_task_for_workspace, stop_current_task
+from litehive.tasks.status import requeue_task_for_workspace, resume_task_for_workspace, stop_current_task
 from litehive.worktree.inspection import inspect_dirty_worktree_gate
 
 
@@ -135,7 +135,7 @@ def test_resume_task_allows_stranded_in_progress_task(tmp_path: Path, execution_
     state.queue = [item for item in state.queue if item != task.id]
     save_state(tmp_path, state)
 
-    resumed = resume_task(tmp_path, task.id, front=True)
+    resumed = resume_task_for_workspace(Workspace.from_path(tmp_path), task.id, front=True)
 
     assert resumed.status == "queued"
     assert resumed.pipeline_status == "grooming"
@@ -221,7 +221,7 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
     task.runtime.pipeline.current_stage.status = "paused"
     save_task(tmp_path, task)
 
-    resumed = resume_task(tmp_path, task.id, front=True)
+    resumed = resume_task_for_workspace(Workspace.from_path(tmp_path), task.id, front=True)
     assert resumed.runtime.pipeline.current_stage.stage == "testing"
     assert resumed.runtime.pipeline.current_stage.status == "idle"
 
@@ -268,7 +268,7 @@ def test_resume_task_recovers_preserved_stage_when_pipeline_status_degraded(tmp_
     )
     save_task(tmp_path, task)
 
-    resumed = resume_task(tmp_path, task.id, front=True)
+    resumed = resume_task_for_workspace(Workspace.from_path(tmp_path), task.id, front=True)
 
     assert resumed.status == "queued"
     assert resumed.pipeline_status == "testing"
@@ -299,7 +299,7 @@ def test_resume_task_canonicalizes_stranded_in_progress_with_degraded_pipeline_s
     state.queue = []
     save_state(tmp_path, state)
 
-    resumed = resume_task(tmp_path, task.id, front=True)
+    resumed = resume_task_for_workspace(Workspace.from_path(tmp_path), task.id, front=True)
 
     assert resumed.status == "queued"
     assert resumed.pipeline_status == "testing"

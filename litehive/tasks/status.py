@@ -3,7 +3,7 @@
 Historically this module contained every status-mutation helper in one
 place. The implementations now live in focused sibling modules:
 
-* ``litehive.tasks.status_resume`` -- ``requeue_task``, ``resume_task``
+* ``litehive.tasks.status_resume`` -- ``requeue_task``, ``resume_task_for_workspace``
 * ``litehive.tasks.status_close`` -- ``close_task``, ``park_task``, ``abandon_task``
 * ``litehive.tasks.status_update`` -- ``update_task``
 * ``litehive.tasks.stop`` -- ``stop_current_task``
@@ -22,7 +22,7 @@ from litehive.tasks.status_close import (
     park_task,
     park_task_for_workspace,
 )
-from litehive.tasks.status_resume import requeue_task, requeue_task_for_workspace, resume_task, resume_task_for_workspace
+from litehive.tasks.status_resume import requeue_task, requeue_task_for_workspace, resume_task_for_workspace
 from litehive.tasks.status_update import update_task, update_task_for_workspace
 from litehive.tasks.stop import stop_current_task
 from litehive.tasks.switch_engine import switch_task_engine_for_workspace
@@ -36,7 +36,6 @@ __all__ = [
     "park_task_for_workspace",
     "requeue_task",
     "requeue_task_for_workspace",
-    "resume_task",
     "resume_task_for_workspace",
     "stop_current_task",
     "switch_task_engine_for_workspace",
