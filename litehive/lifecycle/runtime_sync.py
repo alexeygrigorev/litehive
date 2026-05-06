@@ -6,8 +6,6 @@ runtime/observability shape (``task.runtime.pipeline.*`` fields,
 ``litehive status`` and the queue stay coherent after each transition.
 """
 
-from pathlib import Path
-
 from litehive.domain.common import (
     OutcomeKind,
     OutcomeReasonCode,

@@ -37,6 +37,7 @@ from litehive.db.schema import connect_workspace_db
 if TYPE_CHECKING:
     from litehive.config.model import LitehiveConfig
     from litehive.domain.task import TaskRecord
+    from litehive.tasks.activity import TaskActivityLog
 
 
 @dataclass(frozen=True)
@@ -174,3 +175,17 @@ class Workspace:
         from litehive.tasks.paths import task_dir as _task_dir  # noqa: PLC0415
 
         return _task_dir(self.root, task, bootstrap=bootstrap)
+
+    def task_activity(self, task: "TaskRecord") -> "TaskActivityLog":
+        """
+        Return the persisted activity feed handle for ``task``.
+
+        Query operations live on the returned collaborator so callers
+        holding a ``Workspace`` can ask for task activity directly
+        without threading both objects through loose helper functions.
+        """
+        # inline: tasks.activity imports Workspace for type annotations,
+        # so importing at module load would create an import cycle.
+        from litehive.tasks.activity import TaskActivityLog  # noqa: PLC0415
+
+        return TaskActivityLog(self, task)
