@@ -692,8 +692,10 @@ def test_lifecycle_selector_uses_shared_select_engine_when_task_record_missing(
     )
     config = load_config(tmp_path)
 
-    def fake_select_engine(root: Path, task: TaskRecord, config: LitehiveConfig, **kwargs) -> EngineSelection:
-        captured["root"] = root
+    workspace = Workspace.from_path(tmp_path)
+
+    def fake_select_engine(workspace: Workspace, task: TaskRecord, config: LitehiveConfig, **kwargs) -> EngineSelection:
+        captured["workspace"] = workspace
         captured["task"] = task
         captured["config"] = config
         captured["kwargs"] = kwargs
@@ -704,12 +706,12 @@ def test_lifecycle_selector_uses_shared_select_engine_when_task_record_missing(
             skipped=[],
         )
 
-    monkeypatch.setattr("litehive.lifecycle.engines.select_engine", fake_select_engine)
+    monkeypatch.setattr("litehive.lifecycle.engines.select_engine_for_workspace", fake_select_engine)
 
     selector = ConfigBackedEngineSelector(
         config,
         cast(EngineFactory, lambda engine_name: _StubLifecycleEngine(engine_name)),
-        workspace_root=tmp_path,
+        workspace=workspace,
     )
 
     engine = selector.select(
@@ -721,7 +723,7 @@ def test_lifecycle_selector_uses_shared_select_engine_when_task_record_missing(
     assert isinstance(engine, _StubLifecycleEngine)
     assert engine.name == "gemini"
     assert engine.model_name == "gemini-2.5-pro"
-    assert captured["root"] == tmp_path
+    assert captured["workspace"] == workspace
     assert isinstance(captured["task"], TaskRecord)
     assert captured["task"].id == "T-4040"
     assert captured["task"].pipeline_status == "implementing"

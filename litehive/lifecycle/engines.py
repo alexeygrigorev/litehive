@@ -15,15 +15,15 @@ pass a fake factory; production passes a ``HeruEngineFactory`` bound to a
 workspace root and session context.
 """
 
-from pathlib import Path
 from typing import Callable, cast
 
 from litehive.config.engine_models import (
-    select_engine,
+    select_engine_for_workspace,
 )
 from litehive.config.model import LitehiveConfig
 from litehive.domain.task import TaskRecord
 from litehive.state.records import get_task
+from litehive.workspace import Workspace
 
 from .nodes.agent import (
     Engine,
@@ -55,7 +55,7 @@ class ConfigBackedEngineSelector:
         self,
         config: LitehiveConfig,
         engine_factory: EngineFactory,
-        workspace_root: Path,
+        workspace: Workspace,
         engine_override: str | None = None,
         model_override: str | None = None,
         check_quota: bool = True,
@@ -70,7 +70,8 @@ class ConfigBackedEngineSelector:
         """
         self.config = config
         self.engine_factory = engine_factory
-        self.workspace_root = workspace_root.resolve()
+        self.workspace = workspace
+        self.workspace_root = workspace.root
         self.engine_override = engine_override
         self.model_override = model_override
         self.check_quota = check_quota
@@ -118,8 +119,8 @@ class ConfigBackedEngineSelector:
             return None
 
         if self.check_quota:
-            selection = select_engine(
-                self.workspace_root,
+            selection = select_engine_for_workspace(
+                self.workspace,
                 task,
                 self.config,
                 engine_override=self.engine_override,
@@ -127,8 +128,8 @@ class ConfigBackedEngineSelector:
                 excluded_engine_names=excluded,
             )
         else:
-            selection = select_engine(
-                self.workspace_root,
+            selection = select_engine_for_workspace(
+                self.workspace,
                 task,
                 self.config,
                 engine_override=self.engine_override,

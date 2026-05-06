@@ -137,7 +137,7 @@ def run_task(
         selector = ConfigBackedEngineSelector(
             config,
             factory,
-            workspace_root=root,
+            workspace=workspace,
             engine_override=engine_override,
             model_override=model_override,
             check_quota=engine_factory is None,
