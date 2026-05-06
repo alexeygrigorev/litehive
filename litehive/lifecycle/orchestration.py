@@ -229,7 +229,7 @@ def run_task_for_workspace(
                 persistence=persistence,
             )
             updated_task = reconciled_task or updated_task
-            _clear_terminal_task_from_workspace_state(root, updated_task.id)
+            _clear_terminal_task_from_workspace_state(workspace, updated_task.id)
             try:
                 _cleanup_terminal_worktree(root, updated_task)
             except GitError:

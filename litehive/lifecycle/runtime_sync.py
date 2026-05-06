@@ -26,10 +26,9 @@ from litehive.domain.runtime import (
     RuntimeRecoveryOutcome,
 )
 from litehive.domain.task import TaskRecord
-from litehive.state.locking import persist_future_task_update
-from litehive.state.persist import load_state, persist_tasks_and_state
+from litehive.state.locking import persist_future_task_update_for_workspace
+from litehive.state.persist import load_state_for_workspace, persist_tasks_and_state_for_workspace
 from litehive.state.records import get_task, set_task_commit_sha
-from litehive.tasks.activity import latest_task_activity_entry
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.runtime import apply_task_outcome
 from litehive.workspace import Workspace
@@ -356,8 +355,8 @@ def _sync_back(state: TaskState, workspace: Workspace) -> TaskRecord | None:
                 },
             )
         )
-    persist_future_task_update(
-        workspace_root,
+    persist_future_task_update_for_workspace(
+        workspace,
         task_record,
         journal_message=journal_message,
         audit_entries=audit_entries or None,
@@ -379,9 +378,7 @@ def _sync_recovery_follow_up(workspace: Workspace, task_record: TaskRecord, stat
         return
     if failed_reason != "recovery_exhausted":
         return
-    latest = latest_task_activity_entry(
-        workspace,
-        task_record,
+    latest = workspace.task_activity(task_record).latest_entry(
         role="recovery",
         stage=PipelineState.RECOVERING,
         verdicts={"reject"},
@@ -422,7 +419,7 @@ def _sync_recovery_follow_up(workspace: Workspace, task_record: TaskRecord, stat
     )
 
 
-def _clear_terminal_task_from_workspace_state(root: Path, task_id: str) -> None:
+def _clear_terminal_task_from_workspace_state(workspace: Workspace, task_id: str) -> None:
     """
     Drop a finished task from the active slot and queue.
 
@@ -431,13 +428,13 @@ def _clear_terminal_task_from_workspace_state(root: Path, task_id: str) -> None:
     spin in a tight no-op loop until an operator manually cleared the
     queue.
     """
-    state = load_state(root)
+    state = load_state_for_workspace(workspace)
     if state.active_task_id == task_id:
         state.active_task_id = None
     if task_id in state.queue:
         state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
-    persist_tasks_and_state(
-        root,
+    persist_tasks_and_state_for_workspace(
+        workspace,
         tasks=(),
         state=state,
         protected_task_ids=[task_id],
