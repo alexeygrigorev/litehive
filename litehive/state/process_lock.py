@@ -3,11 +3,11 @@
 from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TextIO
 
 from litehive.domain.common import utcnow
 from litehive.state.lock_manager import WorkspaceLockManager
+from litehive.state.store import RuntimeStore
 
 
 @dataclass
@@ -24,6 +24,7 @@ class ProcessLockManager:
 
     process_name: str
     lock_manager: WorkspaceLockManager
+    runtime_store: RuntimeStore | None = None
 
     def is_active(self) -> bool:
         """Probe whether the lock is currently held by any process."""
@@ -141,7 +142,7 @@ class ProcessLockManager:
             metadata.update(extra_updates)
         self.write_locked_metadata(handle, metadata)
 
-    def save_process_state(self, workspace: Path, payload: dict[str, object], status: str = "running") -> None:
+    def save_process_state(self, payload: dict[str, object], status: str = "running") -> None:
         """
         Mirror process identity into the SQLite runtime store.
 
@@ -149,15 +150,14 @@ class ProcessLockManager:
         slot without holding the flock; the lockfile remains the source
         of truth, but the SQLite row is the cheap-to-read mirror.
         """
-        from litehive.state.store import runtime_store  # noqa: PLC0415
-
-        runtime_store(workspace).save_process_state(
+        store = self._runtime_store()
+        store.save_process_state(
             self.process_name,
             status=status,
             payload=payload,
         )
 
-    def clear_process_state(self, workspace: Path) -> None:
+    def clear_process_state(self) -> None:
         """
         Drop the SQLite runtime mirror for this named process slot.
 
@@ -166,11 +166,9 @@ class ProcessLockManager:
         leaving the SQLite mirror around would survive a restart and
         confuse the next status query.
         """
-        from litehive.state.store import runtime_store  # noqa: PLC0415
+        self._runtime_store().clear_process_state(self.process_name)
 
-        runtime_store(workspace).clear_process_state(self.process_name)
-
-    def clear_stale_state(self, workspace: Path, expected_pid: int | None = None) -> bool:
+    def clear_stale_state(self, expected_pid: int | None = None) -> bool:
         """
         Clear stale lock metadata and the SQLite mirror for this slot.
 
@@ -183,5 +181,13 @@ class ProcessLockManager:
             require_stale_pid=True,
         )
         if cleared:
-            self.clear_process_state(workspace)
+            self.clear_process_state()
         return cleared
+
+    def _runtime_store(self) -> RuntimeStore:
+        """
+        Return the injected runtime store or fail loudly for write callers.
+        """
+        if self.runtime_store is None:
+            raise RuntimeError(f"{self.process_name} process state store was not configured")
+        return self.runtime_store

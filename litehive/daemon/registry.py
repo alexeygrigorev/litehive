@@ -21,6 +21,7 @@ from litehive.config.paths import workspace_path
 from litehive.state.lock_manager import WorkspaceLockManager
 from litehive.state.locking import runner_pid_is_alive
 from litehive.state.process_lock import ProcessLockManager
+from litehive.state.store import runtime_store
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,7 @@ def _daemon_lock_manager(workspace: Path) -> ProcessLockManager:
             held_in_process=lambda: _daemon_lock_is_held_in_process(workspace),
             fsync_writes=True,
         ),
+        runtime_store=runtime_store(workspace),
     )
 
 
@@ -101,7 +103,7 @@ def _clear_stale_daemon_metadata(workspace: Path, pid: int | None = None) -> Non
     """
     workspace = workspace.resolve()
     manager = _daemon_lock_manager(workspace)
-    manager.clear_stale_state(workspace, expected_pid=pid)
+    manager.clear_stale_state(expected_pid=pid)
 
 
 def daemon_metadata(workspace: Path) -> dict[str, object] | None:
@@ -185,7 +187,7 @@ def register_daemon(workspace: Path, pid: int, log_dir: Path) -> None:
             if existing_handle is not None:
                 raise RuntimeError(f"daemon already registered in-process for {workspace}")
             _DAEMON_LOCKS[workspace] = handle
-        manager.save_process_state(workspace, payload)
+        manager.save_process_state(payload)
     except (OSError, RuntimeError):
         try:
             manager.lock_manager.unlock(handle)
@@ -218,7 +220,7 @@ def unregister_daemon(workspace: Path, pid: int | None = None) -> None:
             return
     finally:
         manager.lock_manager.release(handle, clear_metadata=True)
-    manager.clear_process_state(workspace)
+    manager.clear_process_state()
 
 
 def touch_daemon(workspace: Path, pid: int | None = None) -> bool:
@@ -244,7 +246,7 @@ def touch_daemon(workspace: Path, pid: int | None = None) -> bool:
             return False
         manager.update_heartbeat(handle)
         metadata = manager.read_locked_metadata(handle)
-        manager.save_process_state(workspace, metadata)
+        manager.save_process_state(metadata)
     return True
 
 

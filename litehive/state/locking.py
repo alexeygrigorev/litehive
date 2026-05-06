@@ -70,6 +70,7 @@ def _runner_lock_manager(
             pid_is_alive=runner_pid_is_alive,
             held_in_process=held_in_process,
         ),
+        runtime_store=runtime_store(root),
     )
 
 
