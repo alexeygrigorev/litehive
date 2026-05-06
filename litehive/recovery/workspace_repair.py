@@ -12,7 +12,10 @@ from litehive.domain.common import (
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
 from litehive.state.locking import workspace_lock
-from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
+from litehive.state.persist import (
+    load_state_for_workspace,
+    persist_task_and_state_without_runner_guard_for_workspace,
+)
 from litehive.state.records import get_task_record
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.queue import idle_stage_state
@@ -52,7 +55,7 @@ def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepa
     mutated = False
     root = workspace.root
     with workspace_lock(root):
-        state = load_state(root, bootstrap=False)
+        state = load_state_for_workspace(workspace, bootstrap=False)
         queued_ids = set(state.queue)
         for task_id in _stale_terminal_candidate_ids(workspace):
             if state.active_task_id == task_id or task_id in queued_ids:
@@ -89,8 +92,8 @@ def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepa
             state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
             if state.active_task_id == task.id:
                 state.active_task_id = None
-            persist_task_and_state_without_runner_guard(
-                root,
+            persist_task_and_state_without_runner_guard_for_workspace(
+                workspace,
                 task=task,
                 state=state,
                 journal_message=(
