@@ -291,13 +291,13 @@ from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task
 from litehive.state.persist import load_state
 from litehive.state.persist import save_state_without_runner_guard
-from litehive.state import persist as workflow_module
+import litehive.state.persist
 
 root = Path(__import__("sys").argv[1])
 ensure_workspace(root)
 first = create_task(root, title="First queued task")
 second = create_task(root, title="Second queued task")
-original_merge = workflow_module.merged_state_for_runner_owned_write
+original_merge = litehive.state.persist.merged_state_for_runner_owned_write
 injected = False
 
 def inject_latest_state(root, *, state, protected_task_ids=()):
@@ -309,7 +309,7 @@ def inject_latest_state(root, *, state, protected_task_ids=()):
         save_state_without_runner_guard(root, latest)
     return original_merge(root, state=state, protected_task_ids=protected_task_ids)
 
-workflow_module.merged_state_for_runner_owned_write = inject_latest_state
+litehive.state.persist.merged_state_for_runner_owned_write = inject_latest_state
 added = create_task(root, title="Added while runner updated queue")
 print(json.dumps({"id": added.id, "queue": load_state(root).queue}))
 """

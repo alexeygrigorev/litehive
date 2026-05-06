@@ -510,6 +510,15 @@ def _pipeline_stage_key(name: str | None) -> str | None:
     return pipeline_stage_key(name)
 
 
+_RETRY_COUNTER_PIPELINE_STATE_BY_TASK_STAGE: dict[TaskStage, PipelineState] = {
+    TaskStage.GROOMING: PipelineState.GROOMING,
+    TaskStage.IMPLEMENTING: PipelineState.IMPLEMENTING,
+    TaskStage.TESTING: PipelineState.TESTING,
+    TaskStage.ACCEPTING: PipelineState.ACCEPTING,
+    TaskStage.COMMIT_TO_GIT: PipelineState.COMMIT,
+}
+
+
 def _retry_counter_stage(origin_stage: str | None) -> PipelineState | None:
     """
     Map any stage label to the canonical stage that owns its retry counter.
@@ -520,17 +529,20 @@ def _retry_counter_stage(origin_stage: str | None) -> PipelineState | None:
     when bumping retries on a rejection and when resetting them after
     a successful recovery — both sides need to target the same bucket
     or the counter and the reset can drift apart.
+
+    Returns ``None`` for unrecognised stage labels so the caller can
+    skip writing a delta rather than producing a dangling counter
+    bucket on a typo.
     """
     key = _pipeline_stage_key(origin_stage)
-    if key in {
-        TaskStage.GROOMING,
-        TaskStage.IMPLEMENTING,
-        TaskStage.TESTING,
-        TaskStage.ACCEPTING,
-        TaskStage.COMMIT_TO_GIT,
-    }:
-        return key  # type: ignore[return-value]
-    return origin_stage  # type: ignore[return-value]
+    if isinstance(key, TaskStage):
+        return _RETRY_COUNTER_PIPELINE_STATE_BY_TASK_STAGE[key]
+    if origin_stage is None:
+        return None
+    try:
+        return PipelineState(origin_stage)
+    except ValueError:
+        return None
 
 
 def _hook_recovery_made_progress(trigger: RecoveryTrigger | None, event: Event) -> bool:
