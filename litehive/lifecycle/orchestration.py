@@ -123,7 +123,7 @@ def run_task(
     config = container.config
     workspace = container.workspace
 
-    with workspace_runner_guard(root):
+    with workspace_runner_guard(workspace):
         persistence = SqlitePersistence(
             workspace,
             limits=replace(

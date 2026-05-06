@@ -5,6 +5,7 @@ from litehive.config.workspace import ensure_workspace
 from litehive.daemon.registry import register_daemon, unregister_daemon
 from litehive.state.locking import touch_runner_status, workspace_runner_guard
 from litehive.state.store import runtime_store
+from litehive.workspace import Workspace
 
 
 def test_runner_process_state_is_persisted_in_sqlite(tmp_path: Path, monkeypatch) -> None:
@@ -13,7 +14,7 @@ def test_runner_process_state_is_persisted_in_sqlite(tmp_path: Path, monkeypatch
     ensure_workspace(workspace)
     store = runtime_store(workspace)
 
-    with workspace_runner_guard(workspace):
+    with workspace_runner_guard(Workspace.from_path(workspace)):
         payload = store.load_process_state("runner")
         assert payload is not None
         assert payload["pid"] == os.getpid()

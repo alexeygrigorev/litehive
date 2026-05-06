@@ -10,7 +10,6 @@ from pathlib import Path
 from collections.abc import Callable
 from typing import TYPE_CHECKING, TextIO, cast
 
-from litehive.container import build_workspace
 from litehive.config.workspace_files import workspace_dir
 from litehive.domain.common import RunnerStatus, TaskExecutionStatus, utcnow
 from litehive.domain.runtime import RunnerStatusState
@@ -18,6 +17,7 @@ from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.lock_manager import WorkspaceLockManager
 from litehive.state.process_lock import ProcessLockManager
 from litehive.state.store import runtime_store
+from litehive.workspace import Workspace
 
 from litehive.tasks.constants import (
     HEARTBEAT_LATE_THRESHOLD_SECONDS,
@@ -30,7 +30,6 @@ from litehive.tasks.paths import runner_lock_path
 
 if TYPE_CHECKING:
     from litehive.tasks.audit import TaskAuditEntry
-    from litehive.workspace import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -490,7 +489,7 @@ def _auto_repair_stale_state(workspace: "Workspace") -> None:
 
 
 @contextmanager
-def workspace_runner_guard(root: Path):
+def workspace_runner_guard(workspace: Workspace):
     """
     Long-lived workspace guard wrapping a runner's whole lifetime.
 
@@ -499,8 +498,7 @@ def workspace_runner_guard(root: Path):
     mutation guards work without deadlocking. The single canonical
     entry-point — every other guard helper layers on top of this.
     """
-    root = root.resolve()
-    workspace = build_workspace(root)
+    root = workspace.root
     owner_thread_id = threading.get_ident()
     manager = _runner_lock_manager(root, held_in_process=lambda: root in RUNNER_LOCKS)
     with RUNNER_LOCKS_MUTEX:
@@ -580,7 +578,7 @@ def workspace_mutation_guard(root: Path):
     if existing is not None and existing.owner_thread_id == owner_thread_id:
         yield
         return
-    with workspace_runner_guard(root):
+    with workspace_runner_guard(Workspace.from_path(root)):
         yield
 
 
