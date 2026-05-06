@@ -5,6 +5,7 @@ import typer
 
 from litehive.cli.common import WorkspaceOption, make_typer, require_subcommand
 from litehive.config.workspace import ensure_workspace
+from litehive.container import build_workspace
 from litehive.git.ops import GitError
 from litehive.worktree.service import WorktreeService
 
@@ -28,7 +29,8 @@ def ls(workspace: WorkspaceOption = Path.cwd()) -> int:
     diving into git.
     """
     ensure_workspace(workspace)
-    service = WorktreeService(workspace)
+    workspace_obj = build_workspace(workspace)
+    service = WorktreeService(workspace_obj)
     worktrees = service.collect_managed_worktrees()
     print(f"workspace: {workspace}")
     print(f"worktree_count: {len(worktrees)}")
@@ -64,7 +66,8 @@ def clean(
     on-disk evidence.
     """
     ensure_workspace(workspace)
-    service = WorktreeService(workspace)
+    workspace_obj = build_workspace(workspace)
+    service = WorktreeService(workspace_obj)
     results = service.remove_cleanable_worktrees(dry_run=dry_run)
 
     candidates = results["candidates"]
@@ -119,7 +122,8 @@ def rescue(
     audit before mutating main.
     """
     ensure_workspace(workspace)
-    service = WorktreeService(workspace)
+    workspace_obj = build_workspace(workspace)
+    service = WorktreeService(workspace_obj)
     candidates = service.collect_rescue_candidates()
 
     print(f"workspace: {workspace}")

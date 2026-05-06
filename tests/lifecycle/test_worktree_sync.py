@@ -9,6 +9,7 @@ from litehive.lifecycle.nodes.system import GitWorktreeSyncNode
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.types import PipelineMode
 from litehive.state.records import create_task, get_task, save_task
+from litehive.workspace import Workspace
 from litehive.worktree.paths import task_worktree_branch
 
 
@@ -56,7 +57,7 @@ def test_worktree_sync_creates_missing_task_worktree(tmp_path: Path) -> None:
 
     task = create_task(workspace, title="Sync")
     node = GitWorktreeSyncNode(
-        workspace_root=workspace,
+        workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}",
     )
 
@@ -82,7 +83,7 @@ def test_worktree_sync_links_worktree_venv_to_workspace_venv(tmp_path: Path) -> 
 
     task = create_task(workspace, title="Shared venv")
     node = GitWorktreeSyncNode(
-        workspace_root=workspace,
+        workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}",
     )
 
@@ -107,7 +108,7 @@ def test_worktree_sync_skips_broken_venv_link_when_workspace_has_no_venv(tmp_pat
 
     task = create_task(workspace, title="No shared venv")
     node = GitWorktreeSyncNode(
-        workspace_root=workspace,
+        workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}",
     )
 
@@ -157,7 +158,7 @@ def test_worktree_sync_rebases_existing_task_worktree_onto_local_main(tmp_path: 
     main_head = _git_ok(workspace, "rev-parse", "HEAD")
 
     node = GitWorktreeSyncNode(
-        workspace_root=workspace,
+        workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: worktree,
     )
     changed = node.sync(_state(task.id, entry_stage=PipelineState.IMPLEMENTING))
@@ -206,7 +207,7 @@ def test_worktree_sync_rebases_dirty_resumed_worktree_and_preserves_wip(tmp_path
     main_head = _git_ok(workspace, "rev-parse", "HEAD")
 
     node = GitWorktreeSyncNode(
-        workspace_root=workspace,
+        workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: worktree,
     )
     changed = node.sync(_state(task.id, entry_stage=PipelineState.TESTING))
@@ -264,7 +265,7 @@ def test_worktree_sync_skips_dirty_worktrees(tmp_path: Path) -> None:
     (worktree / "app.txt").write_text("base\nlocal draft\n", encoding="utf-8")
 
     node = GitWorktreeSyncNode(
-        workspace_root=workspace,
+        workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: worktree,
     )
     changed = node.sync(_state(task.id))
@@ -305,7 +306,7 @@ def test_worktree_sync_prunes_stale_git_worktree_metadata_before_recreate(tmp_pa
     shutil.rmtree(worktree)
 
     node = GitWorktreeSyncNode(
-        workspace_root=workspace,
+        workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: worktree,
     )
     changed = node.sync(_state(task.id))
@@ -343,7 +344,7 @@ def test_worktree_sync_reuses_existing_branch_worktree_when_runtime_path_missing
     save_task(workspace, task)
 
     node = GitWorktreeSyncNode(
-        workspace_root=workspace,
+        workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: worktree,
     )
     changed = node.sync(_state(task.id))

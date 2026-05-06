@@ -9,6 +9,7 @@ SHA reconciliation).
 
 from pathlib import Path
 
+from litehive.container import build_workspace
 from litehive.domain.common import PipelineState, TaskExecutionStatus, TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import current_head
@@ -78,7 +79,7 @@ def build_commit_node(root: Path) -> CommitNode:
 def _build_worktree_sync_node(root: Path) -> GitWorktreeSyncNode:
     """Return the production ``GitWorktreeSyncNode`` bound to this workspace; mirrors ``build_commit_node`` for the worktree-sync stage."""
     return GitWorktreeSyncNode(
-        workspace_root=root,
+        workspace=build_workspace(root),
         worktree_resolver=lambda state: _resolve_worktree(root, state),
     )
 
@@ -93,7 +94,7 @@ def _worktree_missing_probe(root: Path):
     launch?" without every call site reaching into the service
     directly.
     """
-    service = WorktreeService(root)
+    service = WorktreeService(build_workspace(root))
 
     def _probe(state) -> bool:
         return service.task_has_missing_recorded_worktree(state.task_id)
@@ -110,7 +111,7 @@ def _worktree_metadata_repair(root: Path):
     stale path on the task record so the next launch creates a fresh
     worktree instead of failing the existence check.
     """
-    service = WorktreeService(root)
+    service = WorktreeService(build_workspace(root))
 
     def _repair(state) -> None:
         service.clear_missing_recorded_worktree(state.task_id)

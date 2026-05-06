@@ -62,6 +62,7 @@ from litehive.worktree.paths import (
     task_worktree_path,
 )
 from litehive.worktree.rescue import apply_rescue_candidate, collect_rescue_candidates, require_clean_main_checkout
+from litehive.workspace import Workspace
 
 
 def status_porcelain_untracked(cwd: Path) -> bool:
@@ -88,17 +89,16 @@ class WorktreeService:
     drives rescue.
     """
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, workspace: Workspace) -> None:
         """
-        Bind the service to a single workspace root.
+        Bind the service to a single workspace.
 
         Every method below scopes its git operations under this
         directory so callers can hold one ``WorktreeService`` per
-        workspace and forget about path threading. The ``Path()``
-        wrap normalizes the input so equality checks downstream
-        don't fail on a string vs. a ``Path``.
+        workspace and forget about path threading.
         """
-        self.root = Path(root)
+        self.workspace = workspace
+        self.root = workspace.root
 
     def sync_task_worktree(
         self,
@@ -181,9 +181,7 @@ class WorktreeService:
         post-success cleanup. ``dry_run`` lets the CLI preview what
         would be removed without touching disk.
         """
-        from litehive.workspace import Workspace  # noqa: PLC0415
-
-        return remove_cleanable_worktrees_for_workspace(Workspace.from_path(self.root), dry_run=dry_run)
+        return remove_cleanable_worktrees_for_workspace(self.workspace, dry_run=dry_run)
 
     def collect_rescue_candidates(self) -> list[RescueCandidate]:
         """

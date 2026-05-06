@@ -84,7 +84,7 @@ def test_worktree_sync_persists_runtime_worktree_path(tmp_path: Path) -> None:
     task = create_task(workspace, title="Persist worktree")
     worktree = task_worktree_path(workspace, task)
     node = GitWorktreeSyncNode(
-        workspace_root=workspace,
+        workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: worktree,
     )
 
@@ -116,7 +116,7 @@ def test_agent_and_commit_use_persisted_worktree_path(
     task = create_task(workspace, title="Persisted checkout")
     worktree = task_worktree_path(workspace, task)
     sync_node = GitWorktreeSyncNode(
-        workspace_root=workspace,
+        workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: worktree,
     )
     assert sync_node.sync(_state(task.id, PipelineState.WORKTREE_SYNC)) is True
@@ -183,7 +183,7 @@ def test_commit_ignores_untracked_embedded_git_repos_in_task_worktree(tmp_path: 
     task = create_task(workspace, title="Scratch repo in worktree")
     worktree = task_worktree_path(workspace, task)
     sync_node = GitWorktreeSyncNode(
-        workspace_root=workspace,
+        workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: worktree,
     )
     assert sync_node.sync(_state(task.id, PipelineState.WORKTREE_SYNC)) is True

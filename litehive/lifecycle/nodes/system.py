@@ -23,6 +23,7 @@ from litehive.git.ops import (
     status_porcelain_with_options,
     unmerged_files,
 )
+from litehive.workspace import Workspace
 
 from ..events import (
     CleanState,
@@ -227,7 +228,7 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
 
     def __init__(
         self,
-        workspace_root: Path,
+        workspace: Workspace,
         worktree_resolver: "WorktreeResolver",
         main_ref: str = "origin/main",
     ) -> None:
@@ -241,7 +242,8 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         upstream merge entirely.
         """
         super().__init__()
-        self.workspace_root = Path(workspace_root)
+        self.workspace = workspace
+        self.workspace_root = workspace.root
         self.worktree_resolver = worktree_resolver
         self.main_ref = main_ref
 
@@ -258,7 +260,7 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         from litehive.worktree.service import WorktreeService  # noqa: PLC0415
 
         try:
-            result = WorktreeService(self.workspace_root).sync_task_worktree(
+            result = WorktreeService(self.workspace).sync_task_worktree(
                 state.task_id,
                 entry_stage=state.entry_stage,
                 worktree_resolver=self.worktree_resolver,

@@ -37,7 +37,7 @@ def render_task_evidence_for_workspace(workspace: Workspace, task) -> int:
     _print_latest_report(workspace, task)
     _print_latest_activity(workspace, task)
     _print_latest_subagent(root, workspace, task)
-    _print_worktree_evidence(root, task)
+    _print_worktree_evidence(workspace, task)
     return 0
 
 
@@ -231,29 +231,16 @@ def _print_latest_subagent(root: Path, workspace: Workspace, task) -> None:
         print(f"latest_subagent_trace_source: {trace.source.relative_to(root)}")
 
 
-def debug_worktree(root: Path, task):
-    """
-    Compatibility entrypoint for the worktree-only evidence view.
-
-    Drops the lifecycle/report/activity/subagent sections and
-    prints only the worktree slice — used when the operator
-    already knows the task is parked over uncommitted work and
-    wants to inspect the worktree without scrolling past the
-    other evidence sections.
-    """
-    print(f"task: {task.id}")
-    _print_worktree_evidence(root, task)
-    return 0
-
-
 def debug_worktree_for_workspace(workspace: Workspace, task):
     """
     Render the worktree-only evidence view from an injected workspace.
     """
-    return debug_worktree(workspace.root, task)
+    print(f"task: {task.id}")
+    _print_worktree_evidence(workspace, task)
+    return 0
 
 
-def _print_worktree_evidence(root: Path, task) -> None:
+def _print_worktree_evidence(workspace: Workspace, task) -> None:
     """
     Print the task's worktree state.
 
@@ -264,7 +251,7 @@ def _print_worktree_evidence(root: Path, task) -> None:
     the operator can tell at a glance whether the task has any
     uncommitted work.
     """
-    inspection = WorktreeService(root).inspect_task_worktree(task)
+    inspection = WorktreeService(workspace).inspect_task_worktree(task)
     if not inspection.worktree_rel:
         print("worktree: none")
         return
