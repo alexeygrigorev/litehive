@@ -8,10 +8,11 @@ so the operator can resume later).
 
 from pathlib import Path
 
-from litehive.container import build_container
+from litehive.container import build_workspace
 from litehive.domain.common import OutcomeReasonCode, TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import StopTaskSummary
+from litehive.workspace import Workspace
 
 from litehive.tasks.constants import (
     CLOSED_TASK_STATUSES,
@@ -40,7 +41,7 @@ from litehive.tasks._status_helpers import (
 
 
 def _abandon_task_transition(
-    root: Path,
+    workspace: Workspace,
     task_id: str,
     reason: str = "Task abandoned via CLI.",
     audit_actor: str = "operator",
@@ -55,8 +56,8 @@ def _abandon_task_transition(
     outcome, ``abandon`` says "stop right now and tear it down".
     """
 
+    root = workspace.root
     with workspace_lock(root):
-        workspace = build_container(root).workspace
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
         state = load_state(root)
@@ -91,7 +92,7 @@ def _abandon_task_transition(
 
 
 def _close_task_transition(
-    root: Path,
+    workspace: Workspace,
     task_id: str,
     outcome: str,
     reason: str | None = None,
@@ -107,6 +108,7 @@ def _close_task_transition(
     live runner/subagent is signalled so a closed task does not keep
     consuming runtime resources.
     """
+    root = workspace.root
     try:
         outcome_code = OutcomeReasonCode(outcome)
     except ValueError:
@@ -135,7 +137,6 @@ def _close_task_transition(
     _terminate_subagent_pid(task_id, active_subagent_pid)
     _terminate_subagent_pid(task_id, runner_pid)
     with workspace_lock(root):
-        workspace = build_container(root).workspace
         task = get_task_record(root, task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
@@ -234,7 +235,7 @@ def abandon_task(
     importable from ``litehive.tasks.status``.
     """
     return _abandon_task_transition(
-        root,
+        build_workspace(root),
         task_id,
         reason=reason,
         audit_actor=audit_actor,
@@ -260,7 +261,7 @@ def close_task(
     surface stays importable from ``litehive.tasks.status``.
     """
     return _close_task_transition(
-        root,
+        build_workspace(root),
         task_id,
         outcome=outcome,
         reason=reason,
