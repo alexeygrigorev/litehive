@@ -31,7 +31,7 @@ from litehive.attention import append_attention_log
 from litehive.db.schema import apply_pending_migrations
 from litehive.git.ops import fetch, is_ancestor, list_remote_names, rev_parse_verify
 from litehive.observability.status import (
-    collect_task_pipeline_status,
+    collect_task_pipeline_status_for_workspace,
     render_runner_status_line,
     render_task_pipeline_status_lines,
 )
@@ -177,6 +177,13 @@ def _append_attention_log(workspace: Workspace, message: str) -> None:
 
 def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
     """
+    Path-based compatibility wrapper for daemon status tests and helpers.
+    """
+    return _daemon_status_snapshot_for_workspace(build_workspace(workspace))
+
+
+def _daemon_status_snapshot_for_workspace(workspace: Workspace) -> tuple[dict[str, object], str]:
+    """
     Capture pool state plus a renderable status block in one read-only pass.
 
     The daemon loop logs the snapshot before and after each
@@ -185,9 +192,9 @@ def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
     keeps the snapshot from racing the runner's own writes — the
     daemon must not mutate state here, only observe it.
     """
-    status = collect_task_pipeline_status(workspace, read_only=True)
+    status = collect_task_pipeline_status_for_workspace(workspace, read_only=True)
     state = status.state.model_dump(mode="python")
-    lines = render_task_pipeline_status_lines(status, workspace=workspace, mode="summary")
+    lines = render_task_pipeline_status_lines(status, workspace=workspace.root, mode="summary")
     return state, "\n".join(lines) + "\n"
 
 
@@ -611,7 +618,7 @@ def run_daemon_loop(
                 _emit(f"backup_failed: {exc}", stream=output_stream)
 
             try:
-                pre_state, pre_snapshot = _daemon_status_snapshot(workspace)
+                pre_state, pre_snapshot = _daemon_status_snapshot_for_workspace(daemon_workspace)
             except (OSError, RuntimeError, ValueError) as exc:
                 logger.exception("status snapshot raised")
                 _emit(f"status raised: {exc}", stream=output_stream)
@@ -643,7 +650,7 @@ def run_daemon_loop(
                 return run_rc
 
             try:
-                post_state, post_snapshot = _daemon_status_snapshot(workspace)
+                post_state, post_snapshot = _daemon_status_snapshot_for_workspace(daemon_workspace)
             except (OSError, RuntimeError, ValueError) as exc:
                 logger.exception("post-status snapshot raised")
                 _emit(f"post-status raised: {exc}", stream=output_stream)

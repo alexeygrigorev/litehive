@@ -10,6 +10,7 @@ from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import WorkspaceState
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task
+from litehive.workspace import Workspace
 
 
 def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monkeypatch) -> None:
@@ -126,7 +127,7 @@ def test_daemon_status_snapshot_uses_shared_status_collector(tmp_path: Path, mon
     )
     captured: dict[str, object] = {}
 
-    def fake_collect(workspace: Path, *, read_only: bool = False):
+    def fake_collect(workspace, *, read_only: bool = False):
         captured["workspace"] = workspace
         captured["read_only"] = read_only
         return shared_status
@@ -138,7 +139,7 @@ def test_daemon_status_snapshot_uses_shared_status_collector(tmp_path: Path, mon
         captured["retry_on_label"] = retry_on_label
         return ["workspace: shared", "queued_tasks: 1"]
 
-    monkeypatch.setattr("litehive.daemon.execution.collect_task_pipeline_status", fake_collect)
+    monkeypatch.setattr("litehive.daemon.execution.collect_task_pipeline_status_for_workspace", fake_collect)
     monkeypatch.setattr("litehive.daemon.execution.render_task_pipeline_status_lines", fake_render)
 
     snapshot_state, text = _daemon_status_snapshot(tmp_path)
@@ -147,14 +148,16 @@ def test_daemon_status_snapshot_uses_shared_status_collector(tmp_path: Path, mon
     assert snapshot_state["queue"] == ["T-0002"]
     assert snapshot_state["pool_stop_reason"] == "attention_required"
     assert text == "workspace: shared\nqueued_tasks: 1\n"
+    captured_workspace = captured.pop("workspace")
     assert captured == {
-        "workspace": tmp_path,
         "read_only": True,
         "status": shared_status,
         "render_workspace": tmp_path,
         "mode": "summary",
         "retry_on_label": None,
     }
+    assert isinstance(captured_workspace, Workspace)
+    assert captured_workspace.root == tmp_path.resolve()
 
 
 def test_check_origin_divergence_compares_main_even_when_head_is_elsewhere(tmp_path: Path) -> None:

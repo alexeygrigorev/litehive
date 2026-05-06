@@ -53,7 +53,11 @@ def dispatch_status(argv: list[str]) -> int:
         render_operational_issue_lines,
         status_has_problems,
     )
-    from litehive.observability.status import collect_task_pipeline_status, render_task_pipeline_status_lines  # noqa: PLC0415
+    from litehive.container import build_workspace  # noqa: PLC0415
+    from litehive.observability.status import (  # noqa: PLC0415
+        collect_task_pipeline_status_for_workspace,
+        render_task_pipeline_status_lines,
+    )
 
     try:
         explicit_workspace = _workspace_override_from_argv(argv)
@@ -64,8 +68,9 @@ def dispatch_status(argv: list[str]) -> int:
     except ValueError as exc:
         print(f"status failed: {exc}")
         return 1
-    status = collect_task_pipeline_status(workspace, read_only=True)
-    for line in render_task_pipeline_status_lines(status, workspace=workspace, mode="summary"):
+    workspace_obj = build_workspace(workspace)
+    status = collect_task_pipeline_status_for_workspace(workspace_obj, read_only=True)
+    for line in render_task_pipeline_status_lines(status, workspace=workspace_obj.root, mode="summary"):
         print(line)
     if status_has_problems(status.issues):
         print()

@@ -22,8 +22,8 @@ from litehive.container import build_container, build_workspace
 from litehive.daemon.registry import daemon_metadata
 from litehive.domain.common import TaskStatus
 from litehive.observability.status import (
-    collect_task_pipeline_status,
     collect_recent_activity,
+    collect_task_pipeline_status_for_workspace,
     find_last_completed_task,
     render_active_task_section,
     render_engine_availability_lines,
@@ -148,7 +148,7 @@ def status_command(
     """
     ws = build_workspace(workspace)
     root = ws.root
-    status = collect_task_pipeline_status(root, diagnostics=full)
+    status = collect_task_pipeline_status_for_workspace(ws, diagnostics=full)
     if full:
         for line in render_task_pipeline_status_lines(
             status,

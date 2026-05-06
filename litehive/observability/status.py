@@ -68,6 +68,7 @@ from litehive.observability.status_summary import (
     render_task_summary,
 )
 from litehive.state.records import get_task
+from litehive.workspace import Workspace
 
 collect_operational_status_snapshot = collect_operational_status_snapshot_for_workspace
 collect_status_snapshot = collect_status_snapshot_for_workspace
@@ -78,6 +79,7 @@ __all__ = [
     "TaskPipelineStatusData",
     "collect_recent_activity",
     "collect_task_pipeline_status",
+    "collect_task_pipeline_status_for_workspace",
     "estimate_task_execution",
     "find_last_completed_task",
     "render_active_task_detail_lines",
@@ -126,6 +128,21 @@ def collect_task_pipeline_status(
     diagnostics: bool = False,
 ) -> TaskPipelineStatusData:
     """
+    Path-based compatibility wrapper for callers not yet on ``Workspace``.
+    """
+    return collect_task_pipeline_status_for_workspace(
+        build_workspace(root.resolve()),
+        read_only=read_only,
+        diagnostics=diagnostics,
+    )
+
+
+def collect_task_pipeline_status_for_workspace(
+    workspace: Workspace,
+    read_only: bool = False,
+    diagnostics: bool = False,
+) -> TaskPipelineStatusData:
+    """
     Bundle the workspace snapshot the CLI status commands need in one read.
 
     Called by the CLI status entry points and by the daemon when
@@ -136,8 +153,7 @@ def collect_task_pipeline_status(
     fast-path skips, because the issue scan is too expensive for
     every status print.
     """
-    resolved_root = root.resolve()
-    workspace = build_workspace(resolved_root)
+    resolved_root = workspace.root
     if diagnostics:
         snapshot = collect_status_snapshot_for_workspace(workspace)
     else:

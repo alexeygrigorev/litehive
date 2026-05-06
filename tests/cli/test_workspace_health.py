@@ -289,7 +289,7 @@ def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatc
     )
     status.active_task = active_task
 
-    monkeypatch.setattr("litehive.cli.workspace.collect_task_pipeline_status", lambda root, **kwargs: status)
+    monkeypatch.setattr("litehive.cli.workspace.collect_task_pipeline_status_for_workspace", lambda workspace, **kwargs: status)
     monkeypatch.setattr("litehive.cli.workspace.list_tasks_state_first", lambda workspace, state=None: [])
     monkeypatch.setattr("litehive.cli.workspace.find_last_completed_task", lambda tasks: None)
     monkeypatch.setattr("litehive.cli.workspace.collect_recent_activity", lambda root: [])
@@ -311,7 +311,7 @@ def test_full_status_command_lists_tasks_with_strict_false(tmp_path: Path, monke
     )
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr("litehive.cli.workspace.collect_task_pipeline_status", lambda root, **kwargs: status)
+    monkeypatch.setattr("litehive.cli.workspace.collect_task_pipeline_status_for_workspace", lambda workspace, **kwargs: status)
     monkeypatch.setattr(
         "litehive.cli.workspace.render_task_pipeline_status_lines",
         lambda task_status, *, workspace, mode, retry_on_label=None: ["workspace: demo"],
