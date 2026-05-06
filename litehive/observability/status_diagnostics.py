@@ -93,7 +93,7 @@ def collect_status_snapshot_for_workspace(workspace: Workspace) -> StatusSnapsho
     root = workspace.root
     registry_issues = probe_registry_files()
     config, config_issues = _load_config_for_status(root)
-    state, state_issues = _load_state_for_status(root)
+    state, state_issues = _load_state_for_status(workspace)
     runner, runner_issue = _load_runner_status_for_status(root)
     monitoring, monitoring_issues = _load_engine_monitoring_for_status(workspace)
     if runner_issue is not None:
@@ -148,7 +148,7 @@ def collect_operational_status_snapshot_for_workspace(workspace: Workspace) -> S
     """
     root = workspace.root
     config, config_issues = _load_config_for_status(root)
-    state, state_issues = _load_state_for_status(root)
+    state, state_issues = _load_state_for_status(workspace)
     runner, runner_issue = _load_runner_status_for_status(root)
     monitoring, monitoring_issues = _load_engine_monitoring_for_status(workspace)
     if runner_issue is not None:

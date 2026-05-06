@@ -31,7 +31,7 @@ from litehive.observability.status_io import (
 )
 from litehive.observability.status_types import StatusIssue
 from litehive.state.locking import runner_metadata_present, runner_pid_is_alive
-from litehive.state.store import runtime_store
+from litehive.state.store import runtime_store_for_workspace
 from litehive.workspace import Workspace
 
 
@@ -142,7 +142,7 @@ def _config_error_key(exc: Exception) -> str | None:
     return None
 
 
-def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue]]:
+def _load_state_for_status(workspace: Workspace) -> tuple[WorkspaceState, list[StatusIssue]]:
     """
     Read workspace state without taking a writer lock.
 
@@ -153,7 +153,7 @@ def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue
     badly-mangled file before attempting a full read.
     """
     issues: list[StatusIssue] = []
-    db_path = workspace_path(root, "data.db")
+    db_path = workspace.runtime_path("data.db")
     if db_path.exists():
         try:
             with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
@@ -172,7 +172,7 @@ def _load_state_for_status(root: Path) -> tuple[WorkspaceState, list[StatusIssue
             )
             return WorkspaceState(), issues
     try:
-        store_state = runtime_store(root).load_workspace_state_read_only()
+        store_state = runtime_store_for_workspace(workspace).load_workspace_state_read_only()
     except (OSError, sqlite3.DatabaseError, ValueError, ValidationError) as exc:
         detail = str(exc).strip() or type(exc).__name__
         issues.append(
