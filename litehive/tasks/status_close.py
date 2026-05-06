@@ -9,7 +9,7 @@ so the operator can resume later).
 from pathlib import Path
 
 from litehive.container import build_container
-from litehive.domain.common import TaskStatus
+from litehive.domain.common import OutcomeReasonCode, TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import StopTaskSummary
 
@@ -107,8 +107,13 @@ def _close_task_transition(
     live runner/subagent is signalled so a closed task does not keep
     consuming runtime resources.
     """
-    if outcome not in _CLOSE_OUTCOME_REASON_CODES:
-        allowed = ", ".join(sorted(_CLOSE_OUTCOME_REASON_CODES))
+    try:
+        outcome_code = OutcomeReasonCode(outcome)
+    except ValueError:
+        allowed = ", ".join(sorted(code.value for code in _CLOSE_OUTCOME_REASON_CODES))
+        raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
+    if outcome_code not in _CLOSE_OUTCOME_REASON_CODES:
+        allowed = ", ".join(sorted(code.value for code in _CLOSE_OUTCOME_REASON_CODES))
         raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
     state = load_state(root)
     stop_summary: StopTaskSummary | None = None
@@ -150,7 +155,7 @@ def _close_task_transition(
             raise ValueError(f"Task {task.id} is already done and cannot be closed")
         journal_message = _apply_close_task_state(
             task,
-            outcome=outcome,
+            outcome=outcome_code,
             reason=reason,
             follow_up_task_id=follow_up_task_id,
         )
@@ -166,7 +171,7 @@ def _close_task_transition(
             before_task=before_task,
             before_queue=queue_before,
             context={
-                "outcome": outcome,
+                "outcome": outcome_code.value,
                 "reason": reason,
                 "follow_up_task_id": follow_up_task_id,
             },

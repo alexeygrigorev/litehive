@@ -9,7 +9,7 @@ persistence and outcome-shaping plumbing.
 
 from pathlib import Path
 
-from litehive.domain.common import PipelineStatus, TaskStatus
+from litehive.domain.common import OutcomeKind, OutcomeReasonCode, PipelineStatus, TaskStatus
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.state.persist import persist_task_and_state_without_runner_guard
@@ -28,14 +28,20 @@ from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
 _terminate_subagent_pid = terminate_subagent_pid
 
 
-_CLOSE_OUTCOME_REASON_CODES = {"done", "wont_do", "deferred", "duplicate", "execution_cancelled"}
+_CLOSE_OUTCOME_REASON_CODES = {
+    OutcomeReasonCode.DONE,
+    OutcomeReasonCode.WONT_DO,
+    OutcomeReasonCode.DEFERRED,
+    OutcomeReasonCode.DUPLICATE,
+    OutcomeReasonCode.EXECUTION_CANCELLED,
+}
 
-_CLOSE_REASON_CODE_LABELS: dict[str, str] = {
-    "done": "Task already satisfied.",
-    "wont_do": "Task closed as won't do.",
-    "deferred": "Task deferred.",
-    "duplicate": "Task closed as duplicate.",
-    "execution_cancelled": "Task abandoned via CLI.",
+_CLOSE_REASON_CODE_LABELS: dict[OutcomeReasonCode, str] = {
+    OutcomeReasonCode.DONE: "Task already satisfied.",
+    OutcomeReasonCode.WONT_DO: "Task closed as won't do.",
+    OutcomeReasonCode.DEFERRED: "Task deferred.",
+    OutcomeReasonCode.DUPLICATE: "Task closed as duplicate.",
+    OutcomeReasonCode.EXECUTION_CANCELLED: "Task abandoned via CLI.",
 }
 
 
@@ -125,9 +131,9 @@ def _apply_cancelled_task_state(task: TaskRecord, reason: str) -> None:
     task.flag_reason = None
     apply_task_outcome(
         task,
-        kind="closed",
+        kind=OutcomeKind.CLOSED,
         stage=task.pipeline_status,
-        reason_code="execution_cancelled",
+        reason_code=OutcomeReasonCode.EXECUTION_CANCELLED,
         reason=reason,
         retry_count=0,
         retry_limit=0,
@@ -136,10 +142,10 @@ def _apply_cancelled_task_state(task: TaskRecord, reason: str) -> None:
 
 def _apply_close_task_state(
     task: TaskRecord,
-    outcome: str,
+    outcome: OutcomeReasonCode,
     reason: str | None,
     follow_up_task_id: str | None = None,
-    pipeline_status: str | None = None,
+    pipeline_status: PipelineStatus | str | None = None,
 ) -> str:
     """
     Project a task into the done/closed shape and return the journal message.
@@ -150,18 +156,18 @@ def _apply_close_task_state(
     one rule set; returning the journal text lets the caller persist it
     in the same audit envelope.
     """
-    if outcome == "done":
+    if outcome == OutcomeReasonCode.DONE:
         execution_status = "done"
     else:
         execution_status = "cancelled"
     clear_task_run_activity(task, execution_status=execution_status)
-    if outcome == "done":
+    if outcome == OutcomeReasonCode.DONE:
         task.status = TaskStatus.DONE
     else:
         task.status = TaskStatus.CLOSED
-    task.close_reason = outcome
+    task.close_reason = outcome.value
     task.flag_reason = None
-    if outcome == "done":
+    if outcome == OutcomeReasonCode.DONE:
         pipeline_status_fallback = PipelineStatus.DONE
     else:
         pipeline_status_fallback = task.pipeline_status
@@ -171,9 +177,10 @@ def _apply_close_task_state(
         if isinstance(resolved_pipeline_status, PipelineStatus)
         else PipelineStatus(resolved_pipeline_status)
     )
+    outcome_kind = OutcomeKind(task.status.value)
     apply_task_outcome(
         task,
-        kind=task.status,
+        kind=outcome_kind,
         stage=task.pipeline_status,
         reason_code=outcome,
         reason=reason or _CLOSE_REASON_CODE_LABELS[outcome],
@@ -181,7 +188,7 @@ def _apply_close_task_state(
         retry_limit=0,
         follow_up_task_id=follow_up_task_id,
     )
-    journal_message = f"Task closed: {outcome}."
+    journal_message = f"Task closed: {outcome.value}."
     if reason:
         journal_message += f" {reason}"
     if follow_up_task_id is not None:
