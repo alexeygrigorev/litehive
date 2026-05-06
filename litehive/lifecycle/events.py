@@ -391,12 +391,12 @@ class RecoverySucceeded(Event):
     Fired only by ``RecoveryAgent.verdict_to_event`` in response to a
     ``resume`` / ``advance`` / ``done`` outcome. The ``resume`` field
     tells the rule table where to route:
-      - ``"done"`` → terminal
+      - ``PipelineState.DONE`` → terminal
       - a stage name (e.g. ``"implementing"``) → that stage's pre-hook
       - a bare phase name → that phase directly
     """
 
-    resume: PipelineState | Literal["done"]
+    resume: PipelineState
     disposition_hint: Literal["resume", "advance", "done"] = "resume"
 
 

@@ -163,7 +163,7 @@ def resume_from_origin(state: TaskState, event: Event) -> PipelineState:
     if not isinstance(event, RecoverySucceeded):
         raise TypeError(f"resume_from_origin expects RecoverySucceeded, got {type(event).__name__}")
     e = event
-    if e.resume == "done":
+    if e.resume == PipelineState.DONE:
         return PipelineState.DONE
     if not e.resume:
         trigger = state.active_recovery_trigger

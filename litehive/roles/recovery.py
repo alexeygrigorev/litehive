@@ -1,10 +1,10 @@
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_report, load_subagent_session
 from litehive.container import build_workspace
-from litehive.domain.common import PipelineState, pipeline_stage_key
+from litehive.domain.common import PipelineState, Verdict, canonical_pipeline_state, pipeline_stage_key
 from litehive.domain.runtime import RuntimeRecoveryOutcome
 from litehive.workspace import Workspace
 from litehive.lifecycle.events import Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
@@ -154,20 +154,23 @@ class RecoveryAgent(RoleAgent):
         ``RecoveryBudgetHit``, or ``RecoveryFailed``. Called by the agent
         node when the recovery turn returns to the lifecycle runner.
         """
-        outcome = verdict.outcome.lower()
-        if outcome == "resume":
+        try:
+            outcome = Verdict(str(verdict.outcome).lower())
+        except ValueError:
+            return RecoveryFailed(reason=verdict.reason or "recovery_failed")
+        if outcome == Verdict.RESUME:
             target = str(verdict.metadata.get("target_stage") or "").strip()
             if not target:
                 return RecoveryFailed(reason="recovery resume verdict missing target_stage")
-            return RecoverySucceeded(resume=cast(PipelineState, target), disposition_hint="resume")
-        if outcome == "advance":
+            return RecoverySucceeded(resume=canonical_pipeline_state(target), disposition_hint="resume")
+        if outcome == Verdict.ADVANCE:
             target = str(verdict.metadata.get("target_stage") or "").strip()
             if not target:
                 return RecoveryFailed(reason="recovery advance verdict missing target_stage")
-            return RecoverySucceeded(resume=cast(PipelineState, target), disposition_hint="advance")
-        if outcome == "done":
-            return RecoverySucceeded(resume="done", disposition_hint="done")
-        if outcome == "budget_hit":
+            return RecoverySucceeded(resume=canonical_pipeline_state(target), disposition_hint="advance")
+        if outcome == Verdict.DONE:
+            return RecoverySucceeded(resume=PipelineState.DONE, disposition_hint="done")
+        if outcome == Verdict.BUDGET_HIT:
             return RecoveryBudgetHit()
         return RecoveryFailed(reason=verdict.reason or "recovery_failed")
 

@@ -522,7 +522,7 @@ def test_recovery_succeeded_resume_done():
             message="boom",
         ),
     )
-    assert step("recovering", RecoverySucceeded(resume="done"), state).next == "done"
+    assert step("recovering", RecoverySucceeded(resume=PipelineState.DONE), state).next == "done"
 
 
 def test_recovery_failed_goes_to_failed_terminal_with_reason():

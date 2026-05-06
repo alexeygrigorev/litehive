@@ -2,7 +2,7 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Literal, Protocol
 
-from litehive.domain.common import PipelineState
+from litehive.domain.common import PipelineState, Verdict
 from ..events import Blocked, Crash, Event, Pass, Reject
 from ..persistence import TaskState
 from ..types import NodeType
@@ -81,7 +81,7 @@ class NudgeRequired(Exception):
 
 @dataclass
 class AgentVerdict:
-    outcome: str  # "pass" | "reject"
+    outcome: Verdict | str
     reason: str = ""
     classification: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -383,10 +383,13 @@ class AgentNode(Node):
         runner caring about engine response shapes. Recovery overrides
         this method because its verdict vocabulary is wider.
         """
-        outcome = verdict.outcome.lower()
-        if outcome == "pass":
+        try:
+            outcome = Verdict(str(verdict.outcome).lower())
+        except ValueError:
+            return Crash(exc_type="UnknownVerdict", message=str(verdict.outcome))
+        if outcome == Verdict.PASS:
             return Pass(metadata=dict(verdict.metadata or {}))
-        if outcome == "reject":
+        if outcome == Verdict.REJECT:
             metadata = dict(verdict.metadata or {})
             classification = verdict.classification or _metadata_classification(metadata)
             if classification is not None:
@@ -397,9 +400,9 @@ class AgentNode(Node):
                 classification=classification,
                 metadata=metadata,
             )
-        if outcome == "blocked":
+        if outcome == Verdict.BLOCKED:
             return Blocked(reason=verdict.reason)
-        return Crash(exc_type="UnknownVerdict", message=verdict.outcome)
+        return Crash(exc_type="UnknownVerdict", message=outcome.value)
 
 
 def _metadata_classification(metadata: dict[str, Any]) -> str | None:
