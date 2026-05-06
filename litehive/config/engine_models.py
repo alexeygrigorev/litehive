@@ -24,10 +24,10 @@ from heru.quota import (
     check_zai_quota,
     preferred_reset_at,
 )
-from litehive.container import build_container
 from litehive.config.model import LitehiveConfig
 from litehive.config.runtime_settings import clear_engine_freeze, set_engine_freeze
 from litehive.domain.task import TaskRecord
+from litehive.workspace import Workspace
 
 
 def _engine_attempt_order(initial_engine_names: list[str], engine_preference: list[str]) -> list[str]:
@@ -178,6 +178,31 @@ def persist_engine_freeze_iso(
     """
     Write a freeze entry to the audited runtime-settings store.
 
+    Path-based compatibility wrapper. Callers that already have a
+    :class:`Workspace` should use
+    :func:`persist_engine_freeze_iso_for_workspace`.
+    """
+    persist_engine_freeze_iso_for_workspace(
+        Workspace.from_path(root),
+        engine_name=engine_name,
+        freeze_iso=freeze_iso,
+        actor=actor,
+        source=source,
+        reason=reason,
+    )
+
+
+def persist_engine_freeze_iso_for_workspace(
+    workspace: Workspace,
+    engine_name: str,
+    freeze_iso: str,
+    actor: str = "system",
+    source: str = "runtime",
+    reason: str | None = None,
+) -> None:
+    """
+    Write a freeze entry through an injected workspace.
+
     Called by the CLI ``engine freeze`` command and by
     quota-driven freezes inside engine selection. Both paths
     funnel through here so audit rows for an operator-typed
@@ -189,7 +214,7 @@ def persist_engine_freeze_iso(
     else:
         context = None
     set_engine_freeze(
-        build_container(root).workspace,
+        workspace,
         engine_name=engine_name,
         freeze_iso=freeze_iso,
         actor=actor,
@@ -208,6 +233,29 @@ def clear_persisted_engine_freeze(
     """
     Remove a freeze entry through the audited store.
 
+    Path-based compatibility wrapper. Callers that already have a
+    :class:`Workspace` should use
+    :func:`clear_persisted_engine_freeze_for_workspace`.
+    """
+    return clear_persisted_engine_freeze_for_workspace(
+        Workspace.from_path(root),
+        engine_name=engine_name,
+        actor=actor,
+        source=source,
+        reason=reason,
+    )
+
+
+def clear_persisted_engine_freeze_for_workspace(
+    workspace: Workspace,
+    engine_name: str,
+    actor: str = "system",
+    source: str = "runtime",
+    reason: str | None = None,
+) -> bool:
+    """
+    Remove a freeze entry through an injected workspace.
+
     Returns whether anything actually changed so callers can
     avoid emitting "unfroze nothing" log lines. Called by the
     CLI ``engine unfreeze`` command and by engine selection when
@@ -220,7 +268,7 @@ def clear_persisted_engine_freeze(
     else:
         context = None
     return clear_engine_freeze(
-        build_container(root).workspace,
+        workspace,
         engine_name=engine_name,
         actor=actor,
         source=source,

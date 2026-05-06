@@ -17,8 +17,10 @@ from litehive.cli.app import app
 from litehive.config.engine_models import (
     EngineSelection,
     clear_persisted_engine_freeze,
+    clear_persisted_engine_freeze_for_workspace,
     parse_engine_freeze_until,
     persist_engine_freeze_iso,
+    persist_engine_freeze_iso_for_workspace,
 )
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
@@ -377,6 +379,7 @@ def test_queue_switch_subcommand_still_works(tmp_path: Path) -> None:
 
 def test_engine_freeze_helpers_persist_and_clear_workspace_config(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    workspace = Workspace.from_path(tmp_path)
 
     assert parse_engine_freeze_until("2099-06-15") == "2099-06-15T00:00:00Z"
     assert parse_engine_freeze_until("2099-06-15 14:30") is None
@@ -387,6 +390,15 @@ def test_engine_freeze_helpers_persist_and_clear_workspace_config(tmp_path: Path
     assert clear_persisted_engine_freeze(tmp_path, engine_name="gemini") is False
     assert clear_persisted_engine_freeze(tmp_path, engine_name="codex") is True
     assert "codex" not in load_config(tmp_path).engine_freeze
+
+    persist_engine_freeze_iso_for_workspace(
+        workspace,
+        engine_name="gemini",
+        freeze_iso="2099-06-15T00:00:00Z",
+    )
+    assert load_config(tmp_path).engine_freeze["gemini"] == "2099-06-15T00:00:00Z"
+    assert clear_persisted_engine_freeze_for_workspace(workspace, engine_name="gemini") is True
+    assert "gemini" not in load_config(tmp_path).engine_freeze
 
 
 def test_frozen_engine_skipped_in_attempt_order(tmp_path: Path) -> None:
