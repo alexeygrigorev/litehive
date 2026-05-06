@@ -285,7 +285,7 @@ def _trim_activity_for_prompt(
     if last_rejection:
         activity = [entry for entry in activity if not _matches_last_rejection(entry, last_rejection)]
 
-    def _last_where(**match: str | Verdict) -> dict[str, Any] | None:
+    def _last_where(**match: str | TaskStage | Verdict) -> dict[str, Any] | None:
         """Local closure: scan ``activity`` newest-first for the first entry that equals every kwarg.
 
         Used by the per-stage selection branches of ``_select_activity_entries``
@@ -303,7 +303,7 @@ def _trim_activity_for_prompt(
         pass  # no activity context needed
 
     elif current_stage == TaskStage.IMPLEMENTING:
-        g = _last_where(stage=TaskStage.GROOMING.value, verdict=Verdict.PASS)
+        g = _last_where(stage=TaskStage.GROOMING, verdict=Verdict.PASS)
         if g:
             kept.append(g)
         # On retry, the rejection is rendered in the dedicated last_rejection
@@ -311,28 +311,28 @@ def _trim_activity_for_prompt(
         if not last_rejection:
             for e in reversed(activity):
                 if e.get("verdict") == Verdict.REJECT and e.get("stage") in (
-                    TaskStage.TESTING.value,
-                    TaskStage.ACCEPTING.value,
-                    TaskStage.IMPLEMENTING.value,
+                    TaskStage.TESTING,
+                    TaskStage.ACCEPTING,
+                    TaskStage.IMPLEMENTING,
                 ):
                     kept.append(e)
                     break
 
     elif current_stage == TaskStage.TESTING:
-        p = _last_where(stage=TaskStage.IMPLEMENTING.value, verdict=Verdict.PASS)
+        p = _last_where(stage=TaskStage.IMPLEMENTING, verdict=Verdict.PASS)
         if p:
             kept.append(p)
 
     elif current_stage == TaskStage.ACCEPTING:
-        p = _last_where(stage=TaskStage.IMPLEMENTING.value, verdict=Verdict.PASS)
+        p = _last_where(stage=TaskStage.IMPLEMENTING, verdict=Verdict.PASS)
         if p:
             kept.append(p)
-        t = _last_where(stage=TaskStage.TESTING.value, verdict=Verdict.PASS)
+        t = _last_where(stage=TaskStage.TESTING, verdict=Verdict.PASS)
         if t:
             kept.append(t)
 
     elif current_stage == PipelineState.RECOVERING:
-        p = _last_where(stage=TaskStage.IMPLEMENTING.value, verdict=Verdict.PASS)
+        p = _last_where(stage=TaskStage.IMPLEMENTING, verdict=Verdict.PASS)
         if p:
             kept.append(p)
         # The crash or rejection that triggered recovery
@@ -343,7 +343,7 @@ def _trim_activity_for_prompt(
 
     else:
         # Fallback: grooming pass + last per (stage, verdict)
-        g = _last_where(stage=TaskStage.GROOMING.value, verdict=Verdict.PASS)
+        g = _last_where(stage=TaskStage.GROOMING, verdict=Verdict.PASS)
         if g:
             kept.append(g)
         seen: set[tuple[str, str]] = set()
