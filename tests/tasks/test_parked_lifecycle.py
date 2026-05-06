@@ -17,7 +17,7 @@ from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, list_tasks, save_task
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.tasks.queue import dequeue_next_task, restore_missing_queued_tasks
-from litehive.tasks.status import resume_task, stop_current_task
+from litehive.tasks.status import requeue_task_for_workspace, resume_task, resume_task_for_workspace, stop_current_task
 from litehive.worktree.inspection import inspect_dirty_worktree_gate
 
 
@@ -143,6 +143,27 @@ def test_resume_task_allows_stranded_in_progress_task(tmp_path: Path, execution_
     assert resumed.runtime.pipeline.current_stage.stage == "grooming"
     assert resumed.runtime.pipeline.current_stage.status == "idle"
     assert load_state(tmp_path).queue[0] == task.id
+
+
+def test_resume_and_requeue_accept_injected_workspace(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
+    parked = create_task(tmp_path, title="Resume through workspace")
+    parked.status = TaskStatus.PARKED
+    parked.pipeline_status = PipelineStatus.IMPLEMENTING
+    save_task(tmp_path, parked)
+    flagged = create_task(tmp_path, title="Requeue through workspace")
+    flagged.status = TaskStatus.FLAGGED
+    flagged.pipeline_status = PipelineStatus.IMPLEMENTING
+    save_task(tmp_path, flagged)
+
+    resumed = resume_task_for_workspace(workspace, parked.id, front=True)
+    requeued = requeue_task_for_workspace(workspace, flagged.id, force=True)
+
+    assert resumed.status == "queued"
+    assert resumed.pipeline_status == "implementing"
+    assert requeued.status == "queued"
+    assert requeued.pipeline_status == "implementing"
 
 
 def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(

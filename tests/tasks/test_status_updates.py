@@ -13,7 +13,7 @@ from litehive.workspace import Workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.state.store import runtime_store
-from litehive.tasks.status import close_task, update_task
+from litehive.tasks.status import close_task, close_task_for_workspace, park_task_for_workspace, update_task
 from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
 
 
@@ -217,3 +217,19 @@ def test_close_task_resets_pipeline_state_row(tmp_path: Path) -> None:
     assert refreshed.runtime.pipeline.last_outcome.reason == "duplicate umbrella"
     with pytest.raises(TaskNotFound):
         persistence.load(task.id)
+
+
+def test_close_and_park_accept_injected_workspace(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
+    close_me = create_task(tmp_path, title="Close through workspace")
+    park_me = create_task(tmp_path, title="Park through workspace")
+
+    closed = close_task_for_workspace(workspace, close_me.id, outcome="duplicate", reason="same work")
+    parked = park_task_for_workspace(workspace, park_me.id)
+
+    assert closed.status == "closed"
+    assert closed.close_reason == "duplicate"
+    assert closed.runtime.pipeline.last_outcome.reason == "same work"
+    assert parked.status == "parked"
+    assert parked.runtime.pipeline.execution_status == "paused"

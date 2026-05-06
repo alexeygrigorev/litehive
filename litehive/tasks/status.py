@@ -14,18 +14,30 @@ Names are re-exported here so existing imports of the form
 ``from litehive.tasks.status import ...`` keep working.
 """
 
-from litehive.tasks.status_close import abandon_task, close_task, park_task
-from litehive.tasks.status_resume import requeue_task, resume_task
+from litehive.tasks.status_close import (
+    abandon_task,
+    abandon_task_for_workspace,
+    close_task,
+    close_task_for_workspace,
+    park_task,
+    park_task_for_workspace,
+)
+from litehive.tasks.status_resume import requeue_task, requeue_task_for_workspace, resume_task, resume_task_for_workspace
 from litehive.tasks.status_update import update_task
 from litehive.tasks.stop import stop_current_task
 from litehive.tasks.switch_engine import switch_task_engine
 
 __all__ = [
     "abandon_task",
+    "abandon_task_for_workspace",
     "close_task",
+    "close_task_for_workspace",
     "park_task",
+    "park_task_for_workspace",
     "requeue_task",
+    "requeue_task_for_workspace",
     "resume_task",
+    "resume_task_for_workspace",
     "stop_current_task",
     "switch_task_engine",
     "update_task",

@@ -182,7 +182,7 @@ def _close_task_transition(
 
 
 def _park_task_transition(
-    root: Path,
+    workspace: Workspace,
     task_id: str,
     reason: str = "Task parked via CLI.",
     audit_actor: str = "operator",
@@ -195,6 +195,7 @@ def _park_task_transition(
     selectable by the runner; the operator brings them back via
     ``litehive task resume`` when ready.
     """
+    root = workspace.root
     with workspace_lock(root):
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
@@ -234,8 +235,27 @@ def abandon_task(
     around ``_abandon_task_transition`` so the public surface stays
     importable from ``litehive.tasks.status``.
     """
-    return _abandon_task_transition(
+    return abandon_task_for_workspace(
         build_workspace(root),
+        task_id,
+        reason=reason,
+        audit_actor=audit_actor,
+        audit_source=audit_source,
+    )
+
+
+def abandon_task_for_workspace(
+    workspace: Workspace,
+    task_id: str,
+    reason: str = "Task abandoned via CLI.",
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> TaskRecord:
+    """
+    Public entry for abandoning a task using an injected workspace.
+    """
+    return _abandon_task_transition(
+        workspace,
         task_id,
         reason=reason,
         audit_actor=audit_actor,
@@ -260,8 +280,31 @@ def close_task(
     reference; thin wrapper around ``_close_task_transition`` so the public
     surface stays importable from ``litehive.tasks.status``.
     """
-    return _close_task_transition(
+    return close_task_for_workspace(
         build_workspace(root),
+        task_id,
+        outcome=outcome,
+        reason=reason,
+        follow_up_task_id=follow_up_task_id,
+        audit_actor=audit_actor,
+        audit_source=audit_source,
+    )
+
+
+def close_task_for_workspace(
+    workspace: Workspace,
+    task_id: str,
+    outcome: str,
+    reason: str | None = None,
+    follow_up_task_id: str | None = None,
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> TaskRecord:
+    """
+    Public entry for closing a task using an injected workspace.
+    """
+    return _close_task_transition(
+        workspace,
         task_id,
         outcome=outcome,
         reason=reason,
@@ -285,8 +328,27 @@ def park_task(
     can pick it up again later via ``litehive task resume``; thin wrapper
     around ``_park_task_transition`` for the public surface.
     """
+    return park_task_for_workspace(
+        build_workspace(root),
+        task_id,
+        reason=reason,
+        audit_actor=audit_actor,
+        audit_source=audit_source,
+    )
+
+
+def park_task_for_workspace(
+    workspace: Workspace,
+    task_id: str,
+    reason: str = "Task parked via CLI.",
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> TaskRecord:
+    """
+    Public entry for parking a task using an injected workspace.
+    """
     return _park_task_transition(
-        root,
+        workspace,
         task_id,
         reason=reason,
         audit_actor=audit_actor,

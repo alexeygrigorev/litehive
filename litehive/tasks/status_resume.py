@@ -246,8 +246,29 @@ def requeue_task(
     public-surface shim around ``_requeue_task_transition`` so existing
     imports of ``requeue_task`` from ``litehive.tasks.status`` keep working.
     """
-    return _requeue_task_transition(
+    return requeue_task_for_workspace(
         build_workspace(root),
+        task_id,
+        front=front,
+        force=force,
+        audit_actor=audit_actor,
+        audit_source=audit_source,
+    )
+
+
+def requeue_task_for_workspace(
+    workspace: Workspace,
+    task_id: str,
+    front: bool = False,
+    force: bool = False,
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> TaskRecord:
+    """
+    Public entry for requeueing a task using an injected workspace.
+    """
+    return _requeue_task_transition(
+        workspace,
         task_id,
         front=front,
         force=force,
@@ -264,4 +285,11 @@ def resume_task(root: Path, task_id: str, front: bool = False) -> TaskRecord:
     last working on; thin shim around ``_resume_task_transition`` for the
     public surface importable via ``litehive.tasks.status``.
     """
-    return _resume_task_transition(build_workspace(root), task_id, front=front)
+    return resume_task_for_workspace(build_workspace(root), task_id, front=front)
+
+
+def resume_task_for_workspace(workspace: Workspace, task_id: str, front: bool = False) -> TaskRecord:
+    """
+    Public entry for resuming a task using an injected workspace.
+    """
+    return _resume_task_transition(workspace, task_id, front=front)
