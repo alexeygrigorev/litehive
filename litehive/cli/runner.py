@@ -14,7 +14,7 @@ from litehive.config.engine_models import select_engine_for_workspace
 from litehive.config.paths import workspace_path
 from litehive.config.runtime_settings import load_runtime_setting_audit_entries, load_runtime_settings
 from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
-from litehive.container import LitehiveContainer, build_container
+from litehive.container import LitehiveContainer, build_container, build_workspace
 from heru import ENGINE_CHOICES
 from litehive.daemon.execution import (
     daemon_status_lines,
@@ -555,8 +555,8 @@ def report_command(
         message=message,
         files_changed=list(files_changed or []),
     )
-    container = build_container(root)
-    append_task_activity(container.workspace, task, entry)
+    workspace_obj = build_workspace(root)
+    append_task_activity(workspace_obj, task, entry)
     print(f"task: {task.id}")
     print(f"stage: {stage}")
     print(f"verdict: {verdict}")
