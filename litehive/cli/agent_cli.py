@@ -19,7 +19,7 @@ from typing import Annotated, cast
 import typer
 
 from litehive.agents.session_store import load_subagent_session
-from litehive.container import build_container
+from litehive.container import build_workspace
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.workspace import Workspace
 
@@ -264,8 +264,7 @@ def agent_report_command(
     if not tid:
         print("report failed: no task id")
         raise SystemExit(1)
-    container = build_container(root)
-    workspace_obj = container.workspace
+    workspace_obj = build_workspace(root)
     task = get_task_record(root, tid)
     if task is None:
         print(f"report failed: task {tid} not found")
