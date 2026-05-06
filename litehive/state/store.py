@@ -826,11 +826,22 @@ def runtime_store(root: Path) -> RuntimeStore:
     """
     Module-level factory for ``RuntimeStore``.
 
-    Used everywhere instead of ``RuntimeStore(root)`` so tests can
+    Path-based compatibility wrapper. Callers that already have a
+    :class:`Workspace` should use :func:`runtime_store_for_workspace`
+    so the store does not rebuild workspace dependencies.
+    """
+    return runtime_store_for_workspace(Workspace.from_path(root))
+
+
+def runtime_store_for_workspace(workspace: Workspace) -> RuntimeStore:
+    """
+    Module-level factory for ``RuntimeStore`` from an injected workspace.
+
+    Used everywhere instead of direct construction so tests can
     monkey-patch a single symbol; without the factory each call site
     would have to be patched independently when redirecting the store.
     """
-    return RuntimeStore(Workspace.from_path(root))
+    return RuntimeStore(workspace)
 
 
 def _load_task_state_for_intent_columns(
