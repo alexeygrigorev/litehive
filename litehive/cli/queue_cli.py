@@ -12,7 +12,7 @@ from litehive.cli.display import (
     task_model_label,
 )
 from litehive.config.workspace import ensure_workspace
-from litehive.container import build_container
+from litehive.container import build_container, build_workspace
 from litehive.git.ops import GitError, checkpoint_message
 from litehive.recovery.execution_recovery import recover_stale_runner_state
 from litehive.tasks.completed_task_recovery import recover_completed_task
@@ -23,10 +23,10 @@ from litehive.tasks.normalization import missing_acceptance_criteria_reason
 from litehive.state.persist import load_state
 from litehive.tasks.queue import move_queued_task, prioritize_queued_tasks
 from litehive.tasks.status import (
-    requeue_task,
-    resume_task,
+    requeue_task_for_workspace,
+    resume_task_for_workspace,
     stop_current_task,
-    switch_task_engine,
+    switch_task_engine_for_workspace,
 )
 
 app = make_typer(invoke_without_command=True)
@@ -125,7 +125,7 @@ def promote(
     try:
         task = require_task(workspace, task_id)
         if task.status in {TaskStatus.INTERRUPTED, TaskStatus.PARKED, TaskStatus.FLAGGED, TaskStatus.CLOSED}:
-            task = resume_task(workspace, task_id, front=True)
+            task = resume_task_for_workspace(build_workspace(workspace), task_id, front=True)
             print(f"task: {task.id} {task.title}")
             print("status: queued")
             print(f"pipeline_stage: {task.pipeline_status}")
@@ -164,8 +164,9 @@ def requeue(
     task = get_task_record(workspace, task_id)
     if task is not None and (task.pipeline_status == PipelineStatus.DONE or task.status == TaskStatus.DONE):
         return recover(task_id, workspace)
+    workspace_obj = build_workspace(workspace)
     try:
-        task = requeue_task(workspace, task_id, front=front, force=force)
+        task = requeue_task_for_workspace(workspace_obj, task_id, front=front, force=force)
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"requeue failed: {exc}")
         return 1
@@ -196,8 +197,9 @@ def resume(
     interruption (engine quota, sandbox failure, manual park).
     """
     ensure_workspace(workspace)
+    workspace_obj = build_workspace(workspace)
     try:
-        task = resume_task(workspace, task_id, front=front)
+        task = resume_task_for_workspace(workspace_obj, task_id, front=front)
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"resume failed: {exc}")
         return 1
@@ -350,8 +352,9 @@ def switch(
     before producing more work on the old engine.
     """
     ensure_workspace(workspace)
+    workspace_obj = build_workspace(workspace)
     try:
-        summary = switch_task_engine(workspace, task_id, engine=engine, reason=reason)
+        summary = switch_task_engine_for_workspace(workspace_obj, task_id, engine=engine, reason=reason)
     except (ValueError, WorkspaceConflictError) as exc:
         print(f"switch failed: {exc}")
         return 1
