@@ -1,28 +1,27 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from pydantic import ValidationError
-import yaml
-
-from litehive.container import build_container, build_workspace
+from litehive.config.model import LitehiveConfig
 from litehive.config.profiles.model import ProcessProfile
 from litehive.domain.common import PipelineState, TaskStage
 from litehive.lifecycle.nodes.agent import AgentNode, EngineSelector, SessionProvider
 from litehive.lifecycle.persistence import LastRejection, TaskState
 from litehive.lifecycle.prompt_types import AgentPrompt
+from litehive.workspace import Workspace
 from .guidance import default_startup_guidance
-
-if TYPE_CHECKING:
-    from litehive.workspace import Workspace
 
 
 @dataclass
 class PromptContext:
     """Workspace-level context the runner provides to agents at construction.
 
-    - ``workspace_root``: repo root; used to read per-project overlays at
+    - ``workspace``: resolved workspace dependency supplied by the
+      process-level container; used to read per-project overlays at
       ``.litehive/agents/{role}.md`` and ``.litehive/agents/all.md``.
+    - ``config``: already-loaded workspace config. When unavailable
+      (usually in tests), config-backed prompt sections are omitted
+      instead of loading config inside the role.
     - ``startup_guidance``: extra bullets per role, merged on top of the
       built-in ``DEFAULT_STARTUP_GUIDANCE``. Usually comes from workspace
       config.
@@ -30,9 +29,15 @@ class PromptContext:
       django, …) that can add per-stage instruction blocks.
     """
 
-    workspace_root: Path
+    workspace: Workspace
+    config: LitehiveConfig | None = None
     startup_guidance: dict[str, list[str]] = field(default_factory=dict)
     profile_overlay: ProcessProfile | None = None
+
+    @property
+    def workspace_root(self) -> Path:
+        """Return the workspace root for path-only prompt helpers."""
+        return self.workspace.root
 
 
 def _bulletize(lines: list[str]) -> str:
@@ -175,8 +180,7 @@ class RoleAgent(AgentNode):
         fallback = state.last_rejection_by_stage.get(self.NODE_NAME)
         if self.NODE_NAME != PipelineState.IMPLEMENTING:
             return fallback
-        root = self.prompt_context.workspace_root
-        rejection_stage = _latest_reject_stage_for_implementing(build_workspace(root), state.task_id)
+        rejection_stage = _latest_reject_stage_for_implementing(self.prompt_context.workspace, state.task_id)
         if rejection_stage is None:
             return fallback
         return state.last_rejection_by_stage.get(rejection_stage) or fallback
@@ -191,10 +195,8 @@ class RoleAgent(AgentNode):
         the hook-rejection retry cycle.
         """
         after_phase = f"after_{self.NODE_NAME}"
-        root = self.prompt_context.workspace_root
-        try:
-            config = build_container(root).config
-        except (OSError, TypeError, ValidationError, ValueError, yaml.YAMLError):
+        config = self.prompt_context.config
+        if config is None:
             return []
         raw_hooks = (config.runner_hooks or {}).get(after_phase, [])
         return _stage_hook_summaries(raw_hooks)

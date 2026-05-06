@@ -35,6 +35,7 @@ from typing import Any
 from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.container import build_container, build_subagent_manager, build_workspace
+from litehive.config.model import LitehiveConfig
 from litehive.domain.agent import EngineFailure
 from litehive.domain.common import OutcomeReasonCode, PipelineState, TaskStage, Verdict, cap_feedback
 from litehive.domain.reports import StageReport, TaskActivityStage, canonical_report_pipeline_state
@@ -401,6 +402,7 @@ class HeruEngineAdapter:
         workspace_root: Path,
         *,
         workspace: Workspace,
+        config: LitehiveConfig | None = None,
         model_name: str | None = None,
     ) -> None:
         """
@@ -413,6 +415,7 @@ class HeruEngineAdapter:
         self.name = engine_name
         self.workspace_root = Path(workspace_root)
         self.workspace = workspace
+        self.config = config
         self.model_name = model_name
 
     def with_model(self, model_name: str | None) -> "HeruEngineAdapter":
@@ -428,6 +431,7 @@ class HeruEngineAdapter:
             self.name,
             self.workspace_root,
             workspace=self.workspace,
+            config=self.config,
             model_name=model_name,
         )
 
@@ -649,7 +653,7 @@ class HeruEngineAdapter:
         recovery_agent = RecoveryAgent(
             _NullSelector(),
             _NullSessions(),
-            prompt_context=PromptContext(workspace_root=self.workspace_root),
+            prompt_context=PromptContext(workspace=self.workspace, config=self.config),
         )
         prompt = recovery_agent.build_prompt(recovery_state)
         return serialize_prompt(prompt, task_record=task, workspace_root=self.workspace_root)
@@ -799,9 +803,9 @@ def _is_retryable_failure(exc: Exception) -> bool:
 def heru_engine_factory(workspace_root: Path):
     """Return a callable that produces ``HeruEngineAdapter`` instances. Suitable as the ``engine_factory`` argument for ``ConfigBackedEngineSelector``."""
     root = Path(workspace_root)
-    workspace = build_workspace(root)
+    container = build_container(root)
 
     def _factory(engine_name: str) -> Engine:
-        return HeruEngineAdapter(engine_name, root, workspace=workspace)
+        return HeruEngineAdapter(engine_name, root, workspace=container.workspace, config=container.config)
 
     return _factory

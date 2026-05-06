@@ -121,7 +121,7 @@ def test_full_mode_task_runs_end_to_end_to_done(workspace: Path) -> None:
         session_store=sessions,
         hook_runner=hook_runner,
         commit_node=StubCommitNode(),
-        prompt_context=PromptContext(workspace_root=workspace),
+        prompt_context=PromptContext(workspace=Workspace.from_path(workspace)),
     )
 
     runner = StateMachineRunner(registry, persistence, journal=journal)
@@ -167,7 +167,7 @@ def test_single_mode_zero_change_shortcut_goes_straight_to_done(workspace: Path)
         session_store=sessions,
         hook_runner=_NoopHookRunner(),
         commit_node=StubCommitNode(),
-        prompt_context=PromptContext(workspace_root=workspace),
+        prompt_context=PromptContext(workspace=Workspace.from_path(workspace)),
     )
     runner = StateMachineRunner(registry, persistence, journal=journal)
 
@@ -197,7 +197,7 @@ def test_single_mode_with_changes_routes_through_commit(workspace: Path) -> None
         session_store=sessions,
         hook_runner=_NoopHookRunner(),
         commit_node=StubCommitNode(),
-        prompt_context=PromptContext(workspace_root=workspace),
+        prompt_context=PromptContext(workspace=Workspace.from_path(workspace)),
     )
     runner = StateMachineRunner(registry, persistence, journal=journal)
 
@@ -226,7 +226,7 @@ def test_persistence_state_survives_load_after_run(workspace: Path) -> None:
         session_store=sessions,
         hook_runner=_NoopHookRunner(),
         commit_node=StubCommitNode(),
-        prompt_context=PromptContext(workspace_root=workspace),
+        prompt_context=PromptContext(workspace=Workspace.from_path(workspace)),
     )
     runner = StateMachineRunner(registry, persistence, journal=journal)
     persistence.initialize("T-E2E-RESUME", pipeline_mode=PipelineMode.FULL)
@@ -459,7 +459,7 @@ def test_merge_conflict_routes_to_merge_agent_then_back_to_after_commit(
         session_store=InMemorySessionStore(),
         hook_runner=_NoopHookRunner(),
         commit_node=commit_node,
-        prompt_context=PromptContext(workspace_root=workspace),
+        prompt_context=PromptContext(workspace=Workspace.from_path(workspace)),
     )
     runner = StateMachineRunner(registry, persistence, journal=journal)
 
@@ -495,7 +495,7 @@ def test_reject_from_implementing_retries_then_fails(workspace: Path) -> None:
         session_store=sessions,
         hook_runner=_NoopHookRunner(),
         commit_node=StubCommitNode(),
-        prompt_context=PromptContext(workspace_root=workspace),
+        prompt_context=PromptContext(workspace=Workspace.from_path(workspace)),
     )
     runner = StateMachineRunner(registry, persistence, journal=journal)
     persistence.initialize("T-E2E-RECOVER", pipeline_mode=PipelineMode.FULL)

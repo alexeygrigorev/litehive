@@ -154,7 +154,7 @@ def run_task(
         pre_exec_recovery_node = PreExecRecoveryNode(
             repairs=[_worktree_metadata_repair(root)],
         )
-        prompt_context = PromptContext(workspace_root=root)
+        prompt_context = PromptContext(workspace=workspace, config=config)
         hook_specs = hook_specs_from_config(config)
         retry_budget = resolve_task_retry_policy(task, config)
 

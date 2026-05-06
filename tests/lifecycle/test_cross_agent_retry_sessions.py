@@ -92,7 +92,7 @@ def _build_runner(
         session_store=sessions,
         hook_runner=_NoopHookRunner(),
         commit_node=StubCommitNode(),
-        prompt_context=PromptContext(workspace_root=workspace),
+        prompt_context=PromptContext(workspace=Workspace.from_path(workspace)),
     )
     return (
         StateMachineRunner(registry, persistence, journal=SqliteJournal(Workspace.from_path(workspace)), session_store=sessions),
