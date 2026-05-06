@@ -277,7 +277,7 @@ def clear_persisted_engine_freeze_for_workspace(
 
 
 def _persist_engine_freeze(
-    root: Path,
+    workspace: Workspace,
     config: LitehiveConfig,
     engine_name: str,
     freeze_until: datetime,
@@ -295,11 +295,17 @@ def _persist_engine_freeze(
     freeze_iso = freeze_until.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     if config.engine_freeze.get(engine_name) == freeze_iso:
         return
-    persist_engine_freeze_iso(root, engine_name=engine_name, freeze_iso=freeze_iso, actor="system", source="quota")
+    persist_engine_freeze_iso_for_workspace(
+        workspace,
+        engine_name=engine_name,
+        freeze_iso=freeze_iso,
+        actor="system",
+        source="quota",
+    )
     config.engine_freeze[engine_name] = freeze_iso
 
 
-def _clear_engine_freeze(root: Path, config: LitehiveConfig, engine_name: str) -> None:
+def _clear_engine_freeze(workspace: Workspace, config: LitehiveConfig, engine_name: str) -> None:
     """
     Drop a freeze entry from both the audited store and the live config.
 
@@ -310,7 +316,7 @@ def _clear_engine_freeze(root: Path, config: LitehiveConfig, engine_name: str) -
     delete keeps the operator able to reconstruct freeze
     history.
     """
-    clear_persisted_engine_freeze(root, engine_name=engine_name, actor="system", source="quota")
+    clear_persisted_engine_freeze_for_workspace(workspace, engine_name=engine_name, actor="system", source="quota")
     config.engine_freeze.pop(engine_name, None)
 
 
@@ -420,6 +426,38 @@ def select_engine(
     """
     Pick the engine and model the next stage will use.
 
+    Path-based compatibility wrapper. Callers that already have a
+    :class:`Workspace` should use :func:`select_engine_for_workspace`
+    so quota freeze persistence does not rebuild workspace
+    dependencies.
+    """
+    return select_engine_for_workspace(
+        Workspace.from_path(root),
+        task,
+        config,
+        engine_override=engine_override,
+        model_override=model_override,
+        engine_names=engine_names,
+        excluded_engine_names=excluded_engine_names,
+        require_available=require_available,
+        check_quota=check_quota,
+    )
+
+
+def select_engine_for_workspace(
+    workspace: Workspace,
+    task: TaskRecord,
+    config: LitehiveConfig,
+    engine_override: str | None = None,
+    model_override: str | None = None,
+    engine_names: list[str] | None = None,
+    excluded_engine_names: Collection[str] = (),
+    require_available: bool = False,
+    check_quota: bool = True,
+) -> EngineSelection:
+    """
+    Pick the engine and model the next stage will use from an injected workspace.
+
     Walks the task's engine plan plus the workspace preference
     list, skipping frozen, unavailable, and quota-exhausted
     engines, and returns the first usable ``(engine, model)``
@@ -476,13 +514,13 @@ def select_engine(
             quota_reason, freeze_until = (None, None)
         if quota_reason is not None:
             if freeze_until is not None:
-                _persist_engine_freeze(root, config, engine_name=engine_name, freeze_until=freeze_until)
+                _persist_engine_freeze(workspace, config, engine_name=engine_name, freeze_until=freeze_until)
             elif expired_freeze:
-                _clear_engine_freeze(root, config, engine_name=engine_name)
+                _clear_engine_freeze(workspace, config, engine_name=engine_name)
             skipped.append(EngineSkip(engine_name=engine_name, reason=quota_reason))
             continue
         if expired_freeze:
-            _clear_engine_freeze(root, config, engine_name=engine_name)
+            _clear_engine_freeze(workspace, config, engine_name=engine_name)
         return EngineSelection(
             engine_name=engine_name,
             model_name=resolve_model(

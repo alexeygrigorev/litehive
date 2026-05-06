@@ -10,7 +10,7 @@ import typer
 
 from litehive.cli.agent_cli import block_if_agent
 from litehive.cli.common import WorkspaceOption, choice, require_subcommand
-from litehive.config.engine_models import select_engine
+from litehive.config.engine_models import select_engine_for_workspace
 from litehive.config.paths import workspace_path
 from litehive.config.runtime_settings import load_runtime_setting_audit_entries, load_runtime_settings
 from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
@@ -351,8 +351,8 @@ def _preview_single(
             print("No queued task.")
         return 0
 
-    engine_selection = select_engine(
-        workspace.root,
+    engine_selection = select_engine_for_workspace(
+        workspace,
         selection.task,
         container.config,
         engine_override=engine,

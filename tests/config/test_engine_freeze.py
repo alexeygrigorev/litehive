@@ -21,6 +21,7 @@ from litehive.config.engine_models import (
     parse_engine_freeze_until,
     persist_engine_freeze_iso,
     persist_engine_freeze_iso_for_workspace,
+    select_engine_for_workspace,
 )
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
@@ -496,6 +497,32 @@ def test_select_engine_records_quota_freeze_and_falls_back(
     assert selection.engine_name == "gemini"
     reloaded = load_config(tmp_path)
     assert reloaded.engine_freeze["codex"] == freeze_iso
+
+
+def test_select_engine_for_workspace_records_quota_freeze_and_falls_back(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    freeze_until = (datetime.now(timezone.utc) + timedelta(days=3)).replace(microsecond=0)
+    freeze_iso = freeze_until.strftime("%Y-%m-%dT%H:%M:%SZ")
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(default_engine="codex", engine_preference=["codex", "gemini"]),
+    )
+    task = TaskRecord(id="T-0001", slug="test", title="test", status="queued", pipeline_status="implementing")
+    config = load_config(tmp_path)
+
+    def fake_quota_block(engine_name: str):
+        if engine_name == "codex":
+            return f"codex quota exhausted (used 100%, resets at {freeze_iso})", freeze_until
+        return None, None
+
+    monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
+
+    selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config)
+
+    assert selection.engine_name == "gemini"
+    assert load_config(tmp_path).engine_freeze["codex"] == freeze_iso
 
 
 def test_engine_quota_block_consumes_current_heru_normalized_windows(
