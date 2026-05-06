@@ -15,7 +15,6 @@ is one self-contained operator action with its own audit shape.
 
 from pathlib import Path
 
-from litehive.container import build_workspace
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
@@ -100,31 +99,6 @@ def _switch_activity_entry_message(
     else:
         lines.append("prior_work: no prior subagent artifacts recorded")
     return "\n".join(lines)
-
-
-def switch_task_engine(
-    root: Path,
-    task_id: str,
-    engine: str,
-    reason: str,
-    audit_actor: str = "operator",
-    audit_source: str = "cli",
-) -> SwitchTaskSummary:
-    """
-    Carry out an operator-initiated engine swap end-to-end.
-
-    Path-based compatibility wrapper. Callers that already have a
-    :class:`Workspace` should use
-    :func:`switch_task_engine_for_workspace`.
-    """
-    return switch_task_engine_for_workspace(
-        build_workspace(root),
-        task_id,
-        engine=engine,
-        reason=reason,
-        audit_actor=audit_actor,
-        audit_source=audit_source,
-    )
 
 
 def switch_task_engine_for_workspace(
