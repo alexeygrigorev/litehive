@@ -482,6 +482,18 @@ The recording asked for "step by step, never break things". Order:
 6. **Adjust nudge / non-completion handling.** Verify the lifecycle
    node reuses the session ID and the parser does not turn a
    missing-verdict into a `Reject` upstream of it.
+6a. **Introduce the DI container and burn down `root: Path`.**
+    Add the single production assembly point that converts operator
+    input (`Path`) into a typed container. The container owns
+    construction of the `Workspace`, loaded config, and long-lived
+    services/repositories. After this lands, migrate one boundary at
+    a time so internal helpers receive `Workspace`, the container, or
+    a focused service from the container instead of raw `root: Path`.
+    The target is exactly one raw-root conversion path at the CLI /
+    process boundary; constructors must accept dependencies and must
+    not call `Workspace.from_path`, `load_config`, or collaborator
+    factories themselves. Run tests and `make typecheck` after each
+    migrated slice.
 7. **Centralize git.** Bring all subprocess git calls behind
    `litehive/git/ops.py` (P5). One module of callers per commit.
 8. **Move attention to DB** (P12).

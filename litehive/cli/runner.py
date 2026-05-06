@@ -11,10 +11,10 @@ import typer
 from litehive.cli.agent_cli import block_if_agent
 from litehive.cli.common import WorkspaceOption, choice, require_subcommand
 from litehive.config.engine_models import select_engine
-from litehive.config.loading import load_config
 from litehive.config.paths import workspace_path
 from litehive.config.runtime_settings import load_runtime_setting_audit_entries, load_runtime_settings
 from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
+from litehive.container import LitehiveContainer, build_container
 from heru import ENGINE_CHOICES
 from litehive.daemon.execution import (
     daemon_status_lines,
@@ -328,7 +328,7 @@ def _run_single(
 
 
 def _preview_single(
-    workspace: Path,
+    container: LitehiveContainer,
     engine: str | None = None,
     model: str | None = None,
 ) -> int:
@@ -341,20 +341,20 @@ def _preview_single(
     valuable when triaging engine quotas or freezes that may have
     pushed the choice somewhere unexpected.
     """
-    selection = peek_next_task_selection(Workspace.from_path(workspace))
+    workspace = container.workspace
+    selection = peek_next_task_selection(workspace)
     if selection.task is None:
-        state = load_state(workspace)
+        state = load_state(workspace.root)
         if state.queue:
             print("No runnable task.")
         else:
             print("No queued task.")
         return 0
 
-    config = load_config(workspace)
     engine_selection = select_engine(
-        workspace,
+        workspace.root,
         selection.task,
-        config,
+        container.config,
         engine_override=engine,
         model_override=model,
     )
@@ -461,9 +461,10 @@ def run_command(
     ensure_workspace(workspace)
     if dry_run and drain:
         raise click.UsageError("--dry-run cannot be combined with --drain")
+    container = build_container(workspace)
     if dry_run:
-        return _preview_single(workspace, engine=engine, model=model)
-    config = load_config(workspace)
+        return _preview_single(container, engine=engine, model=model)
+    config = container.config
     if stop_on_failure is None:
         effective_stop_on_failure = config.pool_stop_on_failure
     else:
