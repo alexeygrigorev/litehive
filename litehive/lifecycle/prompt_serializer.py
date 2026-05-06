@@ -21,11 +21,12 @@ activity history rendering stays here because it's tightly coupled to the
 """
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 import yaml
 
+from litehive.container import build_workspace
 from litehive.domain.common import PipelineState, TaskStage, pipeline_stage_key
 from litehive.domain.task import TaskRecord
 from litehive.lifecycle.prompt_sections import (
@@ -52,7 +53,9 @@ from litehive.lifecycle.prompt_sections import (
 )
 from litehive.lifecycle.prompt_types import AgentPrompt, RecoveryPrompt
 from litehive.tasks.activity import load_task_activity
-from litehive.workspace import Workspace
+
+if TYPE_CHECKING:
+    from litehive.workspace import Workspace
 
 
 SECTION_SEP = "\n"
@@ -77,7 +80,7 @@ def serialize_prompt(
     """
     activity = prompt.activity or []
     if not activity and task_record is not None:
-        activity = _load_task_activity_history(Workspace.from_path(workspace_root), task_record)
+        activity = _load_task_activity_history(build_workspace(workspace_root), task_record)
 
     sections: list[str] = []
     sections.append(_header_section(prompt, task_record))
@@ -384,5 +387,4 @@ def _activity_section(
         message = entry.get("message", "")
         blocks.append(f"[{stage}] {role} ({verdict_label}): {message}")
     return "Task activity:\n" + "\n".join(blocks)
-
 
