@@ -50,7 +50,7 @@ from litehive.state.records import (
 from litehive.worktree.cleanup import (
     WorktreeCleanupResult,
     cleanup_terminal_task_worktree,
-    collect_managed_worktrees,
+    collect_managed_worktrees_for_workspace,
     remove_cleanable_worktrees_for_workspace,
 )
 from litehive.worktree.inspection import worktree_committed_changes, worktree_uncommitted_changes
@@ -171,7 +171,7 @@ class WorktreeService:
         so callers holding a service handle don't import the cleanup
         module just to list.
         """
-        return collect_managed_worktrees(self.root)
+        return collect_managed_worktrees_for_workspace(self.workspace)
 
     def remove_cleanable_worktrees(self, dry_run: bool = False) -> WorktreeCleanupResult:
         """

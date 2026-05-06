@@ -18,7 +18,7 @@ from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.domain.worktree import ManagedWorktree
 from litehive.git.ops import GitError, delete_branch, remove_worktree, status_porcelain
-from litehive.state.persist import load_state
+from litehive.state.persist import load_state_for_workspace
 from litehive.state.records import (
     clear_task_worktree_path,
     get_task,
@@ -58,6 +58,13 @@ def cleanup_terminal_task_worktree(root: Path, task: TaskRecord) -> None:
 
 def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
     """
+    Path-based compatibility wrapper for managed worktree collection.
+    """
+    return collect_managed_worktrees_for_workspace(Workspace.from_path(root))
+
+
+def collect_managed_worktrees_for_workspace(workspace: Workspace) -> list[ManagedWorktree]:
+    """
     Enumerate live Litehive-managed task worktrees with their dirty-change count.
 
     Backs the ``litehive worktree`` listing CLI and any flow that
@@ -66,7 +73,8 @@ def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
     task id so two operator invocations produce identical output
     and tests don't have to depend on filesystem walk order.
     """
-    state = load_state(root)
+    root = workspace.root
+    state = load_state_for_workspace(workspace)
     if state.active_task_id:
         active_task = get_task(root, state.active_task_id)
     else:
@@ -122,7 +130,7 @@ def remove_cleanable_worktrees_for_workspace(workspace: Workspace, dry_run: bool
     ``--dry-run`` flag.
     """
     root = workspace.root
-    worktrees = collect_managed_worktrees(root)
+    worktrees = collect_managed_worktrees_for_workspace(workspace)
     candidates = [item for item in worktrees if item.cleanable]
     skipped_active = [item for item in worktrees if item.active]
 
