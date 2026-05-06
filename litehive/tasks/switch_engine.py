@@ -15,7 +15,7 @@ is one self-contained operator action with its own audit shape.
 
 from pathlib import Path
 
-from litehive.config.loading import load_config
+from litehive.container import build_container
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
@@ -32,7 +32,6 @@ from litehive.tasks.constants import CLOSED_TASK_STATUSES, VALID_TASK_ENGINES
 from litehive.tasks.paths import latest_subagent_base, task_dir
 from litehive.tasks.queue import move_queued_task
 from litehive.tasks.runtime import mark_engine_switch
-from litehive.workspace import Workspace
 
 
 def _effective_task_engine(root: Path, task: TaskRecord) -> str:
@@ -49,7 +48,7 @@ def _effective_task_engine(root: Path, task: TaskRecord) -> str:
         return task.runtime.execution.active_subagent.engine
     if task.subagents:
         return task.subagents[-1].engine
-    return load_config(root).default_engine
+    return build_container(root).config.default_engine
 
 
 def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
@@ -173,7 +172,7 @@ def switch_task_engine(
 
     prior_work_paths = _switch_prior_work_paths(root, task)
 
-    workspace = Workspace.from_path(root)
+    workspace = build_container(root).workspace
     append_task_activity(
         workspace,
         task,
