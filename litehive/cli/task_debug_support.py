@@ -13,7 +13,7 @@ import sqlite3
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_session
-from litehive.container import build_container
+from litehive.container import build_workspace
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,
@@ -34,12 +34,18 @@ def render_task_evidence(root: Path, task) -> int:
     triaging a stuck task gets one screen of verdict-grade signal
     instead of a sprawling ``task show``.
     """
+    return render_task_evidence_for_workspace(build_workspace(root), task)
+
+
+def render_task_evidence_for_workspace(workspace: Workspace, task) -> int:
+    """
+    Render compact task evidence from an injected workspace.
+    """
+    root = workspace.root
     print(f"task: {task.id}")
     print(f"title: {task.title}")
     print(f"status: {task.status}")
     print(f"pipeline_status: {task.pipeline_status}")
-    container = build_container(root)
-    workspace = container.workspace
     _print_lifecycle_evidence(workspace, task)
     _print_latest_report(workspace, task)
     _print_latest_activity(workspace, task)
@@ -57,13 +63,19 @@ def debug_all(root: Path, task):
     most recent run; per-row status and exit code make it cheap
     to spot which subagent is the failing one.
     """
+    return debug_all_for_workspace(build_workspace(root), task)
+
+
+def debug_all_for_workspace(workspace: Workspace, task):
+    """
+    List every subagent attached to a task using an injected workspace.
+    """
     if not task.subagents:
         print(f"{task.id}: no subagents")
         return 0
 
     print(f"{task.id}: {len(task.subagents)} subagent(s)")
     print()
-    workspace = build_container(root).workspace
     for ref in task.subagents:
         exit_code = _read_exit_code(workspace, task.id, ref.id)
         if exit_code is not None:

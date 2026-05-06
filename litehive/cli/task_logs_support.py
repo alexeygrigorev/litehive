@@ -15,12 +15,13 @@ import time
 from litehive.agents.session_store import load_subagent_session
 from litehive.cli.task_debug_support import render_task_evidence
 from litehive.config.paths import workspace_path
-from litehive.container import build_container
+from litehive.container import build_workspace
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.domain.task import TaskRecord
 from litehive.state.records import get_task_record, list_tasks
 from litehive.tasks.journal import render_task_journal
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
+from litehive.workspace import Workspace
 
 _DEFAULT_TAIL_LINES = 40
 FOLLOW_POLL_SECONDS = 0.1
@@ -84,8 +85,17 @@ def show_task_journal(root: Path, task: TaskRecord) -> int:
     can pass ``--agent`` to drop into the subagent evidence view
     instead.
     """
-    container = build_container(root)
-    journal = render_task_journal(container.workspace, task)
+    return show_task_journal_for_workspace(build_workspace(root), task)
+
+
+def show_task_journal_for_workspace(workspace: Workspace, task: TaskRecord) -> int:
+    """
+    Render a task journal from an injected workspace.
+
+    Kept separate from the path wrapper so CLI callers that already
+    resolved workspace dependencies do not rebuild them for display.
+    """
+    journal = render_task_journal(workspace, task)
     if not journal:
         print(f"{task.id}: journal not found")
         return 0
@@ -115,6 +125,13 @@ def list_task_subagents(root: Path, task: TaskRecord) -> int:
     persisted session data so a still-active subagent shows live
     fields instead of stale on-disk values.
     """
+    return list_task_subagents_for_workspace(build_workspace(root), task)
+
+
+def list_task_subagents_for_workspace(workspace: Workspace, task: TaskRecord) -> int:
+    """
+    List task subagents from an injected workspace.
+    """
     if not task.subagents:
         print(f"{task.id}: no subagents")
         return 0
@@ -123,8 +140,6 @@ def list_task_subagents(root: Path, task: TaskRecord) -> int:
     if task.runtime.execution.active_subagent is not None:
         runtime_by_id[task.runtime.execution.active_subagent.id] = task.runtime.execution.active_subagent
 
-    container = build_container(root)
-    workspace = container.workspace
     for ref in reversed(task.subagents):
         runtime_state = runtime_by_id.get(ref.id)
         session = load_subagent_session(workspace, task.id, ref.id)
