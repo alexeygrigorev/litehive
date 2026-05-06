@@ -25,7 +25,7 @@ from litehive.workspace import Workspace
 
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
 from litehive.domain.reports import TaskActivityEntry, TaskActivityVerdict, classify_task_activity_verdict
-from litehive.tasks.status import close_task, update_task
+from litehive.tasks.status import close_task_for_workspace, update_task_for_workspace
 from litehive.state.records import get_task_record
 from litehive.state.persist import load_state
 from litehive.tasks.activity import append_task_activity
@@ -450,8 +450,9 @@ def agent_update_command(
         priority_arg = priority
     else:
         priority_arg = sentinel
-    update_task(
-        target.root,
+    target_workspace = build_workspace(target.root)
+    update_task_for_workspace(
+        target_workspace,
         target.task_id,
         goal=goal_arg,
         acceptance_criteria=acceptance_criteria_arg,
@@ -484,8 +485,9 @@ def agent_close_command(
     """
     target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
 
-    task = close_task(
-        target.root,
+    target_workspace = build_workspace(target.root)
+    task = close_task_for_workspace(
+        target_workspace,
         target.task_id,
         outcome=outcome,
         reason=reason,

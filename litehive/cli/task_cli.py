@@ -28,12 +28,13 @@ from litehive.cli.task_logs_support import (
     show_task_journal,
 )
 from litehive.config.workspace import ensure_workspace
+from litehive.container import build_workspace
 from litehive.state.records import create_task, get_task, list_tasks, require_task
 from litehive.domain.common import TaskStatus
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
-from litehive.tasks.status import abandon_task, close_task, update_task
+from litehive.tasks.status import abandon_task_for_workspace, close_task_for_workspace, update_task_for_workspace
 
 app = make_typer(invoke_without_command=True)
 
@@ -376,7 +377,7 @@ def abandon(task_id: Annotated[str, typer.Argument(help="Task id")], workspace: 
     """
     ensure_workspace(workspace)
     try:
-        task = abandon_task(workspace, task_id)
+        task = abandon_task_for_workspace(build_workspace(workspace), task_id)
     except ValueError as exc:
         print(f"abandon failed: {exc}")
         return 1
@@ -417,9 +418,10 @@ def close(
         mutation_task_id = target.task_id
         close_kwargs = {"audit_actor": "agent", "audit_source": "agent"}
     ensure_workspace(mutation_workspace)
+    workspace_obj = build_workspace(mutation_workspace)
     try:
-        task = close_task(
-            mutation_workspace,
+        task = close_task_for_workspace(
+            workspace_obj,
             mutation_task_id,
             outcome=outcome,
             reason=reason,
@@ -476,6 +478,7 @@ def update(
         audit_actor = "agent"
         audit_source = "agent"
     ensure_workspace(mutation_workspace)
+    workspace_obj = build_workspace(mutation_workspace)
     if (
         title is None
         and depends_on is None
@@ -496,8 +499,8 @@ def update(
         title_arg: str | EllipsisType = title if title is not None else ...
         priority_arg: str | EllipsisType = priority if priority is not None else ...
         goal_arg: str | EllipsisType = goal if goal is not None else ...
-        task = update_task(
-            mutation_workspace,
+        task = update_task_for_workspace(
+            workspace_obj,
             mutation_task_id,
             title=title_arg,
             depends_on=depends_on_arg,
