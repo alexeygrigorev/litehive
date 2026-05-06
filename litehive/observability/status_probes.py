@@ -17,6 +17,7 @@ from typing import Mapping
 
 from pydantic import ValidationError
 
+from litehive.container import build_workspace
 from litehive.config.paths import workspace_path
 from litehive.config.registry import workspace_registry_error, workspace_registry_path
 from litehive.daemon.logs import latest_run_all_log_dir
@@ -376,13 +377,11 @@ def _probe_task_status_damage(
             )
         ]
 
-    from litehive.workspace import Workspace  # noqa: PLC0415
-
     issues: list[StatusIssue] = []
     active_task_id = runner.active_task_id or state.active_task_id
     active_stage = _live_active_pipeline_stage(active_task_id, tasks)
     queued_ids = set(state.queue)
-    workspace = Workspace.from_path(root)
+    workspace = build_workspace(root)
 
     for task in sorted(tasks, key=lambda candidate: candidate.id):
         recovery_issue = _recovery_failure_issue(workspace, task)

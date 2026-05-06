@@ -30,8 +30,19 @@ def build_container(root: Path) -> LitehiveContainer:
     container, its ``workspace``, or a focused service from it rather
     than rebuilding dependencies from ``root``.
     """
-    workspace = Workspace.from_path(root)
+    workspace = build_workspace(root)
     return LitehiveContainer(
         workspace=workspace,
         config=workspace.config(),
     )
+
+
+def build_workspace(root: Path) -> Workspace:
+    """
+    Convert a raw workspace path into the workspace dependency only.
+
+    Use this for read-only paths that must not load config or bootstrap
+    persistence as a side effect. Full process wiring should prefer
+    :func:`build_container`.
+    """
+    return Workspace.from_path(root)

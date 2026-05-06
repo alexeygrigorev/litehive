@@ -19,6 +19,7 @@ from a single path:
 
 from pathlib import Path
 
+from litehive.container import build_workspace
 # Re-exported public API. Imports kept in `status_diagnostics` so existing
 # `from litehive.observability.status_diagnostics import ...` callers keep working.
 from litehive.observability.status_loaders import _load_runner_status_for_status  # noqa: F401
@@ -75,10 +76,8 @@ def collect_status_snapshot(root: Path) -> StatusSnapshot:
     damage). Distinct from :func:`collect_operational_status_snapshot`
     because the full sweep is too heavy for routine status reads.
     """
-    from litehive.workspace import Workspace  # noqa: PLC0415
-
     root = root.resolve()
-    workspace = Workspace.from_path(root)
+    workspace = build_workspace(root)
     registry_issues = probe_registry_files()
     config, config_issues = _load_config_for_status(root)
     state, state_issues = _load_state_for_status(root)
@@ -123,10 +122,8 @@ def collect_operational_status_snapshot(root: Path) -> StatusSnapshot:
     who needs them runs ``litehive health`` or
     ``litehive status --full``.
     """
-    from litehive.workspace import Workspace  # noqa: PLC0415
-
     root = root.resolve()
-    workspace = Workspace.from_path(root)
+    workspace = build_workspace(root)
     config, config_issues = _load_config_for_status(root)
     state, state_issues = _load_state_for_status(root)
     runner, runner_issue = _load_runner_status_for_status(root)
