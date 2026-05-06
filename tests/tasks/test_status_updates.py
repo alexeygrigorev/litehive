@@ -13,7 +13,13 @@ from litehive.workspace import Workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.state.store import runtime_store
-from litehive.tasks.status import close_task, close_task_for_workspace, park_task_for_workspace, update_task
+from litehive.tasks.status import (
+    close_task,
+    close_task_for_workspace,
+    park_task_for_workspace,
+    update_task,
+    update_task_for_workspace,
+)
 from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
 
 
@@ -182,6 +188,17 @@ def test_update_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path
 
     refreshed = require_task(tmp_path, "T-0001")
     assert refreshed.goal == "Updated safely"
+
+
+def test_update_task_accepts_injected_workspace(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Update through workspace")
+    workspace = Workspace.from_path(tmp_path)
+
+    updated = update_task_for_workspace(workspace, task.id, goal="Updated safely")
+
+    assert updated.goal == "Updated safely"
+    assert require_task(tmp_path, task.id).goal == "Updated safely"
 
 
 def test_close_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path) -> None:

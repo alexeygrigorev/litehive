@@ -9,8 +9,10 @@ import threading
 from pathlib import Path
 from typing import cast
 
+from litehive.container import build_workspace
 from litehive.domain.common import PipelineStatus
 from litehive.domain.task import TaskRecord
+from litehive.workspace import Workspace
 
 from litehive.tasks.constants import (
     VALID_TASK_PRIORITIES,
@@ -32,12 +34,12 @@ from litehive.tasks.normalization import (
     reroute_stage_for_acceptance_criteria,
 )
 from litehive.tasks.queue import validate_task_dependencies
-from litehive.tasks.status_close import abandon_task, close_task, park_task
-from litehive.tasks.status_resume import requeue_task
+from litehive.tasks.status_close import abandon_task_for_workspace, close_task_for_workspace, park_task_for_workspace
+from litehive.tasks.status_resume import requeue_task_for_workspace
 
 
 def _update_task_transition(
-    root: Path,
+    workspace: Workspace,
     task_id: str,
     title: str | object = ...,
     depends_on: list[str] | object = ...,
@@ -65,14 +67,15 @@ def _update_task_transition(
     indistinguishable from "no change" and the runner would never see the
     intended reset.
     """
+    root = workspace.root
 
     if outcome is not ... and outcome is not None:
         if outcome_reason is not ... and outcome_reason is not None:
             close_reason_arg = str(outcome_reason)
         else:
             close_reason_arg = None
-        return close_task(
-            root,
+        return close_task_for_workspace(
+            workspace,
             task_id,
             outcome=str(outcome),
             reason=close_reason_arg,
@@ -82,23 +85,23 @@ def _update_task_transition(
 
     if action is not ... and action is not None:
         if action == "park":
-            return park_task(
-                root,
+            return park_task_for_workspace(
+                workspace,
                 task_id,
                 reason="Task parked via structured report.",
                 audit_actor=audit_actor,
                 audit_source=audit_source,
             )
         if action == "requeue":
-            return requeue_task(
-                root,
+            return requeue_task_for_workspace(
+                workspace,
                 task_id,
                 audit_actor=audit_actor,
                 audit_source=audit_source,
             )
         if action == "abandon":
-            return abandon_task(
-                root,
+            return abandon_task_for_workspace(
+                workspace,
                 task_id,
                 reason="Task abandoned via structured report.",
                 audit_actor=audit_actor,
@@ -234,8 +237,55 @@ def update_task(
     shim around ``_update_task_transition`` so the public surface is
     importable from ``litehive.tasks.status``.
     """
+    return update_task_for_workspace(
+        build_workspace(root),
+        task_id,
+        title=title,
+        depends_on=depends_on,
+        model=model,
+        retry_limit=retry_limit,
+        priority=priority,
+        goal=goal,
+        acceptance_criteria=acceptance_criteria,
+        constraints=constraints,
+        plan=plan,
+        auto_commit=auto_commit,
+        outcome=outcome,
+        outcome_reason=outcome_reason,
+        action=action,
+        allow_active_agent_task_mutation=allow_active_agent_task_mutation,
+        journal_message=journal_message,
+        audit_actor=audit_actor,
+        audit_source=audit_source,
+    )
+
+
+def update_task_for_workspace(
+    workspace: Workspace,
+    task_id: str,
+    title: str | object = ...,
+    depends_on: list[str] | object = ...,
+    model: str | None | object = ...,
+    retry_limit: int | None | object = ...,
+    priority: str | object = ...,
+    goal: str | object = ...,
+    acceptance_criteria: list[str] | object = ...,
+    constraints: list[str] | object = ...,
+    plan: list[str] | object = ...,
+    auto_commit: bool | object = ...,
+    outcome: str | None | object = ...,
+    outcome_reason: str | None | object = ...,
+    action: str | None | object = ...,
+    allow_active_agent_task_mutation: bool = False,
+    journal_message: str | None = None,
+    audit_actor: str = "operator",
+    audit_source: str = "cli",
+) -> TaskRecord:
+    """
+    Public entry for task edits and intent routing using an injected workspace.
+    """
     return _update_task_transition(
-        root,
+        workspace,
         task_id,
         title=title,
         depends_on=depends_on,

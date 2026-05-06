@@ -23,7 +23,7 @@ from litehive.tasks.status_close import (
     park_task_for_workspace,
 )
 from litehive.tasks.status_resume import requeue_task, requeue_task_for_workspace, resume_task, resume_task_for_workspace
-from litehive.tasks.status_update import update_task
+from litehive.tasks.status_update import update_task, update_task_for_workspace
 from litehive.tasks.stop import stop_current_task
 from litehive.tasks.switch_engine import switch_task_engine
 
@@ -41,4 +41,5 @@ __all__ = [
     "stop_current_task",
     "switch_task_engine",
     "update_task",
+    "update_task_for_workspace",
 ]
