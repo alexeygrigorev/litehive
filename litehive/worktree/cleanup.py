@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import TypedDict
 
 from litehive.attention import append_attention_log
-from litehive.container import build_container
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.domain.worktree import ManagedWorktree
@@ -32,6 +31,7 @@ from litehive.worktree.paths import (
     resolve_recorded_worktree_path,
     task_worktree_branch,
 )
+from litehive.workspace import Workspace
 
 
 def cleanup_terminal_task_worktree(root: Path, task: TaskRecord) -> None:
@@ -113,6 +113,17 @@ def remove_cleanable_worktrees(root: Path, dry_run: bool = False) -> WorktreeCle
     """
     Remove worktrees for terminal tasks and report what was touched.
 
+    Path-based compatibility wrapper. Callers that already have a
+    :class:`Workspace` should use
+    :func:`remove_cleanable_worktrees_for_workspace`.
+    """
+    return remove_cleanable_worktrees_for_workspace(Workspace.from_path(root), dry_run=dry_run)
+
+
+def remove_cleanable_worktrees_for_workspace(workspace: Workspace, dry_run: bool = False) -> WorktreeCleanupResult:
+    """
+    Remove worktrees for terminal tasks using an injected workspace.
+
     Backs ``litehive worktree clean``. The result dict separates
     candidates by what actually happened (removed, deferred because
     the workspace was locked, failed with a git error, skipped
@@ -121,6 +132,7 @@ def remove_cleanable_worktrees(root: Path, dry_run: bool = False) -> WorktreeCle
     returns the candidate list without touching disk for the
     ``--dry-run`` flag.
     """
+    root = workspace.root
     worktrees = collect_managed_worktrees(root)
     candidates = [item for item in worktrees if item.cleanable]
     skipped_active = [item for item in worktrees if item.active]
@@ -137,7 +149,6 @@ def remove_cleanable_worktrees(root: Path, dry_run: bool = False) -> WorktreeCle
     failures = []
     removed = []
     deferred = []
-    workspace = build_container(root).workspace
 
     for item in candidates:
         try:

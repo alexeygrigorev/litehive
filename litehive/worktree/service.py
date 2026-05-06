@@ -51,7 +51,7 @@ from litehive.worktree.cleanup import (
     WorktreeCleanupResult,
     cleanup_terminal_task_worktree,
     collect_managed_worktrees,
-    remove_cleanable_worktrees,
+    remove_cleanable_worktrees_for_workspace,
 )
 from litehive.worktree.inspection import worktree_committed_changes, worktree_uncommitted_changes
 from litehive.worktree.paths import (
@@ -181,7 +181,9 @@ class WorktreeService:
         post-success cleanup. ``dry_run`` lets the CLI preview what
         would be removed without touching disk.
         """
-        return remove_cleanable_worktrees(self.root, dry_run=dry_run)
+        from litehive.workspace import Workspace  # noqa: PLC0415
+
+        return remove_cleanable_worktrees_for_workspace(Workspace.from_path(self.root), dry_run=dry_run)
 
     def collect_rescue_candidates(self) -> list[RescueCandidate]:
         """
