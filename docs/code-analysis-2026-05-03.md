@@ -518,12 +518,15 @@ The recording asked for "step by step, never break things". Order:
     `PipelineStatus`, `OutcomeKind`, and `OutcomeReasonCode` values.
     Lifecycle mode and verdict routing now use the canonical domain
     `PipelineMode` / `Verdict` enums, and the prompt activity trimmer
-    uses typed `TaskStage` / `Verdict` comparisons. Remaining raw
-    strings are mostly persisted literal fields, execution-status
-    markers without a domain enum yet, and larger prompt / adapter
-    extraction targets. Continue file by file; do not coerce persisted
-    `StageReport` / `TaskActivityEntry` literal fields to enum objects
-    unless their model types are widened first.
+    uses typed `TaskStage` / `Verdict` comparisons. Task runtime
+    execution and current-stage markers now have `TaskExecutionStatus`
+    and `RuntimeStageStatus` enums, with the runtime models still
+    accepting existing persisted strings during the migration. Remaining
+    raw strings are mostly persisted literal fields, SQL JSON predicates,
+    and larger prompt / adapter extraction targets. Continue file by
+    file; do not coerce persisted `StageReport` / `TaskActivityEntry`
+    literal fields to enum objects unless their model types are widened
+    first.
 
 Each step lands as its own commit. Tests must be green between
 steps. UI / CLI smoke checks (`litehive --help`,
