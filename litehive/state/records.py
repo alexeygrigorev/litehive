@@ -33,6 +33,7 @@ from litehive.tasks.audit import (
 )
 from litehive.tasks.normalization import normalize_acceptance_criteria
 from litehive.tasks.paths import slugify, task_dir
+from litehive.workspace import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -417,6 +418,35 @@ def create_task(
     priority: str | None = None,
 ) -> TaskRecord:
     """
+    Path-based compatibility wrapper for task creation.
+    """
+    return create_task_for_workspace(
+        Workspace.from_path(root),
+        title=title,
+        depends_on=depends_on,
+        pipeline_mode=pipeline_mode,
+        model=model,
+        retry_limit=retry_limit,
+        goal=goal,
+        acceptance_criteria=acceptance_criteria,
+        auto_commit=auto_commit,
+        priority=priority,
+    )
+
+
+def create_task_for_workspace(
+    workspace: Workspace,
+    title: str,
+    depends_on: list[str] | None = None,
+    pipeline_mode: str = "full",
+    model: str | None = None,
+    retry_limit: int | None = None,
+    goal: str = "",
+    acceptance_criteria: list[str] | None = None,
+    auto_commit: bool = True,
+    priority: str | None = None,
+) -> TaskRecord:
+    """
     Create and persist a single new task.
 
     The user-facing ``litehive task add`` CLI and the agent-facing
@@ -424,6 +454,7 @@ def create_task(
     priority validation, queue insertion, and audit emission all live
     in one place rather than being duplicated across entry points.
     """
+    root = workspace.root
     ensure_workspace(root)
     if retry_limit is not None and retry_limit < 0:
         raise ValueError("Retry limit must be 0 or greater")
@@ -434,14 +465,14 @@ def create_task(
     if priority is not None and priority not in VALID_TASK_PRIORITIES:
         raise ValueError(f"Unsupported priority '{priority}'; choose from {sorted(VALID_TASK_PRIORITIES)}")
     # inline: tasks.queue top-level-imports state.records (would cycle).
-    from litehive.tasks.queue import validate_task_dependencies  # noqa: PLC0415
+    from litehive.tasks.queue import validate_task_dependencies_for_workspace  # noqa: PLC0415
 
     with workspace_lock(root):
         state = load_state(root, bootstrap=False)
         task_id = f"T-{_reserve_next_task_numbers(root, state)[0]:04d}"
         slug = slugify(title)
         if depends_on:
-            validate_task_dependencies(root, task_id=task_id, depends_on=depends_on)
+            validate_task_dependencies_for_workspace(workspace, task_id=task_id, depends_on=depends_on)
         task = TaskRecord(
             id=task_id,
             slug=slug,

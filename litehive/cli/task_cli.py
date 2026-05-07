@@ -29,7 +29,7 @@ from litehive.cli.task_logs_support import (
 )
 from litehive.config.workspace import ensure_workspace
 from litehive.container import build_workspace
-from litehive.state.records import create_task
+from litehive.state.records import create_task_for_workspace
 from litehive.domain.common import TaskStatus
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
@@ -147,6 +147,7 @@ def add(
     creation rather than in a downstream rejection.
     """
     ensure_workspace(workspace)
+    workspace_obj = build_workspace(workspace)
     try:
         depends_on_parsed = parse_dependency_ids(depends_on)
         acceptance_criteria_parsed = parse_acceptance_criteria(acceptance_criteria)
@@ -156,8 +157,8 @@ def add(
         acceptance_criteria_arg: list[str] | None = (
             acceptance_criteria_parsed if isinstance(acceptance_criteria_parsed, list) else None
         )
-        task = create_task(
-            workspace,
+        task = create_task_for_workspace(
+            workspace_obj,
             title=title,
             depends_on=depends_on_arg,
             goal=goal,
