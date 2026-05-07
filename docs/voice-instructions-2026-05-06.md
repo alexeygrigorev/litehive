@@ -1964,10 +1964,16 @@ Legend:
   bootstrap. Deleted the global workspace registry modules and removed
   the status probe/tests that treated a corrupt global workspace
   registry as an operator issue.
-- [ ] W12. Replace `ensure_workspace` with explicit
+- [x] W12. Replace `ensure_workspace` with explicit
   `create_workspace` / bootstrap behavior. Do not accidentally create
   workspace state during load.
   Source: note 5, 13:43-14:18.
+  Completed 2026-05-07: renamed the bootstrap API to
+  `create_workspace` across production and test setup, leaving no
+  `ensure_workspace` references in Python code. Updated `load_state`
+  to validate with `require_existing_workspace` instead of creating a
+  workspace, and added a regression test proving `load_state(tmp_path)`
+  raises without creating `.litehive`.
 
 ## Daemon Instructions
 

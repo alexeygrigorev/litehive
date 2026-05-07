@@ -19,7 +19,7 @@ from litehive.roles.reviewer import ReviewerAgent
 from litehive.roles.swe import SWEAgent
 from litehive.roles.base import PromptContext
 from litehive.config.loading import load_config
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.config.workspace_files import config_path
 from litehive.domain.lifecycle_deltas import StateDelta
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, TaskActivityEntry
@@ -36,7 +36,7 @@ from litehive.tasks.paths import task_dir
 
 @pytest.fixture
 def workspace(tmp_path: Path) -> Path:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     return tmp_path
 
 

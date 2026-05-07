@@ -49,9 +49,9 @@ def require_existing_workspace(root: Path, source: str) -> Path:
     """
     Return ``root`` when it is already a Litehive workspace.
 
-    Loading paths call this instead of ``ensure_workspace`` so a read
+    Loading paths call this instead of ``create_workspace`` so a read
     operation cannot silently bootstrap a new project. Workspace
-    creation remains explicit through ``ensure_workspace``.
+    creation remains explicit through ``create_workspace``.
     """
     resolved_root = normalize_workspace_root(root, source=source)
     if workspace_dir(resolved_root).is_dir():
@@ -131,22 +131,21 @@ def resolve_workspace(
     return workspace_root
 
 
-def ensure_workspace(
+def create_workspace(
     root: Path,
     config: LitehiveConfig | None = None,
 ) -> Path:
     """
     Bootstrap a workspace on first use.
 
-    Creates directories, seeds config/context/gitignore, registers
-    the path, and bootstraps the runtime store. Idempotent so
-    every CLI command can call it at startup without first
-    checking whether the workspace already exists; ``config`` is
-    only consulted on first creation, established workspaces are
-    not rewritten.
+    Creates directories, seeds config/context/gitignore, and
+    bootstraps the runtime store. Idempotent so explicit init and
+    mutation entry points can prepare the workspace before writing;
+    ``config`` is only consulted on first creation, established
+    workspaces are not rewritten.
     """
-    root = normalize_workspace_root(root, source="ensure_workspace")
-    _reject_litehive_control_paths(root, source="ensure_workspace")
+    root = normalize_workspace_root(root, source="create_workspace")
+    _reject_litehive_control_paths(root, source="create_workspace")
     base = workspace_dir(root)
     tasks = base / "tasks"
     tasks.mkdir(parents=True, exist_ok=True)

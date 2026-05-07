@@ -11,7 +11,7 @@ from litehive.cli.display import (
     task_interruption_label,
     task_model_label,
 )
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.container import build_workspace
 from litehive.git.ops import GitError, checkpoint_message
 from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
@@ -95,7 +95,7 @@ def move(
     current queue at the moment of the call so chained moves
     behave predictably.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
         state = move_queued_task_for_workspace(workspace_obj, task_id, position)
@@ -120,7 +120,7 @@ def promote(
     it up immediately. Without this branching the operator would
     have to call ``resume`` then ``move`` separately.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
         task = workspace_obj.require_task(task_id)
@@ -160,7 +160,7 @@ def requeue(
     branch (the persistence layer needs the override to clear
     flagging counters).
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     task = workspace_obj.get_task_record(task_id)
     if task is not None and (task.pipeline_status == PipelineStatus.DONE or task.status == TaskStatus.DONE):
@@ -196,7 +196,7 @@ def resume(
     Used after the operator clears whatever caused the
     interruption (engine quota, sandbox failure, manual park).
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
         task = resume_task_for_workspace(workspace_obj, task_id, front=front)
@@ -225,7 +225,7 @@ def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
     actually delivered (``signal_sent``) so the operator can tell
     a "no runner to signal" cleanup apart from a real interruption.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
         summary = stop_current_task(workspace_obj)
@@ -258,7 +258,7 @@ def prioritize(task_ids: list[str], workspace: Path) -> int:
     position 1, the second at 2, and so on, regardless of where
     they were queued before.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
         state = prioritize_queued_tasks_for_workspace(workspace_obj, task_ids)
@@ -301,7 +301,7 @@ def recover(task_id: str, workspace: Path) -> int:
     keeps ``requeue`` operator-friendly without forcing them to
     pick the right command.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
         task = recover_completed_task_for_workspace(workspace_obj, task_id)
@@ -354,7 +354,7 @@ def switch(
     task is active the runner receives a SIGTERM so it stops
     before producing more work on the old engine.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
         summary = switch_task_engine_for_workspace(workspace_obj, task_id, engine=engine, reason=reason)

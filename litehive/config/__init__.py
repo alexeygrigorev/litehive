@@ -11,7 +11,7 @@ load the rest of the package, hiding real import dependencies.
   policy (`LitehiveConfig`, `ExternalEngineSandboxConfig`,
   `ExternalEngineSandboxPolicy`, validators).
 - ``workspace`` — workspace bootstrap and path resolution
-  (`ensure_workspace`, `resolve_workspace`,
+  (`create_workspace`, `resolve_workspace`,
   `normalize_workspace_root`, `render_workspace_gitignore`).
 - ``paths`` — root/workspace path helpers (`litehive_root`,
   `workspace_path`, `workspace_data_dir`).

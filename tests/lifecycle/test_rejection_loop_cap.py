@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from litehive.config.model import LitehiveConfig
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.config.workspace_files import config_path
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.orchestration import run_task as run_pipeline_task
@@ -40,7 +40,7 @@ class _StageScriptEngine:
 
 
 def _init_workspace_git_repo(root: Path, *, config: LitehiveConfig | None = None) -> None:
-    ensure_workspace(root)
+    create_workspace(root)
     if config is not None:
         config_path(root).write_text(yaml.safe_dump(asdict(config), sort_keys=False), encoding="utf-8")
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)

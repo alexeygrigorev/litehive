@@ -11,12 +11,12 @@ from litehive.config.model import (
     parse_litehive_config_data,
 )
 from litehive.config.paths import litehive_root
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.common import TransientFailureKind
 
 
 def test_configure_persists_gemini_model(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
     raw_config["default_engine"] = "gemini"
     raw_config["gemini_model"] = "gemini-2.5-pro"
@@ -30,7 +30,7 @@ def test_configure_persists_gemini_model(tmp_path: Path) -> None:
 
 
 def test_configure_persists_copilot_model(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
     raw_config["default_engine"] = "copilot"
     raw_config["copilot_model"] = "gpt-5"
@@ -44,7 +44,7 @@ def test_configure_persists_copilot_model(tmp_path: Path) -> None:
 
 
 def test_configure_persists_process_profile(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
     raw_config["process_profile"] = "rust"
     (tmp_path / ".litehive" / "config.yaml").write_text(
@@ -74,7 +74,7 @@ def test_load_config_uses_global_defaults_when_workspace_config_is_empty(
     )
 
     workspace = tmp_path / "workspace"
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     (workspace / ".litehive" / "config.yaml").write_text("{}", encoding="utf-8")
 
     config = load_config(workspace)
@@ -102,7 +102,7 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
     )
 
     workspace = tmp_path / "workspace"
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     (workspace / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
             {
@@ -129,7 +129,7 @@ def test_load_config_ignores_deprecated_config_home_global_config(
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
 
     workspace = tmp_path / "workspace"
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     (workspace / ".litehive" / "config.yaml").write_text("{}", encoding="utf-8")
 
     legacy_path = tmp_path / "xdg-config" / "litehive" / "config.yaml"
@@ -161,7 +161,7 @@ def test_load_config_deep_merges_global_and_workspace_mappings(tmp_path: Path, m
     )
 
     workspace = tmp_path / "workspace"
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     (workspace / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
             {
@@ -226,7 +226,7 @@ def test_litehive_config_defaults_include_flat_retry_on() -> None:
 
 
 def test_load_config_reads_subagent_inactivity_timeout_override(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
     raw_config["subagent_inactivity_timeout_seconds"] = 42
     (tmp_path / ".litehive" / "config.yaml").write_text(
@@ -240,7 +240,7 @@ def test_load_config_reads_subagent_inactivity_timeout_override(tmp_path: Path) 
 
 
 def test_load_config_reads_task_time_budget_override(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
     raw_config["task_time_budget_seconds"] = 90
     (tmp_path / ".litehive" / "config.yaml").write_text(
@@ -265,7 +265,7 @@ def test_litehive_config_rejects_unknown_retry_on_kind() -> None:
 
 @pytest.mark.parametrize("legacy_value", ["echo hi", "", None])
 def test_load_config_rejects_legacy_pre_acceptance_command(tmp_path: Path, legacy_value: str | None) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
     raw_config["pre_acceptance_command"] = legacy_value
     (tmp_path / ".litehive" / "config.yaml").write_text(
@@ -278,7 +278,7 @@ def test_load_config_rejects_legacy_pre_acceptance_command(tmp_path: Path, legac
 
 
 def test_load_config_rejects_legacy_task_engine_routing(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
     raw_config["task_engine_routing"] = {"research": "gemini", "refactor": "codex"}
     (tmp_path / ".litehive" / "config.yaml").write_text(
@@ -291,7 +291,7 @@ def test_load_config_rejects_legacy_task_engine_routing(tmp_path: Path) -> None:
 
 
 def test_load_config_rejects_legacy_engine_fallbacks_key(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
     raw_config["engine_fallbacks"] = {
         "codex": ["goz", "copilot"],
@@ -307,7 +307,7 @@ def test_load_config_rejects_legacy_engine_fallbacks_key(tmp_path: Path) -> None
 
 
 def test_load_config_rejects_removed_runner_hook_execution_mode_key(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
     raw_config["runner_hook_execution_mode"] = "fail_fast"
     (tmp_path / ".litehive" / "config.yaml").write_text(
@@ -320,7 +320,7 @@ def test_load_config_rejects_removed_runner_hook_execution_mode_key(tmp_path: Pa
 
 
 def test_load_config_rejects_unknown_process_profile(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
     raw_config["process_profile"] = "unknown_profile"
     (tmp_path / ".litehive" / "config.yaml").write_text(
@@ -333,7 +333,7 @@ def test_load_config_rejects_unknown_process_profile(tmp_path: Path) -> None:
 
 
 def test_load_config_still_rejects_unknown_keys(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     raw_config = yaml.safe_load((tmp_path / ".litehive" / "config.yaml").read_text(encoding="utf-8"))
     raw_config["unsupported_key"] = True
     (tmp_path / ".litehive" / "config.yaml").write_text(

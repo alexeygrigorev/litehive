@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.state.records import create_task, save_task
 from litehive.domain.common import TaskStatus
 from litehive.worktree.cleanup import remove_cleanable_worktrees_for_workspace
@@ -41,7 +41,7 @@ def test_resolve_task_execution_root_links_worktree_venv_to_workspace_venv(tmp_p
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     (workspace / ".venv").mkdir()
@@ -61,7 +61,7 @@ def test_resolve_task_execution_root_accepts_injected_workspace(tmp_path: Path) 
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")
@@ -102,7 +102,7 @@ def test_resolve_task_execution_root_logs_target_and_raises_on_worktree_cleanup_
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")
@@ -126,7 +126,7 @@ def test_remove_cleanable_worktrees_includes_closed_tasks(tmp_path: Path) -> Non
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     task = create_task(workspace, title="Closed worktree cleanup")
     worktree = task_worktree_path(workspace, task)

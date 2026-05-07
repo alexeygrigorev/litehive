@@ -27,7 +27,7 @@ from litehive.cli.task_logs_support import (
     show_latest_subagent_for_workspace,
     show_task_journal_for_workspace,
 )
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.container import build_workspace
 from litehive.state.records import create_task_for_workspace
 from litehive.domain.common import TaskStatus
@@ -146,7 +146,7 @@ def add(
     can still triage the task, but the operator sees the gap on
     creation rather than in a downstream rejection.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
         depends_on_parsed = parse_dependency_ids(depends_on)
@@ -199,7 +199,7 @@ def evidence(
     ``task show`` because most triage decisions only need the
     pipeline-level evidence and not the task fields.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
         task = workspace_obj.require_task(task_id)
@@ -225,7 +225,7 @@ def debug(
     otherwise the latest-subagent view; the operator picks the
     flavor without remembering three separate command names.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
         task = workspace_obj.require_task(task_id)
@@ -258,7 +258,7 @@ def logs(
     task-id branch, with ``--agent``/``--all`` further selecting
     inside the task branch.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     if follow:
         return follow_active_subagent_for_workspace(workspace_obj, task_id=task_id)
@@ -290,7 +290,7 @@ def list_tasks_command(
     Loads tasks with ``strict=False`` so a single corrupted record
     does not blank out the entire listing.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     tasks = workspace_obj.list_tasks(strict=False)
     filtered = []
@@ -322,7 +322,7 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
     because triage rarely needs the full surface — this is the
     "I'm reasoning about the whole task" view.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     task = workspace_obj.get_task(task_id)
     if task is None:
@@ -385,7 +385,7 @@ def abandon(task_id: Annotated[str, typer.Argument(help="Task id")], workspace: 
     the queue. Closing with an explicit outcome is the correct
     surface when a reason and follow-up matter.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
         task = abandon_task_for_workspace(workspace_obj, task_id)
@@ -428,7 +428,7 @@ def close(
         mutation_workspace = target.root
         mutation_task_id = target.task_id
         close_kwargs = {"audit_actor": "agent", "audit_source": "agent"}
-    ensure_workspace(mutation_workspace)
+    create_workspace(mutation_workspace)
     workspace_obj = build_workspace(mutation_workspace)
     try:
         task = close_task_for_workspace(
@@ -488,7 +488,7 @@ def update(
         allow_active_agent_task_mutation = True
         audit_actor = "agent"
         audit_source = "agent"
-    ensure_workspace(mutation_workspace)
+    create_workspace(mutation_workspace)
     workspace_obj = build_workspace(mutation_workspace)
     if (
         title is None

@@ -10,7 +10,7 @@ from heru.types import SubagentRef
 
 from litehive.agents.session_store import SubagentArtifactPayload, subagent_artifacts
 from litehive.config.paths import workspace_path
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.runtime import RuntimeSubagentState
 from litehive.state.records import create_task, save_task, save_task_runtime
 from litehive.tasks.paths import task_dir
@@ -39,7 +39,7 @@ def _ns(
 
 
 def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Logs test task", auto_commit=False)
     ref = SubagentRef(
         id="SA-0001",
@@ -83,7 +83,7 @@ def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
 
 
 def test_logs_defaults_to_latest_daemon_run_tail(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     log_dir = workspace_path(tmp_path, "logs", "run-all", "20260409T120000Z")
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -99,7 +99,7 @@ def test_logs_defaults_to_latest_daemon_run_tail(tmp_path: Path, capsys: pytest.
 
 
 def test_logs_daemon_lists_latest_sessions_with_outcomes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     logs_root = workspace_path(tmp_path, "logs", "run-all")
     logs_root.mkdir(parents=True, exist_ok=True)
@@ -124,7 +124,7 @@ def test_logs_daemon_lists_latest_sessions_with_outcomes(tmp_path: Path, capsys:
 
 
 def test_logs_task_journal_prints_journal(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Journal task", auto_commit=False)
 
     exit_code = _cmd_logs(_ns(tmp_path, task.id))
@@ -139,7 +139,7 @@ def test_logs_task_journal_prints_journal(tmp_path: Path, capsys: pytest.Capture
 def test_logs_task_journal_tolerates_unrelated_missing_runtime_rows(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Journal task", auto_commit=False)
 
     missing_dir = tmp_path / ".litehive" / "tasks" / "T-0002-missing-runtime"
@@ -215,7 +215,7 @@ def test_logs_agent_reads_compressed_completed_artifacts(tmp_path: Path, capsys:
 
 
 def test_logs_agent_all_lists_all_subagents_with_duration(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="All subagents", auto_commit=False)
     task.subagents = [
         SubagentRef(

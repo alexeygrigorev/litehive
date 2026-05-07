@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from litehive.agents.session_store import SubagentArtifactPayload, SubagentEventStreamPayload, subagent_artifacts
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
@@ -128,7 +128,7 @@ def test_task_runtime_stage_accessors_hide_nested_current_stage_shape() -> None:
 
 
 def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="DB runtime")
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.current_stage.stage = "implementing"
@@ -142,7 +142,7 @@ def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
 
 
 def test_task_runtime_persists_pipeline_and_execution_slices(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Split runtime")
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.retry_count = 2
@@ -192,7 +192,7 @@ def test_task_runtime_persists_pipeline_and_execution_slices(tmp_path: Path) -> 
 
 
 def test_current_storage_contract_uses_sqlite_without_workspace_yaml(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="SQLite contract")
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.current_stage.stage = "implementing"
@@ -258,7 +258,7 @@ def test_task_runtime_outcome_string_mutations_persist_without_pydantic_warnings
     kind: str,
     reason_code: str,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title=f"{reason_code} outcome")
     # The string spellings here are valid TaskOutcomeKind / OutcomeReasonCode enum
     # values; this test exercises that pydantic accepts the string form on
@@ -281,7 +281,7 @@ def test_task_runtime_outcome_string_mutations_persist_without_pydantic_warnings
 
 
 def test_get_task_preserves_commit_sha_when_runtime_copy_is_missing(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Commit SHA fallback")
     state = task.to_state_record()
     state.git.commit_sha = "abc123"
@@ -296,7 +296,7 @@ def test_get_task_preserves_commit_sha_when_runtime_copy_is_missing(tmp_path: Pa
 
 
 def test_task_intent_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Intent only", auto_commit=False)
     task.model = "gpt-5.4"
     task.status = TaskStatus.FLAGGED
@@ -344,7 +344,7 @@ def test_task_intent_persists_only_intent_fields_and_runtime_moves_to_db(tmp_pat
 
 
 def test_task_intent_canonical_columns_preserve_existing_runtime_status(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = TaskRecord(
         id="T-0001",
         slug="state-first",
@@ -377,7 +377,7 @@ def test_task_intent_canonical_columns_preserve_existing_runtime_status(tmp_path
 
 
 def test_get_task_raises_when_sqlite_runtime_state_row_is_missing(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     runtime_store(tmp_path).save_task_intent(
         "T-0001",
         TaskRecord(
@@ -398,7 +398,7 @@ def test_get_task_raises_when_sqlite_runtime_state_row_is_missing(tmp_path: Path
 
 
 def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     present = create_task(tmp_path, title="Has runtime")
 
     runtime_store(tmp_path).save_task_intent(
@@ -422,7 +422,7 @@ def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Pat
 
 
 def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Roundtrip")
     task.model = "gpt-5.4"
     task.status = TaskStatus.FLAGGED

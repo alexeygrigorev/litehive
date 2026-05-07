@@ -9,7 +9,7 @@ from litehive.config.engine_models import (
 )
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.runtime import RuntimeEngineSwitch
 from litehive.state.records import create_task
 from litehive.domain.common import PipelineStatus
@@ -18,7 +18,7 @@ from litehive.domain.common import PipelineStatus
 def test_resolve_engine_name_prefers_run_override_then_workspace_default(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Pending task")
 
@@ -29,7 +29,7 @@ def test_resolve_engine_name_prefers_run_override_then_workspace_default(
 def test_resolve_model_prefers_run_override_then_task_then_workspace_default(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine="opencode",
@@ -47,7 +47,7 @@ def test_resolve_model_prefers_run_override_then_task_then_workspace_default(
 
 
 def test_resolve_model_skips_unsupported_engine_override(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Pending task", model="custom-task-model")
 
@@ -55,7 +55,7 @@ def test_resolve_model_skips_unsupported_engine_override(tmp_path: Path) -> None
 
 
 def test_resolve_model_honors_goz_run_task_and_workspace_overrides(tmp_path: Path) -> None:
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine="goz",
@@ -75,7 +75,7 @@ def test_resolve_model_honors_goz_run_task_and_workspace_overrides(tmp_path: Pat
 def test_resolve_engine_name_ignores_title_keywords_uses_default(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Research engine quota behavior")
 
@@ -91,7 +91,7 @@ def test_config_builds_workspace_engine_attempt_order() -> None:
 
 def test_resolve_engine_name_uses_first_unfrozen_attempt(tmp_path: Path) -> None:
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine="codex",
@@ -108,7 +108,7 @@ def test_resolve_engine_name_uses_first_unfrozen_attempt(tmp_path: Path) -> None
 def test_resolve_engine_name_uses_default_engine_without_task_override(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine="gemini",
@@ -122,7 +122,7 @@ def test_resolve_engine_name_uses_default_engine_without_task_override(
 
 
 def test_resolve_engine_name_honors_stage_matched_engine_switch(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Switch engine for retry")
     task.pipeline_status = PipelineStatus.IMPLEMENTING
@@ -139,7 +139,7 @@ def test_resolve_engine_name_honors_stage_matched_engine_switch(tmp_path: Path) 
 
 
 def test_resolve_engine_name_run_override_beats_stage_matched_engine_switch(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Switch engine for retry")
     task.pipeline_status = PipelineStatus.IMPLEMENTING
@@ -156,7 +156,7 @@ def test_resolve_engine_name_run_override_beats_stage_matched_engine_switch(tmp_
 
 
 def test_resolve_engine_name_ignores_stage_mismatched_engine_switch(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Switch engine for retry")
     task.pipeline_status = PipelineStatus.IMPLEMENTING
@@ -173,7 +173,7 @@ def test_resolve_engine_name_ignores_stage_mismatched_engine_switch(tmp_path: Pa
 
 
 def test_resolve_task_rejection_loop_limit_uses_workspace_default(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_rejection_loop_limit=4))
+    create_workspace(tmp_path, LitehiveConfig(default_rejection_loop_limit=4))
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Workspace loop cap")
 
@@ -181,7 +181,7 @@ def test_resolve_task_rejection_loop_limit_uses_workspace_default(tmp_path: Path
 
 
 def test_resolve_task_rejection_loop_limit_prefers_task_override(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_rejection_loop_limit=5))
+    create_workspace(tmp_path, LitehiveConfig(default_rejection_loop_limit=5))
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Task loop cap")
     task.retry_policy.rejection_loop_limit = 2

@@ -5,11 +5,11 @@ import yaml
 
 from litehive.config.loading import load_config
 from litehive.config.model import VALID_RUNNER_HOOK_ENTRY_KEYS, VALID_RUNNER_HOOK_POINTS
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 
 
 def test_load_config_normalizes_runner_hooks(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
             {
@@ -39,7 +39,7 @@ def test_load_config_normalizes_runner_hooks(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("unsupported_key", ["blocking", "reject_on_failure", "unsupported_key"])
 def test_load_config_rejects_unsupported_runner_hook_entry_keys(tmp_path: Path, unsupported_key: str) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
             {
@@ -59,7 +59,7 @@ def test_load_config_rejects_unsupported_runner_hook_entry_keys(tmp_path: Path, 
 
 
 def test_load_config_preserves_runner_hook_descriptions_and_instructions(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
             {
@@ -85,7 +85,7 @@ def test_load_config_preserves_runner_hook_descriptions_and_instructions(tmp_pat
 
 
 def test_configure_rejects_removed_runner_hook_points(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
             {"runner_hooks": {"after_merge": [{"command": "echo nope"}]}},
@@ -99,7 +99,7 @@ def test_configure_rejects_removed_runner_hook_points(tmp_path: Path) -> None:
 
 
 def test_configure_rejects_invalid_runner_hook_point(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     (tmp_path / ".litehive" / "config.yaml").write_text(
         yaml.safe_dump(
             {"runner_hooks": {"invalid_hook_point": [{"command": "echo nope"}]}},

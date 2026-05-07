@@ -5,7 +5,7 @@ from typer.testing import CliRunner
 
 from litehive.cli.app import app
 from litehive.config.paths import workspace_path
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.reports import StageReport
 from litehive.state.persist import load_state, save_state
@@ -50,7 +50,7 @@ def _clear_task_tables(root: Path) -> None:
 
 def test_task_event_log_records_lifecycle_transition_types_outside_sqlite(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Eventful task")
 
     update_task_for_workspace(Workspace.from_path(tmp_path), task.id, title="Updated eventful task")
@@ -126,7 +126,7 @@ def test_task_event_log_has_events_short_circuits_without_full_decode(tmp_path: 
 
 def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     done = create_task(tmp_path, title="Replay done", goal="old goal")
     queued = create_task(tmp_path, title="Replay queued")
     update_task_for_workspace(
@@ -202,7 +202,7 @@ def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_
 
 
 def test_db_rebuild_from_events_refuses_incomplete_replay_source(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Do not silently drop me")
     task_event_log_path(Workspace.from_path(tmp_path)).unlink()
 
@@ -218,7 +218,7 @@ def test_db_rebuild_from_events_refuses_incomplete_replay_source(tmp_path: Path)
 
 
 def test_replay_skips_truncated_partial_log_record(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Partial replay")
     task_event_log_path(Workspace.from_path(tmp_path)).open("ab").write(b'{"schema_version":1,"event_type":')
 
@@ -232,7 +232,7 @@ def test_replay_skips_truncated_partial_log_record(tmp_path: Path) -> None:
 
 
 def test_replay_keeps_discarded_created_task_removed(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Temporary import task")
     discard_created_task(tmp_path, task.id)
 
@@ -255,14 +255,14 @@ def test_replay_keeps_discarded_created_task_removed(tmp_path: Path) -> None:
     ]
 
 
-def test_ensure_workspace_rebuilds_after_database_loss_from_task_event_log(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+def test_create_workspace_rebuilds_after_database_loss_from_task_event_log(tmp_path: Path) -> None:
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="DB loss replay", acceptance_criteria=["restored from log"])
     event_log = task_event_log_path(Workspace.from_path(tmp_path))
     first_event = json.loads(event_log.read_text(encoding="utf-8").splitlines()[0])
 
     _delete_workspace_db(tmp_path)
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     rebuilt = get_task(tmp_path, task.id)
     rebuilt_state = load_state(tmp_path)

@@ -5,7 +5,7 @@ from typer.testing import CliRunner
 
 from litehive.cli.app import app
 from litehive.config.paths import workspace_path
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.status import requeue_task_for_workspace
@@ -14,7 +14,7 @@ from litehive.domain.common import PipelineStatus, TaskStatus
 
 
 def test_requeue_writes_durable_audit_row_to_workspace_db(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Retry with audit")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
@@ -45,7 +45,7 @@ def test_requeue_writes_durable_audit_row_to_workspace_db(tmp_path: Path) -> Non
 
 
 def test_db_audit_cli_shows_requeue_entry_for_done_task(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Complete after requeue")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.IMPLEMENTING

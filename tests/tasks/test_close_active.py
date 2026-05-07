@@ -8,7 +8,7 @@ import time
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from heru.types import SubagentRef
 from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.journal import render_task_journal
@@ -36,7 +36,7 @@ def _wait_for_process_exit(proc: subprocess.Popen[bytes], *, timeout_seconds: fl
 
 
 def test_cmd_close_task_stops_active_runner_and_closes_task(tmp_path: Path, capsys, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.setattr("litehive.cli.agent_cli.block_if_agent", lambda: None)
     task = create_task(tmp_path, title="Kill bad run")
@@ -152,7 +152,7 @@ with workspace_runner_guard(Workspace.from_path(root)):
 
 
 def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.setattr("litehive.cli.agent_cli.block_if_agent", lambda: None)
     task = create_task(tmp_path, title="Kill live subagent")

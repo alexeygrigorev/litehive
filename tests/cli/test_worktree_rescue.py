@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 
 from litehive.cli.app import app
 from litehive.config.paths import workspace_path
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.task import UnmergedWorktree
 from litehive.state.locking import runner_lock_is_held
 from litehive.state.persist import load_state, save_state
@@ -67,7 +67,7 @@ def _bootstrap_git_workspace(workspace: Path) -> None:
     _git_ok(workspace, "init", "-b", "main")
     _git_ok(workspace, "config", "user.email", "test@example.com")
     _git_ok(workspace, "config", "user.name", "Test User")
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "-A")
     _git_ok(workspace, "commit", "-m", "initial")

@@ -8,7 +8,7 @@ from heru.types import SubagentRef
 
 from litehive.container import build_subagent_manager
 from litehive.agents.report_extraction import stage_report_from_subagent
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.agent import EngineFailure, ExecutionTrace, SubagentResult
 from litehive.domain.common import TaskStage
 from litehive.feedback import FEEDBACK_CAP
@@ -52,7 +52,7 @@ def _subagent_result(
 
 
 def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Keep CLI summary untouched")
     message = "summary line\n\n" + ("y" * (FEEDBACK_CAP + 250))
 
@@ -81,7 +81,7 @@ def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Pat
 
 
 def test_stage_report_from_subagent_preserves_semantic_reject_classification(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Classified reviewer reject")
 
     append_activity_entry(
@@ -168,7 +168,7 @@ def test_subagent_manager_keeps_full_transcript_artifacts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Keep full transcript artifacts")
     manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
     transcript = "full transcript\n" + ("z" * (FEEDBACK_CAP + 400))

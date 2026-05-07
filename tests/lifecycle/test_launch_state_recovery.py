@@ -1,7 +1,7 @@
 import subprocess
 from pathlib import Path
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.runtime import RuntimeFailedRunRecord, RuntimeStageState
 from litehive.lifecycle.journal import SqliteJournal
 from litehive.workspace import Workspace
@@ -31,7 +31,7 @@ class _PassEngine:
 
 
 def _init_workspace_git_repo(root: Path) -> None:
-    ensure_workspace(root)
+    create_workspace(root)
     for args in (
         ["git", "init", "-q", "-b", "main"],
         ["git", "config", "user.email", "t@t"],

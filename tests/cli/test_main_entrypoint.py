@@ -7,7 +7,7 @@ import pytest
 
 import litehive.main as main_module
 from litehive.config.paths import litehive_root
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 
 cli_app_module = importlib.import_module("litehive.cli.app")
 
@@ -333,7 +333,7 @@ def test_main_status_fast_option_is_removed(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys, "argv", ["litehive", "status", "--fast"])
 
@@ -353,7 +353,7 @@ def test_main_status_ignores_corrupt_registry_from_workspace_cwd(
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     registry_path = litehive_root() / "workspaces.db"
     registry_path.write_text("not a sqlite database", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
@@ -377,7 +377,7 @@ def test_main_status_ignores_corrupt_registry_from_workspace_env(
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(tmp_path))
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     registry_path = litehive_root() / "workspaces.db"
     registry_path.write_text("not a sqlite database", encoding="utf-8")
     monkeypatch.chdir(tmp_path.parent)

@@ -8,7 +8,7 @@ from litehive.attention import (
     waiting_for_you_lines,
 )
 from litehive.config.paths import workspace_path
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.daemon.execution import run_daemon_loop
 from litehive.main import dispatch_status
 from litehive.sandbox.git_wrapper import main as git_wrapper_main
@@ -20,7 +20,7 @@ from litehive.domain.common import PipelineStatus, TaskStatus
 
 
 def test_status_surfaces_flagged_task_as_operator_needed(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Flagged work")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
@@ -40,7 +40,7 @@ def test_status_surfaces_flagged_task_as_operator_needed(tmp_path: Path, capsys)
 
 
 def test_status_surfaces_runner_pool_stop_as_operator_needed(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     save_state(tmp_path, WorkspaceState(pool_stop_reason="diverged_from_origin"))
 
     exit_code = dispatch_status(["--workspace", str(tmp_path)])
@@ -53,7 +53,7 @@ def test_status_surfaces_runner_pool_stop_as_operator_needed(tmp_path: Path, cap
 
 
 def test_status_reports_no_operator_needed_when_workspace_is_clear(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     exit_code = dispatch_status(["--workspace", str(tmp_path)])
     output = capsys.readouterr().out
@@ -64,7 +64,7 @@ def test_status_reports_no_operator_needed_when_workspace_is_clear(tmp_path: Pat
 
 
 def test_operator_log_is_runtime_diagnostic_not_queue_item(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     workspace = Workspace.from_path(tmp_path)
     append_attention_log(workspace, "manual diagnostic")
@@ -76,7 +76,7 @@ def test_operator_log_is_runtime_diagnostic_not_queue_item(tmp_path: Path) -> No
 
 
 def test_git_wrapper_block_logs_without_persisting_attention_queue(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     exit_code = git_wrapper_main(
         ["push", "--force", "origin", "main"],
@@ -97,7 +97,7 @@ def test_git_wrapper_block_logs_without_persisting_attention_queue(tmp_path: Pat
 
 
 def test_runner_stops_before_running_tasks_when_operator_stop_reason_is_set(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     create_task(tmp_path, title="Queued work")
     set_pool_stop_reason(tmp_path, "attention_required")
 
@@ -124,7 +124,7 @@ def test_runner_stops_before_running_tasks_when_operator_stop_reason_is_set(tmp_
 
 
 def test_runner_resumes_after_operator_stop_reason_is_cleared(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     create_task(tmp_path, title="Queued work")
     set_pool_stop_reason(tmp_path, "attention_required")
 
@@ -158,7 +158,7 @@ def test_runner_resumes_after_operator_stop_reason_is_cleared(tmp_path: Path, mo
 
 
 def test_pool_halts_immediately_when_local_main_diverges_from_origin(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     create_task(tmp_path, title="Queued work")
 
     calls: list[tuple[str, ...]] = []

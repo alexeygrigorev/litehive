@@ -2,7 +2,7 @@ import importlib
 from pathlib import Path
 import sys
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 
 cli_app = importlib.import_module("litehive.cli.app")
 
@@ -17,7 +17,7 @@ def _isolate_workspace_resolution(tmp_path: Path, monkeypatch) -> None:
 def test_daemon_status_uses_workspace_cwd(tmp_path: Path, monkeypatch, capsys) -> None:
     _isolate_workspace_resolution(tmp_path, monkeypatch)
     workspace = tmp_path / "workspace"
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     monkeypatch.chdir(workspace)
     monkeypatch.setattr(sys, "argv", ["litehive", "daemon", "status"])
 
@@ -33,7 +33,7 @@ def test_daemon_status_accepts_explicit_workspace(tmp_path: Path, monkeypatch, c
     _isolate_workspace_resolution(tmp_path, monkeypatch)
     workspace = tmp_path / "workspace"
     outside = tmp_path / "outside"
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     outside.mkdir()
     monkeypatch.chdir(outside)
     monkeypatch.setattr(sys, "argv", ["litehive", "daemon", "status", "--workspace", str(workspace)])

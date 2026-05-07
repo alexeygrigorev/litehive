@@ -7,12 +7,12 @@ from litehive.agents.session_store import (
     load_subagent_session_record,
     subagent_artifacts,
 )
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.workspace import Workspace
 
 
 def test_subagent_session_store_loads_named_slices_directly(tmp_path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
 
     subagent_artifacts(workspace, "T-0001", "SA-0001").save(
@@ -35,7 +35,7 @@ def test_subagent_session_store_loads_named_slices_directly(tmp_path) -> None:
 
 
 def test_subagent_session_store_event_stream_can_be_cleared(tmp_path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
 
     subagent_artifacts(workspace, "T-0001", "SA-0001").save(
@@ -49,7 +49,7 @@ def test_subagent_session_store_event_stream_can_be_cleared(tmp_path) -> None:
 
 
 def test_subagent_session_record_normalizes_created_at(tmp_path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
 
     subagent_artifacts(workspace, "T-0001", "SA-0001").save(
@@ -82,7 +82,7 @@ def test_subagent_session_record_normalizes_created_at(tmp_path) -> None:
 
 
 def test_subagent_session_record_falls_back_to_persisted_created_at(tmp_path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
 
     subagent_artifacts(workspace, "T-0001", "SA-0001").save(

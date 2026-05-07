@@ -18,7 +18,7 @@ def workspace_dir(root: Path) -> Path:
 
     The single canonical answer to "where does Litehive store
     this workspace's in-repo metadata?". Pure path math — does
-    not create the directory; ``ensure_workspace`` is the
+    not create the directory; ``create_workspace`` is the
     bootstrap path.
     """
     return root / ".litehive"
@@ -29,7 +29,7 @@ def config_path(root: Path) -> Path:
     Path to the workspace YAML config.
 
     Consumed by the :class:`LitehiveConfig` loader and seeded by
-    ``ensure_workspace`` on first use. Lives in the repo so the
+    ``create_workspace`` on first use. Lives in the repo so the
     config travels with the source rather than being scoped to a
     particular checkout.
     """

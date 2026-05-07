@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.workspace import Workspace
 from litehive.state.persist import load_state
@@ -27,7 +27,7 @@ def _flag_task(root: Path, task_id: str) -> None:
 
 
 def test_flag_count_increments_on_each_flagged_transition(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Flaky task")
 
     _flag_task(tmp_path, task.id)
@@ -44,7 +44,7 @@ def test_flag_count_increments_on_each_flagged_transition(tmp_path: Path) -> Non
 
 
 def test_auto_defer_after_three_flags(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Repeatedly failing task")
 
     # Flag 1
@@ -77,7 +77,7 @@ def test_auto_defer_after_three_flags(tmp_path: Path) -> None:
 
 
 def test_requeue_blocked_without_force_after_three_flags(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Triple-flagged task")
 
     # Flag 3 times to reach the threshold
@@ -96,7 +96,7 @@ def test_requeue_blocked_without_force_after_three_flags(tmp_path: Path) -> None
 
 
 def test_requeue_with_force_succeeds_after_three_flags(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Triple-flagged but forced")
 
     # Set flag_count to 3 and status to flagged (simulating threshold handling)
@@ -115,7 +115,7 @@ def test_requeue_with_force_succeeds_after_three_flags(tmp_path: Path) -> None:
 
 
 def test_flag_count_not_reset_by_requeue(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Counter survives requeue")
 
     # Flag once
@@ -133,7 +133,7 @@ def test_flag_count_not_reset_by_requeue(tmp_path: Path) -> None:
 
 
 def test_requeue_task_resets_sticky_pipeline_failure_state(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Requeue clears failed pipeline state")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
@@ -151,7 +151,7 @@ def test_requeue_task_resets_sticky_pipeline_failure_state(tmp_path: Path) -> No
 
 
 def test_cli_requeue_warns_and_fails_without_force(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="CLI force check")
 
     # Set up a flagged task with flag_count >= 3
@@ -170,7 +170,7 @@ def test_cli_requeue_warns_and_fails_without_force(tmp_path: Path, capsys: pytes
 
 
 def test_cli_requeue_succeeds_with_force(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="CLI force requeue")
 
     t = get_task(tmp_path, task.id)
@@ -192,7 +192,7 @@ def test_cli_requeue_succeeds_with_force(tmp_path: Path, capsys: pytest.CaptureF
 
 
 def test_new_task_has_flag_count_zero(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Fresh task")
     assert task.flag_count == 0
     t = get_task(tmp_path, task.id)

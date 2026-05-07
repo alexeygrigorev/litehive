@@ -12,7 +12,7 @@ def test_worktree_clean_defers_metadata_clear_when_runner_active(tmp_path: Path,
     workspace.mkdir(parents=True)
 
     # Mock the workspace to be valid
-    monkeypatch.setattr("litehive.config.workspace.ensure_workspace", lambda x: None)
+    monkeypatch.setattr("litehive.config.workspace.create_workspace", lambda x: None)
 
     # Mock collect_managed_worktrees to return a cleanable worktree
     mock_worktree = Mock()
@@ -74,7 +74,7 @@ def test_worktree_clean_succeeds_when_no_runner_conflict(tmp_path: Path, monkeyp
     workspace.mkdir(parents=True)
 
     # Mock the workspace to be valid
-    monkeypatch.setattr("litehive.config.workspace.ensure_workspace", lambda x: None)
+    monkeypatch.setattr("litehive.config.workspace.create_workspace", lambda x: None)
 
     # Mock collect_managed_worktrees to return a cleanable worktree
     mock_worktree = Mock()

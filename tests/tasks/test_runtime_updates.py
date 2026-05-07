@@ -2,7 +2,7 @@ from pathlib import Path
 
 from heru.types import SubagentRef
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
 from litehive.domain.failure_diagnostics import FailureDiagnostics
 from litehive.domain.reports import StageReport
@@ -43,7 +43,7 @@ def test_runtime_stage_model_copy_does_not_resurrect_removed_fields() -> None:
 
 
 def test_mark_task_run_started_resets_stage_and_active_subagent(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Reset runtime")
 
     mark_stage_started(tmp_path, task, "implementing")
@@ -66,7 +66,7 @@ def test_mark_task_run_started_resets_stage_and_active_subagent(tmp_path: Path) 
 
 
 def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Finish stage")
 
     mark_stage_started(tmp_path, task, "implementing")
@@ -88,7 +88,7 @@ def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_pat
 
 
 def test_task_outcome_failure_diagnostics_are_typed_and_persist_as_object(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Typed outcome diagnostics")
 
     mark_task_outcome(
@@ -117,7 +117,7 @@ def test_task_outcome_failure_diagnostics_are_typed_and_persist_as_object(tmp_pa
 
 
 def test_mark_subagent_finished_clears_active_subagent_without_completed_runtime_copy(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Finish subagent")
     ref = _subagent_ref()
 

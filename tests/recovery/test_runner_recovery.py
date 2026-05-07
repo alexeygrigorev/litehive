@@ -5,7 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from litehive.agents.session_store import SubagentArtifactPayload, load_subagent_report, subagent_artifacts
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.runtime import RuntimeStageState, RuntimeSubagentState
 from litehive.recovery.execution_recovery import prepare_interrupted_task, recover_stale_runner_state_for_workspace
@@ -16,7 +16,7 @@ from litehive.domain.common import PipelineStatus, TaskStatus
 
 
 def _seed_running_task(tmp_path: Path, *, stage: str, active: bool) -> tuple[str, str]:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title=f"{stage} recovery")
     task.status = TaskStatus.IN_PROGRESS
     task.pipeline_status = PipelineStatus(stage)
@@ -138,7 +138,7 @@ def test_recover_stale_runner_state_preserves_runtime_stage_when_pipeline_status
 def test_recover_stale_runner_state_canonicalizes_nonrunning_stranded_task(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(
         tmp_path,
         title="Stranded non-running task",
@@ -174,7 +174,7 @@ def test_recover_stale_runner_state_canonicalizes_nonrunning_stranded_task(
 def test_recover_stale_runner_state_canonicalizes_queued_interrupted_marker(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(
         tmp_path,
         title="Queued interrupted task",
@@ -208,7 +208,7 @@ def test_recover_stale_runner_state_canonicalizes_queued_interrupted_marker(
 
 
 def test_recover_stale_runner_state_clears_non_running_active_task_id(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Flagged but not running")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.FLAGGED
@@ -225,7 +225,7 @@ def test_recover_stale_runner_state_clears_non_running_active_task_id(tmp_path: 
 
 
 def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Interrupted run")
     subagent_path = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "subagents" / "SA-1234-swe"
     subagent_path.mkdir(parents=True)

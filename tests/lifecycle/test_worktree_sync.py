@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 
 from litehive.config.paths import workspace_path
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.common import PipelineState
 from litehive.lifecycle.nodes.system import GitWorktreeSyncNode
 from litehive.lifecycle.persistence import TaskState
@@ -49,7 +49,7 @@ def test_worktree_sync_creates_missing_task_worktree(tmp_path: Path) -> None:
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")
@@ -74,7 +74,7 @@ def test_worktree_sync_links_worktree_venv_to_workspace_venv(tmp_path: Path) -> 
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     (workspace / ".venv").mkdir()
@@ -100,7 +100,7 @@ def test_worktree_sync_skips_broken_venv_link_when_workspace_has_no_venv(tmp_pat
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")
@@ -125,7 +125,7 @@ def test_worktree_sync_rebases_existing_task_worktree_onto_local_main(tmp_path: 
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")
@@ -176,7 +176,7 @@ def test_worktree_sync_rebases_dirty_resumed_worktree_and_preserves_wip(tmp_path
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")
@@ -239,7 +239,7 @@ def test_worktree_sync_skips_dirty_worktrees(tmp_path: Path) -> None:
 
     _git_ok(tmp_path, "clone", str(origin), str(workspace))
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     task = create_task(workspace, title="Sync")
     worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
     worktree.parent.mkdir(parents=True, exist_ok=True)
@@ -281,7 +281,7 @@ def test_worktree_sync_prunes_stale_git_worktree_metadata_before_recreate(tmp_pa
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")
@@ -321,7 +321,7 @@ def test_worktree_sync_reuses_existing_branch_worktree_when_runtime_path_missing
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import PipelineState
 from litehive.domain.recovery import (
@@ -43,7 +43,7 @@ from litehive.workspace import Workspace
 
 @pytest.fixture
 def workspace(tmp_path: Path) -> Path:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     return tmp_path
 
 

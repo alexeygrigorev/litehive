@@ -69,7 +69,7 @@ class RuntimeStore:
         heals itself instead of losing history.
         """
         with self.workspace.connect() as connection:
-            self.ensure_workspace_state_rows(connection)
+            self.create_workspace_state_rows(connection)
             if consume_rebuilt_database_marker(self.root):
                 connection.commit()
             connection.commit()
@@ -101,7 +101,7 @@ class RuntimeStore:
         the workspace has never been bootstrapped.
         """
         with self.workspace.connect() as connection:
-            self.ensure_workspace_state_rows(connection)
+            self.create_workspace_state_rows(connection)
             state_row = connection.execute(
                 "SELECT payload FROM pool_state WHERE workspace_key = ?",
                 ("workspace",),
@@ -789,7 +789,7 @@ class RuntimeStore:
         return highest
 
     @staticmethod
-    def ensure_workspace_state_rows(connection: sqlite3.Connection) -> None:
+    def create_workspace_state_rows(connection: sqlite3.Connection) -> None:
         """
         Seed the singleton ``pool_state`` and ``queue`` rows on first connect.
 

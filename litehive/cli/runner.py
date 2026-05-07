@@ -13,7 +13,7 @@ from litehive.config.engine_models import EngineSelectionRequest, select_engine_
 from litehive.config.environment import LitehiveEnvironment
 from litehive.config.paths import workspace_path
 from litehive.config.runtime_settings import load_runtime_setting_audit_entries, load_runtime_settings
-from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
+from litehive.config.workspace import create_workspace, normalize_workspace_root, resolve_workspace
 from litehive.container import LitehiveContainer, build_container, build_workspace
 from heru import ENGINE_CHOICES
 from litehive.daemon.execution import (
@@ -106,7 +106,7 @@ def daemon_status(workspace):
     tests can drive it directly without going through the Typer
     command machinery.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     for line in daemon_status_lines(workspace):
         print(line)
     return 0
@@ -121,7 +121,7 @@ def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
     ``start`` can detect the "nothing to stop" case rather than
     silently treating it as success.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     entry = stop_workspace_daemon(workspace)
     print(f"workspace: {workspace.resolve()}")
     if entry is None:
@@ -478,7 +478,7 @@ def run_command(
     mutually exclusive because previewing a multi-task drain has
     no defined meaning.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     if dry_run and drain:
         raise click.UsageError("--dry-run cannot be combined with --drain")
     container = build_container(workspace)
@@ -599,7 +599,7 @@ def backup_create(workspace: WorkspaceOption = Path.cwd()) -> int:
     destructive command — the snapshot is the only path back if
     the live database is corrupted.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     try:
         backup = create_workspace_backup(workspace)
     except Exception as exc:
@@ -619,7 +619,7 @@ def backup_list(workspace: WorkspaceOption = Path.cwd()) -> int:
     operator can pick a timestamp for ``backup restore``. The
     output is line-oriented so it can feed shell pipelines.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     backups = list_workspace_backups(workspace)
     print(f"backups: {len(backups)}")
     for backup in backups:
@@ -643,7 +643,7 @@ def backup_restore(
     overwriting unless ``--yes`` is set so an interactive operator
     cannot accidentally wipe their workspace.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     daemon = get_workspace_daemon(workspace)
     if daemon is not None:
         print("backup restore failed: workspace daemon is running")

@@ -4,7 +4,7 @@ import pytest
 from typer.testing import CliRunner
 
 from litehive.cli.app import app as cli_app
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.pool import DirtyWorktreeOwnership
 from litehive.domain.reports import TaskActivityEntry
@@ -41,7 +41,7 @@ class _PassEngine:
 
 
 def test_stop_current_task_marks_active_work_as_parked(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(
         tmp_path,
         title="Stop me later",
@@ -79,7 +79,7 @@ def test_stop_current_task_marks_active_work_as_parked(tmp_path: Path) -> None:
 def test_restore_missing_queued_tasks_skips_parked_and_restores_interrupted(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     interrupted = create_task(
         tmp_path,
         title="Interrupted work",
@@ -122,7 +122,7 @@ def test_restore_missing_queued_tasks_skips_parked_and_restores_interrupted(
 
 @pytest.mark.parametrize("execution_status", ["interrupted", "idle"])
 def test_resume_task_allows_stranded_in_progress_task(tmp_path: Path, execution_status: str) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Resume stranded task")
     task.status = TaskStatus.IN_PROGRESS
     task.pipeline_status = PipelineStatus.GROOMING
@@ -147,7 +147,7 @@ def test_resume_task_allows_stranded_in_progress_task(tmp_path: Path, execution_
 
 
 def test_resume_and_requeue_accept_injected_workspace(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
     parked = create_task(tmp_path, title="Resume through workspace")
     parked.status = TaskStatus.PARKED
@@ -171,7 +171,7 @@ def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(
         tmp_path,
         title="Dirty ownership",
@@ -209,7 +209,7 @@ def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
 
 
 def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(
         tmp_path,
         title="Restart saved stage",
@@ -248,7 +248,7 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
 
 
 def test_resume_task_recovers_preserved_stage_when_pipeline_status_degraded(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(
         tmp_path,
         title="Resume preserved stage",
@@ -282,7 +282,7 @@ def test_resume_task_recovers_preserved_stage_when_pipeline_status_degraded(tmp_
 def test_resume_task_canonicalizes_stranded_in_progress_with_degraded_pipeline_status(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(
         tmp_path,
         title="Resume stranded degraded task",
@@ -317,7 +317,7 @@ def test_queue_resume_and_requeue_keep_parked_semantics_explicit(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     runner = CliRunner()
 

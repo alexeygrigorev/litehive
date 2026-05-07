@@ -13,11 +13,12 @@ from litehive.config.model import (
 )
 from litehive.config.profiles.defaults import PROCESS_PROFILE_OVERLAYS, SHARED_PROCESS_PROFILE
 from litehive.config.profiles.loader import resolve_process_profile
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
+from litehive.state.persist import load_state
 
 
-def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+def test_create_workspace_creates_layout(tmp_path: Path) -> None:
+    create_workspace(tmp_path)
 
     assert (tmp_path / ".litehive" / "config.yaml").exists()
     assert (tmp_path / ".litehive" / ".gitignore").exists()
@@ -26,8 +27,8 @@ def test_ensure_workspace_creates_layout(tmp_path: Path) -> None:
     assert "engine-monitoring" not in (tmp_path / ".litehive" / ".gitignore").read_text(encoding="utf-8")
 
 
-def test_ensure_workspace_bootstraps_rich_commented_config_once(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+def test_create_workspace_bootstraps_rich_commented_config_once(tmp_path: Path) -> None:
+    create_workspace(tmp_path)
 
     config_path = tmp_path / ".litehive" / "config.yaml"
     contents = config_path.read_text(encoding="utf-8")
@@ -46,12 +47,12 @@ def test_ensure_workspace_bootstraps_rich_commented_config_once(tmp_path: Path) 
     original = "default_engine: gemini\n"
     config_path.write_text(original, encoding="utf-8")
 
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     assert config_path.read_text(encoding="utf-8") == original
 
 
-def test_ensure_workspace_bootstraps_runtime_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_create_workspace_bootstraps_runtime_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_home = tmp_path / "xdg-config"
     data_home = tmp_path / "xdg-data"
     state_home = tmp_path / "xdg-state"
@@ -62,7 +63,7 @@ def test_ensure_workspace_bootstraps_runtime_db(tmp_path: Path, monkeypatch: pyt
     from litehive.config.paths import litehive_root, workspace_data_dir, workspace_path
     from litehive.db.schema import connect_workspace_db
 
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     wid = workspace_data_dir(tmp_path).name
     assert workspace_path(tmp_path, "data.db") == data_home / "litehive" / wid / "data.db"
@@ -103,6 +104,13 @@ def test_ensure_workspace_bootstraps_runtime_db(tmp_path: Path, monkeypatch: pyt
     } <= tables
 
 
+def test_load_state_requires_existing_workspace_without_creating_it(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="not an existing Litehive project"):
+        load_state(tmp_path)
+
+    assert not (tmp_path / ".litehive").exists()
+
+
 def test_deprecated_global_state_in_config_home_is_ignored(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -132,7 +140,7 @@ def test_deprecated_global_state_in_config_home_is_ignored(
     )
     (legacy_root / "daemons.yaml").write_text("- workspace: /tmp/legacy-workspace\n", encoding="utf-8")
 
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     err = capsys.readouterr().err
 
     assert err == ""
@@ -145,14 +153,14 @@ def test_deprecated_global_state_in_config_home_is_ignored(
     (tmp_path / ".litehive" / "config.yaml").write_text("{}", encoding="utf-8")
     assert load_config(tmp_path).default_engine != "gemini"
 
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     assert capsys.readouterr().err == ""
 
 
 def test_workspace_load_config_is_workspace_bound_entrypoint(tmp_path: Path) -> None:
     from litehive.workspace import Workspace
 
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="gemini"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="gemini"))
     workspace = Workspace.from_path(tmp_path)
 
     config = workspace.load_config()
@@ -161,13 +169,13 @@ def test_workspace_load_config_is_workspace_bound_entrypoint(tmp_path: Path) -> 
     assert workspace.config() is config
 
 
-def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
+def test_create_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
     tmp_path: Path,
 ) -> None:
     from litehive.db.schema import connect_workspace_db
     from litehive.state.records import create_task
 
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Current runtime state")
 
     with connect_workspace_db(tmp_path) as connection:
@@ -175,20 +183,20 @@ def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
         connection.commit()
         assert connection.execute("SELECT task_id FROM task_state WHERE task_id = ?", (task.id,)).fetchone() is None
 
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     with connect_workspace_db(tmp_path) as connection:
         assert connection.execute("SELECT task_id FROM task_state WHERE task_id = ?", (task.id,)).fetchone() is None
 
 
-def test_ensure_workspace_rebuilds_fresh_database_from_task_event_log(tmp_path: Path) -> None:
+def test_create_workspace_rebuilds_fresh_database_from_task_event_log(tmp_path: Path) -> None:
     from litehive.config.paths import workspace_path
     from litehive.db.schema import connect_workspace_db
     from litehive.state.records import create_task
     from litehive.tasks.event_log import task_event_log_path
     from litehive.workspace import Workspace
 
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovered from event log")
     assert task_event_log_path(Workspace.from_path(tmp_path)).exists()
 
@@ -196,7 +204,7 @@ def test_ensure_workspace_rebuilds_fresh_database_from_task_event_log(tmp_path: 
     for path in (db_path, db_path.with_name(db_path.name + "-wal"), db_path.with_name(db_path.name + "-shm")):
         path.unlink(missing_ok=True)
 
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     with connect_workspace_db(tmp_path) as connection:
         task_row = connection.execute("SELECT task_id FROM task_state WHERE task_id = ?", (task.id,)).fetchone()
@@ -207,13 +215,13 @@ def test_ensure_workspace_rebuilds_fresh_database_from_task_event_log(tmp_path: 
     assert json.loads(queue_row[0]) == [task.id]
 
 
-def test_ensure_workspace_skips_disk_scan_for_bootstrapped_empty_workspace(
+def test_create_workspace_skips_disk_scan_for_bootstrapped_empty_workspace(
     tmp_path: Path,
 ) -> None:
     from litehive.db.schema import connect_workspace_db
 
-    ensure_workspace(tmp_path)
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     with connect_workspace_db(tmp_path) as connection:
         task_rows = connection.execute("SELECT COUNT(*) FROM task_state").fetchone()[0]
@@ -243,7 +251,7 @@ def test_litehive_home_overrides_default_root(tmp_path: Path, monkeypatch: pytes
 
     from litehive.config.paths import litehive_root, workspace_data_dir, workspace_path
 
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     wid = workspace_data_dir(tmp_path).name
     assert litehive_root() == custom_home
@@ -257,7 +265,7 @@ def test_litehive_home_overrides_default_root(tmp_path: Path, monkeypatch: pytes
 
 
 def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None:
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             external_engine_sandbox=ExternalEngineSandboxConfig(
@@ -309,7 +317,7 @@ def test_load_config_rejects_malformed_external_engine_sandbox_shapes(
     sandbox_patch: dict[str, object],
     message: str,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     current_config_path = tmp_path / ".litehive" / "config.yaml"
     raw_config = yaml.safe_load(current_config_path.read_text(encoding="utf-8"))
     raw_config["external_engine_sandbox"] = sandbox_patch

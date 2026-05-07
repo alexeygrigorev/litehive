@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.outcomes import TaskOutcomeKind
@@ -57,7 +57,7 @@ def _queue_task(
 
 
 def test_dequeue_filter_skips_terminal_runtime_execution_statuses(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     zombie_ids: list[str] = []
     for execution_status in ("done", "cancelled", "failed", "blocked", "interrupted"):
         zombie = create_task(tmp_path, title=f"Zombie {execution_status}")
@@ -85,7 +85,7 @@ def test_dequeue_filter_skips_terminal_runtime_execution_statuses(tmp_path: Path
 
 
 def test_queued_task_with_done_execution_status_is_not_selected(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     zombie = create_task(tmp_path, title="Done zombie")
     runnable = create_task(tmp_path, title="Runnable")
     _queue_task(
@@ -106,7 +106,7 @@ def test_queued_task_with_done_execution_status_is_not_selected(tmp_path: Path) 
 
 
 def test_dequeue_selection_skips_tasks_missing_runtime_rows(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     legacy = create_task(tmp_path, title="Legacy disk-only task")
     runnable = create_task(tmp_path, title="Runnable")
 
@@ -128,7 +128,7 @@ def test_dequeue_selection_skips_tasks_missing_runtime_rows(tmp_path: Path) -> N
 
 
 def test_dequeue_filter_skips_terminal_last_outcome_kinds(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     zombie_ids: list[str] = []
     for outcome_kind in (TaskOutcomeKind.DUPLICATE, TaskOutcomeKind.DEFERRED, TaskOutcomeKind.WONT_DO):
         zombie = create_task(tmp_path, title=f"Zombie {outcome_kind.value}")
@@ -156,7 +156,7 @@ def test_dequeue_filter_skips_terminal_last_outcome_kinds(tmp_path: Path) -> Non
 
 
 def test_selector_resets_stale_queued_pipeline_status_to_backlog(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Stale stage")
     _queue_task(
         tmp_path,
@@ -188,7 +188,7 @@ def test_run_drain_skips_zombie_queue_entries_and_leaves_main_clean(
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "tracked.txt").write_text("seed\n", encoding="utf-8")
     _git_ok(workspace, "add", "tracked.txt")
@@ -259,7 +259,7 @@ def test_task_with_hook_rejection_and_recovery_has_terminal_execution_status(tmp
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     # Create initial commit
     (workspace / "tracked.txt").write_text("initial\n", encoding="utf-8")

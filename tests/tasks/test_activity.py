@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.agent import SubagentId
 from litehive.domain.common import Verdict
@@ -30,7 +30,7 @@ def _activity_rows(root: Path, task_id: str) -> list[dict]:
 
 
 def test_append_activity_entry_persists_to_sqlite(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Activity")
 
     append_activity_entry(
@@ -59,7 +59,7 @@ def test_append_activity_entry_persists_to_sqlite(tmp_path: Path) -> None:
 
 
 def test_task_activity_entry_carries_verdict_as_domain_enum(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Typed verdict")
     workspace = Workspace.from_path(tmp_path)
 
@@ -81,7 +81,7 @@ def test_task_activity_entry_carries_verdict_as_domain_enum(tmp_path: Path) -> N
 
 
 def test_task_activity_log_latest_returns_newest_entry(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Latest activity")
     workspace = Workspace.from_path(tmp_path)
     activity = workspace.task_activity(task)
@@ -100,7 +100,7 @@ def test_task_activity_log_latest_returns_newest_entry(tmp_path: Path) -> None:
 
 
 def test_load_task_activity_ignores_stale_filesystem_activity(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="SQLite only")
     source_dir = task_dir(tmp_path, task)
     (source_dir / ("comments" + ".yaml")).write_text("- message: stale mirror\n", encoding="utf-8")
@@ -116,7 +116,7 @@ def test_load_task_activity_ignores_stale_filesystem_activity(tmp_path: Path) ->
 
 
 def test_task_activity_entry_models_non_agent_sources(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Operator activity")
 
     append_activity_entry(
@@ -138,7 +138,7 @@ def test_task_activity_entry_models_non_agent_sources(tmp_path: Path) -> None:
 
 
 def test_workspace_task_activity_returns_latest_matching_entry(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Activity query")
     workspace = Workspace.from_path(tmp_path)
 

@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 
 import litehive.state.records as tasks_crud
 from litehive.cli.task_cli import app as task_app
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.reports import FollowUpTaskSpec
 from litehive.state.persist import load_state, save_state
@@ -31,7 +31,7 @@ def _help_option_names(output: str) -> set[str]:
 
 
 def test_create_task_persists_folder_and_queue(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     task = create_task(tmp_path, title="Fix login race")
     tasks = list_tasks(tmp_path)
@@ -50,7 +50,7 @@ def test_create_task_persists_manual_creation_provenance(tmp_path: Path, monkeyp
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
     monkeypatch.delenv("LITEHIVE_STAGE", raising=False)
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     task = create_task(tmp_path, title="Manual provenance")
     persisted = get_task(tmp_path, task.id)
@@ -68,7 +68,7 @@ def test_create_task_persists_manual_creation_provenance(tmp_path: Path, monkeyp
 
 
 def test_create_task_defaults_to_full_pipeline_mode(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     task = create_task(tmp_path, title="Default pipeline mode")
     persisted = get_task(tmp_path, task.id)
@@ -78,7 +78,7 @@ def test_create_task_defaults_to_full_pipeline_mode(tmp_path: Path) -> None:
 
 
 def test_create_task_persists_single_pipeline_mode(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     task = create_task(tmp_path, title="Single pipeline mode", pipeline_mode="single")
     persisted = get_task(tmp_path, task.id)
@@ -93,7 +93,7 @@ def test_create_task_persists_agent_creation_provenance_from_env(
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
     monkeypatch.delenv("LITEHIVE_STAGE", raising=False)
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     parent = create_task(tmp_path, title="Current agent task")
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
     monkeypatch.setenv("LITEHIVE_TASK_ID", parent.id)
@@ -113,7 +113,7 @@ def test_create_task_persists_agent_creation_provenance_from_env(
 
 
 def test_task_add_cli_persists_surviving_flags(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     first = create_task(tmp_path, title="First prerequisite")
     second = create_task(tmp_path, title="Second prerequisite")
 
@@ -178,7 +178,7 @@ def test_task_add_help_matches_trimmed_option_surface() -> None:
 
 
 def test_task_add_cli_defaults_to_full_pipeline_mode(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     result = CliRunner().invoke(
         task_app,
@@ -240,7 +240,7 @@ def test_task_update_help_matches_trimmed_option_surface() -> None:
 
 def test_task_update_cli_persists_surviving_flags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     create_task(tmp_path, title="First prerequisite")
     second = create_task(tmp_path, title="Second prerequisite")
     task = create_task(tmp_path, title="Original title")
@@ -288,14 +288,14 @@ def test_create_task_preserves_runner_queue_changes_after_state_snapshot(tmp_pat
     script = """
 import json
 from pathlib import Path
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.state.records import create_task
 from litehive.state.persist import load_state
 from litehive.state.persist import save_state_without_runner_guard
 import litehive.state.persist
 
 root = Path(__import__("sys").argv[1])
-ensure_workspace(root)
+create_workspace(root)
 first = create_task(root, title="First queued task")
 second = create_task(root, title="Second queued task")
 original_merge = litehive.state.persist.merged_state_for_runner_owned_write
@@ -327,7 +327,7 @@ print(json.dumps({"id": added.id, "queue": load_state(root).queue}))
 
 
 def test_create_task_seeds_next_task_number_from_existing_workspace_state(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     create_task(tmp_path, title="Existing task")
     create_task(tmp_path, title="Second task")
 
@@ -344,7 +344,7 @@ def test_create_task_seeds_next_task_number_from_existing_workspace_state(tmp_pa
 def test_create_task_uses_persisted_next_task_number_without_rescanning(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     create_task(tmp_path, title="Existing task")
 
     def fail_scan(root: Path) -> int:
@@ -359,7 +359,7 @@ def test_create_task_uses_persisted_next_task_number_without_rescanning(
 
 
 def test_create_task_persists_dependencies(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     first = create_task(tmp_path, title="First prerequisite")
     second = create_task(tmp_path, title="Second prerequisite")
@@ -376,14 +376,14 @@ def test_create_task_persists_dependencies(tmp_path: Path) -> None:
 
 
 def test_create_task_rejects_missing_dependency(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     with pytest.raises(ValueError, match="Task T-9999 not found"):
         create_task(tmp_path, title="Dependent task", depends_on=["T-9999"])
 
 
 def test_create_task_rejects_dependency_cycle(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     first = create_task(tmp_path, title="First task")
     second = create_task(tmp_path, title="Second task")
@@ -395,7 +395,7 @@ def test_create_task_rejects_dependency_cycle(tmp_path: Path) -> None:
 
 
 def test_create_follow_up_tasks_persists_queue_and_creation_source(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     parent = create_task(tmp_path, title="Parent task")
 
     created = create_follow_up_tasks(

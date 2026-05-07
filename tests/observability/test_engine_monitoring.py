@@ -2,7 +2,7 @@ from pathlib import Path
 
 from heru import get_engine
 from heru.base import AdapterCapabilities, CLIExecutionResult, ExternalCLIAdapter
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.engine import EngineUsageObservation, EngineUsageWindow
 from litehive.observability.engine_monitoring import (
     load_engine_monitoring,
@@ -12,7 +12,7 @@ from litehive.workspace import Workspace
 
 
 def test_record_engine_execution_tracks_local_usage_fallback(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     record_engine_execution(
         Workspace.from_path(tmp_path),
@@ -48,7 +48,7 @@ def test_record_engine_execution_tracks_local_usage_fallback(tmp_path: Path) -> 
 
 
 def test_record_engine_execution_accepts_provider_usage_observation(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     class ProviderAdapter(ExternalCLIAdapter):
         def build_command(
@@ -106,7 +106,7 @@ def test_record_engine_execution_accepts_provider_usage_observation(tmp_path: Pa
 
 
 def test_record_engine_execution_tracks_codex_provider_limit_observation(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     record_engine_execution(
         Workspace.from_path(tmp_path),
@@ -148,7 +148,7 @@ def test_record_engine_execution_tracks_codex_provider_limit_observation(tmp_pat
 
 
 def test_record_engine_execution_tracks_claude_provider_limit_observation(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     record_engine_execution(
         Workspace.from_path(tmp_path),
@@ -186,7 +186,7 @@ def test_record_engine_execution_tracks_claude_provider_limit_observation(tmp_pa
 
 
 def test_record_engine_execution_tracks_opencode_provider_usage_observation(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     record_engine_execution(
         Workspace.from_path(tmp_path),
@@ -225,7 +225,7 @@ def test_record_engine_execution_tracks_opencode_provider_usage_observation(tmp_
 
 
 def test_load_engine_monitoring_ignores_legacy_workspace_yaml(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     monitoring_file = tmp_path / ".litehive" / "engine-monitoring.yaml"
     monitoring_file.write_text(
         "engines:\n  codex:\n    engine: codex\n    last_limit_kind: capacity\n",

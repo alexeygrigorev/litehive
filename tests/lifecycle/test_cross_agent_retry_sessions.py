@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.common import PipelineState
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.hook import HookRunner, HookSpec
@@ -76,7 +76,7 @@ class _SameAgentRetryEngine:
 
 @pytest.fixture
 def workspace(tmp_path: Path) -> Path:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     return tmp_path
 
 

@@ -28,7 +28,7 @@ from litehive.config.engine_models import (
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.runtime_settings import load_runtime_setting_audit_entries
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import GitError
 from litehive.lifecycle.engines import ConfigBackedEngineSelector, EngineFactory
@@ -79,7 +79,7 @@ def _assert_engine_selection_request(actual: object, expected: EngineSelectionRe
 
 def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """CLI: freeze an engine, verify audited DB settings, then unfreeze."""
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     config_path = tmp_path / ".litehive" / "config.yaml"
     raw_config_before = config_path.read_text(encoding="utf-8")
 
@@ -128,7 +128,7 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
 
 
 def test_default_engine_cli_persists_to_audited_db_not_config_file(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     config_path = tmp_path / ".litehive" / "config.yaml"
     raw_config_before = config_path.read_text(encoding="utf-8")
 
@@ -157,7 +157,7 @@ def test_default_engine_cli_persists_to_audited_db_not_config_file(tmp_path: Pat
 
 
 def test_engine_preference_cli_persists_to_audited_db(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     exit_code, output = _run_engine(
         "engine",
@@ -188,7 +188,7 @@ def test_engine_preference_cli_persists_to_audited_db(tmp_path: Path) -> None:
 
 
 def test_engine_freeze_cli_persists_to_audited_db_not_config_file(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     config_path = tmp_path / ".litehive" / "config.yaml"
     raw_config_before = config_path.read_text(encoding="utf-8")
 
@@ -224,7 +224,7 @@ def test_engine_freeze_cli_persists_to_audited_db_not_config_file(tmp_path: Path
 
 
 def test_engine_runtime_settings_treat_config_file_drift_as_bootstrap_only(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex", engine_preference=["codex", "gemini"]))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex", engine_preference=["codex", "gemini"]))
     first = load_config(tmp_path)
     assert first.default_engine == "codex"
     assert first.engine_preference == ["codex", "gemini"]
@@ -245,7 +245,7 @@ def test_engine_runtime_settings_treat_config_file_drift_as_bootstrap_only(tmp_p
 
 
 def test_engine_freeze_requires_iso_date(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     exit_code, output = _run_engine(
         "engine",
@@ -261,7 +261,7 @@ def test_engine_freeze_requires_iso_date(tmp_path: Path, capsys) -> None:
 
 
 def test_unfreeze_not_frozen_engine_returns_error(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     exit_code, output = _run_engine(
         "engine",
@@ -275,7 +275,7 @@ def test_unfreeze_not_frozen_engine_returns_error(tmp_path: Path, capsys) -> Non
 
 
 def test_engine_status_prints_routing_availability_and_live_quota(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine="codex",
@@ -338,7 +338,7 @@ def test_engine_status_prints_routing_availability_and_live_quota(tmp_path: Path
 
 
 def test_engine_status_handles_quota_errors_gracefully(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     monkeypatch.setattr(
         "litehive.config.engine_quota.check_claude_quota",
@@ -373,7 +373,7 @@ def test_engine_status_handles_quota_errors_gracefully(tmp_path: Path, monkeypat
 
 
 def test_queue_switch_cli_queues_task_for_new_engine(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     task = _prepare_runnable_task(tmp_path, "Switch engines")
 
     exit_code, output = _run_engine(
@@ -405,7 +405,7 @@ def test_queue_switch_cli_queues_task_for_new_engine(tmp_path: Path) -> None:
 def test_switch_task_engine_accepts_injected_workspace(tmp_path: Path) -> None:
     from litehive.tasks.switch_engine import switch_task_engine_for_workspace
 
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     task = _prepare_runnable_task(tmp_path, "Switch engines with injected workspace")
     workspace = Workspace.from_path(tmp_path)
 
@@ -426,7 +426,7 @@ def test_switch_task_engine_accepts_injected_workspace(tmp_path: Path) -> None:
 
 
 def test_queue_switch_subcommand_still_works(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     task = _prepare_runnable_task(tmp_path, "Switch engines via queue subcommand")
 
     exit_code, output = _run_engine(
@@ -449,7 +449,7 @@ def test_queue_switch_subcommand_still_works(tmp_path: Path) -> None:
 
 
 def test_engine_freeze_helpers_persist_and_clear_workspace_config(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    create_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
     workspace = Workspace.from_path(tmp_path)
 
     assert parse_engine_freeze_until("2099-06-15") == "2099-06-15T00:00:00Z"
@@ -548,7 +548,7 @@ def test_select_engine_records_quota_freeze_and_falls_back(
 
     freeze_until = (datetime.now(timezone.utc) + timedelta(days=30)).replace(microsecond=0)
     freeze_iso = freeze_until.strftime("%Y-%m-%dT%H:%M:%SZ")
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(default_engine="codex", engine_preference=["codex", "gemini"]),
     )
@@ -578,7 +578,7 @@ def test_select_engine_for_workspace_records_quota_freeze_and_falls_back(
 ) -> None:
     freeze_until = (datetime.now(timezone.utc) + timedelta(days=3)).replace(microsecond=0)
     freeze_iso = freeze_until.strftime("%Y-%m-%dT%H:%M:%SZ")
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(default_engine="codex", engine_preference=["codex", "gemini"]),
     )
@@ -640,7 +640,7 @@ def test_select_engine_skips_current_heru_quota_status_shape(
         secondary_window=CodexQuotaWindow(used_percent=95.0, reset_at="2026-04-27T00:00:00Z"),
         limit_reached=True,
     )
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(default_engine="codex", recovery_engine="claude"),
     )
@@ -670,7 +670,7 @@ def test_select_engine_skips_active_freeze_without_quota_call(
     from litehive.config.engine_models import select_engine_for_workspace
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine="codex",
@@ -703,7 +703,7 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
     past = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
     refreshed = (datetime.now(timezone.utc) + timedelta(days=7)).replace(microsecond=0)
     refreshed_iso = refreshed.strftime("%Y-%m-%dT%H:%M:%SZ")
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine="codex",
@@ -740,7 +740,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
     from litehive.config.engine_models import select_engine_for_workspace
 
     past = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine="codex",
@@ -770,7 +770,7 @@ def test_lifecycle_selector_uses_shared_select_engine_when_task_record_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine="codex",
@@ -843,7 +843,7 @@ def test_recovery_engine_uses_shared_select_engine(
     from litehive.tasks.recovery_engine import resolve_recovery_engine
 
     captured: dict[str, object] = {}
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine=default_engine,
@@ -889,7 +889,7 @@ def test_recovery_auto_engine_respects_shared_selector_blocked_result(tmp_path: 
     from litehive.tasks.recovery_engine import resolve_recovery_engine
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine="codex",
@@ -932,7 +932,7 @@ def test_recovery_non_auto_branches_skip_frozen_engines(
     from litehive.tasks.recovery_engine import resolve_recovery_engine
 
     future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine=default_engine,

@@ -13,7 +13,7 @@ from heru import get_engine
 from heru.base import CLIExecutionResult
 from litehive.db.schema import connect_workspace_db
 from litehive.config.paths import litehive_root, workspace_path
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.config.workspace_files import workspace_dir
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.domain.task import WorkspaceState
@@ -56,7 +56,7 @@ def test_status_snapshot_does_not_bootstrap_missing_database(tmp_path: Path) -> 
 
 
 def test_operational_status_snapshot_does_not_run_doctor_style_probes(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     monkeypatch.setattr(
         "litehive.observability.status_diagnostics._probe_daemon_status",
         lambda root: (_ for _ in ()).throw(AssertionError("daemon probe should not run")),
@@ -80,7 +80,7 @@ def test_operational_status_snapshot_does_not_run_doctor_style_probes(tmp_path: 
 
 
 def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     config_file = workspace_dir(tmp_path) / "config.yaml"
     state_db = workspace_path(tmp_path, "data.db")
 
@@ -98,7 +98,7 @@ def test_status_reports_corrupt_workspace_dependencies_without_raising(tmp_path:
 
 def test_status_reports_corrupt_workspace_registry_without_raising(tmp_path: Path, capsys, monkeypatch) -> None:
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     registry_path = litehive_root() / "workspaces.db"
     registry_path.write_text("not a sqlite database", encoding="utf-8")
 
@@ -112,7 +112,7 @@ def test_status_reports_corrupt_workspace_registry_without_raising(tmp_path: Pat
 
 
 def test_status_reports_invalid_merged_config_without_silent_defaulting(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     config_file = workspace_dir(tmp_path) / "config.yaml"
     config_file.write_text("poll_interval_seconds: not-a-number\n", encoding="utf-8")
 
@@ -126,7 +126,7 @@ def test_status_reports_invalid_merged_config_without_silent_defaulting(tmp_path
 
 
 def test_status_reports_non_mapping_config_without_silent_defaulting(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     config_file = workspace_dir(tmp_path) / "config.yaml"
     config_file.write_text("- not\n- a\n- mapping\n", encoding="utf-8")
 
@@ -139,7 +139,7 @@ def test_status_reports_non_mapping_config_without_silent_defaulting(tmp_path: P
 
 
 def test_status_preserves_valid_config_fields_when_reporting_invalid_config(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     config_file = workspace_dir(tmp_path) / "config.yaml"
     config_file.write_text(
         "default_engine: claude\npoll_interval_seconds: not-a-number\n",
@@ -155,7 +155,7 @@ def test_status_preserves_valid_config_fields_when_reporting_invalid_config(tmp_
 
 
 def test_status_reports_legacy_engine_fallbacks_config_error(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     config_file = workspace_dir(tmp_path) / "config.yaml"
     config_file.write_text(
         yaml.safe_dump(
@@ -178,7 +178,7 @@ def test_status_reports_legacy_engine_fallbacks_config_error(tmp_path: Path, cap
 
 
 def test_status_ignores_legacy_engine_monitoring_yaml_and_renders_db_data(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     record_engine_execution(
         Workspace.from_path(tmp_path),
         task_id="T-0001",
@@ -207,7 +207,7 @@ def test_status_ignores_legacy_engine_monitoring_yaml_and_renders_db_data(tmp_pa
 
 
 def test_status_reports_never_started_runner_without_lock(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
@@ -216,7 +216,7 @@ def test_status_reports_never_started_runner_without_lock(tmp_path: Path, capsys
 
 
 def test_status_reports_stale_runner_lock(tmp_path: Path, capsys, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     save_state(tmp_path, WorkspaceState(active_task_id="T-0001"))
     workspace_path(tmp_path, "runtime", ".runner.lock").parent.mkdir(parents=True, exist_ok=True)
     workspace_path(tmp_path, "runtime", ".runner.lock").write_text(
@@ -243,7 +243,7 @@ def test_status_reports_stale_runner_lock(tmp_path: Path, capsys, monkeypatch) -
 
 
 def test_full_status_reports_corrupt_runner_lock_without_raising(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     lock_path = workspace_path(tmp_path, "runtime", ".runner.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text("[", encoding="utf-8")
@@ -257,7 +257,7 @@ def test_full_status_reports_corrupt_runner_lock_without_raising(tmp_path: Path,
 
 
 def test_full_status_reports_invalid_runner_lock_schema(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     lock_path = workspace_path(tmp_path, "runtime", ".runner.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text(json.dumps({"pid": "nope"}), encoding="utf-8")
@@ -271,7 +271,7 @@ def test_full_status_reports_invalid_runner_lock_schema(tmp_path: Path, capsys) 
 
 
 def test_full_status_reports_non_mapping_runner_lock_without_empty_default(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     lock_path = workspace_path(tmp_path, "runtime", ".runner.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text("[]", encoding="utf-8")
@@ -285,7 +285,7 @@ def test_full_status_reports_non_mapping_runner_lock_without_empty_default(tmp_p
 
 
 def test_status_reports_stopped_runner_for_empty_lock_file(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     lock_path = workspace_path(tmp_path, "runtime", ".runner.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text("{}\n", encoding="utf-8")
@@ -297,7 +297,7 @@ def test_status_reports_stopped_runner_for_empty_lock_file(tmp_path: Path, capsy
 
 
 def test_status_reports_queued_task_missing_from_sqlite_index(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Still queued")
     save_state(tmp_path, WorkspaceState(queue=[task.id]))
     with connect_workspace_db(tmp_path) as connection:
@@ -319,7 +319,7 @@ def test_runner_status_diagnostic_copies_serialize_without_pydantic_warnings(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     lock_path = workspace_path(tmp_path, "runtime", ".runner.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -350,7 +350,7 @@ def test_runner_status_diagnostic_copies_serialize_without_pydantic_warnings(
 
 
 def test_status_reports_wedged_runner_heartbeat(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     stale_heartbeat = (datetime.now(UTC) - timedelta(minutes=11)).isoformat().replace("+00:00", "Z")
     workspace_path(tmp_path, "runtime", ".runner.lock").parent.mkdir(parents=True, exist_ok=True)
     workspace_path(tmp_path, "runtime", ".runner.lock").write_text(
@@ -373,7 +373,7 @@ def test_status_reports_wedged_runner_heartbeat(tmp_path: Path, capsys) -> None:
 
 
 def test_status_reports_dead_daemon_pid(tmp_path: Path, capsys, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     daemon_lock = workspace_path(tmp_path, "runtime", ".daemon.lock")
     daemon_lock.parent.mkdir(parents=True, exist_ok=True)
     daemon_lock.write_text(
@@ -397,7 +397,7 @@ def test_status_reports_dead_daemon_pid(tmp_path: Path, capsys, monkeypatch) -> 
 
 
 def test_status_reports_failed_last_cycle(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     log_dir = workspace_path(tmp_path, "logs", "run-all", "20260412T010203Z")
     log_dir.mkdir(parents=True, exist_ok=True)
     repair_log = log_dir / "0001-repair.log"
@@ -412,7 +412,7 @@ def test_status_reports_failed_last_cycle(tmp_path: Path, capsys) -> None:
 
 
 def test_status_reports_broken_heru_link(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     (tmp_path / "pyproject.toml").write_text(
         """
 [project]
@@ -434,7 +434,7 @@ heru = { path = "../heru", editable = true }
 
 
 def test_status_reports_origin_divergence_as_attention_required(tmp_path: Path, capsys, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     save_state(tmp_path, WorkspaceState(pool_stop_reason="diverged_from_origin"))
     monkeypatch.setattr(
         "litehive.daemon.execution.check_origin_divergence",
@@ -456,7 +456,7 @@ def test_status_reports_origin_divergence_as_attention_required(tmp_path: Path, 
 
 
 def test_full_status_reports_consecutive_task_failures_as_critical(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     save_state(
         tmp_path,
         WorkspaceState(
@@ -474,7 +474,7 @@ def test_full_status_reports_consecutive_task_failures_as_critical(tmp_path: Pat
 
 
 def test_status_omits_recovery_failure_repair_guidance_from_default_path(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery failed task")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.FLAGGED
@@ -493,7 +493,7 @@ def test_status_omits_recovery_failure_repair_guidance_from_default_path(tmp_pat
 
 
 def test_full_status_reports_terminal_recovery_failure_from_lifecycle_state(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Terminal lifecycle recovery failure")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.FLAGGED
@@ -531,7 +531,7 @@ def test_full_status_reports_terminal_recovery_failure_from_lifecycle_state(tmp_
 
 
 def test_status_reports_queued_backlog_task_with_resumable_runtime_stage(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Backlog damaged task")
     task.status = TaskStatus.QUEUED
     task.pipeline_status = PipelineStatus.BACKLOG
@@ -549,7 +549,7 @@ def test_status_reports_queued_backlog_task_with_resumable_runtime_stage(tmp_pat
 
 
 def test_status_omits_backlog_runtime_stage_repair_guidance_from_default_path(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Backlog damaged task missing from queue")
     task.status = TaskStatus.QUEUED
     task.pipeline_status = PipelineStatus.BACKLOG
@@ -569,7 +569,7 @@ def test_status_omits_backlog_runtime_stage_repair_guidance_from_default_path(tm
 
 
 def test_status_omits_queued_stage_normalization_warning_from_default_path(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Stale queued stage")
     task.status = TaskStatus.QUEUED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
@@ -586,7 +586,7 @@ def test_status_omits_queued_stage_normalization_warning_from_default_path(tmp_p
 
 
 def test_full_status_tolerates_missing_active_task_record(tmp_path: Path, capsys) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     save_state(tmp_path, WorkspaceState(active_task_id="T-9999"))
 
     exit_code, output = _run_full_status(tmp_path, capsys)

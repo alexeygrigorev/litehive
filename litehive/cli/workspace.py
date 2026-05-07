@@ -17,7 +17,7 @@ from heru.quota import (
 from litehive.cli.engine import engine_command
 from litehive.cli.display import format_retry_on
 from litehive.cli.common import WorkspaceOption
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.container import build_container, build_workspace
 from litehive.daemon.registry import daemon_metadata
 from litehive.domain.common import TaskStatus
@@ -210,7 +210,7 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     automatic cleanup that runs from ``queue`` and ``run`` so
     the operator can also force a full reconciliation pass.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     start_time = time.perf_counter()
     try:
@@ -259,7 +259,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     exit code into alerting; that is the difference between this
     command and ``status``, which is the broader interactive view.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     ws = build_workspace(workspace)
     root = ws.root
     state = load_state(root)

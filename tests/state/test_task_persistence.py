@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 import litehive.state.persist as workflow_module
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task
 from litehive.domain.common import PipelineStatus, TaskStatus
@@ -15,7 +15,7 @@ def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
 ) -> None:
     from litehive.state.store import RuntimeStore
 
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     task = create_task(tmp_path, title="Atomic save", auto_commit=False)
     task.status = TaskStatus.FLAGGED
@@ -41,7 +41,7 @@ def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
 def test_workspace_transition_writes_preserve_task_added_after_state_snapshot(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     active = create_task(tmp_path, title="Active task")
     queued = create_task(tmp_path, title="Queued task")
     stale_state = load_state(tmp_path)
@@ -66,7 +66,7 @@ def test_create_task_surfaces_cleanup_failure_when_rollback_removal_fails(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     def fail_write_atomic_files_and_then(writes, callback) -> None:
         del writes, callback

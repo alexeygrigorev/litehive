@@ -25,7 +25,7 @@ import time
 from typing import TextIO
 
 from litehive.container import build_workspace
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.attention import append_attention_log
 from litehive.db.schema import apply_pending_migrations
 from litehive.git.ops import fetch, is_ancestor, list_remote_names, rev_parse_verify
@@ -447,7 +447,7 @@ def _emit_runner_wait(status, stream: TextIO | None) -> None:
     )
 
 
-def ensure_workspace_venvs_ready(
+def create_workspace_venvs_ready(
     workspace: Path,
 ) -> None:
     """
@@ -543,7 +543,7 @@ def run_daemon_loop(
     versus only momentarily paused.
     """
     workspace = workspace.resolve()
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     daemon_workspace = build_workspace(workspace)
     apply_pending_migrations(workspace)
     command_prefix = default_command_prefix()
@@ -708,7 +708,7 @@ def start_background_daemon(workspace: Path) -> int:
             raise RuntimeError(f"daemon already running for {workspace}: pid={pid}")
     if existing is not None and existing.get("status") == "stale":
         unregister_daemon(workspace)
-    ensure_workspace_venvs_ready(workspace)
+    create_workspace_venvs_ready(workspace)
     project_root = Path(__file__).resolve().parents[2]
     child_env = os.environ.copy()
     for key in ("LITEHIVE_AGENT_ROLE", "LITEHIVE_STAGE", "LITEHIVE_TASK_ID"):

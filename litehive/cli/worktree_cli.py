@@ -4,7 +4,7 @@ from typing import Annotated
 import typer
 
 from litehive.cli.common import WorkspaceOption, make_typer, require_subcommand
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.container import build_workspace
 from litehive.git.ops import GitError
 from litehive.worktree.service import WorktreeService
@@ -28,7 +28,7 @@ def ls(workspace: WorkspaceOption = Path.cwd()) -> int:
     ``change_count`` lets the operator spot dirty trees without
     diving into git.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     service = WorktreeService(workspace_obj)
     worktrees = service.collect_managed_worktrees()
@@ -65,7 +65,7 @@ def clean(
     because the operator wants confirmation before destroying
     on-disk evidence.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     service = WorktreeService(workspace_obj)
     results = service.remove_cleanable_worktrees(dry_run=dry_run)
@@ -121,7 +121,7 @@ def rescue(
     Without ``--apply``, prints the candidates so the operator can
     audit before mutating main.
     """
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     service = WorktreeService(workspace_obj)
     candidates = service.collect_rescue_candidates()

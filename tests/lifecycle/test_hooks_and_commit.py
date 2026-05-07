@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from litehive.config.model import LitehiveConfig
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import has_non_litehive_changes
@@ -686,7 +686,7 @@ class _RecordingPassEngine:
 
 
 def _init_workspace_git_repo(root: Path, *, config: LitehiveConfig | None = None) -> None:
-    ensure_workspace(root, config)
+    create_workspace(root, config)
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
     subprocess.run(["git", "config", "user.email", "t@t"], cwd=root, check=True)
     subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
@@ -1219,7 +1219,7 @@ def test_run_task_auto_commit_cleanup_excludes_db_and_gitignored_files(tmp_path:
         "printf 'db\\n' > .litehive/local.db && "
         "printf 'ignored\\n' > ignored.log"
     )
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             runner_hooks={
@@ -1293,7 +1293,7 @@ def test_run_task_auto_commit_cleanup_excludes_db_and_gitignored_files(tmp_path:
 
 
 def test_main_checkout_cleanup_skips_tracked_ignored_task_reports(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     gitignore = tmp_path / ".gitignore"
     existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
     gitignore.write_text(existing + ".litehive/tasks/*/reports/\n", encoding="utf-8")
@@ -1337,7 +1337,7 @@ def test_main_checkout_cleanup_skips_tracked_ignored_task_reports(tmp_path: Path
 
 
 def test_main_checkout_cleanup_commits_already_staged_deletions(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     probe_file = tmp_path / "tmp_review_probe" / ".litehive" / ".gitignore"
     probe_file.parent.mkdir(parents=True, exist_ok=True)
     probe_file.write_text(".lock\n", encoding="utf-8")

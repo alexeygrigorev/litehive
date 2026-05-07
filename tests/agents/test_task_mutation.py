@@ -9,7 +9,7 @@ from litehive.agents.task_mutation import (
     AgentTaskMutator,
     AgentTaskUpdateRequest,
 )
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task_record
 from litehive.tasks.audit import load_task_audit_entries
@@ -23,7 +23,7 @@ def _set_active_task(root: Path, task_id: str) -> None:
 
 
 def test_agent_task_mutation_authorizer_resolves_active_env_task(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Active task")
     _set_active_task(tmp_path, task.id)
     authorizer = AgentTaskMutationAuthorizer(
@@ -40,7 +40,7 @@ def test_agent_task_mutation_authorizer_resolves_active_env_task(tmp_path: Path)
 
 
 def test_agent_task_mutation_authorizer_rejects_inactive_requested_task(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     active = create_task(tmp_path, title="Active task")
     queued = create_task(tmp_path, title="Queued task")
     _set_active_task(tmp_path, active.id)
@@ -55,7 +55,7 @@ def test_agent_task_mutation_authorizer_rejects_inactive_requested_task(tmp_path
 
 
 def test_agent_task_mutation_authorizer_marks_role_rejections_as_unauthorized(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Active task")
     _set_active_task(tmp_path, task.id)
     authorizer = AgentTaskMutationAuthorizer(
@@ -71,7 +71,7 @@ def test_agent_task_mutation_authorizer_marks_role_rejections_as_unauthorized(tm
 
 
 def test_agent_task_mutator_updates_active_task_with_agent_attribution(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Active task", goal="old goal")
     _set_active_task(tmp_path, task.id)
 
@@ -94,7 +94,7 @@ def test_agent_task_mutator_updates_active_task_with_agent_attribution(tmp_path:
 
 
 def test_agent_task_mutator_rejects_empty_update(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Active task")
 
     mutator = AgentTaskMutator(Workspace.from_path(tmp_path), task.id)
@@ -104,7 +104,7 @@ def test_agent_task_mutator_rejects_empty_update(tmp_path: Path) -> None:
 
 
 def test_agent_task_mutator_closes_active_task_with_agent_attribution(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Duplicate task")
     _set_active_task(tmp_path, task.id)
 

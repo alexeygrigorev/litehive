@@ -2,7 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from litehive.config.model import LitehiveConfig
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.pool import (
     DirtyWorktreeFinding,
@@ -37,7 +37,7 @@ from litehive.domain.common import PipelineStatus, TaskStatus
 
 
 def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Estimate demo task")
 
     record_stage_report(Workspace.from_path(tmp_path),
@@ -60,7 +60,7 @@ def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) 
 
 
 def test_render_task_summary_surfaces_semantic_reject_classification(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Semantic reject status")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.FLAGGED
@@ -84,7 +84,7 @@ def test_render_task_summary_surfaces_semantic_reject_classification(tmp_path: P
 
 
 def test_render_active_task_detail_lines_prefers_active_subagent_engine(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Active detail task")
     task.status = TaskStatus.IN_PROGRESS
     task.pipeline_status = PipelineStatus.IMPLEMENTING
@@ -225,7 +225,7 @@ def test_render_runtime_policy_lines_uses_preformatted_retry_label() -> None:
 
 
 def test_render_health_task_sections(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     active = create_task(tmp_path, title="Active health task")
     active.status = TaskStatus.IN_PROGRESS
     active.pipeline_status = PipelineStatus.IMPLEMENTING

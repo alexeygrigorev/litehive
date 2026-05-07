@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 from litehive.agents.session_store import SubagentArtifactPayload, subagent_artifacts
 from litehive.cli.agent_cli import agent_app
 from litehive.cli.app import app as root_app
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.common import PipelineState
 from litehive.lifecycle.persistence import SqlitePersistence, TaskState
 from litehive.workspace import Workspace
@@ -81,7 +81,7 @@ def test_agent_report_derives_role_from_subagent_session_and_records_source(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Session-bound report")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="qa", subagent_id="SA-0042")
     monkeypatch.setenv("LITEHIVE_STAGE", "testing")
@@ -125,7 +125,7 @@ def test_agent_report_rejects_removed_role_override(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="No role spoofing")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="qa")
 
@@ -177,7 +177,7 @@ def test_agent_report_uses_intent_record_when_runtime_row_is_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     _save_intent_only_task(tmp_path)
     _bind_report_identity(tmp_path, monkeypatch, task_id="T-0001", role="recovery")
 
@@ -224,7 +224,7 @@ def test_agent_report_persists_hidden_recovery_target_stage(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Persist target stage")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
 
@@ -271,7 +271,7 @@ def test_agent_report_rejects_recovery_resume_without_target_stage(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery target stage required")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
 
@@ -296,7 +296,7 @@ def test_agent_report_rejects_recovery_resume_without_target_stage(
 
 
 def test_agent_report_uses_env_stage_when_runtime_row_is_missing(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     _save_intent_only_task(tmp_path)
     _bind_report_identity(tmp_path, monkeypatch, task_id="T-0001", role="planner")
     monkeypatch.setenv("LITEHIVE_STAGE", "grooming")
@@ -336,7 +336,7 @@ def test_agent_report_uses_env_stage_when_runtime_row_is_missing(tmp_path: Path,
 
 
 def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Prefer env stage")
     SqlitePersistence(Workspace.from_path(tmp_path)).save(TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL))
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="planner")
@@ -389,7 +389,7 @@ def test_agent_report_classifies_qa_reviewer_rejects_as_semantic(
     role: str,
     stage: str,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title=f"{role} semantic reject")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role=role)
 
@@ -423,7 +423,7 @@ def test_agent_report_rejects_agent_blocked_verdict(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Agent blocked verdict rejected")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
 
@@ -451,7 +451,7 @@ def test_agent_report_rejects_removed_fail_verdict_alias(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Legacy fail verdict")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
 
@@ -480,7 +480,7 @@ def test_agent_report_rejects_removed_fail_verdict_alias(
 
 
 def test_agent_update_allows_planner_to_shape_active_task(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Shape active task", goal="old goal")
     state = load_state(tmp_path)
     state.active_task_id = task.id
@@ -513,7 +513,7 @@ def test_agent_update_allows_planner_to_shape_active_task(tmp_path: Path, monkey
 
 
 def test_agent_update_resolves_source_workspace_from_managed_worktree(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Managed worktree update", goal="old goal")
     state = load_state(tmp_path)
     state.active_task_id = task.id
@@ -545,7 +545,7 @@ def test_agent_update_resolves_source_workspace_from_managed_worktree(tmp_path: 
 
 
 def test_agent_close_resolves_source_workspace_from_managed_worktree(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Managed worktree close")
     state = load_state(tmp_path)
     state.active_task_id = task.id
@@ -577,7 +577,7 @@ def test_agent_close_resolves_source_workspace_from_managed_worktree(tmp_path: P
 
 
 def test_agent_update_rejects_wrong_task_id(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     active = create_task(tmp_path, title="Active task", goal="old")
     other = create_task(tmp_path, title="Other task", goal="old")
     state = load_state(tmp_path)
@@ -601,7 +601,7 @@ def test_agent_update_rejects_wrong_task_id(tmp_path: Path, monkeypatch) -> None
 
 
 def test_root_task_update_allows_planner_agent_api(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Shape via task update", goal="old goal")
     state = load_state(tmp_path)
     state.active_task_id = task.id
@@ -639,7 +639,7 @@ def test_root_task_update_allows_planner_agent_api(tmp_path: Path, monkeypatch) 
 
 
 def test_root_task_update_delegates_agent_resolution_from_managed_worktree(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Root update from worktree", goal="old goal")
     state = load_state(tmp_path)
     state.active_task_id = task.id
@@ -670,7 +670,7 @@ def test_root_task_update_delegates_agent_resolution_from_managed_worktree(tmp_p
 
 
 def test_root_task_update_rejects_non_planner_reviewer_agent(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Blocked agent task update", goal="old goal")
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
     monkeypatch.chdir(tmp_path)
@@ -686,7 +686,7 @@ def test_root_task_update_rejects_non_planner_reviewer_agent(tmp_path: Path, mon
 
 
 def test_root_task_close_allows_reviewer_agent_api(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Close via task group")
     state = load_state(tmp_path)
     state.active_task_id = task.id
@@ -720,7 +720,7 @@ def test_root_task_close_allows_reviewer_agent_api(tmp_path: Path, monkeypatch) 
 
 
 def test_root_task_close_allows_planner_to_mark_done_from_grooming(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Already satisfied on main")
     state = load_state(tmp_path)
     state.active_task_id = task.id
@@ -763,7 +763,7 @@ def test_agent_report_rejects_legacy_recovery_pass_verdict(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery verdict contract")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
     result = CliRunner().invoke(
@@ -788,7 +788,7 @@ def test_agent_report_accepts_recovery_resume_verdict(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Recovery resume verdict")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
 
@@ -834,7 +834,7 @@ def test_agent_report_rejects_removed_step_alias(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Agent report step alias")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
 
@@ -863,7 +863,7 @@ def test_agent_report_rejects_removed_step_alias(
 
 
 def test_root_report_rejects_removed_step_alias(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Legacy step alias for root report")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
     monkeypatch.setenv("LITEHIVE_STAGE", "recovering")
@@ -893,7 +893,7 @@ def test_root_report_rejects_removed_step_alias(tmp_path: Path, monkeypatch) -> 
 
 
 def test_root_report_rejects_removed_fail_verdict_alias(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Legacy root fail verdict")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
     monkeypatch.setenv("LITEHIVE_STAGE", "implementing")
@@ -923,7 +923,7 @@ def test_root_report_rejects_removed_fail_verdict_alias(tmp_path: Path, monkeypa
 
 
 def test_root_report_defaults_to_litehive_task_id_env(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Root report task env")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
     monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
@@ -950,7 +950,7 @@ def test_root_report_defaults_to_litehive_task_id_env(tmp_path: Path, monkeypatc
 
 
 def test_root_report_accepts_workspace_override(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Root report workspace override")
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
@@ -1011,7 +1011,7 @@ def test_root_report_fails_clearly_when_workspace_cannot_be_resolved(tmp_path: P
 
 
 def test_agent_report_accepts_workspace_override(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Agent report workspace override")
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")

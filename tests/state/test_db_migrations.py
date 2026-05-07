@@ -8,7 +8,7 @@ from typer.testing import CliRunner
 from litehive.agents.session_store import SubagentArtifactPayload, load_subagent_report, subagent_artifacts
 from litehive.cli.app import app
 from litehive.config.paths import workspace_path
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.task import TaskStateRecord, WorkspaceState
 from litehive.recovery.detection import TaskLaunchFailure
 from litehive.state.records import create_task, get_task, list_tasks
@@ -115,7 +115,7 @@ def test_embedded_initial_migration_is_discoverable() -> None:
 
 
 def test_connect_workspace_db_closes_connection_on_context_exit(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     with connect_workspace_db(tmp_path) as connection:
         connection.execute("SELECT 1")
@@ -125,7 +125,7 @@ def test_connect_workspace_db_closes_connection_on_context_exit(tmp_path: Path) 
 
 
 def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     next_version = _next_migration_version()
     next_name = f"{next_version:04d}_add_marker.sql"
     staged = (
@@ -154,7 +154,7 @@ def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeyp
 
 
 def test_apply_pending_migrations_rolls_back_failed_migration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     next_version = _next_migration_version()
     staged = (
         *available_migrations(),
@@ -242,7 +242,7 @@ def test_migration_0005_does_not_import_deprecated_task_yaml(tmp_path: Path) -> 
 def test_daemon_run_applies_pending_migrations_before_start(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     next_version = _next_migration_version()
     next_name = f"{next_version:04d}_daemon_marker.sql"
     staged = (
@@ -279,7 +279,7 @@ def test_daemon_run_applies_pending_migrations_before_start(
 def test_daemon_run_reports_broken_worktree_venv_before_start(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     create_task(tmp_path, title="Queued work")
     broken_worktree = workspace_path(tmp_path, "worktrees") / "T-0001-demo"
     _create_broken_venv_binary(broken_worktree, "ruff", tmp_path / "fake-home" / ".cache" / "uv")
@@ -298,7 +298,7 @@ def test_daemon_run_reports_broken_worktree_venv_before_start(
 
 
 def test_legacy_workspace_db_rebuild_replays_task_event_log_without_task_yaml_rescan(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Keep me")
     db_path = workspace_path(tmp_path, "data.db")
     db_path.unlink()
@@ -325,7 +325,7 @@ def test_legacy_workspace_db_rebuild_replays_task_event_log_without_task_yaml_re
         connection.commit()
 
     apply_pending_migrations(tmp_path)
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     with sqlite3.connect(db_path) as connection:
         applied_versions = [
@@ -341,7 +341,7 @@ def test_legacy_workspace_db_rebuild_replays_task_event_log_without_task_yaml_re
 
 
 def test_migration_rebuild_refuses_to_drop_tasks_missing_from_event_log(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Historical task before event log")
     task_event_log_path(Workspace.from_path(tmp_path)).unlink()
     db_path = workspace_path(tmp_path, "data.db")
@@ -363,7 +363,7 @@ def test_migration_rebuild_refuses_to_drop_tasks_missing_from_event_log(tmp_path
 
 
 def test_connect_workspace_db_rebuilds_replaced_cached_db(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     db_path = workspace_path(tmp_path, "data.db")
 
     subagent_artifacts(Workspace.from_path(tmp_path), "T-0001", "SA-0001").save(
@@ -393,7 +393,7 @@ def test_connect_workspace_db_cache_ignores_normal_db_writes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     schema_module.MIGRATED_DB_PATHS.clear()
 
     apply_calls = 0

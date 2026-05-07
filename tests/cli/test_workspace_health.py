@@ -14,7 +14,7 @@ from litehive.cli.workspace import (
     status_command,
 )
 from litehive.config.model import LitehiveConfig
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.reports import StageReport
@@ -87,7 +87,7 @@ def test_repair_summary_lines_include_empty_fields_for_repair_mode() -> None:
 
 
 def test_doctor_command_is_not_registered(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     result = _RUNNER.invoke(app, ["doctor", "--workspace", str(tmp_path)], standalone_mode=False)
 
@@ -150,7 +150,7 @@ def test_collect_quota_health_reuses_shared_statuses(monkeypatch) -> None:
 
 
 def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Repair stale resumable task")
     task.status = TaskStatus.IN_PROGRESS
     task.pipeline_status = PipelineStatus.TESTING
@@ -184,7 +184,7 @@ def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tm
 
 
 def test_repair_skips_legacy_disk_only_tasks_missing_runtime_state(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Repair stale resumable task")
     legacy = create_task(tmp_path, title="Legacy disk-only task")
 
@@ -214,7 +214,7 @@ def test_repair_skips_legacy_disk_only_tasks_missing_runtime_state(tmp_path: Pat
 
 
 def test_repair_normalizes_stale_queued_terminal_task(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Already accepted task")
     task.status = TaskStatus.QUEUED
     task.pipeline_status = PipelineStatus.BACKLOG

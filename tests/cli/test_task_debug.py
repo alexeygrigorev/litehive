@@ -8,7 +8,7 @@ import pytest
 from heru.types import SubagentRef
 
 from litehive.agents.session_store import SubagentArtifactPayload, subagent_artifacts
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.common import PipelineState
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.domain.reports import StageReport, TaskActivityEntry
@@ -33,7 +33,7 @@ def _ns(workspace, task_id, all_flag=False, worktree_flag=False):
 
 
 def _make_task_with_subagent(tmp_path, *, engine="codex", role="swe", sa_id="SA-implementing"):
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Debug test task", auto_commit=False)
     sa_path = f"subagents/{sa_id}"
     task.subagents = [SubagentRef(id=sa_id, role=role, engine=engine, status="completed", path=sa_path)]
@@ -146,7 +146,7 @@ def test_debug_alias_uses_minimal_evidence_view(tmp_path: Path, capsys: pytest.C
 
 
 def test_debug_task_not_found(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     exit_code = _cmd_debug(_ns(tmp_path, "T-9999"))
     output = capsys.readouterr().out
 
@@ -155,7 +155,7 @@ def test_debug_task_not_found(tmp_path: Path, capsys: pytest.CaptureFixture[str]
 
 
 def test_debug_all_subagents_remains_compact(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Multi SA task", auto_commit=False)
     task.subagents = [
         SubagentRef(
@@ -178,7 +178,7 @@ def test_debug_all_subagents_remains_compact(tmp_path: Path, capsys: pytest.Capt
 
 
 def test_debug_worktree_shows_minimal_change_summary(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     _init_git_repo(tmp_path)
     task = create_task(tmp_path, title="Worktree debug task", auto_commit=False)
     worktree_path = _create_task_worktree(tmp_path, task)

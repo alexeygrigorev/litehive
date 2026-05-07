@@ -296,12 +296,12 @@ def _reset_stub_manager_state() -> None:
 def test_heru_engine_adapter_runs_recovery_from_litehive_source_checkout(tmp_path, monkeypatch) -> None:
     from litehive.config.loading import load_config
     from litehive.config.model import LitehiveConfig
-    from litehive.config.workspace import ensure_workspace
+    from litehive.config.workspace import create_workspace
     from litehive.state.records import create_task, save_task, set_task_worktree_path
 
     source_repo = tmp_path / "litehive-src"
     source_repo.mkdir()
-    ensure_workspace(tmp_path, LitehiveConfig(litehive_source_path=str(source_repo)))
+    create_workspace(tmp_path, LitehiveConfig(litehive_source_path=str(source_repo)))
     task = create_task(tmp_path, title="recovery source checkout", goal="recover from source repo")
     worktree = tmp_path / "task-checkout"
     worktree.mkdir()

@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.task import TaskRecord
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
@@ -51,7 +51,7 @@ def test_update_task_signature_excludes_removed_engine_kwarg() -> None:
 
 
 def test_update_task_rejects_removed_engine_kwarg(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="No engine override")
 
     # Hide the kwarg behind a callable indirection so the static type
@@ -63,7 +63,7 @@ def test_update_task_rejects_removed_engine_kwarg(tmp_path: Path) -> None:
 
 
 def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Close me")
     persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     state = persistence.initialize(task.id)
@@ -99,7 +99,7 @@ def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None
 
 
 def test_update_task_parks_task_with_structured_action(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Park me")
 
     update_task_for_workspace(Workspace.from_path(tmp_path), task.id, action="park")
@@ -115,7 +115,7 @@ def test_update_task_parks_task_with_structured_action(tmp_path: Path) -> None:
 
 
 def test_update_task_requeues_task_with_structured_action(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Retry me")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
@@ -139,7 +139,7 @@ def test_update_task_requeues_task_with_structured_action(tmp_path: Path) -> Non
 
 
 def test_update_task_abandons_task_with_structured_action(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Stop me")
     persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     state = persistence.initialize(task.id)
@@ -167,7 +167,7 @@ def test_update_task_abandons_task_with_structured_action(tmp_path: Path) -> Non
 
 
 def test_update_task_ignores_unrelated_missing_runtime_rows(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Target task")
 
     _save_intent_only_task(tmp_path, "T-0002")
@@ -179,7 +179,7 @@ def test_update_task_ignores_unrelated_missing_runtime_rows(tmp_path: Path) -> N
 
 
 def test_update_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     _save_intent_only_task(tmp_path, goal="Original goal")
 
     update_task_for_workspace(Workspace.from_path(tmp_path), "T-0001", goal="Updated safely")
@@ -189,7 +189,7 @@ def test_update_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path
 
 
 def test_update_task_accepts_injected_workspace(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Update through workspace")
     workspace = Workspace.from_path(tmp_path)
 
@@ -200,7 +200,7 @@ def test_update_task_accepts_injected_workspace(tmp_path: Path) -> None:
 
 
 def test_close_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     _save_intent_only_task(tmp_path)
 
     close_task_for_workspace(
@@ -222,7 +222,7 @@ def test_close_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path)
 
 
 def test_close_task_resets_pipeline_state_row(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Close and clear pipeline state")
     persistence = SqlitePersistence(Workspace.from_path(tmp_path))
     state = persistence.initialize(task.id)
@@ -245,7 +245,7 @@ def test_close_task_resets_pipeline_state_row(tmp_path: Path) -> None:
 
 
 def test_close_and_park_accept_injected_workspace(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
     close_me = create_task(tmp_path, title="Close through workspace")
     park_me = create_task(tmp_path, title="Park through workspace")

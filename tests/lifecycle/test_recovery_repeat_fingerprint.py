@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.nodes.agent import AgentVerdict, UnrecoverableError
 from litehive.lifecycle.orchestration import run_task as run_pipeline_task
@@ -54,7 +54,7 @@ class _RepeatRecoveryEscalationEngine:
 
 
 def _init_workspace_git_repo(root: Path) -> None:
-    ensure_workspace(root)
+    create_workspace(root)
     for args in (
         ["git", "init", "-q", "-b", "main"],
         ["git", "config", "user.email", "t@t"],

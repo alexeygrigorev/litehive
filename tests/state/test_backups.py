@@ -7,7 +7,7 @@ from typer.testing import CliRunner
 
 from litehive.cli.app import app
 from litehive.config.paths import workspace_path
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.runtime import RunnerStatusState
 from litehive.state.backup import create_workspace_backup, list_workspace_backups
 
@@ -30,7 +30,7 @@ def _read_workspace_db_values(root: Path) -> list[str]:
 
 
 def test_create_backup_and_restore_backup_cli(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     _seed_workspace_db(tmp_path, ["before"])
     backup = create_workspace_backup(tmp_path, when=datetime(2026, 4, 11, 2, tzinfo=UTC))
     _seed_workspace_db(tmp_path, ["after"])
@@ -50,7 +50,7 @@ def test_create_backup_and_restore_backup_cli(tmp_path: Path) -> None:
 def test_restore_command_refuses_when_daemon_running(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     monkeypatch.setattr("litehive.cli.runner.get_workspace_daemon", lambda root: {"pid": 123})
 
@@ -68,7 +68,7 @@ def test_restore_command_refuses_when_daemon_running(
 def test_restore_command_refuses_when_runner_active(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     monkeypatch.setattr("litehive.cli.runner.get_workspace_daemon", lambda root: None)
     monkeypatch.setattr(
@@ -88,7 +88,7 @@ def test_restore_command_refuses_when_runner_active(
 
 
 def test_backup_rotation_keeps_seven_daily_and_four_weekly(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     _seed_workspace_db(tmp_path, ["one"])
     timestamps = [
         "2026-04-11T02",
@@ -131,7 +131,7 @@ def test_daemon_loop_creates_scheduled_backup(tmp_path: Path, monkeypatch: pytes
 
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     fake_uv = tmp_path / "uv"
     fake_uv.write_text(

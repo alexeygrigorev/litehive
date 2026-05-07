@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import require_existing_workspace
 from litehive.domain.common import PipelineState, utcnow
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.locking import workspace_lock, workspace_mutation_guard_for_workspace
@@ -26,12 +26,12 @@ CONSECUTIVE_TASK_FAILURE_STOP_REASON = "consecutive_task_failures"
 @contextmanager
 def skip_bootstrap_load_state():
     """
-    Suppress workspace bootstrap inside ``load_state``.
+    Suppress workspace validation inside ``load_state``.
 
     Entered by recovery and inspection paths that must read state without
-    provisioning workspace files on disk; without it those flows would
-    create the very ``.litehive`` directory they are trying to inspect
-    for evidence of corruption.
+    requiring a complete workspace on disk; without it those flows would
+    fail before they can inspect the missing or corrupt files they are
+    trying to diagnose.
     """
     token = _SKIP_BOOTSTRAP_LOAD_STATE.set(True)
     try:
@@ -49,15 +49,16 @@ def load_state(root: Path, bootstrap: bool = True) -> WorkspaceState:
 
 def load_state_for_workspace(workspace: Workspace, bootstrap: bool = True) -> WorkspaceState:
     """
-    Return the workspace state, materialising an empty row on first read.
+    Return the workspace state for an existing Litehive workspace.
 
     The canonical reader used everywhere the runner, CLI, or dashboards
-    need queue/runner pointers; bootstrapping on first read is what makes
-    a fresh workspace usable without a separate ``init`` step.
+    need queue/runner pointers. It validates the workspace boundary
+    before loading so a read path cannot silently create a new project;
+    explicit workspace creation is owned by ``create_workspace``.
     """
     root = workspace.root
     if bootstrap and not _SKIP_BOOTSTRAP_LOAD_STATE.get():
-        ensure_workspace(root)
+        require_existing_workspace(root, source="load_state")
     store = runtime_store_for_workspace(workspace)
     state = store.load_workspace_state()
     if state is None:

@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.daemon.registry import register_daemon, unregister_daemon
 from litehive.state.locking import touch_runner_status, workspace_runner_guard
 from litehive.state.store import runtime_store
@@ -11,7 +11,7 @@ from litehive.workspace import Workspace
 def test_runner_process_state_is_persisted_in_sqlite(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     workspace = tmp_path / "workspace"
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     store = runtime_store(workspace)
 
     with workspace_runner_guard(Workspace.from_path(workspace)):
@@ -31,7 +31,7 @@ def test_runner_process_state_is_persisted_in_sqlite(tmp_path: Path, monkeypatch
 def test_daemon_process_state_is_persisted_in_sqlite(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     workspace = tmp_path / "workspace"
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
     store = runtime_store(workspace)

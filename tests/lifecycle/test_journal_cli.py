@@ -23,13 +23,13 @@ from litehive.lifecycle.journal import SqliteJournal
 from litehive.workspace import Workspace
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.lifecycle.types import PipelineMode
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.common import PipelineState
 
 
 @pytest.fixture
 def workspace(tmp_path: Path) -> Path:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     return tmp_path
 
 

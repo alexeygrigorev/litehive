@@ -1,5 +1,5 @@
 from litehive.cli.pool import _write_pool_summary_report, task_stage_outcomes_for_workspace
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.reports import StageReport
 from litehive.state.records import create_task
 from litehive.tasks.report_storage import record_stage_report
@@ -7,7 +7,7 @@ from litehive.workspace import Workspace
 
 
 def test_pool_reads_canonical_stage_reports(tmp_path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Pool stage metrics")
     workspace = Workspace.from_path(tmp_path)
     record_stage_report(
@@ -27,7 +27,7 @@ def test_pool_reads_canonical_stage_reports(tmp_path) -> None:
 
 
 def test_pool_summary_writes_operator_text_without_structured_yaml(tmp_path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     report = {
         "created_at": "2026-04-25T00:00:00Z",
         "completed_count": 0,

@@ -4,7 +4,7 @@ import pytest
 
 from typer.testing import CliRunner
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task
 
@@ -21,7 +21,7 @@ def test_removed_cli_main_compat_module_is_unavailable() -> None:
 
 
 def test_bare_litehive_prints_status_when_idle(tmp_path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(modern_cli, "_run_next_task", lambda root: None)
 
@@ -145,7 +145,7 @@ def test_attention_commands_are_no_longer_registered() -> None:
 
 
 def test_run_drain_runs_until_queue_is_empty(tmp_path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     class Task:
         def __init__(self, tid: str, title: str) -> None:
@@ -193,7 +193,7 @@ def test_run_drain_runs_until_queue_is_empty(tmp_path, monkeypatch) -> None:
 
 
 def test_run_drain_stops_after_three_consecutive_task_failures(tmp_path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     class Task:
         def __init__(self, tid: str, title: str) -> None:
@@ -253,7 +253,7 @@ def test_run_drain_stops_after_three_consecutive_task_failures(tmp_path, monkeyp
 
 
 def test_run_dry_run_previews_next_task_without_mutating_queue(tmp_path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Preview task")
 
     result = CliRunner().invoke(
@@ -271,7 +271,7 @@ def test_run_dry_run_previews_next_task_without_mutating_queue(tmp_path) -> None
 
 
 def test_run_dry_run_reports_no_queued_task(tmp_path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     result = CliRunner().invoke(
         modern_cli.app,
@@ -284,7 +284,7 @@ def test_run_dry_run_reports_no_queued_task(tmp_path) -> None:
 
 
 def test_run_dry_run_rejects_drain_mode(tmp_path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
 
     result = CliRunner().invoke(
         modern_cli.app,

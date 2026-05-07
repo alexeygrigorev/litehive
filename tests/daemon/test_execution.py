@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 from types import SimpleNamespace
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.daemon.execution import _daemon_status_snapshot, check_origin_divergence, run_daemon_loop
 from litehive.config.model import LitehiveConfig
 from litehive.domain.runtime import RunnerStatusState
@@ -14,7 +14,7 @@ from litehive.workspace import Workspace
 
 
 def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     active = create_task(tmp_path, title="Active runner task")
     queued = create_task(tmp_path, title="Queued follow-up task")
 
@@ -79,7 +79,7 @@ def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monke
 
 
 def test_daemon_processes_queued_tasks_sequentially(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     first = create_task(tmp_path, title="First queued task")
     second = create_task(tmp_path, title="Second queued task")
 

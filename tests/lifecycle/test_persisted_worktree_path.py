@@ -4,7 +4,7 @@ from pathlib import Path
 from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.agent import ExecutionTrace, SubagentResult
 from litehive.lifecycle.heru_factory import HeruEngineAdapter
 from litehive.lifecycle.nodes.agent import AgentVerdict
@@ -88,7 +88,7 @@ def test_worktree_sync_persists_runtime_worktree_path(tmp_path: Path) -> None:
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "seed.txt").write_text("seed\n", encoding="utf-8")
     _git_ok(workspace, "add", "seed.txt")
@@ -120,7 +120,7 @@ def test_agent_and_commit_use_persisted_worktree_path(
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "seed.txt").write_text("seed\n", encoding="utf-8")
     _git_ok(workspace, "add", "seed.txt")
@@ -187,7 +187,7 @@ def test_commit_ignores_untracked_embedded_git_repos_in_task_worktree(tmp_path: 
     workspace.mkdir()
     _git_ok(workspace, "init", "-b", "main")
     _configure_repo(workspace)
-    ensure_workspace(workspace)
+    create_workspace(workspace)
 
     (workspace / "seed.txt").write_text("seed\n", encoding="utf-8")
     _git_ok(workspace, "add", "seed.txt")

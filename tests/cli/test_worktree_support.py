@@ -2,13 +2,13 @@ from pathlib import Path
 
 from litehive.worktree.cleanup import collect_managed_worktrees
 from litehive.config.paths import workspace_path
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, save_task
 
 
 def test_collect_managed_worktrees_marks_active_task_without_crashing(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Tracked worktree")
     managed_worktree = workspace_path(tmp_path, "worktrees") / f"{task.id}-{task.slug}"
     managed_worktree.mkdir(parents=True)

@@ -8,7 +8,7 @@ import yaml
 from litehive.cli.runner import run_once
 from litehive.container import build_container
 from litehive.config.model import LitehiveConfig
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.config.workspace_files import config_path
 from litehive.domain.recovery import TriggerEventKind
 from litehive.lifecycle.nodes.agent import AgentVerdict, UnrecoverableError
@@ -110,7 +110,7 @@ def _task_execution_root(workspace: Path, task_id: str) -> Path:
 
 
 def _init_workspace_git_repo(root: Path, *, config: LitehiveConfig | None = None) -> None:
-    ensure_workspace(root)
+    create_workspace(root)
     if config is not None:
         config_path(root).write_text(yaml.safe_dump(asdict(config), sort_keys=False), encoding="utf-8")
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
@@ -209,7 +209,7 @@ def test_recovery_fix_retries_failed_stage_automatically(tmp_path: Path) -> None
 
 
 def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     broken = create_task(tmp_path, title="Broken hook loop")
     runnable = create_task(tmp_path, title="Runnable next task")
     _init_workspace_git_repo(
@@ -278,7 +278,7 @@ def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_p
 
 
 def test_successful_stage_progress_resets_same_hook_reject_tracking(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     task = create_task(tmp_path, title="Reset hook reject counter")
     _init_workspace_git_repo(
         tmp_path,

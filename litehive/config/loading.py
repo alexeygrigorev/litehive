@@ -95,7 +95,7 @@ def load_config_for_workspace(workspace: "Workspace") -> LitehiveConfig:
     Requires an existing workspace, layers in runtime-setting overrides
     on top of the file-based config, and returns a validated
     :class:`LitehiveConfig`. Workspace creation stays explicit through
-    ``ensure_workspace``.
+    ``create_workspace``.
     """
     root = require_existing_workspace(workspace.root, source="load_config")
     # inline: runtime_settings transitively pulls db.schema which loads

@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.daemon.execution import start_background_daemon, stop_workspace_daemon
 from litehive.daemon.registry import (
     daemon_lock_is_active,
@@ -79,7 +79,7 @@ def _wait_for_daemon_metadata(
 def test_register_and_unregister_daemon_uses_shared_lock_manager(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     workspace = tmp_path / "workspace"
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
 
@@ -104,7 +104,7 @@ def test_register_and_unregister_daemon_uses_shared_lock_manager(tmp_path: Path,
 def test_unregister_daemon_clears_stale_metadata_without_daemon_registry_yaml(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     workspace = tmp_path / "workspace"
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     lock_path = daemon_lock_path(workspace)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text(
@@ -126,13 +126,13 @@ def test_unregister_daemon_clears_stale_metadata_without_daemon_registry_yaml(tm
 
 
 def test_start_background_daemon_strips_agent_env(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
     monkeypatch.setenv("LITEHIVE_STAGE", "implementing")
     monkeypatch.setenv("LITEHIVE_TASK_ID", "T-0446")
     monkeypatch.setattr("litehive.daemon.execution.daemon_metadata", lambda workspace: None)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda workspace: None)
-    monkeypatch.setattr("litehive.daemon.execution.ensure_workspace_venvs_ready", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready", lambda *args, **kwargs: None)
 
     captured: dict[str, object] = {}
 
@@ -167,7 +167,7 @@ def test_start_background_daemon_strips_agent_env(tmp_path: Path, monkeypatch) -
 
 def test_stop_workspace_daemon_escalates_to_sigkill_when_sigterm_ignored(tmp_path: Path, monkeypatch) -> None:
     workspace = tmp_path / "workspace"
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     lock_path = daemon_lock_path(workspace)
     sleeper = _spawn_locked_daemon_like_process(
         workspace,
@@ -214,7 +214,7 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
     lock_metadata: dict[str, str],
 ) -> None:
     workspace = tmp_path / "workspace"
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     lock_path = daemon_lock_path(workspace)
     sleeper = _spawn_locked_daemon_like_process(workspace, dict(lock_metadata))
     try:
@@ -222,7 +222,7 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
         assert entry is not None
         assert entry["status"] == "running"
         assert entry["pid"] == sleeper.pid
-        monkeypatch.setattr("litehive.daemon.execution.ensure_workspace_venvs_ready", lambda *args, **kwargs: None)
+        monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready", lambda *args, **kwargs: None)
         monkeypatch.setattr("litehive.daemon.execution.DAEMON_FORCE_KILL_TIMEOUT_SECONDS", 2.0)
         monkeypatch.setattr("litehive.daemon.execution.DAEMON_EXIT_POLL_INTERVAL_SECONDS", 0.05)
 
@@ -252,7 +252,7 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
 
 def test_start_background_daemon_does_not_kill_live_pid_from_stale_metadata(tmp_path: Path, monkeypatch) -> None:
     workspace = tmp_path / "workspace"
-    ensure_workspace(workspace)
+    create_workspace(workspace)
     lock_path = daemon_lock_path(workspace)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     sleeper = subprocess.Popen(
@@ -279,7 +279,7 @@ def test_start_background_daemon_does_not_kill_live_pid_from_stale_metadata(tmp_
         assert entry is not None
         assert entry["status"] == "stale"
         assert entry["pid"] == sleeper.pid
-        monkeypatch.setattr("litehive.daemon.execution.ensure_workspace_venvs_ready", lambda *args, **kwargs: None)
+        monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready", lambda *args, **kwargs: None)
 
         class FakeProcess:
             pid = 4321

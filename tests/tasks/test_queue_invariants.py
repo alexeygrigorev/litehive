@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.queue import dequeue_next_task_selection, peek_next_task_selection
@@ -36,7 +36,7 @@ def _persist_resumable_task(root: Path, task_id: str, *, status: str, pipeline_s
 def test_dequeue_next_task_reclaims_missing_in_progress_task_before_handoff(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     unfinished = create_task(tmp_path, title="Unfinished active task")
     later = create_task(tmp_path, title="Later queued task")
     _persist_task_status(
@@ -67,7 +67,7 @@ def test_dequeue_next_task_reclaims_missing_in_progress_task_before_handoff(
 def test_dequeue_next_task_ignores_stale_active_marker_when_reclaiming_missing_work(
     tmp_path: Path,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     stale = create_task(tmp_path, title="Stale active task")
     unfinished = create_task(tmp_path, title="Unfinished active task")
     later = create_task(tmp_path, title="Later queued task")
@@ -112,7 +112,7 @@ def test_dequeue_next_task_reclaims_missing_resumable_work_before_handoff(
     status: str,
     pipeline_status: str,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     unfinished = create_task(tmp_path, title="Unfinished task")
     later = create_task(tmp_path, title="Later queued task")
     _persist_resumable_task(
@@ -150,7 +150,7 @@ def test_peek_next_task_restores_missing_resumable_tasks_ahead_of_later_queue_on
     status: str,
     pipeline_status: str,
 ) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     unfinished = create_task(tmp_path, title="Unfinished task")
     later = create_task(tmp_path, title="Later queued task")
     _persist_resumable_task(
@@ -176,7 +176,7 @@ def test_peek_next_task_restores_missing_resumable_tasks_ahead_of_later_queue_on
 
 
 def test_dequeue_persistence_keeps_restored_queue_additions(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     first = create_task(tmp_path, title="First missing resumable task")
     second = create_task(tmp_path, title="Second missing resumable task")
     later = create_task(tmp_path, title="Later queued task")
@@ -205,7 +205,7 @@ def test_dequeue_persistence_keeps_restored_queue_additions(tmp_path: Path) -> N
 
 
 def test_peek_canonicalizes_nonrunning_resumable_tasks_on_restart(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     stranded = create_task(tmp_path, title="Stranded in progress")
     resumed = create_task(tmp_path, title="Interrupted resumable task")
 
@@ -257,7 +257,7 @@ def test_peek_canonicalizes_nonrunning_resumable_tasks_on_restart(tmp_path: Path
 
 
 def test_done_dependency_satisfies_queued_task(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     dependency = create_task(tmp_path, title="Completed dependency")
     dependency.status = TaskStatus.DONE
     dependency.pipeline_status = PipelineStatus.DONE
@@ -273,7 +273,7 @@ def test_done_dependency_satisfies_queued_task(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("flag_reason", ["rejection_loop_detected", "semantic_reject"])
 def test_dequeue_skips_flagged_manual_intervention_tasks(tmp_path: Path, flag_reason: str) -> None:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     blocked = create_task(tmp_path, title="Needs manual review")
     runnable = create_task(tmp_path, title="Runnable next task")
 
