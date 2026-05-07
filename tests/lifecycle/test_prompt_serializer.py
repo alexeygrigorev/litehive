@@ -116,6 +116,18 @@ def _instruction_layer(prompt, label: str) -> str | None:
     return None
 
 
+def test_role_agent_rejects_stage_role_mismatch(workspace: Path) -> None:
+    class BadSWEAgent(SWEAgent):
+        NODE_NAME = PipelineState.TESTING
+
+    with pytest.raises(TypeError, match="does not match role swe"):
+        BadSWEAgent(
+            _NullSelector(),
+            _NullSessions(),
+            prompt_context=PromptContext(workspace=Workspace.from_path(workspace)),
+        )
+
+
 def test_serialize_includes_header_goal_acceptance_plan(workspace: Path) -> None:
     task = create_task(
         workspace,

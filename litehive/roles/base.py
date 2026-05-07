@@ -5,6 +5,7 @@ from typing import Any
 from litehive.config.model import LitehiveConfig
 from litehive.config.profiles.model import ProcessProfile
 from litehive.domain.common import PipelineState, TaskStage
+from litehive.domain.roles import known_agent_role
 from litehive.lifecycle.nodes.agent import AgentNode, EngineSelector, SessionProvider
 from litehive.lifecycle.persistence import LastRejection, TaskState
 from litehive.lifecycle.prompt_types import AgentPrompt
@@ -132,6 +133,9 @@ class RoleAgent(AgentNode):
         """
         if not self.NODE_NAME or not self.ROLE:
             raise TypeError(f"{type(self).__name__} must set NODE_NAME and ROLE class attributes")
+        agent_role = known_agent_role(self.ROLE)
+        if agent_role is not None and self.NODE_NAME not in agent_role.pipeline_stages:
+            raise TypeError(f"{type(self).__name__} stage {self.NODE_NAME} does not match role {self.ROLE}")
         super().__init__(
             name=self.NODE_NAME,
             selector=selector,

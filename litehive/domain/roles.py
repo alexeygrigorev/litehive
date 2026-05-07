@@ -74,6 +74,41 @@ class AgentRole(StringEnum):
                 return PipelineState.RECOVERING
 
     @property
+    def pipeline_stages(self) -> frozenset[PipelineState]:
+        """
+        Pipeline states this agent role is allowed to own directly.
+
+        Normal stage roles own their primary executable state. Merge
+        resolution and recovery own their pseudo-stage states. Hook and
+        system phases are intentionally absent because they are runner
+        responsibilities, not role-agent work.
+        """
+        match self:
+            case AgentRole.PLANNER:
+                return frozenset({PipelineState.GROOMING})
+            case AgentRole.SWE:
+                return frozenset({PipelineState.IMPLEMENTING})
+            case AgentRole.QA:
+                return frozenset({PipelineState.TESTING})
+            case AgentRole.REVIEWER:
+                return frozenset({PipelineState.ACCEPTING})
+            case AgentRole.MERGE_RESOLVER:
+                return frozenset({PipelineState.MERGE_RESOLVING})
+            case AgentRole.RECOVERY:
+                return frozenset({PipelineState.RECOVERING})
+
+    @property
+    def task_stages(self) -> frozenset[TaskStage]:
+        """
+        Operator-facing task stages this role owns.
+        """
+        return frozenset(
+            stage
+            for stage in TaskStage
+            if stage.owner_role == self.value
+        )
+
+    @property
     def allowed_activity_verdicts(self) -> frozenset[TaskActivityVerdict]:
         """
         Verdicts this role may submit through the agent report channel.

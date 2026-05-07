@@ -23,6 +23,22 @@ def test_agent_role_owns_default_stage_relationships() -> None:
     assert AgentRole.RECOVERY.default_stage is PipelineState.RECOVERING
 
 
+def test_agent_role_owns_pipeline_and_task_stage_relationships() -> None:
+    assert AgentRole.PLANNER.pipeline_stages == frozenset({PipelineState.GROOMING})
+    assert AgentRole.SWE.pipeline_stages == frozenset({PipelineState.IMPLEMENTING})
+    assert AgentRole.QA.pipeline_stages == frozenset({PipelineState.TESTING})
+    assert AgentRole.REVIEWER.pipeline_stages == frozenset({PipelineState.ACCEPTING})
+    assert AgentRole.MERGE_RESOLVER.pipeline_stages == frozenset({PipelineState.MERGE_RESOLVING})
+    assert AgentRole.RECOVERY.pipeline_stages == frozenset({PipelineState.RECOVERING})
+
+    assert AgentRole.PLANNER.task_stages == frozenset({TaskStage.GROOMING})
+    assert AgentRole.SWE.task_stages == frozenset({TaskStage.IMPLEMENTING})
+    assert AgentRole.QA.task_stages == frozenset({TaskStage.TESTING})
+    assert AgentRole.REVIEWER.task_stages == frozenset({TaskStage.ACCEPTING})
+    assert AgentRole.MERGE_RESOLVER.task_stages == frozenset()
+    assert AgentRole.RECOVERY.task_stages == frozenset()
+
+
 def test_agent_startup_guidance_keys_are_domain_role_policy() -> None:
     assert agent_startup_guidance_keys() == frozenset({"all", "planner", "swe", "qa", "reviewer", "recovery"})
     assert "merge-resolver" not in agent_startup_guidance_keys()

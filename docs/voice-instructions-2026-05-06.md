@@ -1794,9 +1794,17 @@ Legend:
   facts instead of owning hard-coded recovery/hookable-stage lists.
   Verified with domain tests for recovery guidance and non-hookable
   recovery/merge stages, plus config loading/runner hook tests.
-- [ ] R22. Ensure each stage knows its agent/role and each agent/role
+- [x] R22. Ensure each stage knows its agent/role and each agent/role
   knows its stages. Do not scatter role/stage dictionaries.
   Source: note 4, 45:49-46:13.
+  Completed 2026-05-07: kept `TaskStage.owner_role` as the stage-to-role
+  direction and added `AgentRole.pipeline_stages` /
+  `AgentRole.task_stages` for the reverse direction. `RoleAgent`
+  construction now validates that each concrete role class's `ROLE`
+  matches its `NODE_NAME`, so scattered class-level declarations cannot
+  silently drift from the domain relationship. Verified with domain
+  role/stage tests and a lifecycle prompt test that a mismatched
+  `SWEAgent` subclass is rejected.
 - [ ] R23. Split `config/engine_models.py`; it is too large.
   Source: note 4, 46:23-46:29.
 - [ ] R24. Desired config loading shape: load YAML, validate into a
