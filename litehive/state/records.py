@@ -100,6 +100,13 @@ def _reserve_next_task_numbers_for_workspace(
 
 def _task_creation_stage(root: Path, current_task_id: str | None) -> str | None:
     """
+    Path-based compatibility wrapper for task creation stage lookup.
+    """
+    return _task_creation_stage_for_workspace(Workspace.from_path(root), current_task_id=current_task_id)
+
+
+def _task_creation_stage_for_workspace(workspace: Workspace, current_task_id: str | None) -> str | None:
+    """
     Resolve the stage of the agent currently creating a sibling task.
 
     Prefers ``LITEHIVE_STAGE`` from the subagent environment, falls back
@@ -112,7 +119,7 @@ def _task_creation_stage(root: Path, current_task_id: str | None) -> str | None:
         return env_stage
     if not current_task_id:
         return None
-    current_task = get_task_record(root, current_task_id)
+    current_task = get_task_record_for_workspace(workspace, current_task_id)
     if current_task is None:
         return None
     runtime_stage = current_task.current_pipeline_stage
@@ -125,6 +132,13 @@ def _task_creation_stage(root: Path, current_task_id: str | None) -> str | None:
 
 
 def _default_task_creation_source(root: Path) -> TaskCreationSource:
+    """
+    Path-based compatibility wrapper for task creation provenance.
+    """
+    return _default_task_creation_source_for_workspace(Workspace.from_path(root))
+
+
+def _default_task_creation_source_for_workspace(workspace: Workspace) -> TaskCreationSource:
     """
     Build the provenance attached to a new task at create time.
 
@@ -146,7 +160,7 @@ def _default_task_creation_source(root: Path) -> TaskCreationSource:
     return TaskCreationSource(
         source="agent",
         task_id=current_task_id,
-        stage=_task_creation_stage(root, current_task_id=current_task_id),
+        stage=_task_creation_stage_for_workspace(workspace, current_task_id=current_task_id),
         role=agent_role,
         rationale=rationale,
     )
@@ -545,7 +559,7 @@ def create_task_for_workspace(
             goal=goal,
             acceptance_criteria=normalize_acceptance_criteria(acceptance_criteria),
             retry_policy={"max_retries": retry_limit},
-            created_from=_default_task_creation_source(root),
+            created_from=_default_task_creation_source_for_workspace(workspace),
             git={
                 "auto_commit": auto_commit,
                 "commit_message": default_commit_message(task_id, slug),
