@@ -17,7 +17,6 @@ from litehive.domain.common import (
     TaskStatus,
 )
 from litehive.domain.task import TaskRecord, WorkspaceState
-from litehive.state.records import list_tasks
 from litehive.tasks.failed_runs import has_blocking_failed_run_history
 from litehive.tasks.normalization import implementation_entry_stage
 from litehive.workspace import Workspace
@@ -311,7 +310,7 @@ def validate_task_dependencies_for_workspace(workspace: Workspace, task_id: str,
     selector's blocked-task graph from ever observing a cycle and looping
     forever during selection.
     """
-    tasks_by_id = {task.id: task for task in list_tasks(workspace.root, strict=False)}
+    tasks_by_id = {task.id: task for task in workspace.list_tasks(strict=False)}
     seen: set[str] = set()
     for dependency_id in depends_on:
         if dependency_id in seen:
