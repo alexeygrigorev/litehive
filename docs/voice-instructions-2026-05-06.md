@@ -1039,9 +1039,15 @@ Legend:
   current setter and circumstance. Rows with no current production
   setter are explicitly marked that way so D19 can remove or clarify
   them without guesswork.
-- [ ] D19. Explain or delete unclear reason codes such as
+- [x] D19. Explain or delete unclear reason codes such as
   `hallucinated_completion` and `blocked_on_follow_up`.
   Source: note 6, 05:34-05:51.
+  Completed 2026-05-07: kept `hallucinated_completion` because the
+  implementing-pass guard actively emits it and documented that setter
+  in `docs/domain.md`. Deleted the unused `blocked_on_follow_up`
+  `OutcomeReasonCode`; the active implementation stores blocking child
+  references through the explicit `blocked_on_follow_up:<task_id>`
+  reason-string helper in the recovery domain.
 - [ ] D20. Generalize the domain-model critique across the whole code
   base and record durable rules in `docs/code-style.md`.
   Source: note 6, 06:02-06:17.

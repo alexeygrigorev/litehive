@@ -100,7 +100,6 @@ stable across refactors.
 | `verdict_fail` | No current production setter | Reserved historical bucket for a generic failed stage verdict. Current submitted activity rejects unsupported `fail` verdicts. |
 | `verdict_reject` | No current production setter | Reserved bucket for a stage report that rejects without a more specific reason. Current routing usually records a failure classification instead. |
 | `verdict_blocked` | No current production setter | Reserved bucket for a stage report that blocks without a more specific reason. |
-| `blocked_on_follow_up` | No current production setter | Reserved bucket for a parent task waiting on a blocking follow-up. The active implementation stores the child id in the `blocked_on_follow_up:<task_id>` reason string. |
 | `hallucinated_completion` | `HeruEngineAdapter` implementing-pass guard | A SWE reports pass with changed files, but the execution checkout is clean. The pass is rewritten to a reject. |
 | `missing_acceptance_criteria` | No current production setter | Reserved bucket for the grooming gate that keeps under-specified full-pipeline tasks from entering implementation. Current code emits operator warning text instead. |
 | `retry_limit_exhausted` | No current production setter | Reserved bucket for a task-level retry budget failure. |
