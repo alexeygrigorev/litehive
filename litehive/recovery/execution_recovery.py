@@ -20,7 +20,7 @@ from litehive.recovery.running_task_recovery import (
 from litehive.state.locking import (
     current_thread_owns_runner_guard_for_workspace,
     runner_lock_is_held_for_workspace,
-    workspace_lock,
+    workspace_lock_for_workspace,
 )
 from litehive.state.persist import (
     load_state_for_workspace,
@@ -50,8 +50,7 @@ def recover_stale_runner_state_for_workspace(
     only acts when no live runner owns the runner lock, so a live runner
     cannot be repaired out from under itself.
     """
-    root = workspace.root
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace)
         running_task_ids = _running_task_ids(workspace)
         if _can_skip_recovery_scan(

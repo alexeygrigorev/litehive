@@ -20,7 +20,7 @@ from litehive.tasks.constants import (
 from litehive.state.locking import (
     ensure_future_task_mutation_allowed_for_workspace,
     persist_future_task_update_for_workspace,
-    workspace_lock,
+    workspace_lock_for_workspace,
 )
 from litehive.state.persist import load_state_for_workspace
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
@@ -106,7 +106,7 @@ def _update_task_transition(
             )
         raise ValueError(f"Unsupported action '{action}'")
 
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace)
         task = workspace.get_task_record(task_id)
         if task is None:
