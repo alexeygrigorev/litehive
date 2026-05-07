@@ -50,6 +50,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove duplicate cached root field from `RuntimeStore`.
 - [x] Remove duplicate cached root field from `SubagentManager`.
 - [x] Extend the root-constructor guardrail to block cached `workspace.root` fields.
+- [x] Move `WorktreeService` committed-change inspection to a workspace-native helper.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

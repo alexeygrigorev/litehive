@@ -156,6 +156,13 @@ def worktree_uncommitted_changes(worktree_path: Path) -> list[str]:
 
 def worktree_committed_changes(root: Path, worktree_path: Path) -> list[str]:
     """
+    Path-based compatibility wrapper for committed worktree changes.
+    """
+    return worktree_committed_changes_for_workspace(Workspace.from_path(root), worktree_path)
+
+
+def worktree_committed_changes_for_workspace(workspace: Workspace, worktree_path: Path) -> list[str]:
+    """
     Return sorted unique paths committed past main on the worktree branch.
 
     Pairs with :func:`worktree_uncommitted_changes`: together they
@@ -164,7 +171,7 @@ def worktree_committed_changes(root: Path, worktree_path: Path) -> list[str]:
     fork-point with main (a fresh worktree that never diverged
     has nothing committed past main).
     """
-    main_head = current_head(root) or "HEAD"
+    main_head = current_head(workspace.root) or "HEAD"
     fork_point = git_stdout_or_none(worktree_path, "merge-base", main_head, "HEAD")
     if not fork_point:
         return []

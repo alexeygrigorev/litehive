@@ -51,7 +51,7 @@ from litehive.worktree.cleanup import (
     collect_managed_worktrees_for_workspace,
     remove_cleanable_worktrees_for_workspace,
 )
-from litehive.worktree.inspection import worktree_committed_changes, worktree_uncommitted_changes
+from litehive.worktree.inspection import worktree_committed_changes_for_workspace, worktree_uncommitted_changes
 from litehive.worktree.paths import (
     ensure_worktree_venv_link,
     resolve_recorded_worktree_path,
@@ -230,7 +230,7 @@ class WorktreeService:
             worktree_path=worktree_path,
             exists=True,
             uncommitted=worktree_uncommitted_changes(worktree_path),
-            committed_ahead_of_main=worktree_committed_changes(self.workspace.root, worktree_path),
+            committed_ahead_of_main=worktree_committed_changes_for_workspace(self.workspace, worktree_path),
         )
 
     def task_has_missing_recorded_worktree(self, task_id: str) -> bool:
