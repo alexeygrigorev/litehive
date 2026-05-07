@@ -326,6 +326,9 @@ hoist the wiring out of `__init__` into the container.
   modify them without explicit operator instruction.
 - If a project rule disappears mysteriously and an agent ran
   recently, suspect the agent first.
+- Do not mark a checklist item complete until the exact old comments
+  and code paths behind that item have been checked. The completion
+  note must name the paths or commands used for verification.
 
 ## Workspace Identity
 

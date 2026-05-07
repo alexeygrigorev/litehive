@@ -13,6 +13,10 @@ Legend:
 
 - `[ ]` not checked or not done.
 - `[x]` verified done.
+- New `[x]` entries must include a concrete `Completed` or `Verified`
+  note naming the code paths and checks used. Existing legacy checked
+  entries without those notes are explicitly allowlisted in
+  `test_checked_voice_instruction_items_include_verification_notes`.
 - `Audio check` means the transcript wording was unclear enough that
   the audio should be replayed before implementation.
 
@@ -2284,10 +2288,17 @@ Legend:
 
 ## Execution Discipline Instructions
 
-- [ ] X1. Do not report "done" until the exact old comments and old
+- [x] X1. Do not report "done" until the exact old comments and old
   code paths have been checked. The notes repeatedly say prior
   feedback was claimed fixed while the same code remained.
   Source: note 4, 02:17-02:49.
+  Completed 2026-05-07: added a checklist guardrail that scans this
+  instruction file for checked items without `Completed` or `Verified`
+  notes. The 37 legacy checked items without such notes are explicitly
+  allowlisted, so any newly checked item missing a concrete verification
+  note fails architecture tests. Updated the checklist legend and
+  `docs/code-style.md` to require completion notes naming the exact
+  code paths or commands checked before reporting done.
 - [ ] X2. Revisit all prior notes and turn every small detail into a
   separate task.
   Source: note 4, 10:21-10:34.

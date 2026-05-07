@@ -127,6 +127,25 @@ def _contains_mutating_sql(strings: list[str]) -> bool:
     return any(line.lstrip().upper().startswith(mutating_sql) for value in strings for line in value.splitlines())
 
 
+def _checked_voice_instruction_items_without_verification_note() -> list[str]:
+    lines = (REPO_ROOT / "docs" / "voice-instructions-2026-05-06.md").read_text(encoding="utf-8").splitlines()
+    missing: list[str] = []
+    for index, line in enumerate(lines):
+        if not line.startswith("- [x]"):
+            continue
+        block: list[str] = []
+        for next_line in lines[index + 1 :]:
+            if next_line.startswith("- [") or next_line.startswith("## "):
+                break
+            block.append(next_line)
+        block_text = "\n".join(block)
+        if "Completed" in block_text or "Verified" in block_text:
+            continue
+        item_id = line.removeprefix("- [x] ").split(".", maxsplit=1)[0]
+        missing.append(item_id)
+    return missing
+
+
 def test_cli_modules_do_not_mutate_domain_state_with_direct_sqlite() -> None:
     violations: list[str] = []
     for path in _python_files("cli"):
@@ -270,6 +289,50 @@ def test_process_profiles_do_not_use_packaged_yaml() -> None:
     assert yaml_files == []
     assert "yaml" not in _imported_modules(loader_tree)
     assert "litehive/config/profiles/*.yaml" not in wheel_include
+
+
+def test_checked_voice_instruction_items_include_verification_notes() -> None:
+    legacy_checked_without_notes = {
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "A6",
+        "A7",
+        "A8",
+        "A10",
+        "A12",
+        "C11",
+        "F1",
+        "F8",
+        "F11",
+        "G1",
+        "G2",
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7",
+        "G8",
+        "G9",
+        "G10",
+        "G11",
+        "G12",
+        "G13",
+        "G14",
+        "G15",
+        "G16",
+        "G17",
+        "G18",
+        "G19",
+        "G20",
+        "G21",
+        "R3",
+        "R5",
+    }
+
+    assert set(_checked_voice_instruction_items_without_verification_note()) == legacy_checked_without_notes
 
 
 def test_pyrefly_requires_return_annotations() -> None:
