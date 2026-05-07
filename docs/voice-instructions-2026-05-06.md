@@ -1025,8 +1025,12 @@ Legend:
   `parse_engine_freeze_until`, and possibly quota parsing to a
   utility or Heru/engine-owned module.
   Source: note 4, 37:56-38:18.
-- [ ] R12. Remove YouTube engine names if they are still present.
+- [x] R12. Remove YouTube engine names if they are still present.
   Source: note 4, 38:18-38:25.
+  Verified 2026-05-07: searched `litehive`, `tests`, and `docs`
+  excluding source-recording artifacts for `youtube`, `YouTube`,
+  `yt-`, `yt_`, and `YT`. No engine-name references remain; the
+  only hit was this checklist item.
 - [ ] R13. Move active engine freeze out of config and into database
   runtime state.
   Source: note 4, 38:25-39:13.
