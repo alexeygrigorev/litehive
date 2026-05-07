@@ -278,11 +278,7 @@ def _read_exit_code(workspace: Workspace, task_id: str, subagent_id: str) -> int
     or non-integer so the caller can render ``-`` instead of a
     fake zero.
     """
-    session = workspace.load_subagent_session(task_id, subagent_id)
-    value = session.get("exit_code")
-    if isinstance(value, int):
-        return value
-    return None
+    return workspace.load_subagent_session_record(task_id, subagent_id).exit_code
 
 
 def _enum_value(value) -> str | None:

@@ -61,14 +61,20 @@ def test_subagent_session_record_normalizes_created_at(tmp_path) -> None:
         workspace,
         "T-0001",
         "SA-0001",
-        session={"id": " SA-0001 ", "role": " swe ", "created_at": "2026-05-07T10:00:00Z"},
+        session={"id": " SA-0001 ", "role": " swe ", "created_at": "2026-05-07T10:00:00Z", "exit_code": 17},
     )
 
     session = load_subagent_session_record(workspace, "T-0001", "SA-0001")
 
-    assert session.values == {"id": " SA-0001 ", "role": " swe ", "created_at": "2026-05-07T10:00:00Z"}
+    assert session.values == {
+        "id": " SA-0001 ",
+        "role": " swe ",
+        "created_at": "2026-05-07T10:00:00Z",
+        "exit_code": 17,
+    }
     assert session.subagent_id == "SA-0001"
     assert session.role == "swe"
+    assert session.exit_code == 17
     assert session.created_at == "2026-05-07T10:00:00Z"
     assert workspace.load_subagent_session_record("T-0001", "SA-0001") == session
     assert workspace.load_subagent_session_created_at("T-0001", "SA-0001") == "2026-05-07T10:00:00Z"

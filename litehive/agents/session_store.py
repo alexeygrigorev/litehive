@@ -65,6 +65,13 @@ class LoadedSubagentSession:
     def role(self) -> str | None:
         return self._non_empty_string("role")
 
+    @property
+    def exit_code(self) -> int | None:
+        value = self.values.get("exit_code")
+        if isinstance(value, int):
+            return value
+        return None
+
     def _non_empty_string(self, key: str) -> str | None:
         value = self.values.get(key)
         if not isinstance(value, str):
