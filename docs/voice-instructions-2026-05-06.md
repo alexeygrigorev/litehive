@@ -2006,9 +2006,14 @@ Legend:
   daemon execution into `git.ops`; daemon execution and status probes
   now call the git-owned helper while the daemon-specific halt reaction
   remains in `daemon.execution`.
-- [ ] DM4. Review output-stream usage in daemon functions; output
+- [x] DM4. Review output-stream usage in daemon functions; output
   stream should not leak through unrelated daemon logic.
   Source: note 5, 15:23-15:42.
+  Completed 2026-05-07: removed `output_stream`/`stream` parameters
+  from `_halt_for_origin_divergence(...)` and
+  `maybe_run_workspace_backup(...)`. Those helpers now return the
+  divergence message or backup timestamp, and `run_daemon_loop(...)`
+  owns rendering those facts to the daemon output stream.
 - [ ] DM5. Remove useless retry/restart code around line 133 if it is
   dead weight.
   Source: note 5, 15:48-16:04.

@@ -65,28 +65,22 @@ _DAEMON_TRANSIENT_STOP_REASONS = frozenset(
 def _halt_for_origin_divergence(
     workspace: Path,
     attention_workspace: Workspace,
-    output_stream: TextIO | None,
-) -> bool:
+) -> str | None:
     """
     Stop the pool and flag attention when ``main`` has diverged from ``origin/main``.
 
-    Returns ``True`` when the daemon loop should exit. Merging or
-    rebasing a diverged ``main`` is a human decision — the daemon
-    halts, persists ``diverged_from_origin`` as the pool stop reason,
-    and writes an attention-log entry so ``litehive status`` shows
-    the operator exactly what to fix.
+    Returns the divergence message when the daemon loop should exit.
+    Merging or rebasing a diverged ``main`` is a human decision: this
+    helper persists ``diverged_from_origin`` and writes an
+    attention-log entry, while the daemon loop owns how that fact is
+    rendered to its output stream.
     """
     divergence_reason = check_origin_divergence(workspace)
     if divergence_reason is None:
-        return False
+        return None
     _write_pool_stop_reason(workspace, "diverged_from_origin")
     _append_attention_log(attention_workspace, divergence_reason)
-    _emit(
-        "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. Halting pool: diverged_from_origin",
-        stream=output_stream,
-    )
-    _emit(divergence_reason, stream=output_stream)
-    return True
+    return divergence_reason
 
 
 def _write_pool_stop_reason(workspace: Path, reason: str) -> None:
@@ -449,21 +443,19 @@ def maybe_run_workspace_backup(
     workspace: Path,
     *,
     now: datetime | None = None,
-    stream: TextIO | None,
-) -> None:
+) -> str | None:
     """
     Trigger the scheduled workspace backup if one is due.
 
     The backup cadence policy lives in ``state.backup``; this hook is
-    the only place in the daemon loop that calls it, so the "at most
-    one backup per loop turn" guarantee comes from being invoked here
-    once per iteration rather than from any locking inside the backup
-    module itself.
+    the only place in the daemon loop that calls it. Returns the
+    created backup timestamp so the loop can decide whether and where
+    to render it.
     """
     backup = create_scheduled_workspace_backup(workspace, now=now)
     if backup is None:
-        return
-    _emit(f"backup_created: {backup.timestamp}", stream=stream)
+        return None
+    return backup.timestamp
 
 
 def run_logged_subprocess(
@@ -588,15 +580,25 @@ def run_daemon_loop(
                 sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
                 continue
 
-            if _halt_for_origin_divergence(workspace, daemon_workspace, output_stream=output_stream):
+            divergence_reason = _halt_for_origin_divergence(workspace, daemon_workspace)
+            if divergence_reason is not None:
+                _emit(
+                    "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. "
+                    "Halting pool: diverged_from_origin",
+                    stream=output_stream,
+                )
+                _emit(divergence_reason, stream=output_stream)
                 return 0
 
             try:
-                maybe_run_workspace_backup(workspace, stream=output_stream)
+                backup_timestamp = maybe_run_workspace_backup(workspace)
             except (OSError, RuntimeError) as exc:
                 logger.exception("scheduled workspace backup failed")
                 _append_attention_log(daemon_workspace, f"scheduled backup failed: {exc}")
                 _emit(f"backup_failed: {exc}", stream=output_stream)
+            else:
+                if backup_timestamp is not None:
+                    _emit(f"backup_created: {backup_timestamp}", stream=output_stream)
 
             try:
                 pre_state, pre_snapshot = _daemon_status_snapshot_for_workspace(daemon_workspace)
