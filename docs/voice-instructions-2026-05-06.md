@@ -2184,9 +2184,17 @@ Legend:
   and `stale_daemon_metadata(...)` now expose typed entries while the
   registry keeps JSON dictionaries only at the lock-manager persistence
   boundary.
-- [ ] DM26. Consider a `WorkspaceDaemon` object that manages daemon
+- [x] DM26. Consider a `WorkspaceDaemon` object that manages daemon
   registration, lookup, and workspace daemon behavior.
   Source: note 5, 25:29-26:11.
+  Completed 2026-05-07: considered after DM23/DM24. Left
+  `WorkspaceDaemon` unintroduced for now because `DaemonExecutor`
+  owns execution behavior, `DaemonContainer` owns workspace wiring,
+  and `daemon.registry` owns registration/lookup with typed
+  `DaemonRegistryEntry`. A new `WorkspaceDaemon` at this point would
+  only wrap registry functions, conflicting with the DM15 wrapper
+  cleanup; revisit only if start/stop/status move behind one cohesive
+  workspace-daemon service.
 
 ## Database And Migrations Instructions
 
