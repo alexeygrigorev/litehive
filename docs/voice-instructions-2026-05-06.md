@@ -1314,13 +1314,19 @@ Legend:
   CLI now asks the domain role policy for accepted `Verdict` enum
   members instead of carrying raw role-string maps or inline
   `role == "recovery"` gates.
-- [ ] C2. Keep CLI thin: parse user input, create/load the right
+- [x] C2. Keep CLI thin: parse user input, create/load the right
   domain object, and dispatch. Do not keep business logic in CLI.
   Source: note 4, 14:00-14:07; note 4, 16:57-19:09.
   Progress 2026-05-07: extracted the `litehive agent report`
   submission workflow into `AgentReportSubmitter`; the CLI now
   parses Typer/env input, obtains the service from the container,
   submits a typed request, and prints the returned submission.
+  Completed 2026-05-07: extracted the `litehive agent update` and
+  `litehive agent close` task-service calls into `AgentTaskMutator`
+  with typed update/close requests. Verified `agent_cli.py` now
+  parses options, resolves an authorized target, dispatches to the
+  mutator, and prints the result; service tests cover update, close,
+  empty-update rejection, and agent audit attribution.
 - [ ] C3. Convert `Workspace` from a dataclass to a normal class.
   Source: note 4, 14:33-15:12.
 - [ ] C4. In resolve reported entity flows, pass a workspace/session

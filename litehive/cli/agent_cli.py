@@ -18,13 +18,18 @@ from typing import Annotated
 import typer
 
 from litehive.agents.report_submission import AgentReportRequest, AgentReportSubmissionError
-from litehive.agents.task_mutation import AgentTaskMutationAuthorizer, AgentTaskMutationError, AgentTaskMutationTarget
-from litehive.container import build_agent_report_submitter, build_workspace
+from litehive.agents.task_mutation import (
+    AgentTaskCloseRequest,
+    AgentTaskMutationAuthorizer,
+    AgentTaskMutationError,
+    AgentTaskMutationTarget,
+    AgentTaskUpdateRequest,
+)
+from litehive.container import build_agent_report_submitter, build_agent_task_mutator, build_workspace
 from litehive.domain.agent import SubagentId
 from litehive.domain.common import Verdict
 
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
-from litehive.tasks.status import close_task_for_workspace, update_task_for_workspace
 from litehive.state.persist import load_state
 
 
@@ -242,6 +247,13 @@ def resolve_active_agent_task_mutation_target(
         raise SystemExit(1)
 
 
+def _agent_task_mutator(target: AgentTaskMutationTarget):
+    """
+    Build the authorized mutation service for one resolved agent target.
+    """
+    return build_agent_task_mutator(target.root, target.task_id)
+
+
 @agent_app.command("update", help="Update task fields (planner/reviewer only)")
 def agent_update_command(
     task_id: Annotated[str | None, typer.Option("--task-id")] = None,
@@ -261,41 +273,18 @@ def agent_update_command(
     the agent role as the actor.
     """
     target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
-
-    sentinel = ...
-    if goal is not None:
-        goal_arg = goal
-    else:
-        goal_arg = sentinel
-    if acceptance_criteria is not None:
-        acceptance_criteria_arg = acceptance_criteria
-    else:
-        acceptance_criteria_arg = sentinel
-    if plan is not None:
-        plan_arg = plan
-    else:
-        plan_arg = sentinel
-    if constraints is not None:
-        constraints_arg = constraints
-    else:
-        constraints_arg = sentinel
-    if priority is not None:
-        priority_arg = priority
-    else:
-        priority_arg = sentinel
-    target_workspace = build_workspace(target.root)
-    update_task_for_workspace(
-        target_workspace,
-        target.task_id,
-        goal=goal_arg,
-        acceptance_criteria=acceptance_criteria_arg,
-        plan=plan_arg,
-        constraints=constraints_arg,
-        priority=priority_arg,
-        allow_active_agent_task_mutation=True,
-        audit_actor="agent",
-        audit_source="agent",
+    request = AgentTaskUpdateRequest(
+        goal=goal,
+        acceptance_criteria=acceptance_criteria,
+        plan=plan,
+        constraints=constraints,
+        priority=priority,
     )
+    try:
+        _agent_task_mutator(target).update(request)
+    except AgentTaskMutationError as exc:
+        print(f"agent task mutation failed: {exc}")
+        raise SystemExit(1)
     print(f"task: {target.task_id}")
     print("updated: ok")
 
@@ -317,16 +306,7 @@ def agent_close_command(
     The audit trail attributes the close to the agent role.
     """
     target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
-
-    target_workspace = build_workspace(target.root)
-    task = close_task_for_workspace(
-        target_workspace,
-        target.task_id,
-        outcome=outcome,
-        reason=reason,
-        audit_actor="agent",
-        audit_source="agent",
-    )
+    task = _agent_task_mutator(target).close(AgentTaskCloseRequest(outcome=outcome, reason=reason))
     print(f"task: {target.task_id}")
     print(f"status: {task.status}")
     print(f"close_reason: {task.close_reason or outcome}")

@@ -2,10 +2,18 @@ from pathlib import Path
 
 import pytest
 
-from litehive.agents.task_mutation import AgentTaskMutationAuthorizer, AgentTaskMutationError
+from litehive.agents.task_mutation import (
+    AgentTaskCloseRequest,
+    AgentTaskMutationAuthorizer,
+    AgentTaskMutationError,
+    AgentTaskMutator,
+    AgentTaskUpdateRequest,
+)
 from litehive.config.workspace import ensure_workspace
 from litehive.state.persist import load_state, save_state
-from litehive.state.records import create_task
+from litehive.state.records import create_task, get_task_record
+from litehive.tasks.audit import load_task_audit_entries
+from litehive.workspace import Workspace
 
 
 def _set_active_task(root: Path, task_id: str) -> None:
@@ -60,3 +68,51 @@ def test_agent_task_mutation_authorizer_marks_role_rejections_as_unauthorized(tm
         authorizer.authorize(requested_task_id=None, allowed_roles={"planner", "reviewer"})
 
     assert excinfo.value.unauthorized
+
+
+def test_agent_task_mutator_updates_active_task_with_agent_attribution(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Active task", goal="old goal")
+    _set_active_task(tmp_path, task.id)
+
+    mutator = AgentTaskMutator(Workspace.from_path(tmp_path), task.id)
+    updated = mutator.update(
+        AgentTaskUpdateRequest(
+            goal="new goal",
+            acceptance_criteria=["one boundary"],
+        )
+    )
+
+    assert updated.goal == "new goal"
+    assert updated.acceptance_criteria == ["one boundary"]
+    persisted = get_task_record(tmp_path, task.id)
+    assert persisted is not None
+    assert persisted.goal == "new goal"
+    audit_entries = load_task_audit_entries(Workspace.from_path(tmp_path), task_id=task.id, limit=1)
+    assert audit_entries[-1].actor == "agent"
+    assert audit_entries[-1].source == "agent"
+
+
+def test_agent_task_mutator_rejects_empty_update(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Active task")
+
+    mutator = AgentTaskMutator(Workspace.from_path(tmp_path), task.id)
+
+    with pytest.raises(AgentTaskMutationError, match="no changes requested"):
+        mutator.update(AgentTaskUpdateRequest())
+
+
+def test_agent_task_mutator_closes_active_task_with_agent_attribution(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Duplicate task")
+    _set_active_task(tmp_path, task.id)
+
+    mutator = AgentTaskMutator(Workspace.from_path(tmp_path), task.id)
+    closed = mutator.close(AgentTaskCloseRequest(outcome="duplicate", reason="covered elsewhere"))
+
+    assert closed.status == "closed"
+    assert closed.close_reason == "duplicate"
+    audit_entries = load_task_audit_entries(Workspace.from_path(tmp_path), task_id=task.id, limit=1)
+    assert audit_entries[-1].actor == "agent"
+    assert audit_entries[-1].source == "agent"

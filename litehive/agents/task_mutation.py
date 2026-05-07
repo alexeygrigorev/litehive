@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
+from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state
+from litehive.tasks.status import close_task_for_workspace, update_task_for_workspace
+from litehive.workspace import Workspace
 
 
 @dataclass(frozen=True)
@@ -21,6 +24,30 @@ class AgentTaskMutationTarget:
     role: str
     root: Path
     task_id: str
+
+
+@dataclass(frozen=True)
+class AgentTaskUpdateRequest:
+    goal: str | None = None
+    acceptance_criteria: list[str] | None = None
+    plan: list[str] | None = None
+    constraints: list[str] | None = None
+    priority: str | None = None
+
+    def has_changes(self) -> bool:
+        return (
+            self.goal is not None
+            or self.acceptance_criteria is not None
+            or self.plan is not None
+            or self.constraints is not None
+            or self.priority is not None
+        )
+
+
+@dataclass(frozen=True)
+class AgentTaskCloseRequest:
+    outcome: str
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -63,6 +90,67 @@ class AgentTaskMutationAuthorizer:
             return resolve_workspace(task_id)
         except ValueError as exc:
             raise AgentTaskMutationError(str(exc)) from exc
+
+
+@dataclass(frozen=True)
+class AgentTaskMutator:
+    """
+    Applies authorized task mutations requested by an in-pipeline agent.
+
+    The CLI owns parsing Typer options and environment. This service owns
+    the task-service calls and the agent audit attribution so the hidden
+    agent commands stay thin.
+    """
+
+    workspace: Workspace
+    task_id: str
+
+    def update(self, request: AgentTaskUpdateRequest) -> TaskRecord:
+        if not request.has_changes():
+            raise AgentTaskMutationError("no changes requested")
+        sentinel = ...
+        if request.goal is not None:
+            goal = request.goal
+        else:
+            goal = sentinel
+        if request.acceptance_criteria is not None:
+            acceptance_criteria = request.acceptance_criteria
+        else:
+            acceptance_criteria = sentinel
+        if request.plan is not None:
+            plan = request.plan
+        else:
+            plan = sentinel
+        if request.constraints is not None:
+            constraints = request.constraints
+        else:
+            constraints = sentinel
+        if request.priority is not None:
+            priority = request.priority
+        else:
+            priority = sentinel
+        return update_task_for_workspace(
+            self.workspace,
+            self.task_id,
+            goal=goal,
+            acceptance_criteria=acceptance_criteria,
+            plan=plan,
+            constraints=constraints,
+            priority=priority,
+            allow_active_agent_task_mutation=True,
+            audit_actor="agent",
+            audit_source="agent",
+        )
+
+    def close(self, request: AgentTaskCloseRequest) -> TaskRecord:
+        return close_task_for_workspace(
+            self.workspace,
+            self.task_id,
+            outcome=request.outcome,
+            reason=request.reason,
+            audit_actor="agent",
+            audit_source="agent",
+        )
 
 
 def _normalized_optional(value: str | None) -> str | None:

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from litehive.agents.report_submission import AgentReportSubmitter
+from litehive.agents.task_mutation import AgentTaskMutator
 from litehive.config.model import LitehiveConfig
 from litehive.domain.agent import SubagentId
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
@@ -75,6 +76,16 @@ def build_agent_report_submitter(
         env_role=env_role,
         env_subagent_id=env_subagent_id,
         env_stage=env_stage,
+    )
+
+
+def build_agent_task_mutator(root: Path, task_id: str) -> AgentTaskMutator:
+    """
+    Assemble the authorized agent task mutation service.
+    """
+    return AgentTaskMutator(
+        workspace=build_workspace(root),
+        task_id=task_id,
     )
 
 
