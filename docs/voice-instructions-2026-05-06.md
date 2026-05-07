@@ -1813,10 +1813,18 @@ Legend:
   (`cli.engine`, `observability.status`) and direct freeze tests to use
   the new owner while keeping selection's exact freeze/quota path
   verified through `select_engine_for_workspace(...)`.
-- [ ] R24. Desired config loading shape: load YAML, validate into a
+- [x] R24. Desired config loading shape: load YAML, validate into a
   config object, and use that object. Avoid hand-written validation
   where Pydantic can own it.
   Source: note 4, 46:29-48:13.
+  Completed 2026-05-07: added `parse_litehive_config_data(...)` as the
+  model-owned boundary from merged config dictionaries to
+  `LitehiveConfig`, using Pydantic `TypeAdapter` for dataclass
+  materialization after the remaining project-specific unknown-key and
+  process-profile checks. Updated `load_config_for_workspace(...)` and
+  the tolerant status config loader to call this parser instead of
+  constructing `LitehiveConfig(**data)` directly. Verified with config
+  loading and status diagnostics tests.
 - [ ] R25. Prefer `Workspace.load_config()` or an equivalent workspace
   service over root-path config loading.
   Source: note 4, 46:49-47:10.

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
 import yaml
-from litehive.config.model import LitehiveConfig, validate_config_data
+from litehive.config.model import LitehiveConfig, parse_litehive_config_data
 from litehive.config.paths import litehive_root
 from litehive.config.workspace import ensure_workspace
 from litehive.config.workspace_files import config_path, context_path
@@ -105,7 +105,7 @@ def load_config_for_workspace(workspace: "Workspace") -> LitehiveConfig:
     from litehive.config.runtime_settings import apply_runtime_settings_to_config_data  # noqa: PLC0415
 
     data = apply_runtime_settings_to_config_data(workspace, load_effective_config_data(root))
-    return LitehiveConfig(**validate_config_data(data))
+    return parse_litehive_config_data(data)
 
 
 def load_context(root: Path) -> str:

@@ -16,7 +16,7 @@ from typing import Any, Mapping
 from pydantic import ValidationError
 
 from litehive.config.loading import merge_config_layers
-from litehive.config.model import LitehiveConfig, validate_config_data
+from litehive.config.model import LitehiveConfig, parse_litehive_config_data, validate_config_data
 from litehive.config.paths import litehive_root, workspace_path
 from litehive.config.workspace_files import config_path
 from litehive.domain.common import RunnerStatus
@@ -60,7 +60,7 @@ def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssu
         if mapping is not None:
             data = merge_config_layers(data, mapping)
     try:
-        config = LitehiveConfig(**_validate_status_config_data(data))
+        config = parse_litehive_config_data(_validate_status_config_data(data))
     except (TypeError, ValueError, ValidationError) as exc:
         issues.append(
             StatusIssue(

@@ -8,6 +8,7 @@ from litehive.config.model import (
     DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS,
     DEFAULT_TASK_TIME_BUDGET_SECONDS,
     LitehiveConfig,
+    parse_litehive_config_data,
 )
 from litehive.config.paths import litehive_root
 from litehive.config.workspace import ensure_workspace
@@ -184,6 +185,21 @@ def test_litehive_config_normalizes_retry_on() -> None:
     config = LitehiveConfig(retry_on=["timeout", "network", "timeout", "execution_limit"])
 
     assert config.retry_on == ["timeout", "network", "execution_limit"]
+
+
+def test_parse_litehive_config_data_returns_typed_config() -> None:
+    config = parse_litehive_config_data(
+        {
+            "default_engine": "gemini",
+            "engine_preference": ["codex", "gemini", "codex"],
+            "retry_on": ["timeout", "network", "timeout"],
+        }
+    )
+
+    assert isinstance(config, LitehiveConfig)
+    assert config.default_engine == "gemini"
+    assert config.engine_preference == ["codex", "gemini"]
+    assert config.retry_on == ["timeout", "network"]
 
 
 def test_litehive_config_defaults_include_flat_retry_on() -> None:
