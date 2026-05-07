@@ -19,7 +19,6 @@ from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import SwitchTaskSummary
-from litehive.state.records import get_task_record, require_task
 from litehive.state.persist import load_state
 from litehive.tasks.activity import append_task_activity
 from litehive.tasks.audit import (
@@ -131,7 +130,7 @@ def switch_task_engine_for_workspace(
         raise ValueError("Switch reason must not be empty")
 
     root = workspace.root
-    task = require_task(root, task_id)
+    task = workspace.require_task(task_id)
     before_task = snapshot_task_audit_state(task)
     if task.pipeline_status == PipelineStatus.DONE:
         raise ValueError(f"Task {task.id} is already done")
@@ -148,7 +147,7 @@ def switch_task_engine_for_workspace(
         runner_pid = stop_summary.runner_pid
         signal_sent = stop_summary.signal_sent
     else:
-        task = get_task_record(root, task_id)
+        task = workspace.get_task_record(task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
 
@@ -161,11 +160,11 @@ def switch_task_engine_for_workspace(
         to_engine=engine,
         reason=reason.strip(),
     )
-    task = require_task(root, task.id)
+    task = workspace.require_task(task.id)
 
     if task.status == TaskStatus.QUEUED:
         move_queued_task(root, task.id, 1)
-        task = require_task(root, task.id)
+        task = workspace.require_task(task.id)
     elif task.status in {TaskStatus.INTERRUPTED, TaskStatus.PARKED, TaskStatus.FLAGGED, *CLOSED_TASK_STATUSES}:
         task = resume_task_for_workspace(workspace, task.id, front=True)
     else:
