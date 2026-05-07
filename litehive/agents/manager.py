@@ -50,7 +50,6 @@ from litehive.agents.session_snapshots import (
 )
 from litehive.agents.subagent_ids import SubagentIdRepository
 from litehive.domain.roles import agent_stage_for_task
-from litehive.state.records import save_task
 from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.tasks.paths import task_dir
 from litehive.tasks.report_storage import record_stage_report
@@ -300,7 +299,7 @@ class SubagentManager:
             sandbox_summary=sandbox_summary.summary,
         )
         task.subagents.append(ref)
-        save_task(self.root, task)
+        self.workspace.save_task(task)
         mark_subagent_started_for_workspace(self.workspace, task, ref)
         self.sessions.write_session_start(task, base, ref, prompt)
         callbacks = SubagentRunCallbacks(
@@ -577,7 +576,7 @@ class SubagentManager:
         continuation = outcome.continuation
         failure = outcome.failure
 
-        save_task(self.root, task)
+        self.workspace.save_task(task)
         proc_exit_code = proc.exit_code
         proc_pid = proc.pid
         if failure is None or failure.kind != "execution_interrupted":
