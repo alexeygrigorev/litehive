@@ -24,7 +24,7 @@ from litehive.state.records import (
     save_task_runtime_for_workspace,
     write_task_runtime_for_workspace,
 )
-from litehive.state.locking import workspace_lock, workspace_mutation_guard_for_workspace
+from litehive.state.locking import workspace_lock_for_workspace, workspace_mutation_guard_for_workspace
 from litehive.state.persist import load_state_for_workspace, persist_task_and_state_for_workspace
 from litehive.workspace import Workspace
 
@@ -190,8 +190,7 @@ def finish_task_run_transition_for_workspace(
     happen atomically rather than leaving the queue and the task record
     briefly disagreeing about who is active.
     """
-    root = workspace.root
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock(root):
+    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
         canonical_final_status = (
             final_status if isinstance(final_status, TaskExecutionStatus) else TaskExecutionStatus(final_status)
         )

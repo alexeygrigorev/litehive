@@ -7,7 +7,7 @@ from litehive.state.persist import load_state_for_workspace
 from litehive.tasks.normalization import implementation_entry_stage
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.queue import prepare_completed_task_for_recovery
-from litehive.state.locking import workspace_lock, workspace_mutation_guard_for_workspace
+from litehive.state.locking import workspace_lock_for_workspace, workspace_mutation_guard_for_workspace
 from litehive.state.persist import persist_task_and_state_for_workspace
 from litehive.workspace import Workspace
 
@@ -33,8 +33,7 @@ def recover_completed_task_for_workspace(workspace: Workspace, task_id: str) -> 
     see who reopened the task. Called by ``litehive recover`` when an operator
     decides a closed task needs more work.
     """
-    root = workspace.root
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock(root):
+    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
         from litehive.tasks.queue import drop_task_from_workspace_state  # noqa: PLC0415
 
         task = workspace.get_task(task_id)
