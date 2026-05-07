@@ -68,7 +68,7 @@ def _task_recorded_worktree_for_workspace(workspace: Workspace, task_id: str) ->
 def build_commit_node_for_workspace(workspace: Workspace) -> CommitNode:
     """Return the production ``GitCommitNode`` bound to an injected workspace."""
     return GitCommitNode(
-        workspace.root,
+        workspace,
         worktree_resolver=lambda state: _resolve_worktree_for_workspace(workspace, state),
         task_resolver=lambda state: _task_recorded_worktree_for_workspace(workspace, state.task_id)[0],
     )

@@ -172,7 +172,7 @@ def test_agent_and_commit_use_persisted_worktree_path(
         assert resolved is not None
         return resolved
 
-    commit_node = GitCommitNode(workspace, worktree_resolver=_persisted_worktree)
+    commit_node = GitCommitNode(Workspace.from_path(workspace), worktree_resolver=_persisted_worktree)
     event = commit_node.run(_state(task.id, PipelineState.COMMIT))
 
     assert isinstance(event, Pass), event
@@ -214,7 +214,7 @@ def test_commit_ignores_untracked_embedded_git_repos_in_task_worktree(tmp_path: 
         assert resolved is not None
         return resolved
 
-    commit_node = GitCommitNode(workspace, worktree_resolver=_persisted_worktree)
+    commit_node = GitCommitNode(Workspace.from_path(workspace), worktree_resolver=_persisted_worktree)
     event = commit_node.run(_state(task.id, PipelineState.COMMIT))
 
     assert isinstance(event, Pass), event

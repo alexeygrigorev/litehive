@@ -502,7 +502,7 @@ class GitCommitNode(CommitNode):
 
     def __init__(
         self,
-        main_repo_root: Path,
+        workspace: Workspace,
         worktree_resolver: WorktreeResolver,
         task_resolver: TaskResolver | None = None,
     ) -> None:
@@ -515,7 +515,8 @@ class GitCommitNode(CommitNode):
         plain ``litehive <task_id>: <detail>`` line.
         """
         super().__init__()
-        self.main_repo_root = Path(main_repo_root)
+        self.workspace = workspace
+        self.main_repo_root = workspace.root
         self.worktree_resolver = worktree_resolver
         self.task_resolver = task_resolver
 

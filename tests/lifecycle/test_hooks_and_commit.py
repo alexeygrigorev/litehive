@@ -197,7 +197,7 @@ def test_commit_node_clean_merge_returns_pass(git_repo_with_branch) -> None:
     main_repo, worktree = git_repo_with_branch
 
     node = GitCommitNode(
-        main_repo,
+        Workspace.from_path(main_repo),
         worktree_resolver=lambda state: worktree,
     )
 
@@ -240,7 +240,7 @@ def test_commit_node_autocommits_uncommitted_worktree_edits(tmp_path: Path) -> N
     )
 
     node = GitCommitNode(
-        repo,
+        Workspace.from_path(repo),
         worktree_resolver=lambda state: worktree,
         task_resolver=lambda state: task,
     )
@@ -285,7 +285,7 @@ def test_commit_node_autocommits_staged_worktree_deletions(tmp_path: Path) -> No
     subprocess.run(["git", "config", "user.name", "t"], cwd=worktree, check=True)
     subprocess.run(["git", "rm", "-q", "--", "obsolete.txt"], cwd=worktree, check=True)
 
-    node = GitCommitNode(repo, worktree_resolver=lambda state: worktree)
+    node = GitCommitNode(Workspace.from_path(repo), worktree_resolver=lambda state: worktree)
     event = node.run(make_state(stage=PipelineState.COMMIT))
 
     status = subprocess.run(
@@ -336,7 +336,7 @@ def test_commit_node_autocommit_excludes_runner_owned_task_metadata(tmp_path: Pa
     (worktree / "new.txt").write_text("agent wrote this\n")
     (worktree / ".litehive" / "tasks" / "T-0001-demo" / "task.yaml").write_text("id: T-0001\nstatus: implementing\n")
 
-    node = GitCommitNode(repo, worktree_resolver=lambda state: worktree)
+    node = GitCommitNode(Workspace.from_path(repo), worktree_resolver=lambda state: worktree)
     event = node.run(make_state(stage=PipelineState.COMMIT, task_id="T-0001"))
 
     assert isinstance(event, Pass), event
@@ -377,7 +377,7 @@ def test_commit_node_autocommit_excludes_uv_lock(tmp_path: Path) -> None:
     (worktree / "new.txt").write_text("agent wrote this\n")
     (worktree / "uv.lock").write_text("version = 1\n# timestamp churn\n")
 
-    node = GitCommitNode(repo, worktree_resolver=lambda state: worktree)
+    node = GitCommitNode(Workspace.from_path(repo), worktree_resolver=lambda state: worktree)
     event = node.run(make_state(stage=PipelineState.COMMIT))
 
     assert isinstance(event, Pass), event
@@ -395,7 +395,7 @@ def test_commit_node_autocommits_dirty_main_checkout_after_clean_merge(git_repo_
     (main_repo / "tracked.txt").write_text("dirty main\n")
 
     node = GitCommitNode(
-        main_repo,
+        Workspace.from_path(main_repo),
         worktree_resolver=lambda state: worktree,
     )
 
@@ -430,7 +430,7 @@ def test_commit_node_autocommits_untracked_main_checkout_files_after_clean_merge
     (main_repo / "generated.txt").write_text("generated\n")
 
     node = GitCommitNode(
-        main_repo,
+        Workspace.from_path(main_repo),
         worktree_resolver=lambda state: worktree,
     )
 
@@ -476,7 +476,7 @@ def test_commit_node_main_checkout_autocommit_skips_stale_missing_pathspecs(
     (main_repo / "generated.txt").write_text("generated\n")
 
     node = GitCommitNode(
-        main_repo,
+        Workspace.from_path(main_repo),
         worktree_resolver=lambda state: worktree,
     )
 
@@ -516,7 +516,7 @@ def test_commit_node_reports_already_landed_noop_reconciliation(git_repo_with_br
     main_repo, worktree = git_repo_with_branch
 
     node = GitCommitNode(
-        main_repo,
+        Workspace.from_path(main_repo),
         worktree_resolver=lambda state: worktree,
     )
 
@@ -562,7 +562,7 @@ def test_commit_node_with_conflict_emits_merge_conflict_detected(
     subprocess.run(["git", "commit", "-qam", "main change"], cwd=main_repo, check=True)
 
     node = GitCommitNode(
-        main_repo,
+        Workspace.from_path(main_repo),
         worktree_resolver=lambda state: worktree,
     )
 
@@ -591,7 +591,7 @@ def test_commit_node_concludes_resolved_in_progress_merge(git_repo_with_branch) 
     subprocess.run(["git", "commit", "-qam", "main change"], cwd=main_repo, check=True)
 
     node = GitCommitNode(
-        main_repo,
+        Workspace.from_path(main_repo),
         worktree_resolver=lambda state: worktree,
     )
 
@@ -1312,7 +1312,7 @@ def test_main_checkout_cleanup_skips_tracked_ignored_task_reports(tmp_path: Path
     (tmp_path / "tracked.txt").write_text("updated\n")
     report_path.write_text("stage: testing\nsummary: updated\n", encoding="utf-8")
 
-    node = GitCommitNode(main_repo_root=tmp_path, worktree_resolver=lambda state: tmp_path)
+    node = GitCommitNode(workspace=Workspace.from_path(tmp_path), worktree_resolver=lambda state: tmp_path)
     head = node.autocommit_main_checkout_changes(make_state(stage=PipelineState.COMMIT, task_id=seed_task.id))
     assert head is not None
 
@@ -1349,7 +1349,7 @@ def test_main_checkout_cleanup_commits_already_staged_deletions(tmp_path: Path) 
 
     subprocess.run(["git", "rm", "-q", "--", str(probe_file.relative_to(tmp_path))], cwd=tmp_path, check=True)
 
-    node = GitCommitNode(main_repo_root=tmp_path, worktree_resolver=lambda state: tmp_path)
+    node = GitCommitNode(workspace=Workspace.from_path(tmp_path), worktree_resolver=lambda state: tmp_path)
     head = node.autocommit_main_checkout_changes(make_state(stage=PipelineState.COMMIT, task_id="T-0429"))
     assert head is not None
 
