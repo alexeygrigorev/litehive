@@ -1330,9 +1330,14 @@ Legend:
 - [ ] C5. Remove `isinstance` checks from session/report resolution
   by returning typed objects.
   Source: note 4, 15:57-16:14.
-- [ ] C6. Move `resolve_active_agent_task_mutation_target` style
+- [x] C6. Move `resolve_active_agent_task_mutation_target` style
   business logic out of CLI.
   Source: note 4, 16:57-18:37.
+  Completed 2026-05-07: moved the active-agent role gate,
+  workspace resolution, state lookup, and active-task enforcement into
+  `AgentTaskMutationAuthorizer`. The CLI wrapper now only gathers env
+  inputs, calls the service, and maps service errors to the existing
+  command output.
 - [ ] C7. Replace scattered `os.environ.get("LITEHIVE_TASK_ID")` and
   `os.environ.get("LITEHIVE_WORKSPACE_ROOT")` with a container/config
   boundary that reads env once and passes parameters.
