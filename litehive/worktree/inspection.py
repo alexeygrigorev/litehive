@@ -153,13 +153,6 @@ def worktree_uncommitted_changes(worktree_path: Path) -> list[str]:
         return []
 
 
-def worktree_committed_changes(root: Path, worktree_path: Path) -> list[str]:
-    """
-    Path-based compatibility wrapper for committed worktree changes.
-    """
-    return worktree_committed_changes_for_workspace(Workspace.from_path(root), worktree_path)
-
-
 def worktree_committed_changes_for_workspace(workspace: Workspace, worktree_path: Path) -> list[str]:
     """
     Return sorted unique paths committed past main on the worktree branch.
