@@ -868,8 +868,18 @@ Legend:
 
 ## Parsing, Domain Model, And Verdict Instructions
 
-- [ ] D1. Convert verdicts such as reject/fail into domain enums.
+- [x] D1. Convert verdicts such as reject/fail into domain enums.
   Source: note 4, 00:01-00:12.
+  Verified 2026-05-07: `TaskActivityEntry.verdict` now uses the
+  `Verdict` domain enum through `TaskActivityVerdict`, validates that
+  persisted activity rows stay on the supported submitted-verdict
+  vocabulary, and still rejects the removed `fail` activity alias.
+  `litehive agent report` and operator `litehive report` convert CLI
+  strings to `Verdict` at the boundary, the per-role allow-list stores
+  enum members, and system activity writers in hook, recovery,
+  hallucinated-pass retraction, and engine-switch paths pass enum
+  members. Verified with focused activity, report, and verdict
+  consumer tests plus ruff and pyrefly on the touched paths.
 - [ ] D2. Replace `FailureDiagnostics` dictionaries with a typed
   class/dataclass.
   Source: note 4, 00:14-00:20.

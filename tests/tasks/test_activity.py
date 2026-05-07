@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.agent import SubagentId
+from litehive.domain.common import Verdict
 from litehive.domain.reports import TaskActivityEntry
 from litehive.state.records import create_task
 from litehive.tasks.paths import task_dir
@@ -55,6 +56,28 @@ def test_append_activity_entry_persists_to_sqlite(tmp_path: Path) -> None:
     assert rows[0]["payload"]["verdict"] == "pass"
     assert rows[0]["payload"]["message"] == "new"
     assert rows[0]["payload"]["created_at"]
+
+
+def test_task_activity_entry_carries_verdict_as_domain_enum(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Typed verdict")
+    workspace = Workspace.from_path(tmp_path)
+
+    workspace.task_activity(task).append(
+        TaskActivityEntry(
+            source="agent",
+            role="swe",
+            stage="implementing",
+            verdict="reject",
+            message="typed",
+            source_subagent_id="SA-0001",
+        )
+    )
+
+    loaded = workspace.task_activity(task).load()
+
+    assert loaded[0].verdict is Verdict.REJECT
+    assert _activity_rows(tmp_path, task.id)[0]["payload"]["verdict"] == "reject"
 
 
 def test_load_task_activity_ignores_stale_filesystem_activity(tmp_path: Path) -> None:

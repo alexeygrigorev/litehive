@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+from litehive.domain.common import Verdict
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction, RecoveryReport, TaskActivityEntry
 from litehive.domain.task import TaskRecord
@@ -60,7 +61,7 @@ def record_recovery_report(
             source="system",
             role="recovery",
             stage=origin_stage or task.pipeline_status,
-            verdict="comment",
+            verdict=Verdict.COMMENT,
             message=(
                 f"Recovery trigger `{trigger_event_kind.value}`: {summary}\n"
                 f"runnable_state: {runnable_state}\n"

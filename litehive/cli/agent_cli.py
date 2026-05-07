@@ -14,12 +14,13 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated
 
 import typer
 
 from litehive.container import build_workspace
 from litehive.domain.agent import SubagentId
+from litehive.domain.common import Verdict
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.workspace import Workspace
 
@@ -29,13 +30,21 @@ from litehive.tasks.status import close_task_for_workspace, update_task_for_work
 from litehive.state.persist import load_state
 
 
-VERDICT_ALLOWLIST: dict[str, set[str]] = {
-    "planner": {"pass", "reject"},
-    "swe": {"pass", "reject"},
-    "qa": {"pass", "reject"},
-    "reviewer": {"pass", "reject"},
-    "recovery": {"resume", "advance", "done", "budget_hit", "reject"},
-    "merge-resolver": {"pass", "reject"},
+VERDICT_ALLOWLIST: dict[str, frozenset[TaskActivityVerdict]] = {
+    "planner": frozenset({Verdict.PASS, Verdict.REJECT}),
+    "swe": frozenset({Verdict.PASS, Verdict.REJECT}),
+    "qa": frozenset({Verdict.PASS, Verdict.REJECT}),
+    "reviewer": frozenset({Verdict.PASS, Verdict.REJECT}),
+    "recovery": frozenset(
+        {
+            Verdict.RESUME,
+            Verdict.ADVANCE,
+            Verdict.DONE,
+            Verdict.BUDGET_HIT,
+            Verdict.REJECT,
+        }
+    ),
+    "merge-resolver": frozenset({Verdict.PASS, Verdict.REJECT}),
 }
 
 agent_app = typer.Typer(
@@ -121,7 +130,7 @@ def _resolve_report_stage(explicit_stage: str | None, task, pipeline_stage: str 
     return task.pipeline_status
 
 
-def _allowed_verdicts_for_role(role: str) -> set[str]:
+def _allowed_verdicts_for_role(role: str) -> frozenset[TaskActivityVerdict]:
     """
     Source of the per-role verdict gate enforced by ``agent report``.
 
@@ -130,7 +139,7 @@ def _allowed_verdicts_for_role(role: str) -> set[str]:
     Centralized here so a new role's verdict surface is one
     dictionary edit, not a sprawl of inline ``if role == ...`` gates.
     """
-    return VERDICT_ALLOWLIST.get(role, {"pass", "reject"})
+    return VERDICT_ALLOWLIST.get(role, frozenset({Verdict.PASS, Verdict.REJECT}))
 
 
 @dataclass(frozen=True)
@@ -245,7 +254,11 @@ def agent_report_command(
     elif message_file is not None:
         message = message_file.read_text(encoding="utf-8")
 
-    normalized_verdict = verdict.strip().lower()
+    try:
+        normalized_verdict = Verdict(verdict.strip().lower())
+    except ValueError:
+        print("You are not authorized to perform this command.")
+        raise SystemExit(1)
     tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
     try:
         if workspace is None:
@@ -278,7 +291,7 @@ def agent_report_command(
         normalized_target_stage = target_stage.strip()
     else:
         normalized_target_stage = None
-    if agent_role == "recovery" and normalized_verdict in {"resume", "advance"}:
+    if agent_role == "recovery" and normalized_verdict in {Verdict.RESUME, Verdict.ADVANCE}:
         if not normalized_target_stage:
             print(f"report failed: recovery verdict '{normalized_verdict}' requires --target-stage")
             raise SystemExit(1)
@@ -314,7 +327,7 @@ def agent_report_command(
         role=agent_role,
         stage=actual_stage,
         target_stage=normalized_target_stage,
-        verdict=cast(TaskActivityVerdict, normalized_verdict),
+        verdict=normalized_verdict,
         verdict_classification=verdict_classification,
         message=message,
         files_changed=list(files_changed or []),

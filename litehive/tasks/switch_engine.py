@@ -15,7 +15,7 @@ is one self-contained operator action with its own audit shape.
 
 from pathlib import Path
 
-from litehive.domain.common import PipelineStatus, TaskStatus
+from litehive.domain.common import PipelineStatus, TaskStatus, Verdict
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import SwitchTaskSummary
@@ -176,7 +176,7 @@ def switch_task_engine_for_workspace(
             source="operator",
             role="operator",
             stage=task.pipeline_status,
-            verdict="comment",
+            verdict=Verdict.COMMENT,
             message=_switch_activity_entry_message(
                 task,
                 reason=reason.strip(),

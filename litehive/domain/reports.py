@@ -12,7 +12,7 @@ reads activity for routing should be redirected to the reports.
 
 from typing import Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .common import (
     FEEDBACK_CAP,
@@ -42,22 +42,25 @@ ReportPipelineState: TypeAlias = TaskStage | Literal[PipelineState.MERGE_RESOLVI
 TaskActivityStage: TypeAlias = ReportPipelineState | PipelineStatus
 TaskActivitySource: TypeAlias = Literal["agent", "operator", "system"]
 StageReportVerdict: TypeAlias = Literal["pass", "reject", "blocked"]
-TaskActivityVerdict: TypeAlias = Literal[
-    "pass",
-    "reject",
-    "blocked",
-    "comment",
-    "resume",
-    "advance",
-    "done",
-    "budget_hit",
-]
+TaskActivityVerdict: TypeAlias = Verdict
 
 SEMANTIC_REJECT_CLASSIFICATION = "semantic_reject"
 SEMANTIC_REJECT_ROLES = frozenset({"qa", "reviewer"})
+TASK_ACTIVITY_VERDICT_KINDS: frozenset[TaskActivityVerdict] = frozenset(
+    {
+        Verdict.PASS,
+        Verdict.REJECT,
+        Verdict.BLOCKED,
+        Verdict.COMMENT,
+        Verdict.RESUME,
+        Verdict.ADVANCE,
+        Verdict.DONE,
+        Verdict.BUDGET_HIT,
+    }
+)
 
 
-def classify_task_activity_verdict(role: str, verdict: str) -> str | None:
+def classify_task_activity_verdict(role: str, verdict: Verdict | str) -> str | None:
     """
     Return the first-class classification for a newly submitted verdict.
 
@@ -67,7 +70,11 @@ def classify_task_activity_verdict(role: str, verdict: str) -> str | None:
     treats as terminal under ``has_blocking_failed_run_history``.
     Returns ``None`` for verdicts that don't need a classification.
     """
-    if verdict.strip().lower() == "reject" and role.strip().lower() in SEMANTIC_REJECT_ROLES:
+    try:
+        verdict_kind = verdict if isinstance(verdict, Verdict) else Verdict(verdict.strip().lower())
+    except ValueError:
+        return None
+    if verdict_kind == Verdict.REJECT and role.strip().lower() in SEMANTIC_REJECT_ROLES:
         return SEMANTIC_REJECT_CLASSIFICATION
     return None
 
@@ -93,7 +100,15 @@ def canonical_stage_report_verdict(verdict: Verdict | str) -> StageReportVerdict
 # Excludes "comment", which is operator/agent commentary that does not
 # advance the stage report.
 REPORT_VERDICT_KINDS: frozenset[TaskActivityVerdict] = frozenset(
-    {"pass", "reject", "blocked", "resume", "advance", "done", "budget_hit"}
+    {
+        Verdict.PASS,
+        Verdict.REJECT,
+        Verdict.BLOCKED,
+        Verdict.RESUME,
+        Verdict.ADVANCE,
+        Verdict.DONE,
+        Verdict.BUDGET_HIT,
+    }
 )
 
 
@@ -267,13 +282,27 @@ class TaskActivityEntry(BaseModel):
     role: str  # Who created this entry (agent role, operator, system)
     stage: TaskActivityStage  # Pipeline stage where activity occurred
     target_stage: TaskActivityStage | None = None  # Target stage if this is a transition
-    verdict: TaskActivityVerdict = "comment"  # Associated verdict if applicable
+    verdict: TaskActivityVerdict = Verdict.COMMENT  # Associated verdict if applicable
     verdict_classification: str | None = None  # Machine-readable verdict classification
     message: str  # Free-form human-readable activity description
     files_changed: list[str] = Field(default_factory=list)  # Files modified as part of this activity
     source_subagent_id: SubagentId | None = None  # Subagent session that submitted this entry, when applicable
     follow_up_task_id: str | None = None  # Optional follow-up task reference
     created_at: str = Field(default_factory=utcnow)  # When the activity occurred
+
+    @field_validator("verdict")
+    @classmethod
+    def _reject_stage_report_aliases(cls, verdict: TaskActivityVerdict) -> TaskActivityVerdict:
+        """
+        Keep activity rows on the supported submitted-verdict vocabulary.
+
+        ``Verdict`` still owns aliases such as ``fail`` for canonical
+        report projection, but activity entries are submitted through
+        the current CLI contract and must not persist removed aliases.
+        """
+        if verdict not in TASK_ACTIVITY_VERDICT_KINDS:
+            raise ValueError(f"unsupported activity verdict: {verdict}")
+        return verdict
 
     @model_validator(mode="before")
     @classmethod

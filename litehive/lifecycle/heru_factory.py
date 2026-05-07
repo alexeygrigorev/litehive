@@ -243,7 +243,7 @@ def _rewrite_hallucinated_implementing_pass(
             continue
         if entry.message != latest.message or list(entry.files_changed) != list(latest.files_changed):
             continue
-        entry.verdict = "reject"
+        entry.verdict = Verdict.REJECT
         if "[retracted - filesystem check shows no changes landed]" not in entry.message:
             entry.message = f"{entry.message.rstrip()}\n[retracted - filesystem check shows no changes landed]"
         entry.message = f"{entry.message.rstrip()}\n{detail}"

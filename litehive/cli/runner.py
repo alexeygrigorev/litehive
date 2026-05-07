@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated
 import os
 import sys
 import json
@@ -25,8 +25,8 @@ from litehive.daemon.execution import (
 from litehive.daemon.registry import get_workspace_daemon
 from litehive.db.schema import MigrationApplyError, apply_pending_migrations, migration_status
 from litehive.git.ops import has_non_litehive_changes, is_git_repo
-from litehive.domain.common import PipelineState
-from litehive.domain.reports import TaskActivityEntry, TaskActivityVerdict
+from litehive.domain.common import PipelineState, Verdict
+from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.orchestration import ExecutionResult, run_task_for_workspace
 from litehive.state.backup import create_workspace_backup, list_workspace_backups, restore_workspace_backup
 from litehive.domain.task_ops import WorkspaceConflictError
@@ -567,14 +567,12 @@ def report_command(
         print(f"report failed: task {task_id} not found")
         return 1
     stage = stage or task.pipeline_status
-    # ``verdict`` is constrained to TaskActivityVerdict members by the
-    # Click ``choice(...)`` declaration above; ``cast`` lets the static
-    # type tell the same story without a ``# type: ignore``.
+    verdict_kind = Verdict(verdict)
     entry = TaskActivityEntry(
         source="operator",
         role=role,
         stage=stage,
-        verdict=cast(TaskActivityVerdict, verdict),
+        verdict=verdict_kind,
         message=message,
         files_changed=list(files_changed or []),
     )

@@ -7,6 +7,7 @@ report files, journal) see the same shape as engine-emitted reports.
 
 from litehive.domain.common import (
     PipelineState,
+    Verdict,
     canonical_pipeline_state,
     cap_feedback,
     task_stage_for_pipeline_state,
@@ -159,7 +160,7 @@ def _record_hook_warnings(
             source="system",
             role="hook",
             stage=report_stage,
-            verdict="comment",
+            verdict=Verdict.COMMENT,
             message=message,
         )
     )
@@ -222,7 +223,7 @@ def _record_hook_reject(
             source="system",
             role="hook",
             stage=report_stage,
-            verdict="reject",
+            verdict=Verdict.REJECT,
             message=message,
         )
     )
