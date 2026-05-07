@@ -273,10 +273,9 @@ def rebuild_sqlite_from_task_event_log(workspace: Workspace, clear_existing: boo
     replay_state = _ReplayState.empty()
     for event in events:
         _apply_event(replay_state, event)
-    root = workspace.root
     if clear_existing:
         replay_task_ids = set(replay_state.task_intents) | set(replay_state.task_states)
-        db_path = workspace_path(root, "data.db")
+        db_path = workspace_path(workspace.root, "data.db")
         assert_database_rebuild_safe_for_workspace(
             workspace,
             db_path,
