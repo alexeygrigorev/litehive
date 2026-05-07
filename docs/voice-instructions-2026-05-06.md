@@ -2076,7 +2076,9 @@ Legend:
   assertion that `run_daemon_loop` invokes child runs as
   `[sys.executable, "-m", "litehive.main", "run", ...]`, so the
   daemon stays in the current LiteHive Python environment rather than
-  running `uv` from the target workspace.
+  running `uv` from the target workspace. The same regression checks
+  that the subprocess working directory is the resolved target
+  workspace, so executor commands run in the project being serviced.
 - [ ] DM13. Replace `emit(..., stream=...)` free functions with an
   object that takes the stream in its constructor and exposes methods.
   Source: note 5, 19:00-19:27; note 5, 21:25-21:52.
