@@ -7,6 +7,15 @@ every workspace this user has ever initialized on this machine.
 enumerate workspaces without filesystem scanning. Corruption is
 recoverable: a quick-check failure quarantines the file and the
 next operation rebuilds an empty registry.
+
+Registry writes have three separate contention controls. The
+module-level mutex serializes threads inside one Python process so
+two CLI helpers do not race each other through the same connection
+setup. SQLite ``busy_timeout`` lets a process wait for another
+process's write transaction to finish. The optional retry loop sits
+outside SQLite and is only for tests or operators that deliberately
+want extra attempts after SQLite has already returned ``locked`` or
+``busy``.
 """
 
 from datetime import UTC, datetime

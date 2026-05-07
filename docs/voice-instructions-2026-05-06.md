@@ -1561,9 +1561,15 @@ Legend:
   behind `Workspace.runtime_path(...)` for the daemon loop, status
   rendering, and task-log CLI support. Kept a path-based wrapper only
   for callers that have not crossed the Workspace boundary yet.
-- [ ] F8. Review `registry` mutex/busy-timeout/lock-retry behavior and
+- [x] F8. Review `registry` mutex/busy-timeout/lock-retry behavior and
   explain why it exists.
   Source: note 5, 00:35-00:46.
+  Reviewed 2026-05-07: kept all three layers because they cover
+  different contention scopes: the process-local mutex serializes
+  threads, SQLite busy timeout waits on another process's write
+  transaction, and the optional retry loop gives tests/operators extra
+  attempts after SQLite returns `locked` or `busy`. Added that
+  explanation to `config/registry.py`.
 - [ ] F9. Remove registry global/function-as-global access. Use
   dependency injection.
   Source: note 5, 00:46-01:14.
