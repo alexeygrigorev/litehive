@@ -8,17 +8,13 @@ bootstrap; ``config.yaml`` only seeds the initial values, and
 later YAML drift is intentionally ignored to avoid two writers.
 """
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 import json
-from pathlib import Path
 import sqlite3
 from typing import Any, Mapping, Sequence
 
-import yaml
-
+from litehive.config.loading import load_effective_config_data
 from litehive.config.model import LitehiveConfig, normalize_engine_sequence
-from litehive.config.paths import litehive_root
-from litehive.config.workspace_files import config_path
 from litehive.domain.common import utcnow
 from litehive.workspace import Workspace
 
@@ -45,44 +41,6 @@ class RuntimeSettingAuditEntry:
     context: dict[str, Any]
 
 
-def _read_config_layer(path: Path) -> dict[str, Any]:
-    """
-    Load one ``config.yaml`` layer (global or workspace).
-
-    Returns ``{}`` for missing files and raises ``ValueError``
-    for non-mapping payloads. Consumed by
-    :func:`_bootstrap_config_data` so the two layers can be merged
-    uniformly. Duplicates :func:`litehive.config.loading._read_config_layer`
-    intentionally so this module can run in the partial-import
-    window where ``config.loading`` is not yet ready.
-    """
-    if not path.exists():
-        return {}
-    payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(payload, Mapping):
-        raise ValueError(f"Config file must contain a mapping: {path}")
-    return dict(payload)
-
-
-def _merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> dict[str, Any]:
-    """
-    Deep-merge two config dicts at the leaf level.
-
-    Used by :func:`_bootstrap_config_data` so workspace YAML
-    overrides global YAML overrides dataclass defaults without
-    losing nested structure. A shallow merge would clobber an
-    operator's partially-set nested key (e.g. one freeze entry).
-    """
-    merged = dict(base)
-    for key, value in overlay.items():
-        current = merged.get(key)
-        if isinstance(current, Mapping) and isinstance(value, Mapping):
-            merged[key] = _merge_config_layers(current, value)
-        else:
-            merged[key] = value
-    return merged
-
-
 def _bootstrap_config_data(workspace: Workspace) -> dict[str, Any]:
     """
     Compose the three-layer config snapshot used to seed runtime settings.
@@ -93,9 +51,7 @@ def _bootstrap_config_data(workspace: Workspace) -> dict[str, Any]:
     reading the YAML files directly — the operator's mental model
     matches the stored state from day one.
     """
-    config = asdict(LitehiveConfig())
-    config = _merge_config_layers(config, _read_config_layer(litehive_root() / "config.yaml"))
-    return _merge_config_layers(config, _read_config_layer(config_path(workspace.root)))
+    return load_effective_config_data(workspace.root)
 
 
 def _json_dumps(value: Any) -> str:

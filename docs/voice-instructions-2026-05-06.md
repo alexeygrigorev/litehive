@@ -1608,10 +1608,14 @@ Legend:
 - [ ] R1. Review runtime setting keys. The note questions why the
   current key machinery exists.
   Source: note 5, 02:25-02:37.
-- [ ] R2. Remove duplicate config layer logic such as
+- [x] R2. Remove duplicate config layer logic such as
   `read_config_layer` and `merge_config_layers` if config loading
   already owns it.
   Source: note 5, 02:37-02:53.
+  Completed 2026-05-07: removed the duplicate YAML layer reader and
+  deep-merge helper from `config.runtime_settings`; runtime settings
+  bootstrap now reuses `config.loading.load_effective_config_data(...)`
+  for the same defaults/global/workspace config snapshot.
 - [ ] R3. Replace custom `json_dump` / `json_load` helpers with typed
   serialization via Pydantic or another model layer.
   Source: note 5, 02:53-04:35.
