@@ -168,7 +168,7 @@ class DockerSandboxLauncher:
 
     def __init__(self, workspace: Workspace, config: LitehiveConfig) -> None:
         """Store injected workspace/config dependencies for per-engine policy lookup."""
-        self.root = workspace.root
+        self.workspace = workspace
         self.config = config
 
     def policy_summary(self, engine_name: str) -> SandboxPolicySummary:
@@ -260,7 +260,7 @@ class DockerSandboxLauncher:
         workspace_mode = policy.workspace_mode
         container_argv = self._translate_container_argv(
             invocation.argv,
-            host_root=self.root,
+            host_root=self.workspace.root,
             container_root=workspace_mount,
         )
 
@@ -286,7 +286,7 @@ class DockerSandboxLauncher:
             [
                 "--mount",
                 self._bind_mount_spec(
-                    self.root,
+                    self.workspace.root,
                     workspace_mount,
                     read_only=workspace_mode == "ro",
                 ),
