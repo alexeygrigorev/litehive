@@ -1,6 +1,5 @@
 from pathlib import Path
 from typing import Annotated
-import os
 import sys
 import json
 from dataclasses import dataclass
@@ -11,6 +10,7 @@ import typer
 from litehive.cli.agent_cli import block_if_agent
 from litehive.cli.common import WorkspaceOption, choice, require_subcommand
 from litehive.config.engine_models import select_engine_for_workspace
+from litehive.config.environment import LitehiveEnvironment
 from litehive.config.paths import workspace_path
 from litehive.config.runtime_settings import load_runtime_setting_audit_entries, load_runtime_settings
 from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
@@ -544,8 +544,9 @@ def report_command(
         message = sys.stdin.read()
     elif message_file is not None:
         message = message_file.read_text(encoding="utf-8")
+    environment = LitehiveEnvironment.from_process()
     if not task_id:
-        task_id = os.environ.get("LITEHIVE_TASK_ID")
+        task_id = environment.task_id
     try:
         if workspace is None:
             root = resolve_workspace(task_id)

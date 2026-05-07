@@ -1344,10 +1344,15 @@ Legend:
   `AgentTaskMutationAuthorizer`. The CLI wrapper now only gathers env
   inputs, calls the service, and maps service errors to the existing
   command output.
-- [ ] C7. Replace scattered `os.environ.get("LITEHIVE_TASK_ID")` and
+- [x] C7. Replace scattered `os.environ.get("LITEHIVE_TASK_ID")` and
   `os.environ.get("LITEHIVE_WORKSPACE_ROOT")` with a container/config
   boundary that reads env once and passes parameters.
   Source: note 4, 16:57-18:06.
+  Completed 2026-05-07: added `LitehiveEnvironment` as the typed
+  config boundary for Litehive process env values. `agent_cli` now
+  reads that environment once per command/helper and passes task id
+  and workspace root into services instead of calling
+  `os.environ.get(...)` inline.
 - [ ] C8. Audit all CLI modules yourself for any remaining business
   logic and move it into domain/container services.
   Source: note 4, 19:15-19:28.

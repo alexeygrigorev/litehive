@@ -10,7 +10,6 @@ This module also exposes small helpers that other CLI commands can use to
 distinguish operator-only surfaces from the limited agent-facing API.
 """
 
-import os
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -26,6 +25,7 @@ from litehive.agents.task_mutation import (
     AgentTaskUpdateRequest,
 )
 from litehive.container import build_agent_report_submitter, build_agent_task_mutator, build_workspace
+from litehive.config.environment import LitehiveEnvironment
 from litehive.domain.agent import SubagentId
 from litehive.domain.common import Verdict
 
@@ -49,7 +49,7 @@ def _current_role() -> str | None:
     subagent shell. CLI commands consult this to tell whether they
     are running inside an agent context vs an operator shell.
     """
-    return os.environ.get("LITEHIVE_AGENT_ROLE")
+    return _current_environment().agent_role
 
 
 def _current_subagent_id() -> SubagentId | None:
@@ -60,9 +60,9 @@ def _current_subagent_id() -> SubagentId | None:
     the subagent_sessions table; the env var alone cannot be trusted
     because a misbehaving agent could rewrite it.
     """
-    subagent_id = os.environ.get("LITEHIVE_SUBAGENT_ID")
-    if subagent_id and subagent_id.strip():
-        return SubagentId(subagent_id.strip())
+    subagent_id = _current_environment().subagent_id
+    if subagent_id is not None:
+        return SubagentId(subagent_id)
     return None
 
 
@@ -86,10 +86,11 @@ def _current_stage() -> str | None:
     a slow-reporting agent could land its verdict against the wrong
     stage.
     """
-    stage = os.environ.get("LITEHIVE_STAGE")
-    if stage:
-        return stage.strip()
-    return None
+    return _current_environment().agent_stage
+
+
+def _current_environment() -> LitehiveEnvironment:
+    return LitehiveEnvironment.from_process()
 
 
 def block_if_agent() -> None:
@@ -164,7 +165,8 @@ def agent_report_command(
     except ValueError:
         print("You are not authorized to perform this command.")
         raise SystemExit(1)
-    tid = task_id or os.environ.get("LITEHIVE_TASK_ID")
+    environment = _current_environment()
+    tid = task_id or environment.task_id
     try:
         if workspace is None:
             root = resolve_workspace(tid)
@@ -183,9 +185,9 @@ def agent_report_command(
         raise SystemExit(1)
     submitter = build_agent_report_submitter(
         workspace_obj,
-        env_role=_current_role(),
-        env_subagent_id=_current_subagent_id(),
-        env_stage=_current_stage(),
+        env_role=environment.agent_role,
+        env_subagent_id=_subagent_id_from_environment(environment),
+        env_stage=environment.agent_stage,
     )
     request = AgentReportRequest(
         task_id=tid,
@@ -232,10 +234,11 @@ def resolve_active_agent_task_mutation_target(
     enforced against the persisted state, not the env, so a stale
     ``LITEHIVE_TASK_ID`` cannot extend the agent's reach.
     """
+    environment = _current_environment()
     authorizer = AgentTaskMutationAuthorizer(
-        role=_current_role(),
-        env_task_id=os.environ.get("LITEHIVE_TASK_ID"),
-        env_workspace_root=os.environ.get("LITEHIVE_WORKSPACE_ROOT"),
+        role=environment.agent_role,
+        env_task_id=environment.task_id,
+        env_workspace_root=environment.workspace_root,
     )
     try:
         return authorizer.authorize(requested_task_id, allowed_roles)
@@ -245,6 +248,12 @@ def resolve_active_agent_task_mutation_target(
         else:
             print(f"agent task mutation failed: {exc}")
         raise SystemExit(1)
+
+
+def _subagent_id_from_environment(environment: LitehiveEnvironment) -> SubagentId | None:
+    if environment.subagent_id is None:
+        return None
+    return SubagentId(environment.subagent_id)
 
 
 def _agent_task_mutator(target: AgentTaskMutationTarget):
