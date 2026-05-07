@@ -59,9 +59,9 @@ def test_subagent_manager_constructor_stores_injected_collaborators(tmp_path: Pa
         subagent_ids=subagent_ids,
     )
 
-    assert manager.root == tmp_path.resolve()
     assert manager.execution_root == (tmp_path / "execution-root").resolve()
     assert manager.workspace is workspace
+    assert manager.workspace.root == tmp_path.resolve()
     assert manager.config is config
     assert manager.sandbox is sandbox
     assert manager.sessions is sessions

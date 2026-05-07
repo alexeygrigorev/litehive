@@ -218,7 +218,6 @@ class SubagentManager:
         that owns persistence for snapshots, streams, PID metadata, and
         inactivity checks.
         """
-        self.root = workspace.root.resolve()
         self.execution_root = execution_root.resolve()
         self.workspace = workspace
         self.config = config
@@ -282,7 +281,7 @@ class SubagentManager:
         """
         subagent_id = self.subagent_ids.reserve_next_id(task)
         folder_name = f"{subagent_id}-{role}"
-        base = task_dir(self.root, task) / "subagents" / folder_name
+        base = task_dir(self.workspace.root.resolve(), task) / "subagents" / folder_name
         base.mkdir(parents=True, exist_ok=False)
 
         engine_adapter = self.engines.engine_for(engine_name)
@@ -416,7 +415,7 @@ class SubagentManager:
 
         task_env = {
             "LITEHIVE_TASK_ID": task.id,
-            "LITEHIVE_WORKSPACE_ROOT": str(self.root),
+            "LITEHIVE_WORKSPACE_ROOT": str(self.workspace.root.resolve()),
             "LITEHIVE_AGENT_ROLE": role,
             "LITEHIVE_SUBAGENT_ID": context.ref.id,
             "LITEHIVE_STAGE": agent_stage_for_task(task, role).value,
