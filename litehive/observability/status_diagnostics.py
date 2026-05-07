@@ -27,13 +27,13 @@ from litehive.observability.status_loaders import (
     _load_state_for_status,
 )
 from litehive.observability.status_probes import (
-    _probe_daemon_status,
-    _probe_heru_link,
-    _probe_last_cycle,
-    _probe_origin_divergence,
+    _probe_daemon_status_for_workspace,
+    _probe_heru_link_for_workspace,
+    _probe_last_cycle_for_workspace,
+    _probe_origin_divergence_for_workspace,
     _probe_pool_stop_reason,
-    _probe_runner_state,
-    _probe_task_index_references,
+    _probe_runner_state_for_workspace,
+    _probe_task_index_references_for_workspace,
     _probe_task_status_damage,
 )
 from litehive.observability.status_rendering import (  # noqa: F401
@@ -68,7 +68,6 @@ def collect_status_snapshot_for_workspace(workspace: Workspace) -> StatusSnapsho
     Status code receives an injected workspace so diagnostics do
     not rebuild dependencies during read-only status collection.
     """
-    root = workspace.root
     config, config_issues = _load_config_for_status_for_workspace(workspace)
     state, state_issues = _load_state_for_status(workspace)
     runner, runner_issue = _load_runner_status_for_status_for_workspace(workspace)
@@ -82,13 +81,13 @@ def collect_status_snapshot_for_workspace(workspace: Workspace) -> StatusSnapsho
         *state_issues,
         *runner_issues_list,
         *monitoring_issues,
-        *_probe_runner_state(root, state, runner),
-        *_probe_daemon_status(root),
-        *_probe_last_cycle(root),
-        *_probe_heru_link(root),
+        *_probe_runner_state_for_workspace(workspace, state, runner),
+        *_probe_daemon_status_for_workspace(workspace),
+        *_probe_last_cycle_for_workspace(workspace),
+        *_probe_heru_link_for_workspace(workspace),
         *_probe_pool_stop_reason(state),
-        *_probe_origin_divergence(root, state),
-        *_probe_task_index_references(root, state, state_issues),
+        *_probe_origin_divergence_for_workspace(workspace, state),
+        *_probe_task_index_references_for_workspace(workspace, state, state_issues),
         *_probe_task_status_damage(workspace, state, runner, state_issues),
     ]
     return StatusSnapshot(
@@ -108,7 +107,6 @@ def collect_operational_status_snapshot_for_workspace(workspace: Workspace) -> S
     explicit avoids a hidden root-to-workspace conversion on every
     status render.
     """
-    root = workspace.root
     config, config_issues = _load_config_for_status_for_workspace(workspace)
     state, state_issues = _load_state_for_status(workspace)
     runner, runner_issue = _load_runner_status_for_status_for_workspace(workspace)
@@ -122,7 +120,7 @@ def collect_operational_status_snapshot_for_workspace(workspace: Workspace) -> S
         *state_issues,
         *runner_issues_list,
         *monitoring_issues,
-        *_probe_runner_state(root, state, runner),
+        *_probe_runner_state_for_workspace(workspace, state, runner),
         *_probe_pool_stop_reason(state),
     ]
     return StatusSnapshot(

@@ -17,8 +17,7 @@ from typing import Mapping
 
 from pydantic import ValidationError
 
-from litehive.config.paths import workspace_path
-from litehive.daemon.logs import latest_run_all_log_dir
+from litehive.daemon.logs import latest_run_all_log_dir_for_workspace
 from litehive.daemon.registry import daemon_metadata
 from litehive.domain.common import PipelineStatus, RuntimeStageStatus, TaskExecutionStatus, TaskStatus
 from litehive.domain.runtime import RunnerStatusState
@@ -41,6 +40,17 @@ from litehive.workspace import Workspace
 
 def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusState) -> list[StatusIssue]:
     """
+    Path-based compatibility wrapper for callers not yet on ``Workspace``.
+    """
+    return _probe_runner_state_for_workspace(Workspace.from_path(root), state, runner)
+
+
+def _probe_runner_state_for_workspace(
+    workspace: Workspace,
+    state: WorkspaceState,
+    runner: RunnerStatusState,
+) -> list[StatusIssue]:
+    """
     Detect a wedged runner or a stale runner lock.
 
     "Wedged" means a live PID but a stale heartbeat — the
@@ -52,7 +62,7 @@ def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusS
     issues: list[StatusIssue] = []
     active_task_id = runner.active_task_id or state.active_task_id
     live_pid = runner_pid_is_alive(runner.pid)
-    lock_path = workspace_path(root, "runtime", ".runner.lock")
+    lock_path = workspace.runtime_path("runtime", ".runner.lock")
 
     if live_pid:
         heartbeat_age_seconds = _heartbeat_age_seconds(runner.heartbeat_at)
@@ -87,6 +97,13 @@ def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusS
 
 def _probe_daemon_status(root: Path) -> list[StatusIssue]:
     """
+    Path-based compatibility wrapper for callers not yet on ``Workspace``.
+    """
+    return _probe_daemon_status_for_workspace(Workspace.from_path(root))
+
+
+def _probe_daemon_status_for_workspace(workspace: Workspace) -> list[StatusIssue]:
+    """
     Flag a daemon whose lockfile says ``stale`` with a dead PID.
 
     The combination means the daemon supervisor crashed without
@@ -96,7 +113,7 @@ def _probe_daemon_status(root: Path) -> list[StatusIssue]:
     surfaced so the operator can fix the lock file directly.
     """
     try:
-        entry = daemon_metadata(root)
+        entry = daemon_metadata(workspace.root)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         return [
             StatusIssue(
@@ -125,6 +142,13 @@ def _probe_daemon_status(root: Path) -> list[StatusIssue]:
 
 def _probe_last_cycle(root: Path) -> list[StatusIssue]:
     """
+    Path-based compatibility wrapper for callers not yet on ``Workspace``.
+    """
+    return _probe_last_cycle_for_workspace(Workspace.from_path(root))
+
+
+def _probe_last_cycle_for_workspace(workspace: Workspace) -> list[StatusIssue]:
+    """
     Catch a stalled cycle where repair tracebacked and the daemon stopped.
 
     Looks for a ``*-repair.log`` with a traceback that has no
@@ -133,7 +157,7 @@ def _probe_last_cycle(root: Path) -> list[StatusIssue]:
     instead of leaving the workspace looking healthy when in
     fact the daemon is silently broken.
     """
-    latest_dir = latest_run_all_log_dir(root)
+    latest_dir = latest_run_all_log_dir_for_workspace(workspace)
     if latest_dir is None:
         return []
     repair_logs = sorted(latest_dir.glob("*-repair.log"))
@@ -163,6 +187,13 @@ def _probe_last_cycle(root: Path) -> list[StatusIssue]:
 
 def _probe_heru_link(root: Path) -> list[StatusIssue]:
     """
+    Path-based compatibility wrapper for callers not yet on ``Workspace``.
+    """
+    return _probe_heru_link_for_workspace(Workspace.from_path(root))
+
+
+def _probe_heru_link_for_workspace(workspace: Workspace) -> list[StatusIssue]:
+    """
     Detect a broken local heru source path in pyproject.
 
     A ``[tool.uv.sources].heru.path`` that no longer resolves
@@ -171,6 +202,7 @@ def _probe_heru_link(root: Path) -> list[StatusIssue]:
     here names the missing path before the next agent run dies
     on resolve.
     """
+    root = workspace.root
     pyproject_path = root / "pyproject.toml"
     if not pyproject_path.exists():
         return []
@@ -205,6 +237,13 @@ def _probe_heru_link(root: Path) -> list[StatusIssue]:
 
 def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIssue]:
     """
+    Path-based compatibility wrapper for callers not yet on ``Workspace``.
+    """
+    return _probe_origin_divergence_for_workspace(Workspace.from_path(root), state)
+
+
+def _probe_origin_divergence_for_workspace(workspace: Workspace, state: WorkspaceState) -> list[StatusIssue]:
+    """
     Re-surface a previous main/origin-main divergence stop.
 
     When the pool stopped on ``diverged_from_origin``, the
@@ -215,7 +254,7 @@ def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIs
     """
     if state.pool_stop_reason != "diverged_from_origin":
         return []
-    message = check_origin_divergence(root)
+    message = check_origin_divergence(workspace.root)
     if message is not None:
         detail = message
     else:
@@ -261,6 +300,17 @@ def _probe_task_index_references(
     state_issues: list[StatusIssue],
 ) -> list[StatusIssue]:
     """
+    Path-based compatibility wrapper for callers not yet on ``Workspace``.
+    """
+    return _probe_task_index_references_for_workspace(Workspace.from_path(root), state, state_issues)
+
+
+def _probe_task_index_references_for_workspace(
+    workspace: Workspace,
+    state: WorkspaceState,
+    state_issues: list[StatusIssue],
+) -> list[StatusIssue]:
+    """
     Catch queue and active references pointing at unknown task ids.
 
     Without this probe ``health`` would show a clean queue
@@ -271,7 +321,7 @@ def _probe_task_index_references(
     """
     if any(issue.key in _TASKS_UNAVAILABLE_KEYS for issue in state_issues):
         return []
-    db_path = workspace_path(root, "data.db")
+    db_path = workspace.runtime_path("data.db")
     if not db_path.exists():
         return []
     try:
@@ -327,10 +377,9 @@ def _probe_task_status_damage(
     is nothing to walk safely. Sorts the per-task issues by
     task id so successive runs produce a stable diff.
     """
-    root = workspace.root
     if any(issue.key in _TASKS_UNAVAILABLE_KEYS for issue in state_issues):
         return []
-    if not workspace_path(root, "data.db").exists():
+    if not workspace.runtime_path("data.db").exists():
         return []
     try:
         tasks = workspace.list_tasks(strict=False)

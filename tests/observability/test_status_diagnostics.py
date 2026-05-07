@@ -58,20 +58,22 @@ def test_status_snapshot_does_not_bootstrap_missing_database(tmp_path: Path) -> 
 def test_operational_status_snapshot_does_not_run_doctor_style_probes(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
     monkeypatch.setattr(
-        "litehive.observability.status_diagnostics._probe_daemon_status",
-        lambda root: (_ for _ in ()).throw(AssertionError("daemon probe should not run")),
+        "litehive.observability.status_diagnostics._probe_daemon_status_for_workspace",
+        lambda workspace: (_ for _ in ()).throw(AssertionError("daemon probe should not run")),
     )
     monkeypatch.setattr(
-        "litehive.observability.status_diagnostics._probe_last_cycle",
-        lambda root: (_ for _ in ()).throw(AssertionError("last-cycle probe should not run")),
+        "litehive.observability.status_diagnostics._probe_last_cycle_for_workspace",
+        lambda workspace: (_ for _ in ()).throw(AssertionError("last-cycle probe should not run")),
     )
     monkeypatch.setattr(
-        "litehive.observability.status_diagnostics._probe_heru_link",
-        lambda root: (_ for _ in ()).throw(AssertionError("source checkout probe should not run")),
+        "litehive.observability.status_diagnostics._probe_heru_link_for_workspace",
+        lambda workspace: (_ for _ in ()).throw(AssertionError("source checkout probe should not run")),
     )
     monkeypatch.setattr(
-        "litehive.observability.status_diagnostics._probe_task_index_references",
-        lambda root, state, state_issues: (_ for _ in ()).throw(AssertionError("task index probe should not run")),
+        "litehive.observability.status_diagnostics._probe_task_index_references_for_workspace",
+        lambda workspace, state, state_issues: (
+            _ for _ in ()
+        ).throw(AssertionError("task index probe should not run")),
     )
 
     snapshot = collect_operational_status_snapshot_for_workspace(Workspace.from_path(tmp_path))
