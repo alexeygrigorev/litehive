@@ -2,14 +2,13 @@
 Workspace bootstrap and resolution helpers.
 
 Owns three responsibilities: validating and normalizing a candidate
-workspace path (rejecting unresolved shell vars and Litehive-internal
-paths), resolving the right workspace for a CLI invocation when no
-explicit path is given, and bootstrapping a workspace on first use
-(directories, seeded config, runtime store).
+workspace path (rejecting Litehive-internal paths), resolving the right
+workspace for a CLI invocation when no explicit path is given, and
+bootstrapping a workspace on first use (directories, seeded config,
+runtime store).
 """
 
 import os
-import re
 from dataclasses import asdict
 from pathlib import Path
 
@@ -64,27 +63,6 @@ def registered_workspace_root(path: Path, registry: WorkspaceRegistry | None = N
         except OSError:
             continue
     return None
-
-
-def _reject_invalid_workspace_path(path: Path | str, source: str) -> None:
-    """
-    Reject workspace paths containing unresolved shell variables.
-
-    Catches the classic mistake of passing ``$WORKSPACE`` literally
-    (single-quoted, missed expansion) instead of the expanded
-    absolute path; without this the workspace would be bootstrapped
-    inside a directory literally named ``$WORKSPACE`` and the
-    operator would chase ghosts. ``source`` tells the operator
-    which CLI surface produced the bad value.
-    """
-    raw = str(path).strip()
-    shell_variable_pattern = r"(?<!\\)\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)"
-    match = re.search(shell_variable_pattern, raw)
-    if match is not None:
-        raise ValueError(
-            f"invalid workspace root from {source}: {raw!r} contains unresolved shell variable "
-            f"syntax ({match.group(0)!r}); pass the expanded absolute path instead"
-        )
 
 
 def _workspace_config_template_path() -> Path:
@@ -167,14 +145,12 @@ def normalize_workspace_root(root: Path, source: str, registry: WorkspaceRegistr
     """
     Validate, expand, and re-route a candidate workspace path.
 
-    Rejects unresolved shell vars and Litehive-internal paths,
-    and redirects worktree paths back to the owning workspace so
-    a CLI run inside a managed worktree still acts on the real
-    workspace. ``source`` is woven into errors so an operator
-    knows which input (env, ``--workspace``, …) produced a bad
-    value.
+    Rejects Litehive-internal paths and redirects worktree paths
+    back to the owning workspace so a CLI run inside a managed
+    worktree still acts on the real workspace. ``source`` is woven
+    into errors so an operator knows which input (env,
+    ``--workspace``, …) produced a bad value.
     """
-    _reject_invalid_workspace_path(root, source=source)
     resolved_input = Path(root).expanduser().resolve()
     _reject_litehive_control_paths(resolved_input, source=source)
 

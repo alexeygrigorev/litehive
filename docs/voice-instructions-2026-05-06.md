@@ -1872,10 +1872,17 @@ Legend:
   config template path through `_workspace_config_template_path()`.
   Verified with `rg` for module-level constants plus workspace
   bootstrap/resolution tests.
-- [ ] W2. Review and likely remove
+- [x] W2. Review and likely remove
   `workspace.config.template.unresolved.shell.variable`; the note
   questions why it exists.
   Source: note 5, 06:45-06:54.
+  Completed 2026-05-07: found no live symbol by that dotted name;
+  the remaining exact code path was the workspace-root unresolved
+  shell-variable rejection in `config/workspace.py` plus dedicated
+  resolution tests. Removed the special validation branch and its
+  tests, and updated `Workspace.from_path` documentation so workspace
+  normalization now only documents current Litehive-internal path
+  rejection and managed-worktree remapping.
 - [ ] W3. Loading a workspace should not create a workspace. If a path
   is not an existing LiteHive project, raise an error.
   Source: note 5, 07:33-08:59.

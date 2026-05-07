@@ -112,18 +112,6 @@ def test_resolve_workspace_uses_injected_registry(tmp_path: Path, monkeypatch: p
     assert resolve_workspace(task.id, registry=registry) == workspace.resolve()
 
 
-def test_resolve_workspace_rejects_unresolved_workspace_root_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    ensure_workspace(tmp_path)
-
-    monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", "$tmpdir/project")
-    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
-
-    with pytest.raises(ValueError, match="unresolved shell variable"):
-        resolve_workspace(None)
-
-
 def test_resolve_workspace_rejects_nested_workspace_root_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="Nested env probe")
@@ -192,21 +180,6 @@ def test_ensure_workspace_rejects_nested_subdirectory_of_existing_workspace(tmp_
         ensure_workspace(nested_root)
 
 
-def test_ensure_workspace_rejects_leading_unresolved_shell_var() -> None:
-    with pytest.raises(ValueError, match="unresolved shell variable syntax.*expanded absolute path"):
-        ensure_workspace(Path("$tmpdir/project"))
-
-
-def test_ensure_workspace_rejects_embedded_unresolved_shell_var() -> None:
-    with pytest.raises(ValueError, match="unresolved shell variable syntax.*expanded absolute path"):
-        ensure_workspace(Path("/tmp/$tmpdir/project"))
-
-
-def test_ensure_workspace_rejects_braced_unresolved_shell_var() -> None:
-    with pytest.raises(ValueError, match="unresolved shell variable syntax.*expanded absolute path"):
-        ensure_workspace(Path("/tmp/${tmpdir}/project"))
-
-
 @pytest.mark.parametrize(
     ("target_factory", "message"),
     [
@@ -226,28 +199,6 @@ def test_ensure_workspace_rejections_do_not_create_nested_workspace_side_effects
     target.mkdir(parents=True, exist_ok=True)
 
     with pytest.raises(ValueError, match=message):
-        ensure_workspace(target)
-
-    assert not workspace_dir(target).exists()
-
-
-@pytest.mark.parametrize(
-    "target_factory",
-    [
-        lambda root: Path("$tmpdir/project"),
-        lambda root: root / "$tmpdir" / "project",
-        lambda root: root / "${tmpdir}" / "project",
-    ],
-)
-def test_ensure_workspace_unresolved_shell_var_rejections_do_not_create_side_effects(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    target_factory,
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    target = target_factory(tmp_path)
-
-    with pytest.raises(ValueError, match="unresolved shell variable syntax.*expanded absolute path"):
         ensure_workspace(target)
 
     assert not workspace_dir(target).exists()

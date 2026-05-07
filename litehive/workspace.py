@@ -81,9 +81,9 @@ class Workspace:
         Boundary constructor: validate ``root`` and return a ``Workspace``.
 
         The only place a raw ``Path`` becomes a ``Workspace``. Runs
-        ``normalize_workspace_root`` so unresolved shell variables,
-        paths nested inside ``.litehive/`` control directories, and
-        managed-worktree paths are rejected up front — every
+        ``normalize_workspace_root`` so paths nested inside
+        ``.litehive/`` control directories and managed-worktree
+        paths are rejected up front — every
         downstream helper can then trust the ``root`` field without
         re-validating. Tests that need a ``Workspace`` for a
         ``tmp_path`` should also go through here so they exercise
