@@ -20,7 +20,7 @@ from litehive.domain.task import (
 from litehive.state.store import runtime_store_for_workspace
 
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
-from litehive.state.locking import workspace_lock, workspace_mutation_guard, workspace_mutation_guard_for_workspace
+from litehive.state.locking import workspace_lock, workspace_mutation_guard_for_workspace
 from litehive.state.persist import (
     load_state_for_workspace,
     save_state_without_runner_guard_for_workspace,
@@ -422,20 +422,19 @@ def _persist_created_tasks_for_workspace(
 
 def save_task_runtime(root: Path, task: TaskRecord) -> None:
     """
+    Path-based compatibility wrapper for guarded task runtime persistence.
+    """
+    save_task_runtime_for_workspace(Workspace.from_path(root), task)
+
+
+def save_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
+    """
     Persist a task's runtime row under the workspace mutation guard.
 
     Called by the lifecycle's runtime-update helpers when they need a
     fresh state snapshot without any accompanying journal or queue
     change; the guard makes the snapshot safe to take while a runner is
     also touching workspace state on a different transition.
-    """
-    with workspace_mutation_guard(root):
-        write_task_runtime(root, task)
-
-
-def save_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
-    """
-    Persist a task's runtime row under the workspace mutation guard.
     """
     with workspace_mutation_guard_for_workspace(workspace):
         write_task_runtime_for_workspace(workspace, task)

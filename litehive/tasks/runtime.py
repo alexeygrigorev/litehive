@@ -22,7 +22,7 @@ from litehive.domain.task import TaskRecord
 
 from litehive.state.records import (
     save_task_runtime_for_workspace,
-    write_task_runtime,
+    write_task_runtime_for_workspace,
 )
 from litehive.state.locking import workspace_lock, workspace_mutation_guard_for_workspace
 from litehive.state.persist import load_state_for_workspace, persist_task_and_state_for_workspace
@@ -220,7 +220,7 @@ def finish_task_run_transition_for_workspace(
             and task.pipeline_status == PipelineStatus.DONE
             and not state_changed
         ):
-            write_task_runtime(root, task)
+            write_task_runtime_for_workspace(workspace, task)
             return task
         persist_task_and_state_for_workspace(workspace, task=task, state=state)
         return task
