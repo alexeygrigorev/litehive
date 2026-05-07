@@ -39,6 +39,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Move recovery scope-analysis internals from raw root to injected `Workspace`.
 - [x] Move daemon termination helpers from raw root to injected `Workspace`.
 - [x] Move workspace health daemon-status lookup to workspace-native registry helper.
+- [x] Move daemon start/stop internals to workspace-native registry helpers.
 - [x] Migrate `config.loading.load_config(root)` callers that already hold `Workspace`.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`

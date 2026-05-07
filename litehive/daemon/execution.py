@@ -52,12 +52,10 @@ from .logs import DaemonLogs, latest_matching, latest_run_all_log_dir_for_worksp
 
 from .registry import (
     DaemonRegistryEntry,
-    daemon_metadata,
     daemon_metadata_for_workspace,
-    get_workspace_daemon,
+    get_workspace_daemon_for_workspace,
     register_daemon_for_workspace,
     touch_daemon_for_workspace,
-    unregister_daemon as unregister_daemon_by_path,
     unregister_daemon_for_workspace,
 )
 from .termination import force_kill_recorded_daemon, terminate_child_process, terminate_recorded_daemon
@@ -613,14 +611,14 @@ def start_background_daemon(workspace: Path) -> int:
     workspace = workspace.resolve()
     workspace_obj = build_workspace(workspace)
     daemon_config = workspace_obj.load_config().daemon
-    existing = daemon_metadata(workspace)
+    existing = daemon_metadata_for_workspace(workspace_obj)
     if existing is not None and existing.status == "running":
         if existing.pid is not None and _daemon_healthcheck_failed(existing, daemon_config):
             force_kill_recorded_daemon(workspace_obj, pid=existing.pid, config=daemon_config)
         else:
             raise RuntimeError(f"daemon already running for {workspace}: pid={existing.pid}")
     if existing is not None and existing.status == "stale":
-        unregister_daemon_by_path(workspace)
+        unregister_daemon_for_workspace(workspace_obj)
     create_workspace_venvs_ready_for_workspace(workspace_obj)
     project_root = Path(__file__).resolve().parents[2]
     child_env = os.environ.copy()
@@ -648,7 +646,7 @@ def start_background_daemon(workspace: Path) -> int:
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError("daemon failed to start")
-        entry = get_workspace_daemon(workspace)
+        entry = get_workspace_daemon_for_workspace(workspace_obj)
         if entry is not None and entry.pid == process.pid:
             return process.pid
         time.sleep(daemon_config.startup_poll_interval_seconds)
@@ -669,14 +667,14 @@ def stop_workspace_daemon(workspace: Path) -> DaemonRegistryEntry | None:
     workspace = workspace.resolve()
     workspace_obj = build_workspace(workspace)
     daemon_config = workspace_obj.load_config().daemon
-    entry = daemon_metadata(workspace)
+    entry = daemon_metadata_for_workspace(workspace_obj)
     if entry is None:
         return None
     if entry.status != "running":
-        unregister_daemon_by_path(workspace)
+        unregister_daemon_for_workspace(workspace_obj)
         return None
     if entry.pid is None:
-        unregister_daemon_by_path(workspace)
+        unregister_daemon_for_workspace(workspace_obj)
         return None
     terminate_recorded_daemon(workspace_obj, pid=entry.pid, config=daemon_config)
     return entry

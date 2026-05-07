@@ -132,8 +132,8 @@ def test_start_background_daemon_strips_agent_env(tmp_path: Path, monkeypatch) -
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
     monkeypatch.setenv("LITEHIVE_STAGE", "implementing")
     monkeypatch.setenv("LITEHIVE_TASK_ID", "T-0446")
-    monkeypatch.setattr("litehive.daemon.execution.daemon_metadata", lambda workspace: None)
-    monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda workspace: None)
+    monkeypatch.setattr("litehive.daemon.execution.daemon_metadata_for_workspace", lambda workspace: None)
+    monkeypatch.setattr("litehive.daemon.execution.unregister_daemon_for_workspace", lambda workspace: None)
     monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready_for_workspace", lambda *args, **kwargs: None)
 
     captured: dict[str, object] = {}
@@ -151,11 +151,11 @@ def test_start_background_daemon_strips_agent_env(tmp_path: Path, monkeypatch) -
 
     monkeypatch.setattr("litehive.daemon.execution.subprocess.Popen", fake_popen)
     monkeypatch.setattr(
-        "litehive.daemon.execution.get_workspace_daemon",
+        "litehive.daemon.execution.get_workspace_daemon_for_workspace",
         lambda workspace: DaemonRegistryEntry(
             status="running",
             pid=4321,
-            workspace=str(workspace.resolve()),
+            workspace=str(workspace.root),
             started_at=None,
             heartbeat_at=None,
             log_dir=None,
@@ -253,11 +253,11 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
 
         monkeypatch.setattr("litehive.daemon.execution.subprocess.Popen", lambda *args, **kwargs: FakeProcess())
         monkeypatch.setattr(
-            "litehive.daemon.execution.get_workspace_daemon",
+            "litehive.daemon.execution.get_workspace_daemon_for_workspace",
             lambda workspace: DaemonRegistryEntry(
                 status="running",
                 pid=4321,
-                workspace=str(workspace.resolve()),
+                workspace=str(workspace.root),
                 started_at=None,
                 heartbeat_at=None,
                 log_dir=None,
@@ -315,11 +315,11 @@ def test_start_background_daemon_does_not_kill_live_pid_from_stale_metadata(tmp_
 
         monkeypatch.setattr("litehive.daemon.execution.subprocess.Popen", lambda *args, **kwargs: FakeProcess())
         monkeypatch.setattr(
-            "litehive.daemon.execution.get_workspace_daemon",
+            "litehive.daemon.execution.get_workspace_daemon_for_workspace",
             lambda workspace: DaemonRegistryEntry(
                 status="running",
                 pid=4321,
-                workspace=str(workspace.resolve()),
+                workspace=str(workspace.root),
                 started_at=None,
                 heartbeat_at=None,
                 log_dir=None,
