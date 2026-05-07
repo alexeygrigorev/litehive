@@ -22,7 +22,6 @@ from litehive.config.engine_models import (
 )
 from litehive.config.model import LitehiveConfig
 from litehive.domain.task import TaskRecord
-from litehive.state.records import get_task
 from litehive.workspace import Workspace
 
 from .nodes.agent import (
@@ -71,7 +70,6 @@ class ConfigBackedEngineSelector:
         self.config = config
         self.engine_factory = engine_factory
         self.workspace = workspace
-        self.workspace_root = workspace.root
         self.engine_override = engine_override
         self.model_override = model_override
         self.check_quota = check_quota
@@ -87,7 +85,7 @@ class ConfigBackedEngineSelector:
         paths.
         """
         if getattr(state, "task_id", None):
-            task = get_task(self.workspace_root, state.task_id)
+            task = self.workspace.get_task(state.task_id)
             if task is not None:
                 return task
         return TaskRecord(
