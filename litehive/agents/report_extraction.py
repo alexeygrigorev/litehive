@@ -1,9 +1,11 @@
 """Stage report extraction from subagent activity."""
 
 from litehive.domain.reports import (
+    FailureDiagnostics,
     REPORT_VERDICT_KINDS,
     ReportPipelineState,
     StageReport,
+    TaskActivityEntry,
     canonical_report_pipeline_state,
     canonical_stage_report_verdict,
 )
@@ -73,14 +75,8 @@ def stage_report_from_subagent(
     else:
         failure_classification = None
     report_verdict = canonical_stage_report_verdict(latest.verdict) or "reject"
-    if latest.message:
-        summary = latest.message.splitlines()[0]
-    else:
-        summary = f"{pipeline_state} {latest.verdict}"
-    if failure_classification:
-        failure_diagnostics = {"verdict_classification": failure_classification, "role": latest.role}
-    else:
-        failure_diagnostics = {}
+    summary = _stage_report_summary(latest, pipeline_state)
+    failure_diagnostics = _failure_diagnostics_for_activity(latest, failure_classification)
     return StageReport(
         task_id=task.id,
         pipeline_state=pipeline_state,
@@ -91,3 +87,24 @@ def stage_report_from_subagent(
         failure_classification=failure_classification,
         failure_diagnostics=failure_diagnostics,
     )
+
+
+def _stage_report_summary(latest: TaskActivityEntry, pipeline_state: ReportPipelineState) -> str:
+    """
+    Return the one-line summary persisted on a stage report.
+    """
+    if latest.message:
+        return latest.message.splitlines()[0]
+    return f"{pipeline_state} {latest.verdict}"
+
+
+def _failure_diagnostics_for_activity(
+    latest: TaskActivityEntry,
+    failure_classification: str | None,
+) -> FailureDiagnostics:
+    """
+    Return typed diagnostics derived from a classified activity entry.
+    """
+    if failure_classification is None:
+        return FailureDiagnostics({})
+    return FailureDiagnostics({"verdict_classification": failure_classification, "role": latest.role})

@@ -890,9 +890,17 @@ Legend:
   boundary and persisted JSON remains an object, but report and
   outcome consumers now read a named domain type rather than an
   anonymous dictionary.
-- [ ] D3. Re-read and verify every previous `agents/parsing.py`
+- [x] D3. Re-read and verify every previous `agents/parsing.py`
   comment; the note says the same feedback keeps recurring.
   Source: note 4, 00:25-00:31.
+  Verified 2026-05-07: re-read the older feedback and
+  `docs/code-analysis-2026-05-03.md` entries for the old
+  `agents/parsing.py`. Current `agents.report_extraction` has no
+  `root` parameter/default, uses the domain `REPORT_VERDICT_KINDS`,
+  has no `type: ignore`, treats missing agent verdicts as
+  `MissingVerdictError` instead of synthetic rejects, and now hoists
+  summary plus typed `FailureDiagnostics` construction into named
+  helpers.
 - [ ] D4. Review the domain model separately across the codebase.
   The target is readability and domain ownership, not a pile of
   unclear functions.
