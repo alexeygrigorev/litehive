@@ -8,7 +8,6 @@ must not reach into.
 """
 
 import logging
-from pathlib import Path
 
 from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStage, TaskStatus, utcnow
 from litehive.domain.outcomes import TaskOutcomeKind
@@ -531,13 +530,6 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
         return state
 
 
-def active_task_markers(root: Path, state: WorkspaceState | None = None) -> dict[str, list[str]]:
-    """
-    Path-based compatibility wrapper for active-task marker collection.
-    """
-    return active_task_markers_for_workspace(Workspace.from_path(root), state)
-
-
 def active_task_markers_for_workspace(workspace: Workspace, state: WorkspaceState | None = None) -> dict[str, list[str]]:
     """
     Collect every signal that says "this task is active", keyed by task id.
@@ -574,13 +566,6 @@ def active_task_markers_for_workspace(workspace: Workspace, state: WorkspaceStat
         if task.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING:
             markers.setdefault(task.id, []).append("runtime.pipeline.execution_status=running")
     return markers
-
-
-def validate_single_active_task(root: Path, state: WorkspaceState | None = None) -> None:
-    """
-    Path-based compatibility wrapper for the single-active-task guard.
-    """
-    validate_single_active_task_for_workspace(Workspace.from_path(root), state)
 
 
 def validate_single_active_task_for_workspace(workspace: Workspace, state: WorkspaceState | None = None) -> None:

@@ -53,7 +53,6 @@ from litehive.tasks.queue_selection import (
     _resolve_next_task_from_snapshot,
     _resolve_next_task_from_state,
     _task_selection_key,
-    active_task_markers,
     active_task_markers_for_workspace,
     clear_active_task,
     dequeue_next_task,
@@ -63,7 +62,6 @@ from litehive.tasks.queue_selection import (
     restore_missing_queued_tasks,
     restore_untouched_active_task,
     set_active_task,
-    validate_single_active_task,
     validate_single_active_task_for_workspace,
 )
 
@@ -95,7 +93,6 @@ __all__ = [
     "_should_requeue_commit_stage_task",
     "_task_blockers",
     "_task_selection_key",
-    "active_task_markers",
     "active_task_markers_for_workspace",
     "canonicalize_resumable_queue_task",
     "clear_active_task",
@@ -119,7 +116,6 @@ __all__ = [
     "resumable_running_stage",
     "set_active_task",
     "task_has_resume_marker",
-    "validate_single_active_task",
     "validate_single_active_task_for_workspace",
     "validate_task_dependencies_for_workspace",
 ]
