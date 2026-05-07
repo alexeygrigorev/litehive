@@ -6,8 +6,6 @@ information. They are the leaf module of the queue split — both
 ``queue_mutations`` and ``queue_selection`` import from here.
 """
 
-from pathlib import Path
-
 from litehive.domain.common import (
     PipelineStatus,
     RuntimeStageStatus,
@@ -292,13 +290,6 @@ def _task_blockers(task: TaskRecord, tasks_by_id: dict[str, TaskRecord]) -> list
         if not _is_task_completed(dependency):
             blockers.append(f"{dependency.id} ({dependency.status}/{dependency.pipeline_status})")
     return blockers
-
-
-def validate_task_dependencies(root: Path, task_id: str, depends_on: list[str]) -> None:
-    """
-    Path-based compatibility wrapper for dependency validation.
-    """
-    validate_task_dependencies_for_workspace(Workspace.from_path(root), task_id=task_id, depends_on=depends_on)
 
 
 def validate_task_dependencies_for_workspace(workspace: Workspace, task_id: str, depends_on: list[str]) -> None:
