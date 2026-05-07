@@ -19,6 +19,7 @@ from pathlib import Path
 from litehive.config.paths import workspace_path
 from litehive.domain.task import TaskRecord
 from litehive.fs_cleanup import remove_tree_logged
+from litehive.workspace import Workspace
 
 # Use the ``litehive.worktree`` namespace so caplog filters that watch
 # the worktree subsystem catch our messages too — these helpers were
@@ -38,6 +39,13 @@ def task_worktree_path(root: Path, task: TaskRecord) -> Path:
     place to change it.
     """
     return workspace_path(root, "worktrees") / f"{task.id}-{task.slug}"
+
+
+def task_worktree_path_for_workspace(workspace: Workspace, task: TaskRecord) -> Path:
+    """
+    Compute the canonical worktree location for an injected workspace.
+    """
+    return task_worktree_path(workspace.root, task)
 
 
 def task_worktree_branch(task: TaskRecord) -> str:
@@ -72,6 +80,13 @@ def is_managed_worktree_path(root: Path, worktree_path: str | None) -> bool:
         return False
 
 
+def is_managed_worktree_path_for_workspace(workspace: Workspace, worktree_path: str | None) -> bool:
+    """
+    Whether a stored worktree path belongs to an injected workspace.
+    """
+    return is_managed_worktree_path(workspace.root, worktree_path)
+
+
 def resolve_recorded_worktree_path(root: Path, worktree_path: str | None) -> Path | None:
     """
     Turn a stored worktree path back into an absolute resolved ``Path``.
@@ -89,6 +104,16 @@ def resolve_recorded_worktree_path(root: Path, worktree_path: str | None) -> Pat
     if not path.is_absolute():
         path = root / path
     return path.resolve()
+
+
+def resolve_recorded_worktree_path_for_workspace(
+    workspace: Workspace,
+    worktree_path: str | None,
+) -> Path | None:
+    """
+    Turn a stored worktree path back into an absolute path for an injected workspace.
+    """
+    return resolve_recorded_worktree_path(workspace.root, worktree_path)
 
 
 def serialize_worktree_path(path: Path) -> str:
@@ -135,3 +160,10 @@ def ensure_worktree_venv_link(root: Path, worktree_path: Path) -> Path | None:
 
     worktree_venv.symlink_to(main_venv, target_is_directory=main_venv.is_dir())
     return worktree_venv
+
+
+def ensure_worktree_venv_link_for_workspace(workspace: Workspace, worktree_path: Path) -> Path | None:
+    """
+    Symlink a worktree venv to the injected workspace's main venv.
+    """
+    return ensure_worktree_venv_link(workspace.root, worktree_path)

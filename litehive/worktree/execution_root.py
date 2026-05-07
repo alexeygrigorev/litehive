@@ -22,10 +22,10 @@ from litehive.state.records import (
 )
 from litehive.tasks.journal import append_journal
 from litehive.worktree.paths import (
-    ensure_worktree_venv_link,
-    resolve_recorded_worktree_path,
+    ensure_worktree_venv_link_for_workspace,
+    resolve_recorded_worktree_path_for_workspace,
     serialize_worktree_path,
-    task_worktree_path,
+    task_worktree_path_for_workspace,
 )
 from litehive.workspace import Workspace
 
@@ -47,19 +47,18 @@ def resolve_task_execution_root_for_workspace(
     on top of fresh code). A failed rebase lands in the merge-resolver
     agent rather than aborting the task.
     """
-    root = workspace.root
-    if not is_git_repo(root):
-        return root
+    if not is_git_repo(workspace.root):
+        return workspace.root
 
     merge_config = config or workspace.load_config()
     recorded_path = get_task_worktree_path(task)
-    worktree_path = resolve_recorded_worktree_path(root, recorded_path)
+    worktree_path = resolve_recorded_worktree_path_for_workspace(workspace, recorded_path)
     if worktree_path is not None:
         if not worktree_path.exists():
             set_task_worktree_path(task, None)
             workspace.save_task(task)
         else:
-            main_head = current_head(root)
+            main_head = current_head(workspace.root)
             if main_head:
                 rebased = rebase_worktree_onto(worktree_path, main_head)
                 if not rebased:
@@ -71,7 +70,7 @@ def resolve_task_execution_root_for_workspace(
                     run_worktree_merge_agent(workspace, worktree_path, task, main_head, config=merge_config)
             return worktree_path
 
-    worktree_path = task_worktree_path(root, task)
+    worktree_path = task_worktree_path_for_workspace(workspace, task)
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
     if worktree_path.exists():
         remove_tree_logged(
@@ -79,8 +78,8 @@ def resolve_task_execution_root_for_workspace(
             logger=logger,
             target_label="task worktree directory",
         )
-    add_worktree(root, worktree_path, ref=current_head(root) or "HEAD")
-    ensure_worktree_venv_link(root, worktree_path)
+    add_worktree(workspace.root, worktree_path, ref=current_head(workspace.root) or "HEAD")
+    ensure_worktree_venv_link_for_workspace(workspace, worktree_path)
     set_task_worktree_path(task, serialize_worktree_path(worktree_path))
     workspace.save_task(task)
     append_journal(workspace, task, f"Created task worktree at `{get_task_worktree_path(task)}`.")
