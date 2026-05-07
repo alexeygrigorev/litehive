@@ -213,7 +213,8 @@ def test_runtime_failed_run_projection_does_not_seed_fresh_lifecycle_state(tmp_p
     )
     save_task(tmp_path, task)
 
-    state = _load_or_initialize(task.id, tmp_path, SqlitePersistence(Workspace.from_path(tmp_path)))
+    workspace = Workspace.from_path(tmp_path)
+    state = _load_or_initialize(task.id, workspace, SqlitePersistence(workspace))
 
     assert state.entry_stage == "implementing"
     assert state.failed_run_history == {}

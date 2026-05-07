@@ -153,7 +153,7 @@ def run_task_for_workspace(
                 rejection_loop_limit=resolve_task_rejection_loop_limit(task, config),
             ),
         )
-        _load_or_initialize(task.id, root, persistence)
+        _load_or_initialize(task.id, workspace, persistence)
 
         factory = engine_factory or heru_engine_factory(workspace, config)
         selector = ConfigBackedEngineSelector(

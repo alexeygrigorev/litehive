@@ -6,8 +6,6 @@ mid-flight. These helpers decide whether to create, load, or reset that
 row before the state machine starts driving stages.
 """
 
-from pathlib import Path
-
 from litehive.domain.common import (
     PipelineState,
     PipelineStatus,
@@ -16,13 +14,13 @@ from litehive.domain.common import (
     canonical_pipeline_state,
 )
 from litehive.domain.task import TaskRecord
-from litehive.state.records import get_task
+from litehive.workspace import Workspace
 
 from .persistence import FailedRunRecord, SqlitePersistence, TaskNotFound, TaskState
 from .types import PipelineMode
 
 
-def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqlitePersistence) -> TaskState:
+def _load_or_initialize(task_id: str, workspace: Workspace, persistence: SqlitePersistence) -> TaskState:
     """
     Return a ``TaskState`` for ``task_id``, creating the row if needed.
 
@@ -32,7 +30,7 @@ def _load_or_initialize(task_id: str, workspace_root: Path, persistence: SqliteP
     drifted from the launch request (reset while preserving the
     cross-run failure/recovery memory).
     """
-    task_record = get_task(workspace_root, task_id)
+    task_record = workspace.get_task(task_id)
     if task_record is None:
         raise LookupError(f"no task record for {task_id!r}")
     raw = task_record.pipeline_mode
