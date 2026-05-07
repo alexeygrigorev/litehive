@@ -29,7 +29,6 @@ from litehive.config.engine_models import resolve_task_rejection_loop_limit, res
 from litehive.git.ops import GitError
 from litehive.domain.common import PipelineState
 from litehive.domain.task import TaskRecord
-from litehive.state.records import get_task
 from litehive.state.locking import runner_heartbeat, workspace_runner_guard
 
 from litehive.roles.base import PromptContext
@@ -63,7 +62,9 @@ from .worktree_setup import (
     _worktree_metadata_repair,
     _worktree_missing_probe,
     build_commit_node,
+    build_commit_node_for_workspace,
     reconcile_terminal_commit_sha,
+    reconcile_terminal_commit_sha_for_workspace,
 )
 
 
@@ -169,7 +170,7 @@ def run_task_for_workspace(
             root,
             execution_root_resolver=lambda state: _resolve_hook_execution_root(root, state),
         )
-        commit_node = build_commit_node(root)
+        commit_node = build_commit_node_for_workspace(workspace)
         worktree_sync_node = _build_worktree_sync_node(workspace)
         ready_node = ReadyNode(probes=[_worktree_missing_probe(workspace)])
         pre_exec_recovery_node = PreExecRecoveryNode(
@@ -222,8 +223,8 @@ def run_task_for_workspace(
         # 4. Mirror terminal state back to the TaskRecord.
         updated_task = _sync_back(final_state, workspace) or task
         if final_state.stage in {PipelineState.DONE, PipelineState.FAILED}:
-            reconciled_task = reconcile_terminal_commit_sha(
-                root,
+            reconciled_task = reconcile_terminal_commit_sha_for_workspace(
+                workspace,
                 updated_task,
                 final_state=final_state,
                 persistence=persistence,
@@ -261,7 +262,7 @@ def _observe_transition(
     as agent verdicts.
     """
     del trans
-    task = get_task(workspace.root, state.task_id)
+    task = workspace.get_task(state.task_id)
     if task is None:
         return
     match event:

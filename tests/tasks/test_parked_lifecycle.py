@@ -226,8 +226,8 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
     assert resumed.runtime.pipeline.current_stage.status == "idle"
 
     monkeypatch.setattr(
-        "litehive.lifecycle.orchestration.build_commit_node",
-        lambda root: StubCommitNode(),
+        "litehive.lifecycle.orchestration.build_commit_node_for_workspace",
+        lambda workspace: StubCommitNode(),
     )
 
     queued = dequeue_next_task(Workspace.from_path(tmp_path))

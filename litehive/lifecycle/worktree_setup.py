@@ -14,12 +14,9 @@ from litehive.domain.task import TaskRecord
 from litehive.git.ops import current_head
 from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
 from litehive.state.records import (
-    get_task,
     get_task_worktree_path,
-    save_task,
     set_task_commit_sha,
 )
-from litehive.worktree.cleanup import cleanup_terminal_task_worktree
 from litehive.worktree.paths import resolve_recorded_worktree_path
 from litehive.worktree.service import WorktreeService
 from litehive.workspace import Workspace
@@ -51,6 +48,13 @@ def _resolve_hook_execution_root(root: Path, state: TaskState) -> Path:
 
 def _task_recorded_worktree(root: Path, task_id: str) -> tuple[TaskRecord | None, Path | None]:
     """
+    Path-based compatibility wrapper for task worktree lookup.
+    """
+    return _task_recorded_worktree_for_workspace(Workspace.from_path(root), task_id)
+
+
+def _task_recorded_worktree_for_workspace(workspace: Workspace, task_id: str) -> tuple[TaskRecord | None, Path | None]:
+    """
     Look up the task and its on-disk worktree path together.
 
     Commit and sync nodes need both the TaskRecord (for commit message
@@ -58,7 +62,8 @@ def _task_recorded_worktree(root: Path, task_id: str) -> tuple[TaskRecord | None
     returning them in one call means a single db hit per resolution
     instead of two.
     """
-    task = get_task(root, task_id)
+    root = workspace.root
+    task = workspace.get_task(task_id)
     if task is None:
         return None, None
     recorded = get_task_worktree_path(task)
@@ -69,10 +74,16 @@ def _task_recorded_worktree(root: Path, task_id: str) -> tuple[TaskRecord | None
 
 def build_commit_node(root: Path) -> CommitNode:
     """Return the production ``GitCommitNode`` bound to this workspace; called by ``orchestration.run_task`` once per launch to wire the commit stage."""
+    return build_commit_node_for_workspace(Workspace.from_path(root))
+
+
+def build_commit_node_for_workspace(workspace: Workspace) -> CommitNode:
+    """Return the production ``GitCommitNode`` bound to an injected workspace."""
+    root = workspace.root
     return GitCommitNode(
         root,
         worktree_resolver=lambda state: _resolve_worktree(root, state),
-        task_resolver=lambda state: _task_recorded_worktree(root, state.task_id)[0],
+        task_resolver=lambda state: _task_recorded_worktree_for_workspace(workspace, state.task_id)[0],
     )
 
 
@@ -126,7 +137,6 @@ def _mark_task_interrupted_on_crash(workspace: Workspace, task: TaskRecord) -> N
     Clears active_task_id and marks the task as interrupted so the next
     runner start can resume it instead of finding stale "running" state.
     """
-    root = workspace.root
     try:
         state = load_state_for_workspace(workspace)
         if state.active_task_id == task.id:
@@ -134,11 +144,11 @@ def _mark_task_interrupted_on_crash(workspace: Workspace, task: TaskRecord) -> N
             if task.id not in state.queue:
                 state.queue.insert(0, task.id)
             save_state_for_workspace(workspace, state)
-        fresh = get_task(root, task.id)
+        fresh = workspace.get_task(task.id)
         if fresh is not None and fresh.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING:
             fresh.runtime.pipeline.execution_status = TaskExecutionStatus.INTERRUPTED
             fresh.status = TaskStatus.QUEUED
-            save_task(root, fresh)
+            workspace.save_task(fresh)
     except Exception:
         pass  # best-effort — don't mask the original crash
 
@@ -147,8 +157,7 @@ def _cleanup_terminal_worktree(workspace: Workspace, task: TaskRecord | None) ->
     """Tear down a finished task's worktree, but preserve worktrees for tasks flagged for manual review so an operator can inspect them."""
     if task is None:
         return
-    root = workspace.root
-    fresh = get_task(root, task.id)
+    fresh = workspace.get_task(task.id)
     if fresh is not None:
         task = fresh
     if task.status == TaskStatus.FLAGGED and task.flag_reason in _MANUAL_REVIEW_FLAG_REASONS:
@@ -158,6 +167,23 @@ def _cleanup_terminal_worktree(workspace: Workspace, task: TaskRecord | None) ->
 
 def reconcile_terminal_commit_sha(
     root: Path,
+    task: TaskRecord | None,
+    final_state: TaskState,
+    persistence: SqlitePersistence,
+) -> TaskRecord | None:
+    """
+    Path-based compatibility wrapper for terminal commit SHA reconciliation.
+    """
+    return reconcile_terminal_commit_sha_for_workspace(
+        Workspace.from_path(root),
+        task,
+        final_state,
+        persistence,
+    )
+
+
+def reconcile_terminal_commit_sha_for_workspace(
+    workspace: Workspace,
     task: TaskRecord | None,
     final_state: TaskState,
     persistence: SqlitePersistence,
@@ -182,10 +208,11 @@ def reconcile_terminal_commit_sha(
     if commit_result is None:
         return task
 
+    root = workspace.root
     head_sha = commit_result.head_sha or current_head(root)
     if not head_sha:
         return task
 
     set_task_commit_sha(task, head_sha)
-    save_task(root, task)
+    workspace.save_task(task)
     return task
