@@ -115,7 +115,6 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
     ``already_landed``, ``manual_conflict``, …) so the CLI can render
     a per-row status table.
     """
-    root = workspace.root
     task = workspace.get_task(candidate.task_id)
     if task is None:
         return RescueResult(
@@ -143,14 +142,14 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
         )
 
     worktree_head = git_stdout_or_none(candidate.worktree_path, "rev-parse", "HEAD")
-    main_head = current_head(root)
+    main_head = current_head(workspace.root)
 
     if not candidate.commit_shas:
         if (
             worktree_head
             and main_head
             and worktree_head != main_head
-            and _worktree_patch_already_on_main(root, worktree_head, main_head)
+            and _worktree_patch_already_on_main(workspace.root, worktree_head, main_head)
         ):
             try:
                 _finalize_rescue_for_workspace(workspace, task, outcome="already-landed", head_sha=main_head)
@@ -174,7 +173,7 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
             worktree_head
             and main_head
             and worktree_head != main_head
-            and _worktree_has_non_metadata_changes(root, candidate.worktree_path, task.id)
+            and _worktree_has_non_metadata_changes(workspace.root, candidate.worktree_path, task.id)
         ):
             try:
                 _finalize_rescue_for_workspace(workspace, task, outcome="already-landed", head_sha=main_head)
@@ -213,7 +212,7 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
             message="no worktree commits ahead of main",
         )
 
-    if worktree_head and main_head and _worktree_patch_already_on_main(root, worktree_head, main_head):
+    if worktree_head and main_head and _worktree_patch_already_on_main(workspace.root, worktree_head, main_head):
         try:
             _finalize_rescue_for_workspace(workspace, task, outcome="already-landed", head_sha=main_head)
         except WorkspaceConflictError as exc:
@@ -233,17 +232,17 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
             message="worktree patch already landed on main",
         )
 
-    stashed_metadata = _stash_litehive_changes(root)
+    stashed_metadata = _stash_litehive_changes(workspace.root)
     for commit_sha in candidate.commit_shas:
-        ok, pick_message = cherry_pick_no_commit(root, commit_sha)
+        ok, pick_message = cherry_pick_no_commit(workspace.root, commit_sha)
         if not ok:
-            conflicts = unmerged_files(root)
+            conflicts = unmerged_files(workspace.root)
             metadata_conflicts = [path for path in conflicts if _is_task_metadata_path(path, task.id)]
             if conflicts and len(metadata_conflicts) == len(conflicts):
-                _resolve_metadata_conflicts(root, metadata_conflicts)
+                _resolve_metadata_conflicts(workspace.root, metadata_conflicts)
             else:
-                cherry_pick_abort(root)
-                _restore_litehive_changes(root, stashed_metadata)
+                cherry_pick_abort(workspace.root)
+                _restore_litehive_changes(workspace.root, stashed_metadata)
                 workspace.save_task(task)
                 _ensure_unmerged_worktree_state_for_workspace(workspace, task.id, candidate.worktree_rel)
                 return RescueResult(
@@ -254,12 +253,12 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
                     message=pick_message or "git cherry-pick failed",
                 )
 
-        _drop_task_metadata_changes(root, task.id)
+        _drop_task_metadata_changes(workspace.root, task.id)
         try:
-            has_staged = index_has_staged_changes(root)
+            has_staged = index_has_staged_changes(workspace.root)
         except GitError:
-            cherry_pick_abort(root)
-            _restore_litehive_changes(root, stashed_metadata)
+            cherry_pick_abort(workspace.root)
+            _restore_litehive_changes(workspace.root, stashed_metadata)
             workspace.save_task(task)
             _ensure_unmerged_worktree_state_for_workspace(workspace, task.id, candidate.worktree_rel)
             return RescueResult(
@@ -272,10 +271,10 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
         if not has_staged:
             continue
 
-        committed, commit_message = commit_reuse_message(root, commit_sha)
+        committed, commit_message = commit_reuse_message(workspace.root, commit_sha)
         if not committed:
-            cherry_pick_abort(root)
-            _restore_litehive_changes(root, stashed_metadata)
+            cherry_pick_abort(workspace.root)
+            _restore_litehive_changes(workspace.root, stashed_metadata)
             workspace.save_task(task)
             _ensure_unmerged_worktree_state_for_workspace(workspace, task.id, candidate.worktree_rel)
             return RescueResult(
@@ -286,8 +285,8 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
                 message=commit_message or "git commit failed after rescue cherry-pick",
             )
 
-    _restore_litehive_changes(root, stashed_metadata)
-    head_sha = current_head(root)
+    _restore_litehive_changes(workspace.root, stashed_metadata)
+    head_sha = current_head(workspace.root)
     try:
         _finalize_rescue_for_workspace(workspace, task, outcome="rescued", head_sha=head_sha)
     except WorkspaceConflictError as exc:
