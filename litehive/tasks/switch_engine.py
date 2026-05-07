@@ -24,7 +24,7 @@ from litehive.tasks.audit import (
     snapshot_task_audit_state,
 )
 from litehive.tasks.constants import CLOSED_TASK_STATUSES, VALID_TASK_ENGINES
-from litehive.tasks.paths import latest_subagent_base, task_dir
+from litehive.tasks.paths import latest_subagent_base_for_workspace
 from litehive.tasks.queue import move_queued_task_for_workspace
 from litehive.tasks.runtime import mark_engine_switch_for_workspace
 from litehive.workspace import Workspace
@@ -61,9 +61,9 @@ def _switch_prior_work_paths(workspace: Workspace, task: TaskRecord) -> list[str
     for candidate in (ref.path for ref in reversed(task.subagents)):
         if candidate and candidate not in paths:
             paths.append(candidate)
-    base = latest_subagent_base(workspace.root, task)
+    base = latest_subagent_base_for_workspace(workspace, task)
     if base is not None:
-        rel_path = str(base.relative_to(task_dir(workspace.root, task)))
+        rel_path = str(base.relative_to(workspace.task_dir(task)))
         if rel_path not in paths:
             paths.append(rel_path)
     return paths

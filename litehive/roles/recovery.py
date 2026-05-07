@@ -11,7 +11,7 @@ from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.prompt_types import FailedSubagentDiagnostics, RecoveryPrompt
 from litehive.recovery.scope_analysis import analyze_scope_changes
-from litehive.tasks.paths import latest_subagent_base, read_text_artifact, resolve_artifact_path, task_dir
+from litehive.tasks.paths import latest_subagent_base_for_workspace, read_text_artifact, resolve_artifact_path
 
 from .base import RoleAgent
 
@@ -334,12 +334,11 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
     together the runtime state, the persisted subagent record, and the
     on-disk artifacts under the latest subagent base directory.
     """
-    root = workspace.root
-    subagent_base = latest_subagent_base(root, task_record)
+    subagent_base = latest_subagent_base_for_workspace(workspace, task_record)
     if subagent_base is None or not subagent_base.exists():
         return None
 
-    rel_path = str(subagent_base.relative_to(task_dir(root, task_record)))
+    rel_path = str(subagent_base.relative_to(workspace.task_dir(task_record)))
     runtime_state = None
     interruption = task_record.runtime.execution.interruption
     if interruption is None:

@@ -8,6 +8,7 @@ from litehive.config.paths import workspace_path
 from litehive.config.workspace_files import workspace_dir
 from litehive.config.workspace import create_workspace, normalize_workspace_root
 from litehive.domain.task import TaskRecord
+from litehive.workspace import Workspace
 
 
 def _worktree_workspace_dir(root: Path) -> Path | None:
@@ -181,22 +182,30 @@ def latest_run_all_log_path(root: Path) -> Path | None:
 
 def latest_subagent_base(root: Path, task: TaskRecord) -> Path | None:
     """
+    Path-based compatibility wrapper for latest subagent lookup.
+    """
+    return latest_subagent_base_for_workspace(Workspace.from_path(root), task)
+
+
+def latest_subagent_base_for_workspace(workspace: Workspace, task: TaskRecord) -> Path | None:
+    """
     Find the most relevant subagent artifact directory for a task.
 
     Prefers the currently active subagent, then falls back to the newest
     historical one; used by recovery and the engine-switch flow that need
     the last attempt's transcript to seed the next agent's context.
     """
+    task_base = workspace.task_dir(task)
     refs = list(task.subagents)
     preferred = []
     if task.runtime.execution.active_subagent is not None:
         preferred.append(task.runtime.execution.active_subagent.path)
     preferred.extend(ref.path for ref in refs)
     for rel_path in reversed(preferred):
-        base = task_dir(root, task) / rel_path
+        base = task_base / rel_path
         if base.exists():
             return base
-    subagents_root = task_dir(root, task) / "subagents"
+    subagents_root = task_base / "subagents"
     if not subagents_root.exists():
         return None
     candidates = [path for path in subagents_root.iterdir() if path.is_dir()]

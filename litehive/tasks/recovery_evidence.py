@@ -13,10 +13,9 @@ from litehive.observability.events import read_events
 from litehive.state.records import get_task_worktree_path
 from litehive.tasks.paths import (
     latest_run_all_log_path,
-    latest_subagent_base,
+    latest_subagent_base_for_workspace,
     resolve_artifact_path,
     status_entry_paths,
-    task_dir,
 )
 from litehive.tasks.report_storage import latest_stage_report
 from litehive.worktree.paths import resolve_recorded_worktree_path
@@ -51,7 +50,7 @@ def collect_recovery_evidence(
     elif task.subagents:
         engine_name = task.subagents[-1].engine
     engine_record = monitoring.engines.get(engine_name or "")
-    subagent_base = latest_subagent_base(root, task)
+    subagent_base = latest_subagent_base_for_workspace(workspace, task)
 
     if task.close_reason:
         close_reason_part = f" close_reason={task.close_reason}"
@@ -116,7 +115,7 @@ def collect_recovery_evidence(
             )
         )
     if subagent_base is not None:
-        rel_subagent_path = str(subagent_base.relative_to(task_dir(root, task)))
+        rel_subagent_path = str(subagent_base.relative_to(workspace.task_dir(task)))
         subagent_ref = next((ref for ref in task.subagents if ref.path == rel_subagent_path), None)
         if subagent_ref is None:
             artifacts: dict = {}
