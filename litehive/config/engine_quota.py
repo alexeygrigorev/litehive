@@ -38,6 +38,11 @@ type QuotaChecker = Callable[[], QuotaStatus]
 class EngineQuotaBlock:
     """
     Present quota block returned by vendor quota probes.
+
+    Attributes:
+        reason: Operator-facing skip reason for the quota-blocked engine.
+        freeze_until: UTC reset time when known; ``None`` keeps the block
+            transient and avoids persisting a freeze window.
     """
 
     reason: str

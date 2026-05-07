@@ -1075,9 +1075,11 @@ Legend:
 - [ ] R8. In `engine_models`, remove engine attempt order
   deduplication. Assume users provide the right order.
   Source: note 4, 36:49-37:16.
-- [ ] R9. Add dataclass and field docstrings for engine-related
+- [x] R9. Add dataclass and field docstrings for engine-related
   dataclasses such as `EngineSkip`.
   Source: note 4, 37:22-37:49.
+  Completed 2026-05-07: added class and attribute documentation for
+  `EngineSkip`, `EngineSelection`, and `EngineQuotaBlock`.
 - [ ] R10. Remove unnecessary `None` fields from engine model
   dataclasses.
   Source: note 4, 37:49-37:56.

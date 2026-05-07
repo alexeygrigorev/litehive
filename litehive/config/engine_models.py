@@ -46,12 +46,31 @@ def _engine_attempt_order(initial_engine_names: list[str], engine_preference: li
 
 @dataclass(frozen=True)
 class EngineSkip:
+    """
+    Diagnostic entry for one candidate engine that selection bypassed.
+
+    Attributes:
+        engine_name: Engine identifier from the attempted candidate list.
+        reason: Operator-facing reason the engine was not selected.
+    """
+
     engine_name: str
     reason: str
 
 
 @dataclass(frozen=True)
 class EngineSelection:
+    """
+    Result of resolving an executable engine/model pair for a task.
+
+    Attributes:
+        engine_name: Selected engine, or ``None`` when no candidate can run.
+        model_name: Selected model for engines that support model overrides.
+        engine_attempts: Candidate engines considered after freeze filtering.
+        skipped: Candidate engines rejected during availability/quota checks.
+        blocked_reason: Summary reason when no engine can be selected.
+    """
+
     engine_name: str | None
     model_name: str | None
     engine_attempts: list[str]
