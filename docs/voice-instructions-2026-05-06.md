@@ -2143,9 +2143,15 @@ Legend:
   `run_daemon_loop` calls it once per iteration after live-runner and
   origin-divergence checks, but before the pre-run status snapshot and
   before spawning the child `litehive run` process that mutates state.
-- [ ] DM21. Consider moving workspace backup out of daemon if it is a
+- [x] DM21. Consider moving workspace backup out of daemon if it is a
   general pre-operation concern.
   Source: note 5, 22:40-22:50.
+  Completed 2026-05-07: considered and left the scheduling hook in
+  the daemon. The backup implementation and retention policy already
+  live in `state.backup`; the daemon owns only the periodic "once per
+  day before the next daemon-run mutation" trigger. Other mutating
+  maintenance paths already take explicit guarded backups, so there is
+  no general pre-operation hook to extract yet.
 - [ ] DM22. Simplify `run_daemon_loop`; it is complex and should be
   decomposed.
   Source: note 5, 22:57-23:16.
