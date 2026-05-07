@@ -460,7 +460,7 @@ class HeruEngineAdapter:
         report_stage = canonical_report_pipeline_state(stage.value)
         role = prompt.role
         prompt_text = serialize_prompt(prompt, task_record=task, workspace=self.workspace)
-        config = self.config or self.workspace.config()
+        config = self.config or self.workspace.load_config()
         execution_root = _agent_execution_root(self.workspace_root, task, role=role, config=config)
 
         before_turn = datetime.now(UTC)

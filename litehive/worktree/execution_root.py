@@ -51,7 +51,7 @@ def resolve_task_execution_root_for_workspace(
     if not is_git_repo(root):
         return root
 
-    merge_config = config or workspace.config()
+    merge_config = config or workspace.load_config()
     recorded_path = get_task_worktree_path(task)
     worktree_path = resolve_recorded_worktree_path(root, recorded_path)
     if worktree_path is not None:

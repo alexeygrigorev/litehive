@@ -297,7 +297,7 @@ def _recovery_source_checkout(workspace: Workspace) -> tuple[str | None, str | N
     is set. Returns the raw configured value plus the directory the agent
     should treat as its execution root.
     """
-    config = workspace.config()
+    config = workspace.load_config()
     root = workspace.root
     raw_source = str(config.litehive_source_path or "").strip() or None
     if raw_source is None:

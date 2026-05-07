@@ -44,7 +44,7 @@ def queue_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> 
     if ctx.invoked_subcommand is not None:
         return None
     workspace_obj = build_workspace(workspace)
-    config = workspace_obj.config()
+    config = workspace_obj.load_config()
     recover_stale_runner_state_for_workspace(workspace_obj)
     state = load_state_for_workspace(workspace_obj)
     tasks = workspace_obj.list_tasks()

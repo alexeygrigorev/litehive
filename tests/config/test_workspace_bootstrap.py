@@ -413,6 +413,18 @@ def test_deprecated_global_state_in_config_home_is_ignored(
     assert capsys.readouterr().err == ""
 
 
+def test_workspace_load_config_is_workspace_bound_entrypoint(tmp_path: Path) -> None:
+    from litehive.workspace import Workspace
+
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="gemini"))
+    workspace = Workspace.from_path(tmp_path)
+
+    config = workspace.load_config()
+
+    assert config.default_engine == "gemini"
+    assert workspace.config() is config
+
+
 def test_ensure_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
     tmp_path: Path,
 ) -> None:

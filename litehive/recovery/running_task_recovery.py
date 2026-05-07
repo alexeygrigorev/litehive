@@ -114,7 +114,7 @@ def can_attempt_stale_runner_recovery(
     root = workspace.root
     if not current_thread_owns_runner_guard(root) and runner_lock_is_held(root):
         if not runner_lock_pid_is_stale(root):
-            config = workspace.config()
+            config = workspace.load_config()
             if config.inactivity_timeout_seconds is None:
                 return False
             if not _has_inactive_running_tasks(workspace, tasks_by_id, config.inactivity_timeout_seconds):

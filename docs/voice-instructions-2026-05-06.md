@@ -1825,9 +1825,14 @@ Legend:
   the tolerant status config loader to call this parser instead of
   constructing `LitehiveConfig(**data)` directly. Verified with config
   loading and status diagnostics tests.
-- [ ] R25. Prefer `Workspace.load_config()` or an equivalent workspace
+- [x] R25. Prefer `Workspace.load_config()` or an equivalent workspace
   service over root-path config loading.
   Source: note 4, 46:49-47:10.
+  Completed 2026-05-07: renamed the workspace config accessor to
+  `Workspace.load_config()` and migrated production callers that already
+  hold a workspace to use it. Kept `Workspace.config()` as a temporary
+  compatibility wrapper while remaining root-path `load_config(...)`
+  usage is confined to the loader boundary and tests.
 - [ ] R26. Remove `is_iterable`/`Mapping`-style validation in config
   models when Pydantic can enforce the shape.
   Source: note 4, 47:21-48:13.

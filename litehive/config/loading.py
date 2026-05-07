@@ -80,8 +80,8 @@ def load_config(root: Path) -> LitehiveConfig:
     Public config entrypoint.
 
     Path-based compatibility wrapper. Callers that already have a
-    :class:`Workspace` should use :func:`load_config_for_workspace`
-    so config loading does not rebuild workspace dependencies.
+    :class:`Workspace` should use ``workspace.load_config()`` so
+    config loading does not rebuild workspace dependencies.
     """
     from litehive.workspace import Workspace  # noqa: PLC0415
 

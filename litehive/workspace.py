@@ -107,7 +107,7 @@ class Workspace:
         with connect_workspace_db(self.root, migrate=migrate) as connection:
             yield connection
 
-    def config(self) -> "LitehiveConfig":
+    def load_config(self) -> "LitehiveConfig":
         """
         Return the merged ``LitehiveConfig`` for this workspace, cached after first call.
 
@@ -128,6 +128,12 @@ class Workspace:
 
             self._config_cache.append(load_config_for_workspace(self))
         return self._config_cache[0]
+
+    def config(self) -> "LitehiveConfig":
+        """
+        Compatibility wrapper for callers not yet migrated to ``load_config``.
+        """
+        return self.load_config()
 
     def runtime_dir(self) -> Path:
         """

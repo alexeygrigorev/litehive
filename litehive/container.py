@@ -49,7 +49,7 @@ def build_container(root: Path) -> LitehiveContainer:
     workspace = build_workspace(root)
     return LitehiveContainer(
         workspace=workspace,
-        config=workspace.config(),
+        config=workspace.load_config(),
     )
 
 

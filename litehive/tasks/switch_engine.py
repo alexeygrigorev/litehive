@@ -150,7 +150,7 @@ def switch_task_engine_for_workspace(
         if task is None:
             raise ValueError(f"Task {task_id} not found")
 
-    previous_engine = _effective_task_engine(workspace.config().default_engine, task)
+    previous_engine = _effective_task_engine(workspace.load_config().default_engine, task)
     mark_engine_switch(
         root,
         task,
