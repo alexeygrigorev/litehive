@@ -79,6 +79,31 @@ def _dedupe_engine_names(engine_names: list[str]) -> list[str]:
     return ordered
 
 
+def _candidate_engine_order(
+    task: TaskRecord,
+    config: LitehiveConfig,
+    engine_override: str | None,
+    engine_names: list[str] | None,
+    excluded_engine_names: Collection[str],
+) -> list[str]:
+    """
+    Build the ordered candidate engines before freeze/quota filtering.
+    """
+    excluded = set(excluded_engine_names)
+    if engine_names is not None:
+        return [engine_name for engine_name in _dedupe_engine_names(engine_names) if engine_name not in excluded]
+    plan = resolve_engine_plan(
+        task,
+        config,
+        engine_override=engine_override,
+    )
+    return [
+        engine_name
+        for engine_name in _engine_attempt_order(plan, config.engine_preference)
+        if engine_name not in excluded
+    ]
+
+
 def is_engine_frozen(config: LitehiveConfig, engine_name: str) -> bool:
     """
     Report whether an engine is currently frozen.
@@ -240,20 +265,13 @@ def select_engine_for_workspace(
     task transitions into an agent-driven stage and by the
     recovery agent when picking a fallback engine.
     """
-    excluded = set(excluded_engine_names)
-    if engine_names is not None:
-        order = [engine_name for engine_name in _dedupe_engine_names(engine_names) if engine_name not in excluded]
-    else:
-        plan = resolve_engine_plan(
-            task,
-            config,
-            engine_override=engine_override,
-        )
-        order = [
-            engine_name
-            for engine_name in _engine_attempt_order(plan, config.engine_preference)
-            if engine_name not in excluded
-        ]
+    order = _candidate_engine_order(
+        task,
+        config,
+        engine_override,
+        engine_names,
+        excluded_engine_names,
+    )
     frozen_engines = active_engine_freezes(config)
     attempts = [engine_name for engine_name in order if engine_name not in frozen_engines]
     skipped: list[EngineSkip] = []

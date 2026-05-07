@@ -1106,6 +1106,12 @@ Legend:
 - [ ] R17. Simplify `select_engine`; it has too many parameters and
   too much branching.
   Source: note 4, 41:58-42:28.
+  Progress 2026-05-07: extracted candidate engine order construction
+  into `_candidate_engine_order`, keeping explicit `engine_names`,
+  plan-based fallback ordering, and excluded-engine filtering out of
+  the main selection loop. Remaining work: split freeze/quota/
+  availability handling or move the selection request shape into a
+  small object.
 - [ ] R18. Move engine lookup/order logic into config/domain object
   methods where appropriate, for example `config.get_engine(...)`.
   Source: note 4, 42:28-43:05.
