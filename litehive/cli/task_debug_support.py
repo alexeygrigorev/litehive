@@ -15,7 +15,6 @@ from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,
-    task_dir,
 )
 from litehive.tasks.report_storage import latest_stage_report
 from litehive.workspace import Workspace
@@ -26,7 +25,6 @@ def render_task_evidence_for_workspace(workspace: Workspace, task) -> int:
     """
     Render compact task evidence from an injected workspace.
     """
-    root = workspace.root
     print(f"task: {task.id}")
     print(f"title: {task.title}")
     print(f"status: {task.status}")
@@ -34,7 +32,7 @@ def render_task_evidence_for_workspace(workspace: Workspace, task) -> int:
     _print_lifecycle_evidence(workspace, task)
     _print_latest_report(workspace, task)
     _print_latest_activity(workspace, task)
-    _print_latest_subagent(root, workspace, task)
+    _print_latest_subagent(workspace, task)
     _print_worktree_evidence(workspace, task)
     return 0
 
@@ -163,7 +161,7 @@ def _print_latest_activity(workspace: Workspace, task) -> None:
     )
 
 
-def _print_latest_subagent(root: Path, workspace: Workspace, task) -> None:
+def _print_latest_subagent(workspace: Workspace, task) -> None:
     """
     Print the most recent subagent's identity and execution evidence.
 
@@ -178,7 +176,7 @@ def _print_latest_subagent(root: Path, workspace: Workspace, task) -> None:
         return
 
     ref = task.subagents[-1]
-    sa_base = task_dir(root, task) / ref.path
+    sa_base = workspace.task_dir(task) / ref.path
     runtime_sa = None
     if task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id:
         runtime_sa = task.runtime.execution.active_subagent
@@ -225,7 +223,7 @@ def _print_latest_subagent(root: Path, workspace: Workspace, task) -> None:
         f"produced_output={produced_output_label}"
     )
     if trace is not None and isinstance(trace.source, Path):
-        print(f"latest_subagent_trace_source: {trace.source.relative_to(root)}")
+        print(f"latest_subagent_trace_source: {trace.source.relative_to(workspace.root)}")
 
 
 def debug_worktree_for_workspace(workspace: Workspace, task):
