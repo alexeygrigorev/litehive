@@ -14,7 +14,7 @@ from litehive.db.schema import connect_workspace_db
 from litehive.recovery.execution_recovery import mark_interrupted_subagent
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.paths import task_dir
-from litehive.tasks.runtime import mark_subagent_started
+from litehive.tasks.runtime import mark_subagent_started_for_workspace
 from litehive.workspace import Workspace
 
 
@@ -22,6 +22,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
     tmp_path: Path,
 ) -> None:
     create_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
+    workspace = Workspace.from_path(tmp_path)
     task = create_task(tmp_path, title="Claude live restart summary", auto_commit=False)
     manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
 
@@ -33,7 +34,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
         path="subagents/SA-0001-swe",
     )
     task.subagents.append(ref)
-    mark_subagent_started(tmp_path, task, ref)
+    mark_subagent_started_for_workspace(workspace, task, ref)
     save_task(tmp_path, task)
 
     base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
@@ -57,7 +58,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
 
     manager.write_session_progress(task, base, ref, "stream partial Claude output", execution)
 
-    report = load_subagent_report(Workspace.from_path(tmp_path), task.id, "SA-0001")
+    report = load_subagent_report(workspace, task.id, "SA-0001")
     assert report["status"] == "running"
     assert "did not submit verdict" in report["summary"]
     assert report["files_changed"] == []
@@ -65,7 +66,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
     refreshed = get_task(tmp_path, task.id)
     assert refreshed is not None
     interrupted = mark_interrupted_subagent(
-        Workspace.from_path(tmp_path),
+        workspace,
         refreshed,
         reason="runner interrupted before subagent completion",
         stage="implementing",
@@ -74,7 +75,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
     assert interrupted is not None
     assert "did not submit verdict" in interrupted.execution_trace_snippet
 
-    resumed_report = load_subagent_report(Workspace.from_path(tmp_path), task.id, "SA-0001")
+    resumed_report = load_subagent_report(workspace, task.id, "SA-0001")
     assert resumed_report["status"] == "interrupted"
     assert resumed_report["resume_stage"] == "implementing"
 
