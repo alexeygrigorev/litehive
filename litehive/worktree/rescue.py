@@ -51,13 +51,6 @@ from litehive.worktree.paths import is_managed_worktree_path, resolve_recorded_w
 from litehive.workspace import Workspace
 
 
-def collect_rescue_candidates(root: Path) -> list[RescueCandidate]:
-    """
-    Path-based compatibility wrapper for rescue candidate collection.
-    """
-    return collect_rescue_candidates_for_workspace(Workspace.from_path(root))
-
-
 def collect_rescue_candidates_for_workspace(workspace: Workspace) -> list[RescueCandidate]:
     """
     Return tasks flagged ``merge_failed`` whose worktrees still hold commits.
@@ -109,13 +102,6 @@ def require_clean_main_checkout(root: Path) -> None:
         raise GitError("worktree rescue --apply requires a clean checkout on branch 'main'")
     if has_non_litehive_changes(root):
         raise GitError("worktree rescue --apply requires a clean checkout on branch 'main'")
-
-
-def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResult:
-    """
-    Path-based compatibility wrapper for applying a rescue candidate.
-    """
-    return apply_rescue_candidate_for_workspace(Workspace.from_path(root), candidate)
 
 
 def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: RescueCandidate) -> RescueResult:
@@ -406,13 +392,6 @@ def _drop_task_metadata_changes(root: Path, task_id: str) -> None:
     restore_paths(root, metadata_paths, source="HEAD", staged=True, worktree=True)
 
 
-def _finalize_rescue(root: Path, task: TaskRecord, outcome: str, head_sha: str | None) -> None:
-    """
-    Path-based compatibility wrapper for finalizing rescue state.
-    """
-    _finalize_rescue_for_workspace(Workspace.from_path(root), task, outcome=outcome, head_sha=head_sha)
-
-
 def _finalize_rescue_for_workspace(workspace: Workspace, task: TaskRecord, outcome: str, head_sha: str | None) -> None:
     """
     Commit the rescue result to task + workspace state under the workspace lock.
@@ -451,13 +430,6 @@ def _finalize_rescue_for_workspace(workspace: Workspace, task: TaskRecord, outco
             state=state,
             journal_message=journal_message,
         )
-
-
-def _ensure_unmerged_worktree_state(root: Path, task_id: str, worktree_rel: str) -> None:
-    """
-    Path-based compatibility wrapper for manual-conflict unmerged state.
-    """
-    _ensure_unmerged_worktree_state_for_workspace(Workspace.from_path(root), task_id, worktree_rel)
 
 
 def _ensure_unmerged_worktree_state_for_workspace(workspace: Workspace, task_id: str, worktree_rel: str) -> None:
