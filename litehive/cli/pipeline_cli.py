@@ -16,9 +16,10 @@ import typer
 from litehive.cli.common import make_typer
 from litehive.container import build_pipeline_container
 from litehive.domain.common import canonical_pipeline_state
-from litehive.lifecycle.persistence import TaskNotFound
+from litehive.lifecycle.persistence import TaskNotFound, TaskState
 from litehive.lifecycle.transitions import list_transitions
 from litehive.tasks.report_storage import latest_recovery_report, latest_stage_report
+from litehive.workspace import Workspace
 
 app = make_typer(invoke_without_command=True)
 
@@ -131,35 +132,59 @@ def pipeline_journal_command(
 
     print(f"task: {task_id}")
     print(f"stage: {state.stage}")
-    task = workspace_obj.get_task_record(task_id)
-    if task is not None:
-        stage_report = latest_stage_report(workspace_obj, task)
-        if stage_report is not None:
-            print(
-                "latest_stage_report: "
-                f"{stage_report.pipeline_state}/{stage_report.verdict} "
-                f"source={stage_report.source} "
-                f"summary={stage_report.summary}"
-            )
-        recovery_report = latest_recovery_report(workspace_obj, task)
-        if recovery_report is not None:
-            print(
-                "latest_recovery_report: "
-                f"origin_stage={recovery_report.origin_stage or '-'} "
-                f"trigger_event_kind={recovery_report.trigger_event_kind.value} "
-                f"runnable_state={recovery_report.runnable_state} "
-                f"summary={recovery_report.summary}"
-            )
-    if state.active_recovery_trigger:
-        trigger = state.active_recovery_trigger
+    _print_pipeline_report_lines(workspace_obj, task_id)
+    _print_pipeline_state_lines(state)
+    _print_pipeline_lifecycle_lines(journal.load_lifecycle(task_id))
+    _print_pipeline_transition_lines(journal.load_transitions(task_id), limit)
+    return 0
+
+
+def _print_pipeline_report_lines(workspace: Workspace, task_id: str) -> None:
+    task = workspace.get_task_record(task_id)
+    if task is None:
+        return
+    stage_report = latest_stage_report(workspace, task)
+    if stage_report is not None:
         print(
-            "active_recovery_trigger: "
-            f"origin_stage={trigger.origin_stage} "
-            f"trigger_event_kind={trigger.trigger_event_kind.value} "
-            f"fingerprint={trigger.failure_fingerprint.budget_key()} "
-            f"source={trigger.source or '-'} "
-            f"reason_code={trigger.reason_code or '-'}"
+            "latest_stage_report: "
+            f"{stage_report.pipeline_state}/{stage_report.verdict} "
+            f"source={stage_report.source} "
+            f"summary={stage_report.summary}"
         )
+    recovery_report = latest_recovery_report(workspace, task)
+    if recovery_report is not None:
+        print(
+            "latest_recovery_report: "
+            f"origin_stage={recovery_report.origin_stage or '-'} "
+            f"trigger_event_kind={recovery_report.trigger_event_kind.value} "
+            f"runnable_state={recovery_report.runnable_state} "
+            f"summary={recovery_report.summary}"
+        )
+
+
+def _print_pipeline_state_lines(state: TaskState) -> None:
+    _print_recovery_trigger_line(state)
+    _print_merge_and_commit_lines(state)
+    _print_recovery_history_lines(state)
+    _print_failed_run_history_lines(state)
+    _print_failure_detail_lines(state)
+
+
+def _print_recovery_trigger_line(state: TaskState) -> None:
+    if not state.active_recovery_trigger:
+        return
+    trigger = state.active_recovery_trigger
+    print(
+        "active_recovery_trigger: "
+        f"origin_stage={trigger.origin_stage} "
+        f"trigger_event_kind={trigger.trigger_event_kind.value} "
+        f"fingerprint={trigger.failure_fingerprint.budget_key()} "
+        f"source={trigger.source or '-'} "
+        f"reason_code={trigger.reason_code or '-'}"
+    )
+
+
+def _print_merge_and_commit_lines(state: TaskState) -> None:
     if state.merge_context is not None:
         print(
             "merge_context: "
@@ -168,29 +193,40 @@ def pipeline_journal_command(
         )
     if state.commit_result is not None:
         print(f"commit_result: head_sha={state.commit_result.head_sha} reason={state.commit_result.reason or '-'}")
-    if state.recovery_history:
-        print("recovery_history:")
-        for outcome in state.recovery_history:
-            print(
-                "  "
-                f"{outcome.created_at} "
-                f"{outcome.trigger.origin_stage or '-'} "
-                f"{outcome.trigger.trigger_event_kind.value} "
-                f"{outcome.recovery_verdict} "
-                f"{outcome.disposition.value}"
-            )
-    if state.failed_run_history:
-        print("failed_run_history:")
-        for key, record in state.failed_run_history.items():
-            print(
-                "  "
-                f"{key} "
-                f"stage={record.stage} "
-                f"shape={record.failure_shape} "
-                f"count={record.count} "
-                f"latest_at={record.latest_at or '-'} "
-                f"operator_override_count={record.operator_override_count}"
-            )
+
+
+def _print_recovery_history_lines(state: TaskState) -> None:
+    if not state.recovery_history:
+        return
+    print("recovery_history:")
+    for outcome in state.recovery_history:
+        print(
+            "  "
+            f"{outcome.created_at} "
+            f"{outcome.trigger.origin_stage or '-'} "
+            f"{outcome.trigger.trigger_event_kind.value} "
+            f"{outcome.recovery_verdict} "
+            f"{outcome.disposition.value}"
+        )
+
+
+def _print_failed_run_history_lines(state: TaskState) -> None:
+    if not state.failed_run_history:
+        return
+    print("failed_run_history:")
+    for key, record in state.failed_run_history.items():
+        print(
+            "  "
+            f"{key} "
+            f"stage={record.stage} "
+            f"shape={record.failure_shape} "
+            f"count={record.count} "
+            f"latest_at={record.latest_at or '-'} "
+            f"operator_override_count={record.operator_override_count}"
+        )
+
+
+def _print_failure_detail_lines(state: TaskState) -> None:
     if state.stage_retry:
         print(f"stage_retry: {dict(state.stage_retry)}")
     if state.failed_reason:
@@ -204,24 +240,27 @@ def pipeline_journal_command(
         for stage, rej in state.last_rejection_by_stage.items():
             print(f"  {stage}: source={rej.source} reason={rej.reason}")
 
-    lifecycle = journal.load_lifecycle(task_id)
-    if lifecycle:
-        print("\nlifecycle:")
-        for row in lifecycle:
-            print(f"  {row['seq']:3d} {row['created_at']}  {row['kind']}  {row['payload']}")
 
-    transitions = journal.load_transitions(task_id)
-    if transitions:
-        recent = transitions[-limit:]
-        print(f"\ntransitions (last {len(recent)} of {len(transitions)}):")
-        for row in recent:
-            desc = row["rule_description"] or ""
-            if desc:
-                desc_suffix = f"  # {desc}"
-            else:
-                desc_suffix = ""
-            print(
-                f"  {row['seq']:3d} {row['created_at']}  {row['from_stage']:25s} --[{row['event_type']:25s}]--> {row['to_stage']}"
-                + desc_suffix
-            )
-    return 0
+def _print_pipeline_lifecycle_lines(lifecycle) -> None:
+    if not lifecycle:
+        return
+    print("\nlifecycle:")
+    for row in lifecycle:
+        print(f"  {row['seq']:3d} {row['created_at']}  {row['kind']}  {row['payload']}")
+
+
+def _print_pipeline_transition_lines(transitions, limit: int) -> None:
+    if not transitions:
+        return
+    recent = transitions[-limit:]
+    print(f"\ntransitions (last {len(recent)} of {len(transitions)}):")
+    for row in recent:
+        desc = row["rule_description"] or ""
+        if desc:
+            desc_suffix = f"  # {desc}"
+        else:
+            desc_suffix = ""
+        print(
+            f"  {row['seq']:3d} {row['created_at']}  {row['from_stage']:25s} --[{row['event_type']:25s}]--> {row['to_stage']}"
+            + desc_suffix
+        )

@@ -1367,9 +1367,14 @@ Legend:
   reads that environment once per command/helper and passes task id
   and workspace root into services instead of calling
   `os.environ.get(...)` inline.
-- [ ] C8. Audit all CLI modules yourself for any remaining business
+- [x] C8. Audit all CLI modules yourself for any remaining business
   logic and move it into domain/container services.
   Source: note 4, 19:15-19:28.
+  Completed 2026-05-07: audited every `litehive/cli/*.py` module in
+  `docs/cli-business-logic-audit-2026-05-07.md`. Moved the
+  agent-role command allowlist and blocked-command message from
+  `cli.agent_dispatch` into `agents.command_policy`, leaving the CLI
+  dispatcher responsible only for raw argv routing.
 - [x] C9. In `cli/engine.py`, inspect the line where config is loaded
   and then apparently unused. Return or use the config correctly, or
   remove the unnecessary load.
@@ -1429,9 +1434,12 @@ Legend:
   container and persistence store to named locals before calling
   `reset_all(...)`; journal and set-state use the same named
   dependency pattern.
-- [ ] C17. Review state rendering in `pipeline journal`; split the
+- [x] C17. Review state rendering in `pipeline journal`; split the
   many `if` branches into focused functions or object behavior.
   Source: note 4, 25:41-26:19.
+  Completed 2026-05-07: split `pipeline_journal_command` rendering
+  into focused helpers for latest reports, state details, recovery
+  trigger, histories, lifecycle rows, and transition rows.
 
 ## Pool CLI Instructions
 

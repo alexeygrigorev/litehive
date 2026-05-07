@@ -1,5 +1,5 @@
 """
-Agent-role command gating for the cold-start dispatcher.
+Agent-role dispatch for the cold-start dispatcher.
 
 When ``LITEHIVE_AGENT_ROLE`` is set in the environment, the running
 process is an LLM subagent (planner, reviewer, swe, recovery, …)
@@ -15,45 +15,12 @@ else is refused with a single shared message.
 
 This module is the sibling of ``litehive/main.py`` that owns the
 agent-vs-non-agent dispatch decision so ``main.py`` can stay a thin
-composition root. The cold-start dispatcher imports the helpers
-here at module load (they are tiny and pure) and only the chosen
-sub-app is loaded inline afterwards, preserving the fast-path
-budget.
+composition root. The policy itself lives in
+``litehive.agents.command_policy``; this module only applies that
+policy to raw argv and chooses whether to hand off to the full CLI.
 """
 
-_AGENT_ALLOWED_TASK_ROOT_COMMANDS: set[tuple[str, ...]] = {
-    ("task", "add"),
-    ("task", "update"),
-    ("task", "close"),
-}
-
-
-def agent_command_is_allowed(role: str, argv: list[str]) -> bool:
-    """
-    Whether an agent role may invoke a non-``agent`` command.
-
-    The agent-facing CLI is intentionally tiny — agents should not
-    have access to operator commands like ``status`` or ``list``.
-    PM-style roles (``planner``, ``reviewer``) get
-    ``task add|update|close`` so they can shape the task they're
-    running; recovery keeps a small read-only allowlist for
-    diagnostic commands; everything else is blocked.
-
-    Called by the cold-start dispatcher in ``litehive/main.py``
-    after it has already established that an agent role is set and
-    that the operator did not request ``--help``.
-    """
-    if not argv:
-        return False
-    if tuple(argv[:2]) in _AGENT_ALLOWED_TASK_ROOT_COMMANDS and role in {"planner", "reviewer"}:
-        return True
-    if role != "recovery":
-        return False
-    return tuple(argv[:2]) in {
-        ("pipeline", "journal"),
-        ("pipeline", "rules"),
-        ("task", "logs"),
-    }
+from litehive.agents.command_policy import AGENT_BLOCKED_COMMAND_MESSAGE, agent_command_is_allowed
 
 
 def agent_blocked_command_message() -> str:
@@ -70,12 +37,7 @@ def agent_blocked_command_message() -> str:
     when an agent-role process tries to invoke an operator command
     and by the agent CLI when its own guards refuse a request.
     """
-    return (
-        "You are not authorized to perform this command. "
-        "PM agents may shape only the active task via "
-        "`litehive agent update ...` or `litehive agent close ...`; "
-        "operator inspection commands such as status/list/show are not available to agents."
-    )
+    return AGENT_BLOCKED_COMMAND_MESSAGE
 
 
 def requests_help(argv: list[str]) -> bool:
