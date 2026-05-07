@@ -2029,9 +2029,12 @@ Legend:
   waiting on an already-active runner, and that SIGTERM/SIGINT enter
   through the daemon signal handler by flipping the `stop_requested`
   flag read by the callback.
-- [ ] DM7. Add proper callable typing for stop request function
+- [x] DM7. Add proper callable typing for stop request function
   parameters; type checker should reject missing types.
   Source: note 5, 16:17-16:31.
+  Completed 2026-05-07: typed `sleep_with_stop(...)`'s
+  `stop_requested_fn` parameter as `Callable[[], bool]` and verified
+  with `make typecheck` that pyrefly reports zero unsuppressed errors.
 - [ ] DM8. Replace `append_attention_log` free/global behavior with
   an `AttentionRepository` that writes to the database.
   Source: note 5, 16:34-16:56.

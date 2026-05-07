@@ -11,6 +11,7 @@ itself (``run_daemon_loop``), the detach-and-register flow
 ``daemon.logs``.
 """
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 import logging
 import os
@@ -83,7 +84,7 @@ def _halt_for_origin_divergence(
     return divergence_reason
 
 
-def sleep_with_stop(seconds: float, stop_requested_fn) -> None:
+def sleep_with_stop(seconds: float, stop_requested_fn: Callable[[], bool]) -> None:
     """
     Pause the daemon loop without blocking operator stop requests.
 
