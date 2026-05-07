@@ -232,17 +232,17 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
             message="worktree patch already landed on main",
         )
 
-    stashed_metadata = _stash_litehive_changes(workspace.root)
+    stashed_metadata = _stash_litehive_changes_for_workspace(workspace)
     for commit_sha in candidate.commit_shas:
         ok, pick_message = cherry_pick_no_commit(workspace.root, commit_sha)
         if not ok:
             conflicts = unmerged_files(workspace.root)
             metadata_conflicts = [path for path in conflicts if _is_task_metadata_path(path, task.id)]
             if conflicts and len(metadata_conflicts) == len(conflicts):
-                _resolve_metadata_conflicts(workspace.root, metadata_conflicts)
+                _resolve_metadata_conflicts_for_workspace(workspace, metadata_conflicts)
             else:
                 cherry_pick_abort(workspace.root)
-                _restore_litehive_changes(workspace.root, stashed_metadata)
+                _restore_litehive_changes_for_workspace(workspace, stashed_metadata)
                 workspace.save_task(task)
                 _ensure_unmerged_worktree_state_for_workspace(workspace, task.id, candidate.worktree_rel)
                 return RescueResult(
@@ -253,12 +253,12 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
                     message=pick_message or "git cherry-pick failed",
                 )
 
-        _drop_task_metadata_changes(workspace.root, task.id)
+        _drop_task_metadata_changes_for_workspace(workspace, task.id)
         try:
             has_staged = index_has_staged_changes(workspace.root)
         except GitError:
             cherry_pick_abort(workspace.root)
-            _restore_litehive_changes(workspace.root, stashed_metadata)
+            _restore_litehive_changes_for_workspace(workspace, stashed_metadata)
             workspace.save_task(task)
             _ensure_unmerged_worktree_state_for_workspace(workspace, task.id, candidate.worktree_rel)
             return RescueResult(
@@ -274,7 +274,7 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
         committed, commit_message = commit_reuse_message(workspace.root, commit_sha)
         if not committed:
             cherry_pick_abort(workspace.root)
-            _restore_litehive_changes(workspace.root, stashed_metadata)
+            _restore_litehive_changes_for_workspace(workspace, stashed_metadata)
             workspace.save_task(task)
             _ensure_unmerged_worktree_state_for_workspace(workspace, task.id, candidate.worktree_rel)
             return RescueResult(
@@ -285,7 +285,7 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
                 message=commit_message or "git commit failed after rescue cherry-pick",
             )
 
-    _restore_litehive_changes(workspace.root, stashed_metadata)
+    _restore_litehive_changes_for_workspace(workspace, stashed_metadata)
     head_sha = current_head(workspace.root)
     try:
         _finalize_rescue_for_workspace(workspace, task, outcome="rescued", head_sha=head_sha)
@@ -354,7 +354,7 @@ def _is_task_metadata_path(path: str, task_id: str) -> bool:
     return path.startswith(metadata_prefix)
 
 
-def _resolve_metadata_conflicts(root: Path, paths: list[str]) -> None:
+def _resolve_metadata_conflicts_for_workspace(workspace: Workspace, paths: list[str]) -> None:
     """
     Auto-resolve metadata-only cherry-pick conflicts by taking ``ours``.
 
@@ -367,16 +367,16 @@ def _resolve_metadata_conflicts(root: Path, paths: list[str]) -> None:
     """
     if not paths:
         return
-    checkout_ours(root, paths)
+    checkout_ours(workspace.root, paths)
     try:
-        add_paths(root, paths)
+        add_paths(workspace.root, paths)
     except GitError:
         # Best-effort restage — the rescue flow continues and will surface a
         # manual_conflict result if that fails too.
         pass
 
 
-def _drop_task_metadata_changes(root: Path, task_id: str) -> None:
+def _drop_task_metadata_changes_for_workspace(workspace: Workspace, task_id: str) -> None:
     """
     Strip the task's metadata files out of the staged cherry-pick.
 
@@ -385,9 +385,9 @@ def _drop_task_metadata_changes(root: Path, task_id: str) -> None:
     real source changes — keeping the metadata would dirty the
     rescued history with churn that means nothing on main.
     """
-    changed_paths = git_stdout_lines(root, "diff", "--cached", "--name-only")
+    changed_paths = git_stdout_lines(workspace.root, "diff", "--cached", "--name-only")
     metadata_paths = [path for path in changed_paths if _is_task_metadata_path(path, task_id)]
-    restore_paths(root, metadata_paths, source="HEAD", staged=True, worktree=True)
+    restore_paths(workspace.root, metadata_paths, source="HEAD", staged=True, worktree=True)
 
 
 def _finalize_rescue_for_workspace(workspace: Workspace, task: TaskRecord, outcome: str, head_sha: str | None) -> None:
@@ -447,7 +447,7 @@ def _ensure_unmerged_worktree_state_for_workspace(workspace: Workspace, task_id:
     save_state_for_workspace(workspace, state)
 
 
-def _stash_litehive_changes(root: Path) -> str | None:
+def _stash_litehive_changes_for_workspace(workspace: Workspace) -> str | None:
     """
     Set pending ``.litehive/`` workspace edits aside before the cherry-pick.
 
@@ -458,22 +458,22 @@ def _stash_litehive_changes(root: Path) -> str | None:
     so :func:`_restore_litehive_changes` can pop exactly that
     entry afterwards.
     """
-    if not git_stdout_lines(root, "status", "--porcelain", "--untracked-files=all", "--", ".litehive"):
+    if not git_stdout_lines(workspace.root, "status", "--porcelain", "--untracked-files=all", "--", ".litehive"):
         return None
-    before = rev_parse_verify(root, "refs/stash") or ""
+    before = rev_parse_verify(workspace.root, "refs/stash") or ""
     stash_push(
-        root,
+        workspace.root,
         "litehive-worktree-rescue",
         include_untracked=True,
         paths=[".litehive"],
     )
-    after = rev_parse_verify(root, "refs/stash") or ""
+    after = rev_parse_verify(workspace.root, "refs/stash") or ""
     if after and after != before:
         return after
     return None
 
 
-def _restore_litehive_changes(root: Path, stash_ref: str | None) -> None:
+def _restore_litehive_changes_for_workspace(workspace: Workspace, stash_ref: str | None) -> None:
     """
     Reapply the ``.litehive/`` stash captured by :func:`_stash_litehive_changes`.
 
@@ -485,11 +485,11 @@ def _restore_litehive_changes(root: Path, stash_ref: str | None) -> None:
     """
     if not stash_ref:
         return
-    ok, _ = stash_pop(root, ref=stash_ref, with_index=True)
+    ok, _ = stash_pop(workspace.root, ref=stash_ref, with_index=True)
     if ok:
         return
-    stash_apply(root, stash_ref)
-    stash_drop(root, stash_ref)
+    stash_apply(workspace.root, stash_ref)
+    stash_drop(workspace.root, stash_ref)
 
 
 def _worktree_has_non_metadata_changes_for_workspace(workspace: Workspace, worktree_path: Path, task_id: str) -> bool:
