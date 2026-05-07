@@ -616,7 +616,7 @@ def start_background_daemon(workspace: Path) -> int:
     existing = daemon_metadata(workspace)
     if existing is not None and existing.status == "running":
         if existing.pid is not None and _daemon_healthcheck_failed(existing, daemon_config):
-            force_kill_recorded_daemon(workspace, pid=existing.pid, config=daemon_config)
+            force_kill_recorded_daemon(workspace_obj, pid=existing.pid, config=daemon_config)
         else:
             raise RuntimeError(f"daemon already running for {workspace}: pid={existing.pid}")
     if existing is not None and existing.status == "stale":
@@ -678,7 +678,7 @@ def stop_workspace_daemon(workspace: Path) -> DaemonRegistryEntry | None:
     if entry.pid is None:
         unregister_daemon_by_path(workspace)
         return None
-    terminate_recorded_daemon(workspace, pid=entry.pid, config=daemon_config)
+    terminate_recorded_daemon(workspace_obj, pid=entry.pid, config=daemon_config)
     return entry
 
 
