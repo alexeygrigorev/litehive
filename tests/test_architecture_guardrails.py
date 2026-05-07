@@ -83,6 +83,41 @@ def _literal_attribute_name(node: ast.Call) -> str:
     return "<dynamic>"
 
 
+def _untyped_payload_annotation_entries(path: Path) -> list[str]:
+    tree = _tree(path)
+    parents = _parent_map(tree)
+    entries: list[str] = []
+    flagged_annotations = {
+        "Mapping[str, Any]",
+        "Mapping[str, object]",
+        "Mapping[str, Any] | None",
+        "dict[str, Any]",
+        "dict[str, object]",
+        "object",
+    }
+    for node in ast.walk(tree):
+        annotation: ast.AST | None = None
+        subject: str | None = None
+        if isinstance(node, ast.arg):
+            annotation = node.annotation
+            subject = node.arg
+        elif isinstance(node, ast.AnnAssign):
+            annotation = node.annotation
+            subject = ast.unparse(node.target)
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            annotation = node.returns
+            subject = f"{node.name} return"
+        if annotation is None or subject is None:
+            continue
+        annotation_text = ast.unparse(annotation)
+        if annotation_text not in flagged_annotations:
+            continue
+        rel = path.relative_to(REPO_ROOT)
+        owner = _enclosing_definition_name(node, parents)
+        entries.append(f"{rel}:{owner}:{subject}:{annotation_text}")
+    return entries
+
+
 def _string_constants(tree: ast.AST) -> list[str]:
     return [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)]
 
@@ -302,6 +337,42 @@ def test_production_getattr_calls_stay_explicitly_allowlisted() -> None:
             owner = _enclosing_definition_name(node, parents)
             attribute_name = _literal_attribute_name(node)
             found.append(f"{rel}:{owner}:{attribute_name}")
+
+    assert sorted(found) == sorted(allowed)
+
+
+def test_domain_untyped_payload_annotations_stay_allowlisted() -> None:
+    """
+    Keep loose dictionaries and object payloads from spreading in the domain.
+    """
+    allowed = [
+        "litehive/domain/pool.py:_int_report_value:value:object",
+        "litehive/domain/pool.py:_optional_report_string:value:object",
+        "litehive/domain/pool.py:_report_entries_from_value:value:object",
+        "litehive/domain/pool.py:from_mapping:data:Mapping[str, object]",
+        "litehive/domain/pool.py:from_mapping:data:Mapping[str, object]",
+        "litehive/domain/recovery.py:FailureFingerprint:diagnostics:dict[str, Any]",
+        "litehive/domain/recovery.py:FailureFingerprint:to_payload return:dict[str, Any]",
+        "litehive/domain/recovery.py:RecoveryOutcome:to_payload return:dict[str, Any]",
+        "litehive/domain/recovery.py:RecoveryTrigger:diagnostics:dict[str, Any]",
+        "litehive/domain/recovery.py:RecoveryTrigger:to_payload return:dict[str, Any]",
+        "litehive/domain/recovery.py:from_payload:payload:dict[str, Any]",
+        "litehive/domain/recovery.py:from_payload:payload:dict[str, Any]",
+        "litehive/domain/recovery.py:from_payload:payload:dict[str, Any]",
+        "litehive/domain/runtime.py:PipelineRuntime:_serialize_execution_status return:object",
+        "litehive/domain/runtime.py:RunnerStatusState:_serialize_status return:object",
+        "litehive/domain/runtime.py:TaskOutcomeState:_serialize_runtime_enum_value return:object",
+        "litehive/domain/runtime.py:<module>:_json_enum_value return:object",
+        "litehive/domain/runtime.py:_json_enum_value:value:object",
+        "litehive/domain/runtime.py:_serialize_execution_status:value:object",
+        "litehive/domain/runtime.py:_serialize_status:value:object",
+        "litehive/domain/runtime.py:_serialize_runtime_enum_value return:object",
+        "litehive/domain/runtime.py:_serialize_runtime_enum_value:value:object",
+        "litehive/domain/runtime.py:model_copy:update:Mapping[str, Any] | None",
+    ]
+    found: list[str] = []
+    for path in _python_files("domain"):
+        found.extend(_untyped_payload_annotation_entries(path))
 
     assert sorted(found) == sorted(allowed)
 

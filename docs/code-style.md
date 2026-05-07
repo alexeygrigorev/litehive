@@ -134,6 +134,12 @@ from tests.support.helpers import make_workspace, run_cli
 - Do not pass plain `object` values or untyped sentinels through
   business logic. If absence is a real state, model it explicitly; if
   the value is always present, make the type concrete and required.
+- Do not add new `dict[str, Any]`, `dict[str, object]`,
+  `Mapping[str, Any]`, `Mapping[str, object]`, or bare `object`
+  annotations in `litehive/domain/` without adding a deliberate
+  exception to the architecture guardrail. Domain boundaries should
+  receive named models or focused value objects, with raw payload
+  dictionaries kept at persistence/adapter edges.
 - Avoid `getattr` on internal domain/config/runtime objects. It hides
   the real contract from static analysis and readers. If dynamic
   attribute access is genuinely required at an adapter boundary, keep

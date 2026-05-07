@@ -2269,10 +2269,18 @@ Legend:
   New production `getattr` calls now fail tests unless removed or
   intentionally documented in that allowlist. Updated
   `docs/code-style.md` to point future exceptions at the guardrail.
-- [ ] T5. Add or strengthen guardrails against dictionaries and
+- [x] T5. Add or strengthen guardrails against dictionaries and
   untyped `object` payloads crossing domain boundaries.
   Source: note 3, 27:53-28:24; note 4, 07:55-08:23; note 4,
   40:00-40:21.
+  Completed 2026-05-07: added an architecture guardrail that scans
+  `litehive/domain/` for loose `dict[str, Any]`,
+  `dict[str, object]`, `Mapping[str, Any]`,
+  `Mapping[str, object]`, and bare `object` annotations, comparing
+  them to an explicit allowlist of existing serializer and legacy
+  mapping boundaries. New domain-level loose payload annotations now
+  fail tests unless replaced with a named type or intentionally added
+  to the allowlist. Updated `docs/code-style.md` with the same rule.
 
 ## Execution Discipline Instructions
 
