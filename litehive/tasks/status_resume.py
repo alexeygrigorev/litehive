@@ -23,7 +23,6 @@ from litehive.state.locking import (
     workspace_lock,
 )
 from litehive.state.persist import load_state_for_workspace
-from litehive.state.records import get_task_record, require_task
 from litehive.tasks.activity import (
     load_task_activity,
     save_task_activity,
@@ -103,7 +102,7 @@ def _requeue_task_transition(
             raise ValueError(str(exc)) from exc
 
     with workspace_lock(root):
-        task = get_task_record(root, task_id)
+        task = workspace.get_task_record(task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         before_task = snapshot_task_audit_state(task)
@@ -174,7 +173,7 @@ def _resume_task_transition(workspace: Workspace, task_id: str, front: bool = Fa
 
     root = workspace.root
     with workspace_lock(root):
-        task = require_task(root, task_id)
+        task = workspace.require_task(task_id)
         before_task = snapshot_task_audit_state(task)
         state = load_state_for_workspace(workspace)
         queue_before = list(state.queue)
