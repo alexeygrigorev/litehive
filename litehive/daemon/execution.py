@@ -304,15 +304,6 @@ def _snapshot_exit_code(snapshot: DaemonStatusSnapshot, output: DaemonOutput) ->
     return None
 
 
-def create_workspace_venvs_ready(
-    workspace: Path,
-) -> None:
-    """
-    Path-based compatibility wrapper for daemon venv readiness.
-    """
-    create_workspace_venvs_ready_for_workspace(build_workspace(workspace.resolve()))
-
-
 def create_workspace_venvs_ready_for_workspace(
     workspace: Workspace,
 ) -> None:
@@ -610,7 +601,7 @@ def start_background_daemon(workspace: Path) -> int:
             raise RuntimeError(f"daemon already running for {workspace}: pid={existing.pid}")
     if existing is not None and existing.status == "stale":
         unregister_daemon(workspace)
-    create_workspace_venvs_ready(workspace)
+    create_workspace_venvs_ready_for_workspace(build_workspace(workspace))
     project_root = Path(__file__).resolve().parents[2]
     child_env = os.environ.copy()
     for key in ("LITEHIVE_AGENT_ROLE", "LITEHIVE_STAGE", "LITEHIVE_TASK_ID"):

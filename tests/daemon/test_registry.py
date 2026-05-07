@@ -134,7 +134,7 @@ def test_start_background_daemon_strips_agent_env(tmp_path: Path, monkeypatch) -
     monkeypatch.setenv("LITEHIVE_TASK_ID", "T-0446")
     monkeypatch.setattr("litehive.daemon.execution.daemon_metadata", lambda workspace: None)
     monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda workspace: None)
-    monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready_for_workspace", lambda *args, **kwargs: None)
 
     captured: dict[str, object] = {}
 
@@ -244,7 +244,7 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
         assert entry is not None
         assert entry.status == "running"
         assert entry.pid == sleeper.pid
-        monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready", lambda *args, **kwargs: None)
+        monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready_for_workspace", lambda *args, **kwargs: None)
         class FakeProcess:
             pid = 4321
 
@@ -305,7 +305,7 @@ def test_start_background_daemon_does_not_kill_live_pid_from_stale_metadata(tmp_
         assert entry is not None
         assert entry.status == "stale"
         assert entry.pid == sleeper.pid
-        monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready", lambda *args, **kwargs: None)
+        monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready_for_workspace", lambda *args, **kwargs: None)
 
         class FakeProcess:
             pid = 4321
