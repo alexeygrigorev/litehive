@@ -1072,9 +1072,11 @@ Legend:
 - [ ] R7. Simplify `clear_engine_freeze`: it should perform the small
   database mutation/audit needed and nothing more.
   Source: note 5, 05:55-06:25.
-- [ ] R8. In `engine_models`, remove engine attempt order
+- [x] R8. In `engine_models`, remove engine attempt order
   deduplication. Assume users provide the right order.
   Source: note 4, 36:49-37:16.
+  Completed 2026-05-07: removed selection-layer dedupe from
+  `_engine_attempt_order` and explicit `engine_names` handling.
 - [x] R9. Add dataclass and field docstrings for engine-related
   dataclasses such as `EngineSkip`.
   Source: note 4, 37:22-37:49.

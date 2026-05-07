@@ -27,21 +27,13 @@ def _engine_attempt_order(initial_engine_names: list[str], engine_preference: li
     Build the canonical engine fallback chain.
 
     Concatenates the task's initial engine list with the workspace
-    preference and dedupes in first-seen order. Reused by
-    :func:`select_engine_for_workspace` and
+    preference. Reused by :func:`select_engine_for_workspace` and
     :func:`resolve_engine_attempt_order` so the CLI preview and the
     actual execution path see the
     same chain — divergence here would let the operator preview
     one chain and watch a different one run.
     """
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for engine_name in list(initial_engine_names) + engine_preference:
-        if engine_name in seen:
-            continue
-        seen.add(engine_name)
-        ordered.append(engine_name)
-    return ordered
+    return list(initial_engine_names) + engine_preference
 
 
 @dataclass(frozen=True)
@@ -78,26 +70,6 @@ class EngineSelection:
     blocked_reason: str | None = None
 
 
-def _dedupe_engine_names(engine_names: list[str]) -> list[str]:
-    """
-    Preserve first-seen order while dropping duplicates.
-
-    Called by :func:`select_engine_for_workspace` when the caller hands in an
-    explicit engine list. Callers can be sloppy about dedup
-    (e.g. concat'ing overrides with a default) without breaking
-    the attempt loop or producing a misleading "tried engine X
-    twice" diagnostic.
-    """
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for engine_name in engine_names:
-        if engine_name in seen:
-            continue
-        seen.add(engine_name)
-        ordered.append(engine_name)
-    return ordered
-
-
 def _candidate_engine_order(
     task: TaskRecord,
     config: LitehiveConfig,
@@ -110,7 +82,7 @@ def _candidate_engine_order(
     """
     excluded = set(excluded_engine_names)
     if engine_names is not None:
-        return [engine_name for engine_name in _dedupe_engine_names(engine_names) if engine_name not in excluded]
+        return [engine_name for engine_name in engine_names if engine_name not in excluded]
     plan = resolve_engine_plan(
         task,
         config,
