@@ -4,10 +4,12 @@ These run AgentNode.run() directly with scripted engines so each branch is
 exercised without the full state machine.
 """
 
+from pathlib import Path
 from typing import Any
 
 import pytest
 
+from heru.base import CLIExecutionResult
 from heru.types import RuntimeEngineContinuation, SubagentRef
 
 from litehive.domain.agent import EngineFailure, ExecutionTrace, SubagentResult
@@ -27,6 +29,18 @@ from litehive.lifecycle.types import PipelineMode
 from litehive.workspace import Workspace
 from litehive.state.records import create_task
 from tests.support.lifecycle_fakes import InMemorySessionStore
+
+
+def _stub_execution(exit_code: int = 0, stdout: str = "", stderr: str = "") -> CLIExecutionResult:
+    return CLIExecutionResult(
+        adapter="test",
+        argv=("test",),
+        cwd=Path("/tmp"),
+        exit_code=exit_code,
+        stdout=stdout,
+        stderr=stderr,
+        pid=0,
+    )
 
 
 class _ScriptedEngine:
@@ -331,7 +345,7 @@ class _TimeoutThenPassManager:
                     status="failed",
                     path="subagents/SA-0001-swe",
                 ),
-                execution=None,
+                execution=_stub_execution(exit_code=124),
                 execution_trace=ExecutionTrace.from_text(""),
                 exit_code=124,
                 failure=EngineFailure(
@@ -349,7 +363,7 @@ class _TimeoutThenPassManager:
                 status="completed",
                 path="subagents/SA-0002-swe",
             ),
-            execution=None,
+            execution=_stub_execution(),
             execution_trace=ExecutionTrace.from_text(""),
             exit_code=0,
             continuation=_TimeoutThenPassManager.continuation,
@@ -378,7 +392,7 @@ class _TimeoutThenNudgeThenPassManager:
                     status="failed",
                     path=f"subagents/{subagent_id}-swe",
                 ),
-                execution=None,
+                execution=_stub_execution(exit_code=124, stdout="timeout transcript"),
                 execution_trace=ExecutionTrace.from_text("timeout transcript"),
                 exit_code=124,
                 failure=EngineFailure(
@@ -396,7 +410,7 @@ class _TimeoutThenNudgeThenPassManager:
                 status="completed",
                 path=f"subagents/{subagent_id}-swe",
             ),
-            execution=None,
+            execution=_stub_execution(stdout=f"attempt {_TimeoutThenNudgeThenPassManager.calls}"),
             execution_trace=ExecutionTrace.from_text(f"attempt {_TimeoutThenNudgeThenPassManager.calls}"),
             exit_code=0,
             continuation=_TimeoutThenNudgeThenPassManager.continuation,

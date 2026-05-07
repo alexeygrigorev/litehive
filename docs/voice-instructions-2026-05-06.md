@@ -934,14 +934,25 @@ Legend:
 - [x] D7. Change `execution_trace` from one string to a list or typed
   trace if it represents multiple agent actions.
   Source: note 6, 00:21-00:34.
-  Completed 2026-05-07: added `ExecutionTrace` as the domain value
+  Verified 2026-05-07: added `ExecutionTrace` as the domain value
   carried by `SubagentResult.execution_trace`. It stores rendered trace
   chunks explicitly while preserving a `.text` boundary for Markdown
-  artifacts and operator-facing output.
-- [ ] D8. Remove unnecessary `None` values from domain agent models.
+  artifacts and operator-facing output. `SubagentManager.run` and
+  live-progress report construction convert rendered transcripts into
+  `ExecutionTrace`, and focused domain, manager, report, and lifecycle
+  tests verify the producer/consumer path. The remaining string-returning
+  execution-trace helpers are lower-level renderers before the
+  `SubagentResult` boundary.
+- [x] D8. Remove unnecessary `None` values from domain agent models.
   Keep optionality for true failure-only states, such as failure
   details when not every execution fails.
   Source: note 6, 00:39-01:20.
+  Completed 2026-05-07: made `SubagentResult.execution` required,
+  matching the production manager contract that a result is only
+  returned after a `CLIExecutionResult` exists. Kept optionality for
+  true conditional values: `SubagentResult.failure` on successful runs,
+  `SubagentResult.continuation` for engines without resume handles, and
+  `EngineFailure.classification` for failures without a routing class.
 - [ ] D9. Move utility concepts out of `domain/common.py` when they
   are not domain concepts: `utc_now`, feedback cap/truncation marker,
   `cap_feedback`, and similar helpers.

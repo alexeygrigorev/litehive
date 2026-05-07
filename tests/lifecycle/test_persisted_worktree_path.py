@@ -1,6 +1,7 @@
 import subprocess
 from pathlib import Path
 
+from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
 
 from litehive.config.workspace import ensure_workspace
@@ -18,6 +19,18 @@ from litehive.state.records import create_task, get_task_worktree_path, require_
 from litehive.state.store import runtime_store
 from litehive.workspace import Workspace
 from litehive.worktree.paths import resolve_recorded_worktree_path, task_worktree_branch, task_worktree_path
+
+
+def _stub_execution() -> CLIExecutionResult:
+    return CLIExecutionResult(
+        adapter="test",
+        argv=("test",),
+        cwd=Path("/tmp"),
+        exit_code=0,
+        stdout="",
+        stderr="",
+        pid=0,
+    )
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -63,7 +76,7 @@ class _StubManager:
                 status="completed",
                 path="subagents/SA-0001-swe",
             ),
-            execution=None,
+            execution=_stub_execution(),
             execution_trace=ExecutionTrace.from_text(""),
             exit_code=0,
             continuation=None,

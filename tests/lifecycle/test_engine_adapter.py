@@ -27,6 +27,18 @@ _OTHER_SUBAGENT_ID = SubagentId("SA-0002")
 _DIRECT_RECOVERY_SUBAGENT_ID = SubagentId("direct-recovery")
 
 
+def _stub_execution(exit_code: int = 0, stdout: str = "", stderr: str = "") -> CLIExecutionResult:
+    return CLIExecutionResult(
+        adapter="test",
+        argv=("test",),
+        cwd=Path("/tmp"),
+        exit_code=exit_code,
+        stdout=stdout,
+        stderr=stderr,
+        pid=0,
+    )
+
+
 class _StubManager:
     last_init: tuple[Path, Path] | None = None
     last_kwargs: Any = None
@@ -48,7 +60,7 @@ class _StubManager:
                 status="completed",
                 path="subagents/SA-0001-swe",
             ),
-            execution=None,
+            execution=_stub_execution(),
             execution_trace=ExecutionTrace.from_text(""),
             exit_code=0,
             continuation=RuntimeEngineContinuation(session_id="codex-thread-123"),
@@ -132,7 +144,7 @@ def test_heru_engine_adapter_launches_all_supported_engines(
                     status="completed",
                     path="subagents/SA-0001-swe",
                 ),
-                execution=None,
+                execution=_stub_execution(),
                 execution_trace=ExecutionTrace.from_text(""),
                 exit_code=0,
                 continuation=continuation,
@@ -169,7 +181,7 @@ class _TimeoutThenResumeManager(_StubManager):
                     status="failed",
                     path="subagents/SA-0001-swe",
                 ),
-                execution=None,
+                execution=_stub_execution(exit_code=124),
                 execution_trace=ExecutionTrace.from_text(""),
                 exit_code=124,
                 failure=EngineFailure(
@@ -187,7 +199,7 @@ class _TimeoutThenResumeManager(_StubManager):
                 status="completed",
                 path="subagents/SA-0002-swe",
             ),
-            execution=None,
+            execution=_stub_execution(),
             execution_trace=ExecutionTrace.from_text(""),
             exit_code=0,
             continuation=RuntimeEngineContinuation(session_id="codex-thread-123"),
@@ -248,7 +260,7 @@ def _subagent_result(
             status=status,
             path=f"subagents/{subagent_id}-swe",
         ),
-        execution=None,
+        execution=_stub_execution(exit_code=exit_code),
         execution_trace=ExecutionTrace.from_text(""),
         exit_code=exit_code,
         failure=failure,

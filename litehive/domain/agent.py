@@ -37,6 +37,9 @@ class ExecutionTrace:
 
     @classmethod
     def from_text(cls, text: str) -> "ExecutionTrace":
+        """
+        Split rendered Markdown text into action-sized trace chunks.
+        """
         chunks = tuple(chunk.strip() for chunk in text.split("\n\n") if chunk.strip())
         return cls(chunks=chunks)
 
@@ -76,14 +79,14 @@ class SubagentResult:
     :class:`~litehive.domain.runtime.Subagent` record appended to
     ``TaskRecord.subagents`` for this run (id, role, engine, status,
     and artifact path), followed by the low-level execution handle,
-    typed rendered execution trace, exit code, optional ``EngineFailure`` for
-    routing, and optional continuation token so an interrupted run can
-    resume. The runner builds one of these per subagent invocation; no
-    other layer constructs them.
+    typed rendered execution trace, exit code, optional
+    ``EngineFailure`` for routing, and optional continuation token so
+    an interrupted run can resume. The runner builds one of these per
+    subagent invocation; no other layer constructs them.
     """
 
     ref: Subagent  # Persisted Litehive subagent record for this run
-    execution: CLIExecutionResult | None  # Low-level execution results
+    execution: CLIExecutionResult  # Low-level execution results
     execution_trace: ExecutionTrace  # Rendered subagent execution trace chunks
     exit_code: int  # Process exit code
     failure: EngineFailure | None = None  # Failure details if subagent failed

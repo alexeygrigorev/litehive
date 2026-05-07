@@ -18,6 +18,18 @@ from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.workspace import Workspace
 
 
+def _stub_execution(exit_code: int = 0) -> CLIExecutionResult:
+    return CLIExecutionResult(
+        adapter="test",
+        argv=("test",),
+        cwd=Path("/tmp"),
+        exit_code=exit_code,
+        stdout="",
+        stderr="",
+        pid=0,
+    )
+
+
 def _subagent_result(
     *,
     execution_trace: str,
@@ -31,7 +43,7 @@ def _subagent_result(
             status="failed" if failure is not None else "completed",
             path="subagents/SA-0001-swe",
         ),
-        execution=None,
+        execution=_stub_execution(exit_code=1 if failure is not None else 0),
         execution_trace=ExecutionTrace.from_text(execution_trace),
         exit_code=1 if failure is not None else 0,
         failure=failure,

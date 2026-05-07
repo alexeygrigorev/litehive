@@ -773,8 +773,6 @@ class HeruEngineAdapter:
         if continuation is not None:
             return continuation.resume_id or fallback
         execution = result.execution
-        if execution is None:
-            return fallback
         continuation = getattr(execution, "continuation", None)
         if continuation is None:
             return fallback
