@@ -24,7 +24,6 @@ from litehive.git.ops import (
     stdout_or_none as git_stdout_or_none,
 )
 from litehive.state.records import get_task_worktree_path
-from litehive.tasks.activity import load_task_activity
 from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.workspace import Workspace
 from litehive.worktree.paths import resolve_recorded_worktree_path
@@ -179,7 +178,7 @@ def _allowed_commit_paths(workspace: Workspace, task: TaskRecord) -> set[PurePos
     """
     paths: set[PurePosixPath] = set()
     paths.add(PurePosixPath(".litehive") / "tasks" / f"{task.id}-{task.slug}")
-    for entry in load_task_activity(workspace, task):
+    for entry in workspace.task_activity(task).load():
         for changed_file in normalized_files_changed(entry.files_changed):
             paths.add(PurePosixPath(changed_file))
     return paths

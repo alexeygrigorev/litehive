@@ -107,6 +107,53 @@ represented as flagged tasks with `flag_reason = "merge_failed"`.
 - **Subagent**: external agent execution for a specific role.
 - **Store**: persistence boundary for structured data.
 
+## Subagent Execution Boundary
+
+`litehive.agents.manager.SubagentManager` is the per-invocation coordinator
+for one external subagent process. Its responsibility is to turn a task, role,
+engine name, prompt, and execution root into one `SubagentResult` while keeping
+the task/runtime/session surfaces coherent.
+
+The manager owns the run-level sequence:
+
+- allocate the subagent id and artifact directory
+- create and attach the persisted `Subagent` record
+- resolve the engine adapter through `EngineManager`
+- apply sandbox wrapping through `SandboxLauncher`
+- wire `SubagentRunCallbacks` into engine start/progress callbacks
+- classify process exit, interruption, timeout, and startup failures
+- record the final stage report snapshot and engine monitoring event
+
+The manager does not own lifecycle routing, prompt policy, engine registry
+globals, callback best-effort persistence handling, low-level
+session/artifact I/O, sandbox policy calculation, activity storage, or report
+parsing. Those remain with `litehive.lifecycle`, `litehive.roles`,
+`EngineManager`, `SubagentRunCallbacks`, `SubagentSessionManager`,
+`SandboxLauncher`, `Workspace.task_activity(...)`, and
+`stage_report_from_subagent(...)` respectively. If new behavior does not fit the
+coordinator sequence above, add it to the focused collaborator that owns that
+concern instead of widening `SubagentManager`.
+
+## Error Ownership
+
+- `SubagentStartupError` is owned by `litehive.agents.manager.SubagentManager`.
+  `SubagentManager.run` raises it only when the engine process has not been
+  confirmed started yet: unavailable engine checks, sandbox adapter setup, or
+  immediate adapter launch failures before an `on_started` callback or live
+  progress reports a pid. After the engine starts, failures are no longer
+  startup failures; they are recorded as `EngineFailure` values or propagated
+  as their original exception.
+- `HeruEngineAdapter.run_turn` is the lifecycle actor that catches
+  `SubagentStartupError`. It hands the original exception and formatted startup
+  message to `_handle_startup_failure`, which may bypass `SubagentManager` and
+  run the recovery actor directly. If that bypass cannot produce a recovery
+  verdict, the adapter re-raises the original exception into the normal
+  lifecycle crash path.
+- `UnexpectedFailureBeforeTheEngineSubprocessStarted` is not a Litehive
+  exception class. That phrase describes the `SubagentStartupError` condition:
+  an unexpected failure before the external engine subprocess is known to have
+  started.
+
 ## Storage Rule
 
 Task intent, queue state, runtime state, reports, events, monitoring, and audit

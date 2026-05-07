@@ -1,5 +1,6 @@
-"""Session I/O mixin for SubagentManager."""
+"""Session I/O collaborator for SubagentManager."""
 
+from dataclasses import dataclass, field
 import os
 from pathlib import Path
 import re
@@ -9,25 +10,25 @@ from typing import TYPE_CHECKING
 
 from heru import extract_engine_continuation
 from heru.base import CLIExecutionResult
-from heru.types import LiveTimeline, RuntimeEngineContinuation, SubagentRef
+from heru.types import LiveTimeline, RuntimeEngineContinuation
 from litehive.agents.execution_trace import (
-    event_stream_from_events,
     parse_unified_events,
+    recovered_timeline_from_events,
     render_execution_trace_from_events,
 )
-from litehive.agents.artifacts import (
-    remove_text_artifact,
-    write_stream_artifact,
-    write_text_artifact,
-)
+from litehive.agents.artifacts import ArtifactService
 from litehive.agents.session_store import (
     load_subagent_session,
     save_subagent_artifacts,
 )
+from litehive.agents.session_events import SubagentPidEvent, SubagentStartedEvent
+from litehive.agents.session_reports import SubagentReportPayload
+from litehive.agents.session_snapshots import SubagentSessionMetadata, SubagentSessionSnapshot
 from litehive.domain.agent import SubagentInactivityTimeout
-from litehive.domain.common import utcnow
+from litehive.domain.common import SubagentStatus, utcnow
+from litehive.domain.runtime import Subagent
 from litehive.domain.task import TaskRecord
-from litehive.observability.events import append_event, append_session_log, ensure_session_log
+from litehive.observability.events import append_session_log, ensure_session_log
 from litehive.tasks.runtime import mark_subagent_pid
 
 if TYPE_CHECKING:
@@ -42,25 +43,28 @@ _COMPLETED_INACTIVITY_PATTERN = re.compile(
 )
 
 
-class SessionMixin:
-    """Session I/O methods extracted from SubagentManager.
+@dataclass
+class SubagentSessionManager:
+    """
+    Persist subagent session state and stream artifacts for one manager.
 
-    Subclasses must provide: self.root, self.workspace, self.sandbox, self.config, self._stream_offsets.
+    ``SubagentManager`` delegates all session I/O here: initial
+    snapshots, metadata-only updates, event-stream persistence,
+    append-only stream deltas, PID recording, and stdout inactivity
+    checks. Keeping these responsibilities in a concrete collaborator
+    avoids inheritance while making the session boundary explicit.
     """
 
-    # Attributes the concrete SubagentManager subclass is contractually required
-    # to set in __init__ — declared here so type checkers can resolve them on
-    # the mixin without each method having to repeat the pattern.
     root: Path
     workspace: "Workspace"
     sandbox: "SandboxLauncher"
     config: "LitehiveConfig"
-    _stream_offsets: dict[str, int]
+    _stream_offsets: dict[str, int] = field(default_factory=dict)
 
     @staticmethod
     def render_execution_trace(
         engine_name: str,
-        execution: CLIExecutionResult | None,
+        execution: CLIExecutionResult,
     ) -> str:
         """
         Produce the human-readable transcript saved alongside each
@@ -73,8 +77,6 @@ class SessionMixin:
         events would leave the transcript artifact empty.
         """
         del engine_name
-        if execution is None:
-            return ""
         events = parse_unified_events(execution.stdout)
         if not events:
             return execution.transcript
@@ -83,7 +85,7 @@ class SessionMixin:
     @staticmethod
     def extract_execution_continuation(
         engine_name: str,
-        execution: CLIExecutionResult | None,
+        execution: CLIExecutionResult,
     ) -> RuntimeEngineContinuation | None:
         """Pull the engine-specific resume token from the run result so retry and continuation flows can hand it back to the engine on the next turn."""
         return extract_engine_continuation(engine_name, execution)
@@ -96,14 +98,14 @@ class SessionMixin:
         subagent_id: str | None = None,
     ) -> LiveTimeline | None:
         """Parse stdout into the live event timeline persisted as the subagent's ``event_stream`` artifact, so the status UI can replay tool calls without re-parsing raw stdout each time."""
-        return event_stream_from_events(
+        return recovered_timeline_from_events(
             parse_unified_events(stdout),
             engine_name=engine_name,
             task_id=task_id,
             subagent_id=subagent_id,
         )
 
-    def append_stream_delta(self, base: Path, ref: SubagentRef, stream: str, full_content: str) -> None:
+    def append_stream_delta(self, base: Path, ref: Subagent, stream: str, full_content: str) -> None:
         """
         Append only the new portion of a stream to the append-only log.
 
@@ -123,7 +125,7 @@ class SessionMixin:
         self,
         task: TaskRecord,
         base: Path,
-        ref: SubagentRef,
+        ref: Subagent,
         prompt: str,
     ) -> None:
         """Lay down the empty stdout/stderr logs and the initial running snapshot.
@@ -134,46 +136,39 @@ class SessionMixin:
         """
         ensure_session_log(base, "stdout")
         ensure_session_log(base, "stderr")
-        append_event(
-            self.workspace,
+        self.workspace.append_event(
             task,
-            "subagent_started",
-            data={
-                "subagent_id": ref.id,
-                "role": ref.role,
-                "engine": ref.engine,
-                "sandboxed": ref.sandboxed,
-            },
+            SubagentStartedEvent(
+                subagent_id=ref.id,
+                role=ref.role,
+                engine=ref.engine,
+                sandboxed=ref.sandboxed,
+            ),
         )
         self.write_session_snapshot(
             task,
             base,
             ref,
-            prompt=prompt,
-            transcript="",
-            stdout="",
-            stderr="",
-            report_payload={
-                "status": ref.status,
-                "summary": "",
-                "files_changed": [],
-                "tests": {"added": 0, "passing": 0},
-                "warnings": [],
-                "resource_control": self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
-            },
-            exit_code=None,
-            pid=None,
-            interruption_reason=None,
+            snapshot=SubagentSessionSnapshot(
+                prompt=prompt,
+                transcript="",
+                stdout="",
+                stderr="",
+                report=SubagentReportPayload(
+                    status=ref.status,
+                    summary="",
+                    tests={"added": 0, "passing": 0},
+                    resource_control=self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
+                ),
+                metadata=SubagentSessionMetadata(exit_code=None, pid=None),
+            ),
         )
 
     def write_session_metadata(
         self,
         task: TaskRecord,
-        ref: SubagentRef,
-        exit_code: int | None,
-        pid: int | None,
-        interruption_reason: str | None = None,
-        continuation=None,
+        ref: Subagent,
+        metadata: SubagentSessionMetadata,
     ) -> None:
         """
         Update the session row without touching the report or stream
@@ -190,10 +185,6 @@ class SessionMixin:
         existing = load_subagent_session(self.workspace, task.id, ref.id)
         if isinstance(existing.get("created_at"), str):
             created_at = existing["created_at"]
-        if continuation is None:
-            continuation_payload = None
-        else:
-            continuation_payload = continuation.model_dump(mode="python")
         save_subagent_artifacts(
             self.workspace,
             task.id,
@@ -207,15 +198,15 @@ class SessionMixin:
                 "sandbox": ref.sandbox_summary or "host",
                 "created_at": created_at,
                 "updated_at": utcnow(),
-                "pid": pid,
-                "exit_code": exit_code,
-                "interruption_reason": interruption_reason,
+                "pid": metadata.pid,
+                "exit_code": metadata.exit_code,
+                "interruption_reason": metadata.interruption_reason,
                 "resource_control": resource_control,
-                "continuation": continuation_payload,
+                "continuation": metadata.continuation_payload(),
             },
         )
 
-    def record_subagent_pid(self, task: TaskRecord, ref: SubagentRef, pid: int | None) -> None:
+    def record_subagent_pid(self, task: TaskRecord, ref: Subagent, pid: int | None) -> None:
         """
         Pin the engine PID into the runtime row, session metadata,
         and event log.
@@ -233,16 +224,11 @@ class SessionMixin:
         self.write_session_metadata(
             task,
             ref,
-            exit_code=None,
-            pid=pid,
-            interruption_reason=None,
-            continuation=None,
+            metadata=SubagentSessionMetadata(exit_code=None, pid=pid),
         )
-        append_event(
-            self.workspace,
+        self.workspace.append_event(
             task,
-            "subagent_pid",
-            data={"subagent_id": ref.id, "pid": pid},
+            SubagentPidEvent(subagent_id=ref.id, pid=pid),
         )
 
     def subagent_inactivity_timeout_seconds(self, engine_name: str) -> float:
@@ -329,7 +315,7 @@ class SessionMixin:
 
     def write_event_stream(
         self,
-        ref: SubagentRef,
+        ref: Subagent,
         task: TaskRecord,
         stdout: str,
     ) -> None:
@@ -353,16 +339,8 @@ class SessionMixin:
         self,
         task: TaskRecord,
         base: Path,
-        ref: SubagentRef,
-        prompt: str,
-        transcript: str,
-        stdout: str,
-        stderr: str,
-        report_payload: dict[str, object],
-        exit_code: int | None,
-        pid: int | None,
-        interruption_reason: str | None,
-        continuation=None,
+        ref: Subagent,
+        snapshot: SubagentSessionSnapshot,
     ) -> None:
         """
         Write a complete subagent snapshot in one call.
@@ -379,10 +357,6 @@ class SessionMixin:
         existing = load_subagent_session(self.workspace, task.id, ref.id)
         if isinstance(existing.get("created_at"), str):
             created_at = existing["created_at"]
-        if continuation is None:
-            continuation_payload = None
-        else:
-            continuation_payload = continuation.model_dump(mode="python")
         save_subagent_artifacts(
             self.workspace,
             task.id,
@@ -396,18 +370,19 @@ class SessionMixin:
                 "sandbox": ref.sandbox_summary or "host",
                 "created_at": created_at,
                 "updated_at": utcnow(),
-                "pid": pid,
-                "exit_code": exit_code,
-                "interruption_reason": interruption_reason,
+                "pid": snapshot.metadata.pid,
+                "exit_code": snapshot.metadata.exit_code,
+                "interruption_reason": snapshot.metadata.interruption_reason,
                 "resource_control": resource_control,
-                "continuation": continuation_payload,
+                "continuation": snapshot.metadata.continuation_payload(),
             },
-            report=report_payload,
+            report=snapshot.report.as_dict(),
         )
-        write_text_artifact(base, "prompt", ".txt", prompt, compress=False)
-        if ref.status == "running":
-            remove_text_artifact(base, "execution_trace", ".md")
+        artifacts = ArtifactService(base)
+        artifacts.write_text("prompt", ".txt", snapshot.prompt, compress=False)
+        if ref.status == SubagentStatus.RUNNING:
+            artifacts.remove_text("execution_trace", ".md")
         else:
-            write_text_artifact(base, "execution_trace", ".md", transcript, compress=True)
-        write_stream_artifact(base, "stdout", stdout, compress=False)
-        write_stream_artifact(base, "stderr", stderr, compress=False)
+            artifacts.write_text("execution_trace", ".md", snapshot.transcript, compress=True)
+        artifacts.write_stream("stdout", snapshot.stdout, compress=False)
+        artifacts.write_stream("stderr", snapshot.stderr, compress=False)

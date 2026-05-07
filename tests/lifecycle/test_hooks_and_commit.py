@@ -27,7 +27,6 @@ from litehive.state.records import create_task, get_task, save_task, set_task_wo
 from litehive.tasks.journal import render_task_journal
 from litehive.tasks.queue import dequeue_next_task
 from litehive.tasks.paths import task_dir
-from litehive.tasks.activity import load_task_activity
 from litehive.tasks.report_storage import load_stage_reports
 from litehive.worktree.paths import serialize_worktree_path, task_worktree_branch, task_worktree_path
 from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
@@ -1002,7 +1001,7 @@ def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path
     assert (tmp_path / "after_commit_branch.txt").read_text().strip() == "main"
     assert not worktree.exists()
 
-    activity_entries = load_task_activity(Workspace.from_path(tmp_path), refreshed)
+    activity_entries = Workspace.from_path(tmp_path).task_activity(refreshed).load()
     assert activity_entries[-1].role == "hook"
     assert activity_entries[-1].stage == "commit_to_git"
     assert activity_entries[-1].verdict == "reject"
@@ -1103,7 +1102,7 @@ def test_run_task_before_accepting_hook_retries_and_continues(
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
 
-    activity_entries = load_task_activity(Workspace.from_path(tmp_path), refreshed)
+    activity_entries = Workspace.from_path(tmp_path).task_activity(refreshed).load()
     hook_entries = [entry for entry in activity_entries if entry.role == "hook"]
     assert hook_entries
     assert hook_entries[-1].stage == "accepting"

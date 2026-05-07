@@ -20,6 +20,7 @@ import typer
 
 from litehive.agents.session_store import load_subagent_session
 from litehive.container import build_workspace
+from litehive.domain.agent import SubagentId
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.workspace import Workspace
 
@@ -27,7 +28,6 @@ from litehive.config.workspace import normalize_workspace_root, resolve_workspac
 from litehive.domain.reports import TaskActivityEntry, TaskActivityVerdict, classify_task_activity_verdict
 from litehive.tasks.status import close_task_for_workspace, update_task_for_workspace
 from litehive.state.persist import load_state
-from litehive.tasks.activity import append_task_activity
 
 
 VERDICT_ALLOWLIST: dict[str, set[str]] = {
@@ -58,7 +58,7 @@ def _current_role() -> str | None:
     return os.environ.get("LITEHIVE_AGENT_ROLE")
 
 
-def _current_subagent_id() -> str | None:
+def _current_subagent_id() -> SubagentId | None:
     """
     Read the orchestrator-injected subagent id.
 
@@ -68,7 +68,7 @@ def _current_subagent_id() -> str | None:
     """
     subagent_id = os.environ.get("LITEHIVE_SUBAGENT_ID")
     if subagent_id and subagent_id.strip():
-        return subagent_id.strip()
+        return SubagentId(subagent_id.strip())
     return None
 
 
@@ -116,7 +116,7 @@ def _resolve_report_stage(explicit_stage: str | None, task, pipeline_stage: str 
         return env_stage
     if pipeline_stage:
         return pipeline_stage
-    runtime_stage = task.runtime.pipeline.current_stage.stage
+    runtime_stage = task.current_pipeline_stage
     if runtime_stage:
         return runtime_stage
     return task.pipeline_status
@@ -137,7 +137,7 @@ def _allowed_verdicts_for_role(role: str) -> set[str]:
 @dataclass(frozen=True)
 class AgentReportIdentity:
     role: str
-    subagent_id: str
+    subagent_id: SubagentId
 
 
 def _resolve_report_identity(workspace: Workspace, task) -> AgentReportIdentity:
@@ -312,6 +312,7 @@ def agent_report_command(
     )
     verdict_classification = classify_task_activity_verdict(agent_role, normalized_verdict)
     entry = TaskActivityEntry(
+        source="agent",
         role=agent_role,
         stage=actual_stage,
         target_stage=normalized_target_stage,
@@ -322,7 +323,7 @@ def agent_report_command(
         source_subagent_id=identity.subagent_id,
         follow_up_task_id=normalized_follow_up_task,
     )
-    append_task_activity(workspace_obj, task, entry)
+    workspace_obj.task_activity(task).append(entry)
     print(f"task: {task.id}")
     print(f"stage: {actual_stage}")
     print(f"verdict: {normalized_verdict}")

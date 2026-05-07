@@ -12,7 +12,7 @@ reads activity for routing should be redirected to the reports.
 
 from typing import Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .common import (
     FEEDBACK_CAP,
@@ -26,6 +26,7 @@ from .common import (
     cap_feedback,
     utcnow,
 )
+from .agent import SubagentId
 from .recovery import TriggerEventKind
 
 
@@ -39,6 +40,7 @@ ReportPipelineState: TypeAlias = TaskStage | Literal[PipelineState.MERGE_RESOLVI
 # the runner stamps on entries that aren't tied to an executable stage. The
 # union covers both without collapsing back to ``str``.
 TaskActivityStage: TypeAlias = ReportPipelineState | PipelineStatus
+TaskActivitySource: TypeAlias = Literal["agent", "operator", "system"]
 StageReportVerdict: TypeAlias = Literal["pass", "reject", "blocked"]
 TaskActivityVerdict: TypeAlias = Literal[
     "pass",
@@ -53,17 +55,6 @@ TaskActivityVerdict: TypeAlias = Literal[
 
 SEMANTIC_REJECT_CLASSIFICATION = "semantic_reject"
 SEMANTIC_REJECT_ROLES = frozenset({"qa", "reviewer"})
-_STAGE_REPORT_VERDICT_ALIASES: dict[Verdict, StageReportVerdict] = {
-    Verdict.PASS: "pass",
-    Verdict.ACCEPT: "pass",
-    Verdict.RESUME: "pass",
-    Verdict.ADVANCE: "pass",
-    Verdict.DONE: "pass",
-    Verdict.REJECT: "reject",
-    Verdict.FAIL: "reject",
-    Verdict.BLOCKED: "blocked",
-    Verdict.BUDGET_HIT: "blocked",
-}
 
 
 def classify_task_activity_verdict(role: str, verdict: str) -> str | None:
@@ -95,7 +86,7 @@ def canonical_stage_report_verdict(verdict: Verdict | str) -> StageReportVerdict
         verdict_kind = verdict if isinstance(verdict, Verdict) else Verdict(verdict.strip().lower())
     except ValueError:
         return None
-    return _STAGE_REPORT_VERDICT_ALIASES.get(verdict_kind)
+    return verdict_kind.stage_report_verdict
 
 
 # Activity-entry verdicts that count as a CLI-submitted stage report.
@@ -272,6 +263,7 @@ class TaskActivityEntry(BaseModel):
     ``StageReport`` is for.
     """
 
+    source: TaskActivitySource = "agent"  # Actor class that produced this activity entry
     role: str  # Who created this entry (agent role, operator, system)
     stage: TaskActivityStage  # Pipeline stage where activity occurred
     target_stage: TaskActivityStage | None = None  # Target stage if this is a transition
@@ -279,9 +271,46 @@ class TaskActivityEntry(BaseModel):
     verdict_classification: str | None = None  # Machine-readable verdict classification
     message: str  # Free-form human-readable activity description
     files_changed: list[str] = Field(default_factory=list)  # Files modified as part of this activity
-    source_subagent_id: str | None = None  # Subagent session that submitted this entry, when applicable
+    source_subagent_id: SubagentId | None = None  # Subagent session that submitted this entry, when applicable
     follow_up_task_id: str | None = None  # Optional follow-up task reference
     created_at: str = Field(default_factory=utcnow)  # When the activity occurred
+
+    @model_validator(mode="before")
+    @classmethod
+    def _default_legacy_source(cls, data):
+        """
+        Preserve old activity rows that predate explicit source modeling.
+
+        Current constructors should pass ``source`` explicitly. Persisted
+        rows written before the field existed did not know whether a role
+        string came from an agent session, operator, or system helper.
+        A legacy row with ``source_subagent_id`` is still clearly
+        agent-authored; rows without it load as operator-visible
+        activity instead of being dropped.
+        """
+        if not isinstance(data, dict):
+            return data
+        if "source" in data:
+            return data
+        copied = dict(data)
+        if copied.get("source_subagent_id"):
+            copied["source"] = "agent"
+        else:
+            copied["source"] = "operator"
+        return copied
+
+    @model_validator(mode="after")
+    def _require_agent_source_subagent_id(self):
+        """
+        Agent-authored activity must be tied to the exact subagent session.
+
+        Operator and system entries legitimately have no subagent id, but
+        agent verdicts are consumed by post-turn readers that must not
+        accidentally pick up a report from another session.
+        """
+        if self.source == "agent" and not self.source_subagent_id:
+            raise ValueError("agent activity requires source_subagent_id")
+        return self
 
 
 __all__ = [
@@ -297,6 +326,7 @@ __all__ = [
     "StageReport",
     "StageReportVerdict",
     "TaskActivityEntry",
+    "TaskActivitySource",
     "TaskActivityStage",
     "TRUNCATION_MARKER",
     "cap_feedback",

@@ -62,11 +62,22 @@ def build_subagent_manager_for_workspace(
     """
     from litehive.agents.manager import SubagentManager  # noqa: PLC0415
     from litehive.agents.sandbox import SandboxLauncher  # noqa: PLC0415
+    from litehive.agents.engine_manager import EngineManager  # noqa: PLC0415
+    from litehive.agents.session import SubagentSessionManager  # noqa: PLC0415
+    from litehive.agents.subagent_ids import SubagentIdRepository  # noqa: PLC0415
 
     if manager_cls is not None and manager_cls is not SubagentManager:
         return manager_cls(workspace.root, execution_root=execution_root)
 
     sandbox = SandboxLauncher(workspace.root, config)
+    engines = EngineManager()
+    sessions = SubagentSessionManager(
+        root=workspace.root,
+        workspace=workspace,
+        sandbox=sandbox,
+        config=config,
+    )
+    subagent_ids = SubagentIdRepository(workspace)
     manager_type = manager_cls or SubagentManager
     return manager_type(
         workspace.root,
@@ -74,6 +85,9 @@ def build_subagent_manager_for_workspace(
         workspace=workspace,
         config=config,
         sandbox=sandbox,
+        sessions=sessions,
+        engines=engines,
+        subagent_ids=subagent_ids,
     )
 
 

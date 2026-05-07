@@ -27,7 +27,6 @@ from litehive.tasks.audit import snapshot_task_audit_state
 from litehive.tasks.queue import drop_task_from_workspace_state
 from litehive.tasks.stop import stop_current_task
 from litehive.tasks._status_helpers import (
-    _CLOSE_OUTCOME_REASON_CODES,
     _apply_cancelled_task_state,
     _apply_close_task_state,
     _apply_parked_task_state,
@@ -35,6 +34,17 @@ from litehive.tasks._status_helpers import (
     _reset_pipeline_state,
     _terminate_subagent_pid,
 )
+
+
+def _allowed_close_outcome_values() -> list[str]:
+    """
+    Return the CLI-supported close outcome spellings.
+
+    OutcomeReasonCode carries many lifecycle-internal reasons; this
+    projection lists only the terminal operator choices accepted by the
+    close transition.
+    """
+    return sorted(code.value for code in OutcomeReasonCode if code.is_task_close_outcome)
 
 
 def _abandon_task_transition(
@@ -109,10 +119,10 @@ def _close_task_transition(
     try:
         outcome_code = OutcomeReasonCode(outcome)
     except ValueError:
-        allowed = ", ".join(sorted(code.value for code in _CLOSE_OUTCOME_REASON_CODES))
+        allowed = ", ".join(_allowed_close_outcome_values())
         raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
-    if outcome_code not in _CLOSE_OUTCOME_REASON_CODES:
-        allowed = ", ".join(sorted(code.value for code in _CLOSE_OUTCOME_REASON_CODES))
+    if not outcome_code.is_task_close_outcome:
+        allowed = ", ".join(_allowed_close_outcome_values())
         raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
     state = load_state(root)
     stop_summary: StopTaskSummary | None = None

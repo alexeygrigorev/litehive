@@ -508,7 +508,7 @@ def _task_issue_stage(task: TaskRecord, preferred_stage: str | None = None) -> s
         return preferred_stage
     return str(
         task.runtime.pipeline.last_outcome.stage
-        or task.runtime.pipeline.current_stage.stage
+        or task.current_pipeline_stage
         or task.pipeline_status
         or "-"
     )

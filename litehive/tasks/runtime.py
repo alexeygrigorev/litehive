@@ -16,7 +16,7 @@ from litehive.domain.runtime import (
     RuntimeEngineContinuation,
     RuntimeEngineSwitch,
     RuntimeStageState,
-    SubagentRef,
+    Subagent,
     RuntimeSubagentState,
     TaskOutcomeState,
 )
@@ -56,7 +56,7 @@ def _running_stage_state(stage: str, started_at: str) -> RuntimeStageState:
 
 
 def _runtime_subagent_state(
-    ref: SubagentRef,
+    subagent: Subagent,
     started_at: str,
     updated_at: str,
     pid: int | None = None,
@@ -67,7 +67,8 @@ def _runtime_subagent_state(
     continuation: RuntimeEngineContinuation | None = None,
 ) -> RuntimeSubagentState:
     """
-    Project a ``SubagentRef`` plus run-time fields into ``RuntimeSubagentState``.
+    Project a persisted ``Subagent`` plus run-time fields into
+    ``RuntimeSubagentState``.
 
     The single helper used by ``mark_subagent_started`` /
     ``mark_subagent_progress`` / ``mark_subagent_finished`` so every
@@ -75,14 +76,14 @@ def _runtime_subagent_state(
     subagent field only requires editing one place.
     """
     return RuntimeSubagentState(
-        id=ref.id,
-        role=ref.role,
-        engine=ref.engine,
-        status=ref.status,
-        path=ref.path,
+        id=subagent.id,
+        role=subagent.role,
+        engine=subagent.engine,
+        status=subagent.status,
+        path=subagent.path,
         pid=pid,
-        sandboxed=ref.sandboxed,
-        sandbox_summary=ref.sandbox_summary,
+        sandboxed=subagent.sandboxed,
+        sandbox_summary=subagent.sandbox_summary,
         started_at=started_at,
         updated_at=updated_at,
         completed_at=completed_at,
@@ -403,7 +404,7 @@ def apply_stage_finished(task: TaskRecord) -> None:
     task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now)
 
 
-def mark_subagent_started(root: Path, task: TaskRecord, ref: SubagentRef) -> None:
+def mark_subagent_started(root: Path, task: TaskRecord, ref: Subagent) -> None:
     """
     Attach a freshly launched subagent to the task.
 
@@ -459,7 +460,7 @@ def mark_subagent_progress(
         return
     now = utcnow()
     task.runtime.pipeline.updated_at = now
-    if task.runtime.pipeline.current_stage.stage is not None:
+    if task.current_pipeline_stage is not None:
         task.runtime.pipeline.current_stage = task.runtime.pipeline.current_stage.model_copy(update={"updated_at": now})
     updates: dict[str, object] = {"updated_at": now}
     if pid is not None:
@@ -475,7 +476,7 @@ def mark_subagent_progress(
 def mark_subagent_finished(
     root: Path,
     task: TaskRecord,
-    ref: SubagentRef,
+    ref: Subagent,
     transcript: str,
     exit_code: int,
     pid: int | None = None,

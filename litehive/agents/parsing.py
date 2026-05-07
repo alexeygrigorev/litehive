@@ -10,8 +10,7 @@ from litehive.domain.reports import (
 from litehive.domain.common import Verdict
 from litehive.domain.task import TaskRecord
 
-from litehive.domain.agent import SubagentResult
-from litehive.tasks.activity import latest_task_activity_entry
+from litehive.domain.agent import SubagentId, SubagentResult
 from litehive.workspace import Workspace
 
 
@@ -34,7 +33,7 @@ class MissingVerdictError(Exception):
     without re-deriving them.
     """
 
-    def __init__(self, *, pipeline_state: ReportPipelineState, subagent_id: str) -> None:
+    def __init__(self, *, pipeline_state: ReportPipelineState, subagent_id: SubagentId) -> None:
         self.pipeline_state = pipeline_state
         self.subagent_id = subagent_id
         super().__init__(
@@ -61,15 +60,13 @@ def stage_report_from_subagent(
     artifact honest about the fact that no verdict was submitted.
     """
     pipeline_state: ReportPipelineState = canonical_report_pipeline_state(stage)
-    latest = latest_task_activity_entry(
-        workspace,
-        task,
+    latest = workspace.task_activity(task).latest_entry(
         stage=pipeline_state,
-        source_subagent_id=result.ref.id,
+        source_subagent_id=SubagentId(result.ref.id),
         verdicts=REPORT_VERDICT_KINDS,
     )
     if latest is None:
-        raise MissingVerdictError(pipeline_state=pipeline_state, subagent_id=result.ref.id)
+        raise MissingVerdictError(pipeline_state=pipeline_state, subagent_id=SubagentId(result.ref.id))
 
     if latest.verdict == Verdict.REJECT:
         failure_classification = latest.verdict_classification

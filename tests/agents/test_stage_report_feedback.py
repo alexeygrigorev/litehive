@@ -189,7 +189,7 @@ def test_subagent_manager_keeps_full_transcript_artifacts(
             del execution
             return transcript
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
     subagent_dir = task_dir(tmp_path, task) / result.ref.path

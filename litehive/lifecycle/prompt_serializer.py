@@ -17,7 +17,7 @@ The serializer:
 
 Section builders live in :mod:`litehive.lifecycle.prompt_sections`; the
 activity history rendering stays here because it's tightly coupled to the
-``load_task_activity`` data path tests monkey-patch on this module.
+workspace activity-log data path.
 """
 
 from typing import Any
@@ -50,7 +50,6 @@ from litehive.lifecycle.prompt_sections import (
     _verdict_instructions_section,
 )
 from litehive.lifecycle.prompt_types import AgentPrompt, RecoveryPrompt
-from litehive.tasks.activity import load_task_activity
 from litehive.workspace import Workspace
 
 
@@ -150,12 +149,12 @@ def _load_task_activity_history(workspace: Workspace, task_record: TaskRecord) -
 
     Called only when the typed prompt did not pre-populate ``activity``
     — typically the production path, where the serializer has to fall
-    back to disk. Tests monkey-patch ``load_task_activity`` on this
-    module which is why the history loader lives here rather than in
-    ``prompt_sections``.
+    back to disk. The history loader lives here rather than in
+    ``prompt_sections`` because it crosses the workspace persistence
+    boundary before adapting entries into prompt dictionaries.
     """
     try:
-        activity_entries = load_task_activity(workspace, task_record)
+        activity_entries = workspace.task_activity(task_record).load()
     except (OSError, ValidationError, yaml.YAMLError):
         return []
     return [
@@ -173,8 +172,7 @@ def _load_task_activity_history(workspace: Workspace, task_record: TaskRecord) -
 # ── activity history rendering ──────────────────────────────────────────
 #
 # Lives here (not in prompt_sections) because it's tightly coupled to the
-# ``load_task_activity`` data path above and to ``last_rejection`` matching;
-# tests also monkey-patch ``load_task_activity`` on this module.
+# workspace activity-log data path above and to ``last_rejection`` matching.
 
 
 _MESSAGE_CAP = 500

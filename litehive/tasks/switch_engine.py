@@ -20,7 +20,6 @@ from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import SwitchTaskSummary
 from litehive.state.persist import load_state
-from litehive.tasks.activity import append_task_activity
 from litehive.tasks.audit import (
     append_task_audit_entries,
     build_task_audit_entry,
@@ -172,10 +171,9 @@ def switch_task_engine_for_workspace(
 
     prior_work_paths = _switch_prior_work_paths(root, task)
 
-    append_task_activity(
-        workspace,
-        task,
+    workspace.task_activity(task).append(
         TaskActivityEntry(
+            source="operator",
             role="operator",
             stage=task.pipeline_status,
             verdict="comment",
@@ -186,7 +184,7 @@ def switch_task_engine_for_workspace(
                 new_engine=engine,
                 prior_work_paths=prior_work_paths,
             ),
-        ),
+        )
     )
     append_task_audit_entries(
         workspace,

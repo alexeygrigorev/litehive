@@ -18,7 +18,6 @@ from litehive.tasks.paths import (
     resolve_artifact_path,
     task_dir,
 )
-from litehive.tasks.activity import load_task_activity
 from litehive.tasks.report_storage import latest_stage_report
 from litehive.workspace import Workspace
 from litehive.worktree.service import WorktreeService
@@ -154,7 +153,7 @@ def _print_latest_activity(workspace: Workspace, task) -> None:
     stage reports). Showing both surfaces in evidence covers the
     case where an agent posted feedback without a verdict change.
     """
-    activity = load_task_activity(workspace, task)
+    activity = workspace.task_activity(task).load()
     if not activity:
         print("latest_activity: none")
         return

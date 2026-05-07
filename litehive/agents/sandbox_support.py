@@ -1,13 +1,13 @@
 """Generic sandbox helpers for wrapping external engine adapters."""
 
 from pathlib import Path
-from typing import Callable, Mapping, Protocol, cast, runtime_checkable
+from typing import Callable, Mapping, Protocol, runtime_checkable
 
 from heru.base import CLIExecutionResult, CLIInvocation, ExternalCLIAdapter
+from litehive.agents.engine_callables import resolve_cli_execution_callable
 from heru.engine_detection import (
     ORIGINAL_EXTERNAL_ADAPTER_RUN,
     ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE,
-    effective_engine_callable,
     filter_supported_kwargs,
     has_callable_override,
 )
@@ -183,13 +183,12 @@ class SandboxedAdapter(ExternalCLIAdapter):
 
     def finalize_invocation(self, invocation: CLIInvocation) -> CLIInvocation:
         """Hand the invocation to the sandbox launcher right before exec — this is where "engine wants to run X" turns into "actually run X confined"."""
-        wrapped = self._launcher.wrap_invocation(
+        return self._launcher.wrap_invocation(
             self._engine_name,
             self.binary,
             invocation,
             role=self._role,
         )
-        return cast(CLIInvocation, wrapped)
 
     def sandbox_details(self) -> tuple[bool, str]:
         """Expose the policy snapshot to the status/audit surface so operators can confirm the engine actually ran sandboxed for this run."""
@@ -218,10 +217,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
         being silently skipped because we used the base ``run``.
         """
         if has_callable_override(self._adapter, "run", ORIGINAL_EXTERNAL_ADAPTER_RUN):
-            run_callable = cast(
-                Callable[..., CLIExecutionResult],
-                effective_engine_callable(self._adapter, "run") or self._adapter.run,
-            )
+            run_callable = resolve_cli_execution_callable(self._adapter, "run")
             run_kwargs: dict[str, object] = {"model": model}
             if max_turns is not None:
                 run_kwargs["max_turns"] = max_turns
@@ -264,10 +260,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
     ) -> CLIExecutionResult:
         """Streaming counterpart of ``run`` with the same override-detection logic so engine-specific live paths still go through ``finalize_invocation``."""
         if has_callable_override(self._adapter, "run_live", ORIGINAL_EXTERNAL_ADAPTER_RUN_LIVE):
-            run_live_callable = cast(
-                Callable[..., CLIExecutionResult],
-                effective_engine_callable(self._adapter, "run_live") or self._adapter.run_live,
-            )
+            run_live_callable = resolve_cli_execution_callable(self._adapter, "run_live")
             run_live_kwargs: dict[str, object] = {"model": model}
             if max_turns is not None:
                 run_live_kwargs["max_turns"] = max_turns

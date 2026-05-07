@@ -1,0 +1,1460 @@
+[
+  {
+    "word": "Registry",
+    "rendered": "\nRegistry.",
+    "start_ms": 32760,
+    "end_ms": 36300
+  },
+  {
+    "word": "Injection",
+    "rendered": "\nInjection.",
+    "start_ms": 67080,
+    "end_ms": 71280
+  },
+  {
+    "word": "Uh",
+    "rendered": "\nUh,",
+    "start_ms": 105180,
+    "end_ms": 105660
+  },
+  {
+    "word": "was",
+    "rendered": null,
+    "start_ms": 105660,
+    "end_ms": 106200
+  },
+  {
+    "word": "done",
+    "rendered": "done.",
+    "start_ms": 106200,
+    "end_ms": 106500
+  },
+  {
+    "word": "Register",
+    "rendered": "\nRegister",
+    "start_ms": 133860,
+    "end_ms": 134940
+  },
+  {
+    "word": "workspace",
+    "rendered": null,
+    "start_ms": 134940,
+    "end_ms": 135420
+  },
+  {
+    "word": "path",
+    "rendered": "path.",
+    "start_ms": 135420,
+    "end_ms": 135720
+  },
+  {
+    "word": "Okay",
+    "rendered": "\nOkay,",
+    "start_ms": 145380,
+    "end_ms": 146400
+  },
+  {
+    "word": "runtime",
+    "rendered": null,
+    "start_ms": 146400,
+    "end_ms": 147000
+  },
+  {
+    "word": "settings",
+    "rendered": "settings.",
+    "start_ms": 147000,
+    "end_ms": 147180
+  },
+  {
+    "word": "Runtime",
+    "rendered": "\nRuntime",
+    "start_ms": 151380,
+    "end_ms": 152280
+  },
+  {
+    "word": "settings",
+    "rendered": null,
+    "start_ms": 152280,
+    "end_ms": 152460
+  },
+  {
+    "word": "Keys",
+    "rendered": "Keys.",
+    "start_ms": 152460,
+    "end_ms": 153060
+  },
+  {
+    "word": "Emerge",
+    "rendered": "\nEmerge",
+    "start_ms": 167220,
+    "end_ms": 168300
+  },
+  {
+    "word": "country",
+    "rendered": null,
+    "start_ms": 168300,
+    "end_ms": 168540
+  },
+  {
+    "word": "players",
+    "rendered": "players.",
+    "start_ms": 168540,
+    "end_ms": 168960
+  },
+  {
+    "word": "The",
+    "rendered": "\nThe",
+    "start_ms": 176580,
+    "end_ms": 177060
+  },
+  {
+    "word": "Chimlin",
+    "rendered": "Chimlin.",
+    "start_ms": 177060,
+    "end_ms": 177540
+  },
+  {
+    "word": "Freeze",
+    "rendered": "\nFreeze",
+    "start_ms": 198480,
+    "end_ms": 199200
+  },
+  {
+    "word": "value",
+    "rendered": "value.",
+    "start_ms": 199200,
+    "end_ms": 199380
+  },
+  {
+    "word": "Okay",
+    "rendered": "\nOkay.",
+    "start_ms": 205020,
+    "end_ms": 205200
+  },
+  {
+    "word": "Um",
+    "rendered": "\nUm.",
+    "start_ms": 230520,
+    "end_ms": 230940
+  },
+  {
+    "word": "We",
+    "rendered": "\nWe,",
+    "start_ms": 280860,
+    "end_ms": 281880
+  },
+  {
+    "word": "which",
+    "rendered": null,
+    "start_ms": 281880,
+    "end_ms": 282180
+  },
+  {
+    "word": "is",
+    "rendered": "is.",
+    "start_ms": 282180,
+    "end_ms": 282420
+  },
+  {
+    "word": "Histol\u00e1mpos",
+    "rendered": null,
+    "start_ms": 284100,
+    "end_ms": 284940
+  },
+  {
+    "word": "number",
+    "rendered": "number.",
+    "start_ms": 284940,
+    "end_ms": 285180
+  },
+  {
+    "word": "That's",
+    "rendered": "\nThat's",
+    "start_ms": 293700,
+    "end_ms": 294060
+  },
+  {
+    "word": "what",
+    "rendered": null,
+    "start_ms": 294060,
+    "end_ms": 294300
+  },
+  {
+    "word": "they",
+    "rendered": null,
+    "start_ms": 294300,
+    "end_ms": 294420
+  },
+  {
+    "word": "said",
+    "rendered": "said.",
+    "start_ms": 294420,
+    "end_ms": 294600
+  },
+  {
+    "word": "engine",
+    "rendered": "Engine",
+    "start_ms": 294600,
+    "end_ms": 294780
+  },
+  {
+    "word": "preference",
+    "rendered": null,
+    "start_ms": 294780,
+    "end_ms": 295200
+  },
+  {
+    "word": "with",
+    "rendered": null,
+    "start_ms": 295200,
+    "end_ms": 295680
+  },
+  {
+    "word": "white",
+    "rendered": null,
+    "start_ms": 295680,
+    "end_ms": 296100
+  },
+  {
+    "word": "sand",
+    "rendered": null,
+    "start_ms": 296100,
+    "end_ms": 296400
+  },
+  {
+    "word": "runtime",
+    "rendered": null,
+    "start_ms": 296400,
+    "end_ms": 297240
+  },
+  {
+    "word": "settings",
+    "rendered": "settings.",
+    "start_ms": 297240,
+    "end_ms": 297420
+  },
+  {
+    "word": "Clear",
+    "rendered": "\nClear",
+    "start_ms": 358620,
+    "end_ms": 359160
+  },
+  {
+    "word": "engines",
+    "rendered": "engines.",
+    "start_ms": 359160,
+    "end_ms": 359940
+  },
+  {
+    "word": "Clear",
+    "rendered": "\nClear,",
+    "start_ms": 381900,
+    "end_ms": 382440
+  },
+  {
+    "word": "clearly",
+    "rendered": "clearly.",
+    "start_ms": 382440,
+    "end_ms": 383820
+  },
+  {
+    "word": "Hello",
+    "rendered": "\nHello!",
+    "start_ms": 389580,
+    "end_ms": 390180
+  },
+  {
+    "word": "We",
+    "rendered": null,
+    "start_ms": 392820,
+    "end_ms": 393000
+  },
+  {
+    "word": "say",
+    "rendered": null,
+    "start_ms": 393000,
+    "end_ms": 393300
+  },
+  {
+    "word": "the",
+    "rendered": null,
+    "start_ms": 393300,
+    "end_ms": 393480
+  },
+  {
+    "word": "file",
+    "rendered": null,
+    "start_ms": 393480,
+    "end_ms": 393720
+  },
+  {
+    "word": "almost",
+    "rendered": "almost.",
+    "start_ms": 393720,
+    "end_ms": 393840
+  },
+  {
+    "word": "Uh",
+    "rendered": "\nUh,",
+    "start_ms": 399840,
+    "end_ms": 400140
+  },
+  {
+    "word": "workspace",
+    "rendered": "workspace.",
+    "start_ms": 400140,
+    "end_ms": 400860
+  },
+  {
+    "word": "Space",
+    "rendered": null,
+    "start_ms": 401580,
+    "end_ms": 402780
+  },
+  {
+    "word": "workspace",
+    "rendered": null,
+    "start_ms": 402780,
+    "end_ms": 403380
+  },
+  {
+    "word": "files",
+    "rendered": "files.",
+    "start_ms": 403380,
+    "end_ms": 403680
+  },
+  {
+    "word": "Workspace",
+    "rendered": "\nWorkspace",
+    "start_ms": 417240,
+    "end_ms": 418800
+  },
+  {
+    "word": "building",
+    "rendered": null,
+    "start_ms": 418800,
+    "end_ms": 419100
+  },
+  {
+    "word": "template",
+    "rendered": null,
+    "start_ms": 419100,
+    "end_ms": 419880
+  },
+  {
+    "word": "and",
+    "rendered": null,
+    "start_ms": 419880,
+    "end_ms": 419940
+  },
+  {
+    "word": "his",
+    "rendered": null,
+    "start_ms": 419940,
+    "end_ms": 420240
+  },
+  {
+    "word": "own",
+    "rendered": null,
+    "start_ms": 420240,
+    "end_ms": 420420
+  },
+  {
+    "word": "shell",
+    "rendered": null,
+    "start_ms": 420420,
+    "end_ms": 420720
+  },
+  {
+    "word": "available",
+    "rendered": "available.",
+    "start_ms": 420720,
+    "end_ms": 421080
+  },
+  {
+    "word": "Principle",
+    "rendered": "\nPrinciple.",
+    "start_ms": 454080,
+    "end_ms": 454860
+  },
+  {
+    "word": "In",
+    "rendered": "\nIn",
+    "start_ms": 479460,
+    "end_ms": 480000
+  },
+  {
+    "word": "workspace",
+    "rendered": null,
+    "start_ms": 480000,
+    "end_ms": 480600
+  },
+  {
+    "word": "literally",
+    "rendered": "literally.",
+    "start_ms": 480600,
+    "end_ms": 481080
+  },
+  {
+    "word": "That",
+    "rendered": "\nThat",
+    "start_ms": 497580,
+    "end_ms": 497700
+  },
+  {
+    "word": "I",
+    "rendered": null,
+    "start_ms": 497700,
+    "end_ms": 497940
+  },
+  {
+    "word": "am",
+    "rendered": "am.",
+    "start_ms": 497940,
+    "end_ms": 498000
+  },
+  {
+    "word": "Workspace",
+    "rendered": null,
+    "start_ms": 500520,
+    "end_ms": 501420
+  },
+  {
+    "word": "parental",
+    "rendered": "parental.",
+    "start_ms": 501420,
+    "end_ms": 502020
+  },
+  {
+    "word": "But",
+    "rendered": "\nBut",
+    "start_ms": 528120,
+    "end_ms": 528180
+  },
+  {
+    "word": "that's",
+    "rendered": null,
+    "start_ms": 528180,
+    "end_ms": 528540
+  },
+  {
+    "word": "it",
+    "rendered": "it.",
+    "start_ms": 528540,
+    "end_ms": 528840
+  },
+  {
+    "word": "Space",
+    "rendered": "\nSpace",
+    "start_ms": 534840,
+    "end_ms": 535260
+  },
+  {
+    "word": "project",
+    "rendered": "project.",
+    "start_ms": 535260,
+    "end_ms": 535440
+  },
+  {
+    "word": "Task",
+    "rendered": "\nTask",
+    "start_ms": 552720,
+    "end_ms": 553440
+  },
+  {
+    "word": "is",
+    "rendered": null,
+    "start_ms": 553440,
+    "end_ms": 553620
+  },
+  {
+    "word": "none",
+    "rendered": null,
+    "start_ms": 553620,
+    "end_ms": 553980
+  },
+  {
+    "word": "or",
+    "rendered": null,
+    "start_ms": 553980,
+    "end_ms": 554580
+  },
+  {
+    "word": "task",
+    "rendered": null,
+    "start_ms": 554580,
+    "end_ms": 554880
+  },
+  {
+    "word": "exists",
+    "rendered": "exists.",
+    "start_ms": 554880,
+    "end_ms": 555300
+  },
+  {
+    "word": "List",
+    "rendered": "\nList.",
+    "start_ms": 573480,
+    "end_ms": 574680
+  },
+  {
+    "word": "comprehension",
+    "rendered": "Comprehension",
+    "start_ms": 574680,
+    "end_ms": 575100
+  },
+  {
+    "word": "is",
+    "rendered": "is.",
+    "start_ms": 575100,
+    "end_ms": 578340
+  },
+  {
+    "word": "Workspace",
+    "rendered": "\nWorkspace.",
+    "start_ms": 602220,
+    "end_ms": 604620
+  },
+  {
+    "word": "Okay",
+    "rendered": "\nOkay.",
+    "start_ms": 609180,
+    "end_ms": 610380
+  },
+  {
+    "word": "Que",
+    "rendered": "\nQue",
+    "start_ms": 662340,
+    "end_ms": 662760
+  },
+  {
+    "word": "pogo",
+    "rendered": null,
+    "start_ms": 662760,
+    "end_ms": 663180
+  },
+  {
+    "word": "Mercado",
+    "rendered": null,
+    "start_ms": 663180,
+    "end_ms": 663600
+  },
+  {
+    "word": "de",
+    "rendered": null,
+    "start_ms": 663600,
+    "end_ms": 664080
+  },
+  {
+    "word": "photo",
+    "rendered": "photo?",
+    "start_ms": 664080,
+    "end_ms": 664680
+  },
+  {
+    "word": "Put",
+    "rendered": "\nPut",
+    "start_ms": 743880,
+    "end_ms": 744180
+  },
+  {
+    "word": "on",
+    "rendered": null,
+    "start_ms": 744180,
+    "end_ms": 744420
+  },
+  {
+    "word": "tasks",
+    "rendered": null,
+    "start_ms": 744420,
+    "end_ms": 744720
+  },
+  {
+    "word": "exists",
+    "rendered": "exists.",
+    "start_ms": 744720,
+    "end_ms": 744960
+  },
+  {
+    "word": "It's",
+    "rendered": "\nIt's",
+    "start_ms": 758280,
+    "end_ms": 759480
+  },
+  {
+    "word": "all",
+    "rendered": null,
+    "start_ms": 759480,
+    "end_ms": 759720
+  },
+  {
+    "word": "four",
+    "rendered": null,
+    "start_ms": 759720,
+    "end_ms": 759840
+  },
+  {
+    "word": "space",
+    "rendered": null,
+    "start_ms": 759840,
+    "end_ms": 760020
+  },
+  {
+    "word": "from",
+    "rendered": null,
+    "start_ms": 760020,
+    "end_ms": 760260
+  },
+  {
+    "word": "search",
+    "rendered": null,
+    "start_ms": 760260,
+    "end_ms": 760440
+  },
+  {
+    "word": "report",
+    "rendered": "report.",
+    "start_ms": 760440,
+    "end_ms": 760800
+  },
+  {
+    "word": "Pick",
+    "rendered": "\nPick",
+    "start_ms": 781320,
+    "end_ms": 783600
+  },
+  {
+    "word": "the",
+    "rendered": null,
+    "start_ms": 783600,
+    "end_ms": 783840
+  },
+  {
+    "word": "right",
+    "rendered": null,
+    "start_ms": 783840,
+    "end_ms": 783960
+  },
+  {
+    "word": "workspace",
+    "rendered": "workspace?",
+    "start_ms": 783960,
+    "end_ms": 784440
+  },
+  {
+    "word": "yes",
+    "rendered": "Yes.",
+    "start_ms": 784440,
+    "end_ms": 785760
+  },
+  {
+    "word": "Register",
+    "rendered": "\nRegister",
+    "start_ms": 806280,
+    "end_ms": 807660
+  },
+  {
+    "word": "workspace",
+    "rendered": "workspace.",
+    "start_ms": 807660,
+    "end_ms": 808140
+  },
+  {
+    "word": "Workspace",
+    "rendered": "\nWorkspace.",
+    "start_ms": 815400,
+    "end_ms": 820260
+  },
+  {
+    "word": "Ensure",
+    "rendered": null,
+    "start_ms": 821220,
+    "end_ms": 823320
+  },
+  {
+    "word": "workspace",
+    "rendered": "workspace.",
+    "start_ms": 823320,
+    "end_ms": 823620
+  },
+  {
+    "word": "Uh",
+    "rendered": "Uh,",
+    "start_ms": 824520,
+    "end_ms": 825540
+  },
+  {
+    "word": "yeah",
+    "rendered": "yeah.",
+    "start_ms": 825540,
+    "end_ms": 825840
+  },
+  {
+    "word": "Workspace",
+    "rendered": "\nWorkspace",
+    "start_ms": 833100,
+    "end_ms": 837540
+  },
+  {
+    "word": "create",
+    "rendered": "create.",
+    "start_ms": 837540,
+    "end_ms": 838260
+  },
+  {
+    "word": "Great",
+    "rendered": null,
+    "start_ms": 838860,
+    "end_ms": 839100
+  },
+  {
+    "word": "workspace",
+    "rendered": null,
+    "start_ms": 839100,
+    "end_ms": 839760
+  },
+  {
+    "word": "lotion",
+    "rendered": "lotion!",
+    "start_ms": 839760,
+    "end_ms": 840000
+  },
+  {
+    "word": "Uh",
+    "rendered": "Uh,",
+    "start_ms": 840660,
+    "end_ms": 841020
+  },
+  {
+    "word": "if",
+    "rendered": null,
+    "start_ms": 841020,
+    "end_ms": 841320
+  },
+  {
+    "word": "so",
+    "rendered": "so,",
+    "start_ms": 841320,
+    "end_ms": 841560
+  },
+  {
+    "word": "intro",
+    "rendered": null,
+    "start_ms": 841560,
+    "end_ms": 842580
+  },
+  {
+    "word": "workspace",
+    "rendered": null,
+    "start_ms": 842580,
+    "end_ms": 843000
+  },
+  {
+    "word": "is",
+    "rendered": "is.",
+    "start_ms": 843000,
+    "end_ms": 843720
+  },
+  {
+    "word": "Um",
+    "rendered": "\nUm,",
+    "start_ms": 862200,
+    "end_ms": 862260
+  },
+  {
+    "word": "execution",
+    "rendered": "execution.",
+    "start_ms": 862260,
+    "end_ms": 863040
+  },
+  {
+    "word": "Correction",
+    "rendered": "\nCorrection.",
+    "start_ms": 882900,
+    "end_ms": 887700
+  },
+  {
+    "word": "Diversions",
+    "rendered": "\nDiversions.",
+    "start_ms": 897540,
+    "end_ms": 900180
+  },
+  {
+    "word": "Drive",
+    "rendered": "\nDrive",
+    "start_ms": 929220,
+    "end_ms": 929580
+  },
+  {
+    "word": "in",
+    "rendered": null,
+    "start_ms": 929580,
+    "end_ms": 930300
+  },
+  {
+    "word": "New",
+    "rendered": null,
+    "start_ms": 930300,
+    "end_ms": 930480
+  },
+  {
+    "word": "Zealand",
+    "rendered": "Zealand.",
+    "start_ms": 930480,
+    "end_ms": 930840
+  },
+  {
+    "word": "Stop",
+    "rendered": "\nStop",
+    "start_ms": 975180,
+    "end_ms": 976620
+  },
+  {
+    "word": "request",
+    "rendered": null,
+    "start_ms": 976620,
+    "end_ms": 977100
+  },
+  {
+    "word": "function",
+    "rendered": "function.",
+    "start_ms": 977100,
+    "end_ms": 977400
+  },
+  {
+    "word": "Another",
+    "rendered": "\nAnother",
+    "start_ms": 982380,
+    "end_ms": 982800
+  },
+  {
+    "word": "device",
+    "rendered": "device.",
+    "start_ms": 982800,
+    "end_ms": 983220
+  },
+  {
+    "word": "Attend",
+    "rendered": "\nAttend",
+    "start_ms": 992520,
+    "end_ms": 994440
+  },
+  {
+    "word": "a",
+    "rendered": null,
+    "start_ms": 994440,
+    "end_ms": 994620
+  },
+  {
+    "word": "pen",
+    "rendered": null,
+    "start_ms": 994620,
+    "end_ms": 994800
+  },
+  {
+    "word": "detention",
+    "rendered": null,
+    "start_ms": 994800,
+    "end_ms": 995040
+  },
+  {
+    "word": "block",
+    "rendered": "block.",
+    "start_ms": 995040,
+    "end_ms": 995220
+  },
+  {
+    "word": "Pastan",
+    "rendered": "\nPastan",
+    "start_ms": 998580,
+    "end_ms": 1000320
+  },
+  {
+    "word": "de",
+    "rendered": null,
+    "start_ms": 1000320,
+    "end_ms": 1000500
+  },
+  {
+    "word": "poblade",
+    "rendered": "poblade.",
+    "start_ms": 1000500,
+    "end_ms": 1001040
+  },
+  {
+    "word": "Uh",
+    "rendered": "\nUh,",
+    "start_ms": 1068420,
+    "end_ms": 1069920
+  },
+  {
+    "word": "pick",
+    "rendered": null,
+    "start_ms": 1069920,
+    "end_ms": 1070340
+  },
+  {
+    "word": "the",
+    "rendered": null,
+    "start_ms": 1070340,
+    "end_ms": 1070640
+  },
+  {
+    "word": "found",
+    "rendered": null,
+    "start_ms": 1070640,
+    "end_ms": 1071720
+  },
+  {
+    "word": "Pokemon",
+    "rendered": null,
+    "start_ms": 1071720,
+    "end_ms": 1072260
+  },
+  {
+    "word": "prefix",
+    "rendered": "prefix.",
+    "start_ms": 1072260,
+    "end_ms": 1073340
+  },
+  {
+    "word": "This",
+    "rendered": null,
+    "start_ms": 1076040,
+    "end_ms": 1076400
+  },
+  {
+    "word": "is",
+    "rendered": null,
+    "start_ms": 1076400,
+    "end_ms": 1076640
+  },
+  {
+    "word": "Brando",
+    "rendered": "Brando.",
+    "start_ms": 1076640,
+    "end_ms": 1077120
+  },
+  {
+    "word": "Executor",
+    "rendered": "\nExecutor.",
+    "start_ms": 1124580,
+    "end_ms": 1125840
+  },
+  {
+    "word": "What's",
+    "rendered": "\nWhat's",
+    "start_ms": 1163940,
+    "end_ms": 1165380
+  },
+  {
+    "word": "your",
+    "rendered": null,
+    "start_ms": 1165380,
+    "end_ms": 1165620
+  },
+  {
+    "word": "heartbeat",
+    "rendered": null,
+    "start_ms": 1165620,
+    "end_ms": 1166040
+  },
+  {
+    "word": "age",
+    "rendered": null,
+    "start_ms": 1166040,
+    "end_ms": 1166160
+  },
+  {
+    "word": "second",
+    "rendered": "second?",
+    "start_ms": 1166160,
+    "end_ms": 1166400
+  },
+  {
+    "word": "Entry",
+    "rendered": "\nEntry.",
+    "start_ms": 1172760,
+    "end_ms": 1173780
+  },
+  {
+    "word": "Clearly",
+    "rendered": "\nClearly",
+    "start_ms": 1193340,
+    "end_ms": 1194480
+  },
+  {
+    "word": "recorded",
+    "rendered": null,
+    "start_ms": 1194480,
+    "end_ms": 1194840
+  },
+  {
+    "word": "demon",
+    "rendered": null,
+    "start_ms": 1194840,
+    "end_ms": 1195200
+  },
+  {
+    "word": "and",
+    "rendered": null,
+    "start_ms": 1195200,
+    "end_ms": 1195620
+  },
+  {
+    "word": "register",
+    "rendered": null,
+    "start_ms": 1195620,
+    "end_ms": 1195980
+  },
+  {
+    "word": "demon",
+    "rendered": "demon.",
+    "start_ms": 1195980,
+    "end_ms": 1196400
+  },
+  {
+    "word": "Let's",
+    "rendered": "\nLet's",
+    "start_ms": 1228380,
+    "end_ms": 1229100
+  },
+  {
+    "word": "start",
+    "rendered": null,
+    "start_ms": 1229100,
+    "end_ms": 1229400
+  },
+  {
+    "word": "the",
+    "rendered": null,
+    "start_ms": 1229400,
+    "end_ms": 1230300
+  },
+  {
+    "word": "super",
+    "rendered": null,
+    "start_ms": 1230300,
+    "end_ms": 1230660
+  },
+  {
+    "word": "termination",
+    "rendered": "termination.",
+    "start_ms": 1230660,
+    "end_ms": 1231140
+  },
+  {
+    "word": "Tuck",
+    "rendered": "\nTuck",
+    "start_ms": 1241160,
+    "end_ms": 1242480
+  },
+  {
+    "word": "a",
+    "rendered": null,
+    "start_ms": 1242480,
+    "end_ms": 1243260
+  },
+  {
+    "word": "runner",
+    "rendered": null,
+    "start_ms": 1243260,
+    "end_ms": 1243620
+  },
+  {
+    "word": "is",
+    "rendered": null,
+    "start_ms": 1243620,
+    "end_ms": 1243740
+  },
+  {
+    "word": "live",
+    "rendered": "live!",
+    "start_ms": 1243740,
+    "end_ms": 1243980
+  },
+  {
+    "word": "I",
+    "rendered": "\nI",
+    "start_ms": 1266660,
+    "end_ms": 1267500
+  },
+  {
+    "word": "should",
+    "rendered": null,
+    "start_ms": 1267500,
+    "end_ms": 1267740
+  },
+  {
+    "word": "continue",
+    "rendered": null,
+    "start_ms": 1267740,
+    "end_ms": 1267860
+  },
+  {
+    "word": "for",
+    "rendered": null,
+    "start_ms": 1267860,
+    "end_ms": 1268100
+  },
+  {
+    "word": "stop",
+    "rendered": null,
+    "start_ms": 1268100,
+    "end_ms": 1268400
+  },
+  {
+    "word": "reason",
+    "rendered": "reason.",
+    "start_ms": 1268400,
+    "end_ms": 1268640
+  },
+  {
+    "word": "Let",
+    "rendered": "\nLet",
+    "start_ms": 1284840,
+    "end_ms": 1285680
+  },
+  {
+    "word": "me",
+    "rendered": null,
+    "start_ms": 1285680,
+    "end_ms": 1285860
+  },
+  {
+    "word": "try",
+    "rendered": null,
+    "start_ms": 1285860,
+    "end_ms": 1286040
+  },
+  {
+    "word": "another",
+    "rendered": null,
+    "start_ms": 1286040,
+    "end_ms": 1286220
+  },
+  {
+    "word": "wait",
+    "rendered": "wait.",
+    "start_ms": 1286220,
+    "end_ms": 1286460
+  },
+  {
+    "word": "Injection",
+    "rendered": "\nInjection.",
+    "start_ms": 1312260,
+    "end_ms": 1316160
+  },
+  {
+    "word": "Uh",
+    "rendered": "\nUh,",
+    "start_ms": 1345920,
+    "end_ms": 1346460
+  },
+  {
+    "word": "maybe",
+    "rendered": null,
+    "start_ms": 1346460,
+    "end_ms": 1346940
+  },
+  {
+    "word": "run",
+    "rendered": null,
+    "start_ms": 1346940,
+    "end_ms": 1347840
+  },
+  {
+    "word": "workspace",
+    "rendered": null,
+    "start_ms": 1347840,
+    "end_ms": 1348440
+  },
+  {
+    "word": "backup",
+    "rendered": null,
+    "start_ms": 1348440,
+    "end_ms": 1348800
+  },
+  {
+    "word": "device",
+    "rendered": "device.",
+    "start_ms": 1348800,
+    "end_ms": 1351140
+  },
+  {
+    "word": "The",
+    "rendered": "\nThe",
+    "start_ms": 1374840,
+    "end_ms": 1375680
+  },
+  {
+    "word": "Quran",
+    "rendered": null,
+    "start_ms": 1375680,
+    "end_ms": 1376160
+  },
+  {
+    "word": "looked",
+    "rendered": null,
+    "start_ms": 1376160,
+    "end_ms": 1376640
+  },
+  {
+    "word": "subprocessor",
+    "rendered": "subprocessor.",
+    "start_ms": 1376640,
+    "end_ms": 1377360
+  },
+  {
+    "word": "Run",
+    "rendered": "\nRun",
+    "start_ms": 1381380,
+    "end_ms": 1382460
+  },
+  {
+    "word": "demand",
+    "rendered": null,
+    "start_ms": 1382460,
+    "end_ms": 1382820
+  },
+  {
+    "word": "Loop",
+    "rendered": "Loop.",
+    "start_ms": 1382820,
+    "end_ms": 1383000
+  },
+  {
+    "word": "Demon",
+    "rendered": "\nDemon",
+    "start_ms": 1394790,
+    "end_ms": 1395570
+  },
+  {
+    "word": "heartbeat",
+    "rendered": null,
+    "start_ms": 1395570,
+    "end_ms": 1396230
+  },
+  {
+    "word": "Loop",
+    "rendered": "Loop.",
+    "start_ms": 1396230,
+    "end_ms": 1396410
+  },
+  {
+    "word": "Okay",
+    "rendered": "\nOkay.",
+    "start_ms": 1403370,
+    "end_ms": 1403730
+  },
+  {
+    "word": "Start",
+    "rendered": null,
+    "start_ms": 1404870,
+    "end_ms": 1405470
+  },
+  {
+    "word": "up",
+    "rendered": null,
+    "start_ms": 1405470,
+    "end_ms": 1405710
+  },
+  {
+    "word": "a",
+    "rendered": null,
+    "start_ms": 1405710,
+    "end_ms": 1405830
+  },
+  {
+    "word": "ground",
+    "rendered": null,
+    "start_ms": 1405830,
+    "end_ms": 1405950
+  },
+  {
+    "word": "demon",
+    "rendered": null,
+    "start_ms": 1405950,
+    "end_ms": 1406310
+  },
+  {
+    "word": "workspace",
+    "rendered": "workspace.",
+    "start_ms": 1406310,
+    "end_ms": 1408230
+  },
+  {
+    "word": "Okay",
+    "rendered": "\nOkay,",
+    "start_ms": 1483170,
+    "end_ms": 1483650
+  },
+  {
+    "word": "let's",
+    "rendered": null,
+    "start_ms": 1483650,
+    "end_ms": 1484070
+  },
+  {
+    "word": "just",
+    "rendered": null,
+    "start_ms": 1484070,
+    "end_ms": 1484190
+  },
+  {
+    "word": "have",
+    "rendered": null,
+    "start_ms": 1484190,
+    "end_ms": 1484370
+  },
+  {
+    "word": "a",
+    "rendered": null,
+    "start_ms": 1484370,
+    "end_ms": 1484610
+  },
+  {
+    "word": "clients",
+    "rendered": "clients.",
+    "start_ms": 1484610,
+    "end_ms": 1485030
+  },
+  {
+    "word": "Waiting",
+    "rendered": null,
+    "start_ms": 1486590,
+    "end_ms": 1487190
+  },
+  {
+    "word": "classes",
+    "rendered": "classes.",
+    "start_ms": 1487190,
+    "end_ms": 1487490
+  },
+  {
+    "word": "Uh",
+    "rendered": "\nUh,",
+    "start_ms": 1527750,
+    "end_ms": 1528590
+  },
+  {
+    "word": "get",
+    "rendered": null,
+    "start_ms": 1528590,
+    "end_ms": 1529010
+  },
+  {
+    "word": "workspace",
+    "rendered": null,
+    "start_ms": 1529010,
+    "end_ms": 1529610
+  },
+  {
+    "word": "demon",
+    "rendered": "demon,",
+    "start_ms": 1529610,
+    "end_ms": 1529910
+  },
+  {
+    "word": "no",
+    "rendered": null,
+    "start_ms": 1529910,
+    "end_ms": 1530330
+  },
+  {
+    "word": "attacks",
+    "rendered": "attacks.",
+    "start_ms": 1530330,
+    "end_ms": 1531230
+  },
+  {
+    "word": "Okay",
+    "rendered": "\nOkay.",
+    "start_ms": 1571070,
+    "end_ms": 1571790
+  },
+  {
+    "word": "Um",
+    "rendered": "\nUm.",
+    "start_ms": 1591830,
+    "end_ms": 1592130
+  },
+  {
+    "word": "Uh",
+    "rendered": "\nUh,",
+    "start_ms": 1630830,
+    "end_ms": 1631490
+  },
+  {
+    "word": "for",
+    "rendered": null,
+    "start_ms": 1631490,
+    "end_ms": 1632030
+  },
+  {
+    "word": "the",
+    "rendered": null,
+    "start_ms": 1632030,
+    "end_ms": 1632330
+  },
+  {
+    "word": "immigration",
+    "rendered": "immigration.",
+    "start_ms": 1632330,
+    "end_ms": 1633170
+  },
+  {
+    "word": "Just",
+    "rendered": "\nJust,",
+    "start_ms": 1654410,
+    "end_ms": 1654770
+  },
+  {
+    "word": "we",
+    "rendered": null,
+    "start_ms": 1654770,
+    "end_ms": 1655130
+  },
+  {
+    "word": "didn't",
+    "rendered": null,
+    "start_ms": 1655130,
+    "end_ms": 1655310
+  },
+  {
+    "word": "actually",
+    "rendered": null,
+    "start_ms": 1655310,
+    "end_ms": 1655550
+  },
+  {
+    "word": "got",
+    "rendered": null,
+    "start_ms": 1655550,
+    "end_ms": 1656810
+  },
+  {
+    "word": "better",
+    "rendered": "better.",
+    "start_ms": 1656810,
+    "end_ms": 1657170
+  },
+  {
+    "word": "The",
+    "rendered": "\nThe",
+    "start_ms": 1667250,
+    "end_ms": 1671090
+  },
+  {
+    "word": "milk",
+    "rendered": "milk.",
+    "start_ms": 1671090,
+    "end_ms": 1671270
+  },
+  {
+    "word": "Okay",
+    "rendered": "\nOkay.",
+    "start_ms": 1681710,
+    "end_ms": 1681770
+  }
+]

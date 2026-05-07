@@ -27,6 +27,7 @@ _TASK_SCOPED_TABLES = (
     "recovery_reports",
     "hook_artifacts",
     "subagent_sessions",
+    "subagent_id_counters",
     "events",
     "worktrees",
     "pipeline_transitions",

@@ -9,6 +9,16 @@ from heru import (
 )
 from heru.base import CLIExecutionResult
 
+from litehive.agents.execution_trace import ParsedUnifiedEvents, parse_unified_events
+
+
+def test_parse_unified_events_returns_named_event_collection() -> None:
+    parsed = parse_unified_events('{"kind":"message","engine":"codex","content":"step"}')
+
+    assert isinstance(parsed, ParsedUnifiedEvents)
+    assert len(parsed.events) == 1
+    assert parsed.events[0].content == "step"
+
 
 def test_codex_multiline_command_execution_extracts_trace_event_stream_and_continuation(caplog) -> None:
     stdout = "\n".join(

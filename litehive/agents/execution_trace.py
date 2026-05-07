@@ -10,7 +10,8 @@ from heru.types import LiveEvent, LiveTimeline, UnifiedEvent
 from pydantic import ValidationError
 
 from litehive.agents.session_store import load_subagent_event_stream
-from litehive.domain.runtime import RuntimeSubagentState, SubagentRef
+from litehive.domain.common import SubagentStatus
+from litehive.domain.runtime import RuntimeSubagentState, Subagent
 from litehive.domain.task import TaskRecord
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 from litehive.workspace import Workspace
@@ -27,7 +28,24 @@ class ExecutionTraceView:
     cached_final_snapshot: bool = False
 
 
-def parse_unified_events(stdout: str) -> tuple[UnifiedEvent, ...]:
+@dataclass(frozen=True, slots=True)
+class ParsedUnifiedEvents:
+    """
+    Parsed unified events recovered from an engine stdout buffer.
+
+    Execution-trace rendering and event-stream reconstruction use this
+    object when the structured session-store event stream is missing.
+    The named wrapper makes it clear that callers are handling a
+    recovered timeline, not an arbitrary tuple of events.
+    """
+
+    events: tuple[UnifiedEvent, ...]
+
+    def __bool__(self) -> bool:
+        return bool(self.events)
+
+
+def parse_unified_events(stdout: str) -> ParsedUnifiedEvents:
     """
     Recover unified events from a captured engine stdout buffer.
 
@@ -57,7 +75,7 @@ def parse_unified_events(stdout: str) -> tuple[UnifiedEvent, ...]:
                 line_number,
                 exc,
             )
-    return tuple(events)
+    return ParsedUnifiedEvents(events=tuple(events))
 
 
 def render_event_for_execution_trace(event: UnifiedEvent) -> str:
@@ -92,9 +110,15 @@ def render_event_for_execution_trace(event: UnifiedEvent) -> str:
     return "\n".join(lines)
 
 
-def render_execution_trace_from_events(events: tuple[UnifiedEvent, ...], stderr: str) -> str:
-    """Stitch rendered events plus any stderr tail into the canonical trace text written to ``execution_trace.md`` and shown by the status UI — the single place that decides how events and stderr compose."""
-    parts = [rendered for event in events if (rendered := render_event_for_execution_trace(event))]
+def render_execution_trace_from_events(events: ParsedUnifiedEvents, stderr: str) -> str:
+    """
+    Render parsed unified events plus any stderr tail.
+
+    Session writers and status loaders call this as the single place
+    that decides how recovered events and stderr compose into the
+    human-readable trace shown to operators.
+    """
+    parts = [rendered for event in events.events if (rendered := render_event_for_execution_trace(event))]
     if not parts:
         if stderr.strip():
             return f"[stderr]\n{stderr.strip()}"
@@ -104,24 +128,24 @@ def render_execution_trace_from_events(events: tuple[UnifiedEvent, ...], stderr:
     return "\n\n".join(parts)
 
 
-def event_stream_from_events(
-    events: tuple[UnifiedEvent, ...],
+def recovered_timeline_from_events(
+    events: ParsedUnifiedEvents,
     engine_name: str,
     task_id: str | None = None,
     subagent_id: str | None = None,
 ) -> LiveTimeline | None:
     """
-    Wrap parsed unified events into a heru ``LiveTimeline``.
+    Build a Heru timeline from events recovered from stdout.
 
-    Lets the timeline-renderer paths treat reconstructed-from-stdout
-    traces (this function's input) and live captures uniformly — the
-    renderer only knows how to read ``LiveTimeline``, so the
-    fallback path has to lift its parsed events into that shape.
+    Session progress uses this only when no structured live timeline
+    was captured directly. The returned timeline lets downstream
+    status and prompt code handle recovered stdout events the same way
+    it handles a live engine event stream.
     """
     if not events:
         return None
     event_stream = LiveTimeline(engine=engine_name, task_id=task_id, subagent_id=subagent_id)
-    event_stream.events = _rehydrate_live_events(events)
+    event_stream.events = _rehydrate_live_events(events.events)
     event_stream.recompute_counts()
     return event_stream
 
@@ -130,8 +154,8 @@ def _rehydrate_live_events(events) -> list[LiveEvent]:
     """
     Round-trip parsed events through ``LiveEvent`` validation.
 
-    The fallback timeline assembled by :func:`render_execution_trace_from_events`
-    needs ``LiveEvent`` instances even when the parser produced a
+    The fallback timeline assembled by `recovered_timeline_from_events`
+    needs `LiveEvent` instances even when the parser produced a
     different concrete type, so each event is dumped to a plain dict
     and revalidated to land on the canonical pydantic shape.
     """
@@ -180,37 +204,28 @@ def render_execution_trace_from_event_stream_payload(payload: dict[str, Any], st
             events.append(UnifiedEvent.model_validate(raw_event))
         except ValidationError:
             continue
-    return render_execution_trace_from_events(tuple(events), stderr=stderr)
+    return render_execution_trace_from_events(ParsedUnifiedEvents(events=tuple(events)), stderr=stderr)
 
 
 def load_subagent_execution_trace(
     workspace: Workspace,
     task: TaskRecord,
-    ref: SubagentRef | RuntimeSubagentState,
+    ref: Subagent | RuntimeSubagentState,
     active: bool,
     runtime_state: RuntimeSubagentState | None = None,
 ) -> ExecutionTraceView | None:
     """
     Load a readable execution trace for one subagent.
 
-    Walks four sources in preference order — cached
-    ``execution_trace.md`` (only for finished runs), persisted
-    event-stream payload, raw stdout/stderr, and the runtime state
-    snippet — so callers always get the freshest trace available
-    without relying on a live transcript that may have been
-    truncated or lost.
+    Walks four sources in preference order: persisted event-stream
+    payload, cached `execution_trace.md` for finished legacy runs, raw
+    stdout/stderr, and the runtime-state snippet. SQLite session rows
+    are preferred because they are structured state; the file cache is
+    retained only so older artifact-only runs still have readable
+    diagnostics.
     """
 
     base = task_dir(workspace.root, task) / ref.path
-    if not active and ref.status != "running":
-        cached = resolve_artifact_path(base, "execution_trace.md")
-        if cached is not None:
-            return ExecutionTraceView(
-                text=read_text_artifact(cached),
-                source=cached,
-                cached_final_snapshot=True,
-            )
-
     stderr = _read_stream_artifact(base, "stderr", active=active)
     if stderr is None:
         stderr_text = ""
@@ -223,6 +238,15 @@ def load_subagent_execution_trace(
     )
     if event_trace:
         return ExecutionTraceView(text=event_trace, source="subagent_sessions:event_stream")
+
+    if not active and ref.status != SubagentStatus.RUNNING:
+        cached = resolve_artifact_path(base, "execution_trace.md")
+        if cached is not None:
+            return ExecutionTraceView(
+                text=read_text_artifact(cached),
+                source=cached,
+                cached_final_snapshot=True,
+            )
 
     stdout = _read_stream_artifact(base, "stdout", active=active)
     if stdout is None:

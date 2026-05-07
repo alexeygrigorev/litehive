@@ -19,7 +19,7 @@ from .common import (
     TaskStatus,
     utcnow,
 )
-from .runtime import SubagentRef, TaskRuntime
+from .runtime import Subagent, TaskRuntime
 
 
 def canonicalize_task_terminal_state(task: "TaskRecord") -> None:
@@ -226,7 +226,7 @@ class TaskStateRecord(BaseModel):
     flag_count: int = 0  # Number of times flagged
     pipeline_status: PipelineStatus = PipelineStatus.BACKLOG  # Operator-facing pipeline progress projection
     updated_at: str = Field(default_factory=utcnow)  # Last state change timestamp
-    subagents: list[SubagentRef] = Field(default_factory=list)  # Active/recent subagent references
+    subagents: list[Subagent] = Field(default_factory=list)  # Active/recent subagent records
     git: TaskStateGitSettings = Field(default_factory=TaskStateGitSettings)  # Git execution state
     retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)  # Retry configuration
     runtime: TaskRuntime = Field(default_factory=TaskRuntime)  # Detailed execution state
@@ -290,13 +290,24 @@ class TaskRecord(BaseModel):
     acceptance_criteria: list[str] = Field(default_factory=list)  # Concrete completion conditions
     constraints: list[str] = Field(default_factory=list)  # Limitations or rules that must be respected
     plan: list[str] = Field(default_factory=list)  # Current working plan for the task
-    subagents: list[SubagentRef] = Field(default_factory=list)  # Active/recent subagent references
+    subagents: list[Subagent] = Field(default_factory=list)  # Active/recent subagent records
     git: GitSettings = Field(default_factory=GitSettings)  # Git configuration and state
     retry_policy: TaskRetryPolicy = Field(default_factory=TaskRetryPolicy)  # Retry limits configuration
     created_from: TaskCreationSource | None = None  # What created this task (if from another task)
     runtime: TaskRuntime = Field(
         default_factory=TaskRuntime, exclude=True
     )  # Mutable execution state, excluded from serialization
+
+    @property
+    def current_pipeline_stage(self) -> str | None:
+        """
+        Return the runtime pipeline stage label for read-only callers.
+
+        The nested ``runtime.pipeline.current_stage`` object remains
+        the write/storage shape; most callers only need the current
+        stage name and should not know that persistence detail.
+        """
+        return self.runtime.current_stage_name
 
     def to_intent_record(self) -> TaskIntentRecord:
         """

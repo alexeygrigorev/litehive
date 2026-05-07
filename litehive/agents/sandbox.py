@@ -78,7 +78,7 @@ class SandboxPolicySummary:
         string.
 
         Used in CLI output and stored on
-        ``SubagentRef.sandbox_summary`` so the same human-readable
+        ``Subagent.sandbox_summary`` so the same human-readable
         form appears in every operator-facing surface; the structured
         fields are still available via :meth:`as_dict` for callers
         that need them.

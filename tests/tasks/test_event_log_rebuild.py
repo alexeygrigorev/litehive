@@ -10,7 +10,6 @@ from litehive.db.schema import connect_workspace_db
 from litehive.domain.reports import StageReport
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, discard_created_task, get_task, require_task, save_task
-from litehive.tasks.activity import load_task_activity
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.workspace import Workspace
 from litehive.tasks.event_log import (
@@ -193,7 +192,7 @@ def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_
     assert rebuilt_queued is not None
     assert rebuilt_queued.status == "queued"
     assert rebuilt_state.queue == [queued.id]
-    assert [entry.message for entry in load_task_activity(Workspace.from_path(tmp_path), rebuilt_done)] == ["ready to close"]
+    assert [entry.message for entry in Workspace.from_path(tmp_path).task_activity(rebuilt_done).load()] == ["ready to close"]
     replayed_stage_reports = load_stage_reports(Workspace.from_path(tmp_path), rebuilt_done)
     assert len(replayed_stage_reports) == 1
     assert replayed_stage_reports[0].summary == "stage report replay"

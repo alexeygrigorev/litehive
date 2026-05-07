@@ -8,7 +8,6 @@ from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.nodes.agent import AgentVerdict, UnrecoverableError
 from litehive.lifecycle.orchestration import run_task as run_pipeline_task
 from litehive.state.records import create_task, get_task
-from litehive.tasks.activity import append_task_activity
 from litehive.tasks.status import requeue_task_for_workspace
 from litehive.workspace import Workspace
 
@@ -42,16 +41,14 @@ class _RepeatRecoveryEscalationEngine:
         task = get_task(self.workspace, state.task_id)
         assert task is not None
         message = f"Repeated recovery fingerprint `{repeated['fingerprint']}`. Filed follow-up task {follow_up.id}."
-        append_task_activity(
-            Workspace.from_path(self.workspace),
-            task,
+        Workspace.from_path(self.workspace).task_activity(task).append(
             TaskActivityEntry(
                 role="recovery",
                 stage="recovering",
                 verdict="reject",
                 message=message,
                 follow_up_task_id=follow_up.id,
-            ),
+            )
         )
         return AgentVerdict(outcome="reject", reason=message)
 

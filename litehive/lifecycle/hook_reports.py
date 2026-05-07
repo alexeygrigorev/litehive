@@ -18,7 +18,6 @@ from litehive.domain.reports import (
     canonical_report_pipeline_state,
 )
 from litehive.domain.task import TaskRecord
-from litehive.tasks.activity import append_task_activity
 from litehive.tasks.journal import append_journal
 from litehive.tasks.report_storage import record_stage_report
 from litehive.workspace import Workspace
@@ -155,15 +154,14 @@ def _record_hook_warnings(
     )
     report_path = record_stage_report(workspace, task, report)
     message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(workspace.root)}"
-    append_task_activity(
-        workspace,
-        task,
+    workspace.task_activity(task).append(
         TaskActivityEntry(
+            source="system",
             role="hook",
             stage=report_stage,
             verdict="comment",
             message=message,
-        ),
+        )
     )
     append_journal(
         workspace,
@@ -219,15 +217,14 @@ def _record_hook_reject(
     )
     report_path = record_stage_report(workspace, task, report)
     message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(workspace.root)}"
-    append_task_activity(
-        workspace,
-        task,
+    workspace.task_activity(task).append(
         TaskActivityEntry(
+            source="system",
             role="hook",
             stage=report_stage,
             verdict="reject",
             message=message,
-        ),
+        )
     )
     append_journal(
         workspace,

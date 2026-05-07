@@ -38,7 +38,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
 
     base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
     base.mkdir(parents=True, exist_ok=False)
-    manager.write_session_start(task, base, ref, "stream partial Claude output")
+    manager.sessions.write_session_start(task, base, ref, "stream partial Claude output")
 
     execution = CLIExecutionResult(
         adapter="claude",
@@ -143,7 +143,7 @@ def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monke
         def render_transcript(self, execution):
             return execution.transcript
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeStreamingEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeStreamingEngine())
 
     result = manager.run(task, role="swe", engine_name="opencode", prompt="stream it")
     assert result.ref.status == "completed"
@@ -179,7 +179,7 @@ def test_subagent_skips_event_stream_when_no_events(tmp_path: Path, monkeypatch:
         def render_transcript(self, execution):
             return execution.stdout
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="no events")
     assert result.ref.status == "completed"

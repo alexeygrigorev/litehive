@@ -203,6 +203,66 @@ def test_process_profiles_do_not_use_packaged_yaml() -> None:
     assert "litehive/config/profiles/*.yaml" not in wheel_include
 
 
+def test_merge_warning_type_is_not_reintroduced() -> None:
+    """
+    Keep merge feedback on structured task/report fields, not a warning class.
+
+    The old ``MergeWarning`` name did not survive the SQLite/report
+    ownership migration. Merge-related operator signals should remain
+    explicit task state, reports, or activity entries instead of a
+    generic Python warning category whose consumers are hard to trace.
+    """
+    definitions: list[str] = []
+    for path in _python_files():
+        tree = _tree(path)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) and node.name == "MergeWarning":
+                definitions.append(str(path.relative_to(REPO_ROOT)))
+
+    assert definitions == []
+
+
+def test_production_code_uses_subagent_name_not_subagent_ref() -> None:
+    """
+    Keep Litehive-owned code on the domain name for persisted subagents.
+
+    Heru's transport model is still called ``SubagentRef``. Inside
+    Litehive, ``TaskRecord.subagents`` stores the subagent record
+    itself, so production code should import and annotate ``Subagent``.
+    ``domain.runtime`` is the one allowed compatibility boundary.
+    """
+    violations: list[str] = []
+    allowed_path = PACKAGE_ROOT / "domain" / "runtime.py"
+    for path in _python_files():
+        if path == allowed_path:
+            continue
+        tree = _tree(path)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and node.id == "SubagentRef":
+                violations.append(str(path.relative_to(REPO_ROOT)))
+                break
+
+    assert violations == []
+
+
+def test_domain_docs_define_subagent_manager_boundary() -> None:
+    """
+    Keep the broad manager role documented in the domain vocabulary.
+
+    SubagentManager is intentionally a coordinator around focused
+    collaborators; when that boundary disappears from the docs, new
+    behavior tends to accumulate in the manager by default.
+    """
+    domain_doc = (REPO_ROOT / "docs" / "domain.md").read_text(encoding="utf-8")
+
+    assert "## Subagent Execution Boundary" in domain_doc
+    assert "`litehive.agents.manager.SubagentManager` is the per-invocation coordinator" in domain_doc
+    assert "`EngineManager`" in domain_doc
+    assert "`SubagentRunCallbacks`" in domain_doc
+    assert "`SubagentSessionManager`" in domain_doc
+    assert "`SandboxLauncher`" in domain_doc
+
+
 def test_core_boundary_dependency_graph_does_not_gain_new_edges() -> None:
     bounded_contexts = {"tasks", "state", "lifecycle", "agents", "observability"}
     allowed_edges = {

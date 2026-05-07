@@ -11,18 +11,31 @@ helper rather than scattered SQL.
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping, Protocol
 
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskRecord
 from litehive.workspace import Workspace
 
 
+class PersistedTaskEvent(Protocol):
+    """
+    Typed event object accepted by ``append_event``.
+
+    Concrete event classes own their payload fields and expose the
+    serialized kind/data pair at the persistence boundary.
+    """
+
+    @property
+    def kind(self) -> str: ...
+
+    def data(self) -> Mapping[str, object]: ...
+
+
 def append_event(
     workspace: Workspace,
     task: TaskRecord,
-    kind: str,
-    data: dict[str, Any] | None = None,
+    event: PersistedTaskEvent,
 ) -> dict[str, Any]:
     """
     Append a single event to a task's durable event stream.
@@ -33,23 +46,24 @@ def append_event(
     test assertion or pipe it into another sink without having
     to re-read the row.
     """
-    event: dict[str, Any] = {
+    payload: dict[str, Any] = {
         "ts": utcnow(),
         "task_id": task.id,
-        "kind": kind,
+        "kind": event.kind,
     }
+    data = event.data()
     if data:
-        event["data"] = data
+        payload["data"] = dict(data)
     with workspace.connect() as connection:
         connection.execute(
             """
             INSERT INTO events (task_id, created_at, event_kind, payload)
             VALUES (?, ?, ?, ?)
             """,
-            (task.id, event["ts"], kind, json.dumps(event, default=str, sort_keys=True)),
+            (task.id, payload["ts"], payload["kind"], json.dumps(payload, default=str, sort_keys=True)),
         )
         connection.commit()
-    return event
+    return payload
 
 
 def read_events(workspace: Workspace, task: TaskRecord) -> list[dict[str, Any]]:

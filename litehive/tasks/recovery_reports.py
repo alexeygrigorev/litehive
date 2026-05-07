@@ -5,7 +5,6 @@ from typing import Literal
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction, RecoveryReport, TaskActivityEntry
 from litehive.domain.task import TaskRecord
-from litehive.tasks.activity import append_task_activity
 from litehive.tasks.recovery_evidence import collect_recovery_evidence, stage_report_context
 from litehive.tasks.report_storage import ReportReference, insert_recovery_report, latest_stage_report
 from litehive.workspace import Workspace
@@ -56,10 +55,9 @@ def record_recovery_report(
         blocker_part = f"\nblocker: {blocker}"
     else:
         blocker_part = ""
-    append_task_activity(
-        workspace,
-        task,
+    workspace.task_activity(task).append(
         TaskActivityEntry(
+            source="system",
             role="recovery",
             stage=origin_stage or task.pipeline_status,
             verdict="comment",
@@ -70,6 +68,6 @@ def record_recovery_report(
                 + latest_report_part
                 + blocker_part
             ),
-        ),
+        )
     )
     return ref

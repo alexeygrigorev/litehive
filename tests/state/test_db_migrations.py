@@ -108,6 +108,10 @@ def test_embedded_initial_migration_is_discoverable() -> None:
     assert migrations[7].version == 8
     assert "pipeline_sessions_new" in migrations[7].sql
     assert "DROP TABLE pipeline_sessions" in migrations[7].sql
+    assert migrations[8].version == 9
+    assert "CREATE TABLE IF NOT EXISTS attention_log" in migrations[8].sql
+    assert migrations[9].version == 10
+    assert "CREATE TABLE IF NOT EXISTS subagent_id_counters" in migrations[9].sql
 
 
 def test_connect_workspace_db_closes_connection_on_context_exit(tmp_path: Path) -> None:

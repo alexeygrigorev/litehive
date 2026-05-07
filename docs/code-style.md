@@ -96,6 +96,25 @@ from tests.support.helpers import make_workspace, run_cli
 - Prefer deleting speculative extensibility over preserving it “just in case”.
 - If a class exists only to generalize one current call site, collapse it unless there is a committed near-term second implementation.
 - Keep CLI code thin. Business logic should not be reimplemented in CLI handlers.
+- Prefer composition and delegation over inheritance. Mixins are not
+  used in this codebase; a helper that would otherwise be a mixin
+  should become a named collaborator injected into the class that
+  needs it.
+- Do not keep free functions that only call one other function and
+  add no domain behavior. Delete the wrapper, move the real behavior
+  to the caller, or make it a method on the domain object that owns
+  the behavior.
+- Treat returned tuples from business logic as a design smell. If the
+  values have domain meaning, return a named dataclass or domain
+  object so readers can tell what each value means without unpacking
+  positionally.
+- Do not pass plain `object` values or untyped sentinels through
+  business logic. If absence is a real state, model it explicitly; if
+  the value is always present, make the type concrete and required.
+- Avoid `getattr` on internal domain/config/runtime objects. It hides
+  the real contract from static analysis and readers. If dynamic
+  attribute access is genuinely required at an adapter boundary, keep
+  it isolated and explain why.
 
 ## Control Flow
 
@@ -119,6 +138,14 @@ from tests.support.helpers import make_workspace, run_cli
   can still pass parameters by keyword. Splitting positional from
   keyword-only adds noise without protecting anything in this
   codebase.
+- Review every `isinstance` in production code. Most checks mean the
+  caller or loader failed to return a useful domain type. Remove the
+  check by returning a typed object; when an `isinstance` remains at a
+  real boundary, add a short comment explaining why runtime narrowing
+  is needed there.
+- Do not use repeated `None` defaults and guards to paper over states
+  that should be impossible. Optional fields are for real domain
+  states, not for avoiding a proper constructor or state transition.
 
 ## Hoist inline expressions to named locals
 
@@ -147,6 +174,17 @@ from tests.support.helpers import make_workspace, run_cli
   equivalent) and then carried as the typed value.
 - Do not paper over the impedance with `# type: ignore[arg-type]`.
   If you find yourself reaching for one, fix the receiver instead.
+- Domain relationships belong on domain objects, not in scattered
+  dictionaries. If a role has a default stage, the role object should
+  expose that fact; if a stage has an owner role, the stage object
+  should expose that fact.
+- Avoid broad dictionaries for internal domain events, reports,
+  sessions, diagnostics, runtime settings, and command results. Use a
+  dataclass or domain model with fields that explain the contract.
+- Config/profile data that starts as YAML or JSON should be validated
+  into typed models at the boundary. Do not spread mapping-shape
+  checks throughout business logic when one model loader can own the
+  conversion.
 
 ## Module Organization
 
@@ -168,6 +206,18 @@ from tests.support.helpers import make_workspace, run_cli
 - When a class has grown too big, split its responsibilities
   into smaller classes that *interact with each other*. Do not
   keep the outer class as a façade in front of free functions.
+- A function that takes `workspace` as its first argument is a prompt
+  to ask whether it should be a `Workspace` method or a method on a
+  focused service owned by the workspace.
+- Functions with four or more parameters need review. When the
+  values travel together as a concept, introduce a named domain
+  object instead of lengthening the signature.
+- Functions longer than one screen need review. Use 25 lines as the
+  practical threshold; split longer functions into focused helpers
+  whose names describe the domain step they perform.
+- Single Responsibility Principle applies to service classes. If the
+  reader cannot summarize what the class owns in one sentence, split
+  the collaborators before adding more behavior.
 
 ## Dependency Injection
 
@@ -201,6 +251,10 @@ from tests.support.helpers import make_workspace, run_cli
   not call factories, load config, open databases, or construct
   collaborators. The DI container is the only production code that
   performs that assembly.
+- Environment reads (`os.environ.get`, `os.environ.copy`, and
+  similar) belong at DI/config/process boundaries. Business logic and
+  CLI command bodies receive resolved settings as parameters or
+  services, not by reading process environment directly.
 
 This is an incremental migration: the codebase still has many
 ``__init__`` bodies that do their own wiring (SubagentManager,
@@ -263,11 +317,15 @@ hoist the wiring out of `__init__` into the container.
 
 ## Function Docstrings
 
+- Non-trivial helper docstrings use the multi-line form: opening
+  triple quotes on their own line, body on following lines, and
+  closing triple quotes on their own line. One-line docstrings are
+  only for genuinely tiny, obvious helpers.
 - Helpers whose existence is not obvious from the name need a
-  short docstring saying *what problem they solve* and *why they
-  exist*. The "why" is the part that rots silently when the
-  surrounding code changes — without it, future readers can't
-  tell whether the helper is still load-bearing.
+  docstring saying what problem they solve and why they exist. The
+  "why" is the part that rots silently when the surrounding code
+  changes; without it, future readers can't tell whether the helper
+  is still load-bearing.
 - When the caller is not obvious — different module, more than
   one, or only one but in an unexpected place — name the caller
   in **domain terms**: "called by the accepting stage when the
@@ -278,6 +336,20 @@ hoist the wiring out of `__init__` into the container.
 - For helpers with exactly one obvious caller in the same module,
   the location is self-documenting; don't add a callers note for
   its own sake.
+- Do not write docstrings that merely restate the function name.
+  `write_stream_artifact` does not need "writes stream artifact"; it
+  needs to say which actor writes it, why that artifact exists, and
+  how later code uses it.
+- Document parameters whose domain meaning is not obvious from the
+  type and name. If a parameter is called `source`, `reason`,
+  `payload`, `context`, or `data`, the docstring usually needs to
+  explain what values are valid and who supplies them.
+- Keep docstrings readable in plain code. Avoid Markdown-heavy
+  formatting such as `**bold**` and double-backtick markup; use plain
+  text and single backticks only when naming code symbols helps.
+- Wrap docstrings and prose around 80 characters where practical.
+  Long prose inside compact code blocks is harder to review than a
+  few short lines.
 
 ## Subagent Artifacts
 

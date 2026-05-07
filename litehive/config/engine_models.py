@@ -2,8 +2,8 @@
 Engine and model resolution for task execution.
 
 Owns the precedence rules that pick which engine and model run a
-given stage: task plan, workspace preference, freezes, quota
-probes, and per-stage role mapping. Also persists quota-driven
+given stage: task plan, workspace preference, freezes, and quota
+probes. Also persists quota-driven
 freezes through the audited runtime-settings store so the same
 freeze map drives both selection and operator-facing displays.
 """
@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from typing import cast
 
 from heru import get_engine
-from litehive.domain.common import TaskStage
 from heru.quota import (
     UsageStatus,
     check_claude_quota,
@@ -621,55 +620,3 @@ def resolve_task_rejection_loop_limit(task: TaskRecord, config: LitehiveConfig) 
     if task.retry_policy.rejection_loop_limit is not None:
         return task.retry_policy.rejection_loop_limit
     return config.default_rejection_loop_limit
-
-
-def _is_recovery_run(task: TaskRecord) -> bool:
-    """
-    Detect whether a task is currently in a recovery posture.
-
-    Recovery posture means an active interruption or a
-    flagged/interrupted last outcome. Consumed by
-    :func:`_role_for_stage` so engine selection picks the
-    recovery role's preference list instead of the normal
-    stage-owner role; the recovery agent is supposed to lead
-    after a flag, not the SWE/QA/reviewer that originally ran.
-    """
-    return task.runtime.execution.interruption is not None or task.runtime.pipeline.last_outcome.kind in {
-        "flagged",
-        "interrupted",
-    }
-
-
-_RECOVERY_HIJACKABLE_STAGES = frozenset({TaskStage.IMPLEMENTING, TaskStage.TESTING, TaskStage.ACCEPTING})
-
-# Engine selection only knows about the four agent-driven stages; other
-# stages (commit_to_git, recovering, …) fall through to ``swe`` as the
-# default selector role. Keeping this map separate from
-# ``TaskStage.owner_role`` so the engine-resolution fallback stays
-# stable when the canonical stage→role mapping changes.
-_ENGINE_SELECTION_ROLE_BY_STAGE: dict[TaskStage, str] = {
-    TaskStage.GROOMING: "planner",
-    TaskStage.IMPLEMENTING: "swe",
-    TaskStage.TESTING: "qa",
-    TaskStage.ACCEPTING: "reviewer",
-}
-
-
-def _role_for_stage(stage: str, task: TaskRecord | None = None) -> str:
-    """
-    Map a pipeline stage to the engine-selection role.
-
-    Returns ``planner``/``swe``/``qa``/``reviewer``/``recovery``,
-    redirecting agent-driven stages to ``recovery`` when the
-    task is mid-recovery. Module-private because the canonical
-    stage->role mapping lives on :attr:`TaskStage.owner_role`
-    and this one is intentionally narrower — engine selection
-    only picks for the four agent-driven stages, every other
-    stage falls back to ``swe``.
-    """
-    if task is not None and stage in _RECOVERY_HIJACKABLE_STAGES and _is_recovery_run(task):
-        return "recovery"
-    try:
-        return _ENGINE_SELECTION_ROLE_BY_STAGE.get(TaskStage(stage), "swe")
-    except ValueError:
-        return "swe"

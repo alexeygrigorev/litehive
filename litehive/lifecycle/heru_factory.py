@@ -36,7 +36,7 @@ from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.container import build_subagent_manager_for_workspace
 from litehive.config.model import LitehiveConfig
-from litehive.domain.agent import EngineFailure
+from litehive.domain.agent import EngineFailure, SubagentId
 from litehive.domain.common import OutcomeReasonCode, PipelineState, TaskStage, Verdict, cap_feedback
 from litehive.domain.reports import StageReport, TaskActivityStage, canonical_report_pipeline_state
 from litehive.domain.lifecycle_deltas import recovery_trigger_from_event
@@ -45,11 +45,9 @@ from litehive.roles.base import PromptContext
 from litehive.roles.recovery import RecoveryAgent
 from litehive.workspace import Workspace
 from litehive.state.records import get_task_worktree_path
-from litehive.tasks.activity import latest_task_activity_entry, load_task_activity, save_task_activity
 from litehive.tasks.journal import append_journal
 from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.tasks.report_storage import rewrite_latest_stage_report
-from litehive.workspace import Workspace
 from litehive.worktree.paths import resolve_recorded_worktree_path
 
 from .events import Crash
@@ -236,7 +234,8 @@ def _rewrite_hallucinated_implementing_pass(
         f"claimed_files_changed: {claimed}"
     )
 
-    activity_entries = load_task_activity(workspace, task)
+    activity_log = workspace.task_activity(task)
+    activity_entries = activity_log.load()
     for entry in reversed(activity_entries):
         if entry.created_at != latest.created_at:
             continue
@@ -249,7 +248,7 @@ def _rewrite_hallucinated_implementing_pass(
             entry.message = f"{entry.message.rstrip()}\n[retracted - filesystem check shows no changes landed]"
         entry.message = f"{entry.message.rstrip()}\n{detail}"
         break
-    save_task_activity(workspace, task, activity_entries)
+    activity_log.save(activity_entries)
 
     report = StageReport(
         task_id=task.id,
@@ -336,20 +335,21 @@ def latest_verdict_after(
     task_id: str,
     stage: TaskActivityStage,
     after_ts: datetime,
-    source_subagent_id: str | None = None,
+    source_subagent_id: SubagentId,
 ) -> AgentVerdict | None:
     """Return the most recent activity entry for ``(task_id, stage)`` whose
     ``created_at`` is newer than ``after_ts``, mapped to an ``AgentVerdict``.
 
-    Returns ``None`` when nothing newer landed — caller raises ``NudgeRequired``.
+    The source subagent id is required because this helper is the
+    post-turn verdict reader: it must not accept a report from a
+    previous or parallel session for the same stage. Returns ``None``
+    when nothing newer landed — caller raises ``NudgeRequired``.
     """
     workspace_root = workspace.root
     task = workspace.get_task(task_id)
     if task is None:
         return None
-    latest = latest_task_activity_entry(
-        workspace,
-        task,
+    latest = workspace.task_activity(task).latest_entry(
         stage=stage,
         source_subagent_id=source_subagent_id,
         verdicts=_allowed_verdicts_for_stage(stage),
@@ -500,11 +500,11 @@ class HeruEngineAdapter:
 
         # Did the agent submit a verdict during this turn?
         verdict = latest_verdict_after(
-                self.workspace,
-                state.task_id,
-                report_stage,
-                before_turn,
-            source_subagent_id=result.ref.id,
+            self.workspace,
+            state.task_id,
+            report_stage,
+            before_turn,
+            source_subagent_id=SubagentId(result.ref.id),
         )
         if verdict is None:
             raise NudgeRequired(f"{self.name} finished {stage} without a litehive agent report submission")
@@ -582,11 +582,17 @@ class HeruEngineAdapter:
         startup_message: str,
         original_exc: Exception,
     ) -> AgentVerdict:
-        """``SubagentManager`` itself failed to launch — usually because the
-        litehive install is broken. Try a direct Codex shell as the recovery
-        agent so the system can self-heal; if we're not in recovery (or the
-        bypass produced no verdict), re-raise the original exception so the
-        state machine routes through normal recovery."""
+        """
+        Handle a manager/adapter launch failure before a subagent pid exists.
+
+        ``HeruEngineAdapter.run_turn`` is the only lifecycle actor that
+        calls this helper. It receives either a ``SubagentStartupError``
+        from ``SubagentManager.run`` or an exception from constructing
+        the manager itself. The direct-recovery bypass is attempted so a
+        broken Litehive install can repair itself; outside the recovery
+        role, or when the bypass produces no verdict, the original
+        exception is re-raised into the normal lifecycle crash path.
+        """
         try:
             recovery_verdict = self._attempt_direct_recovery_handoff(
                 state=state,
@@ -608,18 +614,21 @@ class HeruEngineAdapter:
         task,
         startup_message: str,
     ) -> AgentVerdict | None:
-        """Last-resort path when SubagentManager won't start: build the
-        recovery prompt, shell Codex directly against litehive's source tree,
-        and read the journal for whatever verdict the recovery agent
-        submitted. Returns ``None`` if the task isn't actually in recovery so
-        the caller falls back to the original exception."""
+        """
+        Run the recovery actor without going through ``SubagentManager``.
+
+        This is the only place that turns a startup failure into a
+        synthetic recovery subagent id. It builds the recovery prompt,
+        shells Codex directly against Litehive's source tree, then reads
+        the activity journal for the recovery verdict. Returns ``None``
+        when the task is not in recovery, leaving the caller to re-raise
+        the original startup exception.
+        """
         recovery_prompt = self._direct_recovery_prompt(task=task, state=state, startup_message=startup_message)
         recovery_execution_root = _agent_execution_root(self.workspace_root, task, role="recovery", config=self.config)
         after_ts = datetime.min.replace(tzinfo=UTC)
         if state.stage == PipelineState.RECOVERING:
-            previous_recovery = latest_task_activity_entry(
-                self.workspace,
-                task,
+            previous_recovery = self.workspace.task_activity(task).latest_entry(
                 stage=PipelineState.RECOVERING,
                 verdicts=_allowed_verdicts_for_stage(PipelineState.RECOVERING),
             )
@@ -629,7 +638,7 @@ class HeruEngineAdapter:
                     after_ts = created_at
                 else:
                     after_ts = datetime.fromisoformat(str(created_at))
-        source_subagent_id = "direct-recovery"
+        source_subagent_id = SubagentId("direct-recovery")
         self._run_direct_recovery_turn(
             task_id=state.task_id,
             execution_root=recovery_execution_root,
@@ -704,7 +713,7 @@ class HeruEngineAdapter:
         task_id: str,
         execution_root: Path,
         prompt_text: str,
-        source_subagent_id: str,
+        source_subagent_id: SubagentId,
     ):
         """Shell Codex directly against litehive's own source tree, registering
         a synthetic subagent record so the journal entry the recovery agent
@@ -714,9 +723,9 @@ class HeruEngineAdapter:
         save_subagent_artifacts(
             self.workspace,
             task_id,
-            source_subagent_id,
+            str(source_subagent_id),
             session={
-                "id": source_subagent_id,
+                "id": str(source_subagent_id),
                 "role": "recovery",
                 "engine": "codex",
                 "status": "running",
@@ -730,7 +739,7 @@ class HeruEngineAdapter:
                 "LITEHIVE_TASK_ID": task_id,
                 "LITEHIVE_WORKSPACE_ROOT": str(self.workspace_root),
                 "LITEHIVE_AGENT_ROLE": "recovery",
-                "LITEHIVE_SUBAGENT_ID": source_subagent_id,
+                "LITEHIVE_SUBAGENT_ID": str(source_subagent_id),
                 "LITEHIVE_STAGE": PipelineState.RECOVERING.value,
             },
         )

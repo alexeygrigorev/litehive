@@ -4,13 +4,13 @@ from pathlib import Path
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_artifacts, load_subagent_event_stream
+from litehive.domain.common import SubagentStatus
 from litehive.domain.reports import RecoveryEvidenceItem, StageReport
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import GitError, current_head, is_git_repo, status_porcelain
 from litehive.observability.engine_monitoring import load_engine_monitoring
 from litehive.observability.events import read_events
 from litehive.state.records import get_task_worktree_path
-from litehive.tasks.activity import load_task_activity
 from litehive.tasks.paths import (
     latest_run_all_log_path,
     latest_subagent_base,
@@ -40,7 +40,7 @@ def collect_recovery_evidence(
     """
     evidence: list[RecoveryEvidenceItem] = []
     root = workspace.root
-    activity_entries = load_task_activity(workspace, task)
+    activity_entries = workspace.task_activity(task).load()
     task_events = read_events(workspace, task)
     latest_report = latest_stage_report(workspace, task)
     latest_run_log = latest_run_all_log_path(root)
@@ -78,7 +78,7 @@ def collect_recovery_evidence(
             kind="runtime",
             label="runtime state",
             summary=(
-                f"execution_status={task.runtime.pipeline.execution_status} current_stage={task.runtime.pipeline.current_stage.stage} "
+                f"execution_status={task.runtime.pipeline.execution_status} current_stage={task.current_pipeline_stage} "
                 f"last_outcome={task.runtime.pipeline.last_outcome.kind or 'none'}"
             ),
         )
@@ -143,7 +143,7 @@ def collect_recovery_evidence(
                 workspace,
                 task,
                 subagent_ref,
-                active=runtime_state is not None and runtime_state.status == "running",
+                active=runtime_state is not None and runtime_state.status == SubagentStatus.RUNNING,
                 runtime_state=runtime_state,
             )
         structured_artifact_keys = {"session", "report", "event_stream"}

@@ -28,23 +28,6 @@ from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
 _terminate_subagent_pid = terminate_subagent_pid
 
 
-_CLOSE_OUTCOME_REASON_CODES = {
-    OutcomeReasonCode.DONE,
-    OutcomeReasonCode.WONT_DO,
-    OutcomeReasonCode.DEFERRED,
-    OutcomeReasonCode.DUPLICATE,
-    OutcomeReasonCode.EXECUTION_CANCELLED,
-}
-
-_CLOSE_REASON_CODE_LABELS: dict[OutcomeReasonCode, str] = {
-    OutcomeReasonCode.DONE: "Task already satisfied.",
-    OutcomeReasonCode.WONT_DO: "Task closed as won't do.",
-    OutcomeReasonCode.DEFERRED: "Task deferred.",
-    OutcomeReasonCode.DUPLICATE: "Task closed as duplicate.",
-    OutcomeReasonCode.EXECUTION_CANCELLED: "Task abandoned via CLI.",
-}
-
-
 def _reset_pipeline_state(workspace: Workspace, task_id: str, preserve_run_memory: bool = False) -> None:
     """
     Wipe the SQLite-side lifecycle/runtime rows before a new attempt.
@@ -178,12 +161,13 @@ def _apply_close_task_state(
         else PipelineStatus(resolved_pipeline_status)
     )
     outcome_kind = OutcomeKind(task.status.value)
+    close_label = outcome.task_close_label or outcome.value
     apply_task_outcome(
         task,
         kind=outcome_kind,
         stage=task.pipeline_status,
         reason_code=outcome,
-        reason=reason or _CLOSE_REASON_CODE_LABELS[outcome],
+        reason=reason or close_label,
         retry_count=0,
         retry_limit=0,
         follow_up_task_id=follow_up_task_id,

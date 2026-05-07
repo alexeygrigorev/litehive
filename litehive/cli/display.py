@@ -69,7 +69,7 @@ def task_interruption_label(task):
     if interruption is not None and interruption.resume_stage is not None:
         stage = interruption.resume_stage
     else:
-        stage = task.runtime.pipeline.current_stage.stage or task.pipeline_status
+        stage = task.current_pipeline_stage or task.pipeline_status
     label = f" resumable_from={stage}"
     if interruption is not None:
         label += f" interruption={interruption.source}"

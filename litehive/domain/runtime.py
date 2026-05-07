@@ -127,7 +127,19 @@ class RuntimeSubagentState(BaseModel):
     continuation: RuntimeEngineContinuation | None = None  # Continuation context for resuming
 
 
-SubagentRef = HeruSubagentRef
+Subagent = HeruSubagentRef
+"""
+Persisted subagent record stored on ``TaskRecord.subagents``.
+
+Heru still names the transport model ``SubagentRef`` because it is
+returned through engine payloads. Litehive treats the same shape as the
+subagent record itself, so production code should use ``Subagent``.
+"""
+
+SubagentRef = Subagent
+"""
+Compatibility alias for older tests and persisted-construction helpers.
+"""
 
 
 class RuntimeEngineSwitch(BaseModel):
@@ -310,6 +322,14 @@ class PipelineRuntime(BaseModel):
         """
         return _json_enum_value(value)
 
+    @property
+    def current_stage_name(self) -> str | None:
+        """
+        Return the current pipeline stage label without exposing the
+        nested runtime marker shape to read-only callers.
+        """
+        return self.current_stage.stage
+
 
 class ExecutionRuntime(BaseModel):
     """
@@ -343,6 +363,13 @@ class TaskRuntime(BaseModel):
 
     pipeline: PipelineRuntime = Field(default_factory=PipelineRuntime)
     execution: ExecutionRuntime = Field(default_factory=ExecutionRuntime)
+
+    @property
+    def current_stage_name(self) -> str | None:
+        """
+        Return the active pipeline stage label from the pipeline slice.
+        """
+        return self.pipeline.current_stage_name
 
     def for_storage(
         self,

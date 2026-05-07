@@ -10,10 +10,15 @@ without importing engine internals.
 """
 
 from dataclasses import dataclass
+from typing import NewType
 
 from heru.base import CLIExecutionResult
 from heru.types import RuntimeEngineContinuation
-from heru.types import SubagentRef
+
+from litehive.domain.runtime import Subagent
+
+
+SubagentId = NewType("SubagentId", str)
 
 
 @dataclass(slots=True)
@@ -39,14 +44,14 @@ class SubagentResult:
     Single-run summary the lifecycle layer reads back from the runner.
 
     Carries everything the lifecycle and recovery layers need to advance
-    the state machine: the heru ``ref``/``execution`` handles, the rendered
-    execution trace, the exit code, an optional ``EngineFailure`` for
-    routing, and an optional continuation token so an interrupted run
-    can resume. The runner builds one of these per subagent invocation;
-    no other layer constructs them.
+    the state machine: the persisted subagent record, the low-level
+    execution handle, the rendered execution trace, the exit code, an
+    optional ``EngineFailure`` for routing, and an optional continuation
+    token so an interrupted run can resume. The runner builds one of
+    these per subagent invocation; no other layer constructs them.
     """
 
-    ref: SubagentRef  # Reference to the subagent that ran
+    ref: Subagent  # Subagent record for the run
     execution: CLIExecutionResult | None  # Low-level execution results
     execution_trace: str  # Rendered subagent execution trace
     exit_code: int  # Process exit code

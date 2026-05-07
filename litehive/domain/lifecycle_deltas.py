@@ -513,15 +513,6 @@ def _pipeline_stage_key(name: str | None) -> str | None:
     return pipeline_stage_key(name)
 
 
-_RETRY_COUNTER_PIPELINE_STATE_BY_TASK_STAGE: dict[TaskStage, PipelineState] = {
-    TaskStage.GROOMING: PipelineState.GROOMING,
-    TaskStage.IMPLEMENTING: PipelineState.IMPLEMENTING,
-    TaskStage.TESTING: PipelineState.TESTING,
-    TaskStage.ACCEPTING: PipelineState.ACCEPTING,
-    TaskStage.COMMIT_TO_GIT: PipelineState.COMMIT,
-}
-
-
 def _retry_counter_stage(origin_stage: str | None) -> PipelineState | None:
     """
     Map any stage label to the canonical stage that owns its retry counter.
@@ -539,7 +530,7 @@ def _retry_counter_stage(origin_stage: str | None) -> PipelineState | None:
     """
     key = _pipeline_stage_key(origin_stage)
     if isinstance(key, TaskStage):
-        return _RETRY_COUNTER_PIPELINE_STATE_BY_TASK_STAGE[key]
+        return key.retry_counter_state
     if origin_stage is None:
         return None
     try:

@@ -1,0 +1,308 @@
+[
+  {
+    "word": "The",
+    "rendered": "\nThe",
+    "start_ms": 900,
+    "end_ms": 2940
+  },
+  {
+    "word": "main",
+    "rendered": "main.",
+    "start_ms": 2940,
+    "end_ms": 2941
+  },
+  {
+    "word": "Agent",
+    "rendered": "Agent.",
+    "start_ms": 3960,
+    "end_ms": 4380
+  },
+  {
+    "word": "Some",
+    "rendered": "\nSome",
+    "start_ms": 8220,
+    "end_ms": 8880
+  },
+  {
+    "word": "agencies",
+    "rendered": null,
+    "start_ms": 8880,
+    "end_ms": 9360
+  },
+  {
+    "word": "out",
+    "rendered": "out.",
+    "start_ms": 9360,
+    "end_ms": 9720
+  },
+  {
+    "word": "Some",
+    "rendered": "\nSome",
+    "start_ms": 20040,
+    "end_ms": 20940
+  },
+  {
+    "word": "patient",
+    "rendered": null,
+    "start_ms": 20940,
+    "end_ms": 21300
+  },
+  {
+    "word": "dissolved",
+    "rendered": "dissolved.",
+    "start_ms": 21300,
+    "end_ms": 21840
+  },
+  {
+    "word": "Execution",
+    "rendered": null,
+    "start_ms": 23820,
+    "end_ms": 24600
+  },
+  {
+    "word": "Trace",
+    "rendered": "Trace.",
+    "start_ms": 24600,
+    "end_ms": 25080
+  },
+  {
+    "word": "Information",
+    "rendered": "\nInformation.",
+    "start_ms": 47880,
+    "end_ms": 48360
+  },
+  {
+    "word": "If",
+    "rendered": "\nIf.",
+    "start_ms": 66180,
+    "end_ms": 66600
+  },
+  {
+    "word": "The",
+    "rendered": null,
+    "start_ms": 67380,
+    "end_ms": 67980
+  },
+  {
+    "word": "country",
+    "rendered": null,
+    "start_ms": 67980,
+    "end_ms": 68220
+  },
+  {
+    "word": "so",
+    "rendered": "so?",
+    "start_ms": 68220,
+    "end_ms": 68760
+  },
+  {
+    "word": "Our",
+    "rendered": null,
+    "start_ms": 69720,
+    "end_ms": 74220
+  },
+  {
+    "word": "execution",
+    "rendered": "execution.",
+    "start_ms": 74220,
+    "end_ms": 74580
+  },
+  {
+    "word": "Okay",
+    "rendered": "\nOkay.",
+    "start_ms": 97140,
+    "end_ms": 97260
+  },
+  {
+    "word": "Outcome",
+    "rendered": "\nOutcome",
+    "start_ms": 146280,
+    "end_ms": 146940
+  },
+  {
+    "word": "kind",
+    "rendered": "kind?",
+    "start_ms": 146940,
+    "end_ms": 147180
+  },
+  {
+    "word": "yeah",
+    "rendered": "Yeah.",
+    "start_ms": 147180,
+    "end_ms": 147540
+  },
+  {
+    "word": "Outcome",
+    "rendered": "\nOutcome",
+    "start_ms": 163620,
+    "end_ms": 164280
+  },
+  {
+    "word": "reason",
+    "rendered": null,
+    "start_ms": 164280,
+    "end_ms": 164460
+  },
+  {
+    "word": "code",
+    "rendered": "code?",
+    "start_ms": 164460,
+    "end_ms": 164760
+  },
+  {
+    "word": "Old",
+    "rendered": "\nOld",
+    "start_ms": 176460,
+    "end_ms": 177120
+  },
+  {
+    "word": "outcome",
+    "rendered": "outcome.",
+    "start_ms": 177120,
+    "end_ms": 177600
+  },
+  {
+    "word": "kind",
+    "rendered": "Kind",
+    "start_ms": 177600,
+    "end_ms": 177840
+  },
+  {
+    "word": "your",
+    "rendered": null,
+    "start_ms": 177840,
+    "end_ms": 178320
+  },
+  {
+    "word": "camera",
+    "rendered": null,
+    "start_ms": 178320,
+    "end_ms": 178620
+  },
+  {
+    "word": "isn't",
+    "rendered": null,
+    "start_ms": 178620,
+    "end_ms": 178980
+  },
+  {
+    "word": "code",
+    "rendered": "code.",
+    "start_ms": 178980,
+    "end_ms": 179160
+  },
+  {
+    "word": "Another",
+    "rendered": "\nAnother",
+    "start_ms": 186480,
+    "end_ms": 187080
+  },
+  {
+    "word": "side",
+    "rendered": null,
+    "start_ms": 187080,
+    "end_ms": 187680
+  },
+  {
+    "word": "of",
+    "rendered": "of.",
+    "start_ms": 187680,
+    "end_ms": 187860
+  },
+  {
+    "word": "Muchas",
+    "rendered": "\nMuchas",
+    "start_ms": 198660,
+    "end_ms": 199080
+  },
+  {
+    "word": "puedo",
+    "rendered": null,
+    "start_ms": 199080,
+    "end_ms": 199560
+  },
+  {
+    "word": "estroche",
+    "rendered": "estroche.",
+    "start_ms": 199560,
+    "end_ms": 200040
+  },
+  {
+    "word": "Okay",
+    "rendered": "\nOkay,",
+    "start_ms": 291660,
+    "end_ms": 292680
+  },
+  {
+    "word": "um",
+    "rendered": "um?",
+    "start_ms": 292680,
+    "end_ms": 292681
+  },
+  {
+    "word": "Uh",
+    "rendered": "\nUh.",
+    "start_ms": 297060,
+    "end_ms": 297480
+  },
+  {
+    "word": "The",
+    "rendered": "\nThe",
+    "start_ms": 320520,
+    "end_ms": 320760
+  },
+  {
+    "word": "episode",
+    "rendered": "episode.",
+    "start_ms": 320760,
+    "end_ms": 321000
+  },
+  {
+    "word": "Outcome",
+    "rendered": "\nOutcome",
+    "start_ms": 327780,
+    "end_ms": 328140
+  },
+  {
+    "word": "reason",
+    "rendered": "reason?",
+    "start_ms": 328140,
+    "end_ms": 328320
+  },
+  {
+    "word": "Block",
+    "rendered": "\nBlock.",
+    "start_ms": 341820,
+    "end_ms": 342120
+  },
+  {
+    "word": "don't",
+    "rendered": "Don't",
+    "start_ms": 342120,
+    "end_ms": 342360
+  },
+  {
+    "word": "follow",
+    "rendered": null,
+    "start_ms": 342360,
+    "end_ms": 342600
+  },
+  {
+    "word": "up",
+    "rendered": "up.",
+    "start_ms": 342600,
+    "end_ms": 342840
+  },
+  {
+    "word": "Bueno",
+    "rendered": "\nBueno.",
+    "start_ms": 366400,
+    "end_ms": 370780
+  },
+  {
+    "word": "Um",
+    "rendered": "Um.",
+    "start_ms": 373120,
+    "end_ms": 373240
+  }
+]

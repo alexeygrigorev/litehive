@@ -15,7 +15,6 @@ already owns enough.
 import os
 import signal
 import time
-from pathlib import Path
 
 from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStage, TaskStatus, utcnow
 from litehive.domain.runtime import RuntimeInterruptionState
@@ -77,7 +76,7 @@ def _stop_active_task_without_runner_guard(workspace: Workspace, task_id: str) -
         queue_before = list(state.queue)
         if task.pipeline_status == PipelineStatus.DONE:
             raise ValueError(f"Task {task.id} is already done")
-        stage = task.runtime.pipeline.current_stage.stage or task.pipeline_status
+        stage = task.current_pipeline_stage or task.pipeline_status
 
         # Park the task - this is intentional operator action, not system interruption
         now = utcnow()

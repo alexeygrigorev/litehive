@@ -112,6 +112,20 @@ def test_task_state_record_rejects_removed_pipeline_status() -> None:
         TaskStateRecord(pipeline_status="merge_failed")
 
 
+def test_task_runtime_stage_accessors_hide_nested_current_stage_shape() -> None:
+    task = TaskRecord(id="T-0001", slug="sample", title="Sample")
+
+    assert task.current_pipeline_stage is None
+    assert task.runtime.current_stage_name is None
+    assert task.runtime.pipeline.current_stage_name is None
+
+    task.runtime.pipeline.current_stage.stage = "implementing"
+
+    assert task.current_pipeline_stage == "implementing"
+    assert task.runtime.current_stage_name == "implementing"
+    assert task.runtime.pipeline.current_stage_name == "implementing"
+
+
 def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="DB runtime")

@@ -11,6 +11,7 @@ locate a record by name without grepping:
 - ``pool`` — dirty-worktree finding/report dataclasses.
 - ``recovery`` — recovery trigger/outcome/fingerprint vocabulary.
 - ``reports`` — stage and recovery reports plus activity entries.
+- ``roles`` — subagent role vocabulary and role/stage relationships.
 - ``runtime`` — task runtime state slices persisted alongside ``TaskRecord``.
 - ``task`` — ``TaskRecord`` and its intent/state projections.
 - ``task_ops`` — non-record dataclasses used by task operations (locks, plans,

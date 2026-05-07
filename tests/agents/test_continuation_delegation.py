@@ -4,7 +4,7 @@ import pytest
 
 from heru import extract_engine_continuation, get_engine
 from heru.base import CLIExecutionResult
-from litehive.agents.session import SessionMixin
+from litehive.agents.session import SubagentSessionManager
 from litehive.domain.engine import LiveEventStream
 from heru.types import RuntimeEngineContinuation
 
@@ -44,12 +44,12 @@ def test_heru_extract_engine_continuation_prefers_unified_events(monkeypatch) ->
 
 
 @pytest.mark.parametrize("engine_name", ("codex", "claude", "copilot", "gemini", "goz", "opencode"))
-def test_session_mixin_does_not_parse_native_engine_jsonl_fallback_for_supported_engines(engine_name: str) -> None:
+def test_subagent_session_manager_does_not_parse_native_engine_jsonl_fallback_for_supported_engines(engine_name: str) -> None:
     execution = _execution('{"type":"message","role":"assistant","content":"legacy output"}\n')
 
-    execution_trace = SessionMixin.render_execution_trace(engine_name, execution)
-    continuation = SessionMixin.extract_execution_continuation(engine_name, execution)
-    event_stream = SessionMixin.extract_execution_event_stream(engine_name, execution.stdout)
+    execution_trace = SubagentSessionManager.render_execution_trace(engine_name, execution)
+    continuation = SubagentSessionManager.extract_execution_continuation(engine_name, execution)
+    event_stream = SubagentSessionManager.extract_execution_event_stream(engine_name, execution.stdout)
 
     assert execution_trace == execution.transcript
     assert continuation is None
@@ -57,7 +57,7 @@ def test_session_mixin_does_not_parse_native_engine_jsonl_fallback_for_supported
 
 
 @pytest.mark.parametrize("engine_name", ("codex", "claude", "copilot", "gemini", "goz", "opencode"))
-def test_session_mixin_extract_execution_continuation_delegates_to_heru(
+def test_subagent_session_manager_extract_execution_continuation_delegates_to_heru(
     engine_name: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -71,13 +71,13 @@ def test_session_mixin_extract_execution_continuation_delegates_to_heru(
 
     monkeypatch.setattr("litehive.agents.session.extract_engine_continuation", fake_extract)
 
-    continuation = SessionMixin.extract_execution_continuation(engine_name, execution)
+    continuation = SubagentSessionManager.extract_execution_continuation(engine_name, execution)
 
     assert continuation is expected
 
 
 @pytest.mark.parametrize("engine_name", ("codex", "claude", "copilot", "gemini", "goz", "opencode"))
-def test_session_mixin_consumes_unified_event_types_for_supported_engines(engine_name: str) -> None:
+def test_subagent_session_manager_consumes_unified_event_types_for_supported_engines(engine_name: str) -> None:
     execution = _execution(
         "\n".join(
             [
@@ -96,9 +96,9 @@ def test_session_mixin_consumes_unified_event_types_for_supported_engines(engine
         )
     )
 
-    execution_trace = SessionMixin.render_execution_trace(engine_name, execution)
-    continuation = SessionMixin.extract_execution_continuation(engine_name, execution)
-    event_stream = SessionMixin.extract_execution_event_stream(
+    execution_trace = SubagentSessionManager.render_execution_trace(engine_name, execution)
+    continuation = SubagentSessionManager.extract_execution_continuation(engine_name, execution)
+    event_stream = SubagentSessionManager.extract_execution_event_stream(
         engine_name,
         execution.stdout,
         task_id="T-0001",

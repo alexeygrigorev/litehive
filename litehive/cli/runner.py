@@ -38,7 +38,6 @@ from litehive.state.persist import (
 )
 from litehive.tasks.event_log import rebuild_sqlite_from_task_event_log
 from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection
-from litehive.tasks.activity import append_task_activity
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.state.locking import runner_status
 
@@ -572,13 +571,14 @@ def report_command(
     # Click ``choice(...)`` declaration above; ``cast`` lets the static
     # type tell the same story without a ``# type: ignore``.
     entry = TaskActivityEntry(
+        source="operator",
         role=role,
         stage=stage,
         verdict=cast(TaskActivityVerdict, verdict),
         message=message,
         files_changed=list(files_changed or []),
     )
-    append_task_activity(workspace_obj, task, entry)
+    workspace_obj.task_activity(task).append(entry)
     print(f"task: {task.id}")
     print(f"stage: {stage}")
     print(f"verdict: {verdict}")

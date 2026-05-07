@@ -18,13 +18,13 @@ trace.
 
 from datetime import UTC, datetime
 from enum import Enum
+from typing import Literal
 
 from heru.types import (
     EngineLimitKind,
     EngineMonitoringSource,
     LiveEventKind,
     LiveEventRole,
-    SubagentStatus,
 )
 
 
@@ -136,6 +136,51 @@ class OutcomeReasonCode(StringEnum):
     DEFERRED = "deferred"
     DUPLICATE = "duplicate"
 
+    @property
+    def is_task_close_outcome(self) -> bool:
+        """
+        Whether ``litehive task close`` may use this reason directly.
+
+        Close outcomes are deliberate terminal operator choices, not
+        every reason the lifecycle can record internally. The CLI uses
+        this to reject retry/recovery-specific reason codes at the
+        boundary before mutating task state.
+        """
+        match self:
+            case (
+                OutcomeReasonCode.DONE
+                | OutcomeReasonCode.WONT_DO
+                | OutcomeReasonCode.DEFERRED
+                | OutcomeReasonCode.DUPLICATE
+                | OutcomeReasonCode.EXECUTION_CANCELLED
+            ):
+                return True
+            case _:
+                return False
+
+    @property
+    def task_close_label(self) -> str | None:
+        """
+        Default human-readable close reason for operator closures.
+
+        ``None`` means the reason code is not a direct task-close
+        outcome. Transition helpers use this as the fallback journal
+        reason when the operator did not provide a custom explanation.
+        """
+        match self:
+            case OutcomeReasonCode.DONE:
+                return "Task already satisfied."
+            case OutcomeReasonCode.WONT_DO:
+                return "Task closed as won't do."
+            case OutcomeReasonCode.DEFERRED:
+                return "Task deferred."
+            case OutcomeReasonCode.DUPLICATE:
+                return "Task closed as duplicate."
+            case OutcomeReasonCode.EXECUTION_CANCELLED:
+                return "Task abandoned via CLI."
+            case _:
+                return None
+
 
 class PipelineMode(StringEnum):
     """
@@ -206,6 +251,102 @@ class PipelineState(StringEnum):
         """
         return self.value.replace("_", " ")
 
+    @property
+    def task_stage(self) -> "TaskStage | None":
+        """
+        Operator-facing task stage that contains this machine state.
+
+        Hook states collapse into their owning work phase so prompts,
+        reports, and recovery logic can reason in the same stage
+        buckets operators see. System-only states return ``None``
+        because they do not belong to a user-visible work phase.
+        """
+        match self:
+            case PipelineState.BEFORE_GROOMING | PipelineState.GROOMING | PipelineState.AFTER_GROOMING:
+                return TaskStage.GROOMING
+            case PipelineState.RECOVERING:
+                return TaskStage.GROOMING
+            case (
+                PipelineState.BEFORE_IMPLEMENTING
+                | PipelineState.IMPLEMENTING
+                | PipelineState.AFTER_IMPLEMENTING
+            ):
+                return TaskStage.IMPLEMENTING
+            case PipelineState.BEFORE_TESTING | PipelineState.TESTING | PipelineState.AFTER_TESTING:
+                return TaskStage.TESTING
+            case PipelineState.BEFORE_ACCEPTING | PipelineState.ACCEPTING | PipelineState.AFTER_ACCEPTING:
+                return TaskStage.ACCEPTING
+            case PipelineState.COMMIT | PipelineState.AFTER_COMMIT | PipelineState.MERGE_RESOLVING:
+                return TaskStage.COMMIT_TO_GIT
+            case (
+                PipelineState.READY
+                | PipelineState.WORKTREE_SYNC
+                | PipelineState.RECOVERING_PRE_EXEC
+                | PipelineState.DONE
+                | PipelineState.FAILED
+            ):
+                return None
+
+    @property
+    def pipeline_status(self) -> "PipelineStatus":
+        """
+        Operator-facing progress bucket for this machine state.
+
+        Lifecycle runtime sync writes this projection after every
+        transition. Keeping it on ``PipelineState`` makes the
+        state/status relationship explicit instead of hiding it in a
+        side table that every caller has to remember to use.
+        """
+        match self:
+            case PipelineState.READY | PipelineState.WORKTREE_SYNC | PipelineState.RECOVERING_PRE_EXEC:
+                return PipelineStatus.BACKLOG
+            case PipelineState.BEFORE_GROOMING | PipelineState.GROOMING | PipelineState.AFTER_GROOMING:
+                return PipelineStatus.GROOMING
+            case PipelineState.RECOVERING:
+                return PipelineStatus.GROOMING
+            case (
+                PipelineState.BEFORE_IMPLEMENTING
+                | PipelineState.IMPLEMENTING
+                | PipelineState.AFTER_IMPLEMENTING
+            ):
+                return PipelineStatus.IMPLEMENTING
+            case PipelineState.BEFORE_TESTING | PipelineState.TESTING | PipelineState.AFTER_TESTING:
+                return PipelineStatus.TESTING
+            case PipelineState.BEFORE_ACCEPTING | PipelineState.ACCEPTING | PipelineState.AFTER_ACCEPTING:
+                return PipelineStatus.ACCEPTING
+            case PipelineState.COMMIT | PipelineState.AFTER_COMMIT | PipelineState.MERGE_RESOLVING:
+                return PipelineStatus.COMMIT_TO_GIT
+            case PipelineState.DONE:
+                return PipelineStatus.DONE
+            case PipelineState.FAILED:
+                return PipelineStatus.FLAGGED
+
+    @property
+    def primary_stage(self) -> "PipelineState":
+        """
+        Primary executable stage that owns this pipeline phase.
+
+        Before/after hook phases are attributed to the stage they wrap
+        so lifecycle comparisons and prompt scaffolding can ask whether
+        two phases belong to the same agent-run stage. Phases that are
+        already primary return themselves.
+        """
+        match self:
+            case PipelineState.BEFORE_GROOMING | PipelineState.AFTER_GROOMING:
+                return PipelineState.GROOMING
+            case PipelineState.BEFORE_IMPLEMENTING | PipelineState.AFTER_IMPLEMENTING:
+                return PipelineState.IMPLEMENTING
+            case PipelineState.BEFORE_TESTING | PipelineState.AFTER_TESTING:
+                return PipelineState.TESTING
+            case PipelineState.BEFORE_ACCEPTING | PipelineState.AFTER_ACCEPTING:
+                return PipelineState.ACCEPTING
+            case PipelineState.AFTER_COMMIT:
+                return PipelineState.COMMIT
+            case PipelineState.RECOVERING:
+                return PipelineState.GROOMING
+            case _:
+                return self
+
 
 class TaskStage(StringEnum):
     """
@@ -236,36 +377,40 @@ class TaskStage(StringEnum):
         duplication is the kind of domain prose ``code-style.md``
         forbids in prompt modules.
         """
-        return _STAGE_OWNER_ROLES[self]
+        match self:
+            case TaskStage.GROOMING:
+                return "planner"
+            case TaskStage.IMPLEMENTING:
+                return "swe"
+            case TaskStage.TESTING:
+                return "qa"
+            case TaskStage.ACCEPTING:
+                return "reviewer"
+            case TaskStage.COMMIT_TO_GIT:
+                return "runner"
 
+    @property
+    def retry_counter_state(self) -> PipelineState:
+        """
+        Canonical pipeline state that owns this stage's retry counter.
 
-_STAGE_OWNER_ROLES: dict["TaskStage", str] = {}
-
-
-def _populate_stage_owners() -> None:
-    """
-    Fill the stage→owner-role lookup after ``TaskStage`` is fully defined.
-
-    Wrapped as a function rather than a class-body literal so the table
-    can reference enum members directly without forward-reference
-    ceremony; called once at module import. The mapping powers
-    ``TaskStage.owner_role`` and is the single source of truth for
-    "which subagent owns which stage" across prompts and reporting.
-    """
-    # Populated after the enum is defined to avoid forward-reference
-    # ceremony with the enum members.
-    _STAGE_OWNER_ROLES.update(
-        {
-            TaskStage.GROOMING: "planner",
-            TaskStage.IMPLEMENTING: "swe",
-            TaskStage.TESTING: "qa",
-            TaskStage.ACCEPTING: "reviewer",
-            TaskStage.COMMIT_TO_GIT: "runner",
-        }
-    )
-
-
-_populate_stage_owners()
+        Before/after hook states share the same budget as their
+        executable stage. Lifecycle recovery uses this state both when
+        bumping retry counts and when clearing them, so the counter
+        identity belongs on the stage rather than in a lifecycle-side
+        lookup table.
+        """
+        match self:
+            case TaskStage.GROOMING:
+                return PipelineState.GROOMING
+            case TaskStage.IMPLEMENTING:
+                return PipelineState.IMPLEMENTING
+            case TaskStage.TESTING:
+                return PipelineState.TESTING
+            case TaskStage.ACCEPTING:
+                return PipelineState.ACCEPTING
+            case TaskStage.COMMIT_TO_GIT:
+                return PipelineState.COMMIT
 
 
 class TaskStatus(StringEnum):
@@ -328,6 +473,23 @@ class RuntimeStageStatus(StringEnum):
     FAILED = "failed"  # The stage failed
 
 
+class SubagentStatus(StringEnum):
+    """
+    Lifecycle status for a Litehive-managed subagent run.
+
+    Heru accepts the same string values at the adapter boundary; inside
+    Litehive, use this enum instead of hard-coded status strings so
+    comparisons and assignments stay on the domain vocabulary.
+    """
+
+    CREATED = "created"  # Subagent record has been allocated
+    RUNNING = "running"  # Engine process is active
+    COMPLETED = "completed"  # Engine process exited successfully
+    FAILED = "failed"  # Engine process failed or timed out
+    BLOCKED = "blocked"  # Engine process hit an external/system block
+    INTERRUPTED = "interrupted"  # Engine process was interrupted and may resume
+
+
 class PipelineStatus(StringEnum):
     """
     Operator-facing projection of pipeline progress.
@@ -336,9 +498,8 @@ class PipelineStatus(StringEnum):
     ``PipelineState`` nodes (including before/after hooks, recovery
     sub-states, and merge resolution) into the coarse buckets shown in
     CLI status and persisted on task runtime for filtering. Renaming an
-    internal pipeline state should not require updating this enum,
-    which is why the projection table is explicit
-    (``pipeline_status_for_pipeline_state``) rather than name-derived.
+    internal pipeline state should not require updating this enum;
+    ``PipelineState.pipeline_status`` owns the explicit projection.
     """
 
     BACKLOG = "backlog"  # Not yet started
@@ -367,51 +528,6 @@ def canonical_pipeline_state(value: str | PipelineState) -> PipelineState:
     return PipelineState(str(value))
 
 
-_TASK_STAGE_BY_PIPELINE_STATE: dict[PipelineState, TaskStage] = {
-    PipelineState.BEFORE_GROOMING: TaskStage.GROOMING,
-    PipelineState.GROOMING: TaskStage.GROOMING,
-    PipelineState.AFTER_GROOMING: TaskStage.GROOMING,
-    PipelineState.RECOVERING: TaskStage.GROOMING,
-    PipelineState.BEFORE_IMPLEMENTING: TaskStage.IMPLEMENTING,
-    PipelineState.IMPLEMENTING: TaskStage.IMPLEMENTING,
-    PipelineState.AFTER_IMPLEMENTING: TaskStage.IMPLEMENTING,
-    PipelineState.BEFORE_TESTING: TaskStage.TESTING,
-    PipelineState.TESTING: TaskStage.TESTING,
-    PipelineState.AFTER_TESTING: TaskStage.TESTING,
-    PipelineState.BEFORE_ACCEPTING: TaskStage.ACCEPTING,
-    PipelineState.ACCEPTING: TaskStage.ACCEPTING,
-    PipelineState.AFTER_ACCEPTING: TaskStage.ACCEPTING,
-    PipelineState.COMMIT: TaskStage.COMMIT_TO_GIT,
-    PipelineState.AFTER_COMMIT: TaskStage.COMMIT_TO_GIT,
-    PipelineState.MERGE_RESOLVING: TaskStage.COMMIT_TO_GIT,
-}
-
-
-_PIPELINE_STATUS_BY_PIPELINE_STATE: dict[PipelineState, PipelineStatus] = {
-    PipelineState.READY: PipelineStatus.BACKLOG,
-    PipelineState.WORKTREE_SYNC: PipelineStatus.BACKLOG,
-    PipelineState.RECOVERING_PRE_EXEC: PipelineStatus.BACKLOG,
-    PipelineState.BEFORE_GROOMING: PipelineStatus.GROOMING,
-    PipelineState.GROOMING: PipelineStatus.GROOMING,
-    PipelineState.AFTER_GROOMING: PipelineStatus.GROOMING,
-    PipelineState.RECOVERING: PipelineStatus.GROOMING,
-    PipelineState.BEFORE_IMPLEMENTING: PipelineStatus.IMPLEMENTING,
-    PipelineState.IMPLEMENTING: PipelineStatus.IMPLEMENTING,
-    PipelineState.AFTER_IMPLEMENTING: PipelineStatus.IMPLEMENTING,
-    PipelineState.BEFORE_TESTING: PipelineStatus.TESTING,
-    PipelineState.TESTING: PipelineStatus.TESTING,
-    PipelineState.AFTER_TESTING: PipelineStatus.TESTING,
-    PipelineState.BEFORE_ACCEPTING: PipelineStatus.ACCEPTING,
-    PipelineState.ACCEPTING: PipelineStatus.ACCEPTING,
-    PipelineState.AFTER_ACCEPTING: PipelineStatus.ACCEPTING,
-    PipelineState.COMMIT: PipelineStatus.COMMIT_TO_GIT,
-    PipelineState.AFTER_COMMIT: PipelineStatus.COMMIT_TO_GIT,
-    PipelineState.MERGE_RESOLVING: PipelineStatus.COMMIT_TO_GIT,
-    PipelineState.DONE: PipelineStatus.DONE,
-    PipelineState.FAILED: PipelineStatus.FLAGGED,
-}
-
-
 def task_stage_for_pipeline_state(value: str | PipelineState) -> TaskStage | None:
     """
     Return the operator-facing ``TaskStage`` for an internal pipeline state.
@@ -422,7 +538,7 @@ def task_stage_for_pipeline_state(value: str | PipelineState) -> TaskStage | Non
     ``WORKTREE_SYNC``…) that don't belong to any user-visible stage, so
     callers can distinguish "between stages" from "in stage X".
     """
-    return _TASK_STAGE_BY_PIPELINE_STATE.get(canonical_pipeline_state(value))
+    return canonical_pipeline_state(value).task_stage
 
 
 def pipeline_stage_key(name: str | None) -> TaskStage | str | None:
@@ -442,7 +558,7 @@ def pipeline_stage_key(name: str | None) -> TaskStage | str | None:
         state = PipelineState(name)
     except ValueError:
         return name
-    return _TASK_STAGE_BY_PIPELINE_STATE.get(state, name)
+    return state.task_stage or name
 
 
 def pipeline_status_for_pipeline_state(value: str | PipelineState) -> PipelineStatus:
@@ -455,7 +571,7 @@ def pipeline_status_for_pipeline_state(value: str | PipelineState) -> PipelineSt
     ``KeyError`` on an unmapped state so a missing entry is caught at
     the boundary instead of silently rendering as ``BACKLOG``.
     """
-    return _PIPELINE_STATUS_BY_PIPELINE_STATE[canonical_pipeline_state(value)]
+    return canonical_pipeline_state(value).pipeline_status
 
 
 class RunnerStatus(StringEnum):
@@ -499,6 +615,26 @@ class Verdict(StringEnum):
     ADVANCE = "advance"  # Move to next stage
     DONE = "done"  # Task completed successfully
     BUDGET_HIT = "budget_hit"  # Resource limits reached
+
+    @property
+    def stage_report_verdict(self) -> Literal["pass", "reject", "blocked"] | None:
+        """
+        Verdict projection accepted by the compact StageReport model.
+
+        Activity entries keep the full verdict vocabulary, but persisted
+        stage reports only need pass/reject/blocked. A comment verdict
+        returns ``None`` because it is operator-visible commentary, not
+        a stage decision.
+        """
+        match self:
+            case Verdict.PASS | Verdict.ACCEPT | Verdict.RESUME | Verdict.ADVANCE | Verdict.DONE:
+                return "pass"
+            case Verdict.REJECT | Verdict.FAIL:
+                return "reject"
+            case Verdict.BLOCKED | Verdict.BUDGET_HIT:
+                return "blocked"
+            case Verdict.COMMENT:
+                return None
 
 
 RunnerExecutionStatus = RunnerStatus

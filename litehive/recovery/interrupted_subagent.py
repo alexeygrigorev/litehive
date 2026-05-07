@@ -6,7 +6,7 @@ from litehive.agents.session_store import (
     load_subagent_session,
     save_subagent_artifacts,
 )
-from litehive.domain.common import utcnow
+from litehive.domain.common import SubagentStatus, utcnow
 from litehive.domain.runtime import RuntimeSubagentState
 from litehive.domain.task import TaskRecord
 from litehive.tasks.runtime import summarize_transcript
@@ -30,22 +30,22 @@ def mark_interrupted_subagent(
         existing = None
     else:
         existing = interruption.subagent
-    if active is None and (existing is None or existing.status != "interrupted"):
+    if active is None and (existing is None or existing.status != SubagentStatus.INTERRUPTED):
         return None
     now = utcnow()
     source = active or existing
     assert source is not None
     if active is not None:
         for ref in reversed(task.subagents):
-            if ref.id == active.id and ref.status == "running":
-                ref.status = "interrupted"
+            if ref.id == active.id and ref.status == SubagentStatus.RUNNING.value:
+                ref.status = SubagentStatus.INTERRUPTED.value
                 break
     snippet = source.execution_trace_snippet
     if active is not None or not snippet:
         snippet = _interrupted_subagent_snippet(workspace, task, source)
     interrupted = source.model_copy(
         update={
-            "status": "interrupted",
+            "status": SubagentStatus.INTERRUPTED,
             "updated_at": now,
             "completed_at": source.completed_at or now,
             "execution_trace_snippet": snippet,

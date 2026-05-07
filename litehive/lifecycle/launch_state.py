@@ -133,7 +133,7 @@ def _entry_stage_for_task(task_record: TaskRecord) -> PipelineState | None:
     else:
         interruption_resume_stage = task_record.runtime.execution.interruption.resume_stage
     stage = (
-        task_record.runtime.pipeline.current_stage.stage
+        task_record.current_pipeline_stage
         or interruption_resume_stage
         or task_record.pipeline_status
     )

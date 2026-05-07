@@ -50,7 +50,7 @@ def estimate_task_execution(workspace: Workspace, task: TaskRecord) -> Execution
     else:
         velocity = 0.0
 
-    current_step = task.runtime.pipeline.current_stage.stage or task.pipeline_status or _PIPELINE_STAGES[0]
+    current_step = task.current_pipeline_stage or task.pipeline_status or _PIPELINE_STAGES[0]
     try:
         current_idx = next(i for i, stage in enumerate(_PIPELINE_STAGES) if stage == current_step)
     except StopIteration:
@@ -109,7 +109,7 @@ def _task_stage_label(task: TaskRecord) -> str:
     fallback the dashboard would print blank cells during that
     window and obscure what the task is actually doing.
     """
-    return task.runtime.pipeline.current_stage.stage or task.pipeline_status or "-"
+    return task.current_pipeline_stage or task.pipeline_status or "-"
 
 
 def _latest_stage_report_for_task(workspace: Workspace, task: TaskRecord) -> Any | None:
@@ -237,7 +237,7 @@ def render_task_summary(task: TaskRecord, active: bool, workspace: Workspace) ->
     lines.append(f"  retry_policy=configured:{configured_limit} effective:{runtime.pipeline.retry_limit}")
     if (
         runtime.pipeline.execution_status != TaskExecutionStatus.IDLE
-        or runtime.pipeline.current_stage.stage
+        or runtime.current_stage_name
         or runtime.pipeline.current_stage.status != RuntimeStageStatus.IDLE
     ):
         parts = [f"run={runtime.pipeline.execution_status}"]
@@ -246,11 +246,11 @@ def render_task_summary(task: TaskRecord, active: bool, workspace: Workspace) ->
             parts.append(f"started={runtime.pipeline.run_started_at}")
         if runtime.pipeline.current_stage.status != RuntimeStageStatus.IDLE:
             parts.append(f"stage_status={runtime.pipeline.current_stage.status}")
-        if runtime.pipeline.current_stage.stage:
+        if runtime.current_stage_name:
             stage_duration = _duration_label(
                 runtime.pipeline.current_stage.started_at, runtime.pipeline.current_stage.duration_seconds
             )
-            parts.append(f"stage={runtime.pipeline.current_stage.stage}")
+            parts.append(f"stage={runtime.current_stage_name}")
             parts.append(f"stage_duration={stage_duration}")
         lines.append("  " + " ".join(parts))
 

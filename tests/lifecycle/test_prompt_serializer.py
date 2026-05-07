@@ -437,8 +437,8 @@ def test_serialize_reads_activity_through_boundary(workspace: Path, monkeypatch)
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     calls: list[tuple[Workspace, str]] = []
 
-    def fake_load_activity(workspace_arg: Workspace, task_record) -> list[TaskActivityEntry]:
-        calls.append((workspace_arg, task_record.id))
+    def fake_load_activity(activity_log) -> list[TaskActivityEntry]:
+        calls.append((activity_log.workspace, activity_log.task.id))
         return [
             TaskActivityEntry(
                 role="planner",
@@ -448,10 +448,7 @@ def test_serialize_reads_activity_through_boundary(workspace: Path, monkeypatch)
             )
         ]
 
-    monkeypatch.setattr(
-        "litehive.lifecycle.prompt_serializer.load_task_activity",
-        fake_load_activity,
-    )
+    monkeypatch.setattr("litehive.tasks.activity.TaskActivityLog.load", fake_load_activity)
 
     text = serialize_prompt(
         agent.build_prompt(make_state(task.id)),

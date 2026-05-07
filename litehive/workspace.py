@@ -239,3 +239,13 @@ class Workspace:
         from litehive.tasks.activity import TaskActivityLog  # noqa: PLC0415
 
         return TaskActivityLog(self, task)
+
+    def append_event(self, task: "TaskRecord", event) -> dict:
+        """
+        Append a typed task event to this workspace's durable event stream.
+        """
+        # inline: observability.events imports Workspace for annotations,
+        # so importing at module load would create an import cycle.
+        from litehive.observability.events import append_event  # noqa: PLC0415
+
+        return append_event(self, task, event)

@@ -66,20 +66,6 @@ STAGE_PHASES: tuple[PipelineState, ...] = (
 )
 
 
-_PRIMARY_STAGE_BY_PHASE: dict[PipelineState, PipelineState] = {
-    PipelineState.BEFORE_GROOMING: PipelineState.GROOMING,
-    PipelineState.AFTER_GROOMING: PipelineState.GROOMING,
-    PipelineState.BEFORE_IMPLEMENTING: PipelineState.IMPLEMENTING,
-    PipelineState.AFTER_IMPLEMENTING: PipelineState.IMPLEMENTING,
-    PipelineState.BEFORE_TESTING: PipelineState.TESTING,
-    PipelineState.AFTER_TESTING: PipelineState.TESTING,
-    PipelineState.BEFORE_ACCEPTING: PipelineState.ACCEPTING,
-    PipelineState.AFTER_ACCEPTING: PipelineState.ACCEPTING,
-    PipelineState.AFTER_COMMIT: PipelineState.COMMIT,
-    PipelineState.RECOVERING: PipelineState.GROOMING,
-}
-
-
 def pipeline_stage_for_phase(phase: str | PipelineState) -> PipelineState:
     """
     Collapse a hook/system phase to its primary agent stage.
@@ -90,7 +76,7 @@ def pipeline_stage_for_phase(phase: str | PipelineState) -> PipelineState:
     against the implementing stage rather than as its own row.
     """
     state = canonical_pipeline_state(phase)
-    return _PRIMARY_STAGE_BY_PHASE.get(state, state)
+    return state.primary_stage
 
 
 ANY_STAGE_PHASE: frozenset[PipelineState] = frozenset(STAGE_PHASES)

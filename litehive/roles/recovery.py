@@ -3,7 +3,7 @@ from typing import Any
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import load_subagent_report, load_subagent_session
-from litehive.domain.common import PipelineState, Verdict, canonical_pipeline_state, pipeline_stage_key
+from litehive.domain.common import PipelineState, SubagentStatus, Verdict, canonical_pipeline_state, pipeline_stage_key
 from litehive.domain.runtime import RuntimeRecoveryOutcome
 from litehive.workspace import Workspace
 from litehive.lifecycle.events import Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
@@ -331,7 +331,7 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
 
     Recovery diagnosis depends on knowing exactly what the prior agent
     produced (or failed to produce) before it stopped, so this stitches
-    together the runtime state, the persisted SubagentRef, and the
+    together the runtime state, the persisted subagent record, and the
     on-disk artifacts under the latest subagent base directory.
     """
     root = workspace.root
@@ -377,7 +377,7 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
                 workspace,
                 task_record,
                 trace_ref,
-                active=runtime_state is not None and runtime_state.status == "running",
+                active=runtime_state is not None and runtime_state.status == SubagentStatus.RUNNING,
                 runtime_state=runtime_state,
             )
     if execution_trace_view is None:

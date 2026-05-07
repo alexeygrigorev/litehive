@@ -4,9 +4,14 @@ from typing import Any, Callable
 
 import pytest
 
+from heru.adapters import EngineError
 from heru.base import CLIExecutionResult
 
-from litehive.agents.manager import SubagentStartupError
+from litehive.agents.engine_manager import EngineManager
+from litehive.agents.callbacks import CallbackWarnings
+from litehive.agents.manager import SubagentManager, SubagentStartupError
+from litehive.agents.session import SubagentSessionManager
+from litehive.agents.subagent_ids import SubagentIdRepository
 from litehive.container import build_subagent_manager
 from litehive.agents.session_store import (
     load_subagent_event_stream,
@@ -22,6 +27,66 @@ from litehive.tasks.paths import task_dir
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.tasks.report_storage import load_stage_reports
 from litehive.workspace import Workspace
+
+
+def test_subagent_manager_receives_session_manager_from_container(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+
+    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+
+    assert isinstance(manager.sessions, SubagentSessionManager)
+    assert isinstance(manager.engines, EngineManager)
+    assert isinstance(manager.subagent_ids, SubagentIdRepository)
+    assert manager.sessions.workspace is manager.workspace
+    assert manager.sessions.sandbox is manager.sandbox
+    assert manager.sessions.config is manager.config
+
+
+def test_subagent_manager_constructor_stores_injected_collaborators(tmp_path: Path) -> None:
+    workspace: Any = object()
+    config: Any = object()
+    sandbox: Any = object()
+    sessions: Any = object()
+    engines: Any = object()
+    subagent_ids: Any = object()
+
+    manager = SubagentManager(
+        tmp_path,
+        tmp_path / "execution-root",
+        workspace=workspace,
+        config=config,
+        sandbox=sandbox,
+        sessions=sessions,
+        engines=engines,
+        subagent_ids=subagent_ids,
+    )
+
+    assert manager.root == tmp_path.resolve()
+    assert manager.execution_root == (tmp_path / "execution-root").resolve()
+    assert manager.workspace is workspace
+    assert manager.config is config
+    assert manager.sandbox is sandbox
+    assert manager.sessions is sessions
+    assert manager.engines is engines
+    assert manager.subagent_ids is subagent_ids
+
+
+def test_callback_warnings_merge_dedupes_collected_failures() -> None:
+    class Ref:
+        id = "SA-0001"
+
+    warnings = CallbackWarnings()
+    exc = RuntimeError("pid bookkeeping failed")
+
+    ref: Any = Ref()
+
+    warnings.record_failure(ref, "start", exc)
+    warnings.record_failure(ref, "start", exc)
+
+    assert warnings.merged_with(["agent warning"]) == [
+        "agent warning",
+        "runner start bookkeeping failed: RuntimeError: pid bookkeeping failed",
+    ]
 
 
 def _fresh_codex_engine(
@@ -79,7 +144,7 @@ def test_subagent_manager_passes_workspace_root_in_extra_env(tmp_path: Path, mon
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
 
     manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -88,6 +153,54 @@ def test_subagent_manager_passes_workspace_root_in_extra_env(tmp_path: Path, mon
     assert captured["extra_env"]["LITEHIVE_WORKSPACE_ROOT"] == str(tmp_path)
     assert captured["extra_env"]["LITEHIVE_SUBAGENT_ID"] == "SA-0001"
     assert captured["extra_env"]["LITEHIVE_STAGE"] == "implementing"
+
+
+def test_subagent_manager_id_allocation_ignores_stale_subagent_directories(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Ignore stale subagent folders")
+    stale_dir = task_dir(tmp_path, task) / "subagents" / "SA-0099-swe"
+    stale_dir.mkdir(parents=True)
+    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            extra_env: dict[str, str] | None = None,
+        ) -> CLIExecutionResult:
+            del prompt, model, extra_env
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="done",
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert result.ref.id == "SA-0001"
+    assert result.ref.path == "subagents/SA-0001-swe"
+    assert (task_dir(tmp_path, task) / "subagents" / "SA-0001-swe").is_dir()
 
 
 def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
@@ -140,7 +253,7 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="planner", engine_name="codex", prompt="groom it")
 
@@ -204,7 +317,7 @@ def test_subagent_manager_uses_recovering_stage_for_recovery_cli_verdict(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="recovery", engine_name="codex", prompt="recover it")
 
@@ -212,6 +325,77 @@ def test_subagent_manager_uses_recovering_stage_for_recovery_cli_verdict(
 
     assert report["summary"] == "Resume from commit"
     assert report["warnings"] == []
+
+
+def test_subagent_manager_file_changes_are_bound_to_current_subagent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Keep files bound to source subagent")
+    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            extra_env: dict[str, str] | None = None,
+        ) -> CLIExecutionResult:
+            del prompt, model
+            assert extra_env is not None
+            append_activity_entry(
+                Workspace.from_path(tmp_path),
+                task,
+                TaskActivityEntry(
+                    role="swe",
+                    stage="implementing",
+                    verdict="pass",
+                    message="current session",
+                    files_changed=["src/current.py"],
+                    source_subagent_id=extra_env["LITEHIVE_SUBAGENT_ID"],
+                ),
+            )
+            append_activity_entry(
+                Workspace.from_path(tmp_path),
+                task,
+                TaskActivityEntry(
+                    role="swe",
+                    stage="implementing",
+                    verdict="reject",
+                    message="different session",
+                    files_changed=["src/wrong.py"],
+                    source_subagent_id="SA-0099",
+                ),
+            )
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="placeholder transcript",
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
+
+    result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    report = load_subagent_report(Workspace.from_path(tmp_path), task.id, result.ref.id)
+
+    assert report["summary"] == "current session"
+    assert report["files_changed"] == ["src/current.py"]
 
 
 def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
@@ -262,7 +446,7 @@ def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return "fallback transcript should not be used"
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -296,7 +480,7 @@ def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
         raise AssertionError("run_live should not be used when only run is overridden")
 
     engine = _fresh_codex_engine(run_live_override=fail_run_live)
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: engine)
     monkeypatch.setattr(engine, "is_available", lambda: True)
 
     calls: list[str] = []
@@ -343,7 +527,7 @@ def test_subagent_manager_prefers_bound_instance_run_override_over_inherited_run
         raise AssertionError("run_live should not be used when run is rebound to a custom method")
 
     engine = _fresh_codex_engine(run_live_override=fail_run_live)
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: engine)
     monkeypatch.setattr(engine, "is_available", lambda: True)
 
     calls: list[str] = []
@@ -408,7 +592,7 @@ def test_subagent_manager_wraps_unexpected_pre_start_failures(tmp_path: Path, mo
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
 
     with pytest.raises(SubagentStartupError, match="RuntimeError: clobbered heru stub"):
         manager.run(task, role="swe", engine_name="codex", prompt="implement it")
@@ -435,7 +619,7 @@ def test_subagent_manager_wraps_unavailable_engine_as_startup_failure(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
 
     with pytest.raises(
         SubagentStartupError,
@@ -473,9 +657,47 @@ def test_subagent_manager_preserves_started_run_failures(tmp_path: Path, monkeyp
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
 
     with pytest.raises(RuntimeError, match="started run exploded"):
+        manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+
+def test_subagent_manager_does_not_fabricate_execution_for_started_engine_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Started engine error")
+    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            *,
+            on_started=None,
+            **kwargs,
+        ) -> CLIExecutionResult:
+            del prompt, cwd, model, kwargs
+            assert on_started is not None
+            on_started(4242)
+            raise EngineError("started engine failed before returning execution")
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
+
+    with pytest.raises(EngineError, match="started engine failed before returning execution"):
         manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
 
@@ -493,7 +715,7 @@ def test_subagent_manager_kills_stale_live_codex_output_after_timeout(
     os.utime(stdout_path, (stale_time, stale_time))
 
     killed: list[int] = []
-    monkeypatch.setattr(manager, "terminate_stale_pid", killed.append)
+    monkeypatch.setattr(manager.sessions, "terminate_stale_pid", killed.append)
 
     execution = CLIExecutionResult(
         adapter="codex",
@@ -506,7 +728,7 @@ def test_subagent_manager_kills_stale_live_codex_output_after_timeout(
     )
 
     with pytest.raises(SubagentInactivityTimeout, match="1s without new stdout"):
-        manager.check_stdout_inactivity(base, "codex", execution)
+        manager.sessions.check_stdout_inactivity(base, "codex", execution)
 
     assert killed == [4242]
 
@@ -560,7 +782,7 @@ def test_subagent_manager_enforces_300s_inactivity_timeout_for_opencode(
             return execution.transcript
 
     engine = FakeEngine()
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: engine)
 
     manager.run(task, role="swe", engine_name="opencode", prompt="implement it")
 
@@ -614,7 +836,7 @@ def test_subagent_manager_omits_model_override_when_resuming_opencode(
         def render_transcript(self, execution: CLIExecutionResult) -> str:
             return execution.transcript
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
 
     manager.run(
         task,
@@ -678,7 +900,7 @@ def test_subagent_manager_preserves_workspace_timeout_for_non_opencode_live_runs
             return execution.transcript
 
     engine = FakeEngine()
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: engine)
 
     manager.run(task, role="swe", engine_name="codex", prompt="implement it")
 
@@ -735,8 +957,8 @@ def test_subagent_manager_survives_nonfatal_start_callback_failure_for_planner(
     def fail_record_pid(*args, **kwargs) -> None:  # type: ignore[no-untyped-def]
         raise RuntimeError("pid bookkeeping failed")
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
-    monkeypatch.setattr(manager, "record_subagent_pid", fail_record_pid)
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr(manager.sessions, "record_subagent_pid", fail_record_pid)
 
     result = manager.run(task, role="planner", engine_name="codex", prompt="groom it")
 
@@ -811,7 +1033,7 @@ def test_subagent_manager_survives_nonfatal_progress_callback_failure_for_planne
     def fail_progress(*args, **kwargs) -> None:  # type: ignore[no-untyped-def]
         raise RuntimeError("progress bookkeeping failed")
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
     monkeypatch.setattr(manager, "write_session_progress", fail_progress)
 
     result = manager.run(task, role="planner", engine_name="codex", prompt="groom it")
@@ -887,7 +1109,7 @@ def test_subagent_manager_classifies_completed_inactivity_timeout_as_retryable_t
             return execution.transcript
 
     engine = FakeEngine()
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: engine)
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: engine)
 
     result = manager.run(task, role="swe", engine_name=engine_name, prompt="implement it")
 

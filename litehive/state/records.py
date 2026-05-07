@@ -97,7 +97,7 @@ def _task_creation_stage(root: Path, current_task_id: str | None) -> str | None:
     current_task = get_task_record(root, current_task_id)
     if current_task is None:
         return None
-    runtime_stage = current_task.runtime.pipeline.current_stage.stage
+    runtime_stage = current_task.current_pipeline_stage
     if runtime_stage:
         return runtime_stage
     pipeline_stage = current_task.pipeline_status

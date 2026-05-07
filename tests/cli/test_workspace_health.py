@@ -272,6 +272,7 @@ def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatc
         id="T-0381",
         title="Move stage and recovery reports off YAML storage",
         pipeline_status="implementing",
+        current_pipeline_stage="implementing",
         subagents=[],
         runtime=SimpleNamespace(
             pipeline=SimpleNamespace(

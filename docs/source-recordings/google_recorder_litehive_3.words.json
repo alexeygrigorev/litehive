@@ -1,0 +1,1724 @@
+[
+  {
+    "word": "The",
+    "rendered": "\nThe",
+    "start_ms": 75000,
+    "end_ms": 75240
+  },
+  {
+    "word": "doctor",
+    "rendered": "doctor.",
+    "start_ms": 75240,
+    "end_ms": 75840
+  },
+  {
+    "word": "Um",
+    "rendered": "\nUm,",
+    "start_ms": 125940,
+    "end_ms": 126180
+  },
+  {
+    "word": "yeah",
+    "rendered": "yeah,",
+    "start_ms": 126180,
+    "end_ms": 126660
+  },
+  {
+    "word": "pretty",
+    "rendered": null,
+    "start_ms": 126660,
+    "end_ms": 127200
+  },
+  {
+    "word": "much",
+    "rendered": "much.",
+    "start_ms": 127200,
+    "end_ms": 127440
+  },
+  {
+    "word": "Constructor",
+    "rendered": "\nConstructor.",
+    "start_ms": 148800,
+    "end_ms": 149760
+  },
+  {
+    "word": "Parameter",
+    "rendered": "\nParameter.",
+    "start_ms": 193060,
+    "end_ms": 193720
+  },
+  {
+    "word": "Format",
+    "rendered": "\nFormat",
+    "start_ms": 253370,
+    "end_ms": 254090
+  },
+  {
+    "word": "Parts",
+    "rendered": null,
+    "start_ms": 254090,
+    "end_ms": 254450
+  },
+  {
+    "word": "unified",
+    "rendered": null,
+    "start_ms": 254450,
+    "end_ms": 254810
+  },
+  {
+    "word": "events",
+    "rendered": "events.",
+    "start_ms": 254810,
+    "end_ms": 255170
+  },
+  {
+    "word": "Unified",
+    "rendered": null,
+    "start_ms": 255770,
+    "end_ms": 257930
+  },
+  {
+    "word": "event",
+    "rendered": "event.",
+    "start_ms": 257930,
+    "end_ms": 258110
+  },
+  {
+    "word": "It",
+    "rendered": "\nIt",
+    "start_ms": 264710,
+    "end_ms": 265130
+  },
+  {
+    "word": "doesn't",
+    "rendered": null,
+    "start_ms": 265130,
+    "end_ms": 265370
+  },
+  {
+    "word": "change",
+    "rendered": null,
+    "start_ms": 265370,
+    "end_ms": 265670
+  },
+  {
+    "word": "to",
+    "rendered": "to.",
+    "start_ms": 265670,
+    "end_ms": 266030
+  },
+  {
+    "word": "So",
+    "rendered": "So?",
+    "start_ms": 267650,
+    "end_ms": 268670
+  },
+  {
+    "word": "Least",
+    "rendered": "Least.",
+    "start_ms": 269990,
+    "end_ms": 270230
+  },
+  {
+    "word": "Yep",
+    "rendered": "\nYep.",
+    "start_ms": 312230,
+    "end_ms": 312650
+  },
+  {
+    "word": "Execution",
+    "rendered": "\nExecution",
+    "start_ms": 326990,
+    "end_ms": 330950
+  },
+  {
+    "word": "case",
+    "rendered": "case.",
+    "start_ms": 330950,
+    "end_ms": 331130
+  },
+  {
+    "word": "Event",
+    "rendered": "\nEvent",
+    "start_ms": 352730,
+    "end_ms": 352910
+  },
+  {
+    "word": "stream",
+    "rendered": null,
+    "start_ms": 352910,
+    "end_ms": 353210
+  },
+  {
+    "word": "from",
+    "rendered": null,
+    "start_ms": 353210,
+    "end_ms": 354230
+  },
+  {
+    "word": "events",
+    "rendered": "events.",
+    "start_ms": 354230,
+    "end_ms": 354710
+  },
+  {
+    "word": "Life",
+    "rendered": "\nLife",
+    "start_ms": 393770,
+    "end_ms": 396530
+  },
+  {
+    "word": "events",
+    "rendered": "events.",
+    "start_ms": 396530,
+    "end_ms": 396950
+  },
+  {
+    "word": "Us",
+    "rendered": "\nUs.",
+    "start_ms": 436670,
+    "end_ms": 436970
+  },
+  {
+    "word": "It",
+    "rendered": "\nIt",
+    "start_ms": 440210,
+    "end_ms": 441170
+  },
+  {
+    "word": "comes",
+    "rendered": null,
+    "start_ms": 441170,
+    "end_ms": 441530
+  },
+  {
+    "word": "to",
+    "rendered": "to.",
+    "start_ms": 441530,
+    "end_ms": 441650
+  },
+  {
+    "word": "Execution",
+    "rendered": "\nExecution.",
+    "start_ms": 467750,
+    "end_ms": 469370
+  },
+  {
+    "word": "Paylords",
+    "rendered": "\nPaylords,",
+    "start_ms": 482930,
+    "end_ms": 485930
+  },
+  {
+    "word": "digital",
+    "rendered": null,
+    "start_ms": 485930,
+    "end_ms": 486410
+  },
+  {
+    "word": "events",
+    "rendered": "events.",
+    "start_ms": 486410,
+    "end_ms": 486950
+  },
+  {
+    "word": "Lots",
+    "rendered": "\nLots",
+    "start_ms": 500330,
+    "end_ms": 501290
+  },
+  {
+    "word": "of",
+    "rendered": null,
+    "start_ms": 501290,
+    "end_ms": 501410
+  },
+  {
+    "word": "agencies",
+    "rendered": "agencies.",
+    "start_ms": 501410,
+    "end_ms": 501830
+  },
+  {
+    "word": "Um",
+    "rendered": "\nUm.",
+    "start_ms": 522470,
+    "end_ms": 522710
+  },
+  {
+    "word": "Um",
+    "rendered": "\nUm.",
+    "start_ms": 539090,
+    "end_ms": 539150
+  },
+  {
+    "word": "Default",
+    "rendered": "\nDefault",
+    "start_ms": 579950,
+    "end_ms": 581210
+  },
+  {
+    "word": "stages",
+    "rendered": null,
+    "start_ms": 581210,
+    "end_ms": 581450
+  },
+  {
+    "word": "for",
+    "rendered": null,
+    "start_ms": 581450,
+    "end_ms": 581630
+  },
+  {
+    "word": "roles",
+    "rendered": "roles.",
+    "start_ms": 581630,
+    "end_ms": 581990
+  },
+  {
+    "word": "Don't",
+    "rendered": "\nDon't",
+    "start_ms": 591890,
+    "end_ms": 592790
+  },
+  {
+    "word": "sleep",
+    "rendered": null,
+    "start_ms": 592790,
+    "end_ms": 593030
+  },
+  {
+    "word": "classes",
+    "rendered": "classes.",
+    "start_ms": 593030,
+    "end_ms": 594290
+  },
+  {
+    "word": "Default",
+    "rendered": "\nDefault",
+    "start_ms": 607070,
+    "end_ms": 607550
+  },
+  {
+    "word": "stage",
+    "rendered": "stage.",
+    "start_ms": 607550,
+    "end_ms": 607790
+  },
+  {
+    "word": "the",
+    "rendered": "The",
+    "start_ms": 607790,
+    "end_ms": 608090
+  },
+  {
+    "word": "one",
+    "rendered": null,
+    "start_ms": 608090,
+    "end_ms": 608390
+  },
+  {
+    "word": "was",
+    "rendered": null,
+    "start_ms": 608390,
+    "end_ms": 608510
+  },
+  {
+    "word": "a",
+    "rendered": null,
+    "start_ms": 608510,
+    "end_ms": 608690
+  },
+  {
+    "word": "chat",
+    "rendered": "chat,",
+    "start_ms": 608690,
+    "end_ms": 608930
+  },
+  {
+    "word": "grooming",
+    "rendered": "grooming,",
+    "start_ms": 608930,
+    "end_ms": 609890
+  },
+  {
+    "word": "complementing",
+    "rendered": null,
+    "start_ms": 609890,
+    "end_ms": 610310
+  },
+  {
+    "word": "testing",
+    "rendered": "testing.",
+    "start_ms": 610310,
+    "end_ms": 611210
+  },
+  {
+    "word": "Going",
+    "rendered": "\nGoing",
+    "start_ms": 630650,
+    "end_ms": 633950
+  },
+  {
+    "word": "to",
+    "rendered": null,
+    "start_ms": 633950,
+    "end_ms": 634070
+  },
+  {
+    "word": "support",
+    "rendered": null,
+    "start_ms": 634070,
+    "end_ms": 634190
+  },
+  {
+    "word": "file",
+    "rendered": null,
+    "start_ms": 634190,
+    "end_ms": 634790
+  },
+  {
+    "word": "changes",
+    "rendered": "changes?",
+    "start_ms": 634790,
+    "end_ms": 634970
+  },
+  {
+    "word": "With",
+    "rendered": "\nWith",
+    "start_ms": 658130,
+    "end_ms": 658610
+  },
+  {
+    "word": "the",
+    "rendered": null,
+    "start_ms": 658610,
+    "end_ms": 658850
+  },
+  {
+    "word": "latest",
+    "rendered": null,
+    "start_ms": 658850,
+    "end_ms": 659270
+  },
+  {
+    "word": "report",
+    "rendered": null,
+    "start_ms": 659270,
+    "end_ms": 659510
+  },
+  {
+    "word": "files",
+    "rendered": "files.",
+    "start_ms": 659510,
+    "end_ms": 659870
+  },
+  {
+    "word": "changes",
+    "rendered": "Changes",
+    "start_ms": 659870,
+    "end_ms": 660290
+  },
+  {
+    "word": "which",
+    "rendered": null,
+    "start_ms": 660290,
+    "end_ms": 660590
+  },
+  {
+    "word": "one",
+    "rendered": null,
+    "start_ms": 660590,
+    "end_ms": 660890
+  },
+  {
+    "word": "source",
+    "rendered": null,
+    "start_ms": 660890,
+    "end_ms": 661250
+  },
+  {
+    "word": "of",
+    "rendered": null,
+    "start_ms": 661250,
+    "end_ms": 661370
+  },
+  {
+    "word": "agentic",
+    "rendered": "agentic?",
+    "start_ms": 661370,
+    "end_ms": 662030
+  },
+  {
+    "word": "On",
+    "rendered": "\nOn",
+    "start_ms": 681890,
+    "end_ms": 682130
+  },
+  {
+    "word": "stage",
+    "rendered": null,
+    "start_ms": 682130,
+    "end_ms": 682550
+  },
+  {
+    "word": "nuns",
+    "rendered": null,
+    "start_ms": 682550,
+    "end_ms": 682910
+  },
+  {
+    "word": "also",
+    "rendered": null,
+    "start_ms": 682910,
+    "end_ms": 683150
+  },
+  {
+    "word": "page",
+    "rendered": "page.",
+    "start_ms": 683150,
+    "end_ms": 683450
+  },
+  {
+    "word": "He",
+    "rendered": "\nHe",
+    "start_ms": 689630,
+    "end_ms": 691190
+  },
+  {
+    "word": "watching",
+    "rendered": null,
+    "start_ms": 691190,
+    "end_ms": 692450
+  },
+  {
+    "word": "Chestnutions",
+    "rendered": "Chestnutions.",
+    "start_ms": 692450,
+    "end_ms": 693470
+  },
+  {
+    "word": "The",
+    "rendered": "\nThe",
+    "start_ms": 762170,
+    "end_ms": 763010
+  },
+  {
+    "word": "check",
+    "rendered": null,
+    "start_ms": 763010,
+    "end_ms": 763190
+  },
+  {
+    "word": "engine",
+    "rendered": null,
+    "start_ms": 763190,
+    "end_ms": 763370
+  },
+  {
+    "word": "availability",
+    "rendered": null,
+    "start_ms": 763370,
+    "end_ms": 763670
+  },
+  {
+    "word": "with",
+    "rendered": null,
+    "start_ms": 763670,
+    "end_ms": 764210
+  },
+  {
+    "word": "retry",
+    "rendered": "retry.",
+    "start_ms": 764210,
+    "end_ms": 764870
+  },
+  {
+    "word": "Unexpected",
+    "rendered": "\nUnexpected",
+    "start_ms": 770930,
+    "end_ms": 775610
+  },
+  {
+    "word": "trailer",
+    "rendered": null,
+    "start_ms": 775610,
+    "end_ms": 775910
+  },
+  {
+    "word": "before",
+    "rendered": null,
+    "start_ms": 775910,
+    "end_ms": 776210
+  },
+  {
+    "word": "the",
+    "rendered": null,
+    "start_ms": 776210,
+    "end_ms": 776390
+  },
+  {
+    "word": "engine",
+    "rendered": null,
+    "start_ms": 776390,
+    "end_ms": 776570
+  },
+  {
+    "word": "supporters",
+    "rendered": null,
+    "start_ms": 776570,
+    "end_ms": 777170
+  },
+  {
+    "word": "started",
+    "rendered": null,
+    "start_ms": 777170,
+    "end_ms": 777530
+  },
+  {
+    "word": "to",
+    "rendered": "to.",
+    "start_ms": 777530,
+    "end_ms": 782990
+  },
+  {
+    "word": "Mixing",
+    "rendered": "Mixing.",
+    "start_ms": 784430,
+    "end_ms": 786770
+  },
+  {
+    "word": "Thank",
+    "rendered": "\nThank",
+    "start_ms": 800090,
+    "end_ms": 800270
+  },
+  {
+    "word": "you",
+    "rendered": "you,",
+    "start_ms": 800270,
+    "end_ms": 800510
+  },
+  {
+    "word": "we're",
+    "rendered": null,
+    "start_ms": 800510,
+    "end_ms": 802190
+  },
+  {
+    "word": "agents",
+    "rendered": null,
+    "start_ms": 802190,
+    "end_ms": 802730
+  },
+  {
+    "word": "manager.bye",
+    "rendered": "manager.bye.",
+    "start_ms": 802730,
+    "end_ms": 804530
+  },
+  {
+    "word": "Agent",
+    "rendered": null,
+    "start_ms": 807410,
+    "end_ms": 809630
+  },
+  {
+    "word": "manager",
+    "rendered": "manager.",
+    "start_ms": 809630,
+    "end_ms": 809930
+  },
+  {
+    "word": "Session",
+    "rendered": null,
+    "start_ms": 812870,
+    "end_ms": 815330
+  },
+  {
+    "word": "mixing",
+    "rendered": "mixing.",
+    "start_ms": 815330,
+    "end_ms": 815750
+  },
+  {
+    "word": "What",
+    "rendered": null,
+    "start_ms": 816470,
+    "end_ms": 818150
+  },
+  {
+    "word": "is",
+    "rendered": null,
+    "start_ms": 818150,
+    "end_ms": 818390
+  },
+  {
+    "word": "the",
+    "rendered": null,
+    "start_ms": 818390,
+    "end_ms": 818510
+  },
+  {
+    "word": "session",
+    "rendered": null,
+    "start_ms": 818510,
+    "end_ms": 818690
+  },
+  {
+    "word": "mixing",
+    "rendered": "mixing?",
+    "start_ms": 818690,
+    "end_ms": 819050
+  },
+  {
+    "word": "No",
+    "rendered": "\nNo",
+    "start_ms": 825110,
+    "end_ms": 825770
+  },
+  {
+    "word": "Nixons",
+    "rendered": "Nixons.",
+    "start_ms": 825770,
+    "end_ms": 826610
+  },
+  {
+    "word": "We",
+    "rendered": "\nWe",
+    "start_ms": 846830,
+    "end_ms": 848150
+  },
+  {
+    "word": "prefer",
+    "rendered": null,
+    "start_ms": 848150,
+    "end_ms": 848510
+  },
+  {
+    "word": "composition",
+    "rendered": null,
+    "start_ms": 848510,
+    "end_ms": 849890
+  },
+  {
+    "word": "over",
+    "rendered": null,
+    "start_ms": 849890,
+    "end_ms": 850310
+  },
+  {
+    "word": "inheritance",
+    "rendered": "inheritance.",
+    "start_ms": 850310,
+    "end_ms": 850970
+  },
+  {
+    "word": "Dependency",
+    "rendered": "\nDependency",
+    "start_ms": 886900,
+    "end_ms": 888880
+  },
+  {
+    "word": "injections",
+    "rendered": "injections.",
+    "start_ms": 888880,
+    "end_ms": 891340
+  },
+  {
+    "word": "Record",
+    "rendered": "\nRecord",
+    "start_ms": 912760,
+    "end_ms": 915700
+  },
+  {
+    "word": "life",
+    "rendered": null,
+    "start_ms": 915700,
+    "end_ms": 915820
+  },
+  {
+    "word": "callback",
+    "rendered": null,
+    "start_ms": 915820,
+    "end_ms": 916420
+  },
+  {
+    "word": "failure",
+    "rendered": "failure.",
+    "start_ms": 916420,
+    "end_ms": 916780
+  },
+  {
+    "word": "Repository",
+    "rendered": "\nRepository",
+    "start_ms": 928360,
+    "end_ms": 933280
+  },
+  {
+    "word": "really",
+    "rendered": "really?",
+    "start_ms": 933280,
+    "end_ms": 933580
+  },
+  {
+    "word": "Rewarding",
+    "rendered": null,
+    "start_ms": 934180,
+    "end_ms": 934780
+  },
+  {
+    "word": "service",
+    "rendered": null,
+    "start_ms": 934780,
+    "end_ms": 934900
+  },
+  {
+    "word": "at",
+    "rendered": null,
+    "start_ms": 934900,
+    "end_ms": 936880
+  },
+  {
+    "word": "the",
+    "rendered": null,
+    "start_ms": 936880,
+    "end_ms": 937120
+  },
+  {
+    "word": "list",
+    "rendered": null,
+    "start_ms": 937120,
+    "end_ms": 937900
+  },
+  {
+    "word": "warnings",
+    "rendered": "warnings.",
+    "start_ms": 937900,
+    "end_ms": 941800
+  },
+  {
+    "word": "Pipeline",
+    "rendered": "\nPipeline",
+    "start_ms": 988480,
+    "end_ms": 992920
+  },
+  {
+    "word": "foreign",
+    "rendered": "foreign.",
+    "start_ms": 992920,
+    "end_ms": 993520
+  },
+  {
+    "word": "Current",
+    "rendered": "\nCurrent",
+    "start_ms": 1018060,
+    "end_ms": 1019980
+  },
+  {
+    "word": "stage",
+    "rendered": "stage.",
+    "start_ms": 1019980,
+    "end_ms": 1020220
+  },
+  {
+    "word": "For",
+    "rendered": "\nFor",
+    "start_ms": 1034740,
+    "end_ms": 1038760
+  },
+  {
+    "word": "the",
+    "rendered": null,
+    "start_ms": 1038760,
+    "end_ms": 1038880
+  },
+  {
+    "word": "stage",
+    "rendered": "stage.",
+    "start_ms": 1038880,
+    "end_ms": 1039180
+  },
+  {
+    "word": "Research",
+    "rendered": null,
+    "start_ms": 1040560,
+    "end_ms": 1044400
+  },
+  {
+    "word": "stage",
+    "rendered": "stage.",
+    "start_ms": 1044400,
+    "end_ms": 1045480
+  },
+  {
+    "word": "That's",
+    "rendered": "\nThat's",
+    "start_ms": 1056520,
+    "end_ms": 1057540
+  },
+  {
+    "word": "a",
+    "rendered": null,
+    "start_ms": 1057540,
+    "end_ms": 1057900
+  },
+  {
+    "word": "stage",
+    "rendered": null,
+    "start_ms": 1057900,
+    "end_ms": 1058200
+  },
+  {
+    "word": "report",
+    "rendered": null,
+    "start_ms": 1058200,
+    "end_ms": 1058320
+  },
+  {
+    "word": "for",
+    "rendered": null,
+    "start_ms": 1058320,
+    "end_ms": 1058680
+  },
+  {
+    "word": "task",
+    "rendered": "task.",
+    "start_ms": 1058680,
+    "end_ms": 1059040
+  },
+  {
+    "word": "Stage",
+    "rendered": "\nStage,",
+    "start_ms": 1080580,
+    "end_ms": 1082740
+  },
+  {
+    "word": "resolving",
+    "rendered": null,
+    "start_ms": 1082740,
+    "end_ms": 1083160
+  },
+  {
+    "word": "recovery",
+    "rendered": null,
+    "start_ms": 1083160,
+    "end_ms": 1083760
+  },
+  {
+    "word": "and",
+    "rendered": null,
+    "start_ms": 1083760,
+    "end_ms": 1083880
+  },
+  {
+    "word": "merge",
+    "rendered": "merge,",
+    "start_ms": 1083880,
+    "end_ms": 1084180
+  },
+  {
+    "word": "resolving",
+    "rendered": "resolving.",
+    "start_ms": 1084180,
+    "end_ms": 1084600
+  },
+  {
+    "word": "Okay",
+    "rendered": "\nOkay,",
+    "start_ms": 1094800,
+    "end_ms": 1094920
+  },
+  {
+    "word": "wrong",
+    "rendered": "wrong.",
+    "start_ms": 1094920,
+    "end_ms": 1095820
+  },
+  {
+    "word": "Goodbye",
+    "rendered": "\nGoodbye,",
+    "start_ms": 1113760,
+    "end_ms": 1114600
+  },
+  {
+    "word": "David",
+    "rendered": null,
+    "start_ms": 1114600,
+    "end_ms": 1114720
+  },
+  {
+    "word": "Sam",
+    "rendered": "Sam.",
+    "start_ms": 1114720,
+    "end_ms": 1115020
+  },
+  {
+    "word": "Uh",
+    "rendered": "\nUh,",
+    "start_ms": 1140040,
+    "end_ms": 1140460
+  },
+  {
+    "word": "but",
+    "rendered": null,
+    "start_ms": 1140460,
+    "end_ms": 1140820
+  },
+  {
+    "word": "no",
+    "rendered": null,
+    "start_ms": 1140820,
+    "end_ms": 1141060
+  },
+  {
+    "word": "executional",
+    "rendered": null,
+    "start_ms": 1141060,
+    "end_ms": 1141540
+  },
+  {
+    "word": "engine",
+    "rendered": null,
+    "start_ms": 1141540,
+    "end_ms": 1141660
+  },
+  {
+    "word": "that",
+    "rendered": null,
+    "start_ms": 1141660,
+    "end_ms": 1142020
+  },
+  {
+    "word": "correct",
+    "rendered": null,
+    "start_ms": 1142020,
+    "end_ms": 1143100
+  },
+  {
+    "word": "agency",
+    "rendered": "agency.",
+    "start_ms": 1143100,
+    "end_ms": 1143640
+  },
+  {
+    "word": "Correct",
+    "rendered": "\nCorrect?",
+    "start_ms": 1159240,
+    "end_ms": 1159780
+  },
+  {
+    "word": "Responsibility",
+    "rendered": "\nResponsibility.",
+    "start_ms": 1196920,
+    "end_ms": 1198420
+  },
+  {
+    "word": "Relations",
+    "rendered": "\nRelations",
+    "start_ms": 1207240,
+    "end_ms": 1208020
+  },
+  {
+    "word": "of",
+    "rendered": null,
+    "start_ms": 1208020,
+    "end_ms": 1208320
+  },
+  {
+    "word": "solid",
+    "rendered": "solid.",
+    "start_ms": 1208320,
+    "end_ms": 1209220
+  },
+  {
+    "word": "what",
+    "rendered": "What",
+    "start_ms": 1209220,
+    "end_ms": 1210660
+  },
+  {
+    "word": "is",
+    "rendered": "is?",
+    "start_ms": 1210660,
+    "end_ms": 1210900
+  },
+  {
+    "word": "Save",
+    "rendered": "\nSave",
+    "start_ms": 1223860,
+    "end_ms": 1224760
+  },
+  {
+    "word": "one",
+    "rendered": null,
+    "start_ms": 1224760,
+    "end_ms": 1225000
+  },
+  {
+    "word": "of",
+    "rendered": null,
+    "start_ms": 1225000,
+    "end_ms": 1225180
+  },
+  {
+    "word": "these",
+    "rendered": null,
+    "start_ms": 1225180,
+    "end_ms": 1225360
+  },
+  {
+    "word": "engine",
+    "rendered": "engine.",
+    "start_ms": 1225360,
+    "end_ms": 1226800
+  },
+  {
+    "word": "Run",
+    "rendered": "\nRun",
+    "start_ms": 1246600,
+    "end_ms": 1247080
+  },
+  {
+    "word": "lice",
+    "rendered": null,
+    "start_ms": 1247080,
+    "end_ms": 1247560
+  },
+  {
+    "word": "volleyball",
+    "rendered": "volleyball.",
+    "start_ms": 1247560,
+    "end_ms": 1247980
+  },
+  {
+    "word": "it's",
+    "rendered": "It's",
+    "start_ms": 1247980,
+    "end_ms": 1248280
+  },
+  {
+    "word": "a",
+    "rendered": null,
+    "start_ms": 1248280,
+    "end_ms": 1248640
+  },
+  {
+    "word": "German",
+    "rendered": null,
+    "start_ms": 1248640,
+    "end_ms": 1248641
+  },
+  {
+    "word": "cast",
+    "rendered": "cast.",
+    "start_ms": 1248641,
+    "end_ms": 1249240
+  },
+  {
+    "word": "Okay",
+    "rendered": "\nOkay",
+    "start_ms": 1261960,
+    "end_ms": 1262200
+  },
+  {
+    "word": "now",
+    "rendered": "now!",
+    "start_ms": 1262200,
+    "end_ms": 1262680
+  },
+  {
+    "word": "Um",
+    "rendered": "\nUm.",
+    "start_ms": 1298440,
+    "end_ms": 1299280
+  },
+  {
+    "word": "Holders",
+    "rendered": "\nHolders.",
+    "start_ms": 1314520,
+    "end_ms": 1317340
+  },
+  {
+    "word": "Requisitori",
+    "rendered": "\nRequisitori.",
+    "start_ms": 1326160,
+    "end_ms": 1331320
+  },
+  {
+    "word": "Is",
+    "rendered": "\nIs",
+    "start_ms": 1343800,
+    "end_ms": 1348480
+  },
+  {
+    "word": "just",
+    "rendered": "just?",
+    "start_ms": 1348480,
+    "end_ms": 1348720
+  },
+  {
+    "word": "Execution",
+    "rendered": "\nExecution",
+    "start_ms": 1364140,
+    "end_ms": 1365700
+  },
+  {
+    "word": "is",
+    "rendered": null,
+    "start_ms": 1365700,
+    "end_ms": 1366000
+  },
+  {
+    "word": "not",
+    "rendered": "not.",
+    "start_ms": 1366000,
+    "end_ms": 1366180
+  },
+  {
+    "word": "Execution",
+    "rendered": "\nExecution,",
+    "start_ms": 1376020,
+    "end_ms": 1376980
+  },
+  {
+    "word": "the",
+    "rendered": null,
+    "start_ms": 1376980,
+    "end_ms": 1378240
+  },
+  {
+    "word": "idea",
+    "rendered": null,
+    "start_ms": 1378240,
+    "end_ms": 1378780
+  },
+  {
+    "word": "realize",
+    "rendered": "realize.",
+    "start_ms": 1378780,
+    "end_ms": 1379620
+  },
+  {
+    "word": "Um",
+    "rendered": "\nUm,",
+    "start_ms": 1418860,
+    "end_ms": 1419160
+  },
+  {
+    "word": "is",
+    "rendered": null,
+    "start_ms": 1419160,
+    "end_ms": 1420120
+  },
+  {
+    "word": "now",
+    "rendered": null,
+    "start_ms": 1420120,
+    "end_ms": 1420480
+  },
+  {
+    "word": "Canandaiguation",
+    "rendered": "Canandaiguation.",
+    "start_ms": 1420480,
+    "end_ms": 1421620
+  },
+  {
+    "word": "El",
+    "rendered": "\nEl",
+    "start_ms": 1447660,
+    "end_ms": 1447840
+  },
+  {
+    "word": "Puerte",
+    "rendered": "Puerte,",
+    "start_ms": 1447840,
+    "end_ms": 1448260
+  },
+  {
+    "word": "Lord",
+    "rendered": "Lord.",
+    "start_ms": 1448260,
+    "end_ms": 1448560
+  },
+  {
+    "word": "Right",
+    "rendered": "\nRight",
+    "start_ms": 1462780,
+    "end_ms": 1463740
+  },
+  {
+    "word": "session",
+    "rendered": null,
+    "start_ms": 1463740,
+    "end_ms": 1464100
+  },
+  {
+    "word": "snapshots",
+    "rendered": "snapshots?",
+    "start_ms": 1464100,
+    "end_ms": 1464700
+  },
+  {
+    "word": "Class",
+    "rendered": "\nClass",
+    "start_ms": 1479340,
+    "end_ms": 1482700
+  },
+  {
+    "word": "data",
+    "rendered": null,
+    "start_ms": 1482700,
+    "end_ms": 1482940
+  },
+  {
+    "word": "class",
+    "rendered": "class.",
+    "start_ms": 1482940,
+    "end_ms": 1483060
+  },
+  {
+    "word": "We",
+    "rendered": "\nWe",
+    "start_ms": 1497580,
+    "end_ms": 1497700
+  },
+  {
+    "word": "watch",
+    "rendered": "watch.",
+    "start_ms": 1497700,
+    "end_ms": 1497940
+  },
+  {
+    "word": "Offensive",
+    "rendered": "\nOffensive",
+    "start_ms": 1518880,
+    "end_ms": 1519240
+  },
+  {
+    "word": "events",
+    "rendered": "events.",
+    "start_ms": 1519240,
+    "end_ms": 1520020
+  },
+  {
+    "word": "Images",
+    "rendered": "\nImages.",
+    "start_ms": 1529800,
+    "end_ms": 1539220
+  },
+  {
+    "word": "Agent",
+    "rendered": "\nAgent",
+    "start_ms": 1545100,
+    "end_ms": 1548820
+  },
+  {
+    "word": "finished",
+    "rendered": "finished.",
+    "start_ms": 1548820,
+    "end_ms": 1549480
+  },
+  {
+    "word": "Is",
+    "rendered": "\nIs",
+    "start_ms": 1563640,
+    "end_ms": 1565920
+  },
+  {
+    "word": "interest",
+    "rendered": "interest?",
+    "start_ms": 1565920,
+    "end_ms": 1568320
+  },
+  {
+    "word": "Foreign",
+    "rendered": "\nForeign.",
+    "start_ms": 1578820,
+    "end_ms": 1579540
+  },
+  {
+    "word": "Los",
+    "rendered": "\nLos",
+    "start_ms": 1595860,
+    "end_ms": 1596100
+  },
+  {
+    "word": "queso",
+    "rendered": null,
+    "start_ms": 1596100,
+    "end_ms": 1596700
+  },
+  {
+    "word": "estas",
+    "rendered": null,
+    "start_ms": 1596700,
+    "end_ms": 1597000
+  },
+  {
+    "word": "Bueno",
+    "rendered": "Bueno.",
+    "start_ms": 1597000,
+    "end_ms": 1598140
+  },
+  {
+    "word": "It",
+    "rendered": "\nIt",
+    "start_ms": 1613080,
+    "end_ms": 1613260
+  },
+  {
+    "word": "makes",
+    "rendered": null,
+    "start_ms": 1613260,
+    "end_ms": 1613920
+  },
+  {
+    "word": "up",
+    "rendered": null,
+    "start_ms": 1613920,
+    "end_ms": 1614280
+  },
+  {
+    "word": "agent",
+    "rendered": null,
+    "start_ms": 1614280,
+    "end_ms": 1614520
+  },
+  {
+    "word": "progress",
+    "rendered": "progress.",
+    "start_ms": 1614520,
+    "end_ms": 1614820
+  },
+  {
+    "word": "Successful",
+    "rendered": "\nSuccessful,",
+    "start_ms": 1630960,
+    "end_ms": 1636480
+  },
+  {
+    "word": "right",
+    "rendered": "right?",
+    "start_ms": 1636480,
+    "end_ms": 1637500
+  },
+  {
+    "word": "the",
+    "rendered": "The",
+    "start_ms": 1637500,
+    "end_ms": 1638520
+  },
+  {
+    "word": "session",
+    "rendered": null,
+    "start_ms": 1638520,
+    "end_ms": 1638820
+  },
+  {
+    "word": "of",
+    "rendered": null,
+    "start_ms": 1638820,
+    "end_ms": 1639000
+  },
+  {
+    "word": "data",
+    "rendered": null,
+    "start_ms": 1639000,
+    "end_ms": 1640500
+  },
+  {
+    "word": "error",
+    "rendered": "error,",
+    "start_ms": 1640500,
+    "end_ms": 1640680
+  },
+  {
+    "word": "which",
+    "rendered": "which?",
+    "start_ms": 1640680,
+    "end_ms": 1640920
+  },
+  {
+    "word": "Right",
+    "rendered": "\nRight,",
+    "start_ms": 1717720,
+    "end_ms": 1717900
+  },
+  {
+    "word": "social",
+    "rendered": null,
+    "start_ms": 1717900,
+    "end_ms": 1718320
+  },
+  {
+    "word": "media",
+    "rendered": null,
+    "start_ms": 1718320,
+    "end_ms": 1718680
+  },
+  {
+    "word": "died",
+    "rendered": "died,",
+    "start_ms": 1718680,
+    "end_ms": 1718860
+  },
+  {
+    "word": "of",
+    "rendered": null,
+    "start_ms": 1718860,
+    "end_ms": 1719160
+  },
+  {
+    "word": "course",
+    "rendered": "course.",
+    "start_ms": 1719160,
+    "end_ms": 1719340
+  },
+  {
+    "word": "Resource",
+    "rendered": "\nResource",
+    "start_ms": 1724140,
+    "end_ms": 1726360
+  },
+  {
+    "word": "control",
+    "rendered": "control,",
+    "start_ms": 1726360,
+    "end_ms": 1726480
+  },
+  {
+    "word": "is",
+    "rendered": null,
+    "start_ms": 1726480,
+    "end_ms": 1727020
+  },
+  {
+    "word": "it",
+    "rendered": "it?",
+    "start_ms": 1727020,
+    "end_ms": 1727320
+  },
+  {
+    "word": "Uh",
+    "rendered": "\nUh,",
+    "start_ms": 1755220,
+    "end_ms": 1755580
+  },
+  {
+    "word": "plus",
+    "rendered": "plus.",
+    "start_ms": 1755580,
+    "end_ms": 1755581
+  },
+  {
+    "word": "Tuesday",
+    "rendered": "\nTuesday,",
+    "start_ms": 1833460,
+    "end_ms": 1833700
+  },
+  {
+    "word": "oh",
+    "rendered": "oh,",
+    "start_ms": 1833700,
+    "end_ms": 1834120
+  },
+  {
+    "word": "this",
+    "rendered": null,
+    "start_ms": 1834120,
+    "end_ms": 1835380
+  },
+  {
+    "word": "is",
+    "rendered": "is.",
+    "start_ms": 1835380,
+    "end_ms": 1835620
+  },
+  {
+    "word": "About",
+    "rendered": "\nAbout",
+    "start_ms": 1877500,
+    "end_ms": 1880680
+  },
+  {
+    "word": "seconds",
+    "rendered": "seconds.",
+    "start_ms": 1880680,
+    "end_ms": 1880980
+  },
+  {
+    "word": "Chess",
+    "rendered": "\nChess",
+    "start_ms": 1894780,
+    "end_ms": 1895140
+  },
+  {
+    "word": "manager",
+    "rendered": "manager.",
+    "start_ms": 1895140,
+    "end_ms": 1895500
+  },
+  {
+    "word": "Okay",
+    "rendered": "\nOkay,",
+    "start_ms": 1909120,
+    "end_ms": 1909660
+  },
+  {
+    "word": "but",
+    "rendered": null,
+    "start_ms": 1909660,
+    "end_ms": 1910080
+  },
+  {
+    "word": "you",
+    "rendered": null,
+    "start_ms": 1910080,
+    "end_ms": 1910200
+  },
+  {
+    "word": "move",
+    "rendered": null,
+    "start_ms": 1910200,
+    "end_ms": 1910320
+  },
+  {
+    "word": "on",
+    "rendered": "on.",
+    "start_ms": 1910320,
+    "end_ms": 1910440
+  },
+  {
+    "word": "Which",
+    "rendered": "\nWhich",
+    "start_ms": 1917100,
+    "end_ms": 1917220
+  },
+  {
+    "word": "one",
+    "rendered": null,
+    "start_ms": 1917220,
+    "end_ms": 1917460
+  },
+  {
+    "word": "I",
+    "rendered": null,
+    "start_ms": 1917460,
+    "end_ms": 1917640
+  },
+  {
+    "word": "didn't",
+    "rendered": "didn't?",
+    "start_ms": 1917640,
+    "end_ms": 1917760
+  },
+  {
+    "word": "Uh",
+    "rendered": "\nUh,",
+    "start_ms": 1924960,
+    "end_ms": 1925500
+  },
+  {
+    "word": "Mars",
+    "rendered": null,
+    "start_ms": 1925500,
+    "end_ms": 1926220
+  },
+  {
+    "word": "in",
+    "rendered": null,
+    "start_ms": 1926220,
+    "end_ms": 1926340
+  },
+  {
+    "word": "goodbye",
+    "rendered": "goodbye.",
+    "start_ms": 1926340,
+    "end_ms": 1926760
+  },
+  {
+    "word": "Coding",
+    "rendered": "\nCoding",
+    "start_ms": 1976560,
+    "end_ms": 1981060
+  },
+  {
+    "word": "style",
+    "rendered": null,
+    "start_ms": 1981060,
+    "end_ms": 1981240
+  },
+  {
+    "word": "now",
+    "rendered": "now!",
+    "start_ms": 1981240,
+    "end_ms": 1981840
+  },
+  {
+    "word": "Putting",
+    "rendered": null,
+    "start_ms": 1982380,
+    "end_ms": 1982680
+  },
+  {
+    "word": "style",
+    "rendered": null,
+    "start_ms": 1982680,
+    "end_ms": 1982980
+  },
+  {
+    "word": "Corazon",
+    "rendered": null,
+    "start_ms": 1982980,
+    "end_ms": 1983520
+  },
+  {
+    "word": "El",
+    "rendered": null,
+    "start_ms": 1983520,
+    "end_ms": 1983700
+  },
+  {
+    "word": "principle",
+    "rendered": "principle?",
+    "start_ms": 1983700,
+    "end_ms": 1984180
+  },
+  {
+    "word": "Generalizable",
+    "rendered": "\nGeneralizable.",
+    "start_ms": 1987360,
+    "end_ms": 1991320
+  },
+  {
+    "word": "Um",
+    "rendered": "Um.",
+    "start_ms": 1993120,
+    "end_ms": 1993660
+  },
+  {
+    "word": "For",
+    "rendered": null,
+    "start_ms": 1994560,
+    "end_ms": 1995760
+  },
+  {
+    "word": "coding",
+    "rendered": null,
+    "start_ms": 1995760,
+    "end_ms": 1996660
+  },
+  {
+    "word": "Styles",
+    "rendered": null,
+    "start_ms": 1996660,
+    "end_ms": 1996900
+  },
+  {
+    "word": "machine",
+    "rendered": "machine.",
+    "start_ms": 1996900,
+    "end_ms": 1997200
+  }
+]

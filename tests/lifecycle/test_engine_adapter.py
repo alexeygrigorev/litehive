@@ -18,7 +18,6 @@ from litehive.lifecycle.sessions import Session
 from litehive.lifecycle.types import PipelineMode
 from litehive.tasks.journal import render_task_journal
 from litehive.workspace import Workspace
-from litehive.tasks.activity import load_task_activity
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.tasks.report_storage import load_stage_reports
 from heru.types import RuntimeEngineContinuation, SubagentRef, SubagentStatus
@@ -452,7 +451,7 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_when_engine_is_unavai
                 pid=4242,
             )
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
     monkeypatch.setattr("litehive.lifecycle.heru_factory.CodexCLIAdapter", FakeCodexAdapter)
 
     with pytest.raises(
@@ -524,7 +523,7 @@ def test_heru_engine_adapter_does_not_launch_direct_recovery_after_started_run_f
             captured["called"] = True
             raise AssertionError("direct recovery must not run after the engine started")
 
-    monkeypatch.setattr("litehive.agents.manager.get_engine", lambda _: FakeEngine())
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
     monkeypatch.setattr("litehive.lifecycle.heru_factory.CodexCLIAdapter", FakeCodexAdapter)
 
     with pytest.raises(UnrecoverableError, match="RuntimeError: started run exploded"):
@@ -927,7 +926,7 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
     assert verdict.source == "guard"
     assert verdict.metadata["reason_code"] == "hallucinated_completion"
 
-    activity_entries = load_task_activity(Workspace.from_path(tmp_path), task)
+    activity_entries = Workspace.from_path(tmp_path).task_activity(task).load()
     assert len(activity_entries) == 1
     assert activity_entries[0].verdict == "reject"
     assert "[retracted - filesystem check shows no changes landed]" in activity_entries[0].message
