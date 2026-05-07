@@ -28,8 +28,13 @@ from .runtime_sync import _MANUAL_REVIEW_FLAG_REASONS
 
 def _resolve_worktree(root: Path, state: TaskState) -> Path:
     """Look up the on-disk worktree path for a task, falling back to the workspace root when no worktree was recorded — the commit/sync nodes never want a missing path."""
-    _, worktree_path = _task_recorded_worktree(root, state.task_id)
-    return worktree_path or root
+    return _resolve_worktree_for_workspace(Workspace.from_path(root), state)
+
+
+def _resolve_worktree_for_workspace(workspace: Workspace, state: TaskState) -> Path:
+    """Look up the task worktree path for a task, falling back to the workspace root when no worktree was recorded."""
+    _, worktree_path = _task_recorded_worktree_for_workspace(workspace, state.task_id)
+    return worktree_path or workspace.root
 
 
 def _resolve_hook_execution_root(root: Path, state: TaskState) -> Path:
@@ -79,20 +84,18 @@ def build_commit_node(root: Path) -> CommitNode:
 
 def build_commit_node_for_workspace(workspace: Workspace) -> CommitNode:
     """Return the production ``GitCommitNode`` bound to an injected workspace."""
-    root = workspace.root
     return GitCommitNode(
-        root,
-        worktree_resolver=lambda state: _resolve_worktree(root, state),
+        workspace.root,
+        worktree_resolver=lambda state: _resolve_worktree_for_workspace(workspace, state),
         task_resolver=lambda state: _task_recorded_worktree_for_workspace(workspace, state.task_id)[0],
     )
 
 
 def _build_worktree_sync_node(workspace: Workspace) -> GitWorktreeSyncNode:
     """Return the production ``GitWorktreeSyncNode`` bound to this workspace; mirrors ``build_commit_node`` for the worktree-sync stage."""
-    root = workspace.root
     return GitWorktreeSyncNode(
         workspace=workspace,
-        worktree_resolver=lambda state: _resolve_worktree(root, state),
+        worktree_resolver=lambda state: _resolve_worktree_for_workspace(workspace, state),
     )
 
 
