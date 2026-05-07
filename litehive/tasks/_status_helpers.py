@@ -7,13 +7,11 @@ stay focused on its own decision logic without copy-pasting the
 persistence and outcome-shaping plumbing.
 """
 
-from pathlib import Path
-
 from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStatus
 from litehive.domain.outcomes import OutcomeReasonCode, TaskCloseReason, TaskOutcomeKind
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.lifecycle.persistence import SqlitePersistence
-from litehive.state.persist import persist_task_and_state_without_runner_guard
+from litehive.state.persist import persist_task_and_state_without_runner_guard_for_workspace
 from litehive.tasks._process_signals import terminate_subagent_pid
 from litehive.workspace import Workspace
 from litehive.tasks.audit import (
@@ -44,7 +42,7 @@ def _reset_pipeline_state(workspace: Workspace, task_id: str, preserve_run_memor
 
 
 def _persist_transition(
-    root: Path,
+    workspace: Workspace,
     task: TaskRecord,
     state: WorkspaceState,
     journal_message: str,
@@ -64,8 +62,8 @@ def _persist_transition(
     avoids each transition reinventing the build_task_audit_entry call.
     """
 
-    persist_task_and_state_without_runner_guard(
-        root,
+    persist_task_and_state_without_runner_guard_for_workspace(
+        workspace,
         task=task,
         state=state,
         journal_message=journal_message,

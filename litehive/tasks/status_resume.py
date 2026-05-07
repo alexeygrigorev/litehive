@@ -140,7 +140,7 @@ def _requeue_task_transition(
         _reset_pipeline_state(workspace, task.id, preserve_run_memory=True)
         _queue_task(state, task.id, front=front)
         _persist_transition(
-            root,
+            workspace,
             task=task,
             state=state,
             journal_message="Task requeued for another implementation pass.",
@@ -209,7 +209,7 @@ def _resume_task_transition(workspace: Workspace, task_id: str, front: bool = Fa
         _reset_pipeline_state(workspace, task.id)
         _queue_task(state, task.id, front=front)
         _persist_transition(
-            root,
+            workspace,
             task=task,
             state=state,
             journal_message=f"Task resumed from `{resumed_stage}`.",

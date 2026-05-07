@@ -83,7 +83,7 @@ def _abandon_task_transition(
         _apply_cancelled_task_state(task, reason=reason)
         drop_task_from_workspace_state(state, task.id)
         _persist_transition(
-            root,
+            workspace,
             task=task,
             state=state,
             journal_message=f"{reason.rstrip('.')} at stage `{task.pipeline_status}`.",
@@ -166,7 +166,7 @@ def _close_task_transition(
         )
         drop_task_from_workspace_state(state, task.id)
         _persist_transition(
-            root,
+            workspace,
             task=task,
             state=state,
             journal_message=journal_message,
@@ -211,7 +211,7 @@ def _park_task_transition(
         _apply_parked_task_state(task)
         drop_task_from_workspace_state(state, task.id)
         _persist_transition(
-            root,
+            workspace,
             task=task,
             state=state,
             journal_message=f"{reason.rstrip('.')} at stage `{task.pipeline_status}`.",
