@@ -309,6 +309,31 @@ class TaskRecord(BaseModel):
         """
         return self.runtime.current_stage_name
 
+    @property
+    def is_pool_pending(self) -> bool:
+        """
+        True when a pool summary should list the task as remaining work.
+        """
+        if self.pipeline_status == PipelineStatus.DONE:
+            return False
+        return self.status in {TaskStatus.QUEUED, TaskStatus.IN_PROGRESS}
+
+    @property
+    def is_resumable(self) -> bool:
+        """
+        True when a stopped task can be picked up by a later pool run.
+        """
+        if self.pipeline_status == PipelineStatus.DONE:
+            return False
+        return self.status in {TaskStatus.INTERRUPTED, TaskStatus.PARKED}
+
+    @property
+    def is_closed(self) -> bool:
+        """
+        True when the task was explicitly closed by an operator action.
+        """
+        return self.status == TaskStatus.CLOSED
+
     def to_intent_record(self) -> TaskIntentRecord:
         """
         Project the operator-intent half of the task for the intent row.

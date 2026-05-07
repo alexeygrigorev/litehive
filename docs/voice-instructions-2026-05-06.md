@@ -1443,40 +1443,71 @@ Legend:
 
 ## Pool CLI Instructions
 
-- [ ] P1. Review `pool.py`; it is around 400 lines and likely should
+- [x] P1. Review `pool.py`; it is around 400 lines and likely should
   be split.
   Source: note 4, 26:24-26:32.
-- [ ] P2. Clarify what `pool` is as a domain concept.
+  Completed 2026-05-07: reviewed the summary/report half of
+  `pool.py` and moved its data model into `litehive.domain.pool`; the
+  CLI now keeps only collection, rendering, and file-writing glue for
+  this slice.
+- [x] P2. Clarify what `pool` is as a domain concept.
   Source: note 4, 26:32-26:40.
-- [ ] P3. Replace functions that simply return dictionaries with
+  Completed 2026-05-07: documented pool as a runner-level queue drain
+  attempt in `docs/domain.md`, with typed stop reasons and summary
+  buckets.
+- [x] P3. Replace functions that simply return dictionaries with
   dataclasses.
   Source: note 4, 26:40-27:12; note 4, 31:15-31:23.
-- [ ] P4. Move task-status business logic out of pool CLI, for
+  Completed 2026-05-07: replaced pool task-entry and summary-report
+  dictionaries with `PoolTaskReportEntry` and `PoolSummaryReport`.
+- [x] P4. Move task-status business logic out of pool CLI, for
   example checks like "if task status not in interrupted pipeline".
   Source: note 4, 27:27-28:20.
-- [ ] P5. Add domain methods/properties such as `task.is_resumable`
+  Completed 2026-05-07: moved pool pending/resumable/closed status
+  checks onto `TaskRecord` properties and made `pool.py` call those
+  domain predicates.
+- [x] P5. Add domain methods/properties such as `task.is_resumable`
   and possibly `task.is_closed`, instead of repeating status-set
   checks in CLI.
   Source: note 4, 27:40-28:56.
-- [ ] P6. Hoist complex inline expressions such as
+  Completed 2026-05-07: added `TaskRecord.is_pool_pending`,
+  `TaskRecord.is_resumable`, and `TaskRecord.is_closed`, with domain
+  tests for the pool summary buckets.
+- [x] P6. Hoist complex inline expressions such as
   `entry.get("stage_outcomes", ...)` into named locals.
   Source: note 4, 29:03-29:33.
-- [ ] P7. Replace pool stop condition labels with an enum/domain
+  Completed 2026-05-07: typed pool report entries expose
+  `stage_outcomes` directly and rendering binds both
+  `stage_outcomes` and `stage_outcomes_label` before formatting.
+- [x] P7. Replace pool stop condition labels with an enum/domain
   value. Do not maintain ad hoc string labels in CLI.
   Source: note 4, 29:33-30:19.
-- [ ] P8. Use a simple value such as `single_task_complete` instead
+  Completed 2026-05-07: introduced `PoolStopReason` with the
+  operator-facing label mapping on the domain enum instead of a CLI
+  dictionary.
+- [x] P8. Use a simple value such as `single_task_complete` instead
   of over-complicated label manipulation.
   Source: note 4, 30:19-30:30.
-- [ ] P9. Replace tuple results around block/remind/no-useful-progress
+  Completed 2026-05-07: `single_task_complete` remains the persisted
+  machine value and the label is derived by `PoolStopReason`.
+- [x] P9. Replace tuple results around block/remind/no-useful-progress
   data with one dataclass containing those fields.
   Source: note 4, 30:35-31:00.
-- [ ] P10. Ensure type checking fails when functions return values but
+  Completed 2026-05-07: replaced the no-useful-progress tuple with
+  `PoolProgressReport`.
+- [x] P10. Ensure type checking fails when functions return values but
   their annotations say they return nothing. Specific pool areas
   mentioned: root/completed/flagged typing around lines 261-276.
   Source: note 4, 31:26-32:23.
-- [ ] P11. Remove `isinstance` checks and dictionaries in pool reports
+  Completed 2026-05-07: annotated the pool summary builder, renderer,
+  and writer boundaries, including `root`, `completed`, and
+  `flagged`.
+- [x] P11. Remove `isinstance` checks and dictionaries in pool reports
   by returning normal report objects.
   Source: note 4, 32:30-33:06.
+  Completed 2026-05-07: pool rendering now iterates typed
+  `PoolTaskReportEntry` objects; legacy mapping conversion is isolated
+  at the writer/renderer boundary.
 
 ## Process Profile And Config Instructions
 

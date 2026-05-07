@@ -27,6 +27,10 @@ stable across refactors.
   interruptions, and runtime projections.
 - **Recovery**: failure fingerprints, recovery triggers, recovery outcomes,
   recovery budgets, and failed-run history.
+- **Pool**: a runner-level queue drain attempt over workspace tasks. It claims
+  eligible queued/resumable work, stops for typed `PoolStopReason` values, and
+  leaves an operator summary describing completed, flagged, resumable, closed,
+  skipped, and remaining tasks.
 - **Reports and Activity**: stage reports, recovery reports, task activity, task
   evidence, audit records, and human-readable history.
 - **Artifacts**: raw prompt, event stream, stdout/stderr, execution trace, and
@@ -139,7 +143,8 @@ stable across refactors.
   and report projections.
 - `litehive/domain/engine.py`: engine monitoring and live event-stream models.
 - `litehive/domain/agent.py`: subagent execution result models and exceptions.
-- `litehive/domain/pool.py`: worktree and dirty-worktree gate reports.
+- `litehive/domain/pool.py`: pool stop reasons, pool summary reports,
+  worktree reports, and dirty-worktree gate reports.
 - `litehive/domain/task_ops.py`: task-operation result and error dataclasses.
 - `litehive/domain/lifecycle_deltas.py`: transition deltas and recovery trigger
   construction.
