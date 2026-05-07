@@ -11,6 +11,7 @@ from litehive.domain.common import (
     TaskStatus,
     utcnow,
 )
+from litehive.domain.failure_diagnostics import FailureDiagnosticValue, FailureDiagnostics
 from litehive.domain.reports import StageReport
 from litehive.domain.runtime import (
     RuntimeEngineContinuation,
@@ -298,7 +299,7 @@ def mark_task_outcome(
     retry_limit: int,
     follow_up_task_id: str | None = None,
     failure_classification: str | None = None,
-    failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
+    failure_diagnostics: FailureDiagnostics | dict[str, FailureDiagnosticValue] | None = None,
 ) -> None:
     """
     Record the verdict that ended a stage and flush it to disk.
@@ -333,7 +334,7 @@ def apply_task_outcome(
     retry_limit: int,
     follow_up_task_id: str | None = None,
     failure_classification: str | None = None,
-    failure_diagnostics: dict[str, str | int | bool | None | list[str]] | None = None,
+    failure_diagnostics: FailureDiagnostics | dict[str, FailureDiagnosticValue] | None = None,
 ) -> None:
     """
     In-memory variant of ``mark_task_outcome``.
@@ -355,12 +356,25 @@ def apply_task_outcome(
         reason_code=outcome_reason_code,
         reason=reason,
         failure_classification=failure_classification,
-        failure_diagnostics=dict(failure_diagnostics or {}),
+        failure_diagnostics=_normalize_failure_diagnostics(failure_diagnostics),
         follow_up_task_id=follow_up_task_id,
         retry_count=retry_count,
         retry_limit=retry_limit,
         recorded_at=now,
     )
+
+
+def _normalize_failure_diagnostics(
+    failure_diagnostics: FailureDiagnostics | dict[str, FailureDiagnosticValue] | None,
+) -> FailureDiagnostics:
+    """
+    Convert legacy dict inputs into the typed diagnostics value.
+    """
+    if failure_diagnostics is None:
+        return FailureDiagnostics({})
+    if isinstance(failure_diagnostics, FailureDiagnostics):
+        return failure_diagnostics
+    return FailureDiagnostics(failure_diagnostics)
 
 
 def mark_stage_started(root: Path, task: TaskRecord, stage: str) -> None:

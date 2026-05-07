@@ -10,12 +10,8 @@ from litehive.domain.common import (
     pipeline_status_for_pipeline_state,
     task_stage_for_pipeline_state,
 )
-from litehive.domain.reports import (
-    FailureDiagnostics,
-    ReportPipelineState,
-    StageReport,
-    canonical_stage_report_verdict,
-)
+from litehive.domain.failure_diagnostics import FailureDiagnostics
+from litehive.domain.reports import ReportPipelineState, StageReport, canonical_stage_report_verdict
 from litehive.domain.runtime import RuntimeSubagentState, Subagent
 
 

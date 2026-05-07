@@ -36,6 +36,7 @@ from .common import (
     TaskExecutionStatus,
     utcnow,
 )
+from .failure_diagnostics import FailureDiagnostics, empty_failure_diagnostics
 
 
 def _json_enum_value(value: object) -> object:
@@ -245,7 +246,7 @@ class TaskOutcomeState(BaseModel):
     reason_code: OutcomeReasonCode | None = None  # Machine-readable reason for outcome
     reason: str = ""  # Human-readable explanation
     failure_classification: str | None = None  # Type of failure if applicable
-    failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)  # Report evidence
+    failure_diagnostics: FailureDiagnostics = Field(default_factory=empty_failure_diagnostics)  # Report evidence
     follow_up_task_id: str | None = None  # ID of any follow-up task created
     retry_count: int = 0  # Number of retries attempted
     retry_limit: int = 0  # Maximum retries allowed
