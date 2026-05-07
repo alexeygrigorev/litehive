@@ -13,8 +13,6 @@ Lives in its own module rather than in ``tasks.status`` because it
 is one self-contained operator action with its own audit shape.
 """
 
-from pathlib import Path
-
 from litehive.domain.common import PipelineStatus, TaskStatus, Verdict
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
@@ -49,7 +47,7 @@ def _effective_task_engine(default_engine: str, task: TaskRecord) -> str:
     return default_engine
 
 
-def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
+def _switch_prior_work_paths(workspace: Workspace, task: TaskRecord) -> list[str]:
     """
     Collect the relative subagent artifact directories from prior runs.
 
@@ -63,9 +61,9 @@ def _switch_prior_work_paths(root: Path, task: TaskRecord) -> list[str]:
     for candidate in (ref.path for ref in reversed(task.subagents)):
         if candidate and candidate not in paths:
             paths.append(candidate)
-    base = latest_subagent_base(root, task)
+    base = latest_subagent_base(workspace.root, task)
     if base is not None:
-        rel_path = str(base.relative_to(task_dir(root, task)))
+        rel_path = str(base.relative_to(task_dir(workspace.root, task)))
         if rel_path not in paths:
             paths.append(rel_path)
     return paths
@@ -169,7 +167,7 @@ def switch_task_engine_for_workspace(
     else:
         raise ValueError(f"Task {task.id} is {task.status} and cannot be switched into a queued runnable state")
 
-    prior_work_paths = _switch_prior_work_paths(root, task)
+    prior_work_paths = _switch_prior_work_paths(workspace, task)
 
     workspace.task_activity(task).append(
         TaskActivityEntry(
