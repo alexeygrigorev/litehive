@@ -58,7 +58,7 @@ from .worktree_setup import (
     _build_worktree_sync_node,
     _cleanup_terminal_worktree,
     _mark_task_interrupted_on_crash,
-    _resolve_hook_execution_root,
+    _resolve_hook_execution_root_for_workspace,
     _worktree_metadata_repair,
     _worktree_missing_probe,
     build_commit_node,
@@ -168,7 +168,7 @@ def run_task_for_workspace(
         journal = SqliteJournal(workspace)
         hook_runner = SubprocessHookRunner(
             root,
-            execution_root_resolver=lambda state: _resolve_hook_execution_root(root, state),
+            execution_root_resolver=lambda state: _resolve_hook_execution_root_for_workspace(workspace, state),
         )
         commit_node = build_commit_node_for_workspace(workspace)
         worktree_sync_node = _build_worktree_sync_node(workspace)

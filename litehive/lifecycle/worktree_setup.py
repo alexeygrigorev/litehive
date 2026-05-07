@@ -39,6 +39,13 @@ def _resolve_worktree_for_workspace(workspace: Workspace, state: TaskState) -> P
 
 def _resolve_hook_execution_root(root: Path, state: TaskState) -> Path:
     """
+    Path-based compatibility wrapper for hook execution root resolution.
+    """
+    return _resolve_hook_execution_root_for_workspace(Workspace.from_path(root), state)
+
+
+def _resolve_hook_execution_root_for_workspace(workspace: Workspace, state: TaskState) -> Path:
+    """
     Pick the cwd for runner hooks based on stage.
 
     Pre-commit hooks run in the task worktree so they see the agent's
@@ -47,8 +54,8 @@ def _resolve_hook_execution_root(root: Path, state: TaskState) -> Path:
     the integrated state.
     """
     if state.stage == PipelineState.AFTER_COMMIT:
-        return root
-    return _resolve_worktree(root, state)
+        return workspace.root
+    return _resolve_worktree_for_workspace(workspace, state)
 
 
 def _task_recorded_worktree(root: Path, task_id: str) -> tuple[TaskRecord | None, Path | None]:
