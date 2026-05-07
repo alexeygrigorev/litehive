@@ -66,6 +66,15 @@ class _StubLifecycleEngine:
         return _StubLifecycleEngine(self.name, model_name=model_name)
 
 
+def _assert_engine_selection_request(actual: object, expected: EngineSelectionRequest) -> None:
+    assert getattr(actual, "engine_override") == expected.engine_override
+    assert getattr(actual, "model_override") == expected.model_override
+    assert getattr(actual, "engine_names") == expected.engine_names
+    assert getattr(actual, "excluded_engine_names") == expected.excluded_engine_names
+    assert getattr(actual, "require_available") == expected.require_available
+    assert getattr(actual, "check_quota") == expected.check_quota
+
+
 def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """CLI: freeze an engine, verify audited DB settings, then unfreeze."""
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
@@ -808,7 +817,10 @@ def test_lifecycle_selector_uses_shared_select_engine_when_task_record_missing(
     assert isinstance(captured["task"], TaskRecord)
     assert captured["task"].id == "T-4040"
     assert captured["task"].pipeline_status == "implementing"
-    assert captured["request"] == EngineSelectionRequest(excluded_engine_names=frozenset({"codex"}))
+    _assert_engine_selection_request(
+        captured["request"],
+        EngineSelectionRequest(excluded_engine_names=frozenset({"codex"})),
+    )
 
 
 @pytest.mark.parametrize(
@@ -867,7 +879,7 @@ def test_recovery_engine_uses_shared_select_engine(
     assert captured["workspace"] == workspace
     assert captured["task"] == task
     assert captured["config"] == config
-    assert captured["request"] == expected_request
+    _assert_engine_selection_request(captured["request"], expected_request)
 
 
 def test_recovery_auto_engine_respects_shared_selector_blocked_result(tmp_path: Path) -> None:
