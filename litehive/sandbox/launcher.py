@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 import shutil
 from typing import Mapping
 
-from litehive.agents.sandbox_support import (
+from litehive.sandbox.support import (
     SandboxedAdapter as LitehiveSandboxedAdapter,
     forced_engine_rw_state_dirs,
 )

@@ -38,7 +38,7 @@ from litehive.observability.events import append_session_log, ensure_session_log
 from litehive.tasks.runtime import mark_subagent_pid
 
 if TYPE_CHECKING:
-    from litehive.agents.sandbox import SandboxLauncher
+    from litehive.sandbox.launcher import SandboxLauncher
     from litehive.config.model import LitehiveConfig
     from litehive.workspace import Workspace
 

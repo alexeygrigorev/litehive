@@ -724,7 +724,7 @@ class HeruEngineAdapter:
             RunningSubagentSessionRow,
             SubagentSessionStorageFields,
         )
-        from litehive.agents.sandbox import SandboxPolicySummary  # noqa: PLC0415
+        from litehive.sandbox.launcher import SandboxPolicySummary  # noqa: PLC0415
         from litehive.agents.session_store import save_subagent_artifacts  # noqa: PLC0415
 
         now = datetime.now(UTC).isoformat()

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from litehive.agents.sandbox import SandboxPolicySummary
+from litehive.sandbox.launcher import SandboxPolicySummary
 from litehive.agents.session_continuation import NoSubagentContinuation, SubagentContinuationState
 from litehive.agents.session_reports import SubagentReportPayload
 from litehive.domain.common import SubagentStatus

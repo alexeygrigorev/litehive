@@ -30,7 +30,7 @@ class SandboxLauncher(Protocol):
 
     The adapter confines engine invocations without depending on a
     concrete launcher implementation; production passes the real
-    ``SandboxLauncher`` in ``litehive.agents.sandbox`` and tests can
+    ``SandboxLauncher`` in ``litehive.sandbox.launcher`` and tests can
     pass a stub that satisfies the protocol.
     """
 

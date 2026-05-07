@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Mapping
 
-from litehive.agents.sandbox import SandboxPolicySummary
+from litehive.sandbox.launcher import SandboxPolicySummary
 from litehive.agents.session_continuation import NoSubagentContinuation, SubagentContinuationState
 from litehive.domain.common import SubagentStatus
 

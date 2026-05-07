@@ -1059,10 +1059,14 @@ Legend:
 
 ## Sandbox Instructions
 
-- [ ] S1. Move `litehive/agents/sandbox_support.py` and
+- [x] S1. Move `litehive/agents/sandbox_support.py` and
   `litehive/agents/sandbox.py` behavior into the sandbox module or
   package. Sandbox behavior should not live under `agents`.
   Source: note 4, 01:27-01:51.
+  Completed 2026-05-07: moved sandbox launcher behavior to
+  `litehive/sandbox/launcher.py` and sandbox adapter/support behavior
+  to `litehive/sandbox/support.py`; updated production and test imports
+  to use the sandbox package directly without compatibility wrappers.
 - [ ] S2. Split `SandboxSupport`; it is too large.
   Source: note 4, 02:01-02:07.
 - [ ] S3. Remove the `__all__` export bag from sandbox support.

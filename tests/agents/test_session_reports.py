@@ -1,6 +1,6 @@
 from heru.types import RuntimeEngineContinuation
 
-from litehive.agents.sandbox import SandboxPolicySummary
+from litehive.sandbox.launcher import SandboxPolicySummary
 from litehive.agents.session_continuation import subagent_continuation_state
 from litehive.agents.session_reports import SubagentReportPayload
 from litehive.domain.common import SubagentStatus

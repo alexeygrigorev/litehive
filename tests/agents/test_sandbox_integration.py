@@ -7,7 +7,7 @@ import tempfile
 import pytest
 
 from heru.base import CLIInvocation
-from litehive.agents.sandbox import SandboxLauncher, SandboxPolicySummary, SandboxProfile, sandbox_profile_for_role
+from litehive.sandbox.launcher import SandboxLauncher, SandboxPolicySummary, SandboxProfile, sandbox_profile_for_role
 from litehive.config.model import LitehiveConfig, ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
 
 

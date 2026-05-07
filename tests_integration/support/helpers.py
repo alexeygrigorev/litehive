@@ -386,7 +386,7 @@ def execute_engine_prompt(
     sandbox_summary_override: str | None = None
     sandbox_applied = False
     if sandboxed:
-        from litehive.agents.sandbox import SandboxLauncher
+        from litehive.sandbox.launcher import SandboxLauncher
         from heru.base import CLIInvocation as _HeruCLIInvocation
 
         launcher = SandboxLauncher(cwd, config)

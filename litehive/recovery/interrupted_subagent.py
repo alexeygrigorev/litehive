@@ -7,7 +7,7 @@ from litehive.agents.session_store import (
 )
 from litehive.agents.session_continuation import subagent_continuation_state
 from litehive.agents.session_snapshots import InterruptedSubagentSessionRow, SubagentSessionStorageFields
-from litehive.agents.sandbox import SandboxPolicySummary
+from litehive.sandbox.launcher import SandboxPolicySummary
 from litehive.domain.common import SubagentStatus, utcnow
 from litehive.domain.runtime import RuntimeSubagentState
 from litehive.domain.task import TaskRecord
