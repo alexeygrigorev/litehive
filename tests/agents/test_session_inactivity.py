@@ -2,7 +2,7 @@ from pathlib import Path
 
 from heru.base import CLIExecutionResult
 
-from litehive.agents.session import SubagentInactivityTimeoutPolicy
+from litehive.agents.session_inactivity import SubagentInactivityTimeoutPolicy
 from litehive.config.model import LitehiveConfig
 
 

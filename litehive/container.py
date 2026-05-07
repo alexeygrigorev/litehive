@@ -63,7 +63,11 @@ def build_subagent_manager_for_workspace(
     from litehive.agents.manager import SubagentManager  # noqa: PLC0415
     from litehive.sandbox.launcher import DockerSandboxLauncher  # noqa: PLC0415
     from litehive.agents.engine_manager import EngineManager  # noqa: PLC0415
-    from litehive.agents.session import SubagentInactivityTimeoutPolicy, SubagentSessionManager  # noqa: PLC0415
+    from litehive.agents.session import SubagentSessionManager  # noqa: PLC0415
+    from litehive.agents.session_inactivity import (  # noqa: PLC0415
+        SubagentInactivityMonitor,
+        SubagentInactivityTimeoutPolicy,
+    )
     from litehive.agents.subagent_ids import SubagentIdRepository  # noqa: PLC0415
 
     if manager_cls is not None and manager_cls is not SubagentManager:
@@ -76,7 +80,7 @@ def build_subagent_manager_for_workspace(
         workspace=workspace,
         sandbox=sandbox,
         config=config,
-        inactivity_policy=SubagentInactivityTimeoutPolicy(config),
+        inactivity_monitor=SubagentInactivityMonitor(SubagentInactivityTimeoutPolicy(config)),
     )
     subagent_ids = SubagentIdRepository(workspace)
     manager_type = manager_cls or SubagentManager

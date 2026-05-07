@@ -714,7 +714,7 @@ def test_subagent_manager_kills_stale_live_codex_output_after_timeout(
     os.utime(stdout_path, (stale_time, stale_time))
 
     killed: list[int] = []
-    monkeypatch.setattr(manager.sessions, "terminate_stale_pid", killed.append)
+    monkeypatch.setattr(manager.sessions.inactivity_monitor, "terminate_stale_pid", killed.append)
 
     execution = CLIExecutionResult(
         adapter="codex",

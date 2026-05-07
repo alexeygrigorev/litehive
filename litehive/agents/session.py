@@ -1,11 +1,7 @@
 """Session I/O collaborator for SubagentManager."""
 
 from dataclasses import dataclass, field
-import os
 from pathlib import Path
-import re
-import signal
-import time
 from typing import TYPE_CHECKING
 
 from heru import extract_engine_continuation
@@ -22,6 +18,7 @@ from litehive.agents.session_store import (
     subagent_artifacts,
 )
 from litehive.agents.session_events import SubagentPidEvent, SubagentStartedEvent
+from litehive.agents.session_inactivity import SubagentInactivityMonitor
 from litehive.agents.session_reports import SubagentReportPayload
 from litehive.agents.session_snapshots import (
     RunningSubagentSessionRow,
@@ -43,48 +40,6 @@ if TYPE_CHECKING:
     from litehive.config.model import LitehiveConfig
     from litehive.workspace import Workspace
 
-_OPENCODE_INACTIVITY_TIMEOUT_SECONDS = 300.0
-_COMPLETED_INACTIVITY_PATTERN = re.compile(
-    r"\[litehive\]\s*Process killed after\s+(?P<seconds>\d+(?:\.\d+)?)s of inactivity\.",
-    re.IGNORECASE,
-)
-
-
-@dataclass
-class SubagentInactivityTimeoutPolicy:
-    """
-    Timeout rules for live and completed subagent executions.
-
-    Live watchdog limits can vary by engine, while completed-process
-    detection reads the stderr marker emitted by Heru's watchdog after
-    the engine has already exited.
-    """
-
-    config: "LitehiveConfig"
-    completed_marker: re.Pattern[str] = _COMPLETED_INACTIVITY_PATTERN
-
-    def live_timeout_seconds(self, engine_name: str) -> float:
-        """
-        Return the stdout idle budget for one engine.
-        """
-        if engine_name == "opencode":
-            return _OPENCODE_INACTIVITY_TIMEOUT_SECONDS
-        return self.config.subagent_inactivity_timeout_seconds
-
-    def completed_timeout(self, execution: CLIExecutionResult) -> SubagentInactivityTimeout | None:
-        """
-        Return a completed-run timeout when stderr carries the watchdog marker.
-        """
-        match = self.completed_marker.search(execution.stderr or "")
-        if match is None:
-            return None
-        limit_seconds = float(match.group("seconds"))
-        return SubagentInactivityTimeout(
-            execution,
-            idle_seconds=limit_seconds,
-            limit_seconds=limit_seconds,
-        )
-
 
 @dataclass
 class SubagentSessionManager:
@@ -102,7 +57,7 @@ class SubagentSessionManager:
     workspace: "Workspace"
     sandbox: "SandboxLauncher"
     config: "LitehiveConfig"
-    inactivity_policy: SubagentInactivityTimeoutPolicy
+    inactivity_monitor: SubagentInactivityMonitor
     _stream_offsets: dict[str, int] = field(default_factory=dict)
 
     def session_storage_fields(
@@ -287,7 +242,7 @@ class SubagentSessionManager:
         lookup keeps the engine-specific exception in one place
         instead of scattering hard-coded exceptions across the watchdog.
         """
-        return self.inactivity_policy.live_timeout_seconds(engine_name)
+        return self.inactivity_monitor.live_timeout_seconds(engine_name)
 
     def completed_inactivity_timeout(
         self,
@@ -303,7 +258,7 @@ class SubagentSessionManager:
         timeout signal, and let the lifecycle accept whatever partial
         output remained.
         """
-        return self.inactivity_policy.completed_timeout(execution)
+        return self.inactivity_monitor.completed_timeout(execution)
 
     def check_stdout_inactivity(
         self,
@@ -320,21 +275,7 @@ class SubagentSessionManager:
         emitting no output; the kill is best-effort and the raise is
         what stops the polling loop.
         """
-        if execution.pid is None:
-            return
-        stdout_path = base / "stdout.txt"
-        if not stdout_path.exists():
-            return
-        limit_seconds = self.subagent_inactivity_timeout_seconds(engine_name)
-        idle_seconds = max(0.0, time.time() - stdout_path.stat().st_mtime)
-        if idle_seconds < limit_seconds:
-            return
-        self.terminate_stale_pid(execution.pid)
-        raise SubagentInactivityTimeout(
-            execution,
-            idle_seconds=idle_seconds,
-            limit_seconds=limit_seconds,
-        )
+        self.inactivity_monitor.check_stdout_inactivity(base, engine_name, execution)
 
     def terminate_stale_pid(self, pid: int) -> None:
         """
@@ -344,10 +285,7 @@ class SubagentSessionManager:
         watchdog's "is it idle" check and this kill — losing the kill
         is fine because the process is already gone.
         """
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except ProcessLookupError:
-            return
+        self.inactivity_monitor.terminate_stale_pid(pid)
 
     def write_event_stream(
         self,

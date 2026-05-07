@@ -1210,21 +1210,34 @@ Legend:
 
 ## Session Module Instructions
 
-- [ ] SE1. Review and likely split the session module; it is about
+- [x] SE1. Review and likely split the session module; it is about
   400 lines and too large.
   Source: note 4, 10:01-10:12.
-- [ ] SE2. Revisit `open code inactivity timeout` and
+  Completed 2026-05-07: split the inactivity timeout policy and
+  stdout watchdog out of `litehive/agents/session.py` into
+  `litehive/agents/session_inactivity.py`; `SubagentSessionManager`
+  delegates to a dedicated `SubagentInactivityMonitor`.
+- [x] SE2. Revisit `open code inactivity timeout` and
   `compiled inactivity pattern`; the same notes were already given
   before, so extract each small item into its own task.
   Source: note 4, 10:15-10:43.
-- [ ] SE2a. Decide whether the opencode 300s live stdout timeout
+  Completed 2026-05-07: moved the opencode timeout exception and the
+  completed-process marker regex into the inactivity collaborator so
+  the policy is isolated from session persistence.
+- [x] SE2a. Decide whether the opencode 300s live stdout timeout
   exception should remain hard-coded policy, become engine config, or
   move to engine capability metadata.
   Source: note 4, 10:15-10:43; extracted from M40.
-- [ ] SE2b. Decide whether completed-process inactivity detection
+  Completed 2026-05-07: kept the 300s opencode exception as explicit
+  inactivity policy for now, isolated in `SubagentInactivityTimeoutPolicy`
+  for a future engine-capability/config migration.
+- [x] SE2b. Decide whether completed-process inactivity detection
   should keep parsing Heru's stderr marker or receive a typed timeout
   result from the engine adapter.
   Source: note 4, 10:15-10:43; extracted from M40.
+  Completed 2026-05-07: kept parsing the Heru stderr marker for now,
+  but moved that parsing into `SubagentInactivityTimeoutPolicy` so the
+  adapter-boundary workaround has one owner.
 - [ ] SE2c. Verify live adapter timeout propagation for every engine
   path, including engines without live execution support.
   Source: note 4, 10:15-10:43; extracted from M40.
@@ -1240,17 +1253,26 @@ Legend:
 - [ ] SE6. Consolidate `append_stream_data` and related event tracking
   into one owner instead of spreading it through code.
   Source: note 4, 11:56-12:17.
-- [ ] SE7. Review `terminate_stale_pid` and inactivity behavior while
+- [x] SE7. Review `terminate_stale_pid` and inactivity behavior while
   splitting session responsibilities.
   Source: note 4, 12:27-12:31.
-- [ ] SE7a. Decide whether live stdout inactivity detection belongs in
+  Completed 2026-05-07: moved stale-stdout detection and pid
+  termination into `SubagentInactivityMonitor`; session keeps
+  compatibility delegate methods for callers.
+- [x] SE7a. Decide whether live stdout inactivity detection belongs in
   the session manager, the engine-process runner, or a dedicated
   watchdog collaborator.
   Source: note 4, 12:27-12:31; extracted from M40.
-- [ ] SE7b. Decide whether `terminate_stale_pid` should stay as a
+  Completed 2026-05-07: chose a dedicated watchdog collaborator
+  (`SubagentInactivityMonitor`) so process idleness is not owned by
+  session persistence.
+- [x] SE7b. Decide whether `terminate_stale_pid` should stay as a
   best-effort session helper or move to the shared process-signal
   owner used by task close/stop flows.
   Source: note 4, 12:27-12:31; extracted from M40.
+  Completed 2026-05-07: moved the best-effort SIGTERM call into the
+  inactivity monitor; a broader shared process-signal owner remains a
+  future cross-cutting cleanup, not part of the session split.
 - [ ] SE8. Split `write_session_snapshot`; it is too large.
   Source: note 4, 12:47-12:53.
 
