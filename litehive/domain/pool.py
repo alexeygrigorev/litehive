@@ -10,6 +10,48 @@ persisted to the pool-state SQLite row and rendered by status output.
 
 from dataclasses import dataclass, field
 
+from litehive.domain.common import StringEnum
+
+
+class DirtyWorktreeLocationKind(StringEnum):
+    """
+    Where a dirty-worktree finding was detected.
+
+    The worktree inspector writes this and status output renders it.
+    Keeping the vocabulary typed prevents the pool gate from silently
+    drifting if a location label is renamed.
+    """
+
+    MAIN_CHECKOUT = "main-checkout"
+    TASK_WORKTREE = "task-worktree"
+
+
+class DirtyWorktreeOwnership(StringEnum):
+    """
+    Ownership classification for dirty worktree paths.
+
+    ``DirtyWorktreeGateReport.blocks_pool`` uses this domain decision
+    to distinguish harmless task-owned dirt from workspace-wide dirt
+    that must halt the pool.
+    """
+
+    MAIN_CHECKOUT = "main-checkout"
+    TASK_OWNED = "task-owned"
+    AMBIGUOUS_OWNERSHIP = "ambiguous-ownership"
+    MISSING_RECORDED_WORKTREE = "missing-recorded-worktree"
+    TASK_OWNED_WORKTREE = "task-owned-worktree"
+
+    @property
+    def blocks_pool(self) -> bool:
+        """
+        Whether this ownership class is severe enough to halt the pool.
+        """
+        return self in {
+            DirtyWorktreeOwnership.MAIN_CHECKOUT,
+            DirtyWorktreeOwnership.AMBIGUOUS_OWNERSHIP,
+            DirtyWorktreeOwnership.MISSING_RECORDED_WORKTREE,
+        }
+
 
 @dataclass(slots=True)
 class DirtyWorktreeFinding:
@@ -23,11 +65,23 @@ class DirtyWorktreeFinding:
     output uses them to tell the operator which task to clean up.
     """
 
-    location_kind: str  # Where changes were found (main-checkout, task-worktree, etc.)
-    ownership: str  # Who owns the changes (task-owned, orphaned, etc.)
+    location_kind: DirtyWorktreeLocationKind | str  # Where changes were found
+    ownership: DirtyWorktreeOwnership | str  # Who owns the dirty paths
     dirty_paths: list[str] = field(default_factory=list)  # Specific files with changes
     task_id: str | None = None  # Associated task if changes are task-owned
     worktree_path: str | None = None  # Path to the worktree with changes
+
+    def __post_init__(self) -> None:
+        """
+        Canonicalize boundary strings into the typed domain vocabulary.
+
+        Tests and replayed status payloads may still construct findings
+        from persisted string values. Convert once here so every
+        consumer, especially ``DirtyWorktreeGateReport.blocks_pool``,
+        reads enum members.
+        """
+        self.location_kind = DirtyWorktreeLocationKind(self.location_kind)
+        self.ownership = DirtyWorktreeOwnership(self.ownership)
 
 
 @dataclass(slots=True)
@@ -64,7 +118,12 @@ class DirtyWorktreeGateReport:
         disk. Task-owned dirt is recorded for visibility but doesn't
         block on its own — the owning task can resume its own changes.
         """
-        return any(
-            finding.ownership in {"main-checkout", "ambiguous-ownership", "missing-recorded-worktree"}
-            for finding in self.findings
-        )
+        return any(DirtyWorktreeOwnership(finding.ownership).blocks_pool for finding in self.findings)
+
+
+__all__ = [
+    "DirtyWorktreeFinding",
+    "DirtyWorktreeGateReport",
+    "DirtyWorktreeLocationKind",
+    "DirtyWorktreeOwnership",
+]

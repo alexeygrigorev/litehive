@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 from litehive.cli.app import app as cli_app
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.common import PipelineStatus, TaskStatus
+from litehive.domain.pool import DirtyWorktreeOwnership
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.lifecycle.journal import SqliteJournal
@@ -203,7 +204,7 @@ def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
     interrupted_report = inspect_dirty_worktree_gate(Workspace.from_path(tmp_path))
 
     assert interrupted_report.blocks_pool is False
-    assert interrupted_report.findings[0].ownership == "task-owned"
+    assert interrupted_report.findings[0].ownership is DirtyWorktreeOwnership.TASK_OWNED
     assert interrupted_report.findings[0].task_id == task.id
 
 

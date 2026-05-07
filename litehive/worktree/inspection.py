@@ -13,7 +13,12 @@ status code never accidentally mutates state.
 from pathlib import Path, PurePosixPath
 
 from litehive.domain.common import PipelineStatus, TaskStatus
-from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
+from litehive.domain.pool import (
+    DirtyWorktreeFinding,
+    DirtyWorktreeGateReport,
+    DirtyWorktreeLocationKind,
+    DirtyWorktreeOwnership,
+)
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import (
     GitError,
@@ -54,16 +59,16 @@ def inspect_dirty_worktree_gate(workspace: Workspace) -> DirtyWorktreeGateReport
     if dirty_entries:
         owners = [task for task in tasks if _task_can_resume_with_owned_dirty_paths(workspace, task, dirty_entries)]
         finding = DirtyWorktreeFinding(
-            location_kind="main-checkout",
-            ownership="main-checkout",
+            location_kind=DirtyWorktreeLocationKind.MAIN_CHECKOUT,
+            ownership=DirtyWorktreeOwnership.MAIN_CHECKOUT,
             dirty_paths=dirty_entry_paths(dirty_entries),
         )
         if len(owners) == 1:
-            finding.ownership = "task-owned"
+            finding.ownership = DirtyWorktreeOwnership.TASK_OWNED
             finding.task_id = owners[0].id
             finding.worktree_path = get_task_worktree_path(owners[0])
         elif len(owners) > 1:
-            finding.ownership = "ambiguous-ownership"
+            finding.ownership = DirtyWorktreeOwnership.AMBIGUOUS_OWNERSHIP
             finding.task_id = ",".join(task.id for task in owners)
         findings.append(finding)
 
@@ -75,8 +80,8 @@ def inspect_dirty_worktree_gate(workspace: Workspace) -> DirtyWorktreeGateReport
         if not worktree_path.exists():
             findings.append(
                 DirtyWorktreeFinding(
-                    location_kind="task-worktree",
-                    ownership="missing-recorded-worktree",
+                    location_kind=DirtyWorktreeLocationKind.TASK_WORKTREE,
+                    ownership=DirtyWorktreeOwnership.MISSING_RECORDED_WORKTREE,
                     task_id=task.id,
                     worktree_path=recorded_path,
                 )
@@ -87,8 +92,8 @@ def inspect_dirty_worktree_gate(workspace: Workspace) -> DirtyWorktreeGateReport
         except GitError:
             findings.append(
                 DirtyWorktreeFinding(
-                    location_kind="task-worktree",
-                    ownership="missing-recorded-worktree",
+                    location_kind=DirtyWorktreeLocationKind.TASK_WORKTREE,
+                    ownership=DirtyWorktreeOwnership.MISSING_RECORDED_WORKTREE,
                     task_id=task.id,
                     worktree_path=recorded_path,
                 )
@@ -98,8 +103,8 @@ def inspect_dirty_worktree_gate(workspace: Workspace) -> DirtyWorktreeGateReport
             continue
         findings.append(
             DirtyWorktreeFinding(
-                location_kind="task-worktree",
-                ownership="task-owned-worktree",
+                location_kind=DirtyWorktreeLocationKind.TASK_WORKTREE,
+                ownership=DirtyWorktreeOwnership.TASK_OWNED_WORKTREE,
                 task_id=task.id,
                 worktree_path=recorded_path,
                 dirty_paths=dirty_entry_paths(worktree_dirty_entries),

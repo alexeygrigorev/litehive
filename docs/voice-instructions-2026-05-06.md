@@ -901,10 +901,20 @@ Legend:
   `MissingVerdictError` instead of synthetic rejects, and now hoists
   summary plus typed `FailureDiagnostics` construction into named
   helpers.
-- [ ] D4. Review the domain model separately across the codebase.
+- [x] D4. Review the domain model separately across the codebase.
   The target is readability and domain ownership, not a pile of
   unclear functions.
   Source: note 4, 00:57-01:21.
+  Verified 2026-05-07: audited the domain package and selected the
+  dirty-worktree pool gate as the next exact domain-ownership slice.
+  `DirtyWorktreeFinding.location_kind` and `ownership` now canonicalize
+  to `DirtyWorktreeLocationKind` and `DirtyWorktreeOwnership`, and
+  `DirtyWorktreeOwnership.blocks_pool` owns the pool-blocking decision
+  instead of `DirtyWorktreeGateReport` checking a loose string set.
+  `inspect_dirty_worktree_gate` now constructs those enum members, and
+  focused domain, worktree, and status-rendering tests verify the
+  exact producer/report/renderer path. The remaining domain-model
+  concerns stay split into the concrete D5-D19 checklist items below.
 - [ ] D5. `lastTaskActivityEntry` or equivalent should likely be a
   method on `Workspace`, `Task`, or a task/workspace service.
   Source: note 4, 00:39-00:55.

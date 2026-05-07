@@ -4,7 +4,12 @@ from types import SimpleNamespace
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.engine import WorkspaceEngineMonitoring
-from litehive.domain.pool import DirtyWorktreeFinding, DirtyWorktreeGateReport
+from litehive.domain.pool import (
+    DirtyWorktreeFinding,
+    DirtyWorktreeGateReport,
+    DirtyWorktreeLocationKind,
+    DirtyWorktreeOwnership,
+)
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport
 from litehive.domain.runtime import RunnerStatusState, RuntimeSubagentState
 from litehive.domain.task import WorkspaceState
@@ -276,8 +281,8 @@ def test_render_health_worktree_and_quota_sections() -> None:
     dirty_report = DirtyWorktreeGateReport(
         findings=[
             DirtyWorktreeFinding(
-                location_kind="task-worktree",
-                ownership="task-owned-worktree",
+                location_kind=DirtyWorktreeLocationKind.TASK_WORKTREE,
+                ownership=DirtyWorktreeOwnership.TASK_OWNED_WORKTREE,
                 task_id="T-0004",
                 worktree_path=".worktrees/T-0004-demo",
                 dirty_paths=["src/app.py", "README.md"],
