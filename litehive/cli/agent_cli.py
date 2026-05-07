@@ -18,15 +18,12 @@ from typing import Annotated
 
 import typer
 
-from litehive.container import build_workspace
+from litehive.agents.report_submission import AgentReportRequest, AgentReportSubmissionError
+from litehive.container import build_agent_report_submitter, build_workspace
 from litehive.domain.agent import SubagentId
 from litehive.domain.common import Verdict
-from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
-from litehive.workspace import Workspace
 
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
-from litehive.domain.reports import TaskActivityEntry, classify_task_activity_verdict
-from litehive.domain.roles import agent_activity_verdicts_for_role, agent_verdict_requires_target_stage
 from litehive.tasks.status import close_task_for_workspace, update_task_for_workspace
 from litehive.state.persist import load_state
 
@@ -88,75 +85,6 @@ def _current_stage() -> str | None:
     if stage:
         return stage.strip()
     return None
-
-
-def _resolve_report_stage(explicit_stage: str | None, task, pipeline_stage: str | None) -> str:
-    """
-    Pick the stage label attached to an agent verdict.
-
-    Precedence: explicit CLI flag > ``LITEHIVE_STAGE`` env >
-    pipeline persistence > task runtime > task ``pipeline_status``.
-    Codified so a stale env var never wins over an explicit
-    operator/orchestrator override and so a missing env never breaks
-    attribution: the persisted pipeline state is always available as
-    a fallback.
-    """
-    if explicit_stage:
-        return explicit_stage
-    env_stage = _current_stage()
-    if env_stage:
-        return env_stage
-    if pipeline_stage:
-        return pipeline_stage
-    runtime_stage = task.current_pipeline_stage
-    if runtime_stage:
-        return runtime_stage
-    return task.pipeline_status
-
-
-@dataclass(frozen=True)
-class AgentReportIdentity:
-    role: str
-    subagent_id: SubagentId
-
-
-def _resolve_report_identity(workspace: Workspace, task) -> AgentReportIdentity:
-    """
-    Resolve the verdict-submitting agent's identity from the session store.
-
-    The role is read from the orchestrator-recorded subagent session
-    rather than trusting ``LITEHIVE_AGENT_ROLE`` alone, so a
-    subagent cannot escalate its role by editing its own env. The
-    env var is still cross-checked: if it disagrees with the stored
-    session, the report is rejected loudly rather than silently
-    accepting either side.
-    """
-    subagent_id = _current_subagent_id()
-    if subagent_id is None:
-        print("report failed: LITEHIVE_SUBAGENT_ID not set")
-        raise SystemExit(1)
-
-    session = workspace.load_subagent_session_record(task.id, subagent_id)
-    if not session:
-        print(f"report failed: subagent session {subagent_id} not found for task {task.id}")
-        raise SystemExit(1)
-
-    payload_id = session.subagent_id
-    if payload_id is not None and payload_id != subagent_id:
-        print(f"report failed: subagent session id mismatch for {subagent_id}")
-        raise SystemExit(1)
-
-    role = session.role
-    if role is None:
-        print(f"report failed: subagent session {subagent_id} has no role")
-        raise SystemExit(1)
-
-    env_role = _current_role()
-    if env_role and env_role != role:
-        print("report failed: LITEHIVE_AGENT_ROLE does not match subagent session identity")
-        raise SystemExit(1)
-
-    return AgentReportIdentity(role=role, subagent_id=subagent_id)
 
 
 def block_if_agent() -> None:
@@ -248,76 +176,40 @@ def agent_report_command(
     if not tid:
         print("report failed: no task id")
         raise SystemExit(1)
-    task = workspace_obj.get_task_record(tid)
-    if task is None:
-        print(f"report failed: task {tid} not found")
-        raise SystemExit(1)
-    identity = _resolve_report_identity(workspace_obj, task)
-    agent_role = identity.role
-
-    allowed = agent_activity_verdicts_for_role(agent_role)
-    if normalized_verdict not in allowed:
-        print("You are not authorized to perform this command.")
-        raise SystemExit(1)
-    if target_stage:
-        normalized_target_stage = target_stage.strip()
-    else:
-        normalized_target_stage = None
-    if agent_verdict_requires_target_stage(agent_role, normalized_verdict):
-        if not normalized_target_stage:
-            print(f"report failed: recovery verdict '{normalized_verdict}' requires --target-stage")
-            raise SystemExit(1)
-    elif normalized_target_stage:
-        print("report failed: --target-stage is only valid with recovery resume/advance verdicts")
-        raise SystemExit(1)
-
-    if follow_up_task:
-        normalized_follow_up_task = follow_up_task.strip()
-    else:
-        normalized_follow_up_task = None
-    if normalized_follow_up_task:
-        if normalized_follow_up_task == task.id:
-            print("report failed: follow-up task id cannot reference the current task")
-            raise SystemExit(1)
-        if workspace_obj.get_task_record(normalized_follow_up_task) is None:
-            print(f"report failed: follow-up task {normalized_follow_up_task} not found")
-            raise SystemExit(1)
-
-    try:
-        pipeline_state = SqlitePersistence(workspace_obj).load(tid)
-        pipeline_stage = pipeline_state.stage
-    except TaskNotFound:
-        pipeline_stage = None
-    actual_stage = _resolve_report_stage(
-        explicit_stage=stage,
-        task=task,
-        pipeline_stage=pipeline_stage,
+    submitter = build_agent_report_submitter(
+        workspace_obj,
+        env_role=_current_role(),
+        env_subagent_id=_current_subagent_id(),
+        env_stage=_current_stage(),
     )
-    verdict_classification = classify_task_activity_verdict(agent_role, normalized_verdict)
-    entry = TaskActivityEntry(
-        source="agent",
-        role=agent_role,
-        stage=actual_stage,
-        target_stage=normalized_target_stage,
+    request = AgentReportRequest(
+        task_id=tid,
         verdict=normalized_verdict,
-        verdict_classification=verdict_classification,
         message=message,
+        explicit_stage=stage,
+        target_stage=target_stage,
         files_changed=list(files_changed or []),
-        source_subagent_id=identity.subagent_id,
-        follow_up_task_id=normalized_follow_up_task,
+        follow_up_task_id=follow_up_task,
     )
-    workspace_obj.task_activity(task).append(entry)
-    print(f"task: {task.id}")
-    print(f"stage: {actual_stage}")
-    print(f"verdict: {normalized_verdict}")
-    print(f"role: {agent_role}")
-    print(f"source_subagent_id: {identity.subagent_id}")
-    if verdict_classification:
-        print(f"verdict_classification: {verdict_classification}")
-    if normalized_target_stage:
-        print(f"target_stage: {normalized_target_stage}")
-    if normalized_follow_up_task:
-        print(f"follow_up_task: {normalized_follow_up_task}")
+    try:
+        submission = submitter.submit(request)
+    except AgentReportSubmissionError as exc:
+        if exc.unauthorized:
+            print("You are not authorized to perform this command.")
+        else:
+            print(f"report failed: {exc}")
+        raise SystemExit(1)
+    print(f"task: {submission.task_id}")
+    print(f"stage: {submission.stage}")
+    print(f"verdict: {submission.verdict}")
+    print(f"role: {submission.role}")
+    print(f"source_subagent_id: {submission.source_subagent_id}")
+    if submission.verdict_classification:
+        print(f"verdict_classification: {submission.verdict_classification}")
+    if submission.target_stage:
+        print(f"target_stage: {submission.target_stage}")
+    if submission.follow_up_task_id:
+        print(f"follow_up_task: {submission.follow_up_task_id}")
 
 
 def _require_role(allowed: set[str]) -> str:

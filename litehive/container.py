@@ -3,7 +3,10 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from litehive.agents.report_submission import AgentReportSubmitter
 from litehive.config.model import LitehiveConfig
+from litehive.domain.agent import SubagentId
+from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.workspace import Workspace
 
 
@@ -46,6 +49,33 @@ def build_workspace(root: Path) -> Workspace:
     :func:`build_container`.
     """
     return Workspace.from_path(root)
+
+
+def build_agent_report_submitter(
+    workspace: Workspace,
+    env_role: str | None,
+    env_subagent_id: SubagentId | None,
+    env_stage: str | None,
+) -> AgentReportSubmitter:
+    """
+    Assemble the agent report submission service for a CLI process.
+    """
+    persistence = SqlitePersistence(workspace)
+
+    def load_pipeline_stage(task_id: str) -> str | None:
+        try:
+            pipeline_state = persistence.load(task_id)
+            return pipeline_state.stage
+        except TaskNotFound:
+            return None
+
+    return AgentReportSubmitter(
+        workspace=workspace,
+        load_pipeline_stage=load_pipeline_stage,
+        env_role=env_role,
+        env_subagent_id=env_subagent_id,
+        env_stage=env_stage,
+    )
 
 
 def build_subagent_manager_for_workspace(

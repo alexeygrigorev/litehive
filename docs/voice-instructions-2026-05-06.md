@@ -1317,6 +1317,10 @@ Legend:
 - [ ] C2. Keep CLI thin: parse user input, create/load the right
   domain object, and dispatch. Do not keep business logic in CLI.
   Source: note 4, 14:00-14:07; note 4, 16:57-19:09.
+  Progress 2026-05-07: extracted the `litehive agent report`
+  submission workflow into `AgentReportSubmitter`; the CLI now
+  parses Typer/env input, obtains the service from the container,
+  submits a typed request, and prints the returned submission.
 - [ ] C3. Convert `Workspace` from a dataclass to a normal class.
   Source: note 4, 14:33-15:12.
 - [ ] C4. In resolve reported entity flows, pass a workspace/session
