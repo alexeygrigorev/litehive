@@ -26,7 +26,7 @@ moves over as ergonomics warrant.
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING, Iterator
 
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import normalize_workspace_root
@@ -254,15 +254,15 @@ class Workspace:
 
         return append_event(self, task, event)
 
-    def load_subagent_session(self, task_id: str, subagent_id: str) -> dict[str, Any]:
+    def load_subagent_session(self, task_id: str, subagent_id: str) -> "LoadedSubagentSession":
         """
-        Return one subagent session slice owned by this workspace.
+        Return the typed subagent session slice owned by this workspace.
         """
         # inline: session_store imports Workspace for runtime access, so
         # importing at module load would create an import cycle.
-        from litehive.agents.session_store import load_subagent_session  # noqa: PLC0415
+        from litehive.agents.session_store import load_subagent_session_record  # noqa: PLC0415
 
-        return load_subagent_session(self, task_id, subagent_id)
+        return load_subagent_session_record(self, task_id, subagent_id)
 
     def load_subagent_session_record(self, task_id: str, subagent_id: str) -> "LoadedSubagentSession":
         """

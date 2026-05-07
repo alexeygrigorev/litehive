@@ -271,6 +271,6 @@ def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> N
 
     session = Workspace.from_path(tmp_path).load_subagent_session(task.id, "SA-1234")
     report = load_subagent_report(Workspace.from_path(tmp_path), task.id, "SA-1234")
-    assert session["status"] == report["status"] == "interrupted"
-    assert session["resume_stage"] == report["resume_stage"] == "implementing"
-    assert session["interruption_reason"] == report["interruption_reason"] == "received ctrl-c"
+    assert session.values["status"] == report["status"] == "interrupted"
+    assert session.values["resume_stage"] == report["resume_stage"] == "implementing"
+    assert session.values["interruption_reason"] == report["interruption_reason"] == "received ctrl-c"

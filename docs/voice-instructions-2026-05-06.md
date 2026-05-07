@@ -1333,10 +1333,15 @@ Legend:
   explicit class constructor, root-based equality/hash, compact repr,
   and the existing lazy config cache. Added a regression test proving
   `Workspace` is no longer a dataclass while preserving root identity.
-- [ ] C4. In resolve reported entity flows, pass a workspace/session
+- [x] C4. In resolve reported entity flows, pass a workspace/session
   object that loads the session. `load_subagent_session` must return a
   typed object, not a dictionary.
   Source: note 4, 15:29-16:14.
+  Completed 2026-05-07: changed
+  `Workspace.load_subagent_session(...)` to return the typed
+  `LoadedSubagentSession` record. Remaining compatibility dictionary
+  loading is confined to the explicit free function
+  `agents.session_store.load_subagent_session(...)`.
 - [ ] C5. Remove `isinstance` checks from session/report resolution
   by returning typed objects.
   Source: note 4, 15:57-16:14.

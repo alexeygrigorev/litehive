@@ -457,7 +457,7 @@ def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
     event_stream = load_subagent_event_stream(Workspace.from_path(tmp_path), task.id, result.ref.id)
 
     assert "did not submit verdict" in report["summary"]
-    assert session["continuation"]["session_id"] == "session-42"
+    assert session.values["continuation"]["session_id"] == "session-42"
     assert event_stream["event_counts"] == {"message": 1, "continuation": 1}
 
     refreshed = get_task(tmp_path, task.id)
@@ -1014,7 +1014,7 @@ def test_subagent_manager_survives_nonfatal_start_callback_failure_for_planner(
     session = Workspace.from_path(tmp_path).load_subagent_session(task.id, result.ref.id)
     report = load_subagent_report(Workspace.from_path(tmp_path), task.id, result.ref.id)
 
-    assert session["pid"] == 4242
+    assert session.values["pid"] == 4242
     assert any(
         "runner start bookkeeping failed: RuntimeError: pid bookkeeping failed" in warning
         for warning in report["warnings"]
@@ -1090,7 +1090,7 @@ def test_subagent_manager_survives_nonfatal_progress_callback_failure_for_planne
     session = Workspace.from_path(tmp_path).load_subagent_session(task.id, result.ref.id)
     report = load_subagent_report(Workspace.from_path(tmp_path), task.id, result.ref.id)
 
-    assert session["pid"] == 4242
+    assert session.values["pid"] == 4242
     assert any(
         "runner progress bookkeeping failed: RuntimeError: progress bookkeeping failed" in warning
         for warning in report["warnings"]
@@ -1178,6 +1178,6 @@ def test_subagent_manager_classifies_completed_inactivity_timeout_as_retryable_t
     report = load_subagent_report(Workspace.from_path(tmp_path), task.id, result.ref.id)
     stderr_path = task_dir(tmp_path, task) / result.ref.path / "stderr.txt"
 
-    assert session["exit_code"] == 124
+    assert session.exit_code == 124
     assert report["status"] == "failed"
     assert f"{expected_timeout_seconds:g}s without new stdout" in stderr_path.read_text(encoding="utf-8")
