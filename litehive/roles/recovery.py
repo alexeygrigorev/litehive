@@ -11,7 +11,6 @@ from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.prompt_types import RecoveryPrompt
 from litehive.recovery.scope_analysis import analyze_scope_changes
-from litehive.state.records import get_task_record
 from litehive.tasks.paths import latest_subagent_base, read_text_artifact, resolve_artifact_path, task_dir
 
 from .base import RoleAgent
@@ -100,7 +99,7 @@ class RecoveryAgent(RoleAgent):
         root = self.prompt_context.workspace_root
         workspace = self.prompt_context.workspace
         if task_record is None:
-            task_record = get_task_record(root, state.task_id)
+            task_record = workspace.get_task_record(state.task_id)
         try:
             litehive_source_path, recovery_execution_root = _recovery_source_checkout(workspace)
         except (OSError, ValueError) as exc:
