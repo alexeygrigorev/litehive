@@ -977,15 +977,26 @@ Legend:
   Completed 2026-05-07: renamed `OutcomeKind` to `TaskOutcomeKind` so
   the enum name describes task-level terminal outcomes rather than
   agent verdicts or stage report results.
-- [ ] D12. Document the relationship between outcome kind, outcome
+- [x] D12. Document the relationship between outcome kind, outcome
   reason code, and verdict.
   Source: note 6, 02:33-04:33.
+  Completed 2026-05-07: documented the relationship in
+  `litehive.domain.outcomes` and added a durable code-style rule:
+  verdicts describe an agent or hook report for one stage,
+  `TaskOutcomeKind` describes the terminal bucket for the whole task,
+  and `OutcomeReasonCode` describes the machine-readable reason that
+  produced that bucket.
 - [ ] D13. Structure the domain documentation with clear sections and
   lists. It currently reads like many things mixed together.
   Source: note 6, 03:45-04:15.
-- [ ] D14. Explain how `Verdict.FAIL`, `Verdict.REJECT`, outcome
+- [x] D14. Explain how `Verdict.FAIL`, `Verdict.REJECT`, outcome
   kind, and outcome reason code differ.
   Source: note 6, 04:15-04:33.
+  Completed 2026-05-07: expanded the `Verdict` documentation:
+  `FAIL` is the generic negative verdict kept for older hook/activity
+  vocabulary, `REJECT` is the explicit agent/reviewer decision that a
+  stage result is unacceptable, both project to stage-report `reject`,
+  and neither is a task outcome.
 - [ ] D15. Prevent unsupported verdicts from being committed or
   serialized. Add tests or validation that catches them.
   Source: note 6, 04:46-04:55.

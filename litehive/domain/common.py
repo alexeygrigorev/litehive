@@ -477,13 +477,20 @@ class Verdict(StringEnum):
     Decision submitted for an executable pipeline state.
 
     Created by subagents and hook execution paths when they submit the
-    result of a pipeline state, then read by ``PipelineRunner`` to
+    result of a pipeline state, then read by `PipelineRunner` to
     decide whether to advance, retry, block, or enter recovery. Also
-    persisted on ``ActivityEntry`` / ``TaskOutcome`` as the canonical
-    submitted decision. ``StageReport`` collapses this richer set into
-    its narrower ``pass/reject/blocked`` form via
-    ``canonical_stage_report_verdict`` so report storage stays small
+    persisted on `ActivityEntry` as the canonical submitted decision.
+    `StageReport` collapses this richer set into its narrower
+    `pass/reject/blocked` form via `canonical_stage_report_verdict` so
+    report storage stays small
     while activity history keeps the full vocabulary.
+
+    `FAIL` is the generic negative verdict kept for older hook and
+    activity vocabulary; `REJECT` is the explicit agent/reviewer
+    decision that a submitted stage result is not acceptable. Both
+    project to a stage-report `reject`. Neither is a task outcome:
+    task-level terminal state is recorded with `TaskOutcomeKind` and
+    `OutcomeReasonCode`.
     """
 
     PASS = "pass"  # General positive outcome
@@ -504,7 +511,7 @@ class Verdict(StringEnum):
 
         Activity entries keep the full verdict vocabulary, but persisted
         stage reports only need pass/reject/blocked. A comment verdict
-        returns ``None`` because it is operator-visible commentary, not
+        returns `None` because it is operator-visible commentary, not
         a stage decision.
         """
         match self:

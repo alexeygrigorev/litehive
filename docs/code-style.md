@@ -178,6 +178,11 @@ from tests.support.helpers import make_workspace, run_cli
   dictionaries. If a role has a default stage, the role object should
   expose that fact; if a stage has an owner role, the stage object
   should expose that fact.
+- Keep verdicts, task outcome kinds, and outcome reason codes distinct.
+  A verdict records an agent or hook report result for one stage. A
+  `TaskOutcomeKind` records the terminal bucket for the whole task. An
+  `OutcomeReasonCode` records the specific machine-readable reason that
+  produced that bucket. Do not reuse one enum to stand in for another.
 - Avoid broad dictionaries for internal domain events, reports,
   sessions, diagnostics, runtime settings, and command results. Use a
   dataclass or domain model with fields that explain the contract.

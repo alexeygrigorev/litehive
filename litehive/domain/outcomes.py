@@ -1,10 +1,21 @@
 """
 Task outcome vocabulary.
 
-``TaskOutcomeKind`` names the terminal bucket a task landed in, while
-``OutcomeReasonCode`` records the machine-readable reason for that
-outcome. Verdicts answer whether an agent report passed or rejected;
-outcomes answer what happened to the task as a whole.
+`TaskOutcomeKind` names the terminal bucket a task landed in:
+done, flagged, blocked, interrupted, cancelled, duplicate, and so on.
+Queue filtering, status summaries, and recovery gates use this broad
+bucket to decide whether a task is still runnable.
+
+`OutcomeReasonCode` names the machine-readable reason for that bucket.
+It is the more specific routing fact: timeout, missing acceptance
+criteria, operator cancellation, retry exhaustion, or a close reason.
+The same broad kind can have different reason codes, and those reason
+codes drive different recovery and reporting paths.
+
+`Verdict` is intentionally separate. Agent and hook reports use verdicts
+to say whether a stage report passed, rejected, blocked, or only left a
+comment. A verdict can lead to a task outcome, but it is not itself the
+task outcome.
 """
 
 from litehive.domain.common import StringEnum
@@ -35,7 +46,7 @@ class OutcomeReasonCode(StringEnum):
     """
     Normalized reason codes for stage outcomes and task interruptions.
 
-    ``OutcomeReasonCode`` answers what specifically caused an outcome
+    `OutcomeReasonCode` answers what specifically caused an outcome
     so two rejections with different root causes can be distinguished
     for routing and reporting.
     """
@@ -61,7 +72,7 @@ class OutcomeReasonCode(StringEnum):
     @property
     def is_task_close_outcome(self) -> bool:
         """
-        Whether ``litehive task close`` may use this reason directly.
+        Whether `litehive task close` may use this reason directly.
         """
         match self:
             case (
