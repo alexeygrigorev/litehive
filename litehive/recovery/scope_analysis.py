@@ -89,8 +89,7 @@ def _is_file_broken_on_main(workspace: Workspace, file_path: str) -> bool:
     syntax errors on main. The "already broken" classification is
     what licenses operator cleanup deletions during scope analysis.
     """
-    workspace_root = workspace.root
-    if not path_exists_in_ref(workspace_root, "main", file_path):
+    if not path_exists_in_ref(workspace.root, "main", file_path):
         return True
     if _is_test_file(file_path):
         return _is_test_broken_on_main(workspace, file_path)
@@ -127,17 +126,16 @@ def _is_test_broken_on_main(workspace: Workspace, test_file: str) -> bool:
     away while the test runs, then restored regardless of the test
     outcome so the probe never leaves the worktree dirty.
     """
-    workspace_root = workspace.root
     try:
-        stash_push(workspace_root, "temp-stash-for-scope-analysis")
+        stash_push(workspace.root, "temp-stash-for-scope-analysis")
 
         try:
-            if not checkout_ref(workspace_root, "main"):
+            if not checkout_ref(workspace.root, "main"):
                 raise ScopeAnalysisError(f"could not checkout main to test {test_file}")
 
             test_result = subprocess.run(
                 ["python", "-m", "pytest", test_file, "-x", "--tb=no", "-q"],
-                cwd=workspace_root,
+                cwd=workspace.root,
                 capture_output=True,
                 timeout=30,
                 check=False,
@@ -146,8 +144,8 @@ def _is_test_broken_on_main(workspace: Workspace, test_file: str) -> bool:
             is_broken = test_result.returncode != 0
 
         finally:
-            checkout_ref(workspace_root, "-")
-            stash_pop(workspace_root)
+            checkout_ref(workspace.root, "-")
+            stash_pop(workspace.root)
 
         return is_broken
 
