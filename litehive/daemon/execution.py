@@ -85,12 +85,13 @@ def _halt_for_origin_divergence(
 
 def sleep_with_stop(seconds: float, stop_requested_fn) -> None:
     """
-    Sleep up to ``seconds`` while remaining responsive to a stop request.
+    Pause the daemon loop without blocking operator stop requests.
 
-    Polls ``stop_requested_fn`` once per second so a SIGTERM that
-    arrives mid-sleep doesn't have to wait the full duration; without
-    this the daemon could ignore an operator stop for as long as the
-    nominal sleep window.
+    Called by ``run_daemon_loop`` when another runner already owns
+    the workspace. The daemon signal handler flips that loop's local
+    ``stop_requested`` flag, and the lambda passed here reads the
+    flag between short sleeps so SIGTERM/SIGINT exits promptly instead
+    of waiting for the whole idle interval.
     """
     deadline = time.monotonic() + seconds
     while True:

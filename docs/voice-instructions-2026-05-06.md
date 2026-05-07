@@ -2021,9 +2021,14 @@ Legend:
   `_write_pool_stop_reason(...)` wrapper around `set_pool_stop_reason`.
   `_halt_for_origin_divergence(...)` now calls the canonical state
   writer directly, leaving no extra daemon-side retry/rewrite shim.
-- [ ] DM6. Document `sleep_with_stop`: why it exists, where it is
+- [x] DM6. Document `sleep_with_stop`: why it exists, where it is
   called, and how stop requests enter it.
   Source: note 5, 16:04-16:18.
+  Completed 2026-05-07: updated the `sleep_with_stop(...)`
+  docstring to state that `run_daemon_loop(...)` calls it while
+  waiting on an already-active runner, and that SIGTERM/SIGINT enter
+  through the daemon signal handler by flipping the `stop_requested`
+  flag read by the callback.
 - [ ] DM7. Add proper callable typing for stop request function
   parameters; type checker should reject missing types.
   Source: note 5, 16:17-16:31.
