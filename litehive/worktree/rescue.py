@@ -85,7 +85,7 @@ def collect_rescue_candidates_for_workspace(workspace: Workspace) -> list[Rescue
     return sorted(candidates, key=lambda item: item.task_id)
 
 
-def require_clean_main_checkout(root: Path) -> None:
+def require_clean_main_checkout_for_workspace(workspace: Workspace) -> None:
     """
     Refuse to rescue unless ``main`` is checked out clean.
 
@@ -96,10 +96,10 @@ def require_clean_main_checkout(root: Path) -> None:
     so the rescue CLI surfaces the precondition failure rather than
     silently performing a half-rescue.
     """
-    branch = git_stdout_or_none(root, "branch", "--show-current")
+    branch = git_stdout_or_none(workspace.root, "branch", "--show-current")
     if branch not in {"main", "master"}:
         raise GitError("worktree rescue --apply requires a clean checkout on branch 'main'")
-    if has_non_litehive_changes(root):
+    if has_non_litehive_changes(workspace.root):
         raise GitError("worktree rescue --apply requires a clean checkout on branch 'main'")
 
 

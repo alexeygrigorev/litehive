@@ -62,7 +62,7 @@ from litehive.worktree.paths import (
 from litehive.worktree.rescue import (
     apply_rescue_candidate_for_workspace,
     collect_rescue_candidates_for_workspace,
-    require_clean_main_checkout,
+    require_clean_main_checkout_for_workspace,
 )
 from litehive.workspace import Workspace
 
@@ -282,7 +282,7 @@ class WorktreeService:
         commits. Raises ``GitError`` to halt the batch loudly
         rather than performing a partial rescue.
         """
-        require_clean_main_checkout(self.workspace.root)
+        require_clean_main_checkout_for_workspace(self.workspace)
 
     def prune_stale_worktrees(self) -> None:
         """
