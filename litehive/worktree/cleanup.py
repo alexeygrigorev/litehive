@@ -21,10 +21,7 @@ from litehive.git.ops import GitError, delete_branch, remove_worktree, status_po
 from litehive.state.persist import load_state_for_workspace
 from litehive.state.records import (
     clear_task_worktree_path,
-    get_task,
     get_task_worktree_path,
-    list_tasks,
-    save_task,
 )
 from litehive.worktree.paths import (
     is_managed_worktree_path,
@@ -59,7 +56,7 @@ def cleanup_terminal_task_worktree_for_workspace(workspace: Workspace, task: Tas
     if worktree_path is not None and worktree_path.exists():
         remove_worktree(root, worktree_path, force=True)
     clear_task_worktree_path(task)
-    save_task(root, task)
+    workspace.save_task(task)
     branch = task_worktree_branch(task)
     delete_branch(root, branch)
 
@@ -84,7 +81,7 @@ def collect_managed_worktrees_for_workspace(workspace: Workspace) -> list[Manage
     root = workspace.root
     state = load_state_for_workspace(workspace)
     if state.active_task_id:
-        active_task = get_task(root, state.active_task_id)
+        active_task = workspace.get_task(state.active_task_id)
     else:
         active_task = None
     if active_task is not None:
@@ -93,7 +90,7 @@ def collect_managed_worktrees_for_workspace(workspace: Workspace) -> list[Manage
         active_path = None
 
     worktrees: list[ManagedWorktree] = []
-    for task in list_tasks(root, strict=False):
+    for task in workspace.list_tasks(strict=False):
         worktree_rel = get_task_worktree_path(task)
         if not is_managed_worktree_path(root, worktree_rel):
             continue
@@ -158,11 +155,11 @@ def remove_cleanable_worktrees_for_workspace(workspace: Workspace, dry_run: bool
     for item in candidates:
         try:
             remove_worktree(root, item.worktree_path, force=True)
-            task = get_task(root, item.task_id)
+            task = workspace.get_task(item.task_id)
             if task is not None:
                 clear_task_worktree_path(task)
                 try:
-                    save_task(root, task)
+                    workspace.save_task(task)
                 except WorkspaceConflictError:
                     append_attention_log(
                         workspace,

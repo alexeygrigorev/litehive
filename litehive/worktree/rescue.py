@@ -44,10 +44,7 @@ from litehive.state.persist import (
 )
 from litehive.state.records import (
     clear_task_worktree_path,
-    get_task,
     get_task_worktree_path,
-    list_tasks,
-    save_task,
     set_task_commit_sha,
 )
 from litehive.worktree.paths import is_managed_worktree_path, resolve_recorded_worktree_path
@@ -72,7 +69,7 @@ def collect_rescue_candidates_for_workspace(workspace: Workspace) -> list[Rescue
     """
     root = workspace.root
     candidates: list[RescueCandidate] = []
-    for task in list_tasks(root, strict=False):
+    for task in workspace.list_tasks(strict=False):
         if task.status != TaskStatus.FLAGGED or task.flag_reason != "merge_failed":
             continue
         worktree_rel = get_task_worktree_path(task)
@@ -134,7 +131,7 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
     a per-row status table.
     """
     root = workspace.root
-    task = get_task(root, candidate.task_id)
+    task = workspace.get_task(candidate.task_id)
     if task is None:
         return RescueResult(
             task_id=candidate.task_id,
@@ -262,8 +259,8 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
             else:
                 cherry_pick_abort(root)
                 _restore_litehive_changes(root, stashed_metadata)
-                save_task(root, task)
-                _ensure_unmerged_worktree_state(root, task.id, candidate.worktree_rel)
+                workspace.save_task(task)
+                _ensure_unmerged_worktree_state_for_workspace(workspace, task.id, candidate.worktree_rel)
                 return RescueResult(
                     task_id=candidate.task_id,
                     worktree_rel=candidate.worktree_rel,
@@ -278,8 +275,8 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
         except GitError:
             cherry_pick_abort(root)
             _restore_litehive_changes(root, stashed_metadata)
-            save_task(root, task)
-            _ensure_unmerged_worktree_state(root, task.id, candidate.worktree_rel)
+            workspace.save_task(task)
+            _ensure_unmerged_worktree_state_for_workspace(workspace, task.id, candidate.worktree_rel)
             return RescueResult(
                 task_id=candidate.task_id,
                 worktree_rel=candidate.worktree_rel,
@@ -294,8 +291,8 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
         if not committed:
             cherry_pick_abort(root)
             _restore_litehive_changes(root, stashed_metadata)
-            save_task(root, task)
-            _ensure_unmerged_worktree_state(root, task.id, candidate.worktree_rel)
+            workspace.save_task(task)
+            _ensure_unmerged_worktree_state_for_workspace(workspace, task.id, candidate.worktree_rel)
             return RescueResult(
                 task_id=candidate.task_id,
                 worktree_rel=candidate.worktree_rel,
@@ -458,6 +455,13 @@ def _finalize_rescue_for_workspace(workspace: Workspace, task: TaskRecord, outco
 
 def _ensure_unmerged_worktree_state(root: Path, task_id: str, worktree_rel: str) -> None:
     """
+    Path-based compatibility wrapper for manual-conflict unmerged state.
+    """
+    _ensure_unmerged_worktree_state_for_workspace(Workspace.from_path(root), task_id, worktree_rel)
+
+
+def _ensure_unmerged_worktree_state_for_workspace(workspace: Workspace, task_id: str, worktree_rel: str) -> None:
+    """
     Re-record the task in ``state.unmerged_worktrees`` after a manual_conflict.
 
     Without this, a partial cherry-pick that aborts halfway would
@@ -466,7 +470,6 @@ def _ensure_unmerged_worktree_state(root: Path, task_id: str, worktree_rel: str)
     idempotent check (skip when already present) keeps repeated
     rescue attempts from duplicating the entry.
     """
-    workspace = Workspace.from_path(root)
     state = load_state_for_workspace(workspace)
     for entry in state.unmerged_worktrees:
         if entry.task_id == task_id:
