@@ -2060,9 +2060,14 @@ Legend:
   snapshot wrappers, heartbeat age checks, daemon registration cleanup,
   venv readiness, and status-line rendering so each names its caller or
   boundary and explains why the helper exists.
-- [ ] DM11. Review `pick_default_command_prefix`; the note questions
+- [x] DM11. Review `pick_default_command_prefix`; the note questions
   whether it is really needed.
   Source: note 5, 17:50-18:01.
+  Completed 2026-05-07: removed the branchy
+  `default_command_prefix()` launcher selection. `run_daemon_loop`
+  now invokes child runs through the current interpreter with
+  `[sys.executable, "-m", "litehive.main"]`, and the backup test no
+  longer patches a fake `uv` launcher.
 - [ ] DM12. If `uv` is used to run LiteHive as an executor in another
   project, ensure it runs in the correct project directory.
   Source: note 5, 18:28-18:56.

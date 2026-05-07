@@ -17,8 +17,6 @@ from datetime import UTC, datetime
 import logging
 import os
 from pathlib import Path
-import shlex
-import shutil
 import signal
 import subprocess
 import sys
@@ -144,32 +142,6 @@ def _daemon_status_snapshot_for_workspace(workspace: Workspace) -> DaemonStatusS
     status = collect_task_pipeline_status_for_workspace(workspace, read_only=True)
     lines = render_task_pipeline_status_lines(status, workspace=workspace.root, mode="summary")
     return DaemonStatusSnapshot(state=status.state, text="\n".join(lines) + "\n")
-
-
-def default_command_prefix() -> list[str]:
-    """
-    Pick the argv prefix the daemon uses to launch a child ``litehive run``.
-
-    Resolves in this order so each environment uses the launcher it
-    actually has installed:
-
-    1. ``LITEHIVE_DAEMON_EXECUTABLE`` override (tests / operators
-       pinning a specific binary).
-    2. ``uv run litehive`` for development workspaces using ``uv``.
-    3. An installed ``litehive`` binary on ``PATH``.
-    4. ``python -m litehive.main`` as the final fallback so the daemon
-       can still spawn a child even when neither launcher is on PATH.
-    """
-    override = os.environ.get("LITEHIVE_DAEMON_EXECUTABLE")
-    if override:
-        return shlex.split(override)
-    uv = shutil.which("uv")
-    if uv:
-        return [uv, "run", "litehive"]
-    litehive_bin = shutil.which("litehive")
-    if litehive_bin:
-        return [litehive_bin]
-    return [sys.executable, "-m", "litehive.main"]
 
 
 def _emit(message: str, stream: TextIO | None) -> None:
@@ -513,7 +485,7 @@ def run_daemon_loop(
     attention_repository = AttentionRepository(daemon_workspace)
     daemon_config = daemon_workspace.load_config().daemon
     apply_pending_migrations(workspace)
-    command_prefix = default_command_prefix()
+    command_prefix = [sys.executable, "-m", "litehive.main"]
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     log_base = daemon_workspace.runtime_path("logs", "run-all")
     log_root = session_dir or (log_base / timestamp)

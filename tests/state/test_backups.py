@@ -126,35 +126,12 @@ def test_backup_rotation_keeps_seven_daily_and_four_weekly(tmp_path: Path) -> No
     ]
 
 
-def test_daemon_loop_creates_scheduled_backup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_daemon_loop_creates_scheduled_backup(tmp_path: Path) -> None:
     from litehive.daemon.execution import run_daemon_loop
 
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     create_workspace(workspace)
-
-    fake_uv = tmp_path / "uv"
-    fake_uv.write_text(
-        "\n".join(
-            [
-                "#!/usr/bin/env bash",
-                "set -euo pipefail",
-                'if [[ "${1:-}" == "run" && "${2:-}" == "litehive" && "${3:-}" == "repair" ]]; then',
-                '  echo "repaired: no"',
-                "  exit 0",
-                "fi",
-                'echo "unexpected uv invocation: $*" >&2',
-                "exit 1",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    fake_uv.chmod(0o755)
-
-    monkeypatch.setattr(
-        "litehive.daemon.execution.default_command_prefix",
-        lambda: [str(fake_uv), "run", "litehive"],
-    )
 
     exit_code = run_daemon_loop(workspace, output_stream=None)
 
