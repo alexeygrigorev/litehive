@@ -20,7 +20,7 @@ from litehive.tasks.constants import (
 )
 from litehive.state.locking import (
     ensure_future_task_mutation_allowed_for_workspace,
-    workspace_lock,
+    workspace_lock_for_workspace,
 )
 from litehive.state.persist import load_state_for_workspace
 from litehive.tasks.activity_rendering import (
@@ -97,7 +97,7 @@ def _requeue_task_transition(
         except GitError as exc:
             raise ValueError(str(exc)) from exc
 
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         task = workspace.get_task_record(task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
@@ -167,9 +167,7 @@ def _resume_task_transition(workspace: Workspace, task_id: str, front: bool = Fa
     (so the next agent sees the previous failure context); clears it for
     requested-retry shapes so the next run starts from a clean verdict.
     """
-
-    root = workspace.root
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         task = workspace.require_task(task_id)
         before_task = snapshot_task_audit_state(task)
         state = load_state_for_workspace(workspace)

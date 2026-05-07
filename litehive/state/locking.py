@@ -106,6 +106,15 @@ def workspace_lock(root: Path):
             manager.unlock(handle)
 
 
+@contextmanager
+def workspace_lock_for_workspace(workspace: Workspace):
+    """
+    Hold the workspace-level flock for an injected workspace.
+    """
+    with workspace_lock(workspace.root):
+        yield
+
+
 def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> None:
     """
     Persist runner identity into the held lockfile.

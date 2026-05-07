@@ -55,6 +55,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Add workspace-native rebuild-safety helpers and migrate event-log replay.
 - [x] Add workspace-native runner-lock probes and migrate recovery callers.
 - [x] Migrate stop/close task flows to workspace-native runner-lock probes.
+- [x] Add workspace-native workspace lock helper and migrate repair/resume callers.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

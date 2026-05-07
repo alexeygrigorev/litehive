@@ -10,7 +10,7 @@ from litehive.domain.common import (
 from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
-from litehive.state.locking import workspace_lock
+from litehive.state.locking import workspace_lock_for_workspace
 from litehive.state.persist import (
     load_state_for_workspace,
     persist_task_and_state_without_runner_guard_for_workspace,
@@ -51,8 +51,7 @@ def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepa
     summary reports each touched task id so the action is auditable.
     """
     mutated = False
-    root = workspace.root
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace, bootstrap=False)
         queued_ids = set(state.queue)
         for task_id in _stale_terminal_candidate_ids(workspace):
