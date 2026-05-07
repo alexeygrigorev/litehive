@@ -680,6 +680,19 @@ Legend:
   PID and exit code should not be `None` where the process model says
   they must exist.
   Source: note 3, 27:20-27:47.
+  Progress 2026-05-07: added concrete persisted session row objects:
+  `RunningSubagentSessionRow` for start/progress snapshots and
+  `TerminalSubagentSessionRow` for finished snapshots. The main
+  `SubagentSessionManager.write_running_session_metadata` and
+  `SubagentSessionManager.write_session_snapshot` paths now pass
+  `session=session_row` to the persistence boundary, while
+  `save_subagent_artifacts` owns final `as_dict()` serialization.
+  Remaining work: convert direct recovery bypass session writes and
+  interrupted-session persistence instead of mutating loaded session
+  dictionaries. Kept nullable PID only on running/progress rows because
+  Heru progress callbacks can arrive before process-start PID
+  reporting. Verified focused row tests plus full `make typecheck` and
+  `make test`.
 - [ ] M34. Every saved event needs a concrete domain role and a
   description of why it is persisted and where it is used.
   Source: note 3, 27:53-28:24.
