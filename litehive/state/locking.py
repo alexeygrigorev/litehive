@@ -602,17 +602,6 @@ def workspace_mutation_guard(root: Path):
         yield
 
 
-def ensure_future_task_mutation_allowed(
-    root: Path,
-    task_ids: list[str],
-    state: WorkspaceState | None = None,
-) -> None:
-    """
-    Path-based compatibility wrapper for future-task mutation checks.
-    """
-    ensure_future_task_mutation_allowed_for_workspace(Workspace.from_path(root), task_ids, state=state)
-
-
 def ensure_future_task_mutation_allowed_for_workspace(
     workspace: Workspace,
     task_ids: list[str],

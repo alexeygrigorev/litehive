@@ -18,7 +18,7 @@ from litehive.tasks.constants import (
     RUNNER_LOCKS_MUTEX,
 )
 from litehive.state.locking import (
-    ensure_future_task_mutation_allowed,
+    ensure_future_task_mutation_allowed_for_workspace,
     persist_future_task_update_for_workspace,
     workspace_lock,
 )
@@ -121,7 +121,7 @@ def _update_task_transition(
         is_runner_thread = runner_state is not None and runner_state.owner_thread_id == owner_thread_id
         allow_active_task_mutation = allow_active_agent_task_mutation and state.active_task_id == task.id
         if not is_runner_thread and not allow_active_task_mutation:
-            ensure_future_task_mutation_allowed(root, [task.id], state=state)
+            ensure_future_task_mutation_allowed_for_workspace(workspace, [task.id], state=state)
 
         if depends_on is not ...:
             depends_on_list = cast(list[str], depends_on)
