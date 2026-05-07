@@ -133,6 +133,12 @@ class TaskActivityLog:
             return entry
         return None
 
+    def latest(self) -> TaskActivityEntry | None:
+        """
+        Return the newest activity entry regardless of filters.
+        """
+        return self.latest_entry()
+
 
 def load_task_activity(workspace: Workspace, task: TaskRecord) -> list[TaskActivityEntry]:
     """

@@ -80,6 +80,25 @@ def test_task_activity_entry_carries_verdict_as_domain_enum(tmp_path: Path) -> N
     assert _activity_rows(tmp_path, task.id)[0]["payload"]["verdict"] == "reject"
 
 
+def test_task_activity_log_latest_returns_newest_entry(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Latest activity")
+    workspace = Workspace.from_path(tmp_path)
+    activity = workspace.task_activity(task)
+
+    activity.append(
+        TaskActivityEntry(source="operator", role="operator", stage="backlog", verdict="comment", message="first")
+    )
+    activity.append(
+        TaskActivityEntry(source="operator", role="operator", stage="backlog", verdict="comment", message="second")
+    )
+
+    latest = activity.latest()
+
+    assert latest is not None
+    assert latest.message == "second"
+
+
 def test_load_task_activity_ignores_stale_filesystem_activity(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title="SQLite only")

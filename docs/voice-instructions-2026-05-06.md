@@ -915,9 +915,14 @@ Legend:
   focused domain, worktree, and status-rendering tests verify the
   exact producer/report/renderer path. The remaining domain-model
   concerns stay split into the concrete D5-D19 checklist items below.
-- [ ] D5. `lastTaskActivityEntry` or equivalent should likely be a
+- [x] D5. `lastTaskActivityEntry` or equivalent should likely be a
   method on `Workspace`, `Task`, or a task/workspace service.
   Source: note 4, 00:39-00:55.
+  Verified 2026-05-07: `Workspace.task_activity(task)` returns the
+  task-owned `TaskActivityLog` service, which already owned
+  `latest_entry(...)`. Added `TaskActivityLog.latest()` for the
+  unfiltered newest-entry case and moved task debug output off
+  `load()[-1]` onto that object-owned API.
 - [ ] D6. In `domain/agent.py`, review `SubAgentResult` and explain
   what `subagent_ref` means.
   Source: note 6, 00:01-00:21.

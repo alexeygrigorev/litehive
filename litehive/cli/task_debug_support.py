@@ -152,11 +152,10 @@ def _print_latest_activity(workspace: Workspace, task) -> None:
     stage reports). Showing both surfaces in evidence covers the
     case where an agent posted feedback without a verdict change.
     """
-    activity = workspace.task_activity(task).load()
-    if not activity:
+    entry = workspace.task_activity(task).latest()
+    if entry is None:
         print("latest_activity: none")
         return
-    entry = activity[-1]
     print(
         "latest_activity: "
         f"stage={entry.stage} role={entry.role} verdict={entry.verdict} "
