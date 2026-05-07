@@ -3,9 +3,9 @@ from pathlib import Path
 
 from litehive.attention import (
     AttentionRepository,
-    collect_operator_needed_state,
+    collect_operator_needed_state_for_workspace,
     read_attention_log,
-    waiting_for_you_lines,
+    waiting_for_you_lines_for_workspace,
 )
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
@@ -35,7 +35,7 @@ def test_status_surfaces_flagged_task_as_operator_needed(tmp_path: Path, capsys)
     assert "operator_needed_tasks: 1" in output
     assert "attention_items:" not in output
 
-    lines = waiting_for_you_lines(tmp_path)
+    lines = waiting_for_you_lines_for_workspace(Workspace.from_path(tmp_path))
     assert f"operator_needed_task: {task.id} stage=implementing reason=needs operator review" in lines
 
 
@@ -49,7 +49,7 @@ def test_status_surfaces_runner_pool_stop_as_operator_needed(tmp_path: Path, cap
     assert exit_code == 0
     assert "operator_needed: true" in output
     assert "operator_needed_pool_stop_reason: diverged_from_origin" in output
-    assert collect_operator_needed_state(tmp_path).pool_stop_reason == "diverged_from_origin"
+    assert collect_operator_needed_state_for_workspace(Workspace.from_path(tmp_path)).pool_stop_reason == "diverged_from_origin"
 
 
 def test_status_reports_no_operator_needed_when_workspace_is_clear(tmp_path: Path, capsys) -> None:

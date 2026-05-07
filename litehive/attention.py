@@ -17,10 +17,8 @@ maintaining a parallel file-based runtime log.
 """
 
 from dataclasses import dataclass
-from pathlib import Path
 import sqlite3
 
-from litehive.config.workspace import normalize_workspace_root
 from litehive.domain.common import TaskStatus, utcnow
 from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state_for_workspace
@@ -129,15 +127,6 @@ def read_attention_log(workspace: Workspace, limit: int | None = None) -> list[A
     return [AttentionLogEntry(created_at=row[0], message=row[1]) for row in rows]
 
 
-def collect_operator_needed_state(root: Path) -> OperatorNeededState:
-    """
-    Path-based compatibility wrapper for operator-attention projection.
-    """
-    return collect_operator_needed_state_for_workspace(
-        Workspace.from_path(normalize_workspace_root(root, source="collect_operator_needed_state"))
-    )
-
-
 def collect_operator_needed_state_for_workspace(workspace: Workspace) -> OperatorNeededState:
     """
     Project the current attention requirement from authoritative SQLite state.
@@ -160,17 +149,6 @@ def collect_operator_needed_state_for_workspace(workspace: Workspace) -> Operato
     if pool_stop_reason not in OPERATOR_NEEDED_POOL_STOP_REASONS:
         pool_stop_reason = None
     return OperatorNeededState(flagged_tasks=flagged_tasks, pool_stop_reason=pool_stop_reason)
-
-
-def waiting_for_you_lines(root: Path, limit: int = 5, reconcile: bool = True) -> list[str]:
-    """
-    Path-based compatibility wrapper for the "waiting on you" status block.
-    """
-    return waiting_for_you_lines_for_workspace(
-        Workspace.from_path(normalize_workspace_root(root, source="waiting_for_you_lines")),
-        limit=limit,
-        reconcile=reconcile,
-    )
 
 
 def waiting_for_you_lines_for_workspace(workspace: Workspace, limit: int = 5, reconcile: bool = True) -> list[str]:
