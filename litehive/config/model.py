@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, fields
 import re
 from typing import Any, Iterable, Mapping, Sequence
 
-from litehive.config.profiles.loader import PROCESS_PROFILES
+from litehive.config.profiles.loader import available_process_profiles
 
 
 def _as_iterable(value: object, *, field_name: str) -> Iterable[object]:
@@ -267,11 +267,12 @@ def validate_config_data(data: Mapping[str, Any]) -> dict[str, Any]:
     """
     validated = dict(data)
     profile = validated.get("process_profile")
-    if profile in PROCESS_PROFILES or profile is None:
+    available_profiles = available_process_profiles()
+    if profile in available_profiles or profile is None:
         pass
     else:
-        available_profiles = ", ".join(sorted(PROCESS_PROFILES))
-        raise ValueError(f"unknown process_profile {profile!r}; must be one of: {available_profiles}")
+        available_profile_labels = ", ".join(available_profiles)
+        raise ValueError(f"unknown process_profile {profile!r}; must be one of: {available_profile_labels}")
     for key in validated:
         if key not in _VALID_CONFIG_KEYS:
             raise ValueError(f"unknown config key {key!r}; remove it or migrate to a supported config field")

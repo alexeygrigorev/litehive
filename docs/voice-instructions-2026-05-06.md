@@ -1533,9 +1533,12 @@ Legend:
 - [ ] F3. Remove unnecessary assignments around the early defaults
   lines called out near lines 19-27.
   Source: note 4, 34:30-35:03.
-- [ ] F4. Simplify `resolve_process_profile`: lookup by name, load if
+- [x] F4. Simplify `resolve_process_profile`: lookup by name, load if
   present, otherwise use default. Remove unnecessary extra structure.
   Source: note 4, 35:03-35:23.
+  Completed 2026-05-07: removed the `PROCESS_PROFILES` alias and
+  collapsed the loader branch to explicit `generic` default lookup,
+  direct named-overlay lookup, and a single unknown-profile error.
 - [x] F5. Remove `from_dict` if Pydantic/model validation can load the
   model directly.
   Source: note 4, 35:45-36:08.
