@@ -29,6 +29,7 @@ from litehive.config.model import DaemonConfig
 from litehive.config.workspace import create_workspace
 from litehive.attention import AttentionRepository
 from litehive.domain.pool import PoolStopReason
+from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import WorkspaceState
 from litehive.db.schema import apply_pending_migrations
 from litehive.git.ops import check_origin_divergence
@@ -77,6 +78,57 @@ class DaemonStatusSnapshot:
 
     state: WorkspaceState
     text: str
+
+
+class DaemonOutput:
+    """
+    Stream-bound renderer for daemon-loop and child-process output.
+
+    Constructed by ``run_daemon_loop`` so call sites do not pass a
+    stream through every output helper. The trailing newline plus
+    explicit flush is load-bearing: an operator running ``tail -f``
+    sees both daemon-loop messages and subprocess stdout interleaved,
+    and a partial line would concatenate with the next child output
+    line. ``stream is None`` remains the silent non-interactive path.
+    """
+
+    def __init__(self, stream: TextIO | None) -> None:
+        self.stream = stream
+
+    def line(self, message: str = "") -> None:
+        if self.stream is None:
+            return
+        self.stream.write(message)
+        if not message.endswith("\n"):
+            self.stream.write("\n")
+        self.stream.flush()
+
+    def child_line(self, line: str) -> None:
+        if self.stream is None:
+            return
+        self.stream.write(line)
+        self.stream.flush()
+
+    def runner_wait(self, status: RunnerStatusState) -> None:
+        """
+        Log enough about a live runner for the operator to diagnose the wait.
+
+        The daemon loop reaches this branch when another ``litehive run``
+        is still active for the workspace. Surfacing pid, active task,
+        and last heartbeat lets the operator decide whether to wait or
+        intervene; without it the daemon log would just say "idling"
+        repeatedly with no context.
+        """
+        if status.pid is None:
+            pid = "-"
+        else:
+            pid = str(status.pid)
+        task_id = status.active_task_id or "-"
+        heartbeat = status.heartbeat_at or "-"
+        self.line(
+            f"runner already active: status={status.status} pid={pid} "
+            f"active_task_id={task_id} heartbeat_at={heartbeat}"
+        )
 
 
 def _halt_for_origin_divergence(
@@ -142,26 +194,6 @@ def _daemon_status_snapshot_for_workspace(workspace: Workspace) -> DaemonStatusS
     status = collect_task_pipeline_status_for_workspace(workspace, read_only=True)
     lines = render_task_pipeline_status_lines(status, workspace=workspace.root, mode="summary")
     return DaemonStatusSnapshot(state=status.state, text="\n".join(lines) + "\n")
-
-
-def _emit(message: str, stream: TextIO | None) -> None:
-    """
-    Write a daemon-loop status line that survives interleaving with subprocess output.
-
-    The trailing newline plus explicit flush is load-bearing: an
-    operator running ``tail -f`` sees both daemon-loop messages and
-    the subprocess's stdout interleaved, and a partial line would
-    leave a half-printed daemon message that readers concatenate
-    with the next ``litehive run`` line. ``stream is None`` is the
-    silent path for non-interactive daemon mode so call sites don't
-    each branch on it.
-    """
-    if stream is None:
-        return
-    stream.write(message)
-    if not message.endswith("\n"):
-        stream.write("\n")
-    stream.flush()
 
 
 def _heartbeat_age_seconds(heartbeat_at: object) -> float | None:
@@ -361,30 +393,6 @@ def _daemon_should_continue_for_stop_reason(reason: str | None) -> bool:
         return False
     return stop_reason in _DAEMON_TRANSIENT_STOP_REASONS
 
-
-def _emit_runner_wait(status, stream: TextIO | None) -> None:
-    """
-    Log enough about the live runner for the operator to diagnose the wait.
-
-    The daemon loop reaches this branch when another ``litehive run``
-    is still active for the workspace. Surfacing pid, active task,
-    and last heartbeat lets the operator decide whether to wait or
-    intervene; without it the daemon log would just say "idling"
-    repeatedly with no context.
-    """
-    if getattr(status, "pid", None) is None:
-        pid = "-"
-    else:
-        pid = str(status.pid)
-    task_id = getattr(status, "active_task_id", None) or "-"
-    heartbeat = getattr(status, "heartbeat_at", None) or "-"
-    state = getattr(status, "status", None) or "running"
-    _emit(
-        f"runner already active: status={state} pid={pid} active_task_id={task_id} heartbeat_at={heartbeat}",
-        stream=stream,
-    )
-
-
 def create_workspace_venvs_ready(
     workspace: Path,
 ) -> None:
@@ -426,7 +434,7 @@ def run_logged_subprocess(
     command: list[str],
     cwd: Path,
     log_path: Path,
-    output_stream: TextIO | None,
+    output: DaemonOutput,
     current_child: dict[str, subprocess.Popen[str] | None],
 ) -> int:
     """
@@ -455,9 +463,7 @@ def run_logged_subprocess(
         for line in process.stdout:
             log_handle.write(line)
             log_handle.flush()
-            if output_stream is not None:
-                output_stream.write(line)
-                output_stream.flush()
+            output.child_line(line)
         return_code = process.wait()
         current_child["process"] = None
         return return_code
@@ -494,6 +500,7 @@ def run_daemon_loop(
     register_daemon(workspace, pid=os.getpid(), log_dir=log_root)
     stop_requested = False
     current_child: dict[str, subprocess.Popen[str] | None] = {"process": None}
+    output = DaemonOutput(output_stream)
     heartbeat_stop = threading.Event()
     heartbeat_thread = threading.Thread(
         target=_daemon_heartbeat_loop,
@@ -524,35 +531,34 @@ def run_daemon_loop(
     previous_term = signal.signal(signal.SIGTERM, _handle_signal)
     previous_int = signal.signal(signal.SIGINT, _handle_signal)
     try:
-        _emit(f"workspace: {workspace}", stream=output_stream)
-        _emit(f"logs: {log_root}", stream=output_stream)
+        output.line(f"workspace: {workspace}")
+        output.line(f"logs: {log_root}")
         iteration = 0
         while True:
             if stop_requested:
-                _emit("Runner stop requested. Stopping.", stream=output_stream)
+                output.line("Runner stop requested. Stopping.")
                 return 0
 
             iteration += 1
             prefix = f"{iteration:04d}"
             run_file = log_root / f"{prefix}-run.log"
 
-            _emit("", stream=output_stream)
-            _emit(f"== iteration {iteration} ==", stream=output_stream)
+            output.line()
+            output.line(f"== iteration {iteration} ==")
 
             live_runner = runner_status_for_workspace(daemon_workspace)
             if _runner_is_live(live_runner):
-                _emit_runner_wait(live_runner, stream=output_stream)
+                output.runner_wait(live_runner)
                 sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
                 continue
 
             divergence_reason = _halt_for_origin_divergence(workspace, attention_repository)
             if divergence_reason is not None:
-                _emit(
+                output.line(
                     "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. "
-                    "Halting pool: diverged_from_origin",
-                    stream=output_stream,
+                    "Halting pool: diverged_from_origin"
                 )
-                _emit(divergence_reason, stream=output_stream)
+                output.line(divergence_reason)
                 return 0
 
             try:
@@ -560,25 +566,25 @@ def run_daemon_loop(
             except (OSError, RuntimeError) as exc:
                 logger.exception("scheduled workspace backup failed")
                 attention_repository.append(f"scheduled backup failed: {exc}")
-                _emit(f"backup_failed: {exc}", stream=output_stream)
+                output.line(f"backup_failed: {exc}")
             else:
                 if backup_timestamp is not None:
-                    _emit(f"backup_created: {backup_timestamp}", stream=output_stream)
+                    output.line(f"backup_created: {backup_timestamp}")
 
             try:
                 pre_snapshot = _daemon_status_snapshot_for_workspace(daemon_workspace)
             except (OSError, RuntimeError, ValueError) as exc:
                 logger.exception("status snapshot raised")
-                _emit(f"status raised: {exc}", stream=output_stream)
+                output.line(f"status raised: {exc}")
                 return 1
-            _emit(pre_snapshot.text, stream=output_stream)
+            output.line(pre_snapshot.text)
 
             if not _has_work(pre_snapshot.state):
-                _emit("No active or queued tasks remain. Stopping.", stream=output_stream)
+                output.line("No active or queued tasks remain. Stopping.")
                 return 0
             stop_reason_before = pre_snapshot.state.pool_stop_reason
             if not _daemon_should_continue_for_stop_reason(stop_reason_before):
-                _emit(f"Runner stopped: {stop_reason_before}", stream=output_stream)
+                output.line(f"Runner stopped: {stop_reason_before}")
                 return 0
 
             try:
@@ -586,31 +592,31 @@ def run_daemon_loop(
                     [*command_prefix, "run", "--workspace", str(workspace)],
                     cwd=workspace,
                     log_path=run_file,
-                    output_stream=output_stream,
+                    output=output,
                     current_child=current_child,
                 )
             except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
                 logger.exception("run subprocess raised")
-                _emit(f"run raised: {exc}", stream=output_stream)
+                output.line(f"run raised: {exc}")
                 return 1
             if run_rc != 0:
-                _emit(f"litehive run failed (rc={run_rc}); see {run_file}", stream=output_stream)
+                output.line(f"litehive run failed (rc={run_rc}); see {run_file}")
                 return run_rc
 
             try:
                 post_snapshot = _daemon_status_snapshot_for_workspace(daemon_workspace)
             except (OSError, RuntimeError, ValueError) as exc:
                 logger.exception("post-status snapshot raised")
-                _emit(f"post-status raised: {exc}", stream=output_stream)
+                output.line(f"post-status raised: {exc}")
                 return 1
-            _emit(post_snapshot.text, stream=output_stream)
+            output.line(post_snapshot.text)
 
             stop_reason = post_snapshot.state.pool_stop_reason
             if not _has_work(post_snapshot.state):
-                _emit("No active or queued tasks remain. Stopping.", stream=output_stream)
+                output.line("No active or queued tasks remain. Stopping.")
                 return 0
             if not _daemon_should_continue_for_stop_reason(stop_reason):
-                _emit(f"Runner stopped: {stop_reason}", stream=output_stream)
+                output.line(f"Runner stopped: {stop_reason}")
                 return 0
     finally:
         signal.signal(signal.SIGTERM, previous_term)

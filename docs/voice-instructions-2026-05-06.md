@@ -2079,9 +2079,13 @@ Legend:
   running `uv` from the target workspace. The same regression checks
   that the subprocess working directory is the resolved target
   workspace, so executor commands run in the project being serviced.
-- [ ] DM13. Replace `emit(..., stream=...)` free functions with an
+- [x] DM13. Replace `emit(..., stream=...)` free functions with an
   object that takes the stream in its constructor and exposes methods.
   Source: note 5, 19:00-19:27; note 5, 21:25-21:52.
+  Completed 2026-05-07: introduced `DaemonOutput`, a stream-bound
+  daemon-loop writer with `line(...)` and `runner_wait(...)` methods.
+  `run_daemon_loop` now constructs one output object and passes only
+  its underlying stream to child subprocess log forwarding.
 - [ ] DM14. Replace daemon health check dictionaries with typed
   entries.
   Source: note 5, 19:28-19:34.
