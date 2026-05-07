@@ -79,6 +79,23 @@ task_time_budget_seconds: 3600.0
 subagent_inactivity_timeout_seconds: 300.0
 inactivity_timeout_seconds: null
 
+# Daemon process-control timing.
+daemon:
+  # Worker heartbeat cadence while the daemon owns the workspace lock.
+  heartbeat_interval_seconds: 1.0
+  # A registered daemon older than this is considered wedged on restart.
+  health_timeout_seconds: 10.0
+  # Time to wait after SIGTERM before escalating to SIGKILL.
+  stop_grace_period_seconds: 5.0
+  # Time to wait for a SIGKILLed daemon pid to disappear.
+  force_kill_timeout_seconds: 4.0
+  # Poll cadence while waiting for daemon process exit.
+  exit_poll_interval_seconds: 0.1
+  # Time `litehive daemon start` waits for the child to register.
+  startup_timeout_seconds: 5.0
+  # Poll cadence while waiting for daemon registration.
+  startup_poll_interval_seconds: 0.1
+
 # External engine sandbox configuration used for adapters that launch outside the repo.
 external_engine_sandbox:
   enabled: false

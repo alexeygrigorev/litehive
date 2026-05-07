@@ -229,11 +229,11 @@ def touch_daemon(workspace: Path, pid: int | None = None) -> bool:
 
     External observers (status, the daemon-start guard) read the
     heartbeat to tell a live daemon from a wedged one. Called by the
-    background heartbeat thread once per
-    ``_DAEMON_HEARTBEAT_INTERVAL_SECONDS`` so a long iteration of
-    the main loop never lets the daemon look dead. Returns ``False``
-    when the in-process row has gone (so the heartbeat thread can
-    stop trying after shutdown began).
+    background heartbeat thread on the configured daemon heartbeat
+    interval so a long iteration of the main loop never lets the
+    daemon look dead. Returns ``False`` when the in-process row has
+    gone (so the heartbeat thread can stop trying after shutdown
+    began).
     """
     workspace = workspace.resolve()
     manager = _daemon_lock_manager(workspace)

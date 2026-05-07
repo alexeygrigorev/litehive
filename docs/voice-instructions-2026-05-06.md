@@ -1977,9 +1977,17 @@ Legend:
 
 ## Daemon Instructions
 
-- [ ] DM1. Move heartbeat/stop and related daemon parameters into
+- [x] DM1. Move heartbeat/stop and related daemon parameters into
   config.
   Source: note 5, 14:21-14:36.
+  Completed 2026-05-07: added typed `DaemonConfig` under
+  `LitehiveConfig.daemon` and documented the `daemon:` YAML block in
+  the workspace config template. `run_daemon_loop`,
+  `start_background_daemon`, and `stop_workspace_daemon` now read
+  heartbeat interval, health timeout, stop grace, force-kill timeout,
+  exit polling, and startup polling from workspace config. Updated
+  daemon tests to configure those values through `LitehiveConfig`
+  instead of monkey-patching daemon module constants.
 - [ ] DM2. Remove unclear `continue, None, None` stop-reason logic.
   Model stop reasons explicitly.
   Source: note 5, 14:37-14:58.

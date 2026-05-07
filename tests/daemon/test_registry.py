@@ -8,6 +8,7 @@ import time
 
 import pytest
 
+from litehive.config.model import DaemonConfig, LitehiveConfig
 from litehive.config.workspace import create_workspace
 from litehive.daemon.execution import start_background_daemon, stop_workspace_daemon
 from litehive.daemon.registry import (
@@ -165,9 +166,18 @@ def test_start_background_daemon_strips_agent_env(tmp_path: Path, monkeypatch) -
     assert child_env["LITEHIVE_WORKSPACE_ROOT"] == str(tmp_path.resolve())
 
 
-def test_stop_workspace_daemon_escalates_to_sigkill_when_sigterm_ignored(tmp_path: Path, monkeypatch) -> None:
+def test_stop_workspace_daemon_escalates_to_sigkill_when_sigterm_ignored(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
-    create_workspace(workspace)
+    create_workspace(
+        workspace,
+        LitehiveConfig(
+            daemon=DaemonConfig(
+                stop_grace_period_seconds=0.2,
+                force_kill_timeout_seconds=2.0,
+                exit_poll_interval_seconds=0.05,
+            )
+        ),
+    )
     lock_path = daemon_lock_path(workspace)
     sleeper = _spawn_locked_daemon_like_process(
         workspace,
@@ -179,10 +189,6 @@ def test_stop_workspace_daemon_escalates_to_sigkill_when_sigterm_ignored(tmp_pat
         assert entry is not None
         assert entry["status"] == "running"
         assert entry["pid"] == sleeper.pid
-        monkeypatch.setattr("litehive.daemon.execution.DAEMON_STOP_GRACE_PERIOD_SECONDS", 0.2)
-        monkeypatch.setattr("litehive.daemon.execution.DAEMON_FORCE_KILL_TIMEOUT_SECONDS", 2.0)
-        monkeypatch.setattr("litehive.daemon.execution.DAEMON_EXIT_POLL_INTERVAL_SECONDS", 0.05)
-
         started = time.monotonic()
         entry = stop_workspace_daemon(workspace)
         elapsed = time.monotonic() - started
@@ -214,7 +220,15 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
     lock_metadata: dict[str, str],
 ) -> None:
     workspace = tmp_path / "workspace"
-    create_workspace(workspace)
+    create_workspace(
+        workspace,
+        LitehiveConfig(
+            daemon=DaemonConfig(
+                force_kill_timeout_seconds=2.0,
+                exit_poll_interval_seconds=0.05,
+            )
+        ),
+    )
     lock_path = daemon_lock_path(workspace)
     sleeper = _spawn_locked_daemon_like_process(workspace, dict(lock_metadata))
     try:
@@ -223,9 +237,6 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
         assert entry["status"] == "running"
         assert entry["pid"] == sleeper.pid
         monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready", lambda *args, **kwargs: None)
-        monkeypatch.setattr("litehive.daemon.execution.DAEMON_FORCE_KILL_TIMEOUT_SECONDS", 2.0)
-        monkeypatch.setattr("litehive.daemon.execution.DAEMON_EXIT_POLL_INTERVAL_SECONDS", 0.05)
-
         class FakeProcess:
             pid = 4321
 

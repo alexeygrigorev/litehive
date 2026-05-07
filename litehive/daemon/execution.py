@@ -25,6 +25,7 @@ import time
 from typing import TextIO
 
 from litehive.container import build_workspace
+from litehive.config.model import DaemonConfig
 from litehive.config.workspace import create_workspace
 from litehive.attention import append_attention_log
 from litehive.db.schema import apply_pending_migrations
@@ -51,12 +52,6 @@ from .registry import (
 )
 
 logger = logging.getLogger(__name__)
-
-_DAEMON_HEARTBEAT_INTERVAL_SECONDS = 1.0
-_DAEMON_HEALTH_TIMEOUT_SECONDS = 10.0
-DAEMON_STOP_GRACE_PERIOD_SECONDS = 5.0
-DAEMON_FORCE_KILL_TIMEOUT_SECONDS = 4.0
-DAEMON_EXIT_POLL_INTERVAL_SECONDS = 0.1
 
 _CONTINUE_STOP_REASONS = {None, "None", "queue_exhausted", "task_requeued"}
 
@@ -265,22 +260,22 @@ def _heartbeat_age_seconds(heartbeat_at: object) -> float | None:
     return max(0.0, (datetime.now(UTC) - timestamp.astimezone(UTC)).total_seconds())
 
 
-def _daemon_healthcheck_failed(entry: dict[str, object]) -> bool:
+def _daemon_healthcheck_failed(entry: dict[str, object], config: DaemonConfig) -> bool:
     """
     Detect a wedged registered daemon that should be reclaimed.
 
     A registry row with ``status=running`` but a heartbeat older than
-    ``_DAEMON_HEALTH_TIMEOUT_SECONDS`` is treated as dead so
+    the configured daemon health timeout is treated as dead so
     ``start_background_daemon`` can SIGKILL the leftover and start
     fresh — without this, an operator who Ctrl-C'd a previous daemon
     would be unable to start a new one until they manually cleared
     the registry.
     """
     heartbeat_age = _heartbeat_age_seconds(entry.get("heartbeat_at"))
-    return heartbeat_age is None or heartbeat_age > _DAEMON_HEALTH_TIMEOUT_SECONDS
+    return heartbeat_age is None or heartbeat_age > config.health_timeout_seconds
 
 
-def _wait_for_pid_exit(pid: int, timeout_seconds: float) -> bool:
+def _wait_for_pid_exit(pid: int, timeout_seconds: float, poll_interval_seconds: float) -> bool:
     """
     Block until a foreign pid is gone or the deadline passes.
 
@@ -296,7 +291,7 @@ def _wait_for_pid_exit(pid: int, timeout_seconds: float) -> bool:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return False
-        time.sleep(min(remaining, DAEMON_EXIT_POLL_INTERVAL_SECONDS))
+        time.sleep(min(remaining, poll_interval_seconds))
 
 
 def _clear_recorded_daemon(workspace: Path, pid: int) -> None:
@@ -311,7 +306,7 @@ def _clear_recorded_daemon(workspace: Path, pid: int) -> None:
     unregister_daemon(workspace, pid=pid)
 
 
-def _force_kill_recorded_daemon(workspace: Path, pid: int) -> None:
+def _force_kill_recorded_daemon(workspace: Path, pid: int, config: DaemonConfig) -> None:
     """
     SIGKILL a daemon that ignored SIGTERM, then clear its registration.
 
@@ -331,18 +326,22 @@ def _force_kill_recorded_daemon(workspace: Path, pid: int) -> None:
         return
     except PermissionError as exc:
         raise RuntimeError(f"failed to send SIGKILL to daemon pid={pid}: {exc}") from exc
-    if not _wait_for_pid_exit(pid, timeout_seconds=DAEMON_FORCE_KILL_TIMEOUT_SECONDS):
+    if not _wait_for_pid_exit(
+        pid,
+        timeout_seconds=config.force_kill_timeout_seconds,
+        poll_interval_seconds=config.exit_poll_interval_seconds,
+    ):
         raise RuntimeError(f"daemon pid={pid} did not exit after SIGKILL")
     _clear_recorded_daemon(workspace, pid=pid)
 
 
-def _terminate_recorded_daemon(workspace: Path, pid: int) -> None:
+def _terminate_recorded_daemon(workspace: Path, pid: int, config: DaemonConfig) -> None:
     """
     Run the graceful-then-forceful stop sequence against a registered daemon.
 
     Sends SIGTERM first so the daemon's signal handler can flush its
     heartbeat thread and unregister cleanly; if the process is still
-    alive after ``DAEMON_STOP_GRACE_PERIOD_SECONDS`` we escalate to
+    alive after the configured daemon stop grace period we escalate to
     SIGKILL via ``_force_kill_recorded_daemon``. Called by
     ``stop_workspace_daemon`` (and the ``litehive stop`` shortcut)
     when the operator asks the workspace's daemon to stop.
@@ -357,10 +356,14 @@ def _terminate_recorded_daemon(workspace: Path, pid: int) -> None:
         return
     except PermissionError as exc:
         raise RuntimeError(f"failed to send SIGTERM to daemon pid={pid}: {exc}") from exc
-    if _wait_for_pid_exit(pid, timeout_seconds=DAEMON_STOP_GRACE_PERIOD_SECONDS):
+    if _wait_for_pid_exit(
+        pid,
+        timeout_seconds=config.stop_grace_period_seconds,
+        poll_interval_seconds=config.exit_poll_interval_seconds,
+    ):
         _clear_recorded_daemon(workspace, pid=pid)
         return
-    _force_kill_recorded_daemon(workspace, pid=pid)
+    _force_kill_recorded_daemon(workspace, pid=pid, config=config)
 
 
 def _terminate_child_process(process: subprocess.Popen[str]) -> None:
@@ -545,6 +548,7 @@ def run_daemon_loop(
     workspace = workspace.resolve()
     create_workspace(workspace)
     daemon_workspace = build_workspace(workspace)
+    daemon_config = daemon_workspace.load_config().daemon
     apply_pending_migrations(workspace)
     command_prefix = default_command_prefix()
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -559,7 +563,7 @@ def run_daemon_loop(
     heartbeat_thread = threading.Thread(
         target=_daemon_heartbeat_loop,
         name="litehive-daemon-heartbeat",
-        args=(workspace, os.getpid(), heartbeat_stop),
+        args=(workspace, os.getpid(), heartbeat_stop, daemon_config.heartbeat_interval_seconds),
         daemon=True,
     )
     heartbeat_thread.start()
@@ -667,22 +671,27 @@ def run_daemon_loop(
         signal.signal(signal.SIGTERM, previous_term)
         signal.signal(signal.SIGINT, previous_int)
         heartbeat_stop.set()
-        heartbeat_thread.join(timeout=max(_DAEMON_HEARTBEAT_INTERVAL_SECONDS, 0.1) * 2)
+        heartbeat_thread.join(timeout=max(daemon_config.heartbeat_interval_seconds, 0.1) * 2)
         unregister_daemon(workspace, pid=os.getpid())
 
 
-def _daemon_heartbeat_loop(workspace: Path, pid: int, stop_event: threading.Event) -> None:
+def _daemon_heartbeat_loop(
+    workspace: Path,
+    pid: int,
+    stop_event: threading.Event,
+    interval_seconds: float,
+) -> None:
     """
     Refresh the daemon registration's heartbeat row while the worker is alive.
 
     Runs in a background thread because a single ``litehive run``
     iteration can take minutes and would otherwise stall the
-    main-thread heartbeat past
-    ``_DAEMON_HEALTH_TIMEOUT_SECONDS``, making the daemon look dead
-    to ``_daemon_healthcheck_failed``. Exits as soon as the
-    run-loop sets ``stop_event`` during shutdown.
+    main-thread heartbeat past the configured health timeout,
+    making the daemon look dead to ``_daemon_healthcheck_failed``.
+    Exits as soon as the run-loop sets ``stop_event`` during
+    shutdown.
     """
-    while not stop_event.wait(_DAEMON_HEARTBEAT_INTERVAL_SECONDS):
+    while not stop_event.wait(interval_seconds):
         touch_daemon(workspace, pid=pid)
 
 
@@ -699,11 +708,14 @@ def start_background_daemon(workspace: Path) -> int:
     daemon's first heartbeat write.
     """
     workspace = workspace.resolve()
+    daemon_config = build_workspace(workspace).load_config().daemon
     existing = daemon_metadata(workspace)
     if existing is not None and existing.get("status") == "running":
         pid = existing.get("pid")
-        if isinstance(pid, int) and _daemon_healthcheck_failed(existing):
-            _force_kill_recorded_daemon(workspace, pid=pid)
+        # Registry metadata is read from SQLite/JSON and must be narrowed
+        # before using it as an OS pid.
+        if isinstance(pid, int) and _daemon_healthcheck_failed(existing, daemon_config):
+            _force_kill_recorded_daemon(workspace, pid=pid, config=daemon_config)
         else:
             raise RuntimeError(f"daemon already running for {workspace}: pid={pid}")
     if existing is not None and existing.get("status") == "stale":
@@ -731,14 +743,14 @@ def start_background_daemon(workspace: Path) -> int:
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
-    deadline = time.time() + 5
-    while time.time() < deadline:
+    deadline = time.monotonic() + daemon_config.startup_timeout_seconds
+    while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError("daemon failed to start")
         entry = get_workspace_daemon(workspace)
         if entry is not None and entry.get("pid") == process.pid:
             return process.pid
-        time.sleep(0.1)
+        time.sleep(daemon_config.startup_poll_interval_seconds)
     raise RuntimeError("daemon did not register before timeout")
 
 
@@ -754,6 +766,7 @@ def stop_workspace_daemon(workspace: Path) -> dict[str, object] | None:
     crashes do not survive an explicit stop.
     """
     workspace = workspace.resolve()
+    daemon_config = build_workspace(workspace).load_config().daemon
     entry = daemon_metadata(workspace)
     if entry is None:
         return None
@@ -761,10 +774,12 @@ def stop_workspace_daemon(workspace: Path) -> dict[str, object] | None:
         unregister_daemon(workspace)
         return None
     pid = entry.get("pid")
+    # Registry metadata is read from SQLite/JSON and must be narrowed
+    # before using it as an OS pid.
     if not isinstance(pid, int):
         unregister_daemon(workspace)
         return None
-    _terminate_recorded_daemon(workspace, pid=pid)
+    _terminate_recorded_daemon(workspace, pid=pid, config=daemon_config)
     return entry
 
 

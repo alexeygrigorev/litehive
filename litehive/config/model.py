@@ -83,6 +83,13 @@ VALID_RUNNER_HOOK_ENTRY_KEYS = frozenset(
 )
 DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS = 300.0
 DEFAULT_TASK_TIME_BUDGET_SECONDS = 3600.0
+DEFAULT_DAEMON_HEARTBEAT_INTERVAL_SECONDS = 1.0
+DEFAULT_DAEMON_HEALTH_TIMEOUT_SECONDS = 10.0
+DEFAULT_DAEMON_STOP_GRACE_PERIOD_SECONDS = 5.0
+DEFAULT_DAEMON_FORCE_KILL_TIMEOUT_SECONDS = 4.0
+DEFAULT_DAEMON_EXIT_POLL_INTERVAL_SECONDS = 0.1
+DEFAULT_DAEMON_STARTUP_TIMEOUT_SECONDS = 5.0
+DEFAULT_DAEMON_STARTUP_POLL_INTERVAL_SECONDS = 0.1
 
 
 # --- supporting dataclasses ---
@@ -123,6 +130,17 @@ class ResolvedExternalEngineSandboxPolicy:
     extra_ro_binds: tuple[str, ...] = ()
     extra_rw_binds: tuple[str, ...] = ()
     setenv: Mapping[str, str] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class DaemonConfig:
+    heartbeat_interval_seconds: float = DEFAULT_DAEMON_HEARTBEAT_INTERVAL_SECONDS
+    health_timeout_seconds: float = DEFAULT_DAEMON_HEALTH_TIMEOUT_SECONDS
+    stop_grace_period_seconds: float = DEFAULT_DAEMON_STOP_GRACE_PERIOD_SECONDS
+    force_kill_timeout_seconds: float = DEFAULT_DAEMON_FORCE_KILL_TIMEOUT_SECONDS
+    exit_poll_interval_seconds: float = DEFAULT_DAEMON_EXIT_POLL_INTERVAL_SECONDS
+    startup_timeout_seconds: float = DEFAULT_DAEMON_STARTUP_TIMEOUT_SECONDS
+    startup_poll_interval_seconds: float = DEFAULT_DAEMON_STARTUP_POLL_INTERVAL_SECONDS
 
 
 @dataclass(slots=True)
@@ -213,6 +231,7 @@ class LitehiveConfig:
     subagent_inactivity_timeout_seconds: float = DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS
     inactivity_timeout_seconds: float | None = None
     external_engine_sandbox: ExternalEngineSandboxConfig = field(default_factory=ExternalEngineSandboxConfig)
+    daemon: DaemonConfig = field(default_factory=DaemonConfig)
     engine_freeze: dict[str, str] = field(default_factory=dict)
     engine_preference: list[str] = field(default_factory=lambda: ["codex", "opencode", "gemini", "copilot", "goz"])
     agent_startup_guidance: dict[str, list[str]] = field(default_factory=dict)
@@ -255,6 +274,7 @@ class LitehiveConfig:
         if self.litehive_source_path is not None:
             self.litehive_source_path = self.litehive_source_path.strip() or None
         self.external_engine_sandbox = normalize_external_engine_sandbox_config(self.external_engine_sandbox)
+        self.daemon = normalize_daemon_config(self.daemon)
 
     def model_for_engine(self, engine_name: str) -> str | None:
         """
@@ -333,7 +353,71 @@ def parse_litehive_config_data(data: Mapping[str, Any]) -> LitehiveConfig:
         validated["external_engine_sandbox"] = normalize_external_engine_sandbox_config(
             validated["external_engine_sandbox"]
         )
+    if "daemon" in validated:
+        validated["daemon"] = normalize_daemon_config(validated["daemon"])
     return _LITEHIVE_CONFIG_ADAPTER.validate_python(validated)
+
+
+def normalize_daemon_config(value: DaemonConfig | Mapping[str, object]) -> DaemonConfig:
+    """
+    Validate daemon timing values from workspace config.
+
+    Daemon start/stop and heartbeat paths use these values directly
+    to decide when a process is stale, when to escalate from SIGTERM
+    to SIGKILL, and how long the CLI waits for a background daemon to
+    register. Rejecting non-positive values during config load keeps
+    those process-control loops from spinning or waiting forever.
+    """
+    # Config loaders can pass a raw YAML mapping; direct constructors
+    # already hold the typed dataclass.
+    if isinstance(value, DaemonConfig):
+        config = value
+    else:
+        mapping = _config_mapping(value, field_name="daemon")
+        try:
+            config = DaemonConfig(**mapping)
+        except TypeError as exc:
+            raise ValueError(f"invalid daemon config: {exc}") from exc
+
+    config.heartbeat_interval_seconds = _positive_daemon_seconds(
+        config.heartbeat_interval_seconds,
+        "heartbeat_interval_seconds",
+    )
+    config.health_timeout_seconds = _positive_daemon_seconds(
+        config.health_timeout_seconds,
+        "health_timeout_seconds",
+    )
+    config.stop_grace_period_seconds = _positive_daemon_seconds(
+        config.stop_grace_period_seconds,
+        "stop_grace_period_seconds",
+    )
+    config.force_kill_timeout_seconds = _positive_daemon_seconds(
+        config.force_kill_timeout_seconds,
+        "force_kill_timeout_seconds",
+    )
+    config.exit_poll_interval_seconds = _positive_daemon_seconds(
+        config.exit_poll_interval_seconds,
+        "exit_poll_interval_seconds",
+    )
+    config.startup_timeout_seconds = _positive_daemon_seconds(
+        config.startup_timeout_seconds,
+        "startup_timeout_seconds",
+    )
+    config.startup_poll_interval_seconds = _positive_daemon_seconds(
+        config.startup_poll_interval_seconds,
+        "startup_poll_interval_seconds",
+    )
+    return config
+
+
+def _positive_daemon_seconds(value: float, field_name: str) -> float:
+    """
+    Coerce and validate one daemon timing field.
+    """
+    seconds = float(value)
+    if seconds <= 0:
+        raise ValueError(f"daemon.{field_name} must be greater than 0")
+    return seconds
 
 
 def normalize_engine_sequence(engines: Sequence[str], field_name: str) -> list[str]:
