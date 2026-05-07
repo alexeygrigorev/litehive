@@ -1068,8 +1068,14 @@ Legend:
   a quota-status protocol and reads status fields directly. Verified with
   `uv run pyrefly check litehive/config/engine_models.py` and
   `uv run pytest tests/config/test_engine_freeze.py -q`.
-- [ ] R15. Move quota handling into a separate module.
+- [x] R15. Move quota handling into a separate module.
   Source: note 4, 40:21-40:31.
+  Completed 2026-05-07: moved Heru quota probe dispatch and quota
+  block translation into `litehive.config.engine_quota`; engine
+  selection imports only `engine_quota_block`. Verified with
+  `uv run pyrefly check litehive/config/engine_quota.py
+  litehive/config/engine_models.py tests/config/test_engine_freeze.py`
+  and `uv run pytest tests/config/test_engine_freeze.py -q`.
 - [ ] R16. Replace `engine_quota_block` tuple returns with a dataclass
   containing reason string and datetime. Optional absence can still be
   modeled, but the present value should not be a tuple.

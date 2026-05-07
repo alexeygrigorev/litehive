@@ -553,16 +553,16 @@ def test_engine_quota_block_consumes_current_heru_normalized_windows(
     import importlib
 
     from heru.quota.codex_quota import CodexQuotaStatus, CodexQuotaWindow
-    import litehive.config.engine_models as engine_models
+    import litehive.config.engine_quota as engine_quota
 
-    engine_models = importlib.reload(engine_models)
+    engine_quota = importlib.reload(engine_quota)
     status = CodexQuotaStatus(
         secondary_window=CodexQuotaWindow(used_percent=95.0, reset_at="2026-04-27T00:00:00Z"),
         limit_reached=True,
     )
-    monkeypatch.setattr(engine_models, "check_codex_quota", lambda: status)
+    monkeypatch.setattr(engine_quota, "check_codex_quota", lambda: status)
 
-    reason, freeze_until = engine_models.engine_quota_block("codex")
+    reason, freeze_until = engine_quota.engine_quota_block("codex")
 
     assert reason == "codex usage limit reached, resets 2026-04-27T00:00:00Z"
     assert freeze_until == datetime(2026, 4, 27, tzinfo=timezone.utc)
@@ -575,8 +575,10 @@ def test_select_engine_skips_current_heru_quota_status_shape(
     import importlib
 
     from heru.quota.codex_quota import CodexQuotaStatus, CodexQuotaWindow
+    import litehive.config.engine_quota as engine_quota
     import litehive.config.engine_models as engine_models
 
+    engine_quota = importlib.reload(engine_quota)
     engine_models = importlib.reload(engine_models)
     status = CodexQuotaStatus(
         secondary_window=CodexQuotaWindow(used_percent=95.0, reset_at="2026-04-27T00:00:00Z"),
@@ -588,8 +590,8 @@ def test_select_engine_skips_current_heru_quota_status_shape(
     )
     task = create_task(tmp_path, title="quota selection repro")
     config = load_config(tmp_path)
-    monkeypatch.setattr(engine_models, "check_codex_quota", lambda: status)
-    monkeypatch.setattr(engine_models, "check_claude_quota", lambda: UsageStatus())
+    monkeypatch.setattr(engine_quota, "check_codex_quota", lambda: status)
+    monkeypatch.setattr(engine_quota, "check_claude_quota", lambda: UsageStatus())
 
     selection = engine_models.select_engine_for_workspace(
         Workspace.from_path(tmp_path),
