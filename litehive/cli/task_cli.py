@@ -35,6 +35,7 @@ from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
 from litehive.tasks.status import abandon_task_for_workspace, close_task_for_workspace, update_task_for_workspace
+from litehive.workspace import Workspace
 
 app = make_typer(invoke_without_command=True)
 
@@ -69,7 +70,7 @@ def _display_close_reason(task) -> str:
     return task.close_reason or task.runtime.pipeline.last_outcome.reason_code or "unknown"
 
 
-def _show_dependency_label(root, task) -> str:
+def _show_dependency_label(workspace: Workspace, task) -> str:
     """
     Render the ``depends_on`` cell with each dependency's current status inline.
 
@@ -81,7 +82,10 @@ def _show_dependency_label(root, task) -> str:
     if not task.depends_on:
         return "-"
 
-    active_statuses = {record.id: record.status for record in list_tasks(root, include_runtime=True, strict=False)}
+    active_statuses = {
+        record.id: record.status
+        for record in workspace.list_tasks(include_runtime=True, strict=False)
+    }
     labels: list[str] = []
     for dependency_id in task.depends_on:
         if dependency_id in active_statuses:
@@ -317,7 +321,8 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
     "I'm reasoning about the whole task" view.
     """
     ensure_workspace(workspace)
-    task = get_task(workspace, task_id)
+    workspace_obj = build_workspace(workspace)
+    task = workspace_obj.get_task(task_id)
     if task is None:
         print(f"task not found: {task_id}")
         return 1
@@ -331,7 +336,7 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
     print(f"priority: {task.priority}")
     print(f"model: {task.model or '-'}")
     print(f"pipeline_mode: {task.pipeline_mode}")
-    print(f"depends_on: {_show_dependency_label(workspace, task)}")
+    print(f"depends_on: {_show_dependency_label(workspace_obj, task)}")
     print(f"created_at: {task.created_at}")
     print(f"updated_at: {task.updated_at}")
     _print_creation_provenance(task)
