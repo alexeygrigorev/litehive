@@ -328,7 +328,7 @@ def create_workspace_venvs_ready_for_workspace(
     """
     findings = probe_broken_venv_executables_for_workspace(workspace)
     if findings:
-        raise RuntimeError(daemon_broken_venv_message(workspace.root, findings))
+        raise RuntimeError(daemon_broken_venv_message(findings))
 
 
 def maybe_run_workspace_backup(

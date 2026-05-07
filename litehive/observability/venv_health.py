@@ -106,17 +106,14 @@ def probe_broken_venv_executables_for_workspace(workspace: Workspace) -> list[Br
     return findings
 
 
-def broken_venv_issue_message(workspace_root: Path, finding: BrokenVenvExecutable) -> str:
+def broken_venv_issue_message(finding: BrokenVenvExecutable) -> str:
     """
     Format an operator-facing fix recipe for one broken venv entrypoint.
 
     Embeds the concrete ``uv venv --clear`` command for the
     affected checkout so the operator can copy-paste it rather
-    than reconstruct paths from a generic instruction. The
-    workspace root is accepted for signature symmetry with
-    upstream callers but not used in the message body.
+    than reconstruct paths from a generic instruction.
     """
-    del workspace_root
     checkout_root = finding.checkout.checkout_root
     venv_path = finding.checkout.venv_path
     local_fix = f"`cd {checkout_root} && uv venv --clear .venv && uv sync --extra dev`"
@@ -127,7 +124,7 @@ def broken_venv_issue_message(workspace_root: Path, finding: BrokenVenvExecutabl
     )
 
 
-def daemon_broken_venv_message(workspace_root: Path, findings: list[BrokenVenvExecutable]) -> str:
+def daemon_broken_venv_message(findings: list[BrokenVenvExecutable]) -> str:
     """
     Aggregate per-finding fix recipes into one daemon-startup error string.
 
@@ -137,7 +134,7 @@ def daemon_broken_venv_message(workspace_root: Path, findings: list[BrokenVenvEx
     operator sees every broken venv plus a fix for each in
     one block.
     """
-    bullets = _broken_venv_bullets(workspace_root, findings)
+    bullets = _broken_venv_bullets(findings)
     lines = [
         "broken virtualenv entrypoints blocked pool start:",
         *bullets,
@@ -145,20 +142,15 @@ def daemon_broken_venv_message(workspace_root: Path, findings: list[BrokenVenvEx
     return "\n".join(lines)
 
 
-def _broken_venv_bullets(
-    workspace_root: Path,
-    findings: list[BrokenVenvExecutable],
-) -> list[str]:
+def _broken_venv_bullets(findings: list[BrokenVenvExecutable]) -> list[str]:
     """
     Format each broken-venv finding as a bullet line.
 
-    Threads ``workspace_root`` so :func:`broken_venv_issue_message`
-    can produce paths relative to the workspace where useful.
     Caller: :func:`daemon_broken_venv_message`.
     """
     bullets: list[str] = []
     for finding in findings:
-        bullets.append(f"- {broken_venv_issue_message(workspace_root, finding)}")
+        bullets.append(f"- {broken_venv_issue_message(finding)}")
     return bullets
 
 
