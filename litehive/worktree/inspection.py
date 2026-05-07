@@ -23,7 +23,7 @@ from litehive.git.ops import (
     stdout_lines as git_stdout_lines,
     stdout_or_none as git_stdout_or_none,
 )
-from litehive.state.records import get_task_worktree_path, list_tasks
+from litehive.state.records import get_task_worktree_path
 from litehive.tasks.activity import load_task_activity
 from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.workspace import Workspace
@@ -51,7 +51,7 @@ def inspect_dirty_worktree_gate(workspace: Workspace) -> DirtyWorktreeGateReport
     except GitError:
         return DirtyWorktreeGateReport()
 
-    tasks = list_tasks(root, strict=False)
+    tasks = workspace.list_tasks(strict=False)
     if dirty_entries:
         owners = [task for task in tasks if _task_can_resume_with_owned_dirty_paths(workspace, task, dirty_entries)]
         finding = DirtyWorktreeFinding(
