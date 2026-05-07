@@ -9,7 +9,7 @@ from litehive.workspace import Workspace
 from litehive.lifecycle.events import Event, RecoveryBudgetHit, RecoveryFailed, RecoverySucceeded
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.persistence import TaskState
-from litehive.lifecycle.prompt_types import RecoveryPrompt
+from litehive.lifecycle.prompt_types import FailedSubagentDiagnostics, RecoveryPrompt
 from litehive.recovery.scope_analysis import analyze_scope_changes
 from litehive.tasks.paths import latest_subagent_base, read_text_artifact, resolve_artifact_path, task_dir
 
@@ -93,7 +93,7 @@ class RecoveryAgent(RoleAgent):
         recovery_execution_root: str | None = None
         litehive_source_path: str | None = None
         recovery_config_diagnostic: dict[str, str] | None = None
-        failed_subagent_diagnostics: dict[str, Any] | None = None
+        failed_subagent_diagnostics: FailedSubagentDiagnostics | None = None
         scope_analysis: dict[str, Any] | None = None
 
         root = self.prompt_context.workspace_root
@@ -326,7 +326,7 @@ def _recovery_source_checkout_diagnostic(root: Path, exc: OSError | ValueError) 
     }
 
 
-def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any) -> dict[str, Any] | None:
+def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any) -> FailedSubagentDiagnostics | None:
     """Collect the failed subagent's session, report, transcript, stdout, stderr, and exit code for the recovery prompt.
 
     Recovery diagnosis depends on knowing exactly what the prior agent
@@ -368,8 +368,8 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
         return None
 
     session_record = workspace.load_subagent_session_record(task_record.id, subagent_id)
-    session_payload = session_record.values
     report_payload = load_subagent_report(workspace, task_record.id, subagent_id)
+    report_summary = str(report_payload.get("summary") or report_payload.get("message") or "").strip()
     trace_ref = runtime_state or subagent_ref
     if trace_ref is None:
         execution_trace_view = None
@@ -405,20 +405,21 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
         runtime_role = None
         runtime_engine = None
         runtime_status = None
-    return {
-        "subagent_id": subagent_id,
-        "role": runtime_role,
-        "engine": runtime_engine,
-        "status": runtime_status,
-        "path": rel_path,
-        "exit_code": exit_code,
-        "did_produce_output": any(text.strip() for text in (execution_trace, stdout, stderr)),
-        "session": session_payload,
-        "report": report_payload,
-        "transcript": execution_trace,
-        "stdout": stdout,
-        "stderr": stderr,
-    }
+    return FailedSubagentDiagnostics(
+        subagent_id=subagent_id,
+        role=runtime_role,
+        engine=runtime_engine,
+        status=runtime_status,
+        path=rel_path,
+        exit_code=exit_code,
+        did_produce_output=any(text.strip() for text in (execution_trace, stdout, stderr)),
+        session_created_at=session_record.created_at,
+        session_updated_at=session_record.updated_at,
+        report_summary=report_summary,
+        transcript=execution_trace,
+        stdout=stdout,
+        stderr=stderr,
+    )
 
 
 def _read_subagent_artifact(subagent_base: Path, artifact_name: str) -> str:

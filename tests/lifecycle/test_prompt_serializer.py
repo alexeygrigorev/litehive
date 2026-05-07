@@ -282,17 +282,13 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
     text = serialize_prompt(prompt, task_record=task, workspace=Workspace.from_path(workspace))
 
     assert diagnostics is not None
-    assert diagnostics["subagent_id"] == "SA-0001"
-    assert diagnostics["role"] == "swe"
-    assert diagnostics["engine"] == "codex"
-    assert diagnostics["status"] == "failed"
-    assert diagnostics["exit_code"] == 17
-    assert diagnostics["did_produce_output"] is True
-    assert diagnostics["session"]["status"] == "failed"
-    assert (
-        diagnostics["report"]["summary"]
-        == "implementing rejected: agent did not submit verdict via litehive agent report CLI"
-    )
+    assert diagnostics.subagent_id == "SA-0001"
+    assert diagnostics.role == "swe"
+    assert diagnostics.engine == "codex"
+    assert diagnostics.status == "failed"
+    assert diagnostics.exit_code == 17
+    assert diagnostics.did_produce_output is True
+    assert diagnostics.report_summary == "implementing rejected: agent did not submit verdict via litehive agent report CLI"
 
     assert "Failed subagent evidence" in text
     assert "exit_code: 17" in text

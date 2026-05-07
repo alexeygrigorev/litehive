@@ -28,6 +28,27 @@ from .types import PipelineMode
 
 
 @dataclass(frozen=True, slots=True)
+class FailedSubagentDiagnostics:
+    """
+    Prompt-ready evidence for the failed subagent that triggered recovery.
+    """
+
+    subagent_id: str
+    role: str | None
+    engine: str | None
+    status: str | None
+    path: str
+    exit_code: int | None
+    did_produce_output: bool
+    session_created_at: str | None
+    session_updated_at: str | None
+    report_summary: str
+    transcript: str
+    stdout: str
+    stderr: str
+
+
+@dataclass(frozen=True, slots=True)
 class AgentPrompt:
     """Structured payload every stage agent passes to the engine adapter.
 
@@ -161,7 +182,7 @@ class RecoveryPrompt(AgentPrompt):
     from ``TaskState.recovery_failure_explanation`` and surfaced under
     the recovery-trigger section."""
 
-    failed_subagent_diagnostics: dict[str, Any] | None = None
+    failed_subagent_diagnostics: FailedSubagentDiagnostics | None = None
     """Persisted evidence of the failed subagent run (session, report,
     transcript, stdout/stderr, exit code) so the recovery agent does not
     have to dig for it."""

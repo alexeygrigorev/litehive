@@ -16,7 +16,7 @@ from litehive.domain.common import PipelineState
 from litehive.domain.task import TaskRecord
 
 if TYPE_CHECKING:
-    from .prompt_types import AgentPrompt, RecoveryPrompt
+    from .prompt_types import AgentPrompt, FailedSubagentDiagnostics, RecoveryPrompt
 
 
 def _bullet_block(items: list[str]) -> str:
@@ -228,7 +228,7 @@ def _recovery_execution_root_section(prompt: "RecoveryPrompt") -> str:
     return "\n".join(lines)
 
 
-def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
+def _failed_subagent_diagnostics_section(diagnostics: "FailedSubagentDiagnostics") -> str:
     """
     Hand the recovery agent persisted evidence of the failed subagent
     run.
@@ -238,39 +238,35 @@ def _failed_subagent_diagnostics_section(diagnostics: dict[str, Any]) -> str:
     agent from having to re-walk the on-disk artifacts to reconstruct
     that picture.
     """
-    exit_code_value = diagnostics.get("exit_code")
+    exit_code_value = diagnostics.exit_code
     if exit_code_value is not None:
         exit_code_label = exit_code_value
     else:
         exit_code_label = "-"
-    if diagnostics.get("did_produce_output"):
+    if diagnostics.did_produce_output:
         did_produce_output_label = "yes"
     else:
         did_produce_output_label = "no"
     lines = [
         "Failed subagent evidence (DB-backed recovery state):",
-        f"- subagent_id: {diagnostics.get('subagent_id') or '-'}",
-        f"- role: {diagnostics.get('role') or '-'}",
-        f"- engine: {diagnostics.get('engine') or '-'}",
-        f"- status: {diagnostics.get('status') or '-'}",
-        f"- path: {diagnostics.get('path') or '-'}",
+        f"- subagent_id: {diagnostics.subagent_id or '-'}",
+        f"- role: {diagnostics.role or '-'}",
+        f"- engine: {diagnostics.engine or '-'}",
+        f"- status: {diagnostics.status or '-'}",
+        f"- path: {diagnostics.path or '-'}",
         f"- exit_code: {exit_code_label}",
         f"- did_produce_output: {did_produce_output_label}",
     ]
-    session_payload = diagnostics.get("session")
-    if isinstance(session_payload, dict) and session_payload:
-        for key in ("created_at", "updated_at"):
-            if session_payload.get(key):
-                lines.append(f"- session_{key}: {session_payload[key]}")
-    report_payload = diagnostics.get("report")
-    if isinstance(report_payload, dict) and report_payload:
-        summary = str(report_payload.get("summary") or report_payload.get("message") or "").strip()
-        if summary:
-            lines.append(f"- report_summary: {_single_line(summary, limit=240)}")
+    if diagnostics.session_created_at:
+        lines.append(f"- session_created_at: {diagnostics.session_created_at}")
+    if diagnostics.session_updated_at:
+        lines.append(f"- session_updated_at: {diagnostics.session_updated_at}")
+    if diagnostics.report_summary:
+        lines.append(f"- report_summary: {_single_line(diagnostics.report_summary, limit=240)}")
     signal = _compact_failure_signal(
-        str(diagnostics.get("stderr") or ""),
-        str(diagnostics.get("stdout") or ""),
-        str(diagnostics.get("transcript") or ""),
+        diagnostics.stderr,
+        diagnostics.stdout,
+        diagnostics.transcript,
     )
     if signal:
         lines.append(f"- output_signal: {signal}")
@@ -608,5 +604,4 @@ def _label_to_heading(label: str) -> str:
     if label.endswith(":md"):
         return f"{label.split(':', 1)[0].title()} workspace overlay"
     return label.title()
-
 

@@ -1342,9 +1342,14 @@ Legend:
   `LoadedSubagentSession` record. Remaining compatibility dictionary
   loading is confined to the explicit free function
   `agents.session_store.load_subagent_session(...)`.
-- [ ] C5. Remove `isinstance` checks from session/report resolution
+- [x] C5. Remove `isinstance` checks from session/report resolution
   by returning typed objects.
   Source: note 4, 15:57-16:14.
+  Completed 2026-05-07: replaced the recovery prompt's failed
+  subagent diagnostics dictionary with `FailedSubagentDiagnostics`.
+  The serializer now reads named fields for session timestamps,
+  report summary, and output evidence instead of checking whether
+  embedded session/report payloads are dictionaries.
 - [x] C6. Move `resolve_active_agent_task_mutation_target` style
   business logic out of CLI.
   Source: note 4, 16:57-18:37.
