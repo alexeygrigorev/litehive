@@ -1,10 +1,8 @@
 """Built-in process profile defaults."""
 
-from typing import Any, TypeAlias
+from typing import Any
 
-ProfileData: TypeAlias = dict[str, Any]
-
-SHARED_PROCESS_PROFILE: ProfileData = {
+SHARED_PROCESS_PROFILE: dict[str, Any] = {
     "label": "Generic",
     "summary": "General software project workflow with deterministic local orchestration.",
     "source_of_truth": "tasks and implementation state live under `.litehive/`.",
@@ -82,7 +80,7 @@ SHARED_PROCESS_PROFILE: ProfileData = {
     "specifics": [],
 }
 
-PROCESS_PROFILE_OVERLAYS: dict[str, ProfileData] = {
+PROCESS_PROFILE_OVERLAYS: dict[str, dict[str, Any]] = {
     "codehive": {
         "label": "Codehive-style",
         "summary": "Multi-agent coding workflow emphasizing manager routing, TDD, and deterministic recovery.",

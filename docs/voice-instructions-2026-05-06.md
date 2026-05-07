@@ -1530,9 +1530,12 @@ Legend:
   Completed 2026-05-07: `resolve_process_profile` now validates the
   merged profile through the Pydantic `ProcessProfile` model. Moving
   the built-in defaults themselves to YAML remains tracked by F1.
-- [ ] F3. Remove unnecessary assignments around the early defaults
+- [x] F3. Remove unnecessary assignments around the early defaults
   lines called out near lines 19-27.
   Source: note 4, 34:30-35:03.
+  Completed 2026-05-07: removed the local `ProfileData` type-alias
+  assignment from `config/profiles/defaults.py` and annotated the
+  built-in profile mappings directly.
 - [x] F4. Simplify `resolve_process_profile`: lookup by name, load if
   present, otherwise use default. Remove unnecessary extra structure.
   Source: note 4, 35:03-35:23.
