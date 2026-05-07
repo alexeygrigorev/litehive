@@ -2309,9 +2309,17 @@ Legend:
   Added `test_voice_instruction_items_are_atomic_and_source_attributed`
   so future checklist edits cannot merge unrelated details into
   anonymous or unattributed umbrella tasks.
-- [ ] X3. Generalize the concrete feedback into durable style/domain
+- [x] X3. Generalize the concrete feedback into durable style/domain
   rules, then apply those rules across the codebase.
   Source: note 3, 32:48-33:08; note 6, 06:09-06:17.
+  Completed 2026-05-07: verified the concrete feedback themes are
+  generalized in `docs/code-style.md` as durable rules covering type
+  annotations, domain values, dependency injection, workspace identity,
+  thin CLI boundaries, `object`, `getattr`, broad dictionaries, and
+  verified checklist completion. Added
+  `test_code_style_keeps_generalized_voice_feedback_rules` to keep
+  those generalized rule anchors from disappearing while the codebase
+  continues applying them through focused guardrails and migrations.
 - [ ] X4. Do not batch all of this into one broad refactor. Add
   characterization tests before structural moves, and keep tests green
   between slices.

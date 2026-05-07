@@ -351,6 +351,25 @@ def test_checked_voice_instruction_items_include_verification_notes() -> None:
     assert set(_checked_voice_instruction_items_without_verification_note()) == legacy_checked_without_notes
 
 
+def test_code_style_keeps_generalized_voice_feedback_rules() -> None:
+    style = (REPO_ROOT / "docs" / "code-style.md").read_text(encoding="utf-8")
+    required_fragments = [
+        "## Type Annotations",
+        "## Domain Values",
+        "## Dependency Injection",
+        "## Workspace Identity",
+        "Keep CLI code thin.",
+        "Do not pass plain `object` values",
+        "Avoid `getattr`",
+        "Avoid broad dictionaries",
+        "Do not mark a checklist item complete until the exact old comments",
+    ]
+
+    missing = [fragment for fragment in required_fragments if fragment not in style]
+
+    assert missing == []
+
+
 def test_voice_instruction_items_are_atomic_and_source_attributed() -> None:
     blocks = _voice_instruction_item_blocks()
     item_ids = [item_id for item_id, _block in blocks]
