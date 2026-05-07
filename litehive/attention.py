@@ -24,7 +24,6 @@ from litehive.config.workspace import normalize_workspace_root
 from litehive.domain.common import TaskStatus, utcnow
 from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state_for_workspace
-from litehive.state.records import list_tasks
 from litehive.workspace import Workspace
 
 OPERATOR_NEEDED_POOL_STOP_REASONS = {
@@ -143,11 +142,10 @@ def collect_operator_needed_state_for_workspace(workspace: Workspace) -> Operato
     rendering and by the daemon's pool gate before deciding
     whether to iterate.
     """
-    root = workspace.root
     state = load_state_for_workspace(workspace, bootstrap=False)
     flagged_tasks = tuple(
         sorted(
-            (task for task in list_tasks(root, strict=False) if task.status == TaskStatus.FLAGGED),
+            (task for task in workspace.list_tasks(strict=False) if task.status == TaskStatus.FLAGGED),
             key=lambda task: task.id,
         )
     )
