@@ -56,7 +56,7 @@ from litehive.tasks.paths import task_dir
 from litehive.tasks.report_storage import record_stage_report
 from litehive.tasks.runtime import (
     mark_subagent_finished_for_workspace,
-    mark_subagent_progress,
+    mark_subagent_progress_for_workspace,
     mark_subagent_started_for_workspace,
 )
 from litehive.workspace import Workspace
@@ -770,8 +770,8 @@ class SubagentManager:
                 execution=execution,
             )
         self.sessions.record_subagent_pid(task, ref, execution.pid)
-        mark_subagent_progress(
-            self.root,
+        mark_subagent_progress_for_workspace(
+            self.workspace,
             task,
             pid=execution.pid,
             transcript=transcript,

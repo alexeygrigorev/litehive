@@ -506,8 +506,37 @@ def mark_subagent_progress(
     where the engine left off; without the periodic refresh, stale-runner
     recovery would mistake a slow subagent for a dead one.
     """
-    if task.runtime.execution.active_subagent is None:
+    if not apply_subagent_progress(task, pid=pid, transcript=transcript, continuation=continuation):
         return
+    save_task_runtime(root, task)
+
+
+def mark_subagent_progress_for_workspace(
+    workspace: Workspace,
+    task: TaskRecord,
+    pid: int | None = None,
+    transcript: str | None = None,
+    continuation: RuntimeEngineContinuation | None = None,
+) -> None:
+    """
+    Refresh active subagent progress through an injected workspace.
+    """
+    if not apply_subagent_progress(task, pid=pid, transcript=transcript, continuation=continuation):
+        return
+    save_task_runtime_for_workspace(workspace, task)
+
+
+def apply_subagent_progress(
+    task: TaskRecord,
+    pid: int | None = None,
+    transcript: str | None = None,
+    continuation: RuntimeEngineContinuation | None = None,
+) -> bool:
+    """
+    In-memory variant of ``mark_subagent_progress``.
+    """
+    if task.runtime.execution.active_subagent is None:
+        return False
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     if task.current_pipeline_stage is not None:
@@ -520,7 +549,7 @@ def mark_subagent_progress(
     if continuation is not None:
         updates["continuation"] = continuation
     task.runtime.execution.active_subagent = task.runtime.execution.active_subagent.model_copy(update=updates)
-    save_task_runtime(root, task)
+    return True
 
 
 def mark_subagent_finished(
