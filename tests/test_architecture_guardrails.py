@@ -207,6 +207,7 @@ def test_pyrefly_requires_return_annotations() -> None:
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     pyrefly_config = pyproject["tool"]["pyrefly"]
 
+    assert pyrefly_config["errors"]["unannotated-parameter"] == "error"
     assert pyrefly_config["errors"]["unannotated-return"] == "error"
 
 

@@ -95,7 +95,7 @@ project-excludes = [
     "dist/**",
     "fetched/**",
 ]
-errors = { unannotated-return = "error" }
+errors = { unannotated-parameter = "error", unannotated-return = "error" }
 # All current errors are recorded in pyrefly-baseline.json so CI is
 # green from day one. New errors fail; existing ones are silenced
 # until they are individually fixed.  Refresh with:

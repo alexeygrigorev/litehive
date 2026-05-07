@@ -77,10 +77,11 @@ from tests.support.helpers import make_workspace, run_cli
 
 ## Type Annotations
 
-- Functions and methods must have explicit return annotations. Pyrefly
-  treats `unannotated-return` as an error; existing debt is recorded in
-  `pyrefly-baseline.json`, and new missing return annotations must be
-  fixed instead of added to the baseline.
+- Functions and methods must have explicit parameter and return
+  annotations. Pyrefly treats `unannotated-parameter` and
+  `unannotated-return` as errors; existing debt is recorded in
+  `pyrefly-baseline.json`, and new missing annotations must be fixed
+  instead of added to the baseline.
 
 ## State And Ownership
 
