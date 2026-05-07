@@ -5,7 +5,6 @@
 transitions in ``status_close``/``status_resume``.
 """
 
-import threading
 from typing import cast
 
 from litehive.domain.common import PipelineStatus
@@ -14,10 +13,9 @@ from litehive.workspace import Workspace
 
 from litehive.tasks.constants import (
     VALID_TASK_PRIORITIES,
-    RUNNER_LOCKS,
-    RUNNER_LOCKS_MUTEX,
 )
 from litehive.state.locking import (
+    current_thread_owns_runner_guard_for_workspace,
     ensure_future_task_mutation_allowed_for_workspace,
     persist_future_task_update_for_workspace,
     workspace_lock_for_workspace,
@@ -64,8 +62,6 @@ def _update_task_transition(
     indistinguishable from "no change" and the runner would never see the
     intended reset.
     """
-    root = workspace.root
-
     if outcome is not ... and outcome is not None:
         if outcome_reason is not ... and outcome_reason is not None:
             close_reason_arg = str(outcome_reason)
@@ -115,10 +111,7 @@ def _update_task_transition(
         queue_before = list(state.queue)
         # Skip the conflict guard when the current thread is the runner
         # (e.g., apply_task_updates_from_report during grooming).
-        owner_thread_id = threading.get_ident()
-        with RUNNER_LOCKS_MUTEX:
-            runner_state = RUNNER_LOCKS.get(root.resolve())
-        is_runner_thread = runner_state is not None and runner_state.owner_thread_id == owner_thread_id
+        is_runner_thread = current_thread_owns_runner_guard_for_workspace(workspace)
         allow_active_task_mutation = allow_active_agent_task_mutation and state.active_task_id == task.id
         if not is_runner_thread and not allow_active_task_mutation:
             ensure_future_task_mutation_allowed_for_workspace(workspace, [task.id], state=state)
