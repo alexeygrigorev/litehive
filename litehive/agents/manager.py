@@ -36,7 +36,7 @@ from heru.engine_detection import (
 from litehive.domain.agent import EngineFailure, SubagentId, SubagentInactivityTimeout, SubagentResult
 from litehive.domain.common import SubagentStatus
 from litehive.domain.runtime import Subagent
-from litehive.agents.parsing import MissingVerdictError, stage_report_from_subagent
+from litehive.agents.report_extraction import MissingVerdictError, stage_report_from_subagent
 from litehive.agents.session import SubagentSessionManager
 from litehive.agents.session_events import SubagentFinishedEvent, SubagentProgressEvent
 from litehive.agents.session_continuation import subagent_continuation_state

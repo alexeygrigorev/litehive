@@ -1,4 +1,4 @@
-"""Stage report parsing from subagent results."""
+"""Stage report extraction from subagent activity."""
 
 from litehive.domain.reports import (
     REPORT_VERDICT_KINDS,

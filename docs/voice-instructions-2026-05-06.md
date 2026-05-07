@@ -856,10 +856,15 @@ Legend:
   is only a caller and does not inline the merge-resolver agent.
   Replaced the local raw role string with `AgentRole.MERGE_RESOLVER`
   so the remaining role value comes from the domain role vocabulary.
-- [ ] M42. Rename `agents/parsing.py`; the note says this is not
+- [x] M42. Rename `agents/parsing.py`; the note says this is not
   really parsing because structured output already exists. Use a name
   that reflects verdict/report extraction or repository loading.
   Source: note 3, 31:36-32:19.
+  Verified 2026-05-07: renamed `litehive.agents.parsing` to
+  `litehive.agents.report_extraction`. The module extracts a
+  `StageReport` from the latest agent CLI activity entry and raises
+  `MissingVerdictError` when no verdict was submitted; it does not
+  parse raw agent text. Updated production and test imports.
 
 ## Parsing, Domain Model, And Verdict Instructions
 

@@ -7,7 +7,7 @@ from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
 
 from litehive.container import build_subagent_manager
-from litehive.agents.parsing import stage_report_from_subagent
+from litehive.agents.report_extraction import stage_report_from_subagent
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.agent import EngineFailure, SubagentResult
 from litehive.domain.common import FEEDBACK_CAP, TaskStage
