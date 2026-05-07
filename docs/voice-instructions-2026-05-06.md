@@ -1370,9 +1370,14 @@ Legend:
 - [ ] C8. Audit all CLI modules yourself for any remaining business
   logic and move it into domain/container services.
   Source: note 4, 19:15-19:28.
-- [ ] C9. In `cli/engine.py`, inspect the line where config is loaded
+- [x] C9. In `cli/engine.py`, inspect the line where config is loaded
   and then apparently unused. Return or use the config correctly, or
   remove the unnecessary load.
+  Completed 2026-05-07: `engine_command` now validates `status`
+  arguments before building the full container, and only `engine
+  status` loads config. Audit/default/preference/freeze/unfreeze build
+  a workspace handle directly because they do not need the config
+  object.
   Source: note 4, 19:28-20:00.
 - [ ] C10. Split long engine command functions according to the
   25-line function-size rule.

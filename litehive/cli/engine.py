@@ -25,7 +25,7 @@ from litehive.config.runtime_settings import (
     set_default_engine,
     set_engine_preference,
 )
-from litehive.container import build_container
+from litehive.container import build_container, build_workspace
 from litehive.workspace import Workspace
 
 
@@ -52,16 +52,17 @@ def engine_command(
     can be reused across subcommands without exposing six near-
     duplicate command signatures.
     """
-    container = build_container(workspace)
     if action == "status":
         if name:
             print("engine status: does not take positional arguments")
             return 1
+        container = build_container(workspace)
         for line in _render_engine_status_lines(container.config):
             print(line)
         return 0
+    workspace_obj = build_workspace(workspace)
     if action == "audit":
-        for line in _render_engine_audit_lines(container.workspace, key=name, limit=limit):
+        for line in _render_engine_audit_lines(workspace_obj, key=name, limit=limit):
             print(line)
         return 0
     if action == "default":
@@ -73,7 +74,7 @@ def engine_command(
         else:
             default_context = None
         change = set_default_engine(
-            container.workspace,
+            workspace_obj,
             name,
             actor="operator",
             source="cli",
@@ -101,7 +102,7 @@ def engine_command(
             preference_context = None
         try:
             change = set_engine_preference(
-                container.workspace,
+                workspace_obj,
                 preference,
                 actor="operator",
                 source="cli",
@@ -126,7 +127,7 @@ def engine_command(
             print("engine freeze: --until must be ISO date YYYY-MM-DD")
             return 1
         persist_engine_freeze_iso_for_workspace(
-            container.workspace,
+            workspace_obj,
             engine_name=name,
             freeze_iso=freeze_iso,
             actor="operator",
@@ -140,7 +141,7 @@ def engine_command(
         print(f"engine_frozen: {name} until {freeze_iso}" + reason_part)
         return 0
     if not clear_persisted_engine_freeze_for_workspace(
-        container.workspace,
+        workspace_obj,
         engine_name=name,
         actor="operator",
         source="cli",
