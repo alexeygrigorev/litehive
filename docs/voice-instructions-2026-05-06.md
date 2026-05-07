@@ -2261,8 +2261,14 @@ Legend:
   an architecture guardrail that locks those daemon predicate
   annotations to the domain types and a pyrefly snippet regression
   test that verifies `object()` calls fail with `[bad-argument-type]`.
-- [ ] T4. Add a ruff/custom guardrail for `getattr`.
+- [x] T4. Add a ruff/custom guardrail for `getattr`.
   Source: note 4, 40:31-40:58.
+  Completed 2026-05-07: added an architecture guardrail that scans
+  production code for `getattr(...)` and compares each call to an
+  explicit allowlist of existing adapter/CLI boundary exceptions.
+  New production `getattr` calls now fail tests unless removed or
+  intentionally documented in that allowlist. Updated
+  `docs/code-style.md` to point future exceptions at the guardrail.
 - [ ] T5. Add or strengthen guardrails against dictionaries and
   untyped `object` payloads crossing domain boundaries.
   Source: note 3, 27:53-28:24; note 4, 07:55-08:23; note 4,

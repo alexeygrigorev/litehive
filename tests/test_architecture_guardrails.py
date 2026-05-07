@@ -57,6 +57,32 @@ def _annotation_source(node: ast.AST | None) -> str | None:
     return ast.unparse(node)
 
 
+def _parent_map(tree: ast.AST) -> dict[ast.AST, ast.AST]:
+    parents: dict[ast.AST, ast.AST] = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[child] = node
+    return parents
+
+
+def _enclosing_definition_name(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> str:
+    current = node
+    while current in parents:
+        current = parents[current]
+        if isinstance(current, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            return current.name
+    return "<module>"
+
+
+def _literal_attribute_name(node: ast.Call) -> str:
+    if len(node.args) < 2:
+        return "<missing>"
+    name_node = node.args[1]
+    if isinstance(name_node, ast.Constant) and isinstance(name_node.value, str):
+        return name_node.value
+    return "<dynamic>"
+
+
 def _string_constants(tree: ast.AST) -> list[str]:
     return [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)]
 
@@ -233,6 +259,51 @@ def test_daemon_runner_liveness_helpers_remain_domain_typed() -> None:
         "_has_work": ["WorkspaceState"],
         "_runner_is_live": ["RunnerStatusState"],
     }
+
+
+def test_production_getattr_calls_stay_explicitly_allowlisted() -> None:
+    """
+    Block new dynamic attribute access in production code.
+    """
+    allowed = [
+        "litehive/agents/engine_callables.py:resolve_cli_execution_callable:<dynamic>",
+        "litehive/cli/engine.py:_quota_status_error:error",
+        "litehive/cli/engine.py:_render_quota_line:limit_reached",
+        "litehive/cli/engine.py:_render_quota_line:long_term",
+        "litehive/cli/engine.py:_render_quota_line:short_term",
+        "litehive/cli/task_logs_support.py:_pick_runtime_value:<dynamic>",
+        "litehive/cli/workspace.py:quota_health:error",
+        "litehive/cli/workspace.py:quota_health:limit_reached",
+        "litehive/cli/workspace.py:quota_health:long_term",
+        "litehive/cli/workspace.py:quota_health:percent_remaining",
+        "litehive/cli/workspace.py:quota_health:percent_remaining",
+        "litehive/cli/workspace.py:quota_health:short_term",
+        "litehive/lifecycle/engines.py:_selection_task:task_id",
+        "litehive/lifecycle/engines.py:_selection_task:task_id",
+        "litehive/lifecycle/engines.py:select:with_model",
+        "litehive/lifecycle/heru_factory.py:extract_continuation_id:continuation",
+        "litehive/lifecycle/hook_reports.py:hook_specs_from_config:runner_hooks",
+        "litehive/lifecycle/runtime_sync.py:_sync_back:value",
+        "litehive/observability/engine_monitoring.py:_extract_usage_observation:extract_usage_observation",
+        "litehive/observability/status_io.py:_yaml_location_label:problem_mark",
+        "litehive/observability/status_summary.py:_task_engine_label:subagents",
+        "litehive/sandbox/support.py:forced_engine_rw_state_dirs:setenv",
+    ]
+    found: list[str] = []
+    for path in _python_files():
+        tree = _tree(path)
+        parents = _parent_map(tree)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if not isinstance(node.func, ast.Name) or node.func.id != "getattr":
+                continue
+            rel = path.relative_to(REPO_ROOT)
+            owner = _enclosing_definition_name(node, parents)
+            attribute_name = _literal_attribute_name(node)
+            found.append(f"{rel}:{owner}:{attribute_name}")
+
+    assert sorted(found) == sorted(allowed)
 
 
 def test_pyrefly_rejects_daemon_predicate_object_misuse() -> None:

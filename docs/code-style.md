@@ -137,7 +137,8 @@ from tests.support.helpers import make_workspace, run_cli
 - Avoid `getattr` on internal domain/config/runtime objects. It hides
   the real contract from static analysis and readers. If dynamic
   attribute access is genuinely required at an adapter boundary, keep
-  it isolated and explain why.
+  it isolated, explain why, and add it to the explicit allowlist in
+  `tests/test_architecture_guardrails.py`.
 
 ## Control Flow
 
