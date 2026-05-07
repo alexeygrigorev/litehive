@@ -145,12 +145,12 @@ def test_daemon_status_snapshot_uses_shared_status_collector(tmp_path: Path, mon
     monkeypatch.setattr("litehive.daemon.execution.collect_task_pipeline_status_for_workspace", fake_collect)
     monkeypatch.setattr("litehive.daemon.execution.render_task_pipeline_status_lines", fake_render)
 
-    snapshot_state, text = _daemon_status_snapshot(tmp_path)
+    snapshot = _daemon_status_snapshot(tmp_path)
 
-    assert snapshot_state["active_task_id"] == "T-0001"
-    assert snapshot_state["queue"] == ["T-0002"]
-    assert snapshot_state["pool_stop_reason"] == "attention_required"
-    assert text == "workspace: shared\nqueued_tasks: 1\n"
+    assert snapshot.state.active_task_id == "T-0001"
+    assert snapshot.state.queue == ["T-0002"]
+    assert snapshot.state.pool_stop_reason == "attention_required"
+    assert snapshot.text == "workspace: shared\nqueued_tasks: 1\n"
     captured_workspace = captured.pop("workspace")
     assert captured == {
         "read_only": True,

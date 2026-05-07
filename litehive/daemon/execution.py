@@ -12,6 +12,7 @@ itself (``run_daemon_loop``), the detach-and-register flow
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 import logging
 import os
@@ -23,7 +24,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import TextIO, cast
+from typing import TextIO
 
 from litehive.container import build_workspace
 from litehive.config.model import DaemonConfig
@@ -41,6 +42,7 @@ from litehive.observability.venv_health import daemon_broken_venv_message, probe
 from litehive.state.backup import create_scheduled_workspace_backup
 from litehive.state.persist import load_state_for_workspace, set_pool_stop_reason
 from litehive.state.locking import runner_pid_is_alive, runner_status_for_workspace
+from litehive.domain.task import WorkspaceState
 from litehive.workspace import Workspace
 
 from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir_for_workspace
@@ -61,6 +63,22 @@ _DAEMON_TRANSIENT_STOP_REASONS = frozenset(
         PoolStopReason.TASK_REQUEUED,
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class DaemonStatusSnapshot:
+    """
+    Status state plus rendered daemon-loop text for one observation.
+
+    Built by ``_daemon_status_snapshot_for_workspace`` before and
+    after each child ``litehive run`` invocation. Keeping the
+    `WorkspaceState` object intact avoids converting domain state into
+    a loose dictionary just so the daemon can inspect queue and stop
+    fields.
+    """
+
+    state: WorkspaceState
+    text: str
 
 
 def _halt_for_origin_divergence(
@@ -102,14 +120,14 @@ def sleep_with_stop(seconds: float, stop_requested_fn: Callable[[], bool]) -> No
         time.sleep(min(remaining, 1.0))
 
 
-def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
+def _daemon_status_snapshot(workspace: Path) -> DaemonStatusSnapshot:
     """
     Path-based compatibility wrapper for daemon status tests and helpers.
     """
     return _daemon_status_snapshot_for_workspace(build_workspace(workspace))
 
 
-def _daemon_status_snapshot_for_workspace(workspace: Workspace) -> tuple[dict[str, object], str]:
+def _daemon_status_snapshot_for_workspace(workspace: Workspace) -> DaemonStatusSnapshot:
     """
     Capture pool state plus a renderable status block in one read-only pass.
 
@@ -120,9 +138,8 @@ def _daemon_status_snapshot_for_workspace(workspace: Workspace) -> tuple[dict[st
     daemon must not mutate state here, only observe it.
     """
     status = collect_task_pipeline_status_for_workspace(workspace, read_only=True)
-    state = status.state.model_dump(mode="python")
     lines = render_task_pipeline_status_lines(status, workspace=workspace.root, mode="summary")
-    return state, "\n".join(lines) + "\n"
+    return DaemonStatusSnapshot(state=status.state, text="\n".join(lines) + "\n")
 
 
 def default_command_prefix() -> list[str]:
@@ -333,7 +350,7 @@ def _runner_is_live(status) -> bool:
     return getattr(status, "status", None) in {"running", "late"}
 
 
-def _has_work(state: dict[str, object]) -> bool:
+def _has_work(state: WorkspaceState) -> bool:
     """
     True when the pool still has something to do.
 
@@ -341,19 +358,7 @@ def _has_work(state: dict[str, object]) -> bool:
     queue. The loop exits cleanly when this returns false so an empty
     queue doesn't keep the daemon spinning every second.
     """
-    return state.get("active_task_id") is not None or bool(state.get("queue", []) or [])
-
-
-def _pool_stop_reason_from_snapshot(state: dict[str, object]) -> str | None:
-    """
-    Extract the typed pool stop reason from a status snapshot.
-
-    The snapshot comes from ``WorkspaceState.model_dump`` in
-    ``_daemon_status_snapshot_for_workspace``, so the value is the
-    domain field's ``str | None`` shape even though the surrounding
-    dictionary is typed as ``object`` for JSON-like payloads.
-    """
-    return cast("str | None", state.get("pool_stop_reason"))
+    return state.active_task_id is not None or bool(state.queue)
 
 
 def _daemon_should_continue_for_stop_reason(reason: str | None) -> bool:
@@ -578,17 +583,17 @@ def run_daemon_loop(
                     _emit(f"backup_created: {backup_timestamp}", stream=output_stream)
 
             try:
-                pre_state, pre_snapshot = _daemon_status_snapshot_for_workspace(daemon_workspace)
+                pre_snapshot = _daemon_status_snapshot_for_workspace(daemon_workspace)
             except (OSError, RuntimeError, ValueError) as exc:
                 logger.exception("status snapshot raised")
                 _emit(f"status raised: {exc}", stream=output_stream)
                 return 1
-            _emit(pre_snapshot, stream=output_stream)
+            _emit(pre_snapshot.text, stream=output_stream)
 
-            if not _has_work(pre_state):
+            if not _has_work(pre_snapshot.state):
                 _emit("No active or queued tasks remain. Stopping.", stream=output_stream)
                 return 0
-            stop_reason_before = _pool_stop_reason_from_snapshot(pre_state)
+            stop_reason_before = pre_snapshot.state.pool_stop_reason
             if not _daemon_should_continue_for_stop_reason(stop_reason_before):
                 _emit(f"Runner stopped: {stop_reason_before}", stream=output_stream)
                 return 0
@@ -610,15 +615,15 @@ def run_daemon_loop(
                 return run_rc
 
             try:
-                post_state, post_snapshot = _daemon_status_snapshot_for_workspace(daemon_workspace)
+                post_snapshot = _daemon_status_snapshot_for_workspace(daemon_workspace)
             except (OSError, RuntimeError, ValueError) as exc:
                 logger.exception("post-status snapshot raised")
                 _emit(f"post-status raised: {exc}", stream=output_stream)
                 return 1
-            _emit(post_snapshot, stream=output_stream)
+            _emit(post_snapshot.text, stream=output_stream)
 
-            stop_reason = _pool_stop_reason_from_snapshot(post_state)
-            if not _has_work(post_state):
+            stop_reason = post_snapshot.state.pool_stop_reason
+            if not _has_work(post_snapshot.state):
                 _emit("No active or queued tasks remain. Stopping.", stream=output_stream)
                 return 0
             if not _daemon_should_continue_for_stop_reason(stop_reason):

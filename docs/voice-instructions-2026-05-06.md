@@ -2043,10 +2043,16 @@ Legend:
   `Workspace`. Removed the `append_attention_log(...)` free helper
   and updated daemon execution, the merge-resolver git wrapper,
   worktree cleanup, and tests to append through the repository.
-- [ ] DM9. Replace daemon status snapshot tuple/dict return with a
+- [x] DM9. Replace daemon status snapshot tuple/dict return with a
   normal object. If `collect_task_pipeline_status` already returns a
   good object, return that instead of converting to dict.
   Source: note 5, 17:00-17:42.
+  Completed 2026-05-07: added `DaemonStatusSnapshot` with a
+  `WorkspaceState` and rendered text. `_daemon_status_snapshot(...)`
+  and `_daemon_status_snapshot_for_workspace(...)` now return that
+  object instead of a tuple containing a dict, and `run_daemon_loop`
+  reads `active_task_id`, `queue`, and `pool_stop_reason` directly
+  from the typed state.
 - [ ] DM10. Fix daemon docstrings to say where each helper is used
   and why.
   Source: note 5, 17:43-17:48.
