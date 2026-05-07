@@ -23,8 +23,8 @@ from litehive.state.records import (
     get_task_worktree_path,
 )
 from litehive.worktree.paths import (
-    is_managed_worktree_path,
-    resolve_recorded_worktree_path,
+    is_managed_worktree_path_for_workspace,
+    resolve_recorded_worktree_path_for_workspace,
     task_worktree_branch,
 )
 from litehive.workspace import Workspace
@@ -40,17 +40,16 @@ def cleanup_terminal_task_worktree_for_workspace(workspace: Workspace, task: Tas
     best-effort because git refuses to drop a branch a worktree
     still holds — we delete the worktree first and then sweep up.
     """
-    root = workspace.root
     worktree_rel = get_task_worktree_path(task)
     if not worktree_rel:
         return
-    worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
+    worktree_path = resolve_recorded_worktree_path_for_workspace(workspace, worktree_rel)
     if worktree_path is not None and worktree_path.exists():
-        remove_worktree(root, worktree_path, force=True)
+        remove_worktree(workspace.root, worktree_path, force=True)
     clear_task_worktree_path(task)
     workspace.save_task(task)
     branch = task_worktree_branch(task)
-    delete_branch(root, branch)
+    delete_branch(workspace.root, branch)
 
 
 def collect_managed_worktrees_for_workspace(workspace: Workspace) -> list[ManagedWorktree]:
@@ -63,7 +62,6 @@ def collect_managed_worktrees_for_workspace(workspace: Workspace) -> list[Manage
     task id so two operator invocations produce identical output
     and tests don't have to depend on filesystem walk order.
     """
-    root = workspace.root
     state = load_state_for_workspace(workspace)
     if state.active_task_id:
         active_task = workspace.get_task(state.active_task_id)
@@ -77,9 +75,9 @@ def collect_managed_worktrees_for_workspace(workspace: Workspace) -> list[Manage
     worktrees: list[ManagedWorktree] = []
     for task in workspace.list_tasks(strict=False):
         worktree_rel = get_task_worktree_path(task)
-        if not is_managed_worktree_path(root, worktree_rel):
+        if not is_managed_worktree_path_for_workspace(workspace, worktree_rel):
             continue
-        worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
+        worktree_path = resolve_recorded_worktree_path_for_workspace(workspace, worktree_rel)
         if worktree_path is None or not worktree_path.exists() or worktree_rel is None:
             continue
         try:
@@ -119,7 +117,6 @@ def remove_cleanable_worktrees_for_workspace(workspace: Workspace, dry_run: bool
     returns the candidate list without touching disk for the
     ``--dry-run`` flag.
     """
-    root = workspace.root
     worktrees = collect_managed_worktrees_for_workspace(workspace)
     candidates = [item for item in worktrees if item.cleanable]
     skipped_active = [item for item in worktrees if item.active]
@@ -140,7 +137,7 @@ def remove_cleanable_worktrees_for_workspace(workspace: Workspace, dry_run: bool
 
     for item in candidates:
         try:
-            remove_worktree(root, item.worktree_path, force=True)
+            remove_worktree(workspace.root, item.worktree_path, force=True)
             task = workspace.get_task(item.task_id)
             if task is not None:
                 clear_task_worktree_path(task)
