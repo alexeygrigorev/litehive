@@ -21,7 +21,9 @@ load the rest of the package, hiding real import dependencies.
 - ``registry`` — global cross-workspace registry of known workspaces.
 - ``runtime_settings`` — audited per-workspace settings persisted in
   SQLite.
-- ``engine_models`` — engine selection and freeze logic
-  (`select_engine_for_workspace`, `active_engine_freezes`).
+- ``engine_models`` — engine and model selection
+  (`select_engine_for_workspace`, `resolve_model`).
+- ``engine_freezes`` — engine freeze projection and audited persistence
+  (`active_engine_freezes`, `persist_engine_freeze_iso_for_workspace`).
 - ``profiles/`` — process profile loaders, defaults, and rendering.
 """

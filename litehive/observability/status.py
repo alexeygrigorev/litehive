@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Literal
 
 from litehive.attention import waiting_for_you_lines
-from litehive.config.engine_models import active_engine_freezes
+from litehive.config.engine_freezes import active_engine_freezes
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import workspace_path
 from litehive.container import build_workspace

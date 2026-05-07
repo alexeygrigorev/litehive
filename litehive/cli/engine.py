@@ -5,12 +5,12 @@ import typer
 from heru import ENGINE_CHOICES, get_engine
 
 from litehive.cli.common import WorkspaceOption, choice
-from litehive.config.engine_models import (
+from litehive.config.engine_freezes import (
     active_engine_freezes,
     clear_persisted_engine_freeze_for_workspace,
-    parse_engine_freeze_until,
     persist_engine_freeze_iso_for_workspace,
 )
+from litehive.config.engine_models import parse_engine_freeze_until
 from litehive.config.engine_quota import collect_engine_quota_statuses
 from litehive.config.model import LitehiveConfig
 from litehive.config.model import normalize_engine_sequence

@@ -14,13 +14,15 @@ from heru.quota import UsageStatus, UsageWindow
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
+from litehive.config.engine_freezes import (
+    clear_persisted_engine_freeze_for_workspace,
+    persist_engine_freeze_iso_for_workspace,
+)
 from litehive.config.engine_quota import EngineQuotaBlock
 from litehive.config.engine_models import (
     EngineSelection,
     EngineSelectionRequest,
-    clear_persisted_engine_freeze_for_workspace,
     parse_engine_freeze_until,
-    persist_engine_freeze_iso_for_workspace,
     select_engine_for_workspace,
 )
 from litehive.config.loading import load_config
@@ -503,7 +505,7 @@ def test_expired_freeze_not_skipped(tmp_path: Path) -> None:
 
 
 def test_is_engine_frozen_and_active_freezes() -> None:
-    from litehive.config.engine_models import is_engine_frozen, active_engine_freezes
+    from litehive.config.engine_freezes import active_engine_freezes, is_engine_frozen
 
     future = (datetime.now(timezone.utc) + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
     past = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")

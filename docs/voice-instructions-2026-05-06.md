@@ -1805,8 +1805,14 @@ Legend:
   silently drift from the domain relationship. Verified with domain
   role/stage tests and a lifecycle prompt test that a mismatched
   `SWEAgent` subclass is rejected.
-- [ ] R23. Split `config/engine_models.py`; it is too large.
+- [x] R23. Split `config/engine_models.py`; it is too large.
   Source: note 4, 46:23-46:29.
+  Completed 2026-05-07: extracted freeze projection and audited
+  freeze persistence into `litehive.config.engine_freezes`, reducing
+  `engine_models.py` from 478 to 388 lines. Updated production callers
+  (`cli.engine`, `observability.status`) and direct freeze tests to use
+  the new owner while keeping selection's exact freeze/quota path
+  verified through `select_engine_for_workspace(...)`.
 - [ ] R24. Desired config loading shape: load YAML, validate into a
   config object, and use that object. Avoid hand-written validation
   where Pydantic can own it.
