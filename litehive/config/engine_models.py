@@ -366,14 +366,19 @@ def resolve_engine_name(
     engine_override: str | None = None,
 ) -> str:
     """
-    Return just the first engine the task would attempt.
+    Return the first unfrozen engine the task would attempt.
 
     Used by status and diagnostic surfaces that want to display
-    the "primary" engine without running the full attempt loop;
-    the full loop additionally consults frozen/unavailable state
-    and is too heavy for status rendering.
+    the next engine without running the full availability/quota
+    loop. If every candidate is frozen, returns the initial planned
+    engine so callers that require a string still get the task's
+    configured primary engine.
     """
-    return resolve_engine_plan(task, config, engine_override=engine_override)[0]
+    initial_engine_names = resolve_engine_plan(task, config, engine_override=engine_override)
+    attempt_order = _unfrozen_engine_attempt_order(config.engine_attempt_order(initial_engine_names), config)
+    if attempt_order:
+        return attempt_order[0]
+    return initial_engine_names[0]
 
 
 def resolve_engine_attempt_order(
@@ -390,10 +395,17 @@ def resolve_engine_attempt_order(
     chain without executing a stage; freezes are filtered up
     front so the preview reflects current state.
     """
-    order = config.engine_attempt_order(resolve_engine_plan(task, config, engine_override=engine_override))
-    if config.engine_freeze:
-        order = [e for e in order if not is_engine_frozen(config, e)]
-    return order
+    initial_engine_names = resolve_engine_plan(task, config, engine_override=engine_override)
+    return _unfrozen_engine_attempt_order(config.engine_attempt_order(initial_engine_names), config)
+
+
+def _unfrozen_engine_attempt_order(engine_names: list[str], config: LitehiveConfig) -> list[str]:
+    """
+    Filter active freezes from an already-ordered candidate list.
+    """
+    if not config.engine_freeze:
+        return engine_names
+    return [engine_name for engine_name in engine_names if not is_engine_frozen(config, engine_name)]
 
 
 def resolve_engine_plan(

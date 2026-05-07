@@ -1772,11 +1772,18 @@ Legend:
   `requested_model_name` explicitly at every call site, including
   `None`, so absence of an operator model request is visible in the
   exact model-resolution path.
-- [ ] R20. Simplify `resolve_engine_name`,
+- [x] R20. Simplify `resolve_engine_name`,
   `resolve_engine_attempt_order`, and `resolve_engine_plan`. The flow
   should load engine names, choose the first unfrozen engine,
   instantiate it, and stop.
   Source: note 4, 43:40-44:29.
+  Completed 2026-05-07: made `resolve_engine_name(...)` use the same
+  unfrozen attempt order as `resolve_engine_attempt_order(...)` instead
+  of returning the first planned engine blindly. Extracted
+  `_unfrozen_engine_attempt_order(...)` so both helper paths load the
+  initial plan, apply workspace ordering, filter active freezes, and
+  choose the first remaining engine consistently. Added a regression
+  test proving a frozen default resolves to the first unfrozen fallback.
 - [ ] R21. Move recovery-stage and hijackable-stage logic out of
   config into domain types such as `TaskStage` / `TaskRecord`.
   Source: note 4, 44:29-45:49.

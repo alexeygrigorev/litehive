@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from litehive.config.engine_models import (
@@ -86,6 +87,22 @@ def test_config_builds_workspace_engine_attempt_order() -> None:
     config = LitehiveConfig(engine_preference=["gemini", "copilot"])
 
     assert config.engine_attempt_order(["codex"]) == ["codex", "gemini", "copilot"]
+
+
+def test_resolve_engine_name_uses_first_unfrozen_attempt(tmp_path: Path) -> None:
+    future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ensure_workspace(
+        tmp_path,
+        LitehiveConfig(
+            default_engine="codex",
+            engine_preference=["gemini"],
+            engine_freeze={"codex": future},
+        ),
+    )
+    config = load_config(tmp_path)
+    task = create_task(tmp_path, title="Frozen primary")
+
+    assert resolve_engine_name(task, config) == "gemini"
 
 
 def test_resolve_engine_name_uses_default_engine_without_task_override(
