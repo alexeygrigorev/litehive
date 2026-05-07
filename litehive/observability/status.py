@@ -262,13 +262,6 @@ def _first_or_none(items):
     return None
 
 
-def _runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
-    """
-    Path-based compatibility wrapper for callers not yet on ``Workspace``.
-    """
-    return _runner_state_label_for_workspace(build_workspace(workspace.resolve()), runner)
-
-
 def _runner_state_label_for_workspace(workspace: Workspace, runner: RunnerStatusState) -> str:
     """
     Distinguish never-started workspaces from stopped or dead runners.
@@ -287,13 +280,6 @@ def _runner_state_label_for_workspace(workspace: Workspace, runner: RunnerStatus
     if runner.pid is None:
         return "stopped"
     return "dead"
-
-
-def _load_task_read_only(root: Path, task_id: str) -> TaskRecord | None:
-    """
-    Path-based compatibility wrapper for callers not yet on ``Workspace``.
-    """
-    return _load_task_read_only_for_workspace(build_workspace(root.resolve()), task_id)
 
 
 def _load_task_read_only_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | None:
