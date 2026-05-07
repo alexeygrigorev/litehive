@@ -29,7 +29,6 @@ from litehive.state.persist import (
     persist_tasks_and_state_without_runner_guard_for_workspace,
     save_state_without_runner_guard_for_workspace,
 )
-from litehive.state.records import list_tasks
 from litehive.workspace import Workspace
 
 
@@ -68,7 +67,7 @@ def recover_stale_runner_state_for_workspace(
             return False
         # Repair must tolerate disk-only task dirs that are missing runtime
         # rows so one stale record does not block runner recovery.
-        tasks = list_tasks(root, strict=False)
+        tasks = workspace.list_tasks(strict=False)
         tasks_by_id = {task.id: task for task in tasks}
         if not can_attempt_stale_runner_recovery(workspace, tasks_by_id, running_task_ids):
             return False
