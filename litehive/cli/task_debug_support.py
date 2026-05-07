@@ -12,7 +12,6 @@ from pathlib import Path
 import sqlite3
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
-from litehive.agents.session_store import load_subagent_session
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,
@@ -193,7 +192,7 @@ def _print_latest_subagent(root: Path, workspace: Workspace, task) -> None:
         started_at = runtime_sa.started_at
         completed_at = runtime_sa.completed_at
     else:
-        session_data = load_subagent_session(workspace, task.id, ref.id)
+        session_data = workspace.load_subagent_session(task.id, ref.id)
         if session_data:
             exit_code = session_data.get("exit_code")
             started_at = session_data.get("created_at")
@@ -279,7 +278,7 @@ def _read_exit_code(workspace: Workspace, task_id: str, subagent_id: str) -> int
     or non-integer so the caller can render ``-`` instead of a
     fake zero.
     """
-    session = load_subagent_session(workspace, task_id, subagent_id)
+    session = workspace.load_subagent_session(task_id, subagent_id)
     value = session.get("exit_code")
     if isinstance(value, int):
         return value

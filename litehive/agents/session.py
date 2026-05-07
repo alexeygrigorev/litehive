@@ -18,7 +18,6 @@ from litehive.agents.execution_trace import (
 )
 from litehive.agents.artifacts import ArtifactService
 from litehive.agents.session_store import (
-    load_subagent_session,
     save_subagent_artifacts,
 )
 from litehive.agents.session_events import SubagentPidEvent, SubagentStartedEvent
@@ -208,7 +207,7 @@ class SubagentSessionManager:
         written through full session snapshots.
         """
         created_at = utcnow()
-        existing = load_subagent_session(self.workspace, task.id, ref.id)
+        existing = self.workspace.load_subagent_session(task.id, ref.id)
         if isinstance(existing.get("created_at"), str):
             created_at = existing["created_at"]
         session_row = RunningSubagentSessionRow(
@@ -370,7 +369,7 @@ class SubagentSessionManager:
         catching the snapshot mid-update.
         """
         created_at = utcnow()
-        existing = load_subagent_session(self.workspace, task.id, ref.id)
+        existing = self.workspace.load_subagent_session(task.id, ref.id)
         if isinstance(existing.get("created_at"), str):
             created_at = existing["created_at"]
         session_row = self.session_row_for_snapshot(ref, snapshot, created_at)

@@ -3,7 +3,6 @@
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import (
     load_subagent_report,
-    load_subagent_session,
     save_subagent_artifacts,
 )
 from litehive.agents.session_snapshots import InterruptedSubagentSessionRow, SubagentSessionStorageFields
@@ -127,7 +126,7 @@ def _write_interrupted_subagent_artifacts(
     between memory and disk would mean resume picks the wrong action.
     """
     now = utcnow()
-    existing_session = load_subagent_session(workspace, task.id, subagent.id)
+    existing_session = workspace.load_subagent_session(task.id, subagent.id)
     report_payload = load_subagent_report(workspace, task.id, subagent.id)
     if subagent.continuation is None:
         continuation_payload = None

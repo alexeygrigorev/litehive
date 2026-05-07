@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Any
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
-from litehive.agents.session_store import load_subagent_report, load_subagent_session
+from litehive.agents.session_store import load_subagent_report
 from litehive.domain.common import PipelineState, SubagentStatus, Verdict, canonical_pipeline_state, pipeline_stage_key
 from litehive.domain.runtime import RuntimeRecoveryOutcome
 from litehive.workspace import Workspace
@@ -367,7 +367,7 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
     if not subagent_id:
         return None
 
-    session_payload = load_subagent_session(workspace, task_record.id, subagent_id)
+    session_payload = workspace.load_subagent_session(task_record.id, subagent_id)
     report_payload = load_subagent_report(workspace, task_record.id, subagent_id)
     trace_ref = runtime_state or subagent_ref
     if trace_ref is None:

@@ -16,7 +16,6 @@ from litehive.container import build_subagent_manager
 from litehive.agents.session_store import (
     load_subagent_event_stream,
     load_subagent_report,
-    load_subagent_session,
 )
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.agent import EngineFailure, SubagentInactivityTimeout
@@ -454,7 +453,7 @@ def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
     assert result.execution_trace == "implemented via unified events"
 
     report = load_subagent_report(Workspace.from_path(tmp_path), task.id, result.ref.id)
-    session = load_subagent_session(Workspace.from_path(tmp_path), task.id, result.ref.id)
+    session = Workspace.from_path(tmp_path).load_subagent_session(task.id, result.ref.id)
     event_stream = load_subagent_event_stream(Workspace.from_path(tmp_path), task.id, result.ref.id)
 
     assert "did not submit verdict" in report["summary"]
@@ -963,7 +962,7 @@ def test_subagent_manager_survives_nonfatal_start_callback_failure_for_planner(
     result = manager.run(task, role="planner", engine_name="codex", prompt="groom it")
 
     assert result.ref.status == "completed"
-    session = load_subagent_session(Workspace.from_path(tmp_path), task.id, result.ref.id)
+    session = Workspace.from_path(tmp_path).load_subagent_session(task.id, result.ref.id)
     report = load_subagent_report(Workspace.from_path(tmp_path), task.id, result.ref.id)
 
     assert session["pid"] == 4242
@@ -1039,7 +1038,7 @@ def test_subagent_manager_survives_nonfatal_progress_callback_failure_for_planne
     result = manager.run(task, role="planner", engine_name="codex", prompt="groom it")
 
     assert result.ref.status == "completed"
-    session = load_subagent_session(Workspace.from_path(tmp_path), task.id, result.ref.id)
+    session = Workspace.from_path(tmp_path).load_subagent_session(task.id, result.ref.id)
     report = load_subagent_report(Workspace.from_path(tmp_path), task.id, result.ref.id)
 
     assert session["pid"] == 4242
@@ -1126,7 +1125,7 @@ def test_subagent_manager_classifies_completed_inactivity_timeout_as_retryable_t
     assert f"{expected_timeout_seconds:g}s without new stdout" in result.execution.stderr
     assert result.ref.status == "failed"
 
-    session = load_subagent_session(Workspace.from_path(tmp_path), task.id, result.ref.id)
+    session = Workspace.from_path(tmp_path).load_subagent_session(task.id, result.ref.id)
     report = load_subagent_report(Workspace.from_path(tmp_path), task.id, result.ref.id)
     stderr_path = task_dir(tmp_path, task) / result.ref.path / "stderr.txt"
 

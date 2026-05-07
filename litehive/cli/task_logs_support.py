@@ -12,7 +12,6 @@ from datetime import datetime
 from pathlib import Path
 import time
 
-from litehive.agents.session_store import load_subagent_session
 from litehive.cli.task_debug_support import render_task_evidence_for_workspace
 from litehive.config.paths import workspace_path
 from litehive.daemon.logs import latest_run_all_log_dir
@@ -117,7 +116,7 @@ def list_task_subagents_for_workspace(workspace: Workspace, task: TaskRecord) ->
 
     for ref in reversed(task.subagents):
         runtime_state = runtime_by_id.get(ref.id)
-        session = load_subagent_session(workspace, task.id, ref.id)
+        session = workspace.load_subagent_session(task.id, ref.id)
         exit_code = _pick_value(runtime_state, session, "exit_code")
         started_at = _pick_value(runtime_state, session, "started_at", "created_at")
         completed_at = _pick_value(runtime_state, session, "completed_at", "updated_at")

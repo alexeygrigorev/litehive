@@ -18,7 +18,6 @@ from typing import Annotated, cast
 
 import typer
 
-from litehive.agents.session_store import load_subagent_session
 from litehive.container import build_workspace
 from litehive.domain.agent import SubagentId
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
@@ -156,7 +155,7 @@ def _resolve_report_identity(workspace: Workspace, task) -> AgentReportIdentity:
         print("report failed: LITEHIVE_SUBAGENT_ID not set")
         raise SystemExit(1)
 
-    session = load_subagent_session(workspace, task.id, subagent_id)
+    session = workspace.load_subagent_session(task.id, subagent_id)
     if not session:
         print(f"report failed: subagent session {subagent_id} not found for task {task.id}")
         raise SystemExit(1)

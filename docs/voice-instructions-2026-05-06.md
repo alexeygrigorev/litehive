@@ -736,10 +736,22 @@ Legend:
   serializers call `.as_dict()`. Reran focused ruff, pyrefly, sandbox
   integration tests, subagent session/report/manager tests, recovery
   tests, and direct-recovery lifecycle tests.
-- [ ] M36. Move `load_subagent_session` toward
+- [x] M36. Move `load_subagent_session` toward
   `Workspace.load_subagent_session(...)`, `Task.load_subagent_session`
   or another object-owned API.
   Source: note 3, 28:58-29:23.
+  Verified 2026-05-07: added
+  `Workspace.load_subagent_session(task_id, subagent_id)` as the
+  object-owned API and migrated production callers in
+  `SubagentSessionManager`, interrupted-subagent recovery,
+  `litehive agent report`, task logs/debug support, and recovery-role
+  diagnostics. Kept `agents.session_store.load_subagent_session(...)`
+  as the storage implementation behind the workspace method. Verified
+  with `rg` that all non-storage call sites now go through
+  `workspace.load_subagent_session(...)`, then reran focused ruff,
+  pyrefly, subagent manager/recovery tests, agent-report/log/debug
+  CLI tests, prompt serializer tests, and operator status/activity
+  tests.
 - [ ] M37. Collapse the chain from existing session load to
   `load_subagent_artifacts` into a simpler typed call if possible.
   Source: note 3, 29:29-29:48.

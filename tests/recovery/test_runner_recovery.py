@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from litehive.agents.session_store import load_subagent_report, load_subagent_session, save_subagent_artifacts
+from litehive.agents.session_store import load_subagent_report, save_subagent_artifacts
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.runtime import RuntimeStageState, RuntimeSubagentState
@@ -271,7 +271,7 @@ def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> N
     assert task.runtime.execution.interruption.subagent.status == "interrupted"
     _assert_runtime_stage_has_no_removed_fields(task.runtime.pipeline.current_stage)
 
-    session = load_subagent_session(Workspace.from_path(tmp_path), task.id, "SA-1234")
+    session = Workspace.from_path(tmp_path).load_subagent_session(task.id, "SA-1234")
     report = load_subagent_report(Workspace.from_path(tmp_path), task.id, "SA-1234")
     assert session["status"] == report["status"] == "interrupted"
     assert session["resume_stage"] == report["resume_stage"] == "implementing"
