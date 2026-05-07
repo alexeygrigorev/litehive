@@ -9,7 +9,6 @@ output must remain useful when one or more inputs are corrupt.
 """
 
 from dataclasses import asdict, fields
-from pathlib import Path
 import sqlite3
 from typing import Any, Mapping
 
@@ -33,13 +32,6 @@ from litehive.observability.status_types import StatusIssue
 from litehive.state.locking import runner_metadata_present, runner_pid_is_alive
 from litehive.state.store import runtime_store_for_workspace
 from litehive.workspace import Workspace
-
-
-def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssue]]:
-    """
-    Path-based compatibility wrapper for callers not yet on ``Workspace``.
-    """
-    return _load_config_for_status_for_workspace(Workspace.from_path(root))
 
 
 def _load_config_for_status_for_workspace(workspace: Workspace) -> tuple[LitehiveConfig, list[StatusIssue]]:
@@ -222,13 +214,6 @@ def _load_engine_monitoring_for_status(
             ),
         )
         return WorkspaceEngineMonitoring(), [issue]
-
-
-def _load_runner_status_for_status(root: Path) -> tuple[RunnerStatusState, StatusIssue | None]:
-    """
-    Path-based compatibility wrapper for callers not yet on ``Workspace``.
-    """
-    return _load_runner_status_for_status_for_workspace(Workspace.from_path(root))
 
 
 def _load_runner_status_for_status_for_workspace(

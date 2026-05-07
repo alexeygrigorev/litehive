@@ -19,7 +19,6 @@ from a single path:
 from litehive.workspace import Workspace
 # Re-exported public API. Imports kept in `status_diagnostics` so existing
 # `from litehive.observability.status_diagnostics import ...` callers keep working.
-from litehive.observability.status_loaders import _load_runner_status_for_status  # noqa: F401
 from litehive.observability.status_loaders import (
     _load_config_for_status_for_workspace,
     _load_engine_monitoring_for_status,
