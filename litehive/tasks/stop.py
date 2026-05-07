@@ -32,7 +32,6 @@ from litehive.state.persist import (
     load_state_for_workspace,
     persist_task_and_state_without_runner_guard_for_workspace,
 )
-from litehive.state.records import get_task_record, require_task
 from litehive.tasks._process_signals import terminate_subagent_pid
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.queue import active_task_markers_for_workspace, validate_single_active_task_for_workspace
@@ -71,7 +70,7 @@ def _stop_active_task_without_runner_guard(workspace: Workspace, task_id: str) -
         active_task_id = _active_task_id_for_stop(workspace, state)
         if active_task_id != task_id:
             raise WorkspaceConflictError(f"task {task_id} is no longer the active task in this workspace")
-        task = get_task_record(root, task_id)
+        task = workspace.get_task_record(task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         before_task = snapshot_task_audit_state(task)
@@ -195,7 +194,7 @@ def stop_current_task(
             markers = active_task_markers_for_workspace(workspace, state)
             if active_task_id not in markers:
                 return StopTaskSummary(
-                    task=require_task(root, active_task_id),
+                    task=workspace.require_task(active_task_id),
                     runner_pid=runner_pid,
                     signal_sent=True,
                 )
