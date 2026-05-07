@@ -109,6 +109,13 @@ class WorkspaceRegistry:
     def register_path(self, root: Path) -> None:
         """
         Upsert a workspace root with the current timestamp.
+
+        The shape is intentionally a little heavier than a direct SQL
+        call: root canonicalization deduplicates symlinks/relative
+        paths, the mutex + retry wrapper handles concurrent CLI
+        processes, and the one-shot quarantine retry lets a corrupt
+        global registry rebuild itself without blocking workspace
+        bootstrap forever.
         """
         resolved = _canonical_workspace_root(root)
         if resolved is None:

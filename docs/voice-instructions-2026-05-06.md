@@ -1593,9 +1593,15 @@ Legend:
   `config.registry` focused on the registry service, SQLite schema,
   corruption quarantine, and workspace-root row operations. Remaining
   work is to split persistence/query details further.
-- [ ] F11. Simplify `register_workspace_path`; verify whether its
+- [x] F11. Simplify `register_workspace_path`; verify whether its
   complexity is justified.
   Source: note 5, 02:12-02:25.
+  Reviewed 2026-05-07: after F9, `register_workspace_path(...)` is
+  only a boundary wrapper around `WorkspaceRegistry.register_path(...)`.
+  Kept the service-side complexity because existing tests cover the
+  justified behavior: canonicalized deduplication, concurrent
+  registration, lock contention retries, and corruption quarantine.
+  Added that rationale to the method docstring.
 
 ## Runtime Settings And Engine Model Instructions
 
