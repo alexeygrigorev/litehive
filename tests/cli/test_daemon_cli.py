@@ -14,13 +14,11 @@ def _isolate_workspace_resolution(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
 
 
-def test_daemon_status_infers_workspace_from_cwd(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_daemon_status_uses_workspace_cwd(tmp_path: Path, monkeypatch, capsys) -> None:
     _isolate_workspace_resolution(tmp_path, monkeypatch)
     workspace = tmp_path / "workspace"
     ensure_workspace(workspace)
-    nested = workspace / "nested"
-    nested.mkdir()
-    monkeypatch.chdir(nested)
+    monkeypatch.chdir(workspace)
     monkeypatch.setattr(sys, "argv", ["litehive", "daemon", "status"])
 
     exit_code = cli_app.main()
@@ -59,5 +57,5 @@ def test_daemon_status_without_inferred_workspace_errors_clearly(tmp_path: Path,
     output = capsys.readouterr().out
 
     assert exit_code == 1
-    assert "daemon status failed: unable to resolve workspace" in output
+    assert "daemon status failed: unable to load workspace from cwd" in output
     assert not (outside / ".litehive").exists()

@@ -1004,10 +1004,10 @@ def test_root_report_fails_clearly_when_workspace_cannot_be_resolved(tmp_path: P
                 "cannot resolve",
             ],
             standalone_mode=False,
-        )
+    )
 
     assert result.exit_code == 1
-    assert "report failed: unable to resolve workspace" in result.output
+    assert "report failed: unable to load workspace from cwd" in result.output
 
 
 def test_agent_report_accepts_workspace_override(tmp_path: Path, monkeypatch) -> None:

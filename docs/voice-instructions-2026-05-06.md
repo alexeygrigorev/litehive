@@ -1943,10 +1943,19 @@ Legend:
   it with a SQLite task-intent lookup through `state.records.task_exists`
   and added a registry-resolution regression where a stale task
   directory in another workspace must not beat the database owner.
-- [ ] W10. Remove `resolve_workspace_from_search_root` / search repo
+- [x] W10. Remove `resolve_workspace_from_search_root` / search repo
   behavior. If no workspace is passed, use current directory and fail
   if it is not a LiteHive project.
   Source: note 5, 12:39-13:25.
+  Completed 2026-05-07: verified `_resolve_workspace_from_search_root()`
+  was the remaining parent-walk/search helper and `resolve_workspace()`
+  still fell back to registry lookup by task id. Removed the helper and
+  registry fallback from workspace resolution. `resolve_workspace()` now
+  selects explicit `cwd`, `LITEHIVE_WORKSPACE_ROOT`, or `Path.cwd()`
+  directly, then requires that selected directory to already be a
+  Litehive workspace. Updated tests so subdirectories and outside
+  directories fail instead of walking upward or searching registered
+  workspaces.
 - [ ] W11. Remove global workspace registry behavior. The note says
   the global registry of workspaces is no longer wanted.
   Source: note 5, 13:27-13:41.

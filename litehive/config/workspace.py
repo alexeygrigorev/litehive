@@ -135,45 +135,6 @@ def _task_exists_in_state(root: Path, task_id: str) -> bool:
     return task_exists(root, task_id)
 
 
-def _resolve_workspace_from_search_root(
-    search_root: Path,
-    effective_task_id: str | None,
-    register: bool,
-    registry: WorkspaceRegistry,
-) -> Path | None:
-    """
-    Resolve a workspace by walking ancestors of ``search_root``.
-
-    Called by :func:`resolve_workspace` for both the cwd-driven
-    and explicit-cwd lookup phases — same logic, run at two
-    different points in the resolution chain. Returns ``None``
-    when no ancestor directory carries a ``.litehive`` directory
-    that matches the optional task constraint.
-    """
-    resolved_search_root = normalize_workspace_root(search_root, source=f"cwd:{search_root}", registry=registry)
-    if resolved_search_root != search_root:
-        if effective_task_id is None:
-            if register:
-                _register_workspace(resolved_search_root, registry)
-            return resolved_search_root
-        if _task_exists_in_state(resolved_search_root, effective_task_id):
-            if register:
-                _register_workspace(resolved_search_root, registry)
-            return resolved_search_root
-
-    for candidate in (search_root, *search_root.parents):
-        if not workspace_dir(candidate).is_dir():
-            continue
-        resolved = candidate.resolve()
-        if effective_task_id is not None:
-            if not _task_exists_in_state(resolved, effective_task_id):
-                continue
-        if register:
-            _register_workspace(resolved, registry)
-        return resolved
-    return None
-
-
 def resolve_workspace(
     task_id: str | None,
     cwd: Path | None = None,
@@ -183,65 +144,27 @@ def resolve_workspace(
     """
     Pick the right workspace for a CLI invocation.
 
-    Precedence: explicit ``cwd``, ``LITEHIVE_WORKSPACE_ROOT``
-    env, the actual current cwd, and finally the registry by task
-    id. The fallback chain is the contract every CLI command
-    relies on for ``--workspace``-less invocation; reordering it
-    would break invocation patterns that hooks and operator
-    scripts rely on.
+    Precedence: explicit ``cwd``, ``LITEHIVE_WORKSPACE_ROOT`` env,
+    then the actual current cwd. The selected directory must already
+    be a Litehive workspace; resolution no longer walks parent
+    directories or searches the workspace registry by task id.
     """
     effective_task_id = task_id
     if effective_task_id is None and cwd is None:
         effective_task_id = os.environ.get("LITEHIVE_TASK_ID")
     workspace_registry = registry or build_workspace_registry()
-    search_root = (cwd or Path.cwd()).resolve()
-
-    if cwd is not None:
-        resolved = _resolve_workspace_from_search_root(
-            search_root,
-            effective_task_id=effective_task_id,
-            register=register,
-            registry=workspace_registry,
-        )
-        if resolved is not None:
-            return resolved
 
     env_workspace = os.environ.get("LITEHIVE_WORKSPACE_ROOT")
-    if env_workspace:
-        resolved_env_workspace = normalize_workspace_root(
-            Path(env_workspace),
-            source="LITEHIVE_WORKSPACE_ROOT",
-            registry=workspace_registry,
-        )
-        if effective_task_id is None:
-            if register:
-                _register_workspace(resolved_env_workspace, workspace_registry)
-            return resolved_env_workspace
-        if _task_exists_in_state(resolved_env_workspace, effective_task_id):
-            if register:
-                _register_workspace(resolved_env_workspace, workspace_registry)
-            return resolved_env_workspace
+    if cwd is None and env_workspace:
+        workspace_root = require_existing_workspace(Path(env_workspace), source="LITEHIVE_WORKSPACE_ROOT")
+    else:
+        workspace_root = require_existing_workspace(cwd or Path.cwd(), source="cwd")
 
-    resolved = _resolve_workspace_from_search_root(
-        search_root,
-        effective_task_id=effective_task_id,
-        register=register,
-        registry=workspace_registry,
-    )
-    if resolved is not None:
-        return resolved
-
-    if effective_task_id:
-        for root in workspace_registry.list_paths():
-            if _task_exists_in_state(root, effective_task_id):
-                if register:
-                    _register_workspace(root, workspace_registry)
-                return root
-
-    raise ValueError(
-        "unable to resolve workspace: set LITEHIVE_WORKSPACE_ROOT, run inside a Litehive workspace, "
-        "or provide/set LITEHIVE_TASK_ID so the workspace registry can be used"
-    )
+    if effective_task_id is not None and not _task_exists_in_state(workspace_root, effective_task_id):
+        raise ValueError(f"unable to resolve workspace: task {effective_task_id} is not in {workspace_root}")
+    if register:
+        _register_workspace(workspace_root, workspace_registry)
+    return workspace_root
 
 
 def _register_workspace(root: Path, registry: WorkspaceRegistry) -> None:

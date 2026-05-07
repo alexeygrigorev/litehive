@@ -3,7 +3,6 @@ import threading
 
 import pytest
 
-from litehive.config.paths import workspace_path
 from litehive.config.workspace_files import workspace_dir
 from litehive.config.workspace import ensure_workspace, normalize_workspace_root, resolve_workspace
 from litehive.state.records import create_task
@@ -21,43 +20,31 @@ def test_resolve_workspace_uses_workspace_root_env(tmp_path: Path, monkeypatch: 
     assert resolve_workspace(None) == tmp_path.resolve()
 
 
-def test_resolve_workspace_walks_up_and_normalizes_worktree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_workspace_uses_current_directory_without_searching_parents(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Walk up worktree")
 
-    nested = workspace_path(tmp_path, "worktrees") / task.id / "src"
-    nested.mkdir(parents=True)
-
-    monkeypatch.chdir(nested)
-    monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
+    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
 
     assert resolve_workspace(None) == tmp_path.resolve()
 
 
-def test_resolve_workspace_prefers_current_unified_root_worktree_over_registry_task_id_collision(
+def test_resolve_workspace_rejects_subdirectory_without_searching_parents(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
-    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
-
-    workspace_one = tmp_path / "workspace-one"
-    workspace_two = tmp_path / "workspace-two"
-    ensure_workspace(workspace_one)
-    ensure_workspace(workspace_two)
-    task_one = create_task(workspace_one, title="first task")
-    task_two = create_task(workspace_two, title="second task")
-
-    assert task_one.id == task_two.id == "T-0001"
-
-    nested = workspace_path(workspace_two, "worktrees") / task_two.id / "src"
+    ensure_workspace(tmp_path)
+    nested = tmp_path / "src"
     nested.mkdir(parents=True)
 
     monkeypatch.chdir(nested)
-    monkeypatch.setenv("LITEHIVE_TASK_ID", task_two.id)
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
 
-    assert resolve_workspace(None) == workspace_two.resolve()
+    with pytest.raises(ValueError, match="not an existing Litehive project"):
+        resolve_workspace(None)
 
 
 def test_normalize_workspace_root_accepts_plain_root_without_registry_lookup(
@@ -77,78 +64,19 @@ def test_normalize_workspace_root_accepts_plain_root_without_registry_lookup(
     assert normalize_workspace_root(tmp_path, source="test", registry=registry) == tmp_path.resolve()
 
 
-def test_resolve_workspace_uses_registry_from_outside_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    config_home = tmp_path / "xdg-config"
-    data_home = tmp_path / "xdg-data"
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
-    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
-    ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Registry lookup")
-    outside = tmp_path / "outside"
-    outside.mkdir()
-
-    monkeypatch.chdir(outside)
-    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
-    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
-
-    assert resolve_workspace(task.id) == tmp_path.resolve()
-
-
-def test_resolve_workspace_ignores_stale_task_directories_when_using_registry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    config_home = tmp_path / "xdg-config"
-    data_home = tmp_path / "xdg-data"
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
-    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
-
-    owning_workspace = tmp_path / "owning-workspace"
-    stale_workspace = tmp_path / "stale-workspace"
-    ensure_workspace(owning_workspace)
-    task = create_task(owning_workspace, title="SQLite-owned task")
-    ensure_workspace(stale_workspace)
-    stale_task_dir = stale_workspace / ".litehive" / "tasks" / f"{task.id}-stale"
-    stale_task_dir.mkdir(parents=True)
-
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    monkeypatch.chdir(outside)
-    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
-    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
-
-    assert resolve_workspace(task.id) == owning_workspace.resolve()
-
-
-def test_resolve_workspace_uses_injected_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from litehive.config.registry import build_workspace_registry
-
-    registry = build_workspace_registry(path=tmp_path / "registry.db", mutex=threading.RLock())
-    workspace = tmp_path / "workspace"
-    outside = tmp_path / "outside"
-    workspace.mkdir()
-    outside.mkdir()
-    ensure_workspace(workspace, registry=registry)
-    task = create_task(workspace, title="Injected registry")
-
-    monkeypatch.chdir(outside)
-    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
-    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
-
-    assert resolve_workspace(task.id, registry=registry) == workspace.resolve()
-
-
-def test_resolve_workspace_uses_task_registry_when_env_workspace_does_not_own_task(
+def test_resolve_workspace_rejects_env_workspace_when_it_does_not_own_task(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ensure_workspace(tmp_path)
-    task = create_task(tmp_path, title="Registry fallback probe")
+    task = create_task(tmp_path, title="Env task mismatch probe")
     legacy = tmp_path / ".litehive" / "worktrees" / f"{task.id}-bad" / "repo"
     (legacy / ".litehive" / "tasks").mkdir(parents=True)
 
     monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(legacy))
     monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
 
-    assert resolve_workspace(None) == tmp_path.resolve()
+    with pytest.raises(ValueError, match=f"task {task.id} is not in"):
+        resolve_workspace(None)
 
 
 def test_resolve_workspace_fails_clearly_when_it_cannot_be_found(
@@ -161,7 +89,7 @@ def test_resolve_workspace_fails_clearly_when_it_cannot_be_found(
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
 
-    with pytest.raises(ValueError, match="provide/set LITEHIVE_TASK_ID"):
+    with pytest.raises(ValueError, match="not an existing Litehive project"):
         resolve_workspace(None)
 
 
