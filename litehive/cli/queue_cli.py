@@ -16,7 +16,6 @@ from litehive.container import build_workspace
 from litehive.git.ops import GitError, checkpoint_message
 from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
 from litehive.tasks.completed_task_recovery import recover_completed_task_for_workspace
-from litehive.state.records import get_task_record, list_tasks, require_task
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_reason
@@ -45,14 +44,13 @@ def queue_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> 
     if ctx.invoked_subcommand is not None:
         return None
     workspace_obj = build_workspace(workspace)
-    root = workspace_obj.root
     config = workspace_obj.config()
     recover_stale_runner_state_for_workspace(workspace_obj)
     state = load_state_for_workspace(workspace_obj)
-    tasks = list_tasks(root)
+    tasks = workspace_obj.list_tasks()
     print(f"active_task_id: {state.active_task_id}")
     if state.active_task_id is not None:
-        active_task = require_task(root, state.active_task_id)
+        active_task = workspace_obj.require_task(state.active_task_id)
         print(
             f"active: {active_task.id} [{active_task.status}/{active_task.pipeline_status}] "
             f"priority={active_task.priority} engine={task_engine_label(None, config.default_engine)} "
@@ -62,7 +60,7 @@ def queue_group(ctx: typer.Context, workspace: WorkspaceOption = Path.cwd()) -> 
         )
     print(f"queue_length: {len(state.queue)}")
     for index, queued_task_id in enumerate(state.queue, start=1):
-        task = require_task(root, queued_task_id)
+        task = workspace_obj.require_task(queued_task_id)
         print(
             f"{index}. {task.id} [{task.status}/{task.pipeline_status}] "
             f"priority={task.priority} engine={task_engine_label(None, config.default_engine)} "
@@ -125,7 +123,7 @@ def promote(
     ensure_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
-        task = require_task(workspace, task_id)
+        task = workspace_obj.require_task(task_id)
         if task.status in {TaskStatus.INTERRUPTED, TaskStatus.PARKED, TaskStatus.FLAGGED, TaskStatus.CLOSED}:
             task = resume_task_for_workspace(workspace_obj, task_id, front=True)
             print(f"task: {task.id} {task.title}")
@@ -163,10 +161,10 @@ def requeue(
     flagging counters).
     """
     ensure_workspace(workspace)
-    task = get_task_record(workspace, task_id)
+    workspace_obj = build_workspace(workspace)
+    task = workspace_obj.get_task_record(task_id)
     if task is not None and (task.pipeline_status == PipelineStatus.DONE or task.status == TaskStatus.DONE):
         return recover(task_id, workspace)
-    workspace_obj = build_workspace(workspace)
     try:
         task = requeue_task_for_workspace(workspace_obj, task_id, front=front, force=force)
     except (ValueError, WorkspaceConflictError) as exc:
