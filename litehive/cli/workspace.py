@@ -47,7 +47,6 @@ from litehive.observability.status_diagnostics import (
 from litehive.recovery.workspace_repair import repair_workspace_state
 from litehive.state.records import list_tasks_state_first
 from litehive.state.persist import load_state
-from litehive.state.records import list_tasks
 from litehive.domain.task_ops import WorkspaceConflictError, WorkspaceRepairSummary
 from litehive.worktree.cleanup import collect_managed_worktrees
 from litehive.worktree.inspection import inspect_dirty_worktree_gate
@@ -158,7 +157,7 @@ def status_command(
             retry_on_label=format_retry_on(status.config),
         ):
             print(line)
-        tasks = list_tasks(root, strict=False)
+        tasks = ws.list_tasks(strict=False)
         if tasks:
             print()
             for task in tasks:

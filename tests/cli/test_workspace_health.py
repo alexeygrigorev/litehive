@@ -317,11 +317,11 @@ def test_full_status_command_lists_tasks_with_strict_false(tmp_path: Path, monke
         lambda task_status, *, workspace, mode, retry_on_label=None: ["workspace: demo"],
     )
 
-    def fake_list_tasks(workspace, *, strict=True):
+    def fake_list_tasks(self, *, strict=True):
         captured["strict"] = strict
         return []
 
-    monkeypatch.setattr("litehive.cli.workspace.list_tasks", fake_list_tasks)
+    monkeypatch.setattr("litehive.cli.workspace.Workspace.list_tasks", fake_list_tasks)
     monkeypatch.setattr("litehive.cli.workspace.print_status_issues", lambda issues: 0)
 
     exit_code = status_command(tmp_path, full=True)
