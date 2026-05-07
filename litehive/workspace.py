@@ -199,6 +199,15 @@ class Workspace:
 
         return _get_task(self.root, task_id)
 
+    def get_task_record(self, task_id: str) -> "TaskRecord | None":
+        """
+        Return one task record, tolerating a missing runtime row.
+        """
+        # inline: see list_tasks import note above.
+        from litehive.state.records import get_task_record as _get_task_record  # noqa: PLC0415
+
+        return _get_task_record(self.root, task_id)
+
     def require_task(self, task_id: str) -> "TaskRecord":
         """
         Return one task record or raise the standard missing-task error.

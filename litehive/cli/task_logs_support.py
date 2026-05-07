@@ -17,7 +17,6 @@ from litehive.cli.task_debug_support import render_task_evidence_for_workspace
 from litehive.config.paths import workspace_path
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.domain.task import TaskRecord
-from litehive.state.records import get_task_record, list_tasks
 from litehive.tasks.journal import render_task_journal
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 from litehive.workspace import Workspace
@@ -420,10 +419,9 @@ def resolve_follow_task_for_workspace(workspace: Workspace, task_id: str | None)
     mid-run and land on the obviously interesting task without
     typing its id.
     """
-    root = workspace.root
     if task_id is not None:
-        return get_task_record(root, task_id)
-    tasks = list_tasks(root, strict=False)
+        return workspace.get_task_record(task_id)
+    tasks = workspace.list_tasks(strict=False)
     active = next((task for task in tasks if task.runtime.execution.active_subagent is not None), None)
     if active is not None:
         return active
@@ -447,7 +445,7 @@ def load_task_with_runtime_for_workspace(workspace: Workspace, task_id: str) -> 
     the seam where richer runtime hydration can land if the logs
     surface needs it.
     """
-    return get_task_record(workspace.root, task_id)
+    return workspace.get_task_record(task_id)
 
 
 def _coerce_datetime(value: str | datetime) -> datetime:
