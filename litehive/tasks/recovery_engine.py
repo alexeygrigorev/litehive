@@ -40,5 +40,5 @@ def resolve_recovery_engine(
         require_available=True,
     )
     if selection.engine_name is None:
-        raise GitError(selection.blocked_reason or "no eligible recovery engine available")
+        raise GitError(selection.blocked_reason)
     return selection.engine_name, selection.model_name

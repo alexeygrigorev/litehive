@@ -60,14 +60,15 @@ class EngineSelection:
         model_name: Selected model for engines that support model overrides.
         engine_attempts: Candidate engines considered after freeze filtering.
         skipped: Candidate engines rejected during availability/quota checks.
-        blocked_reason: Summary reason when no engine can be selected.
+        blocked_reason: Summary reason when no engine can be selected; empty
+            for successful selections.
     """
 
     engine_name: str | None
     model_name: str | None
     engine_attempts: list[str]
     skipped: list[EngineSkip]
-    blocked_reason: str | None = None
+    blocked_reason: str = ""
 
 
 def _candidate_engine_order(
@@ -342,8 +343,6 @@ def workspace_model_for_engine(config: LitehiveConfig, engine_name: str) -> str 
     workspace has not pinned one so :func:`resolve_model` can
     fall through to the engine adapter's own default.
     """
-    if engine_name == "codex":
-        return config.codex_model
     if engine_name == "opencode":
         return config.opencode_model
     if engine_name == "goz":

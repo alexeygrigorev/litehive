@@ -1670,9 +1670,19 @@ Legend:
   Source: note 4, 37:22-37:49.
   Completed 2026-05-07: added class and attribute documentation for
   `EngineSkip`, `EngineSelection`, and `EngineQuotaBlock`.
-- [ ] R10. Remove unnecessary `None` fields from engine model
+- [x] R10. Remove unnecessary `None` fields from engine model
   dataclasses.
   Source: note 4, 37:49-37:56.
+  Completed 2026-05-07: changed `EngineSelection.blocked_reason`
+  from `str | None` to a plain string. Successful selections carry an
+  empty reason, while blocked selections already produce a concrete
+  reason string. Kept `engine_name` and `model_name` nullable because
+  they represent real states: no eligible engine and engines without
+  model overrides.
+  Follow-up 2026-05-07: removed `codex_model` from `LitehiveConfig`,
+  the workspace config template, and integration helper model lookup.
+  Codex does not support model overrides, so the optional field could
+  only carry a permanent `None`.
 - [x] R11. Move parse helpers such as `parse at time you receive`,
   `parse_engine_freeze_until`, and possibly quota parsing to a
   utility or Heru/engine-owned module.
