@@ -646,23 +646,6 @@ def ensure_future_task_mutation_allowed_for_workspace(
         )
 
 
-def persist_future_task_update(
-    root: Path,
-    task: TaskRecord,
-    journal_message: str | None = None,
-    audit_entries: list["TaskAuditEntry"] | None = None,
-) -> None:
-    """
-    Path-based compatibility wrapper for future-task persistence.
-    """
-    persist_future_task_update_for_workspace(
-        Workspace.from_path(root),
-        task,
-        journal_message=journal_message,
-        audit_entries=audit_entries,
-    )
-
-
 def persist_future_task_update_for_workspace(
     workspace: Workspace,
     task: TaskRecord,
