@@ -345,6 +345,15 @@ def touch_daemon_for_workspace(workspace: Workspace, pid: int | None = None) -> 
 @contextmanager
 def stale_daemon_metadata(workspace: Path):
     """
+    Path-based compatibility wrapper for stale daemon metadata reads.
+    """
+    with stale_daemon_metadata_for_workspace(Workspace.from_path(workspace)) as metadata:
+        yield metadata
+
+
+@contextmanager
+def stale_daemon_metadata_for_workspace(workspace: Workspace):
+    """
     Yield stale daemon metadata without mutating the lock file.
 
     Used by recovery and operator-facing diagnostics that want to
@@ -353,7 +362,7 @@ def stale_daemon_metadata(workspace: Path):
     Yields ``None`` when the registration is healthy or absent so
     callers can keep their handler symmetric.
     """
-    metadata = daemon_metadata(workspace)
+    metadata = daemon_metadata_for_workspace(workspace)
     if metadata is None or metadata.status != "stale":
         yield None
         return
