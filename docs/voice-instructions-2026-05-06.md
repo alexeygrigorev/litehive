@@ -1998,10 +1998,14 @@ Legend:
   as absence, continues only for `QUEUE_EXHAUSTED` and
   `TASK_REQUEUED`, and stops on unknown strings such as `"None"`.
   Added a focused daemon test for the explicit continuation policy.
-- [ ] DM3. Move `check_origin_divergence` to git-owned code.
+- [x] DM3. Move `check_origin_divergence` to git-owned code.
   `halt_for_origin_divergence` may remain daemon-owned if it is the
   daemon reaction.
   Source: note 5, 14:58-15:23.
+  Completed 2026-05-07: moved `check_origin_divergence(...)` from
+  daemon execution into `git.ops`; daemon execution and status probes
+  now call the git-owned helper while the daemon-specific halt reaction
+  remains in `daemon.execution`.
 - [ ] DM4. Review output-stream usage in daemon functions; output
   stream should not leak through unrelated daemon logic.
   Source: note 5, 15:23-15:42.

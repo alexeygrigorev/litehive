@@ -23,6 +23,7 @@ from litehive.daemon.registry import daemon_metadata
 from litehive.domain.common import PipelineStatus, RuntimeStageStatus, TaskExecutionStatus, TaskStatus
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
+from litehive.git.ops import check_origin_divergence
 from litehive.observability.status_io import _heartbeat_age_seconds
 from litehive.observability.status_types import (
     StatusIssue,
@@ -215,10 +216,6 @@ def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIs
     """
     if state.pool_stop_reason != "diverged_from_origin":
         return []
-    # inline: daemon.execution top-level-imports observability.status, which
-    # top-level-imports this module (would cycle).
-    from litehive.daemon.execution import check_origin_divergence  # noqa: PLC0415
-
     message = check_origin_divergence(root)
     if message is not None:
         detail = message

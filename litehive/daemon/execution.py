@@ -30,7 +30,7 @@ from litehive.config.workspace import create_workspace
 from litehive.attention import append_attention_log
 from litehive.domain.pool import PoolStopReason
 from litehive.db.schema import apply_pending_migrations
-from litehive.git.ops import fetch, is_ancestor, list_remote_names, rev_parse_verify
+from litehive.git.ops import check_origin_divergence
 from litehive.observability.status import (
     collect_task_pipeline_status_for_workspace,
     render_runner_status_line,
@@ -60,49 +60,6 @@ _DAEMON_TRANSIENT_STOP_REASONS = frozenset(
         PoolStopReason.TASK_REQUEUED,
     }
 )
-
-
-def check_origin_divergence(workspace: Path) -> str | None:
-    """
-    Return a human-readable reason if local ``main`` has diverged from ``origin/main``.
-
-    Pool safety depends on the relationship between ``main`` and
-    ``origin/main`` regardless of where ``HEAD`` currently points,
-    because litehive worktrees branch off ``main``: a divergence
-    means tasks would build on a base operators have not seen on the
-    remote.
-
-    Returns ``None`` for "not our concern" cases — not a git repo, no
-    ``origin`` remote, missing refs, network failures fetching, or
-    fast-forward in either direction. Returns a reason string only
-    on real divergence so the daemon halt path fires only when human
-    reconciliation is required.
-    """
-    if not (workspace / ".git").exists():
-        return None
-    if "origin" not in list_remote_names(workspace):
-        return None
-    ok, stderr = fetch(workspace, "origin", "main")
-    if not ok:
-        logger.warning("git fetch origin main failed: %s", stderr)
-        return None
-    local_sha = rev_parse_verify(workspace, "main")
-    remote_sha = rev_parse_verify(workspace, "origin/main")
-    if local_sha is None or remote_sha is None:
-        return None
-    if local_sha == remote_sha:
-        return None
-    # Either side being an ancestor of the other is a fast-forward — not diverged.
-    if is_ancestor(workspace, local_sha, remote_sha):
-        return None
-    if is_ancestor(workspace, remote_sha, local_sha):
-        return None
-    return (
-        f"local main ({local_sha[:8]}) and origin/main ({remote_sha[:8]}) have diverged. "
-        "Manual reconciliation required: run `git fetch origin main`, inspect "
-        "`git log --oneline --left-right main...origin/main`, then rebase, reset, or merge "
-        "before restarting the pool."
-    )
 
 
 def _halt_for_origin_divergence(

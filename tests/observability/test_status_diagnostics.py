@@ -437,7 +437,7 @@ def test_status_reports_origin_divergence_as_attention_required(tmp_path: Path, 
     create_workspace(tmp_path)
     save_state(tmp_path, WorkspaceState(pool_stop_reason="diverged_from_origin"))
     monkeypatch.setattr(
-        "litehive.daemon.execution.check_origin_divergence",
+        "litehive.observability.status_probes.check_origin_divergence",
         lambda workspace: (
             "local main (12345678) and origin/main (abcdef12) have diverged. "
             "Manual reconciliation required: run `git fetch origin main`, inspect "

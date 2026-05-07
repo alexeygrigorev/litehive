@@ -11,10 +11,13 @@ and the commit-message templating used by the runner. New helpers
 land here rather than as ad-hoc subprocess calls in callers.
 """
 
+import logging
 import subprocess
 from pathlib import Path
 
 from litehive.domain.task import TaskRecord
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CHECKPOINT_SUBJECT_TEMPLATE = "litehive: complete {task_id} {slug}"
 CHECKPOINT_ATTEMPT_SUFFIX_TEMPLATE = "{base} (attempt {attempt})"
@@ -172,6 +175,44 @@ def fetch(cwd: Path, remote: str, *refs: str) -> tuple[bool, str]:
     """
     proc = _run_git(cwd, "fetch", remote, *refs)
     return proc.returncode == 0, proc.stderr.strip()
+
+
+def check_origin_divergence(workspace: Path) -> str | None:
+    """
+    Return a message when local ``main`` diverged from ``origin/main``.
+
+    The daemon calls this before starting a runner iteration, but the
+    behavior is pure git policy: fetch origin/main, compare both refs,
+    and treat equality or either fast-forward direction as safe.
+    Returning ``None`` for non-git workspaces, missing origin refs, and
+    fetch failures keeps daemon halt behavior reserved for confirmed
+    divergence rather than transient git transport problems.
+    """
+    if not (workspace / ".git").exists():
+        return None
+    if "origin" not in list_remote_names(workspace):
+        return None
+    ok, stderr = fetch(workspace, "origin", "main")
+    if not ok:
+        logger.warning("git fetch origin main failed: %s", stderr)
+        return None
+    local_sha = rev_parse_verify(workspace, "main")
+    remote_sha = rev_parse_verify(workspace, "origin/main")
+    if local_sha is None or remote_sha is None:
+        return None
+    if local_sha == remote_sha:
+        return None
+    # Either side being an ancestor of the other is a fast-forward.
+    if is_ancestor(workspace, local_sha, remote_sha):
+        return None
+    if is_ancestor(workspace, remote_sha, local_sha):
+        return None
+    return (
+        f"local main ({local_sha[:8]}) and origin/main ({remote_sha[:8]}) have diverged. "
+        "Manual reconciliation required: run `git fetch origin main`, inspect "
+        "`git log --oneline --left-right main...origin/main`, then rebase, reset, or merge "
+        "before restarting the pool."
+    )
 
 
 def delete_branch(cwd: Path, branch: str) -> None:
@@ -977,5 +1018,4 @@ def checkpoint_message(task: TaskRecord, attempt: int | None = None) -> str:
     if attempt > 1 and _uses_generated_commit_message(task):
         return _with_attempt_suffix(base, attempt)
     return base
-
 
