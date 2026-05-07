@@ -367,7 +367,8 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
     if not subagent_id:
         return None
 
-    session_payload = workspace.load_subagent_session(task_record.id, subagent_id)
+    session_record = workspace.load_subagent_session_record(task_record.id, subagent_id)
+    session_payload = session_record.values
     report_payload = load_subagent_report(workspace, task_record.id, subagent_id)
     trace_ref = runtime_state or subagent_ref
     if trace_ref is None:
@@ -390,9 +391,7 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
     if runtime_state is not None:
         exit_code = runtime_state.exit_code
     if exit_code is None:
-        session_exit_code = session_payload.get("exit_code")
-        if isinstance(session_exit_code, int):
-            exit_code = session_exit_code
+        exit_code = session_record.exit_code
 
     if runtime_state is not None:
         runtime_role = runtime_state.role

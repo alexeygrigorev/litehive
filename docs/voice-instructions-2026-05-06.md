@@ -766,7 +766,7 @@ Legend:
   bundle consumers call `load_subagent_artifacts(...)`, then reran
   focused ruff, pyrefly, session-store tests, subagent manager tests,
   event-stream tests, and recovery tests.
-- [ ] M38. Remove `isinstance(existing.get("created_at"), ...)` by
+- [x] M38. Remove `isinstance(existing.get("created_at"), ...)` by
   making session loading return a typed object, not a dictionary.
   Source: note 3, 29:55-30:15.
   Progress 2026-05-07: added
@@ -797,8 +797,12 @@ Legend:
   `Workspace.load_subagent_session_record(...)` for persisted
   exit-code and duration fields, leaving runtime-state precedence in
   a runtime-only helper.
-  Remaining work: replace the broader session dictionary with a typed
-  loaded-session object.
+  Verified 2026-05-07: moved the last production
+  `Workspace.load_subagent_session(...)` reader, recovery prompt
+  assembly, to `Workspace.load_subagent_session_record(...)` while
+  preserving the dictionary payload in the prompt context. `rg` now
+  shows `load_subagent_session(...)` only at the compatibility method
+  and storage implementation; production callers use the typed record.
 - [ ] M39. Review continuation handling. If continuation is always
   required in a given flow, remove `None`; if not, model the distinct
   start/continue states.
