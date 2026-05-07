@@ -66,6 +66,10 @@ class LoadedSubagentSession:
         return self._non_empty_string("role")
 
     @property
+    def updated_at(self) -> str | None:
+        return self._non_empty_string("updated_at")
+
+    @property
     def exit_code(self) -> int | None:
         value = self.values.get("exit_code")
         if isinstance(value, int):

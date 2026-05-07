@@ -192,11 +192,11 @@ def _print_latest_subagent(root: Path, workspace: Workspace, task) -> None:
         started_at = runtime_sa.started_at
         completed_at = runtime_sa.completed_at
     else:
-        session_data = workspace.load_subagent_session(task.id, ref.id)
-        if session_data:
-            exit_code = session_data.get("exit_code")
-            started_at = session_data.get("created_at")
-            completed_at = session_data.get("updated_at")
+        session = workspace.load_subagent_session_record(task.id, ref.id)
+        if session:
+            exit_code = session.exit_code
+            started_at = session.created_at
+            completed_at = session.updated_at
 
     produced_output = False
     trace = None

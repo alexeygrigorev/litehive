@@ -791,6 +791,8 @@ Legend:
   Progress 2026-05-07: added
   `LoadedSubagentSession.exit_code` and moved task debug's
   subagent-line exit-code reader to the typed session API.
+  Progress 2026-05-07: added `LoadedSubagentSession.updated_at`
+  and moved the latest-subagent debug summary to typed session fields.
   Remaining work: replace the broader session dictionary with a typed
   loaded-session object.
 - [ ] M39. Review continuation handling. If continuation is always
