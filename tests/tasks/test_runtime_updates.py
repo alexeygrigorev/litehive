@@ -9,13 +9,14 @@ from litehive.domain.reports import StageReport
 from litehive.domain.runtime import RuntimeInterruptionState, RuntimeStageState
 from litehive.state.records import create_task, require_task, save_task
 from litehive.tasks.runtime import (
-    mark_stage_finished,
-    mark_stage_started,
+    mark_stage_finished_for_workspace,
+    mark_stage_started_for_workspace,
     mark_subagent_finished,
     mark_subagent_started,
     mark_task_outcome,
-    mark_task_run_started,
+    mark_task_run_started_for_workspace,
 )
+from litehive.workspace import Workspace
 
 
 def _subagent_ref() -> SubagentRef:
@@ -46,7 +47,9 @@ def test_mark_task_run_started_resets_stage_and_active_subagent(tmp_path: Path) 
     create_workspace(tmp_path)
     task = create_task(tmp_path, title="Reset runtime")
 
-    mark_stage_started(tmp_path, task, "implementing")
+    workspace = Workspace.from_path(tmp_path)
+
+    mark_stage_started_for_workspace(workspace, task, "implementing")
     task = require_task(tmp_path, task.id)
     mark_subagent_started(tmp_path, task, _subagent_ref())
 
@@ -54,7 +57,7 @@ def test_mark_task_run_started_resets_stage_and_active_subagent(tmp_path: Path) 
     task.runtime.execution.interruption = RuntimeInterruptionState(source="runner", reason="stale state")
     save_task(tmp_path, task)
 
-    mark_task_run_started(tmp_path, task)
+    mark_task_run_started_for_workspace(workspace, task)
 
     refreshed = require_task(tmp_path, task.id)
     assert refreshed.runtime.pipeline.execution_status == "running"
@@ -69,7 +72,9 @@ def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_pat
     create_workspace(tmp_path)
     task = create_task(tmp_path, title="Finish stage")
 
-    mark_stage_started(tmp_path, task, "implementing")
+    workspace = Workspace.from_path(tmp_path)
+
+    mark_stage_started_for_workspace(workspace, task, "implementing")
     task = require_task(tmp_path, task.id)
     report = StageReport(
         task_id=task.id,
@@ -78,7 +83,7 @@ def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_pat
         summary="implemented the change",
     )
 
-    mark_stage_finished(tmp_path, task, report)
+    mark_stage_finished_for_workspace(workspace, task, report)
 
     refreshed = require_task(tmp_path, task.id)
     assert refreshed.runtime.pipeline.current_stage.stage is None

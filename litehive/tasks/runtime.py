@@ -133,13 +133,28 @@ def mark_task_run_started(root: Path, task: TaskRecord) -> None:
     observers (status panels, daemons) can see "running" the moment the
     transition happens rather than only after the first stage emits.
     """
+    apply_task_run_started(task)
+    save_task_runtime(root, task)
+
+
+def mark_task_run_started_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
+    """
+    Record a run start through an injected workspace.
+    """
+    apply_task_run_started(task)
+    save_task_runtime_for_workspace(workspace, task)
+
+
+def apply_task_run_started(task: TaskRecord) -> None:
+    """
+    In-memory variant of ``mark_task_run_started``.
+    """
     now = clear_task_run_activity(task, execution_status=TaskExecutionStatus.RUNNING, clear_interruption=True)
     task.runtime.pipeline.run_started_at = now
     task.runtime.pipeline.retry_count = 0
     task.runtime.pipeline.retry_limit = task.runtime.pipeline.retry_limit
     task.runtime.pipeline.last_outcome = TaskOutcomeState()
     task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now)
-    save_task_runtime(root, task)
 
 
 def mark_task_run_finished(root: Path, task: TaskRecord, final_status: TaskExecutionStatus | str) -> None:
@@ -151,8 +166,27 @@ def mark_task_run_finished(root: Path, task: TaskRecord, final_status: TaskExecu
     queue ownership; the queue-touching variant is
     ``finish_task_run_transition``.
     """
-    clear_task_run_activity(task, execution_status=final_status)
+    apply_task_run_finished(task, final_status)
     save_task_runtime(root, task)
+
+
+def mark_task_run_finished_for_workspace(
+    workspace: Workspace,
+    task: TaskRecord,
+    final_status: TaskExecutionStatus | str,
+) -> None:
+    """
+    Persist the closing execution status through an injected workspace.
+    """
+    apply_task_run_finished(task, final_status)
+    save_task_runtime_for_workspace(workspace, task)
+
+
+def apply_task_run_finished(task: TaskRecord, final_status: TaskExecutionStatus | str) -> None:
+    """
+    In-memory variant of ``mark_task_run_finished``.
+    """
+    clear_task_run_activity(task, execution_status=final_status)
 
 
 def apply_flag_count_auto_defer(task: TaskRecord) -> None:
@@ -389,10 +423,25 @@ def mark_stage_started(root: Path, task: TaskRecord, stage: str) -> None:
     surfaces would have to infer the current stage from the most recent
     pipeline transition.
     """
+    apply_stage_started(task, stage)
+    save_task_runtime(root, task)
+
+
+def mark_stage_started_for_workspace(workspace: Workspace, task: TaskRecord, stage: str) -> None:
+    """
+    Record stage entry through an injected workspace.
+    """
+    apply_stage_started(task, stage)
+    save_task_runtime_for_workspace(workspace, task)
+
+
+def apply_stage_started(task: TaskRecord, stage: str) -> None:
+    """
+    In-memory variant of ``mark_stage_started``.
+    """
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.pipeline.current_stage = _running_stage_state(stage, started_at=now)
-    save_task_runtime(root, task)
 
 
 def mark_stage_finished(root: Path, task: TaskRecord, report: StageReport) -> None:
@@ -406,6 +455,15 @@ def mark_stage_finished(root: Path, task: TaskRecord, report: StageReport) -> No
     del report
     apply_stage_finished(task)
     save_task_runtime(root, task)
+
+
+def mark_stage_finished_for_workspace(workspace: Workspace, task: TaskRecord, report: StageReport) -> None:
+    """
+    Record stage exit through an injected workspace.
+    """
+    del report
+    apply_stage_finished(task)
+    save_task_runtime_for_workspace(workspace, task)
 
 
 def apply_stage_finished(task: TaskRecord) -> None:
