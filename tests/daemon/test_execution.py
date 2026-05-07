@@ -4,7 +4,12 @@ import subprocess
 from types import SimpleNamespace
 
 from litehive.config.workspace import create_workspace
-from litehive.daemon.execution import _daemon_status_snapshot, check_origin_divergence, run_daemon_loop
+from litehive.daemon.execution import (
+    _daemon_should_continue_for_stop_reason,
+    _daemon_status_snapshot,
+    check_origin_divergence,
+    run_daemon_loop,
+)
 from litehive.config.model import LitehiveConfig
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import WorkspaceState
@@ -158,6 +163,14 @@ def test_daemon_status_snapshot_uses_shared_status_collector(tmp_path: Path, mon
     }
     assert isinstance(captured_workspace, Workspace)
     assert captured_workspace.root == tmp_path.resolve()
+
+
+def test_daemon_continues_only_for_absent_or_transient_stop_reasons() -> None:
+    assert _daemon_should_continue_for_stop_reason(None) is True
+    assert _daemon_should_continue_for_stop_reason("queue_exhausted") is True
+    assert _daemon_should_continue_for_stop_reason("task_requeued") is True
+    assert _daemon_should_continue_for_stop_reason("None") is False
+    assert _daemon_should_continue_for_stop_reason("attention_required") is False
 
 
 def test_check_origin_divergence_compares_main_even_when_head_is_elsewhere(tmp_path: Path) -> None:

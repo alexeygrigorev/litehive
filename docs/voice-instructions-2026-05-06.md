@@ -1988,9 +1988,16 @@ Legend:
   exit polling, and startup polling from workspace config. Updated
   daemon tests to configure those values through `LitehiveConfig`
   instead of monkey-patching daemon module constants.
-- [ ] DM2. Remove unclear `continue, None, None` stop-reason logic.
+- [x] DM2. Remove unclear `continue, None, None` stop-reason logic.
   Model stop reasons explicitly.
   Source: note 5, 14:37-14:58.
+  Completed 2026-05-07: replaced the daemon's raw
+  `{None, "None", "queue_exhausted", "task_requeued"}` continuation
+  set with `PoolStopReason`-typed transient reasons. The daemon now
+  extracts `pool_stop_reason` as `str | None`, treats actual `None`
+  as absence, continues only for `QUEUE_EXHAUSTED` and
+  `TASK_REQUEUED`, and stops on unknown strings such as `"None"`.
+  Added a focused daemon test for the explicit continuation policy.
 - [ ] DM3. Move `check_origin_divergence` to git-owned code.
   `halt_for_origin_divergence` may remain daemon-owned if it is the
   daemon reaction.

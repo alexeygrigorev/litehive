@@ -22,12 +22,13 @@ import subprocess
 import sys
 import threading
 import time
-from typing import TextIO
+from typing import TextIO, cast
 
 from litehive.container import build_workspace
 from litehive.config.model import DaemonConfig
 from litehive.config.workspace import create_workspace
 from litehive.attention import append_attention_log
+from litehive.domain.pool import PoolStopReason
 from litehive.db.schema import apply_pending_migrations
 from litehive.git.ops import fetch, is_ancestor, list_remote_names, rev_parse_verify
 from litehive.observability.status import (
@@ -53,7 +54,12 @@ from .registry import (
 
 logger = logging.getLogger(__name__)
 
-_CONTINUE_STOP_REASONS = {None, "None", "queue_exhausted", "task_requeued"}
+_DAEMON_TRANSIENT_STOP_REASONS = frozenset(
+    {
+        PoolStopReason.QUEUE_EXHAUSTED,
+        PoolStopReason.TASK_REQUEUED,
+    }
+)
 
 
 def check_origin_divergence(workspace: Path) -> str | None:
@@ -411,7 +417,19 @@ def _has_work(state: dict[str, object]) -> bool:
     return state.get("active_task_id") is not None or bool(state.get("queue", []) or [])
 
 
-def _should_continue_for_stop_reason(reason: object) -> bool:
+def _pool_stop_reason_from_snapshot(state: dict[str, object]) -> str | None:
+    """
+    Extract the typed pool stop reason from a status snapshot.
+
+    The snapshot comes from ``WorkspaceState.model_dump`` in
+    ``_daemon_status_snapshot_for_workspace``, so the value is the
+    domain field's ``str | None`` shape even though the surrounding
+    dictionary is typed as ``object`` for JSON-like payloads.
+    """
+    return cast("str | None", state.get("pool_stop_reason"))
+
+
+def _daemon_should_continue_for_stop_reason(reason: str | None) -> bool:
     """
     Distinguish a transient pause from a halt the daemon should respect.
 
@@ -424,7 +442,10 @@ def _should_continue_for_stop_reason(reason: object) -> bool:
     """
     if reason is None:
         return True
-    return str(reason) in _CONTINUE_STOP_REASONS
+    stop_reason = PoolStopReason.from_value(reason)
+    if stop_reason is None:
+        return False
+    return stop_reason in _DAEMON_TRANSIENT_STOP_REASONS
 
 
 def _emit_runner_wait(status, stream: TextIO | None) -> None:
@@ -631,8 +652,8 @@ def run_daemon_loop(
             if not _has_work(pre_state):
                 _emit("No active or queued tasks remain. Stopping.", stream=output_stream)
                 return 0
-            stop_reason_before = pre_state.get("pool_stop_reason")
-            if not _should_continue_for_stop_reason(stop_reason_before):
+            stop_reason_before = _pool_stop_reason_from_snapshot(pre_state)
+            if not _daemon_should_continue_for_stop_reason(stop_reason_before):
                 _emit(f"Runner stopped: {stop_reason_before}", stream=output_stream)
                 return 0
 
@@ -660,11 +681,11 @@ def run_daemon_loop(
                 return 1
             _emit(post_snapshot, stream=output_stream)
 
-            stop_reason = post_state.get("pool_stop_reason")
+            stop_reason = _pool_stop_reason_from_snapshot(post_state)
             if not _has_work(post_state):
                 _emit("No active or queued tasks remain. Stopping.", stream=output_stream)
                 return 0
-            if not _should_continue_for_stop_reason(stop_reason):
+            if not _daemon_should_continue_for_stop_reason(stop_reason):
                 _emit(f"Runner stopped: {stop_reason}", stream=output_stream)
                 return 0
     finally:
