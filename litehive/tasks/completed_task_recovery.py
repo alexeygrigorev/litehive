@@ -44,10 +44,9 @@ def recover_completed_task_for_workspace(workspace: Workspace, task_id: str) -> 
     """
     root = workspace.root
     with workspace_mutation_guard_for_workspace(workspace), workspace_lock(root):
-        from litehive.state.records import get_task  # noqa: PLC0415
         from litehive.tasks.queue import drop_task_from_workspace_state  # noqa: PLC0415
 
-        task = get_task(root, task_id)
+        task = workspace.get_task(task_id)
         if task is None:
             raise GitError(f"Task {task_id} not found")
         before_task = snapshot_task_audit_state(task)

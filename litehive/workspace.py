@@ -176,6 +176,47 @@ class Workspace:
 
         return _task_dir(self.root, task, bootstrap=bootstrap)
 
+    def list_tasks(self, include_runtime: bool = True, strict: bool = True) -> list["TaskRecord"]:
+        """
+        Return task records for this workspace.
+
+        Method form of ``litehive.state.records.list_tasks`` so
+        workspace-aware helpers do not need to re-thread ``root`` for
+        ordinary task lookup.
+        """
+        # inline: state.records imports several modules that eventually
+        # refer back to Workspace during partial startup.
+        from litehive.state.records import list_tasks as _list_tasks  # noqa: PLC0415
+
+        return _list_tasks(self.root, include_runtime=include_runtime, strict=strict)
+
+    def get_task(self, task_id: str) -> "TaskRecord | None":
+        """
+        Return one task record from this workspace, or ``None`` when missing.
+        """
+        # inline: see list_tasks import note above.
+        from litehive.state.records import get_task as _get_task  # noqa: PLC0415
+
+        return _get_task(self.root, task_id)
+
+    def require_task(self, task_id: str) -> "TaskRecord":
+        """
+        Return one task record or raise the standard missing-task error.
+        """
+        # inline: see list_tasks import note above.
+        from litehive.state.records import require_task as _require_task  # noqa: PLC0415
+
+        return _require_task(self.root, task_id)
+
+    def save_task(self, task: "TaskRecord") -> None:
+        """
+        Persist a task record in this workspace.
+        """
+        # inline: see list_tasks import note above.
+        from litehive.state.records import save_task as _save_task  # noqa: PLC0415
+
+        _save_task(self.root, task)
+
     def task_activity(self, task: "TaskRecord") -> "TaskActivityLog":
         """
         Return the persisted activity feed handle for ``task``.

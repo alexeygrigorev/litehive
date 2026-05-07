@@ -475,7 +475,7 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
         if state.active_task_id is None:
             return state
 
-        task = get_task(root, state.active_task_id)
+        task = workspace.get_task(state.active_task_id)
         if task is not None and _should_requeue_commit_stage_task(task):
             prepare_interrupted_task(
                 workspace,
@@ -552,10 +552,9 @@ def active_task_markers_for_workspace(workspace: Workspace, state: WorkspaceStat
     or ``running`` at once, and to spell out which signal disagrees when
     they do (so the conflict message names the failing slot).
     """
-    root = workspace.root
     markers: dict[str, list[str]] = {}
     current_state = state or load_state_for_workspace(workspace)
-    tasks = list_tasks(root, strict=False)
+    tasks = workspace.list_tasks(strict=False)
     tasks_by_id = {task.id: task for task in tasks}
     if current_state.active_task_id is None:
         active_task = None

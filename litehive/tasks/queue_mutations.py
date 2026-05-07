@@ -20,10 +20,7 @@ from litehive.state.persist import (
     load_state_for_workspace,
     save_state_without_runner_guard_for_workspace,
 )
-from litehive.state.records import (
-    require_task,
-    set_task_commit_sha,
-)
+from litehive.state.records import set_task_commit_sha
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.queue_eligibility import (
     _normalize_resumable_stage_name,
@@ -88,7 +85,7 @@ def _enqueue_task_for_workspace(workspace: Workspace, task_id: str, front: bool)
     with workspace_lock(root):
         state = load_state_for_workspace(workspace)
         ensure_future_task_mutation_allowed_for_workspace(workspace, [task_id], state=state)
-        task = require_task(root, task_id)
+        task = workspace.require_task(task_id)
         before_task = snapshot_task_audit_state(task)
         queue_before = list(state.queue)
         state.queue = [item for item in state.queue if item != task_id]
@@ -138,7 +135,7 @@ def move_queued_task_for_workspace(workspace: Workspace, task_id: str, position:
     with workspace_lock(root):
         state = load_state_for_workspace(workspace)
         ensure_future_task_mutation_allowed_for_workspace(workspace, [task_id], state=state)
-        task = require_task(root, task_id)
+        task = workspace.require_task(task_id)
         before_task = snapshot_task_audit_state(task)
         queue_before = list(state.queue)
         if task_id not in state.queue:
@@ -237,7 +234,7 @@ def prioritize_queued_tasks_for_workspace(workspace: Workspace, task_ids: list[s
         if missing:
             joined = ", ".join(missing)
             raise ValueError(f"Tasks are not queued: {joined}")
-        queued_tasks = {task_id: require_task(root, task_id) for task_id in task_ids}
+        queued_tasks = {task_id: workspace.require_task(task_id) for task_id in task_ids}
         before_tasks = {task_id: snapshot_task_audit_state(task) for task_id, task in queued_tasks.items()}
         remaining = [queued_id for queued_id in state.queue if queued_id not in task_ids]
         state.queue = [*task_ids, *remaining]
