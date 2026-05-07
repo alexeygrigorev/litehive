@@ -53,16 +53,34 @@ class TaskStateMissingError(RuntimeError):
 
 def _highest_task_number_in_store(root: Path) -> int:
     """
+    Path-based compatibility wrapper for task-number scanning.
+    """
+    return _highest_task_number_in_store_for_workspace(Workspace.from_path(root))
+
+
+def _highest_task_number_in_store_for_workspace(workspace: Workspace) -> int:
+    """
     Return the largest ``T-NNNN`` numeric prefix actually present in the store.
 
     ``_reserve_next_task_numbers`` consults this whenever the in-memory
     ``next_task_number`` is missing or zero so a freshly bootstrapped
     workspace cannot reuse an existing id when the counter was lost.
     """
-    return runtime_store(root).highest_task_number()
+    return runtime_store_for_workspace(workspace).highest_task_number()
 
 
-def _reserve_next_task_numbers(root, state, count: int = 1) -> list[int]:
+def _reserve_next_task_numbers(root: Path, state: WorkspaceState, count: int = 1) -> list[int]:
+    """
+    Path-based compatibility wrapper for task-number reservation.
+    """
+    return _reserve_next_task_numbers_for_workspace(Workspace.from_path(root), state, count=count)
+
+
+def _reserve_next_task_numbers_for_workspace(
+    workspace: Workspace,
+    state: WorkspaceState,
+    count: int = 1,
+) -> list[int]:
     """
     Allocate the next ``count`` task numbers and advance the workspace counter.
 
@@ -74,7 +92,7 @@ def _reserve_next_task_numbers(root, state, count: int = 1) -> list[int]:
     if count < 1:
         raise ValueError("count must be 1 or greater")
     if state.next_task_number <= 0:
-        state.next_task_number = _highest_task_number_in_store(root)
+        state.next_task_number = _highest_task_number_in_store_for_workspace(workspace)
     start = state.next_task_number + 1
     state.next_task_number += count
     return list(range(start, start + count))
@@ -485,7 +503,7 @@ def create_task_for_workspace(
 
     with workspace_lock(root):
         state = load_state(root, bootstrap=False)
-        task_id = f"T-{_reserve_next_task_numbers(root, state)[0]:04d}"
+        task_id = f"T-{_reserve_next_task_numbers_for_workspace(workspace, state)[0]:04d}"
         slug = slugify(title)
         if depends_on:
             validate_task_dependencies_for_workspace(workspace, task_id=task_id, depends_on=depends_on)

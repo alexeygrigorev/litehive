@@ -347,10 +347,10 @@ def test_create_task_uses_persisted_next_task_number_without_rescanning(
     create_workspace(tmp_path)
     create_task(tmp_path, title="Existing task")
 
-    def fail_scan(root: Path) -> int:
+    def fail_scan(workspace: Workspace) -> int:
         raise AssertionError("task id allocation should not rescan task directories")
 
-    monkeypatch.setattr(tasks_crud, "_highest_task_number_in_store", fail_scan)
+    monkeypatch.setattr(tasks_crud, "_highest_task_number_in_store_for_workspace", fail_scan)
 
     created = create_task(tmp_path, title="Second task")
 
