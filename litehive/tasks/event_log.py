@@ -12,7 +12,10 @@ from typing import Any
 from litehive.config.paths import workspace_path
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskIntentRecord, TaskStateRecord, WorkspaceState
-from litehive.state.rebuild_safety import assert_database_rebuild_safe, backup_database_before_rebuild
+from litehive.state.rebuild_safety import (
+    assert_database_rebuild_safe_for_workspace,
+    backup_database_before_rebuild_for_workspace,
+)
 from litehive.workspace import Workspace
 
 TASK_EVENT_LOG_NAME = "task-events.jsonl"
@@ -274,8 +277,13 @@ def rebuild_sqlite_from_task_event_log(workspace: Workspace, clear_existing: boo
     if clear_existing:
         replay_task_ids = set(replay_state.task_intents) | set(replay_state.task_states)
         db_path = workspace_path(root, "data.db")
-        assert_database_rebuild_safe(root, db_path, replay_task_ids=replay_task_ids, operation="event-log replay")
-        backup_database_before_rebuild(root, db_path, label="before-event-log-replay")
+        assert_database_rebuild_safe_for_workspace(
+            workspace,
+            db_path,
+            replay_task_ids=replay_task_ids,
+            operation="event-log replay",
+        )
+        backup_database_before_rebuild_for_workspace(workspace, db_path, label="before-event-log-replay")
     with suppress_task_event_logging(), workspace.connect() as connection:
         if clear_existing:
             _clear_replay_tables(connection)

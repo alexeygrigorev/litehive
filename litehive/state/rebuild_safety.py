@@ -7,9 +7,12 @@ import re
 import shutil
 import sqlite3
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, TYPE_CHECKING
 
 from litehive.config.paths import workspace_path
+
+if TYPE_CHECKING:
+    from litehive.workspace import Workspace
 
 TASK_EVENT_LOG_NAME = "task-events.jsonl"
 _TASK_DIR_RE = re.compile(r"^(T-\d{4})(?:-|$)")
@@ -71,6 +74,15 @@ def sqlite_task_ids(db_path: Path) -> set[str]:
 
 def task_artifact_dir_ids(root: Path) -> set[str]:
     """
+    Path-based compatibility wrapper for task artifact discovery.
+    """
+    from litehive.workspace import Workspace  # noqa: PLC0415
+
+    return task_artifact_dir_ids_for_workspace(Workspace.from_path(root))
+
+
+def task_artifact_dir_ids_for_workspace(workspace: "Workspace") -> set[str]:
+    """
     Discover task ids that have on-disk artifact directories.
 
     Reported alongside DB and replay coverage so an operator can see
@@ -78,7 +90,7 @@ def task_artifact_dir_ids(root: Path) -> set[str]:
     artifacts are evidence that a task did exist, even if the DB and
     log no longer agree.
     """
-    tasks_dir = root / ".litehive" / "tasks"
+    tasks_dir = workspace.root / ".litehive" / "tasks"
     if not tasks_dir.exists():
         return set()
 
@@ -98,6 +110,15 @@ def task_artifact_dir_ids(root: Path) -> set[str]:
 
 def event_log_replay_task_ids(root: Path) -> set[str]:
     """
+    Path-based compatibility wrapper for event-log replay coverage.
+    """
+    from litehive.workspace import Workspace  # noqa: PLC0415
+
+    return event_log_replay_task_ids_for_workspace(Workspace.from_path(root))
+
+
+def event_log_replay_task_ids_for_workspace(workspace: "Workspace") -> set[str]:
+    """
     Compute which task ids the append-only event log can reconstruct.
 
     Deletion events shrink the set so a tombstoned task does not trigger
@@ -105,7 +126,7 @@ def event_log_replay_task_ids(root: Path) -> set[str]:
     those tombstones or every legitimately deleted task would block a
     rebuild.
     """
-    path = workspace_path(root, TASK_EVENT_LOG_NAME)
+    path = workspace_path(workspace.root, TASK_EVENT_LOG_NAME)
     if not path.exists():
         return set()
 
@@ -141,6 +162,26 @@ def assert_database_rebuild_safe(
     operation: str,
 ) -> RebuildSafetyReport:
     """
+    Path-based compatibility wrapper for database rebuild safety checks.
+    """
+    from litehive.workspace import Workspace  # noqa: PLC0415
+
+    return assert_database_rebuild_safe_for_workspace(
+        Workspace.from_path(root),
+        db_path,
+        replay_task_ids=replay_task_ids,
+        operation=operation,
+    )
+
+
+def assert_database_rebuild_safe_for_workspace(
+    workspace: "Workspace",
+    db_path: Path,
+    *,
+    replay_task_ids: Iterable[str] | None = None,
+    operation: str,
+) -> RebuildSafetyReport:
+    """
     Refuse a destructive DB rebuild that would drop task rows.
 
     Raises ``RebuildSafetyError`` when the replay source cannot account
@@ -149,9 +190,9 @@ def assert_database_rebuild_safe(
     evidence of real work.
     """
     sqlite_ids = sqlite_task_ids(db_path)
-    artifact_ids = task_artifact_dir_ids(root)
+    artifact_ids = task_artifact_dir_ids_for_workspace(workspace)
     if replay_task_ids is None:
-        replay_source = event_log_replay_task_ids(root)
+        replay_source = event_log_replay_task_ids_for_workspace(workspace)
     else:
         replay_source = replay_task_ids
     replay_ids = set(replay_source)
@@ -183,6 +224,19 @@ def assert_database_rebuild_safe(
 
 def backup_database_before_rebuild(root: Path, db_path: Path, label: str) -> Path | None:
     """
+    Path-based compatibility wrapper for pre-rebuild DB backups.
+    """
+    from litehive.workspace import Workspace  # noqa: PLC0415
+
+    return backup_database_before_rebuild_for_workspace(Workspace.from_path(root), db_path, label)
+
+
+def backup_database_before_rebuild_for_workspace(
+    workspace: "Workspace",
+    db_path: Path,
+    label: str,
+) -> Path | None:
+    """
     Snapshot the current DB into ``backups/`` before a rebuild touches it.
 
     The timestamped filename plus the operator-supplied label give a
@@ -192,7 +246,7 @@ def backup_database_before_rebuild(root: Path, db_path: Path, label: str) -> Pat
     """
     if not db_path.exists():
         return None
-    backup_dir = workspace_path(root, "backups")
+    backup_dir = workspace_path(workspace.root, "backups")
     backup_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
     safe_label = re.sub(r"[^A-Za-z0-9_.-]+", "-", label).strip("-") or "pre-rebuild"
