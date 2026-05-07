@@ -386,9 +386,10 @@ def execute_engine_prompt(
     sandbox_applied = False
     if sandboxed:
         from litehive.sandbox.launcher import DockerSandboxLauncher
+        from litehive.workspace import Workspace
         from heru.base import CLIInvocation as _HeruCLIInvocation
 
-        launcher = DockerSandboxLauncher(cwd, config)
+        launcher = DockerSandboxLauncher(Workspace.from_path(cwd), config)
         summary = launcher.policy_summary(engine_name)
         if not summary.enabled:
             pytest.skip(

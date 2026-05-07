@@ -174,7 +174,7 @@ def build_subagent_manager_for_workspace(
     if manager_cls is not None and manager_cls is not SubagentManager:
         return manager_cls(workspace.root, execution_root=execution_root)
 
-    sandbox = DockerSandboxLauncher(workspace.root, config)
+    sandbox = DockerSandboxLauncher(workspace, config)
     engines = EngineManager()
     sessions = SubagentSessionManager(
         root=workspace.root,

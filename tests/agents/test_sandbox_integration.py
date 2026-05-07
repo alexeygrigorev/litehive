@@ -9,6 +9,7 @@ import pytest
 from heru.base import CLIInvocation
 from litehive.sandbox.launcher import DockerSandboxLauncher, SandboxPolicySummary, SandboxProfile
 from litehive.config.model import LitehiveConfig, ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
+from litehive.workspace import Workspace
 
 
 @pytest.fixture
@@ -50,7 +51,7 @@ def test_sandbox_profile_selects_git_policy_by_role():
 def test_sandbox_launcher_policy_summary_disabled(temp_workspace):
     """Test policy summary when sandbox is disabled."""
     config = LitehiveConfig()  # Sandbox disabled by default
-    launcher = DockerSandboxLauncher(temp_workspace, config)
+    launcher = DockerSandboxLauncher(Workspace.from_path(temp_workspace), config)
 
     summary = launcher.policy_summary("codex")
     assert not summary.enabled
@@ -59,7 +60,7 @@ def test_sandbox_launcher_policy_summary_disabled(temp_workspace):
 
 def test_sandbox_launcher_policy_summary_enabled(temp_workspace, docker_sandbox_config):
     """Test policy summary when sandbox is enabled."""
-    launcher = DockerSandboxLauncher(temp_workspace, docker_sandbox_config)
+    launcher = DockerSandboxLauncher(Workspace.from_path(temp_workspace), docker_sandbox_config)
 
     summary = launcher.policy_summary("codex")
     assert summary.enabled
@@ -80,7 +81,7 @@ def test_sandbox_launcher_uses_global_enabled_policy_without_engine_override(tem
             image="litehive-external-engine:latest",
         )
     )
-    launcher = DockerSandboxLauncher(temp_workspace, config)
+    launcher = DockerSandboxLauncher(Workspace.from_path(temp_workspace), config)
 
     summary = launcher.policy_summary("codex")
 
@@ -124,7 +125,7 @@ def test_docker_sandbox_wraps_invocation(mock_which, temp_workspace, docker_sand
         "git": "/usr/bin/git",
     }.get(name)
 
-    launcher = DockerSandboxLauncher(temp_workspace, docker_sandbox_config)
+    launcher = DockerSandboxLauncher(Workspace.from_path(temp_workspace), docker_sandbox_config)
 
     original_invocation = CLIInvocation(
         argv=("/usr/local/bin/codex", "chat", "hello"),
@@ -151,7 +152,7 @@ def test_docker_sandbox_git_wrapper_no_git_role(mock_which, temp_workspace, dock
         "git": "/usr/bin/git",
     }.get(name)
 
-    launcher = DockerSandboxLauncher(temp_workspace, docker_sandbox_config)
+    launcher = DockerSandboxLauncher(Workspace.from_path(temp_workspace), docker_sandbox_config)
 
     original_invocation = CLIInvocation(
         argv=("/usr/local/bin/codex", "chat"),
@@ -177,7 +178,7 @@ def test_docker_sandbox_git_wrapper_merge_resolver_role(mock_which, temp_workspa
         "git": "/usr/bin/git",
     }.get(name)
 
-    launcher = DockerSandboxLauncher(temp_workspace, docker_sandbox_config)
+    launcher = DockerSandboxLauncher(Workspace.from_path(temp_workspace), docker_sandbox_config)
 
     original_invocation = CLIInvocation(
         argv=("/usr/local/bin/codex", "chat"),
@@ -223,7 +224,7 @@ def test_docker_sandbox_creates_git_wrappers(mock_which, temp_workspace, docker_
         "git": "/usr/bin/git",
     }.get(name)
 
-    launcher = DockerSandboxLauncher(temp_workspace, docker_sandbox_config)
+    launcher = DockerSandboxLauncher(Workspace.from_path(temp_workspace), docker_sandbox_config)
 
     wrappers = launcher.ensure_docker_git_wrappers()
 

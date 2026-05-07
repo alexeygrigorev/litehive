@@ -27,6 +27,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Move `WorktreeService` task reads/writes to its injected `Workspace`.
 - [x] Move `SubagentManager` task saves to its injected `Workspace`.
 - [x] Remove duplicate raw root constructor argument from `SubagentManager`.
+- [x] Move `DockerSandboxLauncher` constructor from raw root to injected `Workspace`.
 - [x] Migrate `config.loading.load_config(root)` callers that already hold `Workspace`.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`

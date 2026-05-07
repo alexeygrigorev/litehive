@@ -14,6 +14,7 @@ from heru.base import CLIInvocation
 from litehive.config.model import LitehiveConfig
 from litehive.config.model import ResolvedExternalEngineSandboxPolicy
 from litehive.sandbox.support import forced_engine_rw_state_dirs
+from litehive.workspace import Workspace
 
 
 class SandboxProfile(str, Enum):
@@ -165,9 +166,9 @@ class SandboxLauncher(Protocol):
 class DockerSandboxLauncher:
     """Builds docker-run argv that wraps every external engine invocation."""
 
-    def __init__(self, root: Path, config: LitehiveConfig) -> None:
-        """Store the resolved workspace root and the parsed config so per-engine policies can be looked up on each invocation without re-loading config."""
-        self.root = root.resolve()
+    def __init__(self, workspace: Workspace, config: LitehiveConfig) -> None:
+        """Store injected workspace/config dependencies for per-engine policy lookup."""
+        self.root = workspace.root
         self.config = config
 
     def policy_summary(self, engine_name: str) -> SandboxPolicySummary:
