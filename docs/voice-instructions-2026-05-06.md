@@ -1573,6 +1573,12 @@ Legend:
 - [ ] F9. Remove registry global/function-as-global access. Use
   dependency injection.
   Source: note 5, 00:46-01:14.
+  Progress 2026-05-07: introduced a bound `WorkspaceRegistry`
+  service that carries the registry path and mutex, plus
+  `build_workspace_registry(...)` for explicit injection. Existing
+  module-level functions now act as boundary wrappers; remaining work
+  is to inject the service into workspace/config callers instead of
+  calling those wrappers directly.
 - [ ] F10. Split registry responsibilities. Config, loading,
   persistence queries, sqlite details, security, and workspace path
   registration should not all live in one mixed module.

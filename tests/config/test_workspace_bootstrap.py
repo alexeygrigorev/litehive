@@ -210,6 +210,20 @@ def test_workspace_registry_handles_concurrent_registration(tmp_path: Path, monk
     assert len(registry_paths) == len(workspaces)
 
 
+def test_workspace_registry_can_be_bound_to_explicit_path(tmp_path: Path) -> None:
+    from litehive.config.registry import build_workspace_registry
+
+    registry_path = tmp_path / "custom-registry.db"
+    registry = build_workspace_registry(path=registry_path, mutex=threading.RLock())
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    registry.register_path(workspace_root)
+
+    assert registry.list_paths() == [workspace_root.resolve()]
+    assert _registered_paths(registry_path) == [str(workspace_root.resolve())]
+
+
 def test_workspace_registry_retries_lock_contention_without_rebuilding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

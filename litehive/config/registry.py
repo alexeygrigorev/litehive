@@ -19,6 +19,8 @@ want extra attempts after SQLite has already returned ``locked`` or
 """
 
 from datetime import UTC, datetime
+from contextlib import AbstractContextManager
+from dataclasses import dataclass
 import logging
 import os
 from pathlib import Path
@@ -49,6 +51,85 @@ class WorkspaceRegistryError(RuntimeError):
     """
 
 
+@dataclass(frozen=True)
+class WorkspaceRegistry:
+    """
+    Bound access to one workspace-registry SQLite file.
+
+    Public module functions build the default instance for CLI
+    boundaries, while tests and future containers can inject a
+    registry with an explicit path or mutex instead of relying on
+    module-level state.
+    """
+
+    path: Path
+    mutex: AbstractContextManager[object]
+
+    def error(self) -> str | None:
+        """
+        Probe this registry for corruption and return a short error label.
+        """
+        if not self.path.exists():
+            return None
+        try:
+            with _open_registry_connection(self.path) as connection:
+                _registry_quick_check(connection)
+        except (OSError, sqlite3.DatabaseError) as exc:
+            return str(exc)
+        return None
+
+    def quarantine_corrupt(self, reason: str) -> Path | None:
+        """
+        Move this registry file aside after a corruption failure.
+        """
+        return _backup_corrupt_registry_file(self.path, reason=reason, label="workspace registry")
+
+    def list_paths(self) -> list[Path]:
+        """
+        Return every canonical workspace root this registry knows about.
+        """
+        with self.mutex:
+            for attempt in range(2):
+                try:
+                    return _locked_registry_operation(
+                        lambda: _list_registered_workspace_paths(self.path),
+                        path=self.path,
+                    )
+                except TimeoutError as exc:
+                    raise WorkspaceRegistryError(str(exc)) from exc
+                except sqlite3.DatabaseError as exc:
+                    if attempt == 0 and self.quarantine_corrupt(str(exc)) is not None:
+                        continue
+                    raise WorkspaceRegistryError(f"failed to read workspace registry {self.path}: {exc}") from exc
+                except OSError as exc:
+                    raise WorkspaceRegistryError(f"failed to read workspace registry {self.path}: {exc}") from exc
+        raise WorkspaceRegistryError(f"failed to read workspace registry {self.path}")
+
+    def register_path(self, root: Path) -> None:
+        """
+        Upsert a workspace root with the current timestamp.
+        """
+        resolved = _canonical_workspace_root(root)
+        if resolved is None:
+            return
+        with self.mutex:
+            for attempt in range(2):
+                try:
+                    _locked_registry_operation(
+                        lambda: _register_workspace_path(self.path, resolved),
+                        path=self.path,
+                    )
+                    return
+                except TimeoutError as exc:
+                    raise WorkspaceRegistryError(str(exc)) from exc
+                except sqlite3.DatabaseError as exc:
+                    if attempt == 0 and self.quarantine_corrupt(str(exc)) is not None:
+                        continue
+                    raise WorkspaceRegistryError(f"failed to update workspace registry {self.path}: {exc}") from exc
+                except OSError as exc:
+                    raise WorkspaceRegistryError(f"failed to update workspace registry {self.path}: {exc}") from exc
+
+
 def workspace_registry_path() -> Path:
     """
     Resolve the cross-workspace SQLite registry file path.
@@ -59,6 +140,35 @@ def workspace_registry_path() -> Path:
     filesystem.
     """
     return litehive_root() / "workspaces.db"
+
+
+def build_workspace_registry(
+    path: Path | None = None,
+    mutex: AbstractContextManager[object] | None = None,
+) -> WorkspaceRegistry:
+    """
+    Assemble a workspace-registry dependency.
+
+    The default uses the user's global Litehive registry path and the
+    process-local mutex. Tests and future containers can pass either
+    dependency explicitly to avoid hard-coded globals.
+    """
+    if path is None:
+        registry_path = workspace_registry_path()
+    else:
+        registry_path = path
+    if mutex is None:
+        registry_mutex = _REGISTRY_MUTEX
+    else:
+        registry_mutex = mutex
+    return WorkspaceRegistry(path=registry_path, mutex=registry_mutex)
+
+
+def default_workspace_registry() -> WorkspaceRegistry:
+    """
+    Return the production registry dependency for public wrappers.
+    """
+    return build_workspace_registry()
 
 
 def _int_env(name: str, default: int) -> int:
@@ -202,15 +312,7 @@ def workspace_registry_error() -> str | None:
     ``PRAGMA quick_check`` is enough to flag a corrupt file
     before a more expensive operation hits the same problem.
     """
-    path = workspace_registry_path()
-    if not path.exists():
-        return None
-    try:
-        with _open_registry_connection(path) as connection:
-            _registry_quick_check(connection)
-    except (OSError, sqlite3.DatabaseError) as exc:
-        return str(exc)
-    return None
+    return default_workspace_registry().error()
 
 
 def quarantine_corrupt_workspace_registry(reason: str) -> Path | None:
@@ -223,8 +325,7 @@ def quarantine_corrupt_workspace_registry(reason: str) -> Path | None:
     preserved (with the failure reason in a log line) so an
     operator can inspect it after the fact.
     """
-    path = workspace_registry_path()
-    return _backup_corrupt_registry_file(path, reason=reason, label="workspace registry")
+    return default_workspace_registry().quarantine_corrupt(reason)
 
 
 def _backup_corrupt_registry_file(path: Path, reason: str, label: str) -> Path | None:
@@ -329,23 +430,7 @@ def list_registered_workspace_paths() -> list[Path]:
     workspace this user has initialized without filesystem
     scanning.
     """
-    path = workspace_registry_path()
-    with _REGISTRY_MUTEX:
-        for attempt in range(2):
-            try:
-                return _locked_registry_operation(
-                    lambda: _list_registered_workspace_paths(path),
-                    path=path,
-                )
-            except TimeoutError as exc:
-                raise WorkspaceRegistryError(str(exc)) from exc
-            except sqlite3.DatabaseError as exc:
-                if attempt == 0 and quarantine_corrupt_workspace_registry(str(exc)) is not None:
-                    continue
-                raise WorkspaceRegistryError(f"failed to read workspace registry {path}: {exc}") from exc
-            except OSError as exc:
-                raise WorkspaceRegistryError(f"failed to read workspace registry {path}: {exc}") from exc
-    raise WorkspaceRegistryError(f"failed to read workspace registry {path}")
+    return default_workspace_registry().list_paths()
 
 
 def _list_registered_workspace_paths(path: Path) -> list[Path]:
@@ -374,26 +459,7 @@ def register_workspace_path(root: Path) -> None:
     the filesystem; also called when discovery resolves a
     workspace via cwd or env so registration stays current.
     """
-    resolved = _canonical_workspace_root(root)
-    if resolved is None:
-        return
-    path = workspace_registry_path()
-    with _REGISTRY_MUTEX:
-        for attempt in range(2):
-            try:
-                _locked_registry_operation(
-                    lambda: _register_workspace_path(path, resolved),
-                    path=path,
-                )
-                return
-            except TimeoutError as exc:
-                raise WorkspaceRegistryError(str(exc)) from exc
-            except sqlite3.DatabaseError as exc:
-                if attempt == 0 and quarantine_corrupt_workspace_registry(str(exc)) is not None:
-                    continue
-                raise WorkspaceRegistryError(f"failed to update workspace registry {path}: {exc}") from exc
-            except OSError as exc:
-                raise WorkspaceRegistryError(f"failed to update workspace registry {path}: {exc}") from exc
+    default_workspace_registry().register_path(root)
 
 
 def _register_workspace_path(path: Path, root: Path) -> None:
