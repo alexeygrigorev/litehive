@@ -1061,10 +1061,16 @@ Legend:
 - [ ] R10. Remove unnecessary `None` fields from engine model
   dataclasses.
   Source: note 4, 37:49-37:56.
-- [ ] R11. Move parse helpers such as `parse at time you receive`,
+- [x] R11. Move parse helpers such as `parse at time you receive`,
   `parse_engine_freeze_until`, and possibly quota parsing to a
   utility or Heru/engine-owned module.
   Source: note 4, 37:56-38:18.
+  Completed 2026-05-07: moved freeze-date parsing and shared UTC
+  timestamp parsing into `litehive.config.time_parsing`; engine
+  selection and quota handling now import the shared helpers instead of
+  carrying duplicate private parsers. Searched for a separate
+  "parse at time you receive" helper and found no code hit. Verified
+  with focused pyrefly and `uv run pytest tests/config/test_engine_freeze.py -q`.
 - [x] R12. Remove YouTube engine names if they are still present.
   Source: note 4, 38:18-38:25.
   Verified 2026-05-07: searched `litehive`, `tests`, and `docs`

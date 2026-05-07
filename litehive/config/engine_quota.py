@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Protocol
 
 from heru.quota import (
@@ -11,6 +11,7 @@ from heru.quota import (
     check_copilot_quota,
     check_zai_quota,
 )
+from litehive.config.time_parsing import parse_utc_datetime
 
 
 class QuotaWindow(Protocol):
@@ -41,28 +42,6 @@ class EngineQuotaBlock:
 
     reason: str
     freeze_until: datetime | None
-
-
-def _parse_datetime_utc(value: str | None) -> datetime | None:
-    """
-    Parse a quota reset timestamp into a UTC-aware datetime.
-    """
-    if not value:
-        return None
-    normalized = value.strip()
-    if not normalized:
-        return None
-    try:
-        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
-    except ValueError:
-        try:
-            parsed = datetime.strptime(normalized, "%Y-%m-%d")
-        except ValueError:
-            return None
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
 
 
 def _quota_checker(engine_name: str) -> QuotaChecker | None:
@@ -109,7 +88,7 @@ def _quota_block_reason(engine_name: str, status: QuotaStatus) -> EngineQuotaBlo
         reset_suffix = ""
     return EngineQuotaBlock(
         reason=f"{engine_name} usage limit reached{reset_suffix}",
-        freeze_until=_parse_datetime_utc(reset_at),
+        freeze_until=parse_utc_datetime(reset_at),
     )
 
 

@@ -16,6 +16,8 @@ from heru import get_engine
 from litehive.config.engine_quota import engine_quota_block
 from litehive.config.model import LitehiveConfig
 from litehive.config.runtime_settings import clear_engine_freeze, set_engine_freeze
+from litehive.config.time_parsing import parse_engine_freeze_until as parse_engine_freeze_until
+from litehive.config.time_parsing import parse_utc_datetime
 from litehive.domain.task import TaskRecord
 from litehive.workspace import Workspace
 
@@ -57,53 +59,6 @@ class EngineSelection:
     blocked_reason: str | None = None
 
 
-def _parse_datetime_utc(value: str | None) -> datetime | None:
-    """
-    Parse a stored freeze timestamp into a UTC-aware datetime.
-
-    Accepts ISO 8601 (with optional trailing ``Z``) and the
-    legacy ``YYYY-MM-DD`` form so older freeze entries still
-    parse. Returns ``None`` for unparseable input so every
-    freeze-window check can fall through cleanly without the
-    storage format leaking into the caller.
-    """
-    if not value:
-        return None
-    normalized = value.strip()
-    if not normalized:
-        return None
-    try:
-        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
-    except ValueError:
-        try:
-            parsed = datetime.strptime(normalized, "%Y-%m-%d")
-        except ValueError:
-            return None
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
-
-
-def parse_engine_freeze_until(value: str | None) -> str | None:
-    """
-    Convert a CLI ``--until YYYY-MM-DD`` flag to the persisted ISO form.
-
-    Returns ``None`` for unparseable input so the CLI can
-    surface a single validation error rather than letting an
-    invalid value land in the freeze map. The persisted form is
-    the same UTC ISO with trailing ``Z`` that
-    :func:`_parse_datetime_utc` expects on read.
-    """
-    if value is None:
-        return None
-    try:
-        parsed = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
-    return parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
 def _dedupe_engine_names(engine_names: list[str]) -> list[str]:
     """
     Preserve first-seen order while dropping duplicates.
@@ -132,7 +87,7 @@ def is_engine_frozen(config: LitehiveConfig, engine_name: str) -> bool:
     expired freeze is treated as not-frozen so engine selection
     self-cleans on the next pass without an explicit sweeper.
     """
-    freeze_dt = _parse_datetime_utc(config.engine_freeze.get(engine_name))
+    freeze_dt = parse_utc_datetime(config.engine_freeze.get(engine_name))
     if freeze_dt is None:
         return False
     return datetime.now(timezone.utc) < freeze_dt
@@ -150,7 +105,7 @@ def active_engine_freezes(config: LitehiveConfig) -> dict[str, datetime]:
     now = datetime.now(timezone.utc)
     result: dict[str, datetime] = {}
     for engine_name, freeze_str in config.engine_freeze.items():
-        freeze_dt = _parse_datetime_utc(freeze_str)
+        freeze_dt = parse_utc_datetime(freeze_str)
         if freeze_dt is None:
             continue
         if now < freeze_dt:
@@ -325,7 +280,7 @@ def select_engine_for_workspace(
                 )
                 continue
         expired_freeze = (
-            engine_name not in frozen_engines and _parse_datetime_utc(config.engine_freeze.get(engine_name)) is not None
+            engine_name not in frozen_engines and parse_utc_datetime(config.engine_freeze.get(engine_name)) is not None
         )
         if check_quota:
             quota_block = engine_quota_block(engine_name)
