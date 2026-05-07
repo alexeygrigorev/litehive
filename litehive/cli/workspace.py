@@ -317,13 +317,6 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     return 0
 
 
-def health_daemon_status(root: Path) -> tuple[str, str]:
-    """
-    Path-based compatibility wrapper for daemon health status.
-    """
-    return health_daemon_status_for_workspace(build_workspace(root))
-
-
 def health_daemon_status_for_workspace(workspace: Workspace) -> tuple[str, str]:
     """
     Return a ``(status, pid)`` pair for the workspace daemon.
