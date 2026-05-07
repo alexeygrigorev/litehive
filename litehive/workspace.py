@@ -232,9 +232,9 @@ class Workspace:
         Persist a task record in this workspace.
         """
         # inline: see list_tasks import note above.
-        from litehive.state.records import save_task as _save_task  # noqa: PLC0415
+        from litehive.state.records import save_task_for_workspace as _save_task_for_workspace  # noqa: PLC0415
 
-        _save_task(self.root, task)
+        _save_task_for_workspace(self, task)
 
     def task_activity(self, task: "TaskRecord") -> "TaskActivityLog":
         """

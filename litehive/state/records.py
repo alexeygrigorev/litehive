@@ -17,13 +17,14 @@ from litehive.domain.task import (
     WorkspaceState,
     canonicalize_task_terminal_state,
 )
-from litehive.state.store import runtime_store, runtime_store_for_workspace
+from litehive.state.store import runtime_store_for_workspace
 
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
 from litehive.state.locking import workspace_lock, workspace_mutation_guard, workspace_mutation_guard_for_workspace
 from litehive.state.persist import (
     load_state,
-    save_state_without_runner_guard,
+    load_state_for_workspace,
+    save_state_without_runner_guard_for_workspace,
     write_atomic_files_and_then,
 )
 from litehive.tasks.audit import (
@@ -184,19 +185,18 @@ def task_state_for_storage(task: TaskRecord) -> TaskStateRecord:
 
 def write_task_runtime(root: Path, task: TaskRecord) -> None:
     """
+    Path-based compatibility wrapper for raw task runtime persistence.
+    """
+    write_task_runtime_for_workspace(Workspace.from_path(root), task)
+
+
+def write_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
+    """
     Persist a task's runtime row without entering the workspace mutation guard.
 
     Used by engine adapters that already hold their own lock and need a
     raw save; entering the guard here would force re-entry on a thread
     that has already taken it via a different pathway.
-    """
-    runtime_store(root).save_task_state(task.id, task_state_for_storage(task))
-    ensure_runtime_ignored(root)
-
-
-def write_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
-    """
-    Persist a task's runtime row through an injected workspace.
     """
     runtime_store_for_workspace(workspace).save_task_state(task.id, task_state_for_storage(task))
     ensure_runtime_ignored(workspace.root)
@@ -729,6 +729,13 @@ def create_follow_up_tasks_for_workspace(
 
 def discard_created_task(root: Path, task_id: str) -> None:
     """
+    Path-based compatibility wrapper for task creation rollback.
+    """
+    discard_created_task_for_workspace(Workspace.from_path(root), task_id)
+
+
+def discard_created_task_for_workspace(workspace: Workspace, task_id: str) -> None:
+    """
     Remove a task that should never have existed.
 
     Drops the queue entry, clears it from ``active_task_id`` if set,
@@ -737,20 +744,21 @@ def discard_created_task(root: Path, task_id: str) -> None:
     of the initial persist so the workspace is left in the
     pre-creation shape.
     """
+    root = workspace.root
     with workspace_lock(root):
-        task = get_task(root, task_id)
-        state = load_state(root)
+        task = get_task_for_workspace(workspace, task_id)
+        state = load_state_for_workspace(workspace)
         queue_before = list(state.queue)
         before_task = snapshot_task_audit_state(task)
         if state.active_task_id == task_id:
             state.active_task_id = None
         state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
-        save_state_without_runner_guard(root, state)
+        save_state_without_runner_guard_for_workspace(workspace, state)
         if task is not None:
             td = task_dir(root, task)
             if td.exists():
                 remove_tree_logged(td, logger=logger, target_label="task directory")
-        runtime_store(root).delete_task_records(
+        runtime_store_for_workspace(workspace).delete_task_records(
             task_id,
             audit_entries=[
                 build_task_audit_entry(
@@ -988,6 +996,13 @@ def require_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord
 
 def save_task(root: Path, task: TaskRecord) -> None:
     """
+    Path-based compatibility wrapper for task persistence.
+    """
+    save_task_for_workspace(Workspace.from_path(root), task)
+
+
+def save_task_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
+    """
     Persist both the intent and runtime sides of a task atomically.
 
     Refreshes ``updated_at`` and runs under the workspace mutation
@@ -996,12 +1011,12 @@ def save_task(root: Path, task: TaskRecord) -> None:
     without touching workspace-level queue state.
     """
     task.updated_at = utcnow()
-    with workspace_mutation_guard(root):
+    with workspace_mutation_guard_for_workspace(workspace):
         write_atomic_files_and_then(
             {},
-            lambda: runtime_store(root).save_runtime_transaction(
+            lambda: runtime_store_for_workspace(workspace).save_runtime_transaction(
                 task_intents={task.id: task.to_intent_record()},
                 task_states={task.id: task_state_for_storage(task)},
             ),
         )
-        ensure_runtime_ignored(root)
+        ensure_runtime_ignored(workspace.root)

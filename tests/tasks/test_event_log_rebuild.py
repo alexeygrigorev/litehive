@@ -9,7 +9,7 @@ from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.reports import StageReport
 from litehive.state.persist import load_state, save_state
-from litehive.state.records import create_task, discard_created_task, get_task, require_task, save_task
+from litehive.state.records import create_task, discard_created_task_for_workspace, get_task, require_task, save_task
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.workspace import Workspace
 from litehive.tasks.event_log import (
@@ -233,15 +233,16 @@ def test_replay_skips_truncated_partial_log_record(tmp_path: Path) -> None:
 
 def test_replay_keeps_discarded_created_task_removed(tmp_path: Path) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     task = create_task(tmp_path, title="Temporary import task")
-    discard_created_task(tmp_path, task.id)
+    discard_created_task_for_workspace(workspace, task.id)
 
     assert get_task(tmp_path, task.id) is None
 
     _clear_task_tables(tmp_path)
-    summary = rebuild_sqlite_from_task_event_log(Workspace.from_path(tmp_path))
+    summary = rebuild_sqlite_from_task_event_log(workspace)
 
-    events, invalid = read_task_events(Workspace.from_path(tmp_path))
+    events, invalid = read_task_events(workspace)
     assert invalid == 0
     assert [event["event_type"] for event in events if event.get("task_id") == task.id] == [
         "task_created",
