@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from heru import get_engine
 from litehive.config.engine_quota import engine_quota_block
 from litehive.config.model import LitehiveConfig
-from litehive.config.runtime_settings import clear_engine_freeze, set_engine_freeze
+from litehive.config.runtime_settings import RuntimeSettingContext, clear_engine_freeze, set_engine_freeze
 from litehive.config.time_parsing import parse_engine_freeze_until as parse_engine_freeze_until
 from litehive.config.time_parsing import parse_utc_datetime
 from litehive.domain.task import TaskRecord
@@ -147,7 +147,7 @@ def persist_engine_freeze_iso_for_workspace(
     can be compared directly.
     """
     if reason:
-        context = {"reason": reason}
+        context: RuntimeSettingContext | None = {"reason": reason}
     else:
         context = None
     set_engine_freeze(
@@ -178,7 +178,7 @@ def clear_persisted_engine_freeze_for_workspace(
     captures both directions.
     """
     if reason:
-        context = {"reason": reason}
+        context: RuntimeSettingContext | None = {"reason": reason}
     else:
         context = None
     return clear_engine_freeze(

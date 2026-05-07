@@ -1626,12 +1626,18 @@ Legend:
   deep-merge helper from `config.runtime_settings`; runtime settings
   bootstrap now reuses `config.loading.load_effective_config_data(...)`
   for the same defaults/global/workspace config snapshot.
-- [ ] R3. Replace custom `json_dump` / `json_load` helpers with typed
+- [x] R3. Replace custom `json_dump` / `json_load` helpers with typed
   serialization via Pydantic or another model layer.
   Source: note 5, 02:53-04:35.
-- [ ] R4. Runtime setting values and contexts should be normal typed
+- [x] R4. Runtime setting values and contexts should be normal typed
   objects or strings, not broad `Mapping`/`Any` payloads.
   Source: note 5, 04:09-04:35.
+  Completed 2026-05-07: replaced the broad runtime-settings JSON
+  helpers with Pydantic `TypeAdapter` serialization for
+  `RuntimeSettingValue` and `RuntimeSettingContext`. Runtime-setting
+  changes and audit entries now expose typed values/contexts instead
+  of `Any` payloads, while malformed persisted JSON is still tolerated
+  at the SQLite boundary.
 - [x] R5. Remove `set_engine_preference` if it only delegates to
   `set_runtime_setting`.
   Source: note 5, 04:44-05:12.

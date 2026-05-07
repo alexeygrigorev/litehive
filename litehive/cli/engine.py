@@ -15,6 +15,7 @@ from litehive.config.engine_quota import collect_engine_quota_statuses
 from litehive.config.model import LitehiveConfig
 from litehive.config.model import normalize_engine_sequence
 from litehive.config.runtime_settings import (
+    RuntimeSettingContext,
     load_runtime_setting_audit_entries,
     set_default_engine,
     set_engine_preference,
@@ -156,7 +157,7 @@ def _engine_unfreeze_command(workspace: Workspace, name: str, reason: str | None
     return 0
 
 
-def _engine_reason_context(reason: str | None) -> dict[str, str] | None:
+def _engine_reason_context(reason: str | None) -> RuntimeSettingContext | None:
     if reason:
         return {"reason": reason}
     return None

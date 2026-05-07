@@ -11,7 +11,9 @@ later YAML drift is intentionally ignored to avoid two writers.
 from dataclasses import dataclass
 import json
 import sqlite3
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Sequence, TypeAlias
+
+from pydantic import TypeAdapter, ValidationError
 
 from litehive.config.loading import load_effective_config_data
 from litehive.config.model import LitehiveConfig, normalize_engine_sequence
@@ -40,12 +42,19 @@ RUNTIME_SETTING_KEYS = (
     RuntimeSettingKey.ENGINE_FREEZE.value,
 )
 
+RuntimeSettingValue: TypeAlias = str | list[str] | dict[str, str]
+RuntimeSettingContextValue: TypeAlias = str | int | float | bool | None
+RuntimeSettingContext: TypeAlias = dict[str, RuntimeSettingContextValue]
+
+_RUNTIME_SETTING_VALUE_ADAPTER = TypeAdapter(RuntimeSettingValue)
+_RUNTIME_SETTING_CONTEXT_ADAPTER = TypeAdapter(RuntimeSettingContext)
+
 
 @dataclass(frozen=True)
 class RuntimeSettingChange:
     key: RuntimeSettingKey
-    old_value: Any
-    new_value: Any
+    old_value: RuntimeSettingValue | None
+    new_value: RuntimeSettingValue
     changed: bool
 
 
@@ -56,9 +65,9 @@ class RuntimeSettingAuditEntry:
     created_at: str
     actor: str
     source: str
-    old_value: Any
-    new_value: Any
-    context: dict[str, Any]
+    old_value: RuntimeSettingValue | None
+    new_value: RuntimeSettingValue | None
+    context: RuntimeSettingContext
 
 
 def _bootstrap_config_data(workspace: Workspace) -> dict[str, Any]:
@@ -74,9 +83,9 @@ def _bootstrap_config_data(workspace: Workspace) -> dict[str, Any]:
     return load_effective_config_data(workspace.root)
 
 
-def _json_dumps(value: Any) -> str:
+def _dump_runtime_value(value: RuntimeSettingValue) -> str:
     """
-    Serialise a runtime-setting value with sorted keys.
+    Serialise a typed runtime-setting value with sorted keys.
 
     Sorting on the way out means two semantically-equal dicts
     produce byte-equal JSON — a precondition for the no-op
@@ -84,12 +93,16 @@ def _json_dumps(value: Any) -> str:
     unrelated key reorder would look like a change and write a
     spurious audit row).
     """
-    return json.dumps(value, sort_keys=True)
+    validated = _RUNTIME_SETTING_VALUE_ADAPTER.validate_python(value)
+    return json.dumps(
+        _RUNTIME_SETTING_VALUE_ADAPTER.dump_python(validated, mode="json"),
+        sort_keys=True,
+    )
 
 
-def _json_loads(raw: str | None) -> Any:
+def _load_runtime_value(raw: str | None) -> RuntimeSettingValue | None:
     """
-    Decode a stored ``value_json`` column tolerantly.
+    Decode and validate a stored ``value_json`` column tolerantly.
 
     Returns ``None`` for both NULL rows and malformed JSON so
     the audit-log readers and the no-op check survive a single
@@ -99,9 +112,32 @@ def _json_loads(raw: str | None) -> Any:
     if raw is None:
         return None
     try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
+        return _RUNTIME_SETTING_VALUE_ADAPTER.validate_json(raw)
+    except (json.JSONDecodeError, ValidationError, ValueError):
         return None
+
+
+def _dump_runtime_context(context: RuntimeSettingContext | None) -> str:
+    """
+    Serialise the typed audit context for a runtime-setting change.
+    """
+    validated = _RUNTIME_SETTING_CONTEXT_ADAPTER.validate_python(context or {})
+    return json.dumps(
+        _RUNTIME_SETTING_CONTEXT_ADAPTER.dump_python(validated, mode="json"),
+        sort_keys=True,
+    )
+
+
+def _load_runtime_context(raw: str | None) -> RuntimeSettingContext:
+    """
+    Decode and validate an audit context, falling back to an empty map.
+    """
+    if raw is None:
+        return {}
+    try:
+        return _RUNTIME_SETTING_CONTEXT_ADAPTER.validate_json(raw)
+    except (json.JSONDecodeError, ValidationError, ValueError):
+        return {}
 
 
 def _sequence_value(raw_value: Any, field_name: str) -> list[str]:
@@ -137,7 +173,7 @@ def _freeze_value(raw_value: Any) -> dict[str, str]:
     return {str(key): str(value) for key, value in raw_value.items()}
 
 
-def _runtime_values_from_config(config_data: Mapping[str, Any]) -> dict[str, Any]:
+def _runtime_values_from_config(config_data: Mapping[str, Any]) -> dict[str, RuntimeSettingValue]:
     """
     Project a merged config dict down to the three audited keys.
 
@@ -159,7 +195,7 @@ def _runtime_values_from_config(config_data: Mapping[str, Any]) -> dict[str, Any
     }
 
 
-def _load_setting_rows(connection: sqlite3.Connection) -> dict[str, Any]:
+def _load_setting_rows(connection: sqlite3.Connection) -> dict[str, RuntimeSettingValue | None]:
     """
     Read every ``runtime_settings`` row into a ``{key: parsed_value}`` dict.
 
@@ -171,10 +207,10 @@ def _load_setting_rows(connection: sqlite3.Connection) -> dict[str, Any]:
     rather than at each call site.
     """
     rows = connection.execute("SELECT key, value_json FROM runtime_settings").fetchall()
-    parsed: dict[str, Any] = {}
+    parsed: dict[str, RuntimeSettingValue | None] = {}
     for row in rows:
         key = str(row["key"])
-        parsed[key] = _json_loads(str(row["value_json"]))
+        parsed[key] = _load_runtime_value(str(row["value_json"]))
     return parsed
 
 
@@ -209,12 +245,12 @@ def bootstrap_runtime_settings(workspace: Workspace, config_data: Mapping[str, A
                 INSERT INTO runtime_settings (key, value_json, updated_at, actor, source)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (key, _json_dumps(value), now, "system", "config_bootstrap"),
+                (key, _dump_runtime_value(value), now, "system", "config_bootstrap"),
             )
         connection.commit()
 
 
-def load_runtime_settings(workspace: Workspace) -> dict[str, Any]:
+def load_runtime_settings(workspace: Workspace) -> dict[str, RuntimeSettingValue | None]:
     """
     Return the current audited values for the engine-control settings.
 
@@ -254,10 +290,10 @@ def apply_runtime_settings_to_config_data(workspace: Workspace, config_data: Map
 def set_runtime_setting(
     workspace: Workspace,
     key: RuntimeSettingKey,
-    value: Any,
+    value: RuntimeSettingValue,
     actor: str,
     source: str,
-    context: Mapping[str, Any] | None = None,
+    context: RuntimeSettingContext | None = None,
 ) -> RuntimeSettingChange:
     """
     Write one audited setting and append an audit-log row atomically.
@@ -271,14 +307,14 @@ def set_runtime_setting(
     """
     bootstrap_runtime_settings(workspace)
     now = utcnow()
-    new_json = _json_dumps(value)
+    new_json = _dump_runtime_value(value)
     with workspace.connect() as connection:
         row = connection.execute("SELECT value_json FROM runtime_settings WHERE key = ?", (key.value,)).fetchone()
         if row is None:
             old_json = None
         else:
             old_json = str(row["value_json"])
-        old_value = _json_loads(old_json)
+        old_value = _load_runtime_value(old_json)
         if old_value == value:
             return RuntimeSettingChange(key=key, old_value=old_value, new_value=value, changed=False)
         connection.execute(
@@ -313,7 +349,7 @@ def set_runtime_setting(
                 source,
                 old_json,
                 new_json,
-                _json_dumps(dict(context or {})),
+                _dump_runtime_context(context),
             ),
         )
         connection.commit()
@@ -325,7 +361,7 @@ def set_default_engine(
     engine_name: str,
     actor: str,
     source: str,
-    context: Mapping[str, Any] | None,
+    context: RuntimeSettingContext | None,
 ) -> RuntimeSettingChange:
     """
     Persist the workspace's default engine through the audited store.
@@ -351,7 +387,7 @@ def set_engine_preference(
     engines: Sequence[str],
     actor: str,
     source: str,
-    context: Mapping[str, Any] | None,
+    context: RuntimeSettingContext | None,
 ) -> RuntimeSettingChange:
     """
     Persist the engine fallback order through the audited store.
@@ -379,7 +415,7 @@ def set_engine_freeze(
     freeze_iso: str,
     actor: str,
     source: str,
-    context: Mapping[str, Any] | None,
+    context: RuntimeSettingContext | None,
 ) -> RuntimeSettingChange:
     """
     Add or refresh one engine's freeze-until timestamp.
@@ -415,7 +451,7 @@ def clear_engine_freeze(
     engine_name: str,
     actor: str,
     source: str,
-    context: Mapping[str, Any] | None,
+    context: RuntimeSettingContext | None,
 ) -> RuntimeSettingChange:
     """
     Remove a single engine's freeze entry and persist the rest.
@@ -435,7 +471,7 @@ def clear_engine_freeze(
             old_json = None
         else:
             old_json = str(row["value_json"])
-        freeze_map = _freeze_value(_json_loads(old_json))
+        freeze_map = _freeze_value(_load_runtime_value(old_json))
         old_value = dict(freeze_map)
         old_engine_value = freeze_map.get(engine_name)
         if old_engine_value is None:
@@ -446,7 +482,7 @@ def clear_engine_freeze(
                 changed=False,
             )
         freeze_map.pop(engine_name)
-        new_json = _json_dumps(freeze_map)
+        new_json = _dump_runtime_value(freeze_map)
         connection.execute(
             """
             UPDATE runtime_settings
@@ -475,7 +511,7 @@ def clear_engine_freeze(
                 source,
                 old_json,
                 new_json,
-                _json_dumps(
+                _dump_runtime_context(
                     {
                         "engine": engine_name,
                         "old_value": old_engine_value,
@@ -524,7 +560,7 @@ def load_runtime_setting_audit_entries(
 
     entries: list[RuntimeSettingAuditEntry] = []
     for row in rows:
-        context = _json_loads(str(row["context_json"]))
+        context = _load_runtime_context(str(row["context_json"]))
         if row["old_value_json"] is None:
             old_value_arg = None
         else:
@@ -533,10 +569,6 @@ def load_runtime_setting_audit_entries(
             new_value_arg = None
         else:
             new_value_arg = str(row["new_value_json"])
-        if isinstance(context, dict):
-            context_value = context
-        else:
-            context_value = {}
         entries.append(
             RuntimeSettingAuditEntry(
                 id=int(row["id"]),
@@ -544,9 +576,9 @@ def load_runtime_setting_audit_entries(
                 created_at=str(row["created_at"]),
                 actor=str(row["actor"]),
                 source=str(row["source"]),
-                old_value=_json_loads(old_value_arg),
-                new_value=_json_loads(new_value_arg),
-                context=context_value,
+                old_value=_load_runtime_value(old_value_arg),
+                new_value=_load_runtime_value(new_value_arg),
+                context=context,
             )
         )
     return entries
