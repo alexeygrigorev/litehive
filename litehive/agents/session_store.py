@@ -1,6 +1,7 @@
 """SQLite-backed storage for structured subagent session artifacts."""
 
 import json
+from enum import Enum
 from typing import Any, Protocol, runtime_checkable
 
 from litehive.domain.common import utcnow
@@ -9,6 +10,16 @@ from litehive.workspace import Workspace
 
 _UNSET = object()
 _EVENT_STREAM_KEY = "event_stream"
+
+
+class SubagentArtifactSlice(str, Enum):
+    """
+    Named top-level slices inside one subagent artifact payload.
+    """
+
+    SESSION = "session"
+    REPORT = "report"
+    EVENT_STREAM = _EVENT_STREAM_KEY
 
 
 @runtime_checkable
@@ -52,6 +63,25 @@ def load_subagent_artifacts(workspace: Workspace, task_id: str, subagent_id: str
     """Return the full structured payload (session + report + event stream) for a subagent run — consumed by status snapshots and stage prompt builders that need every slice at once."""
     payload, _ = _load_subagent_payload(workspace, task_id, subagent_id)
     return payload
+
+
+def _load_subagent_artifact_slice(
+    workspace: Workspace,
+    task_id: str,
+    subagent_id: str,
+    artifact_slice: SubagentArtifactSlice,
+) -> dict[str, Any]:
+    """
+    Return one dictionary slice from a subagent artifact payload.
+
+    Slice readers use this instead of loading the public full-artifact
+    payload and manually indexing it with a raw string key.
+    """
+    payload, _ = _load_subagent_payload(workspace, task_id, subagent_id)
+    value = payload.get(artifact_slice.value)
+    if isinstance(value, dict):
+        return value
+    return {}
 
 
 def save_subagent_artifacts(
@@ -112,26 +142,14 @@ def save_subagent_artifacts(
 
 def load_subagent_session(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
     """Return only the engine session metadata slice (resume IDs, transcript pointer) — used by stages that need to resume an existing engine session without paying for the report and event-stream slices."""
-    payload = load_subagent_artifacts(workspace, task_id, subagent_id)
-    session = payload.get("session")
-    if isinstance(session, dict):
-        return session
-    return {}
+    return _load_subagent_artifact_slice(workspace, task_id, subagent_id, SubagentArtifactSlice.SESSION)
 
 
 def load_subagent_report(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
     """Return only the structured report slice (verdict, summary, diagnostics) — read by downstream stages and operator-facing status."""
-    payload = load_subagent_artifacts(workspace, task_id, subagent_id)
-    report = payload.get("report")
-    if isinstance(report, dict):
-        return report
-    return {}
+    return _load_subagent_artifact_slice(workspace, task_id, subagent_id, SubagentArtifactSlice.REPORT)
 
 
 def load_subagent_event_stream(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
     """Return only the event-stream slice (engine tool calls, stdout chunks) — used by ``litehive worktree`` and post-mortem inspection where the timeline is what matters."""
-    payload = load_subagent_artifacts(workspace, task_id, subagent_id)
-    event_stream = payload.get(_EVENT_STREAM_KEY)
-    if isinstance(event_stream, dict):
-        return event_stream
-    return {}
+    return _load_subagent_artifact_slice(workspace, task_id, subagent_id, SubagentArtifactSlice.EVENT_STREAM)

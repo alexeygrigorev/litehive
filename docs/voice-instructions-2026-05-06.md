@@ -752,9 +752,20 @@ Legend:
   pyrefly, subagent manager/recovery tests, agent-report/log/debug
   CLI tests, prompt serializer tests, and operator status/activity
   tests.
-- [ ] M37. Collapse the chain from existing session load to
+- [x] M37. Collapse the chain from existing session load to
   `load_subagent_artifacts` into a simpler typed call if possible.
   Source: note 3, 29:29-29:48.
+  Verified 2026-05-07: added `SubagentArtifactSlice` and
+  `_load_subagent_artifact_slice(...)` in `agents.session_store`.
+  `load_subagent_session`, `load_subagent_report`, and
+  `load_subagent_event_stream` now select a typed payload slice
+  directly instead of calling the public full-payload
+  `load_subagent_artifacts(...)` helper and indexing by raw string.
+  Kept `load_subagent_artifacts(...)` for consumers that need the full
+  bundle, such as recovery evidence. Verified with `rg` that only full
+  bundle consumers call `load_subagent_artifacts(...)`, then reran
+  focused ruff, pyrefly, session-store tests, subagent manager tests,
+  event-stream tests, and recovery tests.
 - [ ] M38. Remove `isinstance(existing.get("created_at"), ...)` by
   making session loading return a typed object, not a dictionary.
   Source: note 3, 29:55-30:15.
