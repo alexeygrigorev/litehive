@@ -135,7 +135,7 @@ with workspace_runner_guard(Workspace.from_path(root)):
         assert refreshed.close_reason == "wont_do"
         assert refreshed.runtime.pipeline.execution_status == "cancelled"
         assert refreshed.runtime.execution.active_subagent is None
-        assert refreshed.runtime.pipeline.last_outcome.reason_code == "wont_do"
+        assert refreshed.runtime.pipeline.last_outcome.reason_code == "task_closed"
         assert refreshed.runtime.pipeline.last_outcome.kind == "closed"
         assert refreshed.runtime.pipeline.last_outcome.reason == "bad direction"
 

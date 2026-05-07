@@ -42,6 +42,46 @@ class TaskOutcomeKind(StringEnum):
     DUPLICATE = "duplicate"  # Another task already covers the same work
 
 
+class TaskCloseReason(StringEnum):
+    """
+    Operator-facing reasons accepted by `litehive task close`.
+
+    These values are persisted on `TaskRecord.close_reason` and shown
+    back to operators. They are intentionally separate from
+    `OutcomeReasonCode`, which records the broader machine-readable
+    runtime cause on `TaskOutcomeState`.
+    """
+
+    DONE = "done"
+    WONT_DO = "wont_do"
+    DEFERRED = "deferred"
+    DUPLICATE = "duplicate"
+
+    @property
+    def outcome_reason_code(self) -> "OutcomeReasonCode":
+        """
+        Return the runtime reason-code bucket for this close reason.
+        """
+        if self == TaskCloseReason.DONE:
+            return OutcomeReasonCode.TASK_DONE
+        return OutcomeReasonCode.TASK_CLOSED
+
+    @property
+    def task_close_label(self) -> str:
+        """
+        Default human-readable journal reason for operator closures.
+        """
+        match self:
+            case TaskCloseReason.DONE:
+                return "Task already satisfied."
+            case TaskCloseReason.WONT_DO:
+                return "Task closed as won't do."
+            case TaskCloseReason.DEFERRED:
+                return "Task deferred."
+            case TaskCloseReason.DUPLICATE:
+                return "Task closed as duplicate."
+
+
 class OutcomeReasonCode(StringEnum):
     """
     Normalized reason codes for stage outcomes and task interruptions.
@@ -64,43 +104,5 @@ class OutcomeReasonCode(StringEnum):
     STAGE_EXCEPTION = "stage_exception"
     UNSUPPORTED_VERDICT = "unsupported_verdict"
     MERGE_CONFLICT = "merge_conflict"
-    DONE = "done"
-    WONT_DO = "wont_do"
-    DEFERRED = "deferred"
-    DUPLICATE = "duplicate"
-
-    @property
-    def is_task_close_outcome(self) -> bool:
-        """
-        Whether `litehive task close` may use this reason directly.
-        """
-        match self:
-            case (
-                OutcomeReasonCode.DONE
-                | OutcomeReasonCode.WONT_DO
-                | OutcomeReasonCode.DEFERRED
-                | OutcomeReasonCode.DUPLICATE
-                | OutcomeReasonCode.EXECUTION_CANCELLED
-            ):
-                return True
-            case _:
-                return False
-
-    @property
-    def task_close_label(self) -> str | None:
-        """
-        Default human-readable close reason for operator closures.
-        """
-        match self:
-            case OutcomeReasonCode.DONE:
-                return "Task already satisfied."
-            case OutcomeReasonCode.WONT_DO:
-                return "Task closed as won't do."
-            case OutcomeReasonCode.DEFERRED:
-                return "Task deferred."
-            case OutcomeReasonCode.DUPLICATE:
-                return "Task closed as duplicate."
-            case OutcomeReasonCode.EXECUTION_CANCELLED:
-                return "Task abandoned via CLI."
-            case _:
-                return None
+    TASK_DONE = "task_done"
+    TASK_CLOSED = "task_closed"

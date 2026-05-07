@@ -215,8 +215,8 @@ Legend:
   relationship. Removed stage-report verdict aliases; `Verdict` now
   owns `stage_report_verdict`. Removed the unused engine-selection
   role fallback helper/table. Removed task close outcome/label tables;
-  `OutcomeReasonCode` now owns `is_task_close_outcome` and
-  `task_close_label`. Removed the lifecycle primary-stage table;
+  `TaskCloseReason` now owns the close-to-runtime projection and
+  human close labels. Removed the lifecycle primary-stage table;
   `PipelineState.primary_stage` now owns that projection. The remaining
   `dict[PipelineState, ...]` results are registries/config groupings or
   persisted keyed state (`nodes`, `hook_specs`, `stage_retry`,
@@ -1013,10 +1013,16 @@ Legend:
   `Verdict` members cannot be persisted through activity serialization.
   Strengthened the characterization test to cover both unsupported
   submitted verdicts, `accept` and `fail`.
-- [ ] D16. Remove duplicate values between verdict enums and outcome
+- [x] D16. Remove duplicate values between verdict enums and outcome
   reason codes, such as done/won't-do/defer/duplicate appearing in
   multiple places without clear distinction.
   Source: note 6, 04:55-05:06.
+  Completed 2026-05-07: introduced `TaskCloseReason` for
+  operator-facing close choices (`done`, `wont_do`, `deferred`,
+  `duplicate`) and removed those duplicate values from
+  `OutcomeReasonCode`. Runtime outcomes now use `task_done` or
+  `task_closed` as the machine reason-code bucket while retaining the
+  specific close reason on `TaskRecord.close_reason`.
 - [ ] D17. Decide and document whether execution cancelled and
   execution interrupted are distinct concepts.
   Source: note 6, 05:06-05:13.

@@ -84,7 +84,7 @@ def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None
     assert refreshed.close_reason == "wont_do"
     assert refreshed.pipeline_status == "backlog"
     assert refreshed.runtime.pipeline.execution_status == "cancelled"
-    assert refreshed.runtime.pipeline.last_outcome.reason_code == "wont_do"
+    assert refreshed.runtime.pipeline.last_outcome.reason_code == "task_closed"
     assert refreshed.runtime.pipeline.last_outcome.kind == "closed"
     assert refreshed.runtime.pipeline.last_outcome.reason == "not worth it"
     assert state.active_task_id is None
@@ -93,7 +93,7 @@ def test_update_task_closes_task_with_structured_outcome(tmp_path: Path) -> None
     assert raw_state["status"] == "closed"
     assert raw_state["close_reason"] == "wont_do"
     assert raw_state["runtime"]["pipeline"]["last_outcome"]["kind"] == "closed"
-    assert raw_state["runtime"]["pipeline"]["last_outcome"]["reason_code"] == "wont_do"
+    assert raw_state["runtime"]["pipeline"]["last_outcome"]["reason_code"] == "task_closed"
     with pytest.raises(TaskNotFound):
         persistence.load(task.id)
 
@@ -218,7 +218,7 @@ def test_close_task_tolerates_missing_runtime_row_on_target_task(tmp_path: Path)
     assert raw_state["status"] == "closed"
     assert raw_state["close_reason"] == "duplicate"
     assert raw_state["runtime"]["pipeline"]["last_outcome"]["kind"] == "closed"
-    assert raw_state["runtime"]["pipeline"]["last_outcome"]["reason_code"] == "duplicate"
+    assert raw_state["runtime"]["pipeline"]["last_outcome"]["reason_code"] == "task_closed"
 
 
 def test_close_task_resets_pipeline_state_row(tmp_path: Path) -> None:

@@ -8,7 +8,7 @@ without closing so the operator can resume later).
 """
 
 from litehive.domain.common import TaskStatus
-from litehive.domain.outcomes import OutcomeReasonCode
+from litehive.domain.outcomes import TaskCloseReason
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import StopTaskSummary
 from litehive.workspace import Workspace
@@ -41,11 +41,10 @@ def _allowed_close_outcome_values() -> list[str]:
     """
     Return the CLI-supported close outcome spellings.
 
-    OutcomeReasonCode carries many lifecycle-internal reasons; this
-    projection lists only the terminal operator choices accepted by the
-    close transition.
+    TaskCloseReason carries only the terminal operator choices accepted
+    by the close transition.
     """
-    return sorted(code.value for code in OutcomeReasonCode if code.is_task_close_outcome)
+    return sorted(reason.value for reason in TaskCloseReason)
 
 
 def _abandon_task_transition(
@@ -118,11 +117,8 @@ def _close_task_transition(
     """
     root = workspace.root
     try:
-        outcome_code = OutcomeReasonCode(outcome)
+        close_reason = TaskCloseReason(outcome)
     except ValueError:
-        allowed = ", ".join(_allowed_close_outcome_values())
-        raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
-    if not outcome_code.is_task_close_outcome:
         allowed = ", ".join(_allowed_close_outcome_values())
         raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
     state = load_state(root)
@@ -164,7 +160,7 @@ def _close_task_transition(
             raise ValueError(f"Task {task.id} is already done and cannot be closed")
         journal_message = _apply_close_task_state(
             task,
-            outcome=outcome_code,
+            close_reason=close_reason,
             reason=reason,
             follow_up_task_id=follow_up_task_id,
         )
@@ -180,7 +176,7 @@ def _close_task_transition(
             before_task=before_task,
             before_queue=queue_before,
             context={
-                "outcome": outcome_code.value,
+                "outcome": close_reason.value,
                 "reason": reason,
                 "follow_up_task_id": follow_up_task_id,
             },

@@ -250,8 +250,8 @@ def test_current_storage_contract_uses_sqlite_without_workspace_yaml(tmp_path: P
 @pytest.mark.parametrize(
     ("kind", "reason_code"),
     [
-        ("done", "done"),
-        ("closed", "duplicate"),
+        ("done", "task_done"),
+        ("closed", "task_closed"),
         ("closed", "execution_cancelled"),
     ],
 )

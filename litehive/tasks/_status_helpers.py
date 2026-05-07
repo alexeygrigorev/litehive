@@ -10,7 +10,7 @@ persistence and outcome-shaping plumbing.
 from pathlib import Path
 
 from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStatus
-from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
+from litehive.domain.outcomes import OutcomeReasonCode, TaskCloseReason, TaskOutcomeKind
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.state.persist import persist_task_and_state_without_runner_guard
@@ -126,7 +126,7 @@ def _apply_cancelled_task_state(task: TaskRecord, reason: str) -> None:
 
 def _apply_close_task_state(
     task: TaskRecord,
-    outcome: OutcomeReasonCode,
+    close_reason: TaskCloseReason,
     reason: str | None,
     follow_up_task_id: str | None = None,
     pipeline_status: PipelineStatus | str | None = None,
@@ -140,18 +140,18 @@ def _apply_close_task_state(
     one rule set; returning the journal text lets the caller persist it
     in the same audit envelope.
     """
-    if outcome == OutcomeReasonCode.DONE:
+    if close_reason == TaskCloseReason.DONE:
         execution_status = TaskExecutionStatus.DONE
     else:
         execution_status = TaskExecutionStatus.CANCELLED
     clear_task_run_activity(task, execution_status=execution_status)
-    if outcome == OutcomeReasonCode.DONE:
+    if close_reason == TaskCloseReason.DONE:
         task.status = TaskStatus.DONE
     else:
         task.status = TaskStatus.CLOSED
-    task.close_reason = outcome.value
+    task.close_reason = close_reason.value
     task.flag_reason = None
-    if outcome == OutcomeReasonCode.DONE:
+    if close_reason == TaskCloseReason.DONE:
         pipeline_status_fallback = PipelineStatus.DONE
     else:
         pipeline_status_fallback = task.pipeline_status
@@ -162,18 +162,17 @@ def _apply_close_task_state(
         else PipelineStatus(resolved_pipeline_status)
     )
     outcome_kind = TaskOutcomeKind(task.status.value)
-    close_label = outcome.task_close_label or outcome.value
     apply_task_outcome(
         task,
         kind=outcome_kind,
         stage=task.pipeline_status,
-        reason_code=outcome,
-        reason=reason or close_label,
+        reason_code=close_reason.outcome_reason_code,
+        reason=reason or close_reason.task_close_label,
         retry_count=0,
         retry_limit=0,
         follow_up_task_id=follow_up_task_id,
     )
-    journal_message = f"Task closed: {outcome.value}."
+    journal_message = f"Task closed: {close_reason.value}."
     if reason:
         journal_message += f" {reason}"
     if follow_up_task_id is not None:

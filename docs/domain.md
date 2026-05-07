@@ -56,6 +56,10 @@ stable across refactors.
 - `OutcomeReasonCode` is the machine-readable reason that produced a task
   outcome: retry exhaustion, hallucinated completion, operator cancellation,
   missing acceptance criteria, merge conflict, and similar routing facts.
+- `TaskCloseReason` is the operator-facing close choice accepted by
+  `litehive task close`: `done`, `wont_do`, `deferred`, or `duplicate`.
+  It is stored on `TaskRecord.close_reason`; runtime outcome reason codes use
+  the broader `task_done` or `task_closed` buckets.
 - Close outcomes such as `wont_do`, `deferred`, `duplicate`, and
   `execution_cancelled` are close reasons, not task statuses.
 

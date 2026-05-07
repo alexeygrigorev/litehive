@@ -757,7 +757,7 @@ def test_root_task_close_allows_planner_to_mark_done_from_grooming(tmp_path: Pat
     assert updated.runtime.pipeline.execution_status == "done"
     assert updated.runtime.pipeline.last_outcome is not None
     assert updated.runtime.pipeline.last_outcome.kind == "done"
-    assert updated.runtime.pipeline.last_outcome.reason_code == "done"
+    assert updated.runtime.pipeline.last_outcome.reason_code == "task_done"
     assert updated.runtime.pipeline.last_outcome.reason == "verified current main already satisfies the request"
 
 

@@ -10,7 +10,7 @@ from litehive.domain.common import (
     task_stage_for_pipeline_state,
 )
 from litehive.domain.failure_diagnostics import FailureDiagnostics
-from litehive.domain.outcomes import OutcomeReasonCode
+from litehive.domain.outcomes import TaskCloseReason
 from litehive.domain.reports import ReportPipelineState, StageReport, canonical_stage_report_verdict
 from litehive.domain.runtime import RuntimeSubagentState, Subagent
 
@@ -81,12 +81,11 @@ def test_stage_report_verdict_vocabulary_canonicalizes_to_pass_reject_blocked() 
     assert canonical_stage_report_verdict("budget_hit") == "blocked"
 
 
-def test_outcome_reason_code_owns_task_close_projection() -> None:
-    assert OutcomeReasonCode.DONE.is_task_close_outcome is True
-    assert OutcomeReasonCode.DONE.task_close_label == "Task already satisfied."
-    assert OutcomeReasonCode.DUPLICATE.task_close_label == "Task closed as duplicate."
-    assert OutcomeReasonCode.RETRY_LIMIT_EXHAUSTED.is_task_close_outcome is False
-    assert OutcomeReasonCode.RETRY_LIMIT_EXHAUSTED.task_close_label is None
+def test_task_close_reason_owns_close_projection() -> None:
+    assert TaskCloseReason.DONE.outcome_reason_code == "task_done"
+    assert TaskCloseReason.DONE.task_close_label == "Task already satisfied."
+    assert TaskCloseReason.DUPLICATE.outcome_reason_code == "task_closed"
+    assert TaskCloseReason.DUPLICATE.task_close_label == "Task closed as duplicate."
 
 
 def test_stage_report_pipeline_state_uses_named_report_projection() -> None:

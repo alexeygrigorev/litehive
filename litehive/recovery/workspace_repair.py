@@ -82,7 +82,7 @@ def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepa
                 task,
                 kind=TaskOutcomeKind.DONE,
                 stage="done",
-                reason_code=OutcomeReasonCode.DONE,
+                reason_code=OutcomeReasonCode.TASK_DONE,
                 reason="Recovered stale terminal task state from the latest pass report.",
                 retry_count=task.runtime.pipeline.retry_count,
                 retry_limit=task.runtime.pipeline.retry_limit,
