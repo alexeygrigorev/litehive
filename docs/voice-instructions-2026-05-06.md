@@ -2238,9 +2238,20 @@ Legend:
   `[unannotated-return]`, then reran the repository pyrefly baseline
   check, the architecture guardrail test, `make typecheck`, and
   `make test`.
-- [ ] T2. Make the type checker catch untyped variables/parameters
+- [x] T2. Make the type checker catch untyped variables/parameters
   like root/completed/flagged in the pool code.
   Source: note 4, 32:03-32:23.
+  Completed 2026-05-07: enabled pyrefly's
+  `unannotated-parameter` diagnostic as an error in `pyproject.toml`
+  and refreshed `pyrefly-baseline.json` with existing debt so new
+  untyped parameters fail `make typecheck`. Verified the exact
+  pool paths from P10 with `uv run pyrefly check litehive/cli/pool.py
+  litehive/domain/pool.py --only unannotated-parameter --error
+  unannotated-parameter`; the pool summary builder/writer parameters
+  including `root`, `completed`, and `flagged` are already annotated.
+  Added the setting to the architecture guardrail and code-style docs,
+  verified a temporary pyrefly project fails on `def g(x) -> int`, and
+  reran focused pool/guardrail tests, `make typecheck`, and `make test`.
 - [ ] T3. Make the type checker catch daemon `runner_is_live` /
   `has_work` object misuse.
   Source: note 5, 20:43-21:07.
