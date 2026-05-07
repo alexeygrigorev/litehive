@@ -42,9 +42,7 @@ from litehive.git.ops import (
 )
 from litehive.state.records import (
     clear_task_worktree_path,
-    get_task,
     get_task_worktree_path,
-    save_task,
     set_task_worktree_path,
 )
 from litehive.worktree.cleanup import (
@@ -128,7 +126,7 @@ class WorktreeService:
         if not is_git_repo(self.root):
             return WorktreeSyncResult(changed=False)
 
-        task = get_task(self.root, task_id)
+        task = self.workspace.get_task(task_id)
         if task is None:
             raise GitError(f"task {task_id} not found while creating worktree")
 
@@ -138,7 +136,7 @@ class WorktreeService:
             existing = self.registered_worktree_for_branch(branch)
             if existing is not None:
                 set_task_worktree_path(task, serialize_worktree_path(existing))
-                save_task(self.root, task)
+                self.workspace.save_task(task)
                 recorded = existing
             else:
                 worktree = task_worktree_path(self.root, task)
@@ -147,7 +145,7 @@ class WorktreeService:
                 add_worktree_branch(self.root, branch, worktree, force=True)
                 ensure_worktree_venv_link(self.root, worktree)
                 set_task_worktree_path(task, serialize_worktree_path(worktree))
-                save_task(self.root, task)
+                self.workspace.save_task(task)
                 return WorktreeSyncResult(changed=True, worktree_path=worktree)
 
         worktree = self._resolved_lifecycle_worktree(recorded, worktree_resolver, resolver_state)
@@ -245,7 +243,7 @@ class WorktreeService:
         try to reuse a path that is no longer on disk and fail
         unpredictably during a rebase.
         """
-        task = get_task(self.root, task_id)
+        task = self.workspace.get_task(task_id)
         if task is None:
             return False
         inspection = self.inspect_task_worktree(task)
@@ -260,11 +258,11 @@ class WorktreeService:
         no-op when the recorded path is still valid, so callers can
         invoke speculatively.
         """
-        task = get_task(self.root, task_id)
+        task = self.workspace.get_task(task_id)
         if task is None or not self.task_has_missing_recorded_worktree(task_id):
             return
         clear_task_worktree_path(task)
-        save_task(self.root, task)
+        self.workspace.save_task(task)
 
     def cleanup_terminal_task_worktree(self, task: TaskRecord) -> None:
         """

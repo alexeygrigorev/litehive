@@ -23,6 +23,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
   - [x] Remaining load/save wrappers in CLI/task/recovery callers.
 - [x] Move agent task mutation target from raw root to `Workspace`.
 - [x] Add workspace-native daemon registry helpers for daemon execution/status paths.
+- [x] Move `WorktreeService` task reads/writes to its injected `Workspace`.
 - [x] Migrate `config.loading.load_config(root)` callers that already hold `Workspace`.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
