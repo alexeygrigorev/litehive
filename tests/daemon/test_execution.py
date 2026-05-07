@@ -7,9 +7,11 @@ from litehive.config.workspace import create_workspace
 from litehive.daemon.execution import (
     _daemon_should_continue_for_stop_reason,
     _daemon_status_snapshot,
+    _runner_is_live,
     run_daemon_loop,
 )
 from litehive.config.model import LitehiveConfig
+from litehive.domain.common import RunnerExecutionStatus
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import WorkspaceState
 from litehive.state.persist import load_state, save_state
@@ -173,3 +175,10 @@ def test_daemon_continues_only_for_absent_or_transient_stop_reasons() -> None:
     assert _daemon_should_continue_for_stop_reason("task_requeued") is True
     assert _daemon_should_continue_for_stop_reason("None") is False
     assert _daemon_should_continue_for_stop_reason("attention_required") is False
+
+
+def test_runner_is_live_uses_typed_runner_status() -> None:
+    assert _runner_is_live(RunnerStatusState(status=RunnerExecutionStatus.RUNNING)) is True
+    assert _runner_is_live(RunnerStatusState(status=RunnerExecutionStatus.LATE)) is True
+    assert _runner_is_live(RunnerStatusState(status=RunnerExecutionStatus.IDLE)) is False
+    assert _runner_is_live(RunnerStatusState(status=RunnerExecutionStatus.STALE)) is False

@@ -2111,9 +2111,14 @@ Legend:
   `litehive.daemon.termination`. `daemon.execution` now keeps the
   start/stop orchestration and daemon loop while importing the
   termination behavior from that focused module.
-- [ ] DM17. Fix type checking around "runner is live" and `has_work`;
+- [x] DM17. Fix type checking around "runner is live" and `has_work`;
   functions should accept and return normal typed objects.
   Source: note 5, 20:43-21:07.
+  Completed 2026-05-07: `_runner_is_live(...)` now accepts
+  `RunnerStatusState` and compares the typed `RunnerExecutionStatus`
+  values directly. `_has_work(...)` already accepted `WorkspaceState`,
+  so both daemon loop predicates now operate on normal domain objects
+  instead of loose attribute probes.
 - [ ] DM18. Convert `should_continue_for_stop_reason` to use a domain
   enum/object rather than arbitrary object/string values.
   Source: note 5, 21:08-21:24.

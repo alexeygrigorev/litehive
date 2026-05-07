@@ -28,6 +28,7 @@ from litehive.container import build_workspace
 from litehive.config.model import DaemonConfig
 from litehive.config.workspace import create_workspace
 from litehive.attention import AttentionRepository
+from litehive.domain.common import RunnerExecutionStatus
 from litehive.domain.pool import PoolStopReason
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import WorkspaceState
@@ -64,6 +65,7 @@ _DAEMON_TRANSIENT_STOP_REASONS = frozenset(
         PoolStopReason.TASK_REQUEUED,
     }
 )
+_LIVE_RUNNER_STATUSES = frozenset({RunnerExecutionStatus.RUNNING, RunnerExecutionStatus.LATE})
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,7 +241,7 @@ def _daemon_healthcheck_failed(entry: DaemonRegistryEntry, config: DaemonConfig)
     return heartbeat_age is None or heartbeat_age > config.health_timeout_seconds
 
 
-def _runner_is_live(status) -> bool:
+def _runner_is_live(status: RunnerStatusState) -> bool:
     """
     True when another ``litehive run`` is still active for the workspace.
 
@@ -249,7 +251,7 @@ def _runner_is_live(status) -> bool:
     The daemon loop idles instead of spawning a duplicate runner when
     this returns true.
     """
-    return getattr(status, "status", None) in {"running", "late"}
+    return status.status in _LIVE_RUNNER_STATUSES
 
 
 def _has_work(state: WorkspaceState) -> bool:
