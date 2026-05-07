@@ -71,7 +71,7 @@ def collect_rescue_candidates_for_workspace(workspace: Workspace) -> list[Rescue
         if worktree_path is None or worktree_rel is None:
             continue
         if worktree_path.exists():
-            commit_shas = _worktree_commits_ahead_of_main(workspace.root, worktree_path)
+            commit_shas = _worktree_commits_ahead_of_main_for_workspace(workspace, worktree_path)
         else:
             commit_shas = []
         candidates.append(
@@ -149,7 +149,7 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
             worktree_head
             and main_head
             and worktree_head != main_head
-            and _worktree_patch_already_on_main(workspace.root, worktree_head, main_head)
+            and _worktree_patch_already_on_main_for_workspace(workspace, worktree_head, main_head)
         ):
             try:
                 _finalize_rescue_for_workspace(workspace, task, outcome="already-landed", head_sha=main_head)
@@ -173,7 +173,7 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
             worktree_head
             and main_head
             and worktree_head != main_head
-            and _worktree_has_non_metadata_changes(workspace.root, candidate.worktree_path, task.id)
+            and _worktree_has_non_metadata_changes_for_workspace(workspace, candidate.worktree_path, task.id)
         ):
             try:
                 _finalize_rescue_for_workspace(workspace, task, outcome="already-landed", head_sha=main_head)
@@ -212,7 +212,7 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
             message="no worktree commits ahead of main",
         )
 
-    if worktree_head and main_head and _worktree_patch_already_on_main(workspace.root, worktree_head, main_head):
+    if worktree_head and main_head and _worktree_patch_already_on_main_for_workspace(workspace, worktree_head, main_head):
         try:
             _finalize_rescue_for_workspace(workspace, task, outcome="already-landed", head_sha=main_head)
         except WorkspaceConflictError as exc:
@@ -308,7 +308,7 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
     )
 
 
-def _worktree_commits_ahead_of_main(root: Path, worktree_path: Path) -> list[str]:
+def _worktree_commits_ahead_of_main_for_workspace(workspace: Workspace, worktree_path: Path) -> list[str]:
     """
     Return commit SHAs the worktree carries past its fork-point with main, oldest-first.
 
@@ -318,14 +318,14 @@ def _worktree_commits_ahead_of_main(root: Path, worktree_path: Path) -> list[str
     means the worktree has no commits to rescue (the
     ``no_commits`` / ``already_landed`` outcomes branch on this).
     """
-    main_head = current_head(root) or "HEAD"
+    main_head = current_head(workspace.root) or "HEAD"
     fork_point = git_stdout_or_none(worktree_path, "merge-base", main_head, "HEAD")
     if not fork_point:
         return []
     return git_stdout_lines(worktree_path, "rev-list", "--reverse", f"{fork_point}..HEAD")
 
 
-def _worktree_patch_already_on_main(root: Path, wt_head: str, main_head: str) -> bool:
+def _worktree_patch_already_on_main_for_workspace(workspace: Workspace, wt_head: str, main_head: str) -> bool:
     """
     True when the worktree's diff is already represented on main.
 
@@ -334,7 +334,7 @@ def _worktree_patch_already_on_main(root: Path, wt_head: str, main_head: str) ->
     cherry-picking equivalent commits onto main twice. Backed by
     ``git cherry``, which compares patch ids rather than commit shas.
     """
-    lines = cherry_check(root, main_head, wt_head)
+    lines = cherry_check(workspace.root, main_head, wt_head)
     if lines is None:
         return False
     return not lines or all(line.startswith("-") for line in lines)
@@ -492,7 +492,7 @@ def _restore_litehive_changes(root: Path, stash_ref: str | None) -> None:
     stash_drop(root, stash_ref)
 
 
-def _worktree_has_non_metadata_changes(root: Path, worktree_path: Path, task_id: str) -> bool:
+def _worktree_has_non_metadata_changes_for_workspace(workspace: Workspace, worktree_path: Path, task_id: str) -> bool:
     """
     True when the worktree's diff against main contains anything besides task metadata.
 
@@ -503,7 +503,7 @@ def _worktree_has_non_metadata_changes(root: Path, worktree_path: Path, task_id:
     worktree would falsely render as already_landed and confuse the
     rescue summary.
     """
-    main_head = current_head(root) or "HEAD"
+    main_head = current_head(workspace.root) or "HEAD"
     fork_point = git_stdout_or_none(worktree_path, "merge-base", main_head, "HEAD")
     if not fork_point:
         return False
