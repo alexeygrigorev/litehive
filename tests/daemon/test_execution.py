@@ -12,6 +12,7 @@ from litehive.daemon.execution import (
 )
 from litehive.config.model import LitehiveConfig
 from litehive.domain.common import RunnerExecutionStatus
+from litehive.domain.pool import PoolStopReason
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import WorkspaceState
 from litehive.state.persist import load_state, save_state
@@ -171,10 +172,38 @@ def test_daemon_status_snapshot_uses_shared_status_collector(tmp_path: Path, mon
 
 def test_daemon_continues_only_for_absent_or_transient_stop_reasons() -> None:
     assert _daemon_should_continue_for_stop_reason(None) is True
-    assert _daemon_should_continue_for_stop_reason("queue_exhausted") is True
-    assert _daemon_should_continue_for_stop_reason("task_requeued") is True
-    assert _daemon_should_continue_for_stop_reason("None") is False
-    assert _daemon_should_continue_for_stop_reason("attention_required") is False
+    assert _daemon_should_continue_for_stop_reason(PoolStopReason.QUEUE_EXHAUSTED) is True
+    assert _daemon_should_continue_for_stop_reason(PoolStopReason.TASK_REQUEUED) is True
+    assert _daemon_should_continue_for_stop_reason(PoolStopReason.ATTENTION_REQUIRED) is False
+
+
+def test_daemon_stops_for_unknown_persisted_pool_stop_reason(tmp_path: Path, monkeypatch) -> None:
+    create_workspace(tmp_path)
+    create_task(tmp_path, title="Queued work")
+    state = load_state(tmp_path)
+    state.pool_stop_reason = "None"
+    save_state(tmp_path, state)
+
+    subprocess_calls = 0
+
+    def fake_run_logged_subprocess(command: list[str], **kwargs) -> int:
+        del command, kwargs
+        nonlocal subprocess_calls
+        subprocess_calls += 1
+        return 0
+
+    monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
+    monkeypatch.setattr("litehive.daemon.execution.maybe_run_workspace_backup", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.unregister_daemon", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.check_origin_divergence", lambda *args, **kwargs: None)
+
+    stream = io.StringIO()
+    exit_code = run_daemon_loop(tmp_path, output_stream=stream, session_dir=tmp_path / "logs")
+
+    assert exit_code == 0
+    assert subprocess_calls == 0
+    assert "Runner stopped: None" in stream.getvalue()
 
 
 def test_runner_is_live_uses_typed_runner_status() -> None:

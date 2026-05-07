@@ -2119,9 +2119,14 @@ Legend:
   values directly. `_has_work(...)` already accepted `WorkspaceState`,
   so both daemon loop predicates now operate on normal domain objects
   instead of loose attribute probes.
-- [ ] DM18. Convert `should_continue_for_stop_reason` to use a domain
+- [x] DM18. Convert `should_continue_for_stop_reason` to use a domain
   enum/object rather than arbitrary object/string values.
   Source: note 5, 21:08-21:24.
+  Completed 2026-05-07: `_daemon_should_continue_for_stop_reason(...)`
+  now accepts `PoolStopReason | None` and compares enum members
+  directly. The daemon loop converts the persisted
+  `WorkspaceState.pool_stop_reason` string at the state boundary and
+  still treats unknown stored strings as halt reasons.
 - [ ] DM19. Add a daemon DI container or daemon-specific container
   instead of global variables.
   Source: note 5, 21:52-22:06.

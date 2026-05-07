@@ -265,7 +265,13 @@ def _has_work(state: WorkspaceState) -> bool:
     return state.active_task_id is not None or bool(state.queue)
 
 
-def _daemon_should_continue_for_stop_reason(reason: str | None) -> bool:
+def _pool_stop_reason_from_state(state: WorkspaceState) -> PoolStopReason | None:
+    if state.pool_stop_reason is None:
+        return None
+    return PoolStopReason.from_value(state.pool_stop_reason)
+
+
+def _daemon_should_continue_for_stop_reason(reason: PoolStopReason | None) -> bool:
     """
     Distinguish a transient pause from a halt the daemon should respect.
 
@@ -276,12 +282,8 @@ def _daemon_should_continue_for_stop_reason(reason: str | None) -> bool:
     state) is honored — those require human action and looping would
     spin forever.
     """
-    if reason is None:
-        return True
-    stop_reason = PoolStopReason.from_value(reason)
-    if stop_reason is None:
-        return False
-    return stop_reason in _DAEMON_TRANSIENT_STOP_REASONS
+    return reason is None or reason in _DAEMON_TRANSIENT_STOP_REASONS
+
 
 def create_workspace_venvs_ready(
     workspace: Path,
@@ -472,7 +474,10 @@ def run_daemon_loop(
             if not _has_work(pre_snapshot.state):
                 output.line("No active or queued tasks remain. Stopping.")
                 return 0
-            stop_reason_before = pre_snapshot.state.pool_stop_reason
+            stop_reason_before = _pool_stop_reason_from_state(pre_snapshot.state)
+            if pre_snapshot.state.pool_stop_reason is not None and stop_reason_before is None:
+                output.line(f"Runner stopped: {pre_snapshot.state.pool_stop_reason}")
+                return 0
             if not _daemon_should_continue_for_stop_reason(stop_reason_before):
                 output.line(f"Runner stopped: {stop_reason_before}")
                 return 0
@@ -501,9 +506,12 @@ def run_daemon_loop(
                 return 1
             output.line(post_snapshot.text)
 
-            stop_reason = post_snapshot.state.pool_stop_reason
+            stop_reason = _pool_stop_reason_from_state(post_snapshot.state)
             if not _has_work(post_snapshot.state):
                 output.line("No active or queued tasks remain. Stopping.")
+                return 0
+            if post_snapshot.state.pool_stop_reason is not None and stop_reason is None:
+                output.line(f"Runner stopped: {post_snapshot.state.pool_stop_reason}")
                 return 0
             if not _daemon_should_continue_for_stop_reason(stop_reason):
                 output.line(f"Runner stopped: {stop_reason}")
