@@ -11,8 +11,7 @@ from a single path:
   used by loaders and probes.
 - :mod:`.status_loaders` — config, state, runner, and
   engine-monitoring loaders.
-- :mod:`.status_probes` — every ``_probe_*`` and the public
-  :func:`probe_registry_files`.
+- :mod:`.status_probes` — every ``_probe_*``.
 - :mod:`.status_rendering` — :func:`status_has_problems` and the
   ``render_*`` helpers.
 """
@@ -35,7 +34,6 @@ from litehive.observability.status_probes import (
     _probe_runner_state,
     _probe_task_index_references,
     _probe_task_status_damage,
-    probe_registry_files,
 )
 from litehive.observability.status_rendering import (  # noqa: F401
     render_health_summary,
@@ -55,7 +53,6 @@ __all__ = [
     "StatusSnapshot",
     "collect_operational_status_snapshot_for_workspace",
     "collect_status_snapshot_for_workspace",
-    "probe_registry_files",
     "render_health_summary",
     "render_issue_lines",
     "render_operational_issue_lines",
@@ -71,7 +68,6 @@ def collect_status_snapshot_for_workspace(workspace: Workspace) -> StatusSnapsho
     not rebuild dependencies during read-only status collection.
     """
     root = workspace.root
-    registry_issues = probe_registry_files()
     config, config_issues = _load_config_for_status(root)
     state, state_issues = _load_state_for_status(workspace)
     runner, runner_issue = _load_runner_status_for_status(root)
@@ -81,7 +77,6 @@ def collect_status_snapshot_for_workspace(workspace: Workspace) -> StatusSnapsho
     else:
         runner_issues_list = []
     issues = [
-        *registry_issues,
         *config_issues,
         *state_issues,
         *runner_issues_list,

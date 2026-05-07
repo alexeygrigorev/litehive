@@ -18,7 +18,6 @@ from typing import Mapping
 from pydantic import ValidationError
 
 from litehive.config.paths import workspace_path
-from litehive.config.registry import workspace_registry_error, workspace_registry_path
 from litehive.daemon.logs import latest_run_all_log_dir
 from litehive.daemon.registry import daemon_metadata
 from litehive.domain.common import PipelineStatus, RuntimeStageStatus, TaskExecutionStatus, TaskStatus
@@ -37,30 +36,6 @@ from litehive.observability.status_types import (
 )
 from litehive.state.locking import runner_metadata_present, runner_pid_is_alive
 from litehive.workspace import Workspace
-
-
-def probe_registry_files() -> list[StatusIssue]:
-    """
-    Surface a broken global workspace registry as a status issue.
-
-    Without this probe, a corrupt registry would silently break
-    workspace resolution everywhere and the operator would have
-    no signal pointing at the registry file. Returns an empty
-    list when the registry is healthy or absent.
-    """
-    registry_error = workspace_registry_error()
-    if registry_error is None:
-        return []
-    return [
-        StatusIssue(
-            key="registry",
-            severity="ERROR",
-            message=(
-                f"BROKEN at {workspace_registry_path()} ({registry_error})"
-                " — restore or remove the global workspace registry database so Litehive can rebuild it."
-            ),
-        )
-    ]
 
 
 def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusState) -> list[StatusIssue]:

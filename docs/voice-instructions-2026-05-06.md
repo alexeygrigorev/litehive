@@ -1956,9 +1956,14 @@ Legend:
   Litehive workspace. Updated tests so subdirectories and outside
   directories fail instead of walking upward or searching registered
   workspaces.
-- [ ] W11. Remove global workspace registry behavior. The note says
+- [x] W11. Remove global workspace registry behavior. The note says
   the global registry of workspaces is no longer wanted.
   Source: note 5, 13:27-13:41.
+  Completed 2026-05-07: removed workspace registration and registry
+  lookup/remapping from workspace normalization, resolution, and
+  bootstrap. Deleted the global workspace registry modules and removed
+  the status probe/tests that treated a corrupt global workspace
+  registry as an operator issue.
 - [ ] W12. Replace `ensure_workspace` with explicit
   `create_workspace` / bootstrap behavior. Do not accidentally create
   workspace state during load.

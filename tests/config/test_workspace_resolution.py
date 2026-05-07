@@ -1,5 +1,4 @@
 from pathlib import Path
-import threading
 
 import pytest
 
@@ -49,19 +48,10 @@ def test_resolve_workspace_rejects_subdirectory_without_searching_parents(
 
 def test_normalize_workspace_root_accepts_plain_root_without_registry_lookup(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ensure_workspace(tmp_path)
-    from litehive.config.registry import WorkspaceRegistry, build_workspace_registry
 
-    registry = build_workspace_registry(path=tmp_path / "registry.db", mutex=threading.RLock())
-
-    def _boom(self: WorkspaceRegistry) -> list[Path]:
-        raise AssertionError("plain workspace roots should not scan the registry")
-
-    monkeypatch.setattr(WorkspaceRegistry, "list_paths", _boom)
-
-    assert normalize_workspace_root(tmp_path, source="test", registry=registry) == tmp_path.resolve()
+    assert normalize_workspace_root(tmp_path, source="test") == tmp_path.resolve()
 
 
 def test_resolve_workspace_rejects_env_workspace_when_it_does_not_own_task(

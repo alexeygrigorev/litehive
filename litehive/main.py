@@ -62,7 +62,7 @@ def dispatch_status(argv: list[str]) -> int:
     try:
         explicit_workspace = _workspace_override_from_argv(argv)
         if explicit_workspace is None:
-            workspace = resolve_workspace(None, register=False)
+            workspace = resolve_workspace(None)
         else:
             workspace = normalize_workspace_root(explicit_workspace, source="--workspace")
     except ValueError as exc:

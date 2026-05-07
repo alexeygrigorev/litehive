@@ -52,7 +52,7 @@ def daemon_status(workspace: StatusWorkspaceOption = None) -> int:
     """
     try:
         if workspace is None:
-            root = resolve_workspace(None, register=False)
+            root = resolve_workspace(None)
         else:
             root = normalize_workspace_root(workspace, source="--workspace")
     except ValueError as exc:

@@ -18,7 +18,6 @@ load the rest of the package, hiding real import dependencies.
 - ``workspace_files`` — file-name helpers for the workspace layout
   (`config_path`, `context_path`, `workspace_dir`,
   `workspace_gitignore_path`).
-- ``registry`` — global cross-workspace registry of known workspaces.
 - ``runtime_settings`` — audited per-workspace settings persisted in
   SQLite.
 - ``engine_models`` — engine and model selection
