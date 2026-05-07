@@ -9,7 +9,7 @@ from heru.types import SubagentRef
 from litehive.container import build_subagent_manager
 from litehive.agents.report_extraction import stage_report_from_subagent
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.agent import EngineFailure, SubagentResult
+from litehive.domain.agent import EngineFailure, ExecutionTrace, SubagentResult
 from litehive.domain.common import FEEDBACK_CAP, TaskStage
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport, TaskActivityEntry
 from litehive.state.records import create_task
@@ -32,7 +32,7 @@ def _subagent_result(
             path="subagents/SA-0001-swe",
         ),
         execution=None,
-        execution_trace=execution_trace,
+        execution_trace=ExecutionTrace.from_text(execution_trace),
         exit_code=1 if failure is not None else 0,
         failure=failure,
     )

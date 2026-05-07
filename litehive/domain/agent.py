@@ -21,6 +21,34 @@ from litehive.domain.runtime import Subagent
 SubagentId = NewType("SubagentId", str)
 
 
+@dataclass(frozen=True, slots=True)
+class ExecutionTrace:
+    """
+    Rendered subagent trace split into logical chunks.
+
+    Event streams are the canonical structured action log; this value
+    object is the lifecycle-facing rendered form. Keeping the chunks
+    explicit prevents ``SubagentResult`` from treating a multi-action
+    trace as an undifferentiated string while still giving artifact
+    writers a stable ``text`` boundary.
+    """
+
+    chunks: tuple[str, ...]
+
+    @classmethod
+    def from_text(cls, text: str) -> "ExecutionTrace":
+        chunks = tuple(chunk.strip() for chunk in text.split("\n\n") if chunk.strip())
+        return cls(chunks=chunks)
+
+    @property
+    def text(self) -> str:
+        """Return the Markdown representation persisted in trace artifacts."""
+        return "\n\n".join(self.chunks)
+
+    def __bool__(self) -> bool:
+        return bool(self.text)
+
+
 @dataclass(slots=True)
 class EngineFailure:
     """
@@ -48,7 +76,7 @@ class SubagentResult:
     :class:`~litehive.domain.runtime.Subagent` record appended to
     ``TaskRecord.subagents`` for this run (id, role, engine, status,
     and artifact path), followed by the low-level execution handle,
-    rendered execution trace, exit code, optional ``EngineFailure`` for
+    typed rendered execution trace, exit code, optional ``EngineFailure`` for
     routing, and optional continuation token so an interrupted run can
     resume. The runner builds one of these per subagent invocation; no
     other layer constructs them.
@@ -56,7 +84,7 @@ class SubagentResult:
 
     ref: Subagent  # Persisted Litehive subagent record for this run
     execution: CLIExecutionResult | None  # Low-level execution results
-    execution_trace: str  # Rendered subagent execution trace
+    execution_trace: ExecutionTrace  # Rendered subagent execution trace chunks
     exit_code: int  # Process exit code
     failure: EngineFailure | None = None  # Failure details if subagent failed
     continuation: RuntimeEngineContinuation | None = None  # Context for resuming if interrupted

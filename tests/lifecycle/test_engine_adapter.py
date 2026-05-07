@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 
 from heru.base import CLIExecutionResult
-from litehive.domain.agent import EngineFailure, SubagentId, SubagentResult
+from litehive.domain.agent import EngineFailure, ExecutionTrace, SubagentId, SubagentResult
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport, TaskActivityEntry
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
 from litehive.agents.manager import SubagentStartupError
@@ -49,7 +49,7 @@ class _StubManager:
                 path="subagents/SA-0001-swe",
             ),
             execution=None,
-            execution_trace="",
+            execution_trace=ExecutionTrace.from_text(""),
             exit_code=0,
             continuation=RuntimeEngineContinuation(session_id="codex-thread-123"),
         )
@@ -133,7 +133,7 @@ def test_heru_engine_adapter_launches_all_supported_engines(
                     path="subagents/SA-0001-swe",
                 ),
                 execution=None,
-                execution_trace="",
+                execution_trace=ExecutionTrace.from_text(""),
                 exit_code=0,
                 continuation=continuation,
             )
@@ -170,7 +170,7 @@ class _TimeoutThenResumeManager(_StubManager):
                     path="subagents/SA-0001-swe",
                 ),
                 execution=None,
-                execution_trace="",
+                execution_trace=ExecutionTrace.from_text(""),
                 exit_code=124,
                 failure=EngineFailure(
                     kind="retryable_execution_error",
@@ -188,7 +188,7 @@ class _TimeoutThenResumeManager(_StubManager):
                 path="subagents/SA-0002-swe",
             ),
             execution=None,
-            execution_trace="",
+            execution_trace=ExecutionTrace.from_text(""),
             exit_code=0,
             continuation=RuntimeEngineContinuation(session_id="codex-thread-123"),
         )
@@ -249,7 +249,7 @@ def _subagent_result(
             path=f"subagents/{subagent_id}-swe",
         ),
         execution=None,
-        execution_trace="",
+        execution_trace=ExecutionTrace.from_text(""),
         exit_code=exit_code,
         failure=failure,
         continuation=continuation,

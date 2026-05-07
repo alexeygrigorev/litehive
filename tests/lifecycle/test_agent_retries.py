@@ -10,7 +10,7 @@ import pytest
 
 from heru.types import RuntimeEngineContinuation, SubagentRef
 
-from litehive.domain.agent import EngineFailure, SubagentResult
+from litehive.domain.agent import EngineFailure, ExecutionTrace, SubagentResult
 from litehive.lifecycle.events import Crash, Pass, Reject
 from litehive.lifecycle.heru_factory import HeruEngineAdapter
 from litehive.lifecycle.nodes.agent import (
@@ -332,7 +332,7 @@ class _TimeoutThenPassManager:
                     path="subagents/SA-0001-swe",
                 ),
                 execution=None,
-                execution_trace="",
+                execution_trace=ExecutionTrace.from_text(""),
                 exit_code=124,
                 failure=EngineFailure(
                     kind="retryable_execution_error",
@@ -350,7 +350,7 @@ class _TimeoutThenPassManager:
                 path="subagents/SA-0002-swe",
             ),
             execution=None,
-            execution_trace="",
+            execution_trace=ExecutionTrace.from_text(""),
             exit_code=0,
             continuation=_TimeoutThenPassManager.continuation,
         )
@@ -379,7 +379,7 @@ class _TimeoutThenNudgeThenPassManager:
                     path=f"subagents/{subagent_id}-swe",
                 ),
                 execution=None,
-                execution_trace="timeout transcript",
+                execution_trace=ExecutionTrace.from_text("timeout transcript"),
                 exit_code=124,
                 failure=EngineFailure(
                     kind="retryable_execution_error",
@@ -397,7 +397,7 @@ class _TimeoutThenNudgeThenPassManager:
                 path=f"subagents/{subagent_id}-swe",
             ),
             execution=None,
-            execution_trace=f"attempt {_TimeoutThenNudgeThenPassManager.calls}",
+            execution_trace=ExecutionTrace.from_text(f"attempt {_TimeoutThenNudgeThenPassManager.calls}"),
             exit_code=0,
             continuation=_TimeoutThenNudgeThenPassManager.continuation,
         )

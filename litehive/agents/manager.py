@@ -33,7 +33,7 @@ from heru.engine_detection import (
     supports_live_on_started,
     supports_on_started,
 )
-from litehive.domain.agent import EngineFailure, SubagentId, SubagentInactivityTimeout, SubagentResult
+from litehive.domain.agent import EngineFailure, ExecutionTrace, SubagentId, SubagentInactivityTimeout, SubagentResult
 from litehive.domain.common import SubagentStatus
 from litehive.domain.runtime import Subagent
 from litehive.agents.report_extraction import MissingVerdictError, stage_report_from_subagent
@@ -628,7 +628,7 @@ class SubagentManager:
         return SubagentResult(
             ref=ref,
             execution=proc,
-            execution_trace=transcript,
+            execution_trace=ExecutionTrace.from_text(transcript),
             exit_code=proc_exit_code,
             failure=failure,
             continuation=continuation,
@@ -893,7 +893,7 @@ class SubagentManager:
                 SubagentResult(
                     ref=ref,
                     execution=execution,
-                    execution_trace=transcript,
+                    execution_trace=ExecutionTrace.from_text(transcript),
                     exit_code=execution.exit_code,
                 ),
                 workspace=self.workspace,

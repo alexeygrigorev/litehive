@@ -931,9 +931,13 @@ Legend:
   (the entry appended to `TaskRecord.subagents`, carrying id, role,
   engine, status, and artifact path), not a git ref or Heru transport
   reference.
-- [ ] D7. Change `execution_trace` from one string to a list or typed
+- [x] D7. Change `execution_trace` from one string to a list or typed
   trace if it represents multiple agent actions.
   Source: note 6, 00:21-00:34.
+  Completed 2026-05-07: added `ExecutionTrace` as the domain value
+  carried by `SubagentResult.execution_trace`. It stores rendered trace
+  chunks explicitly while preserving a `.text` boundary for Markdown
+  artifacts and operator-facing output.
 - [ ] D8. Remove unnecessary `None` values from domain agent models.
   Keep optionality for true failure-only states, such as failure
   details when not every execution fails.

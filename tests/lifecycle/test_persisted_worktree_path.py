@@ -4,7 +4,7 @@ from pathlib import Path
 from heru.types import SubagentRef
 
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.agent import SubagentResult
+from litehive.domain.agent import ExecutionTrace, SubagentResult
 from litehive.lifecycle.heru_factory import HeruEngineAdapter
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.system import GitCommitNode, GitWorktreeSyncNode
@@ -64,7 +64,7 @@ class _StubManager:
                 path="subagents/SA-0001-swe",
             ),
             execution=None,
-            execution_trace="",
+            execution_trace=ExecutionTrace.from_text(""),
             exit_code=0,
             continuation=None,
         )
