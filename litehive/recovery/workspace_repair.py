@@ -16,7 +16,6 @@ from litehive.state.persist import (
     load_state_for_workspace,
     persist_task_and_state_without_runner_guard_for_workspace,
 )
-from litehive.state.records import get_task_record
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.queue import idle_stage_state
 from litehive.tasks.report_storage import latest_stage_report
@@ -60,7 +59,7 @@ def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepa
         for task_id in _stale_terminal_candidate_ids(workspace):
             if state.active_task_id == task_id or task_id in queued_ids:
                 continue
-            task = get_task_record(root, task_id)
+            task = workspace.get_task_record(task_id)
             if task is None:
                 continue
             report = latest_stage_report(workspace, task)
