@@ -19,7 +19,7 @@ from litehive.tasks.constants import (
     RESUMABLE_TASK_STATUSES,
 )
 from litehive.state.locking import (
-    ensure_future_task_mutation_allowed,
+    ensure_future_task_mutation_allowed_for_workspace,
     workspace_lock,
 )
 from litehive.state.persist import load_state_for_workspace
@@ -113,7 +113,7 @@ def _requeue_task_transition(
             failed_run_overrides = mark_failed_run_operator_override(workspace, task, blocked_failed_runs)
         state = load_state_for_workspace(workspace)
         queue_before = list(state.queue)
-        ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        ensure_future_task_mutation_allowed_for_workspace(workspace, [task.id], state=state)
         if task.status not in {TaskStatus.FLAGGED, TaskStatus.PARKED, *CLOSED_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not flagged, parked, or closed")
         main_ref = current_head(root)
@@ -184,7 +184,7 @@ def _resume_task_transition(workspace: Workspace, task_id: str, front: bool = Fa
         already_queued_resumable = task.status == TaskStatus.QUEUED and resumed_stage is not None
         if state.active_task_id == task.id and task.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING:
             state.active_task_id = None
-        ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        ensure_future_task_mutation_allowed_for_workspace(workspace, [task.id], state=state)
         if (
             task.status not in {TaskStatus.FLAGGED, *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}
             and not stranded_in_progress

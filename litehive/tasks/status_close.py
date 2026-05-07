@@ -18,12 +18,12 @@ from litehive.tasks.constants import (
     RESUMABLE_TASK_STATUSES,
 )
 from litehive.state.locking import (
-    ensure_future_task_mutation_allowed,
+    ensure_future_task_mutation_allowed_for_workspace,
     read_runner_lock_metadata,
     runner_lock_is_held,
     workspace_lock,
 )
-from litehive.state.persist import load_state
+from litehive.state.persist import load_state_for_workspace
 from litehive.tasks.audit import snapshot_task_audit_state
 from litehive.tasks.queue import drop_task_from_workspace_state
 from litehive.tasks.stop import stop_current_task
@@ -67,9 +67,9 @@ def _abandon_task_transition(
     with workspace_lock(root):
         task = workspace.require_task(task_id)
         before_task = snapshot_task_audit_state(task)
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         queue_before = list(state.queue)
-        ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        ensure_future_task_mutation_allowed_for_workspace(workspace, [task.id], state=state)
         if task.status not in {TaskStatus.FLAGGED, *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not interrupted, parked, flagged, or closed")
         if task.runtime.execution.active_subagent is None:
@@ -121,7 +121,7 @@ def _close_task_transition(
     except ValueError:
         allowed = ", ".join(_allowed_close_outcome_values())
         raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
-    state = load_state(root)
+    state = load_state_for_workspace(workspace)
     stop_summary: StopTaskSummary | None = None
     task_snapshot = workspace.get_task_record(task_id)
     if task_snapshot is None or task_snapshot.runtime.execution.active_subagent is None:
@@ -153,9 +153,9 @@ def _close_task_transition(
                 raise ValueError(f"Task {task.id} cannot reference itself as a follow-up task")
             if workspace.get_task_record(follow_up_task_id) is None:
                 raise ValueError(f"Task {follow_up_task_id} not found")
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         queue_before = list(state.queue)
-        ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        ensure_future_task_mutation_allowed_for_workspace(workspace, [task.id], state=state)
         if task.status == TaskStatus.DONE:
             raise ValueError(f"Task {task.id} is already done and cannot be closed")
         journal_message = _apply_close_task_state(
@@ -203,9 +203,9 @@ def _park_task_transition(
     with workspace_lock(root):
         task = workspace.require_task(task_id)
         before_task = snapshot_task_audit_state(task)
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         queue_before = list(state.queue)
-        ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        ensure_future_task_mutation_allowed_for_workspace(workspace, [task.id], state=state)
         if task.status == TaskStatus.DONE:
             raise ValueError(f"Task {task.id} is already done and cannot be parked")
         _apply_parked_task_state(task)
