@@ -1605,9 +1605,13 @@ Legend:
 
 ## Runtime Settings And Engine Model Instructions
 
-- [ ] R1. Review runtime setting keys. The note questions why the
+- [x] R1. Review runtime setting keys. The note questions why the
   current key machinery exists.
   Source: note 5, 02:25-02:37.
+  Completed 2026-05-07: introduced `RuntimeSettingKey` for the
+  closed set of audited runtime-setting rows. The write path now
+  accepts typed keys and persists their string values, so unsupported
+  config fields cannot accidentally enter the audit table.
 - [x] R2. Remove duplicate config layer logic such as
   `read_config_layer` and `merge_config_layers` if config loading
   already owns it.

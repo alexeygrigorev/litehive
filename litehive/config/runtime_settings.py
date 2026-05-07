@@ -15,15 +15,35 @@ from typing import Any, Mapping, Sequence
 
 from litehive.config.loading import load_effective_config_data
 from litehive.config.model import LitehiveConfig, normalize_engine_sequence
-from litehive.domain.common import utcnow
+from litehive.domain.common import StringEnum, utcnow
 from litehive.workspace import Workspace
 
-RUNTIME_SETTING_KEYS = ("default_engine", "engine_preference", "engine_freeze")
+
+class RuntimeSettingKey(StringEnum):
+    """
+    Audited runtime-setting keys stored in SQLite.
+
+    These are the only mutable config values that move from
+    bootstrap YAML into the runtime settings table. Keeping the
+    write path typed prevents accidental audit rows for unsupported
+    config fields.
+    """
+
+    DEFAULT_ENGINE = "default_engine"
+    ENGINE_PREFERENCE = "engine_preference"
+    ENGINE_FREEZE = "engine_freeze"
+
+
+RUNTIME_SETTING_KEYS = (
+    RuntimeSettingKey.DEFAULT_ENGINE.value,
+    RuntimeSettingKey.ENGINE_PREFERENCE.value,
+    RuntimeSettingKey.ENGINE_FREEZE.value,
+)
 
 
 @dataclass(frozen=True)
 class RuntimeSettingChange:
-    key: str
+    key: RuntimeSettingKey
     old_value: Any
     new_value: Any
     changed: bool
@@ -233,7 +253,7 @@ def apply_runtime_settings_to_config_data(workspace: Workspace, config_data: Map
 
 def set_runtime_setting(
     workspace: Workspace,
-    key: str,
+    key: RuntimeSettingKey,
     value: Any,
     actor: str,
     source: str,
@@ -249,13 +269,11 @@ def set_runtime_setting(
     the audit log complete; an alternate write path would let
     changes slip past unnoticed.
     """
-    if key not in RUNTIME_SETTING_KEYS:
-        raise ValueError(f"unsupported runtime setting {key!r}")
     bootstrap_runtime_settings(workspace)
     now = utcnow()
     new_json = _json_dumps(value)
     with workspace.connect() as connection:
-        row = connection.execute("SELECT value_json FROM runtime_settings WHERE key = ?", (key,)).fetchone()
+        row = connection.execute("SELECT value_json FROM runtime_settings WHERE key = ?", (key.value,)).fetchone()
         if row is None:
             old_json = None
         else:
@@ -273,7 +291,7 @@ def set_runtime_setting(
                 actor = excluded.actor,
                 source = excluded.source
             """,
-            (key, new_json, now, actor, source),
+            (key.value, new_json, now, actor, source),
         )
         connection.execute(
             """
@@ -289,7 +307,7 @@ def set_runtime_setting(
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                key,
+                key.value,
                 now,
                 actor,
                 source,
@@ -320,7 +338,7 @@ def set_default_engine(
     """
     return set_runtime_setting(
         workspace,
-        key="default_engine",
+        key=RuntimeSettingKey.DEFAULT_ENGINE,
         value=engine_name,
         actor=actor,
         source=source,
@@ -347,7 +365,7 @@ def set_engine_preference(
     """
     return set_runtime_setting(
         workspace,
-        key="engine_preference",
+        key=RuntimeSettingKey.ENGINE_PREFERENCE,
         value=normalize_engine_sequence(engines, field_name="engine_preference"),
         actor=actor,
         source=source,
@@ -379,7 +397,7 @@ def set_engine_freeze(
     freeze_map[engine_name] = freeze_iso
     return set_runtime_setting(
         workspace,
-        key="engine_freeze",
+        key=RuntimeSettingKey.ENGINE_FREEZE,
         value=freeze_map,
         actor=actor,
         source=source,
@@ -422,7 +440,7 @@ def clear_engine_freeze(
         old_engine_value = freeze_map.get(engine_name)
         if old_engine_value is None:
             return RuntimeSettingChange(
-                key="engine_freeze",
+                key=RuntimeSettingKey.ENGINE_FREEZE,
                 old_value=old_value,
                 new_value=old_value,
                 changed=False,
@@ -468,7 +486,12 @@ def clear_engine_freeze(
             ),
         )
         connection.commit()
-    return RuntimeSettingChange(key="engine_freeze", old_value=old_value, new_value=freeze_map, changed=True)
+    return RuntimeSettingChange(
+        key=RuntimeSettingKey.ENGINE_FREEZE,
+        old_value=old_value,
+        new_value=freeze_map,
+        changed=True,
+    )
 
 
 def load_runtime_setting_audit_entries(
