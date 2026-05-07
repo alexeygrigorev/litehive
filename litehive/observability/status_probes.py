@@ -38,13 +38,6 @@ from litehive.state.locking import runner_metadata_present, runner_pid_is_alive
 from litehive.workspace import Workspace
 
 
-def _probe_runner_state(root: Path, state: WorkspaceState, runner: RunnerStatusState) -> list[StatusIssue]:
-    """
-    Path-based compatibility wrapper for callers not yet on ``Workspace``.
-    """
-    return _probe_runner_state_for_workspace(Workspace.from_path(root), state, runner)
-
-
 def _probe_runner_state_for_workspace(
     workspace: Workspace,
     state: WorkspaceState,
@@ -95,13 +88,6 @@ def _probe_runner_state_for_workspace(
     return issues
 
 
-def _probe_daemon_status(root: Path) -> list[StatusIssue]:
-    """
-    Path-based compatibility wrapper for callers not yet on ``Workspace``.
-    """
-    return _probe_daemon_status_for_workspace(Workspace.from_path(root))
-
-
 def _probe_daemon_status_for_workspace(workspace: Workspace) -> list[StatusIssue]:
     """
     Flag a daemon whose lockfile says ``stale`` with a dead PID.
@@ -140,13 +126,6 @@ def _probe_daemon_status_for_workspace(workspace: Workspace) -> list[StatusIssue
     return []
 
 
-def _probe_last_cycle(root: Path) -> list[StatusIssue]:
-    """
-    Path-based compatibility wrapper for callers not yet on ``Workspace``.
-    """
-    return _probe_last_cycle_for_workspace(Workspace.from_path(root))
-
-
 def _probe_last_cycle_for_workspace(workspace: Workspace) -> list[StatusIssue]:
     """
     Catch a stalled cycle where repair tracebacked and the daemon stopped.
@@ -183,13 +162,6 @@ def _probe_last_cycle_for_workspace(workspace: Workspace) -> list[StatusIssue]:
             ),
         )
     ]
-
-
-def _probe_heru_link(root: Path) -> list[StatusIssue]:
-    """
-    Path-based compatibility wrapper for callers not yet on ``Workspace``.
-    """
-    return _probe_heru_link_for_workspace(Workspace.from_path(root))
 
 
 def _probe_heru_link_for_workspace(workspace: Workspace) -> list[StatusIssue]:
@@ -233,13 +205,6 @@ def _probe_heru_link_for_workspace(workspace: Workspace) -> list[StatusIssue]:
             ),
         )
     ]
-
-
-def _probe_origin_divergence(root: Path, state: WorkspaceState) -> list[StatusIssue]:
-    """
-    Path-based compatibility wrapper for callers not yet on ``Workspace``.
-    """
-    return _probe_origin_divergence_for_workspace(Workspace.from_path(root), state)
 
 
 def _probe_origin_divergence_for_workspace(workspace: Workspace, state: WorkspaceState) -> list[StatusIssue]:
@@ -292,17 +257,6 @@ def _probe_pool_stop_reason(state: WorkspaceState) -> list[StatusIssue]:
             ),
         )
     ]
-
-
-def _probe_task_index_references(
-    root: Path,
-    state: WorkspaceState,
-    state_issues: list[StatusIssue],
-) -> list[StatusIssue]:
-    """
-    Path-based compatibility wrapper for callers not yet on ``Workspace``.
-    """
-    return _probe_task_index_references_for_workspace(Workspace.from_path(root), state, state_issues)
 
 
 def _probe_task_index_references_for_workspace(
