@@ -17,10 +17,10 @@ from litehive.domain.task import (
     WorkspaceState,
     canonicalize_task_terminal_state,
 )
-from litehive.state.store import runtime_store
+from litehive.state.store import runtime_store, runtime_store_for_workspace
 
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
-from litehive.state.locking import workspace_lock, workspace_mutation_guard
+from litehive.state.locking import workspace_lock, workspace_mutation_guard, workspace_mutation_guard_for_workspace
 from litehive.state.persist import (
     load_state,
     save_state_without_runner_guard,
@@ -174,6 +174,14 @@ def write_task_runtime(root: Path, task: TaskRecord) -> None:
     """
     runtime_store(root).save_task_state(task.id, task_state_for_storage(task))
     ensure_runtime_ignored(root)
+
+
+def write_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
+    """
+    Persist a task's runtime row through an injected workspace.
+    """
+    runtime_store_for_workspace(workspace).save_task_state(task.id, task_state_for_storage(task))
+    ensure_runtime_ignored(workspace.root)
 
 
 def set_task_commit_sha(task: TaskRecord, commit_sha: str | None) -> None:
@@ -384,6 +392,14 @@ def save_task_runtime(root: Path, task: TaskRecord) -> None:
     """
     with workspace_mutation_guard(root):
         write_task_runtime(root, task)
+
+
+def save_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
+    """
+    Persist a task's runtime row under the workspace mutation guard.
+    """
+    with workspace_mutation_guard_for_workspace(workspace):
+        write_task_runtime_for_workspace(workspace, task)
 
 
 def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
