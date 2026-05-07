@@ -10,34 +10,36 @@ from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.workspace import Workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task
-from litehive.tasks.runtime import finish_task_run_transition
+from litehive.tasks.runtime import finish_task_run_transition_for_workspace
 from litehive.tasks.status import requeue_task_for_workspace
 
 from tests.support.helpers import _cmd_requeue_task
 from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
 
 
-def _flag_task(root: Path, task_id: str) -> None:
+def _flag_task(workspace: Workspace, task_id: str) -> None:
     """Set a task to flagged and persist via finish_task_run_transition."""
+    root = workspace.root
     task = get_task(root, task_id)
     assert task is not None
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
-    finish_task_run_transition(root, task, "flagged")
+    finish_task_run_transition_for_workspace(workspace, task, "flagged")
 
 
 def test_flag_count_increments_on_each_flagged_transition(tmp_path: Path) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     task = create_task(tmp_path, title="Flaky task")
 
-    _flag_task(tmp_path, task.id)
+    _flag_task(workspace, task.id)
     updated = get_task(tmp_path, task.id)
     assert updated is not None
     assert updated.flag_count == 1
 
     # Requeue and flag again
-    requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id, force=True)
-    _flag_task(tmp_path, task.id)
+    requeue_task_for_workspace(workspace, task.id, force=True)
+    _flag_task(workspace, task.id)
     updated = get_task(tmp_path, task.id)
     assert updated is not None
     assert updated.flag_count == 2
@@ -45,26 +47,27 @@ def test_flag_count_increments_on_each_flagged_transition(tmp_path: Path) -> Non
 
 def test_auto_defer_after_three_flags(tmp_path: Path) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     task = create_task(tmp_path, title="Repeatedly failing task")
 
     # Flag 1
-    _flag_task(tmp_path, task.id)
+    _flag_task(workspace, task.id)
     t = get_task(tmp_path, task.id)
     assert t is not None
     assert t.status == "flagged"
     assert t.flag_count == 1
 
     # Flag 2
-    requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id, force=True)
-    _flag_task(tmp_path, task.id)
+    requeue_task_for_workspace(workspace, task.id, force=True)
+    _flag_task(workspace, task.id)
     t = get_task(tmp_path, task.id)
     assert t is not None
     assert t.status == "flagged"
     assert t.flag_count == 2
 
     # Flag 3 -> manual-review flag reason
-    requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id, force=True)
-    _flag_task(tmp_path, task.id)
+    requeue_task_for_workspace(workspace, task.id, force=True)
+    _flag_task(workspace, task.id)
     t = get_task(tmp_path, task.id)
     assert t is not None
     assert t.status == "flagged"
@@ -78,6 +81,7 @@ def test_auto_defer_after_three_flags(tmp_path: Path) -> None:
 
 def test_requeue_blocked_without_force_after_three_flags(tmp_path: Path) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     task = create_task(tmp_path, title="Triple-flagged task")
 
     # Flag 3 times to reach the threshold
@@ -88,15 +92,16 @@ def test_requeue_blocked_without_force_after_three_flags(tmp_path: Path) -> None
         t.pipeline_status = PipelineStatus.IMPLEMENTING
         t.flag_count = i  # simulate prior increments
         save_task(tmp_path, t)
-        finish_task_run_transition(tmp_path, t, "flagged")
+        finish_task_run_transition_for_workspace(workspace, t, "flagged")
 
     # Now try to requeue without --force
     with pytest.raises(ValueError, match="flagged 3 times.*--force"):
-        requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id)
+        requeue_task_for_workspace(workspace, task.id)
 
 
 def test_requeue_with_force_succeeds_after_three_flags(tmp_path: Path) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     task = create_task(tmp_path, title="Triple-flagged but forced")
 
     # Set flag_count to 3 and status to flagged (simulating threshold handling)
@@ -109,23 +114,24 @@ def test_requeue_with_force_succeeds_after_three_flags(tmp_path: Path) -> None:
     save_task(tmp_path, t)
 
     # Requeue with --force should work
-    result = requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id, force=True)
+    result = requeue_task_for_workspace(workspace, task.id, force=True)
     assert result.status == "queued"
     assert result.flag_count == 3  # flag_count is NOT reset
 
 
 def test_flag_count_not_reset_by_requeue(tmp_path: Path) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     task = create_task(tmp_path, title="Counter survives requeue")
 
     # Flag once
-    _flag_task(tmp_path, task.id)
+    _flag_task(workspace, task.id)
     t = get_task(tmp_path, task.id)
     assert t is not None
     assert t.flag_count == 1
 
     # Requeue
-    requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id)
+    requeue_task_for_workspace(workspace, task.id)
     t = get_task(tmp_path, task.id)
     assert t is not None
     assert t.flag_count == 1  # not reset
@@ -134,17 +140,18 @@ def test_flag_count_not_reset_by_requeue(tmp_path: Path) -> None:
 
 def test_requeue_task_resets_sticky_pipeline_failure_state(tmp_path: Path) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     task = create_task(tmp_path, title="Requeue clears failed pipeline state")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
     save_task(tmp_path, task)
 
-    persistence = SqlitePersistence(Workspace.from_path(tmp_path))
+    persistence = SqlitePersistence(workspace)
     failed_state = persistence.initialize(task.id)
     failed_state.stage = PipelineState.FAILED
     persistence.save(failed_state)
 
-    requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id)
+    requeue_task_for_workspace(workspace, task.id)
 
     with pytest.raises(TaskNotFound):
         persistence.load(task.id)

@@ -19,9 +19,9 @@ from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.tasks.queue import set_active_task
 from litehive.state.locking import runner_lock_is_held
 from litehive.tasks.runtime import (
-    mark_subagent_pid,
-    mark_subagent_started,
-    mark_task_run_started,
+    mark_subagent_pid_for_workspace,
+    mark_subagent_started_for_workspace,
+    mark_task_run_started_for_workspace,
 )
 
 
@@ -37,15 +37,16 @@ def _wait_for_process_exit(proc: subprocess.Popen[bytes], *, timeout_seconds: fl
 
 def test_cmd_close_task_stops_active_runner_and_closes_task(tmp_path: Path, capsys, monkeypatch) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.setattr("litehive.cli.agent_cli.block_if_agent", lambda: None)
     task = create_task(tmp_path, title="Kill bad run")
-    mark_task_run_started(tmp_path, task)
-    set_active_task(Workspace.from_path(tmp_path), task.id)
+    mark_task_run_started_for_workspace(workspace, task)
+    set_active_task(workspace, task.id)
 
     task = require_task(tmp_path, task.id)
-    mark_subagent_started(
-        tmp_path,
+    mark_subagent_started_for_workspace(
+        workspace,
         task,
         SubagentRef(
             id="SA-0001",
@@ -143,7 +144,7 @@ with workspace_runner_guard(Workspace.from_path(root)):
         assert state.active_task_id is None
         assert task.id not in state.queue
 
-        journal = render_task_journal(Workspace.from_path(tmp_path), refreshed)
+        journal = render_task_journal(workspace, refreshed)
         assert "Task closed: wont_do. bad direction" in journal
     finally:
         if proc.poll() is None:
@@ -153,6 +154,7 @@ with workspace_runner_guard(Workspace.from_path(root)):
 
 def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.setattr("litehive.cli.agent_cli.block_if_agent", lambda: None)
     task = create_task(tmp_path, title="Kill live subagent")
@@ -175,8 +177,8 @@ def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch
 
     try:
         task = require_task(tmp_path, task.id)
-        mark_subagent_started(
-            tmp_path,
+        mark_subagent_started_for_workspace(
+            workspace,
             task,
             SubagentRef(
                 id="SA-0001",
@@ -190,8 +192,8 @@ def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch
         task.runtime.pipeline.execution_status = "running"
         save_task(tmp_path, task)
         task = require_task(tmp_path, task.id)
-        mark_subagent_pid(tmp_path, task, sleeper.pid)
-        set_active_task(Workspace.from_path(tmp_path), task.id)
+        mark_subagent_pid_for_workspace(workspace, task, sleeper.pid)
+        set_active_task(workspace, task.id)
 
         result = CliRunner().invoke(
             app,
