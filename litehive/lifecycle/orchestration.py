@@ -61,9 +61,7 @@ from .worktree_setup import (
     _resolve_hook_execution_root_for_workspace,
     _worktree_metadata_repair,
     _worktree_missing_probe,
-    build_commit_node,
     build_commit_node_for_workspace,
-    reconcile_terminal_commit_sha,
     reconcile_terminal_commit_sha_for_workspace,
 )
 
@@ -72,9 +70,7 @@ __all__ = [
     "ExecutionResult",
     "_load_or_initialize",
     "_sync_back",
-    "build_commit_node",
     "hook_specs_from_config",
-    "reconcile_terminal_commit_sha",
     "run_task",
     "run_task_for_workspace",
 ]

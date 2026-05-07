@@ -18,7 +18,7 @@ from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass, Rejec
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.hook import HookNode, HookRunner, HookSpec, SubprocessHookRunner
 from litehive.lifecycle.nodes.system import GitCommitNode, StubCommitNode
-from litehive.lifecycle.orchestration import reconcile_terminal_commit_sha, run_task
+from litehive.lifecycle.orchestration import reconcile_terminal_commit_sha_for_workspace, run_task
 from litehive.lifecycle.persistence import CommitResult, SqlitePersistence, TaskState
 from litehive.workspace import Workspace
 from litehive.lifecycle.types import PipelineMode
@@ -954,8 +954,8 @@ def test_reconcile_terminal_commit_sha_recovers_missing_sha_from_persisted_commi
     fresh.pipeline_status = PipelineStatus.DONE
     save_task(tmp_path, fresh)
 
-    reconciled = reconcile_terminal_commit_sha(
-        tmp_path,
+    reconciled = reconcile_terminal_commit_sha_for_workspace(
+        Workspace.from_path(tmp_path),
         fresh,
         final_state=TaskState(task_id=task.id, stage=PipelineState.DONE, pipeline_mode=PipelineMode.FULL),
         persistence=persistence,

@@ -58,7 +58,7 @@ def _seed_terminal_pipeline_state(
 def _run_recovered_task(tmp_path: Path, monkeypatch, task_id: str) -> tuple[ExecutionResult, list[str], list[str]]:
     queued = dequeue_next_task(Workspace.from_path(tmp_path))
     assert queued is not None and queued.id == task_id
-    monkeypatch.setattr("litehive.lifecycle.orchestration.build_commit_node", lambda root: StubCommitNode())
+    monkeypatch.setattr("litehive.lifecycle.orchestration.build_commit_node_for_workspace", lambda workspace: StubCommitNode())
     engine = _PassEngine("stub")
     result = run_task(tmp_path, queued, engine_factory=lambda _: engine)
     routes = [row["to_stage"] for row in SqliteJournal(Workspace.from_path(tmp_path)).load_transitions(task_id)]

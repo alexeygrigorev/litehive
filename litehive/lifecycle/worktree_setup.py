@@ -65,11 +65,6 @@ def _task_recorded_worktree_for_workspace(workspace: Workspace, task_id: str) ->
     return task, resolve_recorded_worktree_path(root, recorded)
 
 
-def build_commit_node(root: Path) -> CommitNode:
-    """Return the production ``GitCommitNode`` bound to this workspace; called by ``orchestration.run_task`` once per launch to wire the commit stage."""
-    return build_commit_node_for_workspace(Workspace.from_path(root))
-
-
 def build_commit_node_for_workspace(workspace: Workspace) -> CommitNode:
     """Return the production ``GitCommitNode`` bound to an injected workspace."""
     return GitCommitNode(
@@ -154,23 +149,6 @@ def _cleanup_terminal_worktree(workspace: Workspace, task: TaskRecord | None) ->
     if task.status == TaskStatus.FLAGGED and task.flag_reason in _MANUAL_REVIEW_FLAG_REASONS:
         return
     WorktreeService(workspace).cleanup_terminal_task_worktree(task)
-
-
-def reconcile_terminal_commit_sha(
-    root: Path,
-    task: TaskRecord | None,
-    final_state: TaskState,
-    persistence: SqlitePersistence,
-) -> TaskRecord | None:
-    """
-    Path-based compatibility wrapper for terminal commit SHA reconciliation.
-    """
-    return reconcile_terminal_commit_sha_for_workspace(
-        Workspace.from_path(root),
-        task,
-        final_state,
-        persistence,
-    )
 
 
 def reconcile_terminal_commit_sha_for_workspace(
