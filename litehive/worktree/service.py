@@ -53,11 +53,11 @@ from litehive.worktree.cleanup import (
 )
 from litehive.worktree.inspection import worktree_committed_changes_for_workspace, worktree_uncommitted_changes
 from litehive.worktree.paths import (
-    ensure_worktree_venv_link,
-    resolve_recorded_worktree_path,
+    ensure_worktree_venv_link_for_workspace,
+    resolve_recorded_worktree_path_for_workspace,
     serialize_worktree_path,
     task_worktree_branch,
-    task_worktree_path,
+    task_worktree_path_for_workspace,
 )
 from litehive.worktree.rescue import (
     apply_rescue_candidate_for_workspace,
@@ -129,7 +129,7 @@ class WorktreeService:
         if task is None:
             raise GitError(f"task {task_id} not found while creating worktree")
 
-        recorded = resolve_recorded_worktree_path(self.workspace.root, get_task_worktree_path(task))
+        recorded = resolve_recorded_worktree_path_for_workspace(self.workspace, get_task_worktree_path(task))
         if recorded is None or not recorded.exists():
             branch = task_worktree_branch(task)
             existing = self.registered_worktree_for_branch(branch)
@@ -138,11 +138,11 @@ class WorktreeService:
                 self.workspace.save_task(task)
                 recorded = existing
             else:
-                worktree = task_worktree_path(self.workspace.root, task)
+                worktree = task_worktree_path_for_workspace(self.workspace, task)
                 worktree.parent.mkdir(parents=True, exist_ok=True)
                 self.prune_stale_worktrees()
                 add_worktree_branch(self.workspace.root, branch, worktree, force=True)
-                ensure_worktree_venv_link(self.workspace.root, worktree)
+                ensure_worktree_venv_link_for_workspace(self.workspace, worktree)
                 set_task_worktree_path(task, serialize_worktree_path(worktree))
                 self.workspace.save_task(task)
                 return WorktreeSyncResult(changed=True, worktree_path=worktree)
@@ -214,7 +214,7 @@ class WorktreeService:
         call instead of three separate git invocations.
         """
         worktree_rel = get_task_worktree_path(task)
-        worktree_path = resolve_recorded_worktree_path(self.workspace.root, worktree_rel)
+        worktree_path = resolve_recorded_worktree_path_for_workspace(self.workspace, worktree_rel)
         if worktree_rel is None or worktree_path is None or not worktree_path.exists():
             return TaskWorktreeInspection(
                 task_id=task.id,
