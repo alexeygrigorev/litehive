@@ -35,6 +35,7 @@ from litehive.config.workspace_files import workspace_dir
 from litehive.db.schema import connect_workspace_db
 
 if TYPE_CHECKING:
+    from litehive.agents.session_store import LoadedSubagentSession
     from litehive.config.model import LitehiveConfig
     from litehive.domain.task import TaskRecord
     from litehive.tasks.activity import TaskActivityLog
@@ -260,12 +261,18 @@ class Workspace:
 
         return load_subagent_session(self, task_id, subagent_id)
 
-    def load_subagent_session_created_at(self, task_id: str, subagent_id: str) -> str | None:
+    def load_subagent_session_record(self, task_id: str, subagent_id: str) -> "LoadedSubagentSession":
         """
-        Return the persisted creation timestamp for one subagent session.
+        Return the typed subagent session slice owned by this workspace.
         """
         # inline: session_store imports Workspace for runtime access, so
         # importing at module load would create an import cycle.
         from litehive.agents.session_store import load_subagent_session_record  # noqa: PLC0415
 
-        return load_subagent_session_record(self, task_id, subagent_id).created_at
+        return load_subagent_session_record(self, task_id, subagent_id)
+
+    def load_subagent_session_created_at(self, task_id: str, subagent_id: str) -> str | None:
+        """
+        Return the persisted creation timestamp for one subagent session.
+        """
+        return self.load_subagent_session_record(task_id, subagent_id).created_at

@@ -126,14 +126,14 @@ def _write_interrupted_subagent_artifacts(
     between memory and disk would mean resume picks the wrong action.
     """
     now = utcnow()
-    existing_session = workspace.load_subagent_session(task.id, subagent.id)
+    existing_session = workspace.load_subagent_session_record(task.id, subagent.id)
     report_payload = load_subagent_report(workspace, task.id, subagent.id)
     if subagent.continuation is None:
         continuation_payload = None
     else:
         continuation_payload = subagent.continuation.model_dump(mode="python")
-    created_at = str(existing_session.get("created_at") or subagent.started_at)
-    resource_control_value = existing_session.get("resource_control")
+    created_at = str(existing_session.created_at or subagent.started_at)
+    resource_control_value = existing_session.values.get("resource_control")
     if isinstance(resource_control_value, dict):
         resource_control = SandboxPolicySummary.from_mapping(resource_control_value)
     else:

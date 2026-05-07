@@ -779,6 +779,11 @@ Legend:
   through it, so creation-time normalization now happens at the
   persistence boundary while `Workspace.load_subagent_session(...)`
   remains dictionary-compatible for current readers.
+  Progress 2026-05-07: exposed
+  `Workspace.load_subagent_session_record(...)` as the typed
+  object-owned API and moved interrupted-subagent persistence to use
+  the typed `created_at` field instead of reading it from the session
+  dictionary.
   Remaining work: replace the broader session dictionary with a typed
   loaded-session object.
 - [ ] M39. Review continuation handling. If continuation is always
