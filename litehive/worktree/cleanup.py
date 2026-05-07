@@ -36,6 +36,13 @@ from litehive.workspace import Workspace
 
 def cleanup_terminal_task_worktree(root: Path, task: TaskRecord) -> None:
     """
+    Path-based compatibility wrapper for terminal worktree cleanup.
+    """
+    cleanup_terminal_task_worktree_for_workspace(Workspace.from_path(root), task)
+
+
+def cleanup_terminal_task_worktree_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
+    """
     Remove a terminal task's worktree, drop its branch, and clear task metadata.
 
     The lifecycle orchestrator calls this on terminal transitions
@@ -44,6 +51,7 @@ def cleanup_terminal_task_worktree(root: Path, task: TaskRecord) -> None:
     best-effort because git refuses to drop a branch a worktree
     still holds — we delete the worktree first and then sweep up.
     """
+    root = workspace.root
     worktree_rel = get_task_worktree_path(task)
     if not worktree_rel:
         return

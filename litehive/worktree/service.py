@@ -49,7 +49,7 @@ from litehive.state.records import (
 )
 from litehive.worktree.cleanup import (
     WorktreeCleanupResult,
-    cleanup_terminal_task_worktree,
+    cleanup_terminal_task_worktree_for_workspace,
     collect_managed_worktrees_for_workspace,
     remove_cleanable_worktrees_for_workspace,
 )
@@ -274,7 +274,7 @@ class WorktreeService:
         transitions; thin wrapper over the free function in
         ``litehive.worktree.cleanup``.
         """
-        cleanup_terminal_task_worktree(self.root, task)
+        cleanup_terminal_task_worktree_for_workspace(self.workspace, task)
 
     def require_clean_main_checkout(self) -> None:
         """
