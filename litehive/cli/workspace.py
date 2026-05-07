@@ -48,7 +48,7 @@ from litehive.recovery.workspace_repair import repair_workspace_state
 from litehive.state.records import list_tasks_state_first
 from litehive.state.persist import load_state
 from litehive.domain.task_ops import WorkspaceConflictError, WorkspaceRepairSummary
-from litehive.worktree.cleanup import collect_managed_worktrees
+from litehive.worktree.cleanup import collect_managed_worktrees_for_workspace
 from litehive.worktree.inspection import inspect_dirty_worktree_gate
 from litehive.workspace import Workspace
 
@@ -269,7 +269,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     else:
         active_task = None
     flagged_tasks = [task for task in tasks if task.status == TaskStatus.FLAGGED]
-    worktrees = collect_managed_worktrees(root)
+    worktrees = collect_managed_worktrees_for_workspace(ws)
     dirty_report = inspect_dirty_worktree_gate(ws)
     quota_health = collect_quota_health()
     completed = sorted(
