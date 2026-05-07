@@ -11,7 +11,7 @@ itself (``run_daemon_loop``), the detach-and-register flow
 ``daemon.logs``.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import logging
@@ -131,6 +131,21 @@ class DaemonOutput:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class DaemonHealthcheckEntry:
+    """
+    Narrowed daemon registry row used by the start-time health check.
+
+    ``daemon_metadata`` still returns a persistence-shaped dictionary
+    until the broader metadata migration lands. This object keeps the
+    health-check policy from reaching back into that loose mapping for
+    fields after the start guard has validated the row shape.
+    """
+
+    pid: int
+    heartbeat_at: object
+
+
 def _halt_for_origin_divergence(
     workspace: Path,
     attention_repository: AttentionRepository,
@@ -222,7 +237,16 @@ def _heartbeat_age_seconds(heartbeat_at: object) -> float | None:
     return max(0.0, (datetime.now(UTC) - timestamp.astimezone(UTC)).total_seconds())
 
 
-def _daemon_healthcheck_failed(entry: dict[str, object], config: DaemonConfig) -> bool:
+def _daemon_healthcheck_entry(entry: Mapping[str, object]) -> DaemonHealthcheckEntry | None:
+    if entry.get("status") != "running":
+        return None
+    pid = entry.get("pid")
+    if not isinstance(pid, int):
+        return None
+    return DaemonHealthcheckEntry(pid=pid, heartbeat_at=entry.get("heartbeat_at"))
+
+
+def _daemon_healthcheck_failed(entry: DaemonHealthcheckEntry, config: DaemonConfig) -> bool:
     """
     Detect a wedged registered daemon that should be reclaimed.
 
@@ -233,7 +257,7 @@ def _daemon_healthcheck_failed(entry: dict[str, object], config: DaemonConfig) -
     would be unable to start a new one until they manually cleared
     the registry.
     """
-    heartbeat_age = _heartbeat_age_seconds(entry.get("heartbeat_at"))
+    heartbeat_age = _heartbeat_age_seconds(entry.heartbeat_at)
     return heartbeat_age is None or heartbeat_age > config.health_timeout_seconds
 
 
@@ -661,14 +685,14 @@ def start_background_daemon(workspace: Path) -> int:
     workspace = workspace.resolve()
     daemon_config = build_workspace(workspace).load_config().daemon
     existing = daemon_metadata(workspace)
-    if existing is not None and existing.get("status") == "running":
-        pid = existing.get("pid")
-        # Registry metadata is read from SQLite/JSON and must be narrowed
-        # before using it as an OS pid.
-        if isinstance(pid, int) and _daemon_healthcheck_failed(existing, daemon_config):
-            _force_kill_recorded_daemon(workspace, pid=pid, config=daemon_config)
+    healthcheck_entry = _daemon_healthcheck_entry(existing) if existing is not None else None
+    if healthcheck_entry is not None:
+        if _daemon_healthcheck_failed(healthcheck_entry, daemon_config):
+            _force_kill_recorded_daemon(workspace, pid=healthcheck_entry.pid, config=daemon_config)
         else:
-            raise RuntimeError(f"daemon already running for {workspace}: pid={pid}")
+            raise RuntimeError(f"daemon already running for {workspace}: pid={healthcheck_entry.pid}")
+    elif existing is not None and existing.get("status") == "running":
+        raise RuntimeError(f"daemon already running for {workspace}: pid={existing.get('pid')}")
     if existing is not None and existing.get("status") == "stale":
         unregister_daemon(workspace)
     create_workspace_venvs_ready(workspace)

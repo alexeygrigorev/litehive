@@ -2086,9 +2086,13 @@ Legend:
   daemon-loop writer with `line(...)` and `runner_wait(...)` methods.
   `run_daemon_loop` now constructs one output object and passes only
   its underlying stream to child subprocess log forwarding.
-- [ ] DM14. Replace daemon health check dictionaries with typed
+- [x] DM14. Replace daemon health check dictionaries with typed
   entries.
   Source: note 5, 19:28-19:34.
+  Completed 2026-05-07: added `DaemonHealthcheckEntry` as the
+  validated start-guard view of daemon registry metadata. The
+  health-check policy now receives that object instead of reading
+  heartbeat fields from a raw metadata dictionary.
 - [ ] DM15. Remove wrapper functions like `clear_recorded_daemon` /
   `unregister_daemon` if they only call another function.
   Source: note 5, 19:53-20:07.
