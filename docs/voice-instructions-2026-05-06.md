@@ -1048,9 +1048,14 @@ Legend:
   `OutcomeReasonCode`; the active implementation stores blocking child
   references through the explicit `blocked_on_follow_up:<task_id>`
   reason-string helper in the recovery domain.
-- [ ] D20. Generalize the domain-model critique across the whole code
+- [x] D20. Generalize the domain-model critique across the whole code
   base and record durable rules in `docs/code-style.md`.
   Source: note 6, 06:02-06:17.
+  Completed 2026-05-07: extended `docs/code-style.md` domain-value
+  rules to forbid overloading one enum with operator-facing choices and
+  runtime routing buckets, and to require every machine-readable reason
+  code to have a documented setter/circumstance or be deleted/reserved
+  with a cleanup task.
 
 ## Sandbox Instructions
 

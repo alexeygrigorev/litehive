@@ -183,6 +183,14 @@ from tests.support.helpers import make_workspace, run_cli
   `TaskOutcomeKind` records the terminal bucket for the whole task. An
   `OutcomeReasonCode` records the specific machine-readable reason that
   produced that bucket. Do not reuse one enum to stand in for another.
+- Do not overload one enum with operator-facing choices and runtime
+  routing buckets. If the operator chooses a close reason but runtime
+  only needs "task closed", model the close reason separately and map
+  it to the runtime reason at the boundary.
+- Every machine-readable reason code must have a documented setter and
+  circumstance in `docs/domain.md`. If no production code can emit a
+  reason code, delete it or explicitly mark it as reserved with the
+  cleanup task that will decide its fate.
 - Avoid broad dictionaries for internal domain events, reports,
   sessions, diagnostics, runtime settings, and command results. Use a
   dataclass or domain model with fields that explain the contract.
