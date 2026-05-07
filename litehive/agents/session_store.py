@@ -1,6 +1,7 @@
 """SQLite-backed storage for structured subagent session artifacts."""
 
 import json
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol, runtime_checkable
 
@@ -20,6 +21,34 @@ class SubagentArtifactSlice(str, Enum):
     SESSION = "session"
     REPORT = "report"
     EVENT_STREAM = _EVENT_STREAM_KEY
+
+
+@dataclass(frozen=True, slots=True)
+class LoadedSubagentSession:
+    """
+    Typed view of one loaded engine-session metadata slice.
+
+    ``created_at`` is normalized at the storage boundary so session
+    writers do not need to inspect raw dictionaries to preserve the
+    original creation timestamp.
+    """
+
+    values: dict[str, Any]
+    created_at: str | None
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any], persisted_created_at: str | None) -> "LoadedSubagentSession":
+        value = payload.get(SubagentArtifactSlice.SESSION.value)
+        if isinstance(value, dict):
+            values = value
+        else:
+            values = {}
+        session_created_at = values.get("created_at")
+        if isinstance(session_created_at, str):
+            created_at = session_created_at
+        else:
+            created_at = persisted_created_at
+        return cls(values=values, created_at=created_at)
 
 
 @runtime_checkable
@@ -84,6 +113,14 @@ def _load_subagent_artifact_slice(
     return {}
 
 
+def load_subagent_session_record(workspace: Workspace, task_id: str, subagent_id: str) -> LoadedSubagentSession:
+    """
+    Return the typed session metadata slice and row metadata.
+    """
+    payload, created_at = _load_subagent_payload(workspace, task_id, subagent_id)
+    return LoadedSubagentSession.from_payload(payload, created_at)
+
+
 def save_subagent_artifacts(
     workspace: Workspace,
     task_id: str,
@@ -142,7 +179,7 @@ def save_subagent_artifacts(
 
 def load_subagent_session(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:
     """Return only the engine session metadata slice (resume IDs, transcript pointer) — used by stages that need to resume an existing engine session without paying for the report and event-stream slices."""
-    return _load_subagent_artifact_slice(workspace, task_id, subagent_id, SubagentArtifactSlice.SESSION)
+    return load_subagent_session_record(workspace, task_id, subagent_id).values
 
 
 def load_subagent_report(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:

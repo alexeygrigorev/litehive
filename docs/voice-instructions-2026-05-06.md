@@ -774,6 +774,11 @@ Legend:
   moved the creation-time type narrowing behind the workspace API.
   `SubagentSessionManager` no longer performs
   `isinstance(existing.get("created_at"), str)` in its write paths.
+  Progress 2026-05-07: added a typed `LoadedSubagentSession` storage
+  record and routed `Workspace.load_subagent_session_created_at(...)`
+  through it, so creation-time normalization now happens at the
+  persistence boundary while `Workspace.load_subagent_session(...)`
+  remains dictionary-compatible for current readers.
   Remaining work: replace the broader session dictionary with a typed
   loaded-session object.
 - [ ] M39. Review continuation handling. If continuation is always

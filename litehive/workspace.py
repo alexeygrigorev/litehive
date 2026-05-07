@@ -264,7 +264,8 @@ class Workspace:
         """
         Return the persisted creation timestamp for one subagent session.
         """
-        created_at = self.load_subagent_session(task_id, subagent_id).get("created_at")
-        if isinstance(created_at, str):
-            return created_at
-        return None
+        # inline: session_store imports Workspace for runtime access, so
+        # importing at module load would create an import cycle.
+        from litehive.agents.session_store import load_subagent_session_record  # noqa: PLC0415
+
+        return load_subagent_session_record(self, task_id, subagent_id).created_at

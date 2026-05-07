@@ -2,6 +2,7 @@ from litehive.agents.session_store import (
     load_subagent_event_stream,
     load_subagent_report,
     load_subagent_session,
+    load_subagent_session_record,
     save_subagent_artifacts,
 )
 from litehive.config.workspace import ensure_workspace
@@ -50,3 +51,39 @@ def test_subagent_session_store_slice_loaders_ignore_non_mapping_values(tmp_path
     assert load_subagent_session(workspace, "T-0001", "SA-0001") == {}
     assert load_subagent_report(workspace, "T-0001", "SA-0001") == {}
     assert load_subagent_event_stream(workspace, "T-0001", "SA-0001") == {}
+
+
+def test_subagent_session_record_normalizes_created_at(tmp_path) -> None:
+    ensure_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
+
+    save_subagent_artifacts(
+        workspace,
+        "T-0001",
+        "SA-0001",
+        session={"id": "SA-0001", "created_at": "2026-05-07T10:00:00Z"},
+    )
+
+    session = load_subagent_session_record(workspace, "T-0001", "SA-0001")
+
+    assert session.values == {"id": "SA-0001", "created_at": "2026-05-07T10:00:00Z"}
+    assert session.created_at == "2026-05-07T10:00:00Z"
+    assert workspace.load_subagent_session_created_at("T-0001", "SA-0001") == "2026-05-07T10:00:00Z"
+
+
+def test_subagent_session_record_falls_back_to_persisted_created_at(tmp_path) -> None:
+    ensure_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
+
+    save_subagent_artifacts(
+        workspace,
+        "T-0001",
+        "SA-0001",
+        session={"id": "SA-0001"},
+    )
+
+    session = load_subagent_session_record(workspace, "T-0001", "SA-0001")
+
+    assert session.values == {"id": "SA-0001"}
+    assert session.created_at is not None
+    assert workspace.load_subagent_session_created_at("T-0001", "SA-0001") == session.created_at
