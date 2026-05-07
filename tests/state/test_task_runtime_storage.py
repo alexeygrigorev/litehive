@@ -21,7 +21,7 @@ from litehive.state.records import (
     save_task,
     save_task_runtime,
 )
-from litehive.state.store import runtime_store
+from litehive.state.store import runtime_store_for_workspace
 from litehive.tasks.report_storage import record_stage_report
 from litehive.workspace import Workspace
 
@@ -286,7 +286,7 @@ def test_get_task_preserves_commit_sha_when_runtime_copy_is_missing(tmp_path: Pa
     state = task.to_state_record()
     state.git.commit_sha = "abc123"
     state.runtime.pipeline.git.commit_sha = None
-    runtime_store(tmp_path).save_task_state(task.id, state)
+    runtime_store_for_workspace(Workspace.from_path(tmp_path)).save_task_state(task.id, state)
 
     loaded = get_task(tmp_path, task.id)
 
@@ -358,8 +358,9 @@ def test_task_intent_canonical_columns_preserve_existing_runtime_status(tmp_path
     )
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
-    runtime_store(tmp_path).save_task_state(task.id, task.to_storage_state_record())
-    runtime_store(tmp_path).save_task_intent(task.id, task.to_intent_record())
+    store = runtime_store_for_workspace(Workspace.from_path(tmp_path))
+    store.save_task_state(task.id, task.to_storage_state_record())
+    store.save_task_intent(task.id, task.to_intent_record())
 
     columns = _task_intent_columns(tmp_path, task.id)
 
@@ -378,7 +379,7 @@ def test_task_intent_canonical_columns_preserve_existing_runtime_status(tmp_path
 
 def test_get_task_raises_when_sqlite_runtime_state_row_is_missing(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    runtime_store(tmp_path).save_task_intent(
+    runtime_store_for_workspace(Workspace.from_path(tmp_path)).save_task_intent(
         "T-0001",
         TaskRecord(
             id="T-0001",
@@ -401,7 +402,7 @@ def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Pat
     create_workspace(tmp_path)
     present = create_task(tmp_path, title="Has runtime")
 
-    runtime_store(tmp_path).save_task_intent(
+    runtime_store_for_workspace(Workspace.from_path(tmp_path)).save_task_intent(
         "T-0002",
         TaskRecord(
             id="T-0002",
