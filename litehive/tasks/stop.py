@@ -25,7 +25,7 @@ from litehive.state.locking import (
     read_runner_lock_metadata_for_workspace,
     runner_lock_is_held_for_workspace,
     runner_pid_is_alive,
-    workspace_lock,
+    workspace_lock_for_workspace,
 )
 from litehive.state.persist import (
     load_state_for_workspace,
@@ -63,8 +63,7 @@ def _stop_active_task_without_runner_guard(workspace: Workspace, task_id: str) -
     used by ``stop_current_task`` once the runner is no longer in the way
     so the parking step itself does not deadlock on the runner guard.
     """
-    root = workspace.root
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace)
         active_task_id = _active_task_id_for_stop(workspace, state)
         if active_task_id != task_id:

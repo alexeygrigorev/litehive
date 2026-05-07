@@ -21,7 +21,7 @@ from litehive.state.locking import (
     ensure_future_task_mutation_allowed_for_workspace,
     read_runner_lock_metadata_for_workspace,
     runner_lock_is_held_for_workspace,
-    workspace_lock,
+    workspace_lock_for_workspace,
 )
 from litehive.state.persist import load_state_for_workspace
 from litehive.tasks.audit import snapshot_task_audit_state
@@ -62,9 +62,7 @@ def _abandon_task_transition(
     operator-initiated kill path: ``close`` records a deliberate terminal
     outcome, ``abandon`` says "stop right now and tear it down".
     """
-
-    root = workspace.root
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         task = workspace.require_task(task_id)
         before_task = snapshot_task_audit_state(task)
         state = load_state_for_workspace(workspace)
@@ -115,7 +113,6 @@ def _close_task_transition(
     live runner/subagent is signalled so a closed task does not keep
     consuming runtime resources.
     """
-    root = workspace.root
     try:
         close_reason = TaskCloseReason(outcome)
     except ValueError:
@@ -140,7 +137,7 @@ def _close_task_transition(
         runner_pid = stop_summary.runner_pid
     _terminate_subagent_pid(task_id, active_subagent_pid)
     _terminate_subagent_pid(task_id, runner_pid)
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         task = workspace.get_task_record(task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
@@ -199,8 +196,7 @@ def _park_task_transition(
     selectable by the runner; the operator brings them back via
     ``litehive task resume`` when ready.
     """
-    root = workspace.root
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         task = workspace.require_task(task_id)
         before_task = snapshot_task_audit_state(task)
         state = load_state_for_workspace(workspace)
