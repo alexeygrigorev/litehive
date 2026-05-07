@@ -47,13 +47,6 @@ class BrokenVenvExecutable:
         return self.binary_path.name
 
 
-def discover_workspace_venvs(root: Path) -> list[VenvCheckout]:
-    """
-    Path-based compatibility wrapper for venv discovery.
-    """
-    return discover_workspace_venvs_for_workspace(Workspace.from_path(root))
-
-
 def discover_workspace_venvs_for_workspace(workspace: Workspace) -> list[VenvCheckout]:
     """
     Locate every ``.venv`` the workspace might dispatch into.
@@ -82,13 +75,6 @@ def discover_workspace_venvs_for_workspace(workspace: Workspace) -> list[VenvChe
                     VenvCheckout(checkout_root=checkout_root, venv_path=resolved_venv),
                 )
     return [checkouts[path] for path in sorted(checkouts)]
-
-
-def probe_broken_venv_executables(root: Path) -> list[BrokenVenvExecutable]:
-    """
-    Path-based compatibility wrapper for broken-venv probing.
-    """
-    return probe_broken_venv_executables_for_workspace(Workspace.from_path(root))
 
 
 def probe_broken_venv_executables_for_workspace(workspace: Workspace) -> list[BrokenVenvExecutable]:
