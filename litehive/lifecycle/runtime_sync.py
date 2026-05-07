@@ -26,7 +26,7 @@ from litehive.domain.runtime import (
 from litehive.domain.task import TaskRecord
 from litehive.state.locking import persist_future_task_update_for_workspace
 from litehive.state.persist import load_state_for_workspace, persist_tasks_and_state_for_workspace
-from litehive.state.records import get_task, set_task_commit_sha
+from litehive.state.records import set_task_commit_sha
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.runtime import apply_task_outcome
 from litehive.workspace import Workspace
@@ -314,8 +314,7 @@ def _sync_back(state: TaskState, workspace: Workspace) -> TaskRecord | None:
     operator-facing surfaces would drift from the actual lifecycle
     state until the task ends.
     """
-    workspace_root = workspace.root
-    task_record = get_task(workspace_root, state.task_id)
+    task_record = workspace.get_task(state.task_id)
     if task_record is None:
         return None
     before_task = snapshot_task_audit_state(task_record)
