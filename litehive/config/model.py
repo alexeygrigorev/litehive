@@ -14,14 +14,24 @@ import re
 from typing import Any, Mapping, Sequence
 
 from pydantic import TypeAdapter, ValidationError
+import yaml
 
 from litehive.config.profiles.loader import available_process_profiles
-from litehive.domain.common import runner_hook_points
+from litehive.domain.common import TransientFailureKind, runner_hook_points
 from litehive.domain.roles import agent_startup_guidance_keys
 
 
 _CONFIG_LIST_ADAPTER = TypeAdapter(list[object])
 _CONFIG_MAPPING_ADAPTER = TypeAdapter(dict[object, object])
+_RETRY_FAILURE_KIND_ADAPTER = TypeAdapter(TransientFailureKind)
+
+
+def _represent_transient_failure_kind(dumper, value: TransientFailureKind):
+    return dumper.represent_str(value.value)
+
+
+yaml.add_representer(TransientFailureKind, _represent_transient_failure_kind)
+yaml.SafeDumper.add_representer(TransientFailureKind, _represent_transient_failure_kind)
 
 
 def _config_list(value: object, *, field_name: str) -> list[object]:
@@ -59,7 +69,6 @@ def _config_mapping(value: object, *, field_name: str) -> dict[object, object]:
 
 VALID_ENGINE_NAMES = frozenset({"codex", "opencode", "gemini", "copilot", "claude", "goz"})
 VALID_AGENT_STARTUP_GUIDANCE_KEYS = agent_startup_guidance_keys()
-VALID_RETRY_ON_FAILURE_KINDS = frozenset({"execution_limit", "timeout", "network", "service"})
 VALID_SANDBOX_NETWORK_MODES = frozenset({"none", "bridge", "host"})
 VALID_SANDBOX_WORKSPACE_MODES = frozenset({"ro", "rw"})
 VALID_SANDBOX_BACKENDS = frozenset({"docker"})
@@ -187,7 +196,12 @@ class LitehiveConfig:
     claude_model: str = "claude-sonnet-4-20250514"
     claude_max_turns: int = 100
     default_retry_limit: int = 3
-    retry_on: list[str] = field(default_factory=lambda: ["execution_limit", "timeout"])
+    retry_on: list[TransientFailureKind] = field(
+        default_factory=lambda: [
+            TransientFailureKind.EXECUTION_LIMIT,
+            TransientFailureKind.TIMEOUT,
+        ]
+    )
     default_stage_retry_limit: int = 2
     default_rejection_loop_limit: int = 3
     pool_stop_on_failure: bool = False
@@ -377,9 +391,9 @@ def normalize_agent_startup_guidance(
 
 
 def normalize_retry_on(
-    retry_on: Sequence[str] | None,
+    retry_on: Sequence[str | TransientFailureKind] | None,
     field_name: str = "retry_on",
-) -> list[str]:
+) -> list[TransientFailureKind]:
     """
     Validate and dedupe the retry-eligible failure-kind list.
 
@@ -391,15 +405,17 @@ def normalize_retry_on(
     if retry_on is None:
         return []
 
-    normalized: list[str] = []
-    seen: set[str] = set()
+    normalized: list[TransientFailureKind] = []
+    seen: set[TransientFailureKind] = set()
     for raw_kind in retry_on:
-        kind = str(raw_kind).strip().lower()
-        if not kind:
+        raw_text = str(raw_kind).strip().lower()
+        if not raw_text:
             continue
-        if kind not in VALID_RETRY_ON_FAILURE_KINDS:
-            allowed = ", ".join(sorted(VALID_RETRY_ON_FAILURE_KINDS))
-            raise ValueError(f"{field_name} must contain only: {allowed}")
+        try:
+            kind = _RETRY_FAILURE_KIND_ADAPTER.validate_python(raw_text)
+        except ValidationError as exc:
+            allowed = ", ".join(kind.value for kind in TransientFailureKind)
+            raise ValueError(f"{field_name} must contain only: {allowed}") from exc
         if kind in seen:
             continue
         seen.add(kind)

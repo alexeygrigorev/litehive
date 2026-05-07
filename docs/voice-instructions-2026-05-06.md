@@ -1848,9 +1848,17 @@ Legend:
   where a normalizer accepts either an already-typed dataclass instance
   or a raw YAML mapping. Verified malformed `external_engine_sandbox`
   list/map shapes through `load_config(...)`.
-- [ ] R27. Pydantic should load proper enums directly so the project
+- [x] R27. Pydantic should load proper enums directly so the project
   does not maintain duplicate string lists.
   Source: note 4, 47:45-48:13.
+  Completed 2026-05-07: introduced `TransientFailureKind` as the
+  domain enum for retry-eligible transient execution failures and
+  changed `LitehiveConfig.retry_on` to store that enum instead of raw
+  strings. `normalize_retry_on(...)` now validates each entry through a
+  Pydantic `TypeAdapter(TransientFailureKind)` and the duplicate
+  `VALID_RETRY_ON_FAILURE_KINDS` string list is gone. Verified direct
+  dataclass construction and parsed config data both materialize enum
+  values while preserving string-compatible output.
 
 ## Workspace Instructions
 

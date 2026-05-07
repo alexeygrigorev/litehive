@@ -12,6 +12,7 @@ from litehive.config.model import (
 )
 from litehive.config.paths import litehive_root
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.common import TransientFailureKind
 
 
 def test_configure_persists_gemini_model(tmp_path: Path) -> None:
@@ -185,6 +186,11 @@ def test_litehive_config_normalizes_retry_on() -> None:
     config = LitehiveConfig(retry_on=["timeout", "network", "timeout", "execution_limit"])
 
     assert config.retry_on == ["timeout", "network", "execution_limit"]
+    assert config.retry_on == [
+        TransientFailureKind.TIMEOUT,
+        TransientFailureKind.NETWORK,
+        TransientFailureKind.EXECUTION_LIMIT,
+    ]
 
 
 def test_parse_litehive_config_data_returns_typed_config() -> None:
@@ -200,6 +206,7 @@ def test_parse_litehive_config_data_returns_typed_config() -> None:
     assert config.default_engine == "gemini"
     assert config.engine_preference == ["codex", "gemini"]
     assert config.retry_on == ["timeout", "network"]
+    assert config.retry_on == [TransientFailureKind.TIMEOUT, TransientFailureKind.NETWORK]
 
 
 def test_litehive_config_defaults_include_flat_retry_on() -> None:

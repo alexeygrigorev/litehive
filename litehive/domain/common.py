@@ -506,6 +506,21 @@ class RunnerStatus(StringEnum):
     STALE = "stale"  # Runner appears to be unresponsive
 
 
+class TransientFailureKind(StringEnum):
+    """
+    Retry-eligible transient failure categories.
+
+    Engine adapters attach these stable values to ``TransientError`` so
+    retry policy can compare typed domain values instead of maintaining
+    string allow-lists in config code.
+    """
+
+    EXECUTION_LIMIT = "execution_limit"
+    TIMEOUT = "timeout"
+    NETWORK = "network"
+    SERVICE = "service"
+
+
 class Verdict(StringEnum):
     """
     Decision submitted for an executable pipeline state.
@@ -577,6 +592,7 @@ __all__ = [
     "TaskExecutionStatus",
     "TaskStage",
     "TaskStatus",
+    "TransientFailureKind",
     "Verdict",
     "canonical_pipeline_state",
     "pipeline_stage_key",
