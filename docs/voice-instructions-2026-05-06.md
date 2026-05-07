@@ -1833,9 +1833,21 @@ Legend:
   hold a workspace to use it. Kept `Workspace.config()` as a temporary
   compatibility wrapper while remaining root-path `load_config(...)`
   usage is confined to the loader boundary and tests.
-- [ ] R26. Remove `is_iterable`/`Mapping`-style validation in config
+- [x] R26. Remove `is_iterable`/`Mapping`-style validation in config
   models when Pydantic can enforce the shape.
   Source: note 4, 47:21-48:13.
+  Progress 2026-05-07: replaced the generic `_as_iterable` /
+  `_as_mapping` sandbox config shape helpers with Pydantic
+  `TypeAdapter` validators for raw list and mapping values. The
+  remaining `Mapping` checks are narrower typed-object-vs-raw-mapping
+  branches in individual normalizers.
+  Completed 2026-05-07: removed the generic iterable/mapping
+  `isinstance` shape checks from sandbox config normalization. Raw list
+  and mapping boundaries now go through `_CONFIG_LIST_ADAPTER` and
+  `_CONFIG_MAPPING_ADAPTER`; targeted `Mapping` branches remain only
+  where a normalizer accepts either an already-typed dataclass instance
+  or a raw YAML mapping. Verified malformed `external_engine_sandbox`
+  list/map shapes through `load_config(...)`.
 - [ ] R27. Pydantic should load proper enums directly so the project
   does not maintain duplicate string lists.
   Source: note 4, 47:45-48:13.

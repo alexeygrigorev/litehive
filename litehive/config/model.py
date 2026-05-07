@@ -11,48 +11,48 @@ message rather than producing odd behaviour later.
 
 from dataclasses import dataclass, field, fields
 import re
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from litehive.config.profiles.loader import available_process_profiles
 from litehive.domain.common import runner_hook_points
 from litehive.domain.roles import agent_startup_guidance_keys
 
 
-def _as_iterable(value: object, *, field_name: str) -> Iterable[object]:
-    """
-    Coerce a ``raw_config.get(...)`` result into an iterable for normalisation.
+_CONFIG_LIST_ADAPTER = TypeAdapter(list[object])
+_CONFIG_MAPPING_ADAPTER = TypeAdapter(dict[object, object])
 
-    Config values arrive typed as ``object`` because YAML loads into
-    arbitrary Python; this helper narrows them to a real iterable
-    (rejecting strings/bytes which iterate over chars and almost
-    always indicate a misshaped config) so downstream comprehensions
-    type-check cleanly.
+
+def _config_list(value: object, *, field_name: str) -> list[object]:
+    """
+    Validate a raw config value as a list.
+
+    Pydantic owns the boundary shape check so strings and scalars
+    fail as invalid list inputs before normalizers stringify or
+    validate individual elements.
     """
     if value is None:
-        return ()
-    if isinstance(value, (str, bytes)):
-        raise ValueError(f"{field_name} must be a list, got string")
-    if isinstance(value, Iterable):
-        return value
-    raise ValueError(f"{field_name} must be a list")
+        return []
+    try:
+        return _CONFIG_LIST_ADAPTER.validate_python(value)
+    except ValidationError as exc:
+        raise ValueError(f"{field_name} must be a list") from exc
 
 
-def _as_mapping(value: object, *, field_name: str) -> Mapping[object, object]:
+def _config_mapping(value: object, *, field_name: str) -> dict[object, object]:
     """
-    Coerce a ``raw_config.get(...)`` result into a mapping for normalisation.
+    Validate a raw config value as a mapping.
 
-    Mirror of :func:`_as_iterable` for fields that expect a YAML
-    mapping; defends against an operator passing a list where a dict
-    is required and surfaces the field name in the error so the
-    misconfiguration is locatable.
+    Keeps YAML shape validation at the boundary instead of spreading
+    ad hoc ``Mapping`` checks through the sandbox config normalizers.
     """
     if value is None:
         return {}
-    if isinstance(value, Mapping):
-        return value
-    raise ValueError(f"{field_name} must be a mapping")
+    try:
+        return _CONFIG_MAPPING_ADAPTER.validate_python(value)
+    except ValidationError as exc:
+        raise ValueError(f"{field_name} must be a mapping") from exc
 
 
 # --- validation constants ---
@@ -315,6 +315,10 @@ def parse_litehive_config_data(data: Mapping[str, Any]) -> LitehiveConfig:
     validated = validate_config_data(data)
     if "runner_hooks" in validated:
         validated["runner_hooks"] = normalize_runner_hooks(validated["runner_hooks"])
+    if "external_engine_sandbox" in validated:
+        validated["external_engine_sandbox"] = normalize_external_engine_sandbox_config(
+            validated["external_engine_sandbox"]
+        )
     return _LITEHIVE_CONFIG_ADAPTER.validate_python(validated)
 
 
@@ -566,7 +570,7 @@ def _normalize_sandbox_credential_inputs(
     ``credential_inputs[2].env_var ...`` rather than a flat error.
     Caller: :func:`_normalize_external_engine_sandbox_policy`.
     """
-    iterable = _as_iterable(raw_inputs, field_name=field_name)
+    iterable = _config_list(raw_inputs, field_name=field_name)
     credentials: list[SandboxCredentialInput] = []
     for index, item in enumerate(iterable):
         credential = _normalize_sandbox_credential_input(
@@ -587,7 +591,7 @@ def _stripped_bind_strings(raw_binds: object, field_name: str) -> list[str]:
     absolute-path rules. Caller:
     :func:`_normalize_external_engine_sandbox_policy`.
     """
-    iterable = _as_iterable(raw_binds, field_name=field_name)
+    iterable = _config_list(raw_binds, field_name=field_name)
     binds: list[str] = []
     for item in iterable:
         binds.append(str(item).strip())
@@ -604,7 +608,7 @@ def _stringify_setenv_mapping(raw_setenv: object, field_name: str) -> dict[str, 
     values. Caller:
     :func:`_normalize_external_engine_sandbox_policy`.
     """
-    mapping = _as_mapping(raw_setenv, field_name=field_name)
+    mapping = _config_mapping(raw_setenv, field_name=field_name)
     setenv: dict[str, str] = {}
     for key, value in mapping.items():
         setenv[str(key)] = str(value)
@@ -639,7 +643,13 @@ def _normalize_external_engine_sandbox_policy(
             enabled=bool(raw_policy.get("enabled", False)),
             network_mode=network_mode_arg,
             workspace_mode=workspace_mode_arg,
-            environment=[str(item) for item in _as_iterable(raw_policy.get("environment"), field_name=f"{field_name}.environment")],
+            environment=[
+                str(item)
+                for item in _config_list(
+                    raw_policy.get("environment"),
+                    field_name=f"{field_name}.environment",
+                )
+            ],
             credential_inputs=_normalize_sandbox_credential_inputs(
                 raw_policy.get("credential_inputs"),
                 field_name=f"{field_name}.credential_inputs",
@@ -689,7 +699,7 @@ def _normalize_engine_policies_map(
     flat error. Caller:
     :func:`normalize_external_engine_sandbox_config`.
     """
-    mapping = _as_mapping(
+    mapping = _config_mapping(
         raw_engine_policies,
         field_name="external_engine_sandbox.engine_policies",
     )
@@ -728,13 +738,25 @@ def normalize_external_engine_sandbox_config(
             image=str(raw_config.get("image", "litehive-external-engine:latest")),
             workspace_mount_path=str(raw_config.get("workspace_mount_path", "/workspace")),
             binary_mount_root=str(raw_config.get("binary_mount_root", "/litehive/bin")),
-            runtime_args=[str(item) for item in _as_iterable(raw_config.get("runtime_args"), field_name="external_engine_sandbox.runtime_args")],
+            runtime_args=[
+                str(item)
+                for item in _config_list(
+                    raw_config.get("runtime_args"),
+                    field_name="external_engine_sandbox.runtime_args",
+                )
+            ],
             default_network_mode=str(raw_config.get("default_network_mode", "none")),
             default_workspace_mode=str(raw_config.get("default_workspace_mode", "rw")),
             read_only_rootfs=bool(raw_config.get("read_only_rootfs", True)),
             drop_capabilities=bool(raw_config.get("drop_capabilities", True)),
             no_new_privileges=bool(raw_config.get("no_new_privileges", True)),
-            tmpfs=[str(item) for item in _as_iterable(raw_config.get("tmpfs", ["/tmp"]), field_name="external_engine_sandbox.tmpfs")],
+            tmpfs=[
+                str(item)
+                for item in _config_list(
+                    raw_config.get("tmpfs", ["/tmp"]),
+                    field_name="external_engine_sandbox.tmpfs",
+                )
+            ],
             engine_policies=_normalize_engine_policies_map(raw_config.get("engine_policies")),
         )
     if config.backend not in VALID_SANDBOX_BACKENDS:

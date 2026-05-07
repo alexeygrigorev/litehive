@@ -561,6 +561,28 @@ def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None
     assert [item.env_var for item in policy.credential_inputs] == ["GOOGLE_APPLICATION_CREDENTIALS"]
 
 
+@pytest.mark.parametrize(
+    ("sandbox_patch", "message"),
+    [
+        ({"runtime_args": "--pull=never"}, "external_engine_sandbox.runtime_args"),
+        ({"engine_policies": ["codex"]}, "external_engine_sandbox.engine_policies"),
+    ],
+)
+def test_load_config_rejects_malformed_external_engine_sandbox_shapes(
+    tmp_path: Path,
+    sandbox_patch: dict[str, object],
+    message: str,
+) -> None:
+    ensure_workspace(tmp_path)
+    current_config_path = tmp_path / ".litehive" / "config.yaml"
+    raw_config = yaml.safe_load(current_config_path.read_text(encoding="utf-8"))
+    raw_config["external_engine_sandbox"] = sandbox_patch
+    current_config_path.write_text(yaml.safe_dump(raw_config, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_config(tmp_path)
+
+
 def test_resolve_process_profile_merges_shared_process_with_overlay() -> None:
     profile = resolve_process_profile("codehive")
 
