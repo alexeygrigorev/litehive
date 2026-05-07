@@ -368,49 +368,77 @@ def normalize_daemon_config(value: DaemonConfig | Mapping[str, object]) -> Daemo
     register. Rejecting non-positive values during config load keeps
     those process-control loops from spinning or waiting forever.
     """
-    # Config loaders can pass a raw YAML mapping; direct constructors
-    # already hold the typed dataclass.
     if isinstance(value, DaemonConfig):
-        config = value
-    else:
-        mapping = _config_mapping(value, field_name="daemon")
-        try:
-            config = DaemonConfig(**mapping)
-        except TypeError as exc:
-            raise ValueError(f"invalid daemon config: {exc}") from exc
+        return DaemonConfig(
+            heartbeat_interval_seconds=_positive_daemon_seconds(
+                value.heartbeat_interval_seconds,
+                "heartbeat_interval_seconds",
+            ),
+            health_timeout_seconds=_positive_daemon_seconds(
+                value.health_timeout_seconds,
+                "health_timeout_seconds",
+            ),
+            stop_grace_period_seconds=_positive_daemon_seconds(
+                value.stop_grace_period_seconds,
+                "stop_grace_period_seconds",
+            ),
+            force_kill_timeout_seconds=_positive_daemon_seconds(
+                value.force_kill_timeout_seconds,
+                "force_kill_timeout_seconds",
+            ),
+            exit_poll_interval_seconds=_positive_daemon_seconds(
+                value.exit_poll_interval_seconds,
+                "exit_poll_interval_seconds",
+            ),
+            startup_timeout_seconds=_positive_daemon_seconds(
+                value.startup_timeout_seconds,
+                "startup_timeout_seconds",
+            ),
+            startup_poll_interval_seconds=_positive_daemon_seconds(
+                value.startup_poll_interval_seconds,
+                "startup_poll_interval_seconds",
+            ),
+        )
 
-    config.heartbeat_interval_seconds = _positive_daemon_seconds(
-        config.heartbeat_interval_seconds,
-        "heartbeat_interval_seconds",
+    mapping = {str(key): raw_value for key, raw_value in _config_mapping(value, field_name="daemon").items()}
+    valid_fields = {field.name for field in fields(DaemonConfig)}
+    unexpected_fields = sorted(set(mapping) - valid_fields)
+    if unexpected_fields:
+        unexpected = ", ".join(unexpected_fields)
+        raise ValueError(f"invalid daemon config fields: {unexpected}")
+    return DaemonConfig(
+        heartbeat_interval_seconds=_positive_daemon_seconds(
+            mapping.get("heartbeat_interval_seconds", DEFAULT_DAEMON_HEARTBEAT_INTERVAL_SECONDS),
+            "heartbeat_interval_seconds",
+        ),
+        health_timeout_seconds=_positive_daemon_seconds(
+            mapping.get("health_timeout_seconds", DEFAULT_DAEMON_HEALTH_TIMEOUT_SECONDS),
+            "health_timeout_seconds",
+        ),
+        stop_grace_period_seconds=_positive_daemon_seconds(
+            mapping.get("stop_grace_period_seconds", DEFAULT_DAEMON_STOP_GRACE_PERIOD_SECONDS),
+            "stop_grace_period_seconds",
+        ),
+        force_kill_timeout_seconds=_positive_daemon_seconds(
+            mapping.get("force_kill_timeout_seconds", DEFAULT_DAEMON_FORCE_KILL_TIMEOUT_SECONDS),
+            "force_kill_timeout_seconds",
+        ),
+        exit_poll_interval_seconds=_positive_daemon_seconds(
+            mapping.get("exit_poll_interval_seconds", DEFAULT_DAEMON_EXIT_POLL_INTERVAL_SECONDS),
+            "exit_poll_interval_seconds",
+        ),
+        startup_timeout_seconds=_positive_daemon_seconds(
+            mapping.get("startup_timeout_seconds", DEFAULT_DAEMON_STARTUP_TIMEOUT_SECONDS),
+            "startup_timeout_seconds",
+        ),
+        startup_poll_interval_seconds=_positive_daemon_seconds(
+            mapping.get("startup_poll_interval_seconds", DEFAULT_DAEMON_STARTUP_POLL_INTERVAL_SECONDS),
+            "startup_poll_interval_seconds",
+        ),
     )
-    config.health_timeout_seconds = _positive_daemon_seconds(
-        config.health_timeout_seconds,
-        "health_timeout_seconds",
-    )
-    config.stop_grace_period_seconds = _positive_daemon_seconds(
-        config.stop_grace_period_seconds,
-        "stop_grace_period_seconds",
-    )
-    config.force_kill_timeout_seconds = _positive_daemon_seconds(
-        config.force_kill_timeout_seconds,
-        "force_kill_timeout_seconds",
-    )
-    config.exit_poll_interval_seconds = _positive_daemon_seconds(
-        config.exit_poll_interval_seconds,
-        "exit_poll_interval_seconds",
-    )
-    config.startup_timeout_seconds = _positive_daemon_seconds(
-        config.startup_timeout_seconds,
-        "startup_timeout_seconds",
-    )
-    config.startup_poll_interval_seconds = _positive_daemon_seconds(
-        config.startup_poll_interval_seconds,
-        "startup_poll_interval_seconds",
-    )
-    return config
 
 
-def _positive_daemon_seconds(value: float, field_name: str) -> float:
+def _positive_daemon_seconds(value: Any, field_name: str) -> float:
     """
     Coerce and validate one daemon timing field.
     """

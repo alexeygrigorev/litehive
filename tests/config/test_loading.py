@@ -5,6 +5,7 @@ import yaml
 
 from litehive.config.loading import load_config
 from litehive.config.model import (
+    DaemonConfig,
     DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS,
     DEFAULT_TASK_TIME_BUDGET_SECONDS,
     LitehiveConfig,
@@ -216,6 +217,32 @@ def test_parse_litehive_config_data_returns_typed_config() -> None:
     assert config.retry_on == [TransientFailureKind.TIMEOUT, TransientFailureKind.NETWORK]
 
 
+def test_parse_litehive_config_data_returns_typed_daemon_config() -> None:
+    config = parse_litehive_config_data(
+        {
+            "daemon": {
+                "heartbeat_interval_seconds": 2,
+                "health_timeout_seconds": 30,
+                "stop_grace_period_seconds": 4,
+                "force_kill_timeout_seconds": 3,
+                "exit_poll_interval_seconds": 0.25,
+                "startup_timeout_seconds": 8,
+                "startup_poll_interval_seconds": 0.2,
+            }
+        }
+    )
+
+    assert config.daemon == DaemonConfig(
+        heartbeat_interval_seconds=2.0,
+        health_timeout_seconds=30.0,
+        stop_grace_period_seconds=4.0,
+        force_kill_timeout_seconds=3.0,
+        exit_poll_interval_seconds=0.25,
+        startup_timeout_seconds=8.0,
+        startup_poll_interval_seconds=0.2,
+    )
+
+
 def test_litehive_config_defaults_include_flat_retry_on() -> None:
     config = LitehiveConfig()
 
@@ -256,6 +283,11 @@ def test_load_config_reads_task_time_budget_override(tmp_path: Path) -> None:
 def test_litehive_config_rejects_non_positive_task_time_budget() -> None:
     with pytest.raises(ValueError, match="task_time_budget_seconds must be greater than 0"):
         LitehiveConfig(task_time_budget_seconds=0)
+
+
+def test_litehive_config_rejects_non_positive_daemon_timing() -> None:
+    with pytest.raises(ValueError, match="daemon\\.heartbeat_interval_seconds must be greater than 0"):
+        parse_litehive_config_data({"daemon": {"heartbeat_interval_seconds": 0}})
 
 
 def test_litehive_config_rejects_unknown_retry_on_kind() -> None:
