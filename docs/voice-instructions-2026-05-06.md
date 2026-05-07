@@ -2127,9 +2127,14 @@ Legend:
   directly. The daemon loop converts the persisted
   `WorkspaceState.pool_stop_reason` string at the state boundary and
   still treats unknown stored strings as halt reasons.
-- [ ] DM19. Add a daemon DI container or daemon-specific container
+- [x] DM19. Add a daemon DI container or daemon-specific container
   instead of global variables.
   Source: note 5, 21:52-22:06.
+  Completed 2026-05-07: added `DaemonContainer` and
+  `build_daemon_container(...)` to the project DI module. The daemon
+  loop now receives its `Workspace`, loaded config, and
+  `AttentionRepository` from that container instead of wiring those
+  collaborators inline.
 - [ ] DM20. Document `maybe_run_workspace_backup`: where it is called
   and whether it runs before any operation that mutates LiteHive
   state.

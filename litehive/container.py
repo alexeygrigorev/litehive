@@ -5,6 +5,7 @@ from pathlib import Path
 
 from litehive.agents.report_submission import AgentReportSubmitter
 from litehive.agents.task_mutation import AgentTaskMutator
+from litehive.attention import AttentionRepository
 from litehive.config.model import LitehiveConfig
 from litehive.domain.agent import SubagentId
 from litehive.lifecycle.journal import SqliteJournal
@@ -37,6 +38,21 @@ class PipelineContainer:
     journal: SqliteJournal
 
 
+@dataclass(frozen=True)
+class DaemonContainer:
+    """
+    Daemon-loop dependencies for one workspace.
+
+    Production code builds this once at the daemon process boundary and
+    passes its collaborators into the loop instead of constructing
+    workspace-scoped services inline.
+    """
+
+    workspace: Workspace
+    config: LitehiveConfig
+    attention_repository: AttentionRepository
+
+
 def build_container(root: Path) -> LitehiveContainer:
     """
     Convert a raw workspace path into the process-level dependency graph.
@@ -62,6 +78,18 @@ def build_pipeline_container(root: Path) -> PipelineContainer:
         workspace=workspace,
         persistence=SqlitePersistence(workspace),
         journal=SqliteJournal(workspace),
+    )
+
+
+def build_daemon_container(root: Path) -> DaemonContainer:
+    """
+    Assemble daemon-loop dependencies from a raw workspace path.
+    """
+    workspace = build_workspace(root)
+    return DaemonContainer(
+        workspace=workspace,
+        config=workspace.load_config(),
+        attention_repository=AttentionRepository(workspace),
     )
 
 

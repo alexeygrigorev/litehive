@@ -24,7 +24,7 @@ import threading
 import time
 from typing import TextIO
 
-from litehive.container import build_workspace
+from litehive.container import build_daemon_container, build_workspace
 from litehive.config.model import DaemonConfig
 from litehive.config.workspace import create_workspace
 from litehive.attention import AttentionRepository
@@ -379,9 +379,10 @@ def run_daemon_loop(
     """
     workspace = workspace.resolve()
     create_workspace(workspace)
-    daemon_workspace = build_workspace(workspace)
-    attention_repository = AttentionRepository(daemon_workspace)
-    daemon_config = daemon_workspace.load_config().daemon
+    daemon_container = build_daemon_container(workspace)
+    daemon_workspace = daemon_container.workspace
+    attention_repository = daemon_container.attention_repository
+    daemon_config = daemon_container.config.daemon
     apply_pending_migrations(workspace)
     command_prefix = [sys.executable, "-m", "litehive.main"]
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
