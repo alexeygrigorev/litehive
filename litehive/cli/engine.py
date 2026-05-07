@@ -3,13 +3,6 @@ from typing import Annotated
 
 import typer
 from heru import ENGINE_CHOICES, get_engine
-from heru.quota import (
-    UsageStatus,
-    check_claude_quota,
-    check_codex_quota,
-    check_copilot_quota,
-    check_zai_quota,
-)
 
 from litehive.cli.common import WorkspaceOption, choice
 from litehive.config.engine_models import (
@@ -18,6 +11,7 @@ from litehive.config.engine_models import (
     parse_engine_freeze_until,
     persist_engine_freeze_iso_for_workspace,
 )
+from litehive.config.engine_quota import collect_engine_quota_statuses
 from litehive.config.model import LitehiveConfig
 from litehive.config.model import normalize_engine_sequence
 from litehive.config.runtime_settings import (
@@ -264,7 +258,7 @@ def _render_engine_status_lines(config: LitehiveConfig) -> list[str]:
     whether to flip the default engine before queueing more work.
     """
     active_freezes = active_engine_freezes(config)
-    quota_statuses = _collect_quota_statuses()
+    quota_statuses = collect_engine_quota_statuses()
     if config.engine_preference:
         engine_preference_label = ",".join(config.engine_preference)
     else:
@@ -319,62 +313,6 @@ def _engine_freeze_summary_line(engine_freeze: dict[str, str]) -> str:
     for engine_name, until in sorted_items:
         pairs.append(f"{engine_name}={until}")
     return ", ".join(pairs)
-
-
-def _collect_quota_statuses() -> dict[str, object]:
-    """
-    Probe each supported provider's quota once.
-
-    Returns a dict keyed by engine name so the status renderer can
-    do an O(1) lookup per row instead of paying the network cost
-    per engine. Z.ai's probe covers both ``goz`` and ``opencode``
-    because they share a backend; ``gemini`` has no probe surface
-    so it carries the literal ``"unsupported"`` sentinel.
-    """
-    claude_status = _safe_quota_check(check_claude_quota)
-    codex_status = _safe_quota_check(check_codex_quota)
-    copilot_status = _safe_quota_check(check_copilot_quota)
-    zai_status = _safe_quota_check(check_zai_quota)
-    gemini_status = "unsupported"
-    return {
-        "claude": claude_status,
-        "codex": codex_status,
-        "copilot": copilot_status,
-        "gemini": gemini_status,
-        "goz": zai_status,
-        "opencode": zai_status,
-    }
-
-
-def _safe_quota_check(checker) -> object:
-    """
-    Run a quota probe under a broad except.
-
-    A single broken provider must not blank out the whole status
-    table; the operator still wants to see the engines that *do*
-    work. The exception is converted into a labeled
-    :class:`UsageStatus` so downstream rendering can treat it the
-    same as a successful probe with an error attribute.
-    """
-    try:
-        return checker()
-    except Exception as exc:  # pragma: no cover - defensive fallback
-        return UsageStatus(error=_quota_error_label(exc))
-
-
-def _quota_error_label(exc: Exception) -> str:
-    """
-    Pick a human-readable label for a failed quota probe.
-
-    Some provider SDKs raise with empty ``str(exc)`` (e.g. wrapped
-    HTTP errors). Falling back to the exception class name keeps
-    the status row informative instead of printing
-    ``quota: unavailable ()`` which would look broken.
-    """
-    message = str(exc).strip()
-    if message:
-        return message
-    return exc.__class__.__name__
 
 
 def _render_quota_line(_engine_name: str, status: object) -> str:

@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Protocol
 
 from heru.quota import (
+    UsageStatus,
     check_claude_quota,
     check_codex_quota,
     check_copilot_quota,
@@ -31,7 +32,7 @@ class QuotaStatus(Protocol):
     def long_term(self) -> QuotaWindow: ...
 
 
-type QuotaChecker = Callable[[], QuotaStatus]
+QuotaChecker = Callable[[], QuotaStatus]
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,3 +115,47 @@ def engine_quota_block(
         return None
     status = checker()
     return _quota_block_reason(engine_name, status)
+
+
+def collect_engine_quota_statuses() -> dict[str, object]:
+    """
+    Probe each supported provider's quota once for engine status output.
+
+    Returns a dict keyed by engine name so callers can render one row
+    per engine without paying the provider probe cost repeatedly.
+    Z.ai's probe covers both ``goz`` and ``opencode`` because they
+    share a backend; ``gemini`` has no probe surface.
+    """
+    claude_status = _safe_quota_check(check_claude_quota)
+    codex_status = _safe_quota_check(check_codex_quota)
+    copilot_status = _safe_quota_check(check_copilot_quota)
+    zai_status = _safe_quota_check(check_zai_quota)
+    gemini_status = "unsupported"
+    return {
+        "claude": claude_status,
+        "codex": codex_status,
+        "copilot": copilot_status,
+        "gemini": gemini_status,
+        "goz": zai_status,
+        "opencode": zai_status,
+    }
+
+
+def _safe_quota_check(checker: Callable[[], object]) -> object:
+    """
+    Run a quota probe without letting one provider break the status table.
+    """
+    try:
+        return checker()
+    except Exception as exc:  # pragma: no cover - defensive fallback
+        return UsageStatus(error=_quota_error_label(exc))
+
+
+def _quota_error_label(exc: Exception) -> str:
+    """
+    Pick a human-readable label for a failed quota probe.
+    """
+    message = str(exc).strip()
+    if message:
+        return message
+    return exc.__class__.__name__

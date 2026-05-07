@@ -1409,9 +1409,12 @@ Legend:
   Completed 2026-05-07: `_collect_quota_statuses` now assigns
   Claude, Codex, Copilot, Gemini, and shared Z.ai probe results to
   named locals before constructing the engine-keyed status map.
-- [ ] C14. Move quota check and quota error label logic to Heru or a
+- [x] C14. Move quota check and quota error label logic to Heru or a
   dedicated engine/quota domain module if it is not CLI interaction.
   Source: note 4, 23:12-23:38.
+  Completed 2026-05-07: moved engine-status quota probing and quota
+  exception labeling from `cli.engine` into `config.engine_quota`.
+  The CLI now only renders the returned status values.
 - [ ] C15. In `pipeline_cli`, get persistence/store through the
   container or a lightweight sub-container instead of constructing
   `SQLitePersistence` inline.

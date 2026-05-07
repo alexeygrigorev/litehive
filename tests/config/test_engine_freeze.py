@@ -236,7 +236,7 @@ def test_engine_status_prints_routing_availability_and_live_quota(tmp_path: Path
         ),
     )
     monkeypatch.setattr(
-        "litehive.cli.engine.check_claude_quota",
+        "litehive.config.engine_quota.check_claude_quota",
         lambda: SimpleNamespace(
             error=None,
             short_term=UsageWindow(percent_remaining=87.5, reset_at="2026-04-14T12:00:00Z"),
@@ -244,7 +244,7 @@ def test_engine_status_prints_routing_availability_and_live_quota(tmp_path: Path
         ),
     )
     monkeypatch.setattr(
-        "litehive.cli.engine.check_codex_quota",
+        "litehive.config.engine_quota.check_codex_quota",
         lambda: SimpleNamespace(
             error=None,
             limit_reached=True,
@@ -253,7 +253,7 @@ def test_engine_status_prints_routing_availability_and_live_quota(tmp_path: Path
         ),
     )
     monkeypatch.setattr(
-        "litehive.cli.engine.check_copilot_quota",
+        "litehive.config.engine_quota.check_copilot_quota",
         lambda: SimpleNamespace(
             error=None,
             short_term=UsageWindow(percent_remaining=100.0),
@@ -261,7 +261,7 @@ def test_engine_status_prints_routing_availability_and_live_quota(tmp_path: Path
         ),
     )
     monkeypatch.setattr(
-        "litehive.cli.engine.check_zai_quota",
+        "litehive.config.engine_quota.check_zai_quota",
         lambda: SimpleNamespace(
             error=None,
             short_term=UsageWindow(percent_remaining=55.0),
@@ -293,19 +293,19 @@ def test_engine_status_handles_quota_errors_gracefully(tmp_path: Path, monkeypat
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
 
     monkeypatch.setattr(
-        "litehive.cli.engine.check_claude_quota",
+        "litehive.config.engine_quota.check_claude_quota",
         lambda: UsageStatus(error="no-credentials"),
     )
     monkeypatch.setattr(
-        "litehive.cli.engine.check_codex_quota",
+        "litehive.config.engine_quota.check_codex_quota",
         lambda: (_ for _ in ()).throw(RuntimeError("backend timeout")),
     )
     monkeypatch.setattr(
-        "litehive.cli.engine.check_copilot_quota",
+        "litehive.config.engine_quota.check_copilot_quota",
         lambda: UsageStatus(error="gh exit 1"),
     )
     monkeypatch.setattr(
-        "litehive.cli.engine.check_zai_quota",
+        "litehive.config.engine_quota.check_zai_quota",
         lambda: UsageStatus(error="goz exit 1"),
     )
 
