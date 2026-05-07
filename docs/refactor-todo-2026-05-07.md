@@ -34,6 +34,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Move `GitCommitNode` constructor from raw root to injected `Workspace`.
 - [x] Remove duplicate cached root field from `GitWorktreeSyncNode`.
 - [x] Move Heru execution-root helpers from raw root to injected `Workspace`.
+- [x] Remove raw-root alternate `SubagentManager` construction path from the DI container.
 - [x] Migrate `config.loading.load_config(root)` callers that already hold `Workspace`.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`

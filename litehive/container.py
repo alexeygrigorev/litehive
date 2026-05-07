@@ -152,7 +152,7 @@ def build_subagent_manager_for_workspace(
     workspace: Workspace,
     config: LitehiveConfig,
     execution_root: Path,
-    manager_cls=None,
+    manager_type=None,
 ):
     """
     Assemble a ``SubagentManager`` from injected workspace dependencies.
@@ -171,9 +171,7 @@ def build_subagent_manager_for_workspace(
     from litehive.agents.session_streams import SubagentStreamLog  # noqa: PLC0415
     from litehive.agents.subagent_ids import SubagentIdRepository  # noqa: PLC0415
 
-    if manager_cls is not None and manager_cls is not SubagentManager:
-        return manager_cls(workspace.root, execution_root=execution_root)
-
+    manager_class = manager_type or SubagentManager
     sandbox = DockerSandboxLauncher(workspace, config)
     engines = EngineManager()
     sessions = SubagentSessionManager(
@@ -184,8 +182,7 @@ def build_subagent_manager_for_workspace(
         stream_log=SubagentStreamLog(),
     )
     subagent_ids = SubagentIdRepository(workspace)
-    manager_type = manager_cls or SubagentManager
-    return manager_type(
+    return manager_class(
         execution_root=execution_root,
         workspace=workspace,
         config=config,
@@ -196,7 +193,7 @@ def build_subagent_manager_for_workspace(
     )
 
 
-def build_subagent_manager(root: Path, execution_root: Path, manager_cls=None):
+def build_subagent_manager(root: Path, execution_root: Path):
     """
     Assemble a ``SubagentManager`` for one agent turn from a raw path.
 
@@ -209,5 +206,4 @@ def build_subagent_manager(root: Path, execution_root: Path, manager_cls=None):
         container.workspace,
         container.config,
         execution_root=execution_root,
-        manager_cls=manager_cls,
     )

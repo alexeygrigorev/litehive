@@ -1,5 +1,6 @@
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
@@ -62,9 +63,9 @@ def _state(task_id: str, stage: PipelineState) -> TaskState:
 class _StubManager:
     last_init: tuple[Path, Path] | None = None
 
-    def __init__(self, workspace_root: Path, *, execution_root: Path | None = None) -> None:
-        assert execution_root is not None
-        _StubManager.last_init = (Path(workspace_root).resolve(), Path(execution_root).resolve())
+    def __init__(self, execution_root: Path, *, workspace: Workspace, **kwargs: Any) -> None:
+        del kwargs
+        _StubManager.last_init = (workspace.root.resolve(), Path(execution_root).resolve())
 
     def run(self, task, **kwargs) -> SubagentResult:
         del task, kwargs

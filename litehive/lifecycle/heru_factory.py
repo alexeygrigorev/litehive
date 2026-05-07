@@ -467,7 +467,7 @@ class HeruEngineAdapter:
                 self.workspace,
                 config,
                 execution_root=execution_root,
-                manager_cls=SubagentManager,
+                manager_type=SubagentManager,
             )
         except Exception as exc:
             return self._handle_startup_failure(

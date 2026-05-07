@@ -43,11 +43,11 @@ class _StubManager:
     last_init: tuple[Path, Path] | None = None
     last_kwargs: Any = None
 
-    def __init__(self, workspace_root: Path, *, execution_root: Path | None = None) -> None:
-        self.workspace_root = workspace_root
+    def __init__(self, execution_root: Path, *, workspace: Workspace, **kwargs: Any) -> None:
+        del kwargs
+        self.workspace_root = workspace.root
         self.execution_root = execution_root
-        assert execution_root is not None
-        _StubManager.last_init = (Path(workspace_root), Path(execution_root))
+        _StubManager.last_init = (workspace.root, Path(execution_root))
 
     def run(self, task, **kwargs) -> SubagentResult:
         del task

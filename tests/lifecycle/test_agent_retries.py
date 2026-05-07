@@ -329,8 +329,8 @@ class _TimeoutThenPassManager:
     engine_name = "opencode"
     continuation = RuntimeEngineContinuation(session_id="opencode-session-123")
 
-    def __init__(self, workspace_root, *, execution_root=None):
-        del workspace_root, execution_root
+    def __init__(self, execution_root: Path, **kwargs: Any) -> None:
+        del execution_root, kwargs
 
     def run(self, task, **kwargs) -> SubagentResult:
         del task
@@ -375,8 +375,8 @@ class _TimeoutThenNudgeThenPassManager:
     last_kwargs: list[dict[str, object]] = []
     continuation = RuntimeEngineContinuation(thread_id="codex-thread-123")
 
-    def __init__(self, workspace_root, *, execution_root=None):
-        del workspace_root, execution_root
+    def __init__(self, execution_root: Path, **kwargs: Any) -> None:
+        del execution_root, kwargs
 
     def run(self, task, **kwargs) -> SubagentResult:
         del task
