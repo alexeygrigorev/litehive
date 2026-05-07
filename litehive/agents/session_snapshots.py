@@ -35,12 +35,14 @@ class RunningSubagentSessionMetadata:
     """
     Metadata-only update for a running subagent session.
 
-    Used after the process pid is known and during live progress. It
-    deliberately has no exit code or interruption reason because those
-    belong to terminal snapshots, not running-session metadata.
+    Used after the process pid is known and during live progress. Some
+    engine progress callbacks can arrive before a pid is available, so
+    the pid mirrors the nullable runtime row. It deliberately has no
+    exit code or interruption reason because those belong to terminal
+    snapshots, not running-session metadata.
     """
 
-    pid: int
+    pid: int | None
     continuation: RuntimeEngineContinuation | None = None
 
     def continuation_payload(self) -> dict[str, object] | None:

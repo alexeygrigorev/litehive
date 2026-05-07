@@ -8,24 +8,42 @@ freezes through the audited runtime-settings store so the same
 freeze map drives both selection and operator-facing displays.
 """
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import cast
+from typing import Protocol
 
 from heru import get_engine
 from heru.quota import (
-    UsageStatus,
     check_claude_quota,
     check_codex_quota,
     check_copilot_quota,
     check_zai_quota,
-    preferred_reset_at,
 )
 from litehive.config.model import LitehiveConfig
 from litehive.config.runtime_settings import clear_engine_freeze, set_engine_freeze
 from litehive.domain.task import TaskRecord
 from litehive.workspace import Workspace
+
+
+class QuotaWindow(Protocol):
+    reset_at: str | None
+
+
+class QuotaStatus(Protocol):
+    error: str | None
+
+    @property
+    def limit_reached(self) -> bool: ...
+
+    @property
+    def short_term(self) -> QuotaWindow: ...
+
+    @property
+    def long_term(self) -> QuotaWindow: ...
+
+
+type QuotaChecker = Callable[[], QuotaStatus]
 
 
 def _engine_attempt_order(initial_engine_names: list[str], engine_preference: list[str]) -> list[str]:
@@ -271,7 +289,7 @@ def _clear_engine_freeze(workspace: Workspace, config: LitehiveConfig, engine_na
     config.engine_freeze.pop(engine_name, None)
 
 
-def _quota_checker(engine_name: str):
+def _quota_checker(engine_name: str) -> QuotaChecker | None:
     """
     Return the heru ``check_*_quota`` callable for an engine.
 
@@ -291,49 +309,30 @@ def _quota_checker(engine_name: str):
     return None
 
 
-def _quota_status_uses_unified_shape(status: object) -> bool:
-    """
-    Detect heru's "unified" quota status object.
-
-    Identified by the presence of both ``short_term`` and
-    ``long_term`` windows. Lets :func:`_quota_block_reason`
-    ignore legacy or error-shaped statuses that don't carry
-    enough info to act on; returning False there pushes the
-    selector toward "engine is fine".
-    """
-    return getattr(status, "short_term", None) is not None and getattr(status, "long_term", None) is not None
-
-
-def _preferred_quota_reset_at(status: object) -> str | None:
+def _preferred_quota_reset_at(status: QuotaStatus) -> str | None:
     """
     Ask heru for the most informative reset timestamp on a quota status.
 
-    Swallows ``AttributeError`` from older status shapes so a
-    new heru release adding the function does not break Litehive
-    while older releases without it still work. Called by
-    :func:`_quota_block_reason` so the freeze message can include
-    a "resets …" hint when available.
+    Called by :func:`_quota_block_reason` so the freeze message can
+    include a "resets ..." hint when available.
     """
-    try:
-        return preferred_reset_at(cast("UsageStatus", status), include_short_term_fallback=True)
-    except AttributeError:
-        return None
+    if status.long_term.reset_at:
+        return status.long_term.reset_at
+    return status.short_term.reset_at
 
 
-def _quota_block_reason(engine_name: str, status: object) -> tuple[str | None, str | None]:
+def _quota_block_reason(engine_name: str, status: QuotaStatus) -> tuple[str | None, str | None]:
     """
     Translate a heru quota status into a skip reason and reset-at pair.
 
-    Returns ``(None, None)`` whenever the status is errored,
-    legacy-shaped, or not actually limit-reached so
-    :func:`engine_quota_block` falls through to "engine is fine"
-    without a chain of negative branches at the call site.
+    Returns ``(None, None)`` whenever the status is errored or not
+    actually limit-reached so :func:`engine_quota_block` falls through
+    to "engine is fine" without a chain of negative branches at the
+    call site.
     """
-    if getattr(status, "error", None) is not None:
+    if status.error is not None:
         return None, None
-    if not _quota_status_uses_unified_shape(status):
-        return None, None
-    if not bool(getattr(status, "limit_reached", False)):
+    if not status.limit_reached:
         return None, None
     reset_at = _preferred_quota_reset_at(status)
     if reset_at:

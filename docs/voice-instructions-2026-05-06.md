@@ -1061,9 +1061,13 @@ Legend:
 - [ ] R13. Move active engine freeze out of config and into database
   runtime state.
   Source: note 4, 38:25-39:13.
-- [ ] R14. Replace `getattr(status, ...)` in engine models with typed
+- [x] R14. Replace `getattr(status, ...)` in engine models with typed
   status objects.
   Source: note 4, 39:30-40:21.
+  Completed 2026-05-07: `engine_models` now types quota probes through
+  a quota-status protocol and reads status fields directly. Verified with
+  `uv run pyrefly check litehive/config/engine_models.py` and
+  `uv run pytest tests/config/test_engine_freeze.py -q`.
 - [ ] R15. Move quota handling into a separate module.
   Source: note 4, 40:21-40:31.
 - [ ] R16. Replace `engine_quota_block` tuple returns with a dataclass
