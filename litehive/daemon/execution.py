@@ -257,20 +257,6 @@ def _wait_for_pid_exit(pid: int, timeout_seconds: float, poll_interval_seconds: 
         time.sleep(min(remaining, poll_interval_seconds))
 
 
-def _clear_recorded_daemon(workspace: Path, pid: int) -> None:
-    """
-    Drop the daemon registration row once the pid has confirmed exit.
-
-    Used by the SIGTERM/SIGKILL stop sequence after liveness checks
-    prove the old process is gone.
-    Pinning ``unregister_daemon`` by ``pid`` prevents the stop
-    sequence from racing a newer daemon: if a fresh daemon registered
-    for the same workspace while we were waiting for the previous one
-    to die, we must not clear that newer registration.
-    """
-    unregister_daemon(workspace, pid=pid)
-
-
 def _force_kill_recorded_daemon(workspace: Path, pid: int, config: DaemonConfig) -> None:
     """
     SIGKILL a daemon that ignored SIGTERM, then clear its registration.
@@ -282,12 +268,12 @@ def _force_kill_recorded_daemon(workspace: Path, pid: int, config: DaemonConfig)
     workspace is free for a new daemon to register.
     """
     if not runner_pid_is_alive(pid):
-        _clear_recorded_daemon(workspace, pid=pid)
+        unregister_daemon(workspace, pid=pid)
         return
     try:
         os.kill(pid, signal.SIGKILL)
     except ProcessLookupError:
-        _clear_recorded_daemon(workspace, pid=pid)
+        unregister_daemon(workspace, pid=pid)
         return
     except PermissionError as exc:
         raise RuntimeError(f"failed to send SIGKILL to daemon pid={pid}: {exc}") from exc
@@ -297,7 +283,7 @@ def _force_kill_recorded_daemon(workspace: Path, pid: int, config: DaemonConfig)
         poll_interval_seconds=config.exit_poll_interval_seconds,
     ):
         raise RuntimeError(f"daemon pid={pid} did not exit after SIGKILL")
-    _clear_recorded_daemon(workspace, pid=pid)
+    unregister_daemon(workspace, pid=pid)
 
 
 def _terminate_recorded_daemon(workspace: Path, pid: int, config: DaemonConfig) -> None:
@@ -312,12 +298,12 @@ def _terminate_recorded_daemon(workspace: Path, pid: int, config: DaemonConfig) 
     when the operator asks the workspace's daemon to stop.
     """
     if not runner_pid_is_alive(pid):
-        _clear_recorded_daemon(workspace, pid=pid)
+        unregister_daemon(workspace, pid=pid)
         return
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
-        _clear_recorded_daemon(workspace, pid=pid)
+        unregister_daemon(workspace, pid=pid)
         return
     except PermissionError as exc:
         raise RuntimeError(f"failed to send SIGTERM to daemon pid={pid}: {exc}") from exc
@@ -326,7 +312,7 @@ def _terminate_recorded_daemon(workspace: Path, pid: int, config: DaemonConfig) 
         timeout_seconds=config.stop_grace_period_seconds,
         poll_interval_seconds=config.exit_poll_interval_seconds,
     ):
-        _clear_recorded_daemon(workspace, pid=pid)
+        unregister_daemon(workspace, pid=pid)
         return
     _force_kill_recorded_daemon(workspace, pid=pid, config=config)
 

@@ -2094,9 +2094,15 @@ Legend:
   `get_workspace_daemon(...)` now return that typed entry, and the
   daemon start health check reads `pid` and `heartbeat_at` from that
   object instead of raw metadata dictionaries.
-- [ ] DM15. Remove wrapper functions like `clear_recorded_daemon` /
+- [x] DM15. Remove wrapper functions like `clear_recorded_daemon` /
   `unregister_daemon` if they only call another function.
   Source: note 5, 19:53-20:07.
+  Completed 2026-05-07: removed `_clear_recorded_daemon`, which only
+  delegated to `unregister_daemon(workspace, pid=pid)`. The stop and
+  force-kill paths now call the registry function directly at the
+  point where the pid guard is needed. Kept `unregister_daemon`
+  because it owns lock release, pid-guarded metadata clearing, and
+  process-state cleanup.
 - [ ] DM16. Split daemon termination behavior into submodules/classes
   if it violates single responsibility.
   Source: note 5, 20:19-20:42.
