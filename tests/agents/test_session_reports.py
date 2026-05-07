@@ -1,4 +1,5 @@
 from litehive.agents.session_reports import SubagentReportPayload
+from litehive.domain.common import SubagentStatus
 
 
 def test_subagent_report_payload_serializes_defensive_copies() -> None:
@@ -8,7 +9,7 @@ def test_subagent_report_payload_serializes_defensive_copies() -> None:
     resource_control = {"enabled": False}
     continuation = {"session_id": "session-123"}
     payload = SubagentReportPayload(
-        status="completed",
+        status=SubagentStatus.COMPLETED,
         summary="done",
         files_changed=files_changed,
         tests=tests,

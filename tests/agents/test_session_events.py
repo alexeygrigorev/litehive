@@ -7,6 +7,7 @@ from litehive.agents.session_events import (
     SubagentStartedEvent,
 )
 from litehive.config.workspace import ensure_workspace
+from litehive.domain.common import SubagentStatus
 from litehive.observability.events import read_events
 from litehive.state.records import create_task
 from litehive.workspace import Workspace
@@ -25,7 +26,7 @@ def test_subagent_session_events_serialize_expected_kind_and_data() -> None:
         subagent_id="SA-0001",
         role="swe",
         engine="codex",
-        status="completed",
+        status=SubagentStatus.COMPLETED,
         exit_code=0,
         interruption_reason=None,
     )

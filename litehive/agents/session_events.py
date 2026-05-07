@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Mapping
 
+from litehive.domain.common import SubagentStatus
+
 
 @dataclass(frozen=True, slots=True)
 class SubagentStartedEvent:
@@ -77,7 +79,7 @@ class SubagentFinishedEvent:
     subagent_id: str
     role: str
     engine: str
-    status: str
+    status: SubagentStatus
     exit_code: int
     interruption_reason: str | None
 
@@ -92,7 +94,7 @@ class SubagentFinishedEvent:
             "subagent_id": self.subagent_id,
             "role": self.role,
             "engine": self.engine,
-            "status": self.status,
+            "status": self.status.value,
             "exit_code": self.exit_code,
             "interruption_reason": self.interruption_reason,
         }

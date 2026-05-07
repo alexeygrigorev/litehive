@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Mapping
 
+from litehive.domain.common import SubagentStatus
+
 
 @dataclass(frozen=True, slots=True)
 class SubagentReportPayload:
@@ -16,7 +18,7 @@ class SubagentReportPayload:
     preserving the current persisted shape for existing readers.
     """
 
-    status: str
+    status: SubagentStatus
     summary: str
     files_changed: list[str] = field(default_factory=list)
     tests: Mapping[str, object] = field(default_factory=dict)
@@ -30,7 +32,7 @@ class SubagentReportPayload:
         Serialize to the JSON-compatible shape stored in SQLite.
         """
         return {
-            "status": self.status,
+            "status": self.status.value,
             "summary": self.summary,
             "files_changed": list(self.files_changed),
             "tests": dict(self.tests),

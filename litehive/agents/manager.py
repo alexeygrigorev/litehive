@@ -40,7 +40,11 @@ from litehive.agents.parsing import MissingVerdictError, stage_report_from_subag
 from litehive.agents.session import SubagentSessionManager
 from litehive.agents.session_events import SubagentFinishedEvent, SubagentProgressEvent
 from litehive.agents.session_reports import SubagentReportPayload
-from litehive.agents.session_snapshots import SubagentSessionMetadata, SubagentSessionSnapshot
+from litehive.agents.session_snapshots import (
+    RunningSubagentSessionMetadata,
+    SubagentSessionMetadata,
+    SubagentSessionSnapshot,
+)
 from litehive.agents.subagent_ids import SubagentIdRepository
 from litehive.domain.roles import agent_stage_for_task
 from litehive.state.records import save_task
@@ -681,7 +685,7 @@ class SubagentManager:
             )
             warnings = callback_warnings.merged_with([missing_verdict_warning])
             report_payload = SubagentReportPayload(
-                status=ref.status,
+                status=SubagentStatus(ref.status),
                 summary=f"{report_stage}: agent did not submit verdict via litehive agent report CLI",
                 tests={"added": 0, "passing": 0},
                 warnings=warnings,
@@ -699,7 +703,7 @@ class SubagentManager:
             )
             record_stage_report(self.workspace, task, report)
             report_payload = SubagentReportPayload(
-                status=ref.status,
+                status=SubagentStatus(ref.status),
                 summary=report.summary,
                 files_changed=files_changed,
                 tests=report.tests,
@@ -736,7 +740,7 @@ class SubagentManager:
                 subagent_id=ref.id,
                 role=ref.role,
                 engine=ref.engine,
-                status=ref.status,
+                status=SubagentStatus(ref.status),
                 exit_code=exit_code,
                 interruption_reason=interruption_reason,
             ),
@@ -781,11 +785,10 @@ class SubagentManager:
             transcript=transcript,
             continuation=continuation,
         )
-        self.sessions.write_session_metadata(
+        self.sessions.write_running_session_metadata(
             task,
             ref,
-            metadata=SubagentSessionMetadata(
-                exit_code=None,
+            metadata=RunningSubagentSessionMetadata(
                 pid=execution.pid,
                 continuation=continuation,
             ),
@@ -801,7 +804,7 @@ class SubagentManager:
         )
         report_stage = agent_stage_for_task(task, ref.role)
         report_payload = SubagentReportPayload(
-            status=ref.status,
+            status=SubagentStatus(ref.status),
             summary="",
             tests={"added": 0, "passing": 0},
             resource_control=self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
@@ -825,7 +828,7 @@ class SubagentManager:
                 # watching status can tell the agent is mid-flight, but
                 # we do not record a stage-report row.
                 report_payload = SubagentReportPayload(
-                    status=ref.status,
+                    status=SubagentStatus(ref.status),
                     summary=f"{report_stage}: agent did not submit verdict via litehive agent report CLI",
                     tests={"added": 0, "passing": 0},
                     resource_control=self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
@@ -833,7 +836,7 @@ class SubagentManager:
                 )
             else:
                 report_payload = SubagentReportPayload(
-                    status=ref.status,
+                    status=SubagentStatus(ref.status),
                     summary=report.summary,
                     files_changed=_latest_report_files_changed(
                         self.workspace,

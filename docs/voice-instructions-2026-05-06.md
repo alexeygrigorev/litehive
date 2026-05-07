@@ -642,13 +642,40 @@ Legend:
   `append_event` directly or calls it with `data={...}`, then reran
   focused ruff, subagent manager/event-stream/event tests, and recovery
   prompt-reader tests.
-- [ ] M31. `SubAgent.Finished` / finished status should be an enum,
+- [x] M31. `SubAgent.Finished` / finished status should be an enum,
   not a raw string.
   Source: note 3, 25:39-25:49.
-- [ ] M32. Split `write_session_metadata` into success/error flows so
+  Verified 2026-05-07: traced the subagent status path through
+  `SubagentManager._classify_completed_execution`,
+  `SubagentReportPayload`, and `SubagentFinishedEvent`. The Heru
+  `SubagentRef` transport field still serializes to Heru's string
+  literal status vocabulary, but Litehive-owned report/event payloads
+  now require `SubagentStatus` and serialize to `.value` only at the
+  SQLite/JSON boundary. Kept Heru ref status assignments as string
+  `.value` writes for type compatibility, and convert the Heru ref
+  status into `SubagentStatus(...)` when constructing typed report
+  and finished-event objects. Updated session report/event tests to
+  construct enum statuses and verified with `rg` that Litehive-owned
+  subagent report/finished-event paths no longer accept raw
+  `"completed"` / `"failed"` / `"running"` status strings. Reran
+  focused typecheck, subagent session/event/manager tests, and full
+  project typecheck/tests.
+- [x] M32. Split `write_session_metadata` into success/error flows so
   `exit_code` and `interruption_reason` are not vague nullable
   fields.
   Source: note 3, 26:52-27:20.
+  Verified 2026-05-07: replaced the broad metadata-only
+  `write_session_metadata(...)` path with
+  `write_running_session_metadata(...)`, backed by
+  `RunningSubagentSessionMetadata`. Traced both metadata-only call
+  sites: PID recording in `SubagentSessionManager.record_subagent_pid`
+  and live progress writes in `SubagentManager.write_session_progress`
+  now pass only running fields (`pid`, optional continuation). Terminal
+  `exit_code` and `interruption_reason` remain on full
+  `SubagentSessionSnapshot` writes, where completion/error handling has
+  the process result. Verified with `rg` that the old writer name is no
+  longer present in code, and reran focused ruff plus subagent session,
+  manager, event-stream, callback, and recovery tests.
 - [ ] M33. Replace session dictionaries with concrete session objects.
   PID and exit code should not be `None` where the process model says
   they must exist.

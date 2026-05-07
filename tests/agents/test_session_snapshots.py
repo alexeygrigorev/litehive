@@ -1,7 +1,12 @@
 from heru.types import RuntimeEngineContinuation
 
 from litehive.agents.session_reports import SubagentReportPayload
-from litehive.agents.session_snapshots import SubagentSessionMetadata, SubagentSessionSnapshot
+from litehive.agents.session_snapshots import (
+    RunningSubagentSessionMetadata,
+    SubagentSessionMetadata,
+    SubagentSessionSnapshot,
+)
+from litehive.domain.common import SubagentStatus
 
 
 def test_subagent_session_metadata_serializes_continuation() -> None:
@@ -19,8 +24,21 @@ def test_subagent_session_metadata_serializes_continuation() -> None:
     assert "updated_at" in payload
 
 
+def test_running_subagent_session_metadata_only_carries_running_fields() -> None:
+    metadata = RunningSubagentSessionMetadata(
+        pid=4242,
+        continuation=RuntimeEngineContinuation(session_id="session-123"),
+    )
+
+    payload = metadata.continuation_payload()
+
+    assert metadata.pid == 4242
+    assert payload is not None
+    assert payload["session_id"] == "session-123"
+
+
 def test_subagent_session_snapshot_groups_streams_report_and_metadata() -> None:
-    report = SubagentReportPayload(status="running", summary="")
+    report = SubagentReportPayload(status=SubagentStatus.RUNNING, summary="")
     metadata = SubagentSessionMetadata(exit_code=None, pid=None)
 
     snapshot = SubagentSessionSnapshot(

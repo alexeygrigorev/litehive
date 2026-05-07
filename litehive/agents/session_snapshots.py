@@ -31,6 +31,28 @@ class SubagentSessionMetadata:
 
 
 @dataclass(frozen=True, slots=True)
+class RunningSubagentSessionMetadata:
+    """
+    Metadata-only update for a running subagent session.
+
+    Used after the process pid is known and during live progress. It
+    deliberately has no exit code or interruption reason because those
+    belong to terminal snapshots, not running-session metadata.
+    """
+
+    pid: int
+    continuation: RuntimeEngineContinuation | None = None
+
+    def continuation_payload(self) -> dict[str, object] | None:
+        """
+        Serialize the continuation token for session storage.
+        """
+        if self.continuation is None:
+            return None
+        return self.continuation.model_dump(mode="python")
+
+
+@dataclass(frozen=True, slots=True)
 class SubagentSessionSnapshot:
     """
     Complete subagent snapshot written by ``SubagentSessionManager``.

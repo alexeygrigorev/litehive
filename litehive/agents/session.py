@@ -23,7 +23,11 @@ from litehive.agents.session_store import (
 )
 from litehive.agents.session_events import SubagentPidEvent, SubagentStartedEvent
 from litehive.agents.session_reports import SubagentReportPayload
-from litehive.agents.session_snapshots import SubagentSessionMetadata, SubagentSessionSnapshot
+from litehive.agents.session_snapshots import (
+    RunningSubagentSessionMetadata,
+    SubagentSessionMetadata,
+    SubagentSessionSnapshot,
+)
 from litehive.domain.agent import SubagentInactivityTimeout
 from litehive.domain.common import SubagentStatus, utcnow
 from litehive.domain.runtime import Subagent
@@ -155,7 +159,7 @@ class SubagentSessionManager:
                 stdout="",
                 stderr="",
                 report=SubagentReportPayload(
-                    status=ref.status,
+                    status=SubagentStatus(ref.status),
                     summary="",
                     tests={"added": 0, "passing": 0},
                     resource_control=self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
@@ -164,21 +168,20 @@ class SubagentSessionManager:
             ),
         )
 
-    def write_session_metadata(
+    def write_running_session_metadata(
         self,
         task: TaskRecord,
         ref: Subagent,
-        metadata: SubagentSessionMetadata,
+        metadata: RunningSubagentSessionMetadata,
     ) -> None:
         """
-        Update the session row without touching the report or stream
-        artifacts.
+        Update running-session metadata without touching report or
+        stream artifacts.
 
-        Used by SubagentManager for metadata-only events (PID
-        assignment, interruption reason) where rewriting the report
-        payload would clobber the last good values from the engine's
-        own output. The selective update is what keeps a metadata
-        write from undoing a progress snapshot.
+        Metadata-only writes happen while the subagent is still
+        running: PID assignment and live continuation updates. Exit
+        codes and interruption reasons are terminal state and are
+        written through full session snapshots.
         """
         created_at = utcnow()
         resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
@@ -199,8 +202,8 @@ class SubagentSessionManager:
                 "created_at": created_at,
                 "updated_at": utcnow(),
                 "pid": metadata.pid,
-                "exit_code": metadata.exit_code,
-                "interruption_reason": metadata.interruption_reason,
+                "exit_code": None,
+                "interruption_reason": None,
                 "resource_control": resource_control,
                 "continuation": metadata.continuation_payload(),
             },
@@ -221,10 +224,10 @@ class SubagentSessionManager:
         if pid is None:
             return
         mark_subagent_pid(self.root, task, pid)
-        self.write_session_metadata(
+        self.write_running_session_metadata(
             task,
             ref,
-            metadata=SubagentSessionMetadata(exit_code=None, pid=pid),
+            metadata=RunningSubagentSessionMetadata(pid=pid),
         )
         self.workspace.append_event(
             task,
