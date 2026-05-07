@@ -1862,9 +1862,16 @@ Legend:
 
 ## Workspace Instructions
 
-- [ ] W1. Remove global variables from `workspace_files` and related
+- [x] W1. Remove global variables from `workspace_files` and related
   workspace modules.
   Source: note 5, 06:32-06:45.
+  Completed 2026-05-07: verified `workspace_files.py` has no
+  module-level globals and removed the remaining workspace-module
+  globals from `config/workspace.py` by making the unresolved shell
+  variable pattern local to validation and resolving the workspace
+  config template path through `_workspace_config_template_path()`.
+  Verified with `rg` for module-level constants plus workspace
+  bootstrap/resolution tests.
 - [ ] W2. Review and likely remove
   `workspace.config.template.unresolved.shell.variable`; the note
   questions why it exists.

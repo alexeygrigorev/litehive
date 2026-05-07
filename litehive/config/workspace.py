@@ -24,9 +24,6 @@ from litehive.config.registry import (
     build_workspace_registry,
 )
 
-_UNRESOLVED_SHELL_VAR_RE = re.compile(r"(?<!\\)\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)")
-_WORKSPACE_CONFIG_TEMPLATE = Path(__file__).resolve().parents[1] / "cli" / "templates" / "workspace_config.yaml"
-
 
 def render_workspace_gitignore() -> str:
     """
@@ -81,12 +78,20 @@ def _reject_invalid_workspace_path(path: Path | str, source: str) -> None:
     which CLI surface produced the bad value.
     """
     raw = str(path).strip()
-    match = _UNRESOLVED_SHELL_VAR_RE.search(raw)
+    shell_variable_pattern = r"(?<!\\)\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)"
+    match = re.search(shell_variable_pattern, raw)
     if match is not None:
         raise ValueError(
             f"invalid workspace root from {source}: {raw!r} contains unresolved shell variable "
             f"syntax ({match.group(0)!r}); pass the expanded absolute path instead"
         )
+
+
+def _workspace_config_template_path() -> Path:
+    """
+    Return the built-in workspace config template path.
+    """
+    return Path(__file__).resolve().parents[1] / "cli" / "templates" / "workspace_config.yaml"
 
 
 def _workspace_parent_root(path: Path) -> Path | None:
@@ -353,7 +358,7 @@ def ensure_workspace(
     if not config_path(root).exists():
         if config is None:
             config_path(root).write_text(
-                _WORKSPACE_CONFIG_TEMPLATE.read_text(encoding="utf-8"),
+                _workspace_config_template_path().read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
         else:
