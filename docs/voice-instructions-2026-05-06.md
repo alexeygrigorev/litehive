@@ -1067,8 +1067,16 @@ Legend:
   `litehive/sandbox/launcher.py` and sandbox adapter/support behavior
   to `litehive/sandbox/support.py`; updated production and test imports
   to use the sandbox package directly without compatibility wrappers.
-- [ ] S2. Split `SandboxSupport`; it is too large.
+- [x] S2. Split `SandboxSupport`; it is too large.
   Source: note 4, 02:01-02:07.
+  Completed 2026-05-07: moved `SandboxedAdapter` plus its launcher
+  and summary protocols into `litehive/sandbox/adapter.py`; kept
+  `litehive/sandbox/support.py` focused on shared helper functions
+  used by sandbox launcher policy code and removed the `launcher.py`
+  adapter re-export. Verified `SubagentManager` imports
+  `SandboxedAdapter` from `litehive.sandbox.adapter`, and
+  `SandboxLauncher` imports only `forced_engine_rw_state_dirs` from
+  support.
 - [x] S3. Remove the `__all__` export bag from sandbox support.
   Source: note 4, 02:07-02:17.
   Completed 2026-05-07: removed the `__all__` list from

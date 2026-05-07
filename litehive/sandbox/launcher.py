@@ -10,13 +10,10 @@ from pathlib import Path, PurePosixPath
 import shutil
 from typing import Mapping
 
-from litehive.sandbox.support import (
-    SandboxedAdapter as LitehiveSandboxedAdapter,
-    forced_engine_rw_state_dirs,
-)
 from heru.base import CLIInvocation
 from litehive.config.model import LitehiveConfig
 from litehive.config.model import ExternalEngineSandboxPolicy
+from litehive.sandbox.support import forced_engine_rw_state_dirs
 
 
 class SandboxProfile(str, Enum):
@@ -24,9 +21,6 @@ class SandboxProfile(str, Enum):
 
     NO_GIT = "no_git"
     MERGE_RESOLVER = "merge_resolver"
-
-
-SandboxedAdapter = LitehiveSandboxedAdapter
 
 
 def sandbox_profile_for_role(role: str) -> SandboxProfile:

@@ -17,7 +17,8 @@ from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from heru.types import RuntimeEngineContinuation
 from litehive.agents.callbacks import CallbackWarnings, SubagentRunCallbacks
 from litehive.agents.engine_callables import resolve_cli_execution_callable
-from litehive.sandbox.launcher import SandboxError, SandboxedAdapter, SandboxLauncher, SandboxPolicySummary
+from litehive.sandbox.adapter import SandboxedAdapter
+from litehive.sandbox.launcher import SandboxError, SandboxLauncher, SandboxPolicySummary
 from litehive.config.model import LitehiveConfig
 from litehive.agents.engine_manager import EngineManager
 from litehive.domain.reports import REPORT_VERDICT_KINDS, ReportPipelineState, StageReport
