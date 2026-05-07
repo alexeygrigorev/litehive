@@ -13,7 +13,7 @@ from litehive.domain.runtime import TaskOutcomeState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.locking import (
     ensure_future_task_mutation_allowed_for_workspace,
-    workspace_lock,
+    workspace_lock_for_workspace,
 )
 from litehive.state.persist import (
     load_state_for_workspace,
@@ -52,8 +52,7 @@ def _enqueue_task_for_workspace(workspace: Workspace, task_id: str, front: bool)
     wrappers are currently dead code, but this helper is preserved alongside
     them in case they are re-introduced.
     """
-    root = workspace.root
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace)
         ensure_future_task_mutation_allowed_for_workspace(workspace, [task_id], state=state)
         task = workspace.require_task(task_id)
@@ -95,8 +94,7 @@ def move_queued_task_for_workspace(workspace: Workspace, task_id: str, position:
     """
     if position < 1:
         raise ValueError("Queue position must be 1 or greater")
-    root = workspace.root
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace)
         ensure_future_task_mutation_allowed_for_workspace(workspace, [task_id], state=state)
         task = workspace.require_task(task_id)
@@ -182,8 +180,7 @@ def prioritize_queued_tasks_for_workspace(workspace: Workspace, task_ids: list[s
     if duplicates:
         joined = ", ".join(sorted(duplicates))
         raise ValueError(f"Task ids must be unique: {joined}")
-    root = workspace.root
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace)
         ensure_future_task_mutation_allowed_for_workspace(workspace, task_ids, state=state)
         queue_before = list(state.queue)

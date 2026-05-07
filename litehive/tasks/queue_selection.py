@@ -24,7 +24,7 @@ from litehive.recovery.execution_recovery import (
     stale_interruption_reason,
 )
 from litehive.state.locking import (
-    workspace_lock,
+    workspace_lock_for_workspace,
     workspace_mutation_guard_for_workspace,
 )
 from litehive.state.persist import (
@@ -103,7 +103,7 @@ def set_active_task(workspace: Workspace, task_id: str | None) -> WorkspaceState
     ``dequeue_next_task_selection`` so the eligibility checks and audit
     bookkeeping run.
     """
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock(workspace.root):
+    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace)
         state.active_task_id = task_id
         if task_id is not None and task_id in state.queue:
@@ -140,7 +140,7 @@ def peek_next_task_selection(workspace: Workspace) -> TaskSelection:
     fold it back into the dequeue helper rather than carrying two near-copies.
     """
     recover_stale_runner_state_for_workspace(workspace)
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock(workspace.root):
+    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace)
         validate_single_active_task_for_workspace(workspace, state)
         next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace, state)
@@ -175,7 +175,7 @@ def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
     without a second round-trip.
     """
     recover_stale_runner_state_for_workspace(workspace)
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock(workspace.root):
+    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace)
         original_queue = list(state.queue)
         validate_single_active_task_for_workspace(workspace, state)
@@ -462,8 +462,7 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
     ``recovery.execution_recovery`` and ``restore_missing_queued_tasks``;
     looks like a leftover from before workspace-repair owned this concern.
     """
-    root = workspace.root
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock(root):
+    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace)
         validate_single_active_task_for_workspace(workspace, state)
         if state.active_task_id is None:
