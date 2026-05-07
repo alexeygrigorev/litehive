@@ -67,7 +67,6 @@ from litehive.observability.status_summary import (
     estimate_task_execution,  # noqa: F401  (re-export)
     render_task_summary,
 )
-from litehive.state.records import get_task
 from litehive.workspace import Workspace
 
 collect_operational_status_snapshot = collect_operational_status_snapshot_for_workspace
@@ -167,7 +166,7 @@ def collect_task_pipeline_status_for_workspace(
         waiting_lines = waiting_for_you_lines(resolved_root, reconcile=False)
     else:
         if active_task_id:
-            active_task = get_task(resolved_root, active_task_id)
+            active_task = workspace.get_task(active_task_id)
         else:
             active_task = None
         waiting_lines = waiting_for_you_lines(resolved_root)

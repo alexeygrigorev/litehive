@@ -132,8 +132,8 @@ def test_collect_task_pipeline_status_prefers_runner_active_task_id(tmp_path: Pa
         lambda root, **_: ["operator_needed: unavailable"],
     )
     monkeypatch.setattr(
-        "litehive.observability.status.get_task",
-        lambda root, task_id: active_task if task_id else None,
+        "litehive.observability.status.Workspace.get_task",
+        lambda self, task_id: active_task if task_id else None,
     )
 
     status = collect_task_pipeline_status(tmp_path)
