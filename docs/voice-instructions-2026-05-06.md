@@ -2152,9 +2152,13 @@ Legend:
   day before the next daemon-run mutation" trigger. Other mutating
   maintenance paths already take explicit guarded backups, so there is
   no general pre-operation hook to extract yet.
-- [ ] DM22. Simplify `run_daemon_loop`; it is complex and should be
+- [x] DM22. Simplify `run_daemon_loop`; it is complex and should be
   decomposed.
   Source: note 5, 22:57-23:16.
+  Completed 2026-05-07: extracted the repeated snapshot rendering,
+  no-work check, and stop-reason decision into `_snapshot_exit_code`.
+  The daemon loop now handles snapshot collection errors and child-run
+  orchestration while the shared helper owns snapshot stop policy.
 - [ ] DM23. Model daemon execution as an object such as
   `DaemonExecutor` or `DaemonWorkspace` with methods like start/stop,
   instead of passing workspace strings and loose helpers.
