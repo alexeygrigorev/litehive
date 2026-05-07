@@ -1584,7 +1584,7 @@ Legend:
   bootstrap paths. Workspace code no longer imports or calls the
   module-level registry wrapper functions; those remain only as public
   boundary helpers for direct callers.
-- [ ] F10. Split registry responsibilities. Config, loading,
+- [x] F10. Split registry responsibilities. Config, loading,
   persistence queries, sqlite details, security, and workspace path
   registration should not all live in one mixed module.
   Source: note 5, 01:22-02:21.
@@ -1593,6 +1593,12 @@ Legend:
   `config.registry` focused on the registry service, SQLite schema,
   corruption quarantine, and workspace-root row operations. Remaining
   work is to split persistence/query details further.
+  Completed 2026-05-07: moved SQLite connection setup, schema
+  creation, quick-check, corruption-file quarantine, root
+  canonicalization, and registry row queries/upserts into
+  `config.registry_store`. `config.registry` now owns the public
+  service, DI construction, locking wrapper usage, and boundary
+  functions.
 - [x] F11. Simplify `register_workspace_path`; verify whether its
   complexity is justified.
   Source: note 5, 02:12-02:25.

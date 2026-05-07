@@ -340,7 +340,7 @@ def test_workspace_registry_read_failure_raises_diagnostic(tmp_path: Path, monke
     def fail_open(path: Path):
         raise OSError(f"cannot open {path}")
 
-    monkeypatch.setattr("litehive.config.registry._open_registry_connection", fail_open)
+    monkeypatch.setattr("litehive.config.registry_store.open_registry_connection", fail_open)
 
     with pytest.raises(WorkspaceRegistryError, match="failed to read workspace registry"):
         list_registered_workspace_paths()
