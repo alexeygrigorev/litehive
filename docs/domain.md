@@ -60,6 +60,11 @@ stable across refactors.
   `litehive task close`: `done`, `wont_do`, `deferred`, or `duplicate`.
   It is stored on `TaskRecord.close_reason`; runtime outcome reason codes use
   the broader `task_done` or `task_closed` buckets.
+- `execution_interrupted` means execution stopped in a potentially resumable
+  way. The runner records interruption context so recovery or resume can pick
+  the task up later.
+- `execution_cancelled` means an operator deliberately abandoned execution.
+  The task is closed/cancelled, not queued for automatic resume.
 - Close outcomes such as `wont_do`, `deferred`, `duplicate`, and
   `execution_cancelled` are close reasons, not task statuses.
 

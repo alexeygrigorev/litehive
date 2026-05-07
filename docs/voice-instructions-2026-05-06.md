@@ -1023,9 +1023,14 @@ Legend:
   `OutcomeReasonCode`. Runtime outcomes now use `task_done` or
   `task_closed` as the machine reason-code bucket while retaining the
   specific close reason on `TaskRecord.close_reason`.
-- [ ] D17. Decide and document whether execution cancelled and
+- [x] D17. Decide and document whether execution cancelled and
   execution interrupted are distinct concepts.
   Source: note 6, 05:06-05:13.
+  Completed 2026-05-07: documented them as distinct concepts.
+  `execution_interrupted` is potentially resumable and keeps
+  interruption context for recovery/resume; `execution_cancelled` is
+  the deliberate operator abandon/kill path and closes the task instead
+  of queueing automatic resume. Added an enum guardrail test.
 - [ ] D18. For every outcome reason code, document who can set it and
   under what circumstances.
   Source: note 6, 05:13-05:34.

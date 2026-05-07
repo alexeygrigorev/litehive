@@ -99,8 +99,8 @@ class OutcomeReasonCode(StringEnum):
     MISSING_ACCEPTANCE_CRITERIA = "missing_acceptance_criteria"
     RETRY_LIMIT_EXHAUSTED = "retry_limit_exhausted"
     STAGE_RETRY_LIMIT_EXHAUSTED = "stage_retry_limit_exhausted"
-    EXECUTION_INTERRUPTED = "execution_interrupted"
-    EXECUTION_CANCELLED = "execution_cancelled"
+    EXECUTION_INTERRUPTED = "execution_interrupted"  # Potentially resumable stop with interruption context
+    EXECUTION_CANCELLED = "execution_cancelled"  # Deliberate operator abandon/kill path
     STAGE_EXCEPTION = "stage_exception"
     UNSUPPORTED_VERDICT = "unsupported_verdict"
     MERGE_CONFLICT = "merge_conflict"

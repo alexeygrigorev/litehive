@@ -10,7 +10,7 @@ from litehive.domain.common import (
     task_stage_for_pipeline_state,
 )
 from litehive.domain.failure_diagnostics import FailureDiagnostics
-from litehive.domain.outcomes import TaskCloseReason
+from litehive.domain.outcomes import OutcomeReasonCode, TaskCloseReason
 from litehive.domain.reports import ReportPipelineState, StageReport, canonical_stage_report_verdict
 from litehive.domain.runtime import RuntimeSubagentState, Subagent
 
@@ -86,6 +86,12 @@ def test_task_close_reason_owns_close_projection() -> None:
     assert TaskCloseReason.DONE.task_close_label == "Task already satisfied."
     assert TaskCloseReason.DUPLICATE.outcome_reason_code == "task_closed"
     assert TaskCloseReason.DUPLICATE.task_close_label == "Task closed as duplicate."
+
+
+def test_execution_interrupted_and_cancelled_reason_codes_are_distinct() -> None:
+    assert OutcomeReasonCode.EXECUTION_INTERRUPTED != OutcomeReasonCode.EXECUTION_CANCELLED
+    assert OutcomeReasonCode.EXECUTION_INTERRUPTED == "execution_interrupted"
+    assert OutcomeReasonCode.EXECUTION_CANCELLED == "execution_cancelled"
 
 
 def test_stage_report_pipeline_state_uses_named_report_projection() -> None:
