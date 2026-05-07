@@ -1327,8 +1327,12 @@ Legend:
   parses options, resolves an authorized target, dispatches to the
   mutator, and prints the result; service tests cover update, close,
   empty-update rejection, and agent audit attribution.
-- [ ] C3. Convert `Workspace` from a dataclass to a normal class.
+- [x] C3. Convert `Workspace` from a dataclass to a normal class.
   Source: note 4, 14:33-15:12.
+  Completed 2026-05-07: replaced the `@dataclass` Workspace with an
+  explicit class constructor, root-based equality/hash, compact repr,
+  and the existing lazy config cache. Added a regression test proving
+  `Workspace` is no longer a dataclass while preserving root identity.
 - [ ] C4. In resolve reported entity flows, pass a workspace/session
   object that loads the session. `load_subagent_session` must return a
   typed object, not a dictionary.

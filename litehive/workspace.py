@@ -25,7 +25,6 @@ moves over as ergonomics warrant.
 
 import sqlite3
 from contextlib import contextmanager
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterator
 
@@ -41,36 +40,40 @@ if TYPE_CHECKING:
     from litehive.tasks.activity import TaskActivityLog
 
 
-@dataclass(frozen=True)
 class Workspace:
     """
     Bundle of workspace identity, on-demand SQLite access, lazy config, and subpath helpers.
 
-    Frozen so it can be safely shared across helpers, passed into
-    closures, and used as a dataclass field of other records without
-    surprising aliasing. The cached config lives in a one-slot
-    mutable holder (``_config_cache``) so freezing the outer object
-    doesn't disable the cache. Construct via :meth:`from_path` at
-    the system boundary (CLI entry, daemon startup, test fixtures)
-    — that's the only place that runs the workspace-existence check
-    that used to live inline in dozens of callers. Internal helpers
-    should accept a ready-made ``Workspace`` rather than running
-    the check again.
+    Construct via :meth:`from_path` at the system boundary (CLI
+    entry, daemon startup, test fixtures) — that's the only place
+    that runs the workspace-existence check that used to live inline
+    in dozens of callers. Internal helpers should accept a ready-made
+    ``Workspace`` rather than running the check again.
     """
 
-    root: Path
-    """Resolved absolute workspace root path. Identity of the workspace; used as the
-    cache key for the SQLite connection and the directory anchor for
-    workspace-scoped artifacts. Always normalized through ``normalize_workspace_root``
-    by :meth:`from_path` so equality and path arithmetic stay consistent.
-    """
+    __slots__ = ("_config_cache", "root")
 
-    _config_cache: list = field(default_factory=list, repr=False, compare=False)
-    """Single-slot holder for the lazily loaded merged config. A ``list`` (rather than
-    a plain attribute) so the dataclass can stay frozen while the cache fills on
-    first :meth:`config` access. Excluded from repr/equality because it is
-    derived state, not identity.
-    """
+    def __init__(self, root: Path) -> None:
+        """
+        Store the resolved workspace root and its lazy config cache.
+
+        ``from_path`` owns boundary validation. The constructor only
+        stores dependencies so tests can still build a workspace-like
+        value directly when a normalized root is already available.
+        """
+        self.root = root
+        self._config_cache: list = []
+
+    def __repr__(self) -> str:
+        return f"Workspace(root={self.root!r})"
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Workspace):
+            return NotImplemented
+        return self.root == other.root
+
+    def __hash__(self) -> int:
+        return hash(self.root)
 
     @classmethod
     def from_path(cls, root: Path) -> "Workspace":
