@@ -7,37 +7,22 @@ django, python, rust, …). Profiles are merged at load time: the
 and the result is consumed by the workspace bootstrap renderer and by stage
 agents that compose their prompts from layered instruction blocks.
 
-The dataclass replaces the prior ``dict[str, Any]`` shape so consumers can
+The Pydantic model replaces the prior ``dict[str, Any]`` shape so consumers can
 rely on attribute access and tighter types instead of free-form keys.
 """
 
-from dataclasses import dataclass
-from typing import Any
+from pydantic import BaseModel, ConfigDict, Field
 
 
-def _copy_stage_bullet_map(raw: dict[str, Any]) -> dict[str, list[str]]:
+class ProcessProfile(BaseModel):
     """
-    Shallow-copy a profile stage→bullets mapping for the dataclass.
-
-    Wraps each bullet list in ``list(...)`` so the loader's merged
-    structure cannot be mutated through the resolved
-    :class:`ProcessProfile` (the dataclass is frozen, but its
-    list values would otherwise still be aliased). Caller:
-    :meth:`ProcessProfile.from_dict`.
-    """
-    copied: dict[str, list[str]] = {}
-    for stage, bullets in raw.items():
-        copied[stage] = list(bullets)
-    return copied
-
-
-@dataclass(frozen=True)
-class ProcessProfile:
-    """Resolved process profile consumed by rendering and prompt assembly.
+    Resolved process profile consumed by rendering and prompt assembly.
 
     Each field is the merged result of the shared base plus the selected
     overlay (see ``litehive.config.profiles.loader.resolve_process_profile``).
     """
+
+    model_config = ConfigDict(frozen=True)
 
     label: str
     """Human-readable profile name shown in the workspace context header."""
@@ -72,64 +57,32 @@ class ProcessProfile:
     commit_recovery: str
     """Commit checkpoint and recover policy summary; rendered in the process overlay."""
 
-    shared_stages: list[str]
+    shared_stages: list[str] = Field(default_factory=list)
     """Ordered pipeline stage names rendered as the shared stage chain."""
 
-    prompt_scaffold: list[str]
+    prompt_scaffold: list[str] = Field(default_factory=list)
     """Bullet guidance for how stage prompts are scaffolded; rendered in the prompt-scaffold section."""
 
-    init_scaffold: list[str]
+    init_scaffold: list[str] = Field(default_factory=list)
     """Bullet guidance for how ``.litehive/context.md`` is seeded; rendered in the init-scaffold section."""
 
-    development_rules: list[str]
+    development_rules: list[str] = Field(default_factory=list)
     """Workflow rules contributors should follow; rendered in the development-rules section."""
 
-    tool_usage: list[str]
+    tool_usage: list[str] = Field(default_factory=list)
     """Profile-specific tool/command guidance; rendered in the tool-usage section."""
 
-    workspace_overlay: list[str]
+    workspace_overlay: list[str] = Field(default_factory=list)
     """Workspace-level guidance bullets that complement the project summary; rendered in the project overlay block."""
 
-    specifics: list[str]
+    specifics: list[str] = Field(default_factory=list)
     """Optional profile-specific bullets rendered under ``specifics_heading``."""
 
-    stage_instructions: dict[str, list[str]]
+    stage_instructions: dict[str, list[str]] = Field(default_factory=dict)
     """Default per-stage instruction bullets indexed by pipeline stage name; consumed by stage agents and rendering."""
 
-    stage_overlay: dict[str, list[str]]
+    stage_overlay: dict[str, list[str]] = Field(default_factory=dict)
     """Per-profile per-stage overlay bullets appended after ``stage_instructions`` for that stage."""
 
     specifics_heading: str | None = None
     """Markdown heading for the ``specifics`` section, or ``None`` to skip it."""
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ProcessProfile":
-        """Build a ``ProcessProfile`` from a fully-merged profile dict.
-
-        Used by the loader after it merges the shared defaults with the
-        selected overlay. Lists and dicts are taken as-is — the loader has
-        already performed deep copies during merge.
-        """
-        return cls(
-            label=data["label"],
-            summary=data["summary"],
-            source_of_truth=data["source_of_truth"],
-            task_source_of_truth=data["task_source_of_truth"],
-            orchestrator_model=data["orchestrator_model"],
-            routing_model=data["routing_model"],
-            role_model=data["role_model"],
-            tdd_expectations=data["tdd_expectations"],
-            verification_discipline=data["verification_discipline"],
-            acceptance_flow=data["acceptance_flow"],
-            commit_recovery=data["commit_recovery"],
-            shared_stages=list(data["shared_stages"]),
-            prompt_scaffold=list(data["prompt_scaffold"]),
-            init_scaffold=list(data["init_scaffold"]),
-            development_rules=list(data["development_rules"]),
-            tool_usage=list(data["tool_usage"]),
-            workspace_overlay=list(data["workspace_overlay"]),
-            specifics=list(data.get("specifics", [])),
-            stage_instructions=_copy_stage_bullet_map(data.get("stage_instructions", {})),
-            stage_overlay=_copy_stage_bullet_map(data.get("stage_overlay", {})),
-            specifics_heading=data.get("specifics_heading"),
-        )

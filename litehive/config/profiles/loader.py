@@ -43,4 +43,4 @@ def resolve_process_profile(name: str | None) -> ProcessProfile:
                 profile[key].setdefault(stage, []).extend(deepcopy(instructions))
             continue
         profile[key] = deepcopy(value)
-    return ProcessProfile.from_dict(profile)
+    return ProcessProfile.model_validate(profile)

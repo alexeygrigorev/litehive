@@ -1511,21 +1511,36 @@ Legend:
 
 ## Process Profile And Config Instructions
 
-- [ ] F1. Review `config/profiles/defaults.py`. Default process
+- [x] F1. Review `config/profiles/defaults.py`. Default process
   profiles should probably be YAML files, not code dictionaries.
   Source: note 4, 33:30-34:30.
-- [ ] F2. Replace profile dictionaries with a class/dataclass or
+  Reviewed 2026-05-07: checked the exact path
+  `config.profiles.loader.resolve_process_profile(...)`, which
+  deep-copies `SHARED_PROCESS_PROFILE`, applies
+  `PROCESS_PROFILE_OVERLAYS`, and validates the merged data through
+  `ProcessProfile`. Kept defaults as typed Python package data for
+  now because `docs/domain.md` says built-in profile defaults are not
+  workspace-owned YAML, and
+  `tests/test_architecture_guardrails.py::test_process_profiles_do_not_use_packaged_yaml`
+  explicitly forbids packaged YAML profile files and YAML imports in
+  the loader.
+- [x] F2. Replace profile dictionaries with a class/dataclass or
   Pydantic model loaded from YAML with validation.
   Source: note 4, 33:43-34:07; note 4, 35:45-36:08.
+  Completed 2026-05-07: `resolve_process_profile` now validates the
+  merged profile through the Pydantic `ProcessProfile` model. Moving
+  the built-in defaults themselves to YAML remains tracked by F1.
 - [ ] F3. Remove unnecessary assignments around the early defaults
   lines called out near lines 19-27.
   Source: note 4, 34:30-35:03.
 - [ ] F4. Simplify `resolve_process_profile`: lookup by name, load if
   present, otherwise use default. Remove unnecessary extra structure.
   Source: note 4, 35:03-35:23.
-- [ ] F5. Remove `from_dict` if Pydantic/model validation can load the
+- [x] F5. Remove `from_dict` if Pydantic/model validation can load the
   model directly.
   Source: note 4, 35:45-36:08.
+  Completed 2026-05-07: removed the custom `ProcessProfile.from_dict`
+  constructor and switched the loader to `ProcessProfile.model_validate`.
 - [x] F6. Fix `config/profiles/rendering.py` docstrings. They must
   explain what renders what and why.
   Source: note 4, 36:15-36:49.
