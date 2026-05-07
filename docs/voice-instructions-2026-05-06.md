@@ -1248,9 +1248,12 @@ Legend:
   the non-live `_run_single_engine_process` path does not pass the
   live-only timeout to `run(...)`. Added a non-live engine test and
   reran the focused live/non-live inactivity tests.
-- [ ] SE3. Remove `SessionMixin` and use a delegated session manager
+- [x] SE3. Remove `SessionMixin` and use a delegated session manager
   dependency.
   Source: note 4, 10:48-11:13.
+  Completed 2026-05-07: verified there is no remaining `SessionMixin`;
+  `SubagentManager` receives an injected `SubagentSessionManager`
+  from the DI container.
 - [x] SE4. Review `session.render_execution_trace`; it may not be
   session's responsibility.
   Source: note 4, 11:20-11:27.
@@ -1261,9 +1264,12 @@ Legend:
 - [ ] SE5. Find all `del ...` patterns such as deleting
   `engine_name`. If a value is immediately deleted, stop passing it.
   Source: note 4, 11:30-11:43.
-- [ ] SE6. Consolidate `append_stream_data` and related event tracking
+- [x] SE6. Consolidate `append_stream_data` and related event tracking
   into one owner instead of spreading it through code.
   Source: note 4, 11:56-12:17.
+  Completed 2026-05-07: moved append-only stdout/stderr offset
+  tracking into `SubagentStreamLog`; session start/progress now
+  delegates stream-log setup and delta appends to that collaborator.
 - [x] SE7. Review `terminate_stale_pid` and inactivity behavior while
   splitting session responsibilities.
   Source: note 4, 12:27-12:31.

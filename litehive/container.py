@@ -68,6 +68,7 @@ def build_subagent_manager_for_workspace(
         SubagentInactivityMonitor,
         SubagentInactivityTimeoutPolicy,
     )
+    from litehive.agents.session_streams import SubagentStreamLog  # noqa: PLC0415
     from litehive.agents.subagent_ids import SubagentIdRepository  # noqa: PLC0415
 
     if manager_cls is not None and manager_cls is not SubagentManager:
@@ -81,6 +82,7 @@ def build_subagent_manager_for_workspace(
         sandbox=sandbox,
         config=config,
         inactivity_monitor=SubagentInactivityMonitor(SubagentInactivityTimeoutPolicy(config)),
+        stream_log=SubagentStreamLog(),
     )
     subagent_ids = SubagentIdRepository(workspace)
     manager_type = manager_cls or SubagentManager

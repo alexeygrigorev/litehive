@@ -1,6 +1,6 @@
 """Session I/O collaborator for SubagentManager."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,11 +27,11 @@ from litehive.agents.session_snapshots import (
     SubagentSessionStorageFields,
     TerminalSubagentSessionRow,
 )
+from litehive.agents.session_streams import SubagentStreamLog
 from litehive.domain.agent import SubagentInactivityTimeout
 from litehive.domain.common import SubagentStatus, utcnow
 from litehive.domain.runtime import Subagent
 from litehive.domain.task import TaskRecord
-from litehive.observability.events import append_session_log, ensure_session_log
 from litehive.tasks.runtime import mark_subagent_pid
 
 if TYPE_CHECKING:
@@ -57,7 +57,7 @@ class SubagentSessionManager:
     sandbox: "SandboxLauncher"
     config: "LitehiveConfig"
     inactivity_monitor: SubagentInactivityMonitor
-    _stream_offsets: dict[str, int] = field(default_factory=dict)
+    stream_log: SubagentStreamLog
 
     def session_storage_fields(
         self,
@@ -113,11 +113,7 @@ class SubagentSessionManager:
         already been logged so we never double-write or rewrite
         history.
         """
-        key = f"{ref.id}:{stream}"
-        prev = self._stream_offsets.get(key, 0)
-        if len(full_content) > prev:
-            append_session_log(base, stream, full_content[prev:])
-            self._stream_offsets[key] = len(full_content)
+        self.stream_log.append_delta(base, ref, stream, full_content)
 
     def write_session_start(
         self,
@@ -132,8 +128,7 @@ class SubagentSessionManager:
         that observers (status snapshots, recovery) can see a `running` session
         even if the launch crashes before any output arrives.
         """
-        ensure_session_log(base, "stdout")
-        ensure_session_log(base, "stderr")
+        self.stream_log.ensure(base)
         self.workspace.append_event(
             task,
             SubagentStartedEvent(
