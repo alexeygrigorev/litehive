@@ -26,7 +26,6 @@ from litehive.workspace import Workspace
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
 from litehive.domain.reports import TaskActivityEntry, TaskActivityVerdict, classify_task_activity_verdict
 from litehive.tasks.status import close_task_for_workspace, update_task_for_workspace
-from litehive.state.records import get_task_record
 from litehive.state.persist import load_state
 from litehive.tasks.activity import append_task_activity
 
@@ -266,7 +265,7 @@ def agent_report_command(
     if not tid:
         print("report failed: no task id")
         raise SystemExit(1)
-    task = get_task_record(root, tid)
+    task = workspace_obj.get_task_record(tid)
     if task is None:
         print(f"report failed: task {tid} not found")
         raise SystemExit(1)
@@ -297,7 +296,7 @@ def agent_report_command(
         if normalized_follow_up_task == task.id:
             print("report failed: follow-up task id cannot reference the current task")
             raise SystemExit(1)
-        if get_task_record(root, normalized_follow_up_task) is None:
+        if workspace_obj.get_task_record(normalized_follow_up_task) is None:
             print(f"report failed: follow-up task {normalized_follow_up_task} not found")
             raise SystemExit(1)
 
