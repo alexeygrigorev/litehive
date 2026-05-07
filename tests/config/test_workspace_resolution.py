@@ -1,4 +1,5 @@
 from pathlib import Path
+import threading
 
 import pytest
 
@@ -60,16 +61,20 @@ def test_resolve_workspace_prefers_current_unified_root_worktree_over_registry_t
 
 
 def test_normalize_workspace_root_accepts_plain_root_without_registry_lookup(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ensure_workspace(tmp_path)
+    from litehive.config.registry import WorkspaceRegistry, build_workspace_registry
 
-    def _boom() -> list[Path]:
+    registry = build_workspace_registry(path=tmp_path / "registry.db", mutex=threading.RLock())
+
+    def _boom(self: WorkspaceRegistry) -> list[Path]:
         raise AssertionError("plain workspace roots should not scan the registry")
 
-    monkeypatch.setattr("litehive.config.workspace.list_registered_workspace_paths", _boom)
+    monkeypatch.setattr(WorkspaceRegistry, "list_paths", _boom)
 
-    assert normalize_workspace_root(tmp_path, source="test") == tmp_path.resolve()
+    assert normalize_workspace_root(tmp_path, source="test", registry=registry) == tmp_path.resolve()
 
 
 def test_resolve_workspace_uses_registry_from_outside_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -87,6 +92,24 @@ def test_resolve_workspace_uses_registry_from_outside_repo(tmp_path: Path, monke
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
 
     assert resolve_workspace(task.id) == tmp_path.resolve()
+
+
+def test_resolve_workspace_uses_injected_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from litehive.config.registry import build_workspace_registry
+
+    registry = build_workspace_registry(path=tmp_path / "registry.db", mutex=threading.RLock())
+    workspace = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    workspace.mkdir()
+    outside.mkdir()
+    ensure_workspace(workspace, registry=registry)
+    task = create_task(workspace, title="Injected registry")
+
+    monkeypatch.chdir(outside)
+    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
+
+    assert resolve_workspace(task.id, registry=registry) == workspace.resolve()
 
 
 def test_resolve_workspace_rejects_unresolved_workspace_root_env(

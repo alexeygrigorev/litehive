@@ -1570,7 +1570,7 @@ Legend:
   transaction, and the optional retry loop gives tests/operators extra
   attempts after SQLite returns `locked` or `busy`. Added that
   explanation to `config/registry.py`.
-- [ ] F9. Remove registry global/function-as-global access. Use
+- [x] F9. Remove registry global/function-as-global access. Use
   dependency injection.
   Source: note 5, 00:46-01:14.
   Progress 2026-05-07: introduced a bound `WorkspaceRegistry`
@@ -1579,6 +1579,11 @@ Legend:
   module-level functions now act as boundary wrappers; remaining work
   is to inject the service into workspace/config callers instead of
   calling those wrappers directly.
+  Completed 2026-05-07: `config.workspace` now accepts an injected
+  `WorkspaceRegistry` across workspace normalization, resolution, and
+  bootstrap paths. Workspace code no longer imports or calls the
+  module-level registry wrapper functions; those remain only as public
+  boundary helpers for direct callers.
 - [ ] F10. Split registry responsibilities. Config, loading,
   persistence queries, sqlite details, security, and workspace path
   registration should not all live in one mixed module.

@@ -20,8 +20,8 @@ from litehive.config.paths import workspace_path
 from litehive.config.workspace_files import config_path, context_path, workspace_dir, workspace_gitignore_path
 from litehive.config.profiles.rendering import render_context_template
 from litehive.config.registry import (
-    list_registered_workspace_paths,
-    register_workspace_path,
+    WorkspaceRegistry,
+    build_workspace_registry,
 )
 
 _UNRESOLVED_SHELL_VAR_RE = re.compile(r"(?<!\\)\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)")
@@ -46,7 +46,7 @@ def render_workspace_gitignore() -> str:
     )
 
 
-def registered_workspace_root(path: Path) -> Path | None:
+def registered_workspace_root(path: Path, registry: WorkspaceRegistry | None = None) -> Path | None:
     """
     Return the owning workspace root when ``path`` is inside a managed worktree.
 
@@ -59,7 +59,8 @@ def registered_workspace_root(path: Path) -> Path | None:
     resolved = path.resolve()
     if "worktrees" not in resolved.parts:
         return None
-    for root in list_registered_workspace_paths():
+    workspace_registry = registry or build_workspace_registry()
+    for root in workspace_registry.list_paths():
         try:
             if resolved.is_relative_to(workspace_path(root, "worktrees").resolve()):
                 return root.resolve()
@@ -157,7 +158,7 @@ def _reject_litehive_control_paths(path: Path, source: str) -> None:
         )
 
 
-def normalize_workspace_root(root: Path, source: str) -> Path:
+def normalize_workspace_root(root: Path, source: str, registry: WorkspaceRegistry | None = None) -> Path:
     """
     Validate, expand, and re-route a candidate workspace path.
 
@@ -172,7 +173,7 @@ def normalize_workspace_root(root: Path, source: str) -> Path:
     resolved_input = Path(root).expanduser().resolve()
     _reject_litehive_control_paths(resolved_input, source=source)
 
-    resolved_root = registered_workspace_root(resolved_input) or resolved_input
+    resolved_root = registered_workspace_root(resolved_input, registry=registry) or resolved_input
 
     # Additional check for nested .litehive trees in resolved root
     if any(ancestor.name == ".litehive" for ancestor in resolved_root.parents):
@@ -219,6 +220,7 @@ def _resolve_workspace_from_search_root(
     search_root: Path,
     effective_task_id: str | None,
     register: bool,
+    registry: WorkspaceRegistry,
 ) -> Path | None:
     """
     Resolve a workspace by walking ancestors of ``search_root``.
@@ -229,10 +231,10 @@ def _resolve_workspace_from_search_root(
     when no ancestor directory carries a ``.litehive`` directory
     that matches the optional task constraint.
     """
-    resolved_search_root = normalize_workspace_root(search_root, source=f"cwd:{search_root}")
+    resolved_search_root = normalize_workspace_root(search_root, source=f"cwd:{search_root}", registry=registry)
     if resolved_search_root != search_root and _task_matches(resolved_search_root, effective_task_id):
         if register:
-            _register_workspace(resolved_search_root)
+            _register_workspace(resolved_search_root, registry)
         return resolved_search_root
 
     for candidate in (search_root, *search_root.parents):
@@ -242,7 +244,7 @@ def _resolve_workspace_from_search_root(
         if not _task_matches(resolved, effective_task_id):
             continue
         if register:
-            _register_workspace(resolved)
+            _register_workspace(resolved, registry)
         return resolved
     return None
 
@@ -251,6 +253,7 @@ def resolve_workspace(
     task_id: str | None,
     cwd: Path | None = None,
     register: bool = True,
+    registry: WorkspaceRegistry | None = None,
 ) -> Path:
     """
     Pick the right workspace for a CLI invocation.
@@ -265,6 +268,7 @@ def resolve_workspace(
     effective_task_id = task_id
     if effective_task_id is None and cwd is None:
         effective_task_id = os.environ.get("LITEHIVE_TASK_ID")
+    workspace_registry = registry or build_workspace_registry()
     search_root = (cwd or Path.cwd()).resolve()
 
     if cwd is not None:
@@ -272,31 +276,37 @@ def resolve_workspace(
             search_root,
             effective_task_id=effective_task_id,
             register=register,
+            registry=workspace_registry,
         )
         if resolved is not None:
             return resolved
 
     env_workspace = os.environ.get("LITEHIVE_WORKSPACE_ROOT")
     if env_workspace:
-        resolved_env_workspace = normalize_workspace_root(Path(env_workspace), source="LITEHIVE_WORKSPACE_ROOT")
+        resolved_env_workspace = normalize_workspace_root(
+            Path(env_workspace),
+            source="LITEHIVE_WORKSPACE_ROOT",
+            registry=workspace_registry,
+        )
         if _task_matches(resolved_env_workspace, effective_task_id):
             if register:
-                _register_workspace(resolved_env_workspace)
+                _register_workspace(resolved_env_workspace, workspace_registry)
             return resolved_env_workspace
 
     resolved = _resolve_workspace_from_search_root(
         search_root,
         effective_task_id=effective_task_id,
         register=register,
+        registry=workspace_registry,
     )
     if resolved is not None:
         return resolved
 
     if effective_task_id:
-        for root in list_registered_workspace_paths():
+        for root in workspace_registry.list_paths():
             if _task_exists(root, effective_task_id):
                 if register:
-                    _register_workspace(root)
+                    _register_workspace(root, workspace_registry)
                 return root
 
     raise ValueError(
@@ -305,7 +315,7 @@ def resolve_workspace(
     )
 
 
-def _register_workspace(root: Path) -> None:
+def _register_workspace(root: Path, registry: WorkspaceRegistry) -> None:
     """
     Persist the workspace path to the cross-process registry.
 
@@ -314,10 +324,14 @@ def _register_workspace(root: Path) -> None:
     explicit ``--workspace`` flag. Always uses the resolved
     absolute path so the registry never carries relative entries.
     """
-    register_workspace_path(root.resolve())
+    registry.register_path(root.resolve())
 
 
-def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
+def ensure_workspace(
+    root: Path,
+    config: LitehiveConfig | None = None,
+    registry: WorkspaceRegistry | None = None,
+) -> Path:
     """
     Bootstrap a workspace on first use.
 
@@ -328,7 +342,8 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
     only consulted on first creation, established workspaces are
     not rewritten.
     """
-    root = normalize_workspace_root(root, source="ensure_workspace")
+    workspace_registry = registry or build_workspace_registry()
+    root = normalize_workspace_root(root, source="ensure_workspace", registry=workspace_registry)
     _reject_nested_workspace_bootstrap(root, source="ensure_workspace")
     base = workspace_dir(root)
     tasks = base / "tasks"
@@ -356,7 +371,7 @@ def ensure_workspace(root: Path, config: LitehiveConfig | None = None) -> Path:
             encoding="utf-8",
         )
 
-    _register_workspace(root)
+    _register_workspace(root, workspace_registry)
 
     workspace_path(root, "data.db").parent.mkdir(parents=True, exist_ok=True)
     # inline: state.store transitively pulls db.schema which loads config.*
