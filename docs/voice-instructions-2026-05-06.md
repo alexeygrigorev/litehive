@@ -2259,7 +2259,8 @@ Legend:
   `RunnerStatusState` and `_has_work(...)` as `WorkspaceState`, so
   pyrefly rejects passing loose objects or wrong state payloads. Added
   an architecture guardrail that locks those daemon predicate
-  annotations to the domain types.
+  annotations to the domain types and a pyrefly snippet regression
+  test that verifies `object()` calls fail with `[bad-argument-type]`.
 - [ ] T4. Add a ruff/custom guardrail for `getattr`.
   Source: note 4, 40:31-40:58.
 - [ ] T5. Add or strengthen guardrails against dictionaries and

@@ -1,6 +1,8 @@
 """Static architecture guardrails for ownership boundaries."""
 
 import ast
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -231,6 +233,36 @@ def test_daemon_runner_liveness_helpers_remain_domain_typed() -> None:
         "_has_work": ["WorkspaceState"],
         "_runner_is_live": ["RunnerStatusState"],
     }
+
+
+def test_pyrefly_rejects_daemon_predicate_object_misuse() -> None:
+    snippet = """
+from litehive.daemon.execution import _has_work, _runner_is_live
+
+_runner_is_live(object())
+_has_work(object())
+"""
+    pyrefly = Path(sys.executable).with_name("pyrefly")
+    completed = subprocess.run(
+        [
+            str(pyrefly),
+            "snippet",
+            snippet,
+            "--only",
+            "bad-argument-type",
+            "--summary=none",
+            "--no-progress-bar",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    output = completed.stdout + completed.stderr
+    assert completed.returncode == 1
+    assert "parameter `status` with type `RunnerStatusState`" in output
+    assert "parameter `state` with type `WorkspaceState`" in output
 
 
 def test_merge_warning_type_is_not_reintroduced() -> None:
