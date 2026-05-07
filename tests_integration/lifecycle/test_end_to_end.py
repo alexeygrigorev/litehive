@@ -30,6 +30,7 @@ from litehive.lifecycle.runner import StateMachineRunner
 from litehive.roles.base import PromptContext
 from litehive.lifecycle.nodes.hook import HookRunner
 from litehive.lifecycle.nodes.system import CommitNode, StubCommitNode
+from litehive.domain.common import TransientFailureKind
 from litehive.lifecycle.nodes.agent import AgentVerdict, Engine, TransientError
 from litehive.lifecycle.nodes.system import MergeConflict
 from litehive.lifecycle.persistence import Limits, SqlitePersistence
@@ -258,7 +259,7 @@ def test_run_task_uses_workspace_retry_on_for_live_execution_retries(tmp_path: P
             default_engine="codex",
             engine_preference=["codex"],
             default_retry_limit=2,
-            retry_on=["timeout"],
+            retry_on=[TransientFailureKind.TIMEOUT],
         ),
     )
     task = create_task(tmp_path, title="Retry once on timeout", pipeline_mode="single")
@@ -390,7 +391,7 @@ def test_run_task_records_already_landed_commit_reconciliation(tmp_path: Path, m
     state.last_report.files_changed = 1
     persistence.save(state)
 
-    monkeypatch.setattr(orchestration, "build_commit_node", lambda root: _AlreadyLandedCommitNode())
+    monkeypatch.setattr(orchestration, "build_commit_node_for_workspace", lambda workspace: _AlreadyLandedCommitNode())
 
     result = run_task(tmp_path, task, engine_factory=lambda _engine_name: _PassEngine())
     refreshed = get_task(tmp_path, task.id)
@@ -412,7 +413,7 @@ def test_run_task_honors_task_retry_limit_override_for_live_execution_retries(tm
             default_engine="codex",
             engine_preference=["codex"],
             default_retry_limit=1,
-            retry_on=["timeout"],
+            retry_on=[TransientFailureKind.TIMEOUT],
         ),
     )
     task = create_task(

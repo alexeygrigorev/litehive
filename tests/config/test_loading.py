@@ -183,7 +183,14 @@ def test_load_config_deep_merges_global_and_workspace_mappings(tmp_path: Path, m
 
 
 def test_litehive_config_normalizes_retry_on() -> None:
-    config = LitehiveConfig(retry_on=["timeout", "network", "timeout", "execution_limit"])
+    config = LitehiveConfig(
+        retry_on=[
+            TransientFailureKind.TIMEOUT,
+            TransientFailureKind.NETWORK,
+            TransientFailureKind.TIMEOUT,
+            TransientFailureKind.EXECUTION_LIMIT,
+        ]
+    )
 
     assert config.retry_on == ["timeout", "network", "execution_limit"]
     assert config.retry_on == [
@@ -252,8 +259,8 @@ def test_litehive_config_rejects_non_positive_task_time_budget() -> None:
 
 
 def test_litehive_config_rejects_unknown_retry_on_kind() -> None:
-    with pytest.raises(ValueError, match="retry_on must contain only"):
-        LitehiveConfig(retry_on=["timeout", "rate_limit"])
+    with pytest.raises(ValueError, match="retry_on\\.1"):
+        parse_litehive_config_data({"retry_on": ["timeout", "rate_limit"]})
 
 
 @pytest.mark.parametrize("legacy_value", ["echo hi", "", None])
