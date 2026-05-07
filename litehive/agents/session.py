@@ -307,6 +307,13 @@ class SubagentSessionManager:
             session=session_row,
             report=snapshot.report,
         )
+        self.write_snapshot_artifacts(base, ref, snapshot)
+
+    @staticmethod
+    def write_snapshot_artifacts(base: Path, ref: Subagent, snapshot: SubagentSessionSnapshot) -> None:
+        """
+        Persist filesystem artifacts for one session snapshot.
+        """
         artifacts = ArtifactService(base)
         artifacts.write_text("prompt", ".txt", snapshot.prompt, compress=False)
         if ref.status == SubagentStatus.RUNNING:

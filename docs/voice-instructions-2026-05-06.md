@@ -1277,8 +1277,12 @@ Legend:
   Completed 2026-05-07: moved the best-effort SIGTERM call into the
   inactivity monitor; a broader shared process-signal owner remains a
   future cross-cutting cleanup, not part of the session split.
-- [ ] SE8. Split `write_session_snapshot`; it is too large.
+- [x] SE8. Split `write_session_snapshot`; it is too large.
   Source: note 4, 12:47-12:53.
+  Completed 2026-05-07: split filesystem artifact fanout into
+  `SubagentSessionManager.write_snapshot_artifacts`, leaving
+  `write_session_snapshot` focused on building and saving the typed
+  session/report row.
 
 ## CLI And Command Instructions
 
