@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Mapping
 
 from litehive.agents.sandbox import SandboxPolicySummary
+from litehive.agents.session_continuation import NoSubagentContinuation, SubagentContinuationState
 from litehive.domain.common import SubagentStatus
 
 
@@ -26,7 +27,7 @@ class SubagentReportPayload:
     warnings: list[str] = field(default_factory=list)
     resource_control: SandboxPolicySummary = field(default_factory=lambda: SandboxPolicySummary(enabled=False))
     interruption_reason: str | None = None
-    continuation: Mapping[str, object] | None = None
+    continuation: SubagentContinuationState = field(default_factory=NoSubagentContinuation)
 
     def as_dict(self) -> dict[str, object]:
         """
@@ -47,6 +48,4 @@ class SubagentReportPayload:
         """
         Return a mutable copy of the continuation payload when present.
         """
-        if self.continuation is None:
-            return None
-        return dict(self.continuation)
+        return self.continuation.payload()

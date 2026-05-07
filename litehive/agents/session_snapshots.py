@@ -1,10 +1,9 @@
 """Typed session snapshot inputs for subagent persistence."""
 
-from dataclasses import dataclass
-
-from heru.types import RuntimeEngineContinuation
+from dataclasses import dataclass, field
 
 from litehive.agents.sandbox import SandboxPolicySummary
+from litehive.agents.session_continuation import NoSubagentContinuation, SubagentContinuationState
 from litehive.agents.session_reports import SubagentReportPayload
 from litehive.domain.common import SubagentStatus
 
@@ -21,15 +20,13 @@ class SubagentSessionMetadata:
     exit_code: int | None
     pid: int | None
     interruption_reason: str | None = None
-    continuation: RuntimeEngineContinuation | None = None
+    continuation: SubagentContinuationState = field(default_factory=NoSubagentContinuation)
 
     def continuation_payload(self) -> dict[str, object] | None:
         """
         Serialize the continuation token for session storage.
         """
-        if self.continuation is None:
-            return None
-        return self.continuation.model_dump(mode="python")
+        return self.continuation.payload()
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,15 +42,13 @@ class RunningSubagentSessionMetadata:
     """
 
     pid: int | None
-    continuation: RuntimeEngineContinuation | None = None
+    continuation: SubagentContinuationState = field(default_factory=NoSubagentContinuation)
 
     def continuation_payload(self) -> dict[str, object] | None:
         """
         Serialize the continuation token for session storage.
         """
-        if self.continuation is None:
-            return None
-        return self.continuation.model_dump(mode="python")
+        return self.continuation.payload()
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,7 +96,7 @@ class RunningSubagentSessionRow:
 
     fields: SubagentSessionStorageFields
     pid: int | None
-    continuation: dict[str, object] | None = None
+    continuation: SubagentContinuationState = field(default_factory=NoSubagentContinuation)
 
     def as_dict(self) -> dict[str, object]:
         """
@@ -113,7 +108,7 @@ class RunningSubagentSessionRow:
                 "pid": self.pid,
                 "exit_code": None,
                 "interruption_reason": None,
-                "continuation": self.continuation,
+                "continuation": self.continuation.payload(),
             }
         )
         return payload
@@ -129,7 +124,7 @@ class TerminalSubagentSessionRow:
     exit_code: int
     pid: int | None
     interruption_reason: str | None = None
-    continuation: dict[str, object] | None = None
+    continuation: SubagentContinuationState = field(default_factory=NoSubagentContinuation)
 
     def as_dict(self) -> dict[str, object]:
         """
@@ -141,7 +136,7 @@ class TerminalSubagentSessionRow:
                 "pid": self.pid,
                 "exit_code": self.exit_code,
                 "interruption_reason": self.interruption_reason,
-                "continuation": self.continuation,
+                "continuation": self.continuation.payload(),
             }
         )
         return payload
@@ -161,7 +156,7 @@ class InterruptedSubagentSessionRow:
     interruption_reason: str
     resume_stage: str
     exit_code: int | None = None
-    continuation: dict[str, object] | None = None
+    continuation: SubagentContinuationState = field(default_factory=NoSubagentContinuation)
 
     def as_dict(self) -> dict[str, object]:
         """
@@ -174,7 +169,7 @@ class InterruptedSubagentSessionRow:
                 "exit_code": self.exit_code,
                 "interruption_reason": self.interruption_reason,
                 "resume_stage": self.resume_stage,
-                "continuation": self.continuation,
+                "continuation": self.continuation.payload(),
             }
         )
         return payload

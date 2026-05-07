@@ -5,6 +5,7 @@ from litehive.agents.session_store import (
     load_subagent_report,
     save_subagent_artifacts,
 )
+from litehive.agents.session_continuation import subagent_continuation_state
 from litehive.agents.session_snapshots import InterruptedSubagentSessionRow, SubagentSessionStorageFields
 from litehive.agents.sandbox import SandboxPolicySummary
 from litehive.domain.common import SubagentStatus, utcnow
@@ -128,10 +129,7 @@ def _write_interrupted_subagent_artifacts(
     now = utcnow()
     existing_session = workspace.load_subagent_session_record(task.id, subagent.id)
     report_payload = load_subagent_report(workspace, task.id, subagent.id)
-    if subagent.continuation is None:
-        continuation_payload = None
-    else:
-        continuation_payload = subagent.continuation.model_dump(mode="python")
+    continuation_state = subagent_continuation_state(subagent.continuation)
     created_at = str(existing_session.created_at or subagent.started_at)
     resource_control_value = existing_session.values.get("resource_control")
     if isinstance(resource_control_value, dict):
@@ -154,15 +152,13 @@ def _write_interrupted_subagent_artifacts(
         exit_code=subagent.exit_code,
         interruption_reason=subagent.interruption_reason or "interrupted",
         resume_stage=resume_stage,
-        continuation=continuation_payload,
+        continuation=continuation_state,
     )
     report_payload["status"] = subagent.status
     report_payload["summary"] = report_payload.get("summary") or subagent.execution_trace_snippet
     report_payload["interruption_reason"] = subagent.interruption_reason or None
     report_payload["resume_stage"] = resume_stage
-    report_payload["continuation"] = None
-    if subagent.continuation is not None:
-        report_payload["continuation"] = subagent.continuation.model_dump(mode="python")
+    report_payload["continuation"] = continuation_state.payload()
     save_subagent_artifacts(
         workspace,
         task.id,

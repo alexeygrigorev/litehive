@@ -1,6 +1,7 @@
 from heru.types import RuntimeEngineContinuation
 
 from litehive.agents.sandbox import SandboxPolicySummary
+from litehive.agents.session_continuation import CapturedSubagentContinuation, NoSubagentContinuation
 from litehive.agents.session_reports import SubagentReportPayload
 from litehive.agents.session_snapshots import (
     InterruptedSubagentSessionRow,
@@ -19,7 +20,7 @@ def test_subagent_session_metadata_serializes_continuation() -> None:
         exit_code=0,
         pid=4242,
         interruption_reason=None,
-        continuation=RuntimeEngineContinuation(session_id="session-123"),
+        continuation=CapturedSubagentContinuation(RuntimeEngineContinuation(session_id="session-123")),
     )
 
     payload = metadata.continuation_payload()
@@ -32,7 +33,7 @@ def test_subagent_session_metadata_serializes_continuation() -> None:
 def test_running_subagent_session_metadata_only_carries_running_fields() -> None:
     metadata = RunningSubagentSessionMetadata(
         pid=4242,
-        continuation=RuntimeEngineContinuation(session_id="session-123"),
+        continuation=CapturedSubagentContinuation(RuntimeEngineContinuation(session_id="session-123")),
     )
 
     payload = metadata.continuation_payload()
@@ -54,7 +55,7 @@ def test_running_subagent_session_row_serializes_without_terminal_fields() -> No
         updated_at="updated",
         resource_control=SandboxPolicySummary(enabled=True, backend="docker"),
     )
-    row = RunningSubagentSessionRow(fields=fields, pid=None, continuation=None)
+    row = RunningSubagentSessionRow(fields=fields, pid=None, continuation=NoSubagentContinuation())
 
     payload = row.as_dict()
 
@@ -104,7 +105,7 @@ def test_interrupted_subagent_session_row_keeps_resume_fields_separate() -> None
         exit_code=None,
         interruption_reason="received ctrl-c",
         resume_stage="implementing",
-        continuation=None,
+        continuation=NoSubagentContinuation(),
     )
 
     payload = row.as_dict()

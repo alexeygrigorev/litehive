@@ -807,6 +807,17 @@ Legend:
   required in a given flow, remove `None`; if not, model the distinct
   start/continue states.
   Source: note 3, 30:21-30:53; note 6, 00:47-00:59.
+  Progress 2026-05-07: introduced explicit subagent continuation
+  state objects (`NoSubagentContinuation` and
+  `CapturedSubagentContinuation`) for session/report persistence.
+  Subagent report payloads, session snapshot metadata, concrete
+  session rows, running progress snapshots, terminal snapshots, and
+  interrupted-subagent persistence now carry a
+  `SubagentContinuationState` instead of raw
+  `RuntimeEngineContinuation | None` or pre-serialized dictionaries.
+  Remaining work: review lifecycle continuation flows outside
+  subagent artifact persistence and decide which optional states are
+  true start-vs-continue domain states.
 - [ ] M40. Revisit `subagent_inactivity_timeout_seconds`,
   `open code inactivity timeout`, and `compiled inactivity pattern`;
   make each previous small note into a separate task.

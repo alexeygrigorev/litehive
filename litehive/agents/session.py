@@ -210,7 +210,7 @@ class SubagentSessionManager:
         session_row = RunningSubagentSessionRow(
             fields=self.session_storage_fields(ref, created_at, utcnow()),
             pid=metadata.pid,
-            continuation=metadata.continuation_payload(),
+            continuation=metadata.continuation,
         )
         save_subagent_artifacts(
             self.workspace,
@@ -393,7 +393,7 @@ class SubagentSessionManager:
         Convert a complete snapshot into the concrete persisted row type.
         """
         fields = self.session_storage_fields(ref, created_at, utcnow())
-        continuation = snapshot.metadata.continuation_payload()
+        continuation = snapshot.metadata.continuation
         if snapshot.metadata.exit_code is None:
             return RunningSubagentSessionRow(
                 fields=fields,

@@ -1,4 +1,7 @@
+from heru.types import RuntimeEngineContinuation
+
 from litehive.agents.sandbox import SandboxPolicySummary
+from litehive.agents.session_continuation import subagent_continuation_state
 from litehive.agents.session_reports import SubagentReportPayload
 from litehive.domain.common import SubagentStatus
 
@@ -8,7 +11,7 @@ def test_subagent_report_payload_serializes_defensive_copies() -> None:
     tests = {"added": 1, "passing": 1}
     warnings = ["runner warning"]
     resource_control = SandboxPolicySummary(enabled=False)
-    continuation = {"session_id": "session-123"}
+    continuation = RuntimeEngineContinuation(session_id="session-123")
     payload = SubagentReportPayload(
         status=SubagentStatus.COMPLETED,
         summary="done",
@@ -17,15 +20,18 @@ def test_subagent_report_payload_serializes_defensive_copies() -> None:
         warnings=warnings,
         resource_control=resource_control,
         interruption_reason="operator stopped",
-        continuation=continuation,
+        continuation=subagent_continuation_state(continuation),
     )
 
     serialized = payload.as_dict()
     files_changed.append("src/other.py")
     tests["passing"] = 2
     warnings.append("late warning")
-    continuation["session_id"] = "changed"
 
+    continuation_payload = serialized.pop("continuation")
+    assert isinstance(continuation_payload, dict)
+    assert continuation_payload["session_id"] == "session-123"
+    assert "updated_at" in continuation_payload
     assert serialized == {
         "status": "completed",
         "summary": "done",
@@ -44,5 +50,14 @@ def test_subagent_report_payload_serializes_defensive_copies() -> None:
             "propagated_mounts": [],
         },
         "interruption_reason": "operator stopped",
-        "continuation": {"session_id": "session-123"},
     }
+
+
+def test_subagent_report_payload_models_missing_continuation_explicitly() -> None:
+    payload = SubagentReportPayload(
+        status=SubagentStatus.RUNNING,
+        summary="running",
+        continuation=subagent_continuation_state(None),
+    )
+
+    assert payload.as_dict()["continuation"] is None

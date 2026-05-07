@@ -39,6 +39,7 @@ from litehive.domain.runtime import Subagent
 from litehive.agents.parsing import MissingVerdictError, stage_report_from_subagent
 from litehive.agents.session import SubagentSessionManager
 from litehive.agents.session_events import SubagentFinishedEvent, SubagentProgressEvent
+from litehive.agents.session_continuation import subagent_continuation_state
 from litehive.agents.session_reports import SubagentReportPayload
 from litehive.agents.session_snapshots import (
     RunningSubagentSessionMetadata,
@@ -666,10 +667,7 @@ class SubagentManager:
         execution_stdout = execution.stdout
         execution_stderr = execution.stderr
         execution_pid = execution.pid
-        if continuation is None:
-            continuation_payload = None
-        else:
-            continuation_payload = continuation.model_dump(mode="python")
+        continuation_state = subagent_continuation_state(continuation)
         if report is None:
             # Agent finished without submitting a verdict. We do NOT call
             # record_stage_report here — recording a synthetic "reject" would
@@ -691,7 +689,7 @@ class SubagentManager:
                 warnings=warnings,
                 resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
                 interruption_reason=interruption_reason,
-                continuation=continuation_payload,
+                continuation=continuation_state,
             )
         else:
             report = report.model_copy(update={"warnings": callback_warnings.merged_with(report.warnings)})
@@ -710,7 +708,7 @@ class SubagentManager:
                 warnings=report.warnings,
                 resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
                 interruption_reason=interruption_reason,
-                continuation=continuation_payload,
+                continuation=continuation_state,
             )
         self.sessions.write_session_snapshot(
             task,
@@ -726,7 +724,7 @@ class SubagentManager:
                     exit_code=exit_code,
                     pid=execution_pid,
                     interruption_reason=interruption_reason,
-                    continuation=continuation,
+                    continuation=continuation_state,
                 ),
             ),
         )
@@ -769,6 +767,7 @@ class SubagentManager:
             execution,
         )
         continuation = self.sessions.extract_execution_continuation(ref.engine, execution)
+        continuation_state = subagent_continuation_state(continuation)
         if isinstance(engine, ExternalCLIAdapter):
             record_engine_observation(
                 self.workspace,
@@ -790,7 +789,7 @@ class SubagentManager:
             ref,
             metadata=RunningSubagentSessionMetadata(
                 pid=execution.pid,
-                continuation=continuation,
+                continuation=continuation_state,
             ),
         )
         write_text_if_changed(base / "prompt.txt", prompt)
@@ -817,10 +816,6 @@ class SubagentManager:
                 execution=execution,
                 transcript=transcript,
             )
-            if continuation is None:
-                continuation_payload = None
-            else:
-                continuation_payload = continuation.model_dump(mode="python")
             if report is None:
                 # Live progress: the running agent has not yet called
                 # `litehive agent report`. That's expected mid-turn — we
@@ -832,7 +827,7 @@ class SubagentManager:
                     summary=f"{report_stage}: agent did not submit verdict via litehive agent report CLI",
                     tests={"added": 0, "passing": 0},
                     resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
-                    continuation=continuation_payload,
+                    continuation=continuation_state,
                 )
             else:
                 report_payload = SubagentReportPayload(
@@ -847,7 +842,7 @@ class SubagentManager:
                     tests=report.tests,
                     warnings=report.warnings,
                     resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
-                    continuation=continuation_payload,
+                    continuation=continuation_state,
                 )
         self.sessions.write_session_snapshot(
             task,
@@ -862,7 +857,7 @@ class SubagentManager:
                 metadata=SubagentSessionMetadata(
                     exit_code=None,
                     pid=execution.pid,
-                    continuation=continuation,
+                    continuation=continuation_state,
                 ),
             ),
         )
