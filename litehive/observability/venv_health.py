@@ -57,12 +57,11 @@ def discover_workspace_venvs_for_workspace(workspace: Workspace) -> list[VenvChe
     skipping them would let a broken worktree venv kill an
     agent run after status looked clean.
     """
-    root = workspace.root
     checkouts: dict[Path, VenvCheckout] = {}
-    main_venv = root / ".venv"
+    main_venv = workspace.root / ".venv"
     if main_venv.is_dir():
         resolved_main = main_venv.resolve()
-        checkouts[resolved_main] = VenvCheckout(checkout_root=root, venv_path=resolved_main)
+        checkouts[resolved_main] = VenvCheckout(checkout_root=workspace.root, venv_path=resolved_main)
 
     worktrees_dir = workspace.runtime_path("worktrees")
     if worktrees_dir.exists():

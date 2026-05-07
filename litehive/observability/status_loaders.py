@@ -45,10 +45,9 @@ def _load_config_for_status_for_workspace(workspace: Workspace) -> tuple[Litehiv
     the best-effort config builder when the merged dict cannot
     construct a valid :class:`LitehiveConfig`.
     """
-    root = workspace.root
     issues: list[StatusIssue] = []
     data = asdict(LitehiveConfig())
-    for path, key in ((litehive_root() / "config.yaml", "global_config"), (config_path(root), "config")):
+    for path, key in ((litehive_root() / "config.yaml", "global_config"), (config_path(workspace.root), "config")):
         mapping, issue = _safe_yaml_mapping(
             path,
             key=key,

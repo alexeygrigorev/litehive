@@ -135,7 +135,6 @@ def collect_task_pipeline_status_for_workspace(
     fast-path skips, because the issue scan is too expensive for
     every status print.
     """
-    resolved_root = workspace.root
     if diagnostics:
         snapshot = collect_status_snapshot_for_workspace(workspace)
     else:
@@ -156,7 +155,7 @@ def collect_task_pipeline_status_for_workspace(
     if not diagnostics:
         waiting_lines = _operational_attention_lines(waiting_lines)
     return TaskPipelineStatusData(
-        root=resolved_root,
+        root=workspace.root,
         config=snapshot.config,
         state=snapshot.state,
         runner=snapshot.runner,
