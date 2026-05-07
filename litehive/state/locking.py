@@ -194,13 +194,6 @@ def runner_lock_is_active_for_workspace(workspace: Workspace) -> bool:
     return runner_lock_is_active(workspace.root)
 
 
-def runner_status_needs_reconciliation(root: Path) -> bool:
-    """
-    Path-based compatibility wrapper for stale runner-state detection.
-    """
-    return runner_status_needs_reconciliation_for_workspace(Workspace.from_path(root))
-
-
 def runner_status_needs_reconciliation_for_workspace(workspace: Workspace) -> bool:
     """
     Detect leftover "running" markers when no runner holds the lock.
