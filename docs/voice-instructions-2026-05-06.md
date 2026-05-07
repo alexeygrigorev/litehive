@@ -1526,9 +1526,12 @@ Legend:
 - [ ] F5. Remove `from_dict` if Pydantic/model validation can load the
   model directly.
   Source: note 4, 35:45-36:08.
-- [ ] F6. Fix `config/profiles/rendering.py` docstrings. They must
+- [x] F6. Fix `config/profiles/rendering.py` docstrings. They must
   explain what renders what and why.
   Source: note 4, 36:15-36:49.
+  Completed 2026-05-07: expanded each process-profile rendering
+  helper docstring to explain the rendered section, its consumer, and
+  why it belongs in the generated workspace context.
 - [ ] F7. Move some `config/paths.py` responsibilities to
   `Workspace`; the container should resolve LiteHive root, construct
   `Workspace`, then ask `Workspace` for paths.

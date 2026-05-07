@@ -5,12 +5,24 @@ from litehive.config.profiles.model import ProcessProfile
 
 
 def _shared_stage_text(stages: list[str]) -> str:
-    """Format the profile's stage list as a single ``a -> b -> c.`` line for the ``Shared stages`` overlay bullet; isolated so the renderer's main flow stays as a list of bullet strings."""
+    """
+    Render the profile stage order as the shared pipeline chain.
+
+    The process overlay uses this to show the operator and future
+    agents the deterministic stage order that all stage-specific
+    instructions are layered onto.
+    """
     return " -> ".join(stages) + "."
 
 
 def _render_process_overlay(profile: ProcessProfile) -> list[str]:
-    """Build the ``## Process overlay`` markdown block listing the profile's source-of-truth, models, stages, and discipline knobs; one of four section renderers stitched together by :func:`render_context_template`."""
+    """
+    Render the workflow contract shared by every workspace context.
+
+    This section explains which state is authoritative, who owns
+    orchestration, how routing works, and what verification/acceptance
+    discipline agents should preserve while executing tasks.
+    """
     return [
         "## Process overlay",
         f"- Source of truth: {profile.source_of_truth}",
@@ -27,7 +39,13 @@ def _render_process_overlay(profile: ProcessProfile) -> list[str]:
 
 
 def _render_project_overlay(profile: ProcessProfile) -> list[str]:
-    """Build the ``## Project overlay`` markdown block (summary line plus profile-supplied workspace bullets); one of four section renderers stitched together by :func:`render_context_template`."""
+    """
+    Render profile guidance that sits beside repository-specific notes.
+
+    The workspace owner fills in the project skeleton above this block;
+    these profile bullets add process expectations that should remain
+    visible even before a repository-specific context is written.
+    """
     return [
         "## Project overlay",
         f"- {profile.summary}",
@@ -36,7 +54,13 @@ def _render_project_overlay(profile: ProcessProfile) -> list[str]:
 
 
 def _render_scaffold_sections(profile: ProcessProfile) -> list[str]:
-    """Build the ``## Init scaffold`` and ``## Prompt scaffold`` markdown blocks back-to-back; one of four section renderers stitched together by :func:`render_context_template`."""
+    """
+    Render setup guidance for workspace context and stage prompts.
+
+    The init scaffold tells `litehive init` what durable context to
+    seed, while the prompt scaffold tells stage prompt assembly how to
+    layer generic process rules with profile-specific overlays.
+    """
     return [
         "## Init scaffold",
         *profile.init_scaffold,
@@ -48,7 +72,13 @@ def _render_scaffold_sections(profile: ProcessProfile) -> list[str]:
 
 
 def _render_stage_prompt_scaffolding(profile: ProcessProfile) -> list[str]:
-    """Build the ``## Stage prompt scaffolding`` markdown block, emitting one ``### <stage>`` subsection per stage that actually has instructions or overlay text; the per-stage renderer that fills out the bottom of the workspace context template."""
+    """
+    Render per-stage instructions that prompt builders later mirror.
+
+    Empty stages are skipped so the generated context highlights only
+    stages with explicit defaults or profile overlays, keeping the
+    template useful as a routing and review reference.
+    """
     lines = ["## Stage prompt scaffolding"]
     for stage in profile.shared_stages:
         stage_instructions = profile.stage_instructions.get(stage, [])
@@ -63,7 +93,14 @@ def _render_stage_prompt_scaffolding(profile: ProcessProfile) -> list[str]:
 
 
 def render_context_template(profile_name: str) -> str:
-    """Render the full ``CONTEXT.md`` markdown template for a named process profile, stitching together the profile/project overlays, scaffolding sections, optional specifics, and rules; called by ``litehive init`` to seed the workspace's per-process docs."""
+    """
+    Render the `CONTEXT.md` template seeded by `litehive init`.
+
+    The template combines an editable project skeleton with the
+    resolved process profile so future agents inherit the same
+    source-of-truth, routing, stage, verification, and tool guidance
+    every time the workspace context is regenerated.
+    """
     profile = resolve_process_profile(profile_name)
     lines = [
         "# Litehive Workspace Context",
