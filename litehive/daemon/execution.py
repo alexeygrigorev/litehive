@@ -53,10 +53,12 @@ from .logs import DaemonLogs, latest_matching, latest_run_all_log_dir_for_worksp
 from .registry import (
     DaemonRegistryEntry,
     daemon_metadata,
+    daemon_metadata_for_workspace,
     get_workspace_daemon,
-    register_daemon,
-    touch_daemon,
-    unregister_daemon,
+    register_daemon_for_workspace,
+    touch_daemon_for_workspace,
+    unregister_daemon as unregister_daemon_by_path,
+    unregister_daemon_for_workspace,
 )
 from .termination import force_kill_recorded_daemon, terminate_child_process, terminate_recorded_daemon
 
@@ -68,6 +70,23 @@ _DAEMON_TRANSIENT_STOP_REASONS = frozenset(
         PoolStopReason.TASK_REQUEUED,
     }
 )
+
+
+def register_daemon(workspace: Workspace, pid: int, log_dir: Path) -> None:
+    """
+    Execution-module seam for daemon registration.
+
+    Tests patch this name directly; production delegates to the
+    workspace-native registry helper.
+    """
+    register_daemon_for_workspace(workspace, pid=pid, log_dir=log_dir)
+
+
+def unregister_daemon(workspace: Workspace, pid: int | None = None) -> None:
+    """
+    Execution-module seam for daemon unregistration.
+    """
+    unregister_daemon_for_workspace(workspace, pid=pid)
 _LIVE_RUNNER_STATUSES = frozenset({RunnerExecutionStatus.RUNNING, RunnerExecutionStatus.LATE})
 
 
@@ -406,7 +425,7 @@ class DaemonExecutor:
     def run(self) -> int:
         apply_pending_migrations(self.workspace)
         log_root = self.logs.prepare_session(self.session_dir)
-        register_daemon(self.workspace, pid=os.getpid(), log_dir=log_root)
+        register_daemon(self.daemon_workspace, pid=os.getpid(), log_dir=log_root)
         stop_requested = False
         current_child: dict[str, subprocess.Popen[str] | None] = {"process": None}
         heartbeat_stop = threading.Event()
@@ -414,7 +433,7 @@ class DaemonExecutor:
             target=_daemon_heartbeat_loop,
             name="litehive-daemon-heartbeat",
             args=(
-                self.workspace,
+                self.daemon_workspace,
                 os.getpid(),
                 heartbeat_stop,
                 self.daemon_config.heartbeat_interval_seconds,
@@ -524,7 +543,7 @@ class DaemonExecutor:
             signal.signal(signal.SIGINT, previous_int)
             heartbeat_stop.set()
             heartbeat_thread.join(timeout=max(self.daemon_config.heartbeat_interval_seconds, 0.1) * 2)
-            unregister_daemon(self.workspace, pid=os.getpid())
+            unregister_daemon(self.daemon_workspace, pid=os.getpid())
 
 
 def run_daemon_loop(
@@ -560,7 +579,7 @@ def run_daemon_loop(
 
 
 def _daemon_heartbeat_loop(
-    workspace: Path,
+    workspace: Workspace,
     pid: int,
     stop_event: threading.Event,
     interval_seconds: float,
@@ -576,7 +595,7 @@ def _daemon_heartbeat_loop(
     shutdown.
     """
     while not stop_event.wait(interval_seconds):
-        touch_daemon(workspace, pid=pid)
+        touch_daemon_for_workspace(workspace, pid=pid)
 
 
 def start_background_daemon(workspace: Path) -> int:
@@ -592,7 +611,8 @@ def start_background_daemon(workspace: Path) -> int:
     daemon's first heartbeat write.
     """
     workspace = workspace.resolve()
-    daemon_config = build_workspace(workspace).load_config().daemon
+    workspace_obj = build_workspace(workspace)
+    daemon_config = workspace_obj.load_config().daemon
     existing = daemon_metadata(workspace)
     if existing is not None and existing.status == "running":
         if existing.pid is not None and _daemon_healthcheck_failed(existing, daemon_config):
@@ -600,8 +620,8 @@ def start_background_daemon(workspace: Path) -> int:
         else:
             raise RuntimeError(f"daemon already running for {workspace}: pid={existing.pid}")
     if existing is not None and existing.status == "stale":
-        unregister_daemon(workspace)
-    create_workspace_venvs_ready_for_workspace(build_workspace(workspace))
+        unregister_daemon_by_path(workspace)
+    create_workspace_venvs_ready_for_workspace(workspace_obj)
     project_root = Path(__file__).resolve().parents[2]
     child_env = os.environ.copy()
     for key in ("LITEHIVE_AGENT_ROLE", "LITEHIVE_STAGE", "LITEHIVE_TASK_ID"):
@@ -647,15 +667,16 @@ def stop_workspace_daemon(workspace: Path) -> DaemonRegistryEntry | None:
     crashes do not survive an explicit stop.
     """
     workspace = workspace.resolve()
-    daemon_config = build_workspace(workspace).load_config().daemon
+    workspace_obj = build_workspace(workspace)
+    daemon_config = workspace_obj.load_config().daemon
     entry = daemon_metadata(workspace)
     if entry is None:
         return None
     if entry.status != "running":
-        unregister_daemon(workspace)
+        unregister_daemon_by_path(workspace)
         return None
     if entry.pid is None:
-        unregister_daemon(workspace)
+        unregister_daemon_by_path(workspace)
         return None
     terminate_recorded_daemon(workspace, pid=entry.pid, config=daemon_config)
     return entry
@@ -683,7 +704,7 @@ def daemon_status_lines_for_workspace(workspace: Workspace) -> list[str]:
     is the difference between "I can debug" and "I have to grep".
     """
     root = workspace.root
-    entry = daemon_metadata(root)
+    entry = daemon_metadata_for_workspace(workspace)
     lines = [f"workspace: {root}"]
     if entry is None or entry.status != "running":
         lines.append("daemon_status: stopped")

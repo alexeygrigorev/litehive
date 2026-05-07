@@ -10,11 +10,11 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
   - [x] Switch `create_task_for_workspace` to the workspace-native helpers.
   - [x] Switch creation/follow-up/list ordering helpers to workspace state loaders.
   - [ ] Keep path wrappers only where external/path-based callers still require them.
-- [ ] Reduce remaining `runtime_store(root)` production calls:
+- [x] Reduce remaining `runtime_store(root)` production calls:
   - [x] `state.records.py`
   - [x] `state.locking.py`
   - [x] `config/workspace.py`
-- [ ] Revisit `runtime_store(root)` factory once production callers are gone.
+- [x] Revisit `runtime_store(root)` factory once production callers are gone.
 
 ## Next Queues
 
@@ -22,6 +22,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
   - [x] Pool stop/completion helpers used by runner and daemon.
   - [x] Remaining load/save wrappers in CLI/task/recovery callers.
 - [x] Move agent task mutation target from raw root to `Workspace`.
+- [x] Add workspace-native daemon registry helpers for daemon execution/status paths.
 - [x] Migrate `config.loading.load_config(root)` callers that already hold `Workspace`.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
