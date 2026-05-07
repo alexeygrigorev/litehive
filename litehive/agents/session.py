@@ -18,6 +18,7 @@ from litehive.agents.execution_trace import (
 )
 from litehive.agents.artifacts import ArtifactService
 from litehive.agents.session_store import (
+    SubagentEventStreamPayload,
     save_subagent_artifacts,
 )
 from litehive.agents.session_events import SubagentPidEvent, SubagentStartedEvent
@@ -372,7 +373,7 @@ class SubagentSessionManager:
             self.workspace,
             task.id,
             ref.id,
-            event_stream=event_stream.model_dump(mode="python"),
+            event_stream=SubagentEventStreamPayload(event_stream.model_dump(mode="python")),
         )
 
     def write_session_snapshot(
@@ -399,7 +400,7 @@ class SubagentSessionManager:
             task.id,
             ref.id,
             session=session_row,
-            report=snapshot.report.as_dict(),
+            report=snapshot.report,
         )
         artifacts = ArtifactService(base)
         artifacts.write_text("prompt", ".txt", snapshot.prompt, compress=False)

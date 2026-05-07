@@ -5,7 +5,7 @@ import warnings
 import pytest
 from pydantic import ValidationError
 
-from litehive.agents.session_store import save_subagent_artifacts
+from litehive.agents.session_store import SubagentArtifactPayload, SubagentEventStreamPayload, save_subagent_artifacts
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import PipelineStatus, TaskStatus
@@ -200,9 +200,9 @@ def test_current_storage_contract_uses_sqlite_without_workspace_yaml(tmp_path: P
     save_subagent_artifacts(Workspace.from_path(tmp_path),
         task.id,
         "SA-0001",
-        session={"id": "SA-0001", "role": "swe", "status": "completed"},
-        report={"verdict": "pass", "summary": "stored in sqlite"},
-        event_stream={"events": [{"type": "message", "text": "ok"}]},
+        session=SubagentArtifactPayload({"id": "SA-0001", "role": "swe", "status": "completed"}),
+        report=SubagentArtifactPayload({"verdict": "pass", "summary": "stored in sqlite"}),
+        event_stream=SubagentEventStreamPayload({"events": [{"type": "message", "text": "ok"}]}),
     )
     report_ref = record_stage_report(Workspace.from_path(tmp_path),
         task,

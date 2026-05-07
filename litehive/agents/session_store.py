@@ -3,14 +3,13 @@
 import json
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Mapping, Protocol, runtime_checkable
 
 from litehive.domain.agent import SubagentId
 from litehive.domain.common import utcnow
 from litehive.workspace import Workspace
 
 
-_UNSET = object()
 _EVENT_STREAM_KEY = "event_stream"
 
 
@@ -95,6 +94,39 @@ class SerializableSubagentSession(Protocol):
     def as_dict(self) -> dict[str, object]: ...
 
 
+@runtime_checkable
+class SerializableSubagentReport(Protocol):
+    """
+    Concrete report payload object accepted by the persistence boundary.
+    """
+
+    def as_dict(self) -> dict[str, object]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class SubagentArtifactPayload:
+    """
+    Explicit wrapper for legacy session/report payload dictionaries.
+    """
+
+    values: Mapping[str, Any]
+
+    def as_dict(self) -> dict[str, object]:
+        return dict(self.values)
+
+
+@dataclass(frozen=True, slots=True)
+class SubagentEventStreamPayload:
+    """
+    Typed event-stream payload accepted by the persistence boundary.
+    """
+
+    values: Mapping[str, Any]
+
+    def as_dict(self) -> dict[str, Any]:
+        return dict(self.values)
+
+
 def _load_subagent_payload(workspace: Workspace, task_id: str, subagent_id: str) -> tuple[dict[str, Any], str | None]:
     """
     Read the raw payload row plus its original ``created_at``.
@@ -160,32 +192,28 @@ def save_subagent_artifacts(
     workspace: Workspace,
     task_id: str,
     subagent_id: str,
-    session: dict[str, Any] | SerializableSubagentSession | object = _UNSET,
-    report: dict[str, Any] | object = _UNSET,
-    event_stream: dict[str, Any] | None | object = _UNSET,
+    *,
+    session: SerializableSubagentSession | None = None,
+    report: SerializableSubagentReport | None = None,
+    event_stream: SubagentEventStreamPayload | None = None,
+    clear_event_stream: bool = False,
 ) -> None:
     """
     Merge-write the per-subagent payload row.
 
-    The ``_UNSET`` sentinel lets the SubagentManager's session
-    helpers update one slice of the artifact bundle (metadata only,
-    or report only, or event-stream only) without clobbering the
-    others. ``event_stream=None`` is the explicit "remove the key"
-    signal — distinct from "leave it alone".
+    Callers pass typed payload objects for the slices they want to
+    update. Omitted slices are preserved; ``clear_event_stream``
+    explicitly removes the event-stream slice.
     """
     payload, created_at = _load_subagent_payload(workspace, task_id, subagent_id)
-    if session is not _UNSET:
-        if isinstance(session, SerializableSubagentSession):
-            payload["session"] = session.as_dict()
-        else:
-            payload["session"] = session
-    if report is not _UNSET:
-        payload["report"] = report
-    if event_stream is not _UNSET:
-        if event_stream is None:
-            payload.pop(_EVENT_STREAM_KEY, None)
-        else:
-            payload[_EVENT_STREAM_KEY] = event_stream
+    if session is not None:
+        payload["session"] = session.as_dict()
+    if report is not None:
+        payload["report"] = report.as_dict()
+    if clear_event_stream:
+        payload.pop(_EVENT_STREAM_KEY, None)
+    if event_stream is not None:
+        payload[_EVENT_STREAM_KEY] = event_stream.as_dict()
     now = utcnow()
     created_at = created_at or now
     with workspace.connect() as connection:

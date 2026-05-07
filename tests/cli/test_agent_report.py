@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from litehive.agents.session_store import save_subagent_artifacts
+from litehive.agents.session_store import SubagentArtifactPayload, save_subagent_artifacts
 from litehive.cli.agent_cli import agent_app
 from litehive.cli.app import app as root_app
 from litehive.config.workspace import ensure_workspace
@@ -50,12 +50,12 @@ def _bind_report_identity(
     save_subagent_artifacts(Workspace.from_path(root),
         task_id,
         subagent_id,
-        session={
+        session=SubagentArtifactPayload({
             "id": subagent_id,
             "role": role,
             "engine": "codex",
             "status": "running",
-        },
+        }),
     )
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", role)
     monkeypatch.setenv("LITEHIVE_SUBAGENT_ID", subagent_id)

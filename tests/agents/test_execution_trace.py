@@ -3,7 +3,7 @@ from pathlib import Path
 from heru.types import SubagentRef
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
-from litehive.agents.session_store import save_subagent_artifacts
+from litehive.agents.session_store import SubagentEventStreamPayload, save_subagent_artifacts
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task
 from litehive.tasks.paths import task_dir
@@ -29,7 +29,7 @@ def test_load_subagent_execution_trace_prefers_session_event_stream_over_cached_
         workspace,
         task.id,
         ref.id,
-        event_stream={
+        event_stream=SubagentEventStreamPayload({
             "events": [
                 {
                     "kind": "message",
@@ -37,7 +37,7 @@ def test_load_subagent_execution_trace_prefers_session_event_stream_over_cached_
                     "content": "sqlite event trace",
                 }
             ]
-        },
+        }),
     )
 
     trace = load_subagent_execution_trace(workspace, task, ref, active=False)

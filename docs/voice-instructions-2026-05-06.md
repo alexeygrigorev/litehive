@@ -1154,14 +1154,21 @@ Legend:
   and Docker wrapper file handling now live under
   `DockerSandboxLauncher`; generic callers type against the
   `SandboxLauncher` protocol.
-- [ ] S14. Remove `object` and `unset` sentinel patterns in sandbox
+- [x] S14. Remove `object` and `unset` sentinel patterns in sandbox
   artifact/session code. Use concrete dataclasses and explicit domain
   states.
   Source: note 4, 07:55-08:23.
-- [ ] S15. `save_subagent_artifacts` should accept typed session,
+  Completed 2026-05-07: removed the `_UNSET` sentinel from
+  `save_subagent_artifacts`; callers now omit unchanged slices and
+  use `clear_event_stream=True` for explicit event-stream removal.
+- [x] S15. `save_subagent_artifacts` should accept typed session,
   report, and event stream objects, not dictionaries or untyped
   objects.
   Source: note 4, 08:07-08:23.
+  Completed 2026-05-07: `save_subagent_artifacts` now accepts
+  serializable session/report payload objects plus
+  `SubagentEventStreamPayload`; production callers pass typed snapshot
+  rows/reports and tests wrap legacy dictionaries explicitly.
 
 ## Subagent Artifact Ownership Instructions
 

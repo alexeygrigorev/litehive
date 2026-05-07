@@ -1,6 +1,6 @@
 import pytest
 
-from litehive.agents.session_store import save_subagent_artifacts
+from litehive.agents.session_store import SubagentArtifactPayload, save_subagent_artifacts
 from litehive.state.records import create_task, require_task
 from litehive.tasks.queue import set_active_task
 from litehive.tasks.activity import load_task_activity
@@ -36,7 +36,7 @@ def test_codex_can_invoke_litehive_report_and_persist_thread_comment(integration
     save_subagent_artifacts(Workspace.from_path(integration_root),
         task.id,
         subagent_id,
-        session={"id": subagent_id, "role": "swe", "engine": "codex", "status": "running"},
+        session=SubagentArtifactPayload({"id": subagent_id, "role": "swe", "engine": "codex", "status": "running"}),
     )
     prompt = (
         f"Run `{litehive_python_shell_prefix()}LITEHIVE_AGENT_ROLE=swe LITEHIVE_SUBAGENT_ID={subagent_id} "

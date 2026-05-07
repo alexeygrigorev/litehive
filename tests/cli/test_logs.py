@@ -8,7 +8,7 @@ import pytest
 
 from heru.types import SubagentRef
 
-from litehive.agents.session_store import save_subagent_artifacts
+from litehive.agents.session_store import SubagentArtifactPayload, save_subagent_artifacts
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.runtime import RuntimeSubagentState
@@ -64,7 +64,7 @@ def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
         save_subagent_artifacts(Workspace.from_path(tmp_path),
             task.id,
             "SA-0001",
-            session={
+            session=SubagentArtifactPayload({
                 "id": "SA-0001",
                 "role": "swe",
                 "engine": "codex",
@@ -74,7 +74,7 @@ def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
                 "updated_at": "2026-04-09T10:00:05Z",
                 "completed_at": "2026-04-09T10:00:05Z",
                 "exit_code": 0,
-            },
+            }),
         )
     save_task(tmp_path, task)
     save_task_runtime(tmp_path, task)
@@ -242,22 +242,22 @@ def test_logs_agent_all_lists_all_subagents_with_duration(tmp_path: Path, capsys
     save_subagent_artifacts(Workspace.from_path(tmp_path),
         task.id,
         "SA-0001",
-        session={
+        session=SubagentArtifactPayload({
             "exit_code": 0,
             "created_at": "2026-04-09T10:00:00Z",
             "updated_at": "2026-04-09T10:00:03Z",
-        },
+        }),
     )
     swe_dir = task_dir(tmp_path, task) / "subagents" / "SA-0002-swe"
     swe_dir.mkdir(parents=True, exist_ok=True)
     save_subagent_artifacts(Workspace.from_path(tmp_path),
         task.id,
         "SA-0002",
-        session={
+        session=SubagentArtifactPayload({
             "exit_code": 1,
             "created_at": "2026-04-09T10:00:10Z",
             "updated_at": "2026-04-09T10:00:15Z",
-        },
+        }),
     )
 
     exit_code = _cmd_logs(_ns(tmp_path, task.id, agent=True, all_flag=True))

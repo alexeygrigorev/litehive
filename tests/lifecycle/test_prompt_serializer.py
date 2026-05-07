@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from litehive.agents.session_store import save_subagent_artifacts
+from litehive.agents.session_store import SubagentArtifactPayload, save_subagent_artifacts
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import PipelineState
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
@@ -257,11 +257,11 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
         Workspace.from_path(workspace),
         task.id,
         "SA-0001",
-        session={"id": "SA-0001", "status": "failed", "exit_code": 17},
-        report={
+        session=SubagentArtifactPayload({"id": "SA-0001", "status": "failed", "exit_code": 17}),
+        report=SubagentArtifactPayload({
             "status": "failed",
             "summary": "implementing rejected: agent did not submit verdict via litehive agent report CLI",
-        },
+        }),
     )
 
     agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))

@@ -2,6 +2,7 @@
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import (
+    SubagentArtifactPayload,
     load_subagent_report,
     save_subagent_artifacts,
 )
@@ -164,5 +165,5 @@ def _write_interrupted_subagent_artifacts(
         task.id,
         subagent.id,
         session=session_row,
-        report=report_payload,
+        report=SubagentArtifactPayload(report_payload),
     )
