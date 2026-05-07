@@ -1082,18 +1082,31 @@ Legend:
   Completed 2026-05-07: removed the `__all__` list from
   `litehive/sandbox/support.py`; callers import the concrete names
   they use directly from the owning module.
-- [ ] S4. Re-read previous sandbox comments and verify the exact old
+- [x] S4. Re-read previous sandbox comments and verify the exact old
   code paths, because the note says old comments still remain.
   Source: note 4, 02:17-02:49.
-- [ ] S5. Fix `sandbox.policy.summary.as_dict` docstring so its
+  Completed 2026-05-07: re-checked the sandbox source-recording
+  comments against the moved code. The old `litehive/agents/sandbox.py`
+  and `litehive/agents/sandbox_support.py` paths no longer exist in
+  production imports; the remaining comments map to the open sandbox
+  items below.
+- [x] S5. Fix `sandbox.policy.summary.as_dict` docstring so its
   caller and reason are clear.
   Source: note 4, 02:53-03:07.
-- [ ] S6. Turn `sandbox_profile_for_all` into a method on an
+  Completed 2026-05-07: clarified that `SandboxPolicySummary.as_dict`
+  exists only for the report `resource_control` JSON boundary and
+  runtime code should pass the dataclass directly.
+- [x] S6. Turn `sandbox_profile_for_all` into a method on an
   appropriate object.
   Source: note 4, 03:11-03:17.
-- [ ] S7. Remove confusing assignments/aliases like
+  Completed 2026-05-07: removed the free function and moved the role
+  mapping rule to `SandboxProfile.for_role`.
+- [x] S7. Remove confusing assignments/aliases like
   `sandbox.adapter = litehive.sandbox.adapter`.
   Source: note 4, 03:21-03:29.
+  Completed 2026-05-07: removed the `SandboxedAdapter` re-export from
+  `litehive/sandbox/launcher.py`; callers import the adapter from
+  `litehive.sandbox.adapter`.
 - [ ] S8. Avoid `as_dict` in sandbox policy/profile code unless a
   serialization boundary demands it. Prefer dataclasses or typed
   config objects.

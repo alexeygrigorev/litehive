@@ -17,24 +17,23 @@ from litehive.sandbox.support import forced_engine_rw_state_dirs
 
 
 class SandboxProfile(str, Enum):
-    """Git wrapper profile applied to a sandboxed engine invocation; selected by ``sandbox_profile_for_role``."""
+    """Git wrapper profile applied to a sandboxed engine invocation."""
 
     NO_GIT = "no_git"
     MERGE_RESOLVER = "merge_resolver"
 
+    @classmethod
+    def for_role(cls, role: str) -> "SandboxProfile":
+        """
+        Pick the git-wrapper profile that matches a subagent role.
 
-def sandbox_profile_for_role(role: str) -> SandboxProfile:
-    """
-    Pick the git-wrapper profile that matches a subagent role.
-
-    The merge-resolver role is the only one allowed to touch git
-    inside the sandbox (and only via the guarded wrapper); every
-    other role gets git fully blocked so engine code can't
-    accidentally rewrite history while sandboxed.
-    """
-    if role == "merge-resolver":
-        return SandboxProfile.MERGE_RESOLVER
-    return SandboxProfile.NO_GIT
+        The merge-resolver role is the only one allowed to touch git
+        inside the sandbox through the guarded wrapper; every other
+        role gets git fully blocked.
+        """
+        if role == "merge-resolver":
+            return cls.MERGE_RESOLVER
+        return cls.NO_GIT
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +72,12 @@ class SandboxPolicySummary:
         )
 
     def as_dict(self) -> dict[str, object]:
-        """Serialize the policy summary into the ``resource_control`` field of subagent reports so operators can audit how each engine was confined."""
+        """
+        Serialize the policy summary for the report ``resource_control`` JSON field.
+
+        This is intentionally limited to the persistence/reporting
+        boundary; runtime code should pass the dataclass itself.
+        """
         return {
             "enabled": self.enabled,
             "backend": self.backend,
@@ -294,7 +298,7 @@ class SandboxLauncher:
         )
 
         # Set up git wrapper for role-based git protection
-        profile = sandbox_profile_for_role(role)
+        profile = SandboxProfile.for_role(role)
         allowed_env: dict[str, str] = {}
         if policy is None:
             env_names: list = []

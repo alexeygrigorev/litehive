@@ -7,7 +7,7 @@ import tempfile
 import pytest
 
 from heru.base import CLIInvocation
-from litehive.sandbox.launcher import SandboxLauncher, SandboxPolicySummary, SandboxProfile, sandbox_profile_for_role
+from litehive.sandbox.launcher import SandboxLauncher, SandboxPolicySummary, SandboxProfile
 from litehive.config.model import LitehiveConfig, ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
 
 
@@ -39,12 +39,12 @@ def docker_sandbox_config():
     )
 
 
-def test_sandbox_profile_for_role():
+def test_sandbox_profile_selects_git_policy_by_role():
     """Test that roles map to correct sandbox profiles."""
-    assert sandbox_profile_for_role("merge-resolver") == SandboxProfile.MERGE_RESOLVER
-    assert sandbox_profile_for_role("swe") == SandboxProfile.NO_GIT
-    assert sandbox_profile_for_role("qa") == SandboxProfile.NO_GIT
-    assert sandbox_profile_for_role("") == SandboxProfile.NO_GIT
+    assert SandboxProfile.for_role("merge-resolver") == SandboxProfile.MERGE_RESOLVER
+    assert SandboxProfile.for_role("swe") == SandboxProfile.NO_GIT
+    assert SandboxProfile.for_role("qa") == SandboxProfile.NO_GIT
+    assert SandboxProfile.for_role("") == SandboxProfile.NO_GIT
 
 
 def test_sandbox_launcher_policy_summary_disabled(temp_workspace):
