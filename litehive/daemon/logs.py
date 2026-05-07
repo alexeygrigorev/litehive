@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 import shutil
 
-from litehive.config.paths import workspace_path
+from litehive.workspace import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -23,14 +23,25 @@ def latest_run_all_log_dir(workspace: Path) -> Path | None:
     """
     Return the most recent ``run-all`` session log directory.
 
+    Path-based boundary wrapper for callers that have not yet built a
+    ``Workspace``. Internal callers should use
+    :func:`latest_run_all_log_dir_for_workspace` so runtime path
+    composition stays on the workspace object.
+    """
+    return latest_run_all_log_dir_for_workspace(Workspace.from_path(workspace))
+
+
+def latest_run_all_log_dir_for_workspace(workspace: Workspace) -> Path | None:
+    """
+    Return the most recent ``run-all`` session log directory.
+
     Called by the CLI ``logs`` subcommand and the daemon-side
     post-mortem helpers when no specific session is named — those
     paths want "the last thing that happened" without having to
     enumerate session names. Returns ``None`` for a workspace that
     has never run a daemon session.
     """
-    workspace = workspace.resolve()
-    log_base = workspace_path(workspace, "logs", "run-all")
+    log_base = workspace.runtime_path("logs", "run-all")
     if not log_base.exists():
         return None
     candidates = sorted(path for path in log_base.iterdir() if path.is_dir())

@@ -13,8 +13,7 @@ from pathlib import Path
 import time
 
 from litehive.cli.task_debug_support import render_task_evidence_for_workspace
-from litehive.config.paths import workspace_path
-from litehive.daemon.logs import latest_run_all_log_dir
+from litehive.daemon.logs import latest_run_all_log_dir_for_workspace
 from litehive.domain.task import TaskRecord
 from litehive.tasks.journal import render_task_journal
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
@@ -33,8 +32,7 @@ def show_latest_daemon_log_for_workspace(workspace: Workspace) -> int:
     a session timestamp. Tails the last 40 lines so the output
     fits a terminal page even when the underlying log is large.
     """
-    root = workspace.root
-    latest_dir = latest_run_all_log_dir(root)
+    latest_dir = latest_run_all_log_dir_for_workspace(workspace)
     log_path = _latest_daemon_log_path(latest_dir)
     if log_path is None:
         print("No daemon run logs found.")
@@ -55,8 +53,7 @@ def list_daemon_sessions_for_workspace(workspace: Workspace) -> int:
     the parsed ISO timestamp so log directories can be sorted by
     eye instead of by the compact ``YYYYmmddTHHMMSSZ`` form.
     """
-    root = workspace.root
-    logs_root = workspace_path(root.resolve(), "logs", "run-all")
+    logs_root = workspace.runtime_path("logs", "run-all")
     if not logs_root.exists():
         print("No daemon run logs found.")
         return 0

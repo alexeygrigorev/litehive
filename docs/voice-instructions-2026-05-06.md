@@ -1553,10 +1553,14 @@ Legend:
   Completed 2026-05-07: expanded each process-profile rendering
   helper docstring to explain the rendered section, its consumer, and
   why it belongs in the generated workspace context.
-- [ ] F7. Move some `config/paths.py` responsibilities to
+- [x] F7. Move some `config/paths.py` responsibilities to
   `Workspace`; the container should resolve LiteHive root, construct
   `Workspace`, then ask `Workspace` for paths.
   Source: note 5, 00:01-00:22.
+  Completed 2026-05-07: moved daemon run-all log path composition
+  behind `Workspace.runtime_path(...)` for the daemon loop, status
+  rendering, and task-log CLI support. Kept a path-based wrapper only
+  for callers that have not crossed the Workspace boundary yet.
 - [ ] F8. Review `registry` mutex/busy-timeout/lock-retry behavior and
   explain why it exists.
   Source: note 5, 00:35-00:46.

@@ -25,7 +25,6 @@ import time
 from typing import TextIO
 
 from litehive.container import build_workspace
-from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
 from litehive.attention import append_attention_log
 from litehive.db.schema import apply_pending_migrations
@@ -41,7 +40,7 @@ from litehive.state.persist import load_state_for_workspace, set_pool_stop_reaso
 from litehive.state.locking import runner_pid_is_alive, runner_status_for_workspace
 from litehive.workspace import Workspace
 
-from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir
+from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir_for_workspace
 
 from .registry import (
     daemon_metadata,
@@ -549,7 +548,7 @@ def run_daemon_loop(
     apply_pending_migrations(workspace)
     command_prefix = default_command_prefix()
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    log_base = workspace_path(workspace, "logs", "run-all")
+    log_base = daemon_workspace.runtime_path("logs", "run-all")
     log_root = session_dir or (log_base / timestamp)
     log_root.mkdir(parents=True, exist_ok=True)
     prune_run_all_log_dirs(log_base)
@@ -799,7 +798,7 @@ def daemon_status_lines_for_workspace(workspace: Workspace) -> list[str]:
     runner = runner_status_for_workspace(workspace)
     state = load_state_for_workspace(workspace)
     lines.append(render_runner_status_line(runner, state))
-    latest_dir = latest_run_all_log_dir(root)
+    latest_dir = latest_run_all_log_dir_for_workspace(workspace)
     if latest_dir is not None:
         latest_dir_label = latest_dir
     else:
