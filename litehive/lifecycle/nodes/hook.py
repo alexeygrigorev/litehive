@@ -7,6 +7,7 @@ from typing import Callable, Protocol
 
 from litehive.domain.common import PipelineState
 from litehive.feedback import cap_feedback
+from litehive.workspace import Workspace
 
 from ..events import Event, HookOk, Reject
 from ..persistence import TaskState
@@ -57,7 +58,7 @@ def _failed_process(command: str, code: int, stdout: str = "", stderr: str = "")
 
 
 class SubprocessHookRunner(HookRunner):
-    """Production HookRunner that shells out under ``workspace_root`` with task identity in the env.
+    """Production HookRunner that shells out under ``workspace`` with task identity in the env.
 
     ``execution_root_resolver`` lets the runner aim a hook at the per-task
     worktree instead of the main checkout, which is how implementing/testing
@@ -66,7 +67,7 @@ class SubprocessHookRunner(HookRunner):
 
     def __init__(
         self,
-        workspace_root: Path,
+        workspace: Workspace,
         execution_root_resolver: Callable[[TaskState], Path] | None = None,
         extra_env: dict[str, str] | None = None,
     ) -> None:
@@ -79,7 +80,8 @@ class SubprocessHookRunner(HookRunner):
         without it, a hook that checked git status would see the
         wrong tree entirely.
         """
-        self.workspace_root = Path(workspace_root)
+        self.workspace = workspace
+        self.workspace_root = workspace.root
         self.execution_root_resolver = execution_root_resolver
         self.extra_env = dict(extra_env or {})
 

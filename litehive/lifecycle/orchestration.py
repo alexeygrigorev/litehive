@@ -139,8 +139,6 @@ def run_task_for_workspace(
     """
     Run a single task through the state machine using injected dependencies.
     """
-    root = workspace.root
-
     with workspace_runner_guard(workspace):
         persistence = SqlitePersistence(
             workspace,
@@ -163,7 +161,7 @@ def run_task_for_workspace(
         sessions = SqliteSessionStore(workspace)
         journal = SqliteJournal(workspace)
         hook_runner = SubprocessHookRunner(
-            root,
+            workspace,
             execution_root_resolver=lambda state: _resolve_hook_execution_root_for_workspace(workspace, state),
         )
         commit_node = build_commit_node_for_workspace(workspace)
@@ -207,7 +205,7 @@ def run_task_for_workspace(
         )
 
         # 3. Run under the heartbeat so `litehive status` sees the active task.
-        with runner_heartbeat(root, active_task_id=task.id):
+        with runner_heartbeat(workspace.root, active_task_id=task.id):
             try:
                 final_state = runner.run_task(task.id)
             except BaseException:

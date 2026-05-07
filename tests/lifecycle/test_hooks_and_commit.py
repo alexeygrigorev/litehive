@@ -59,13 +59,13 @@ class SequenceHookRunner(HookRunner):
 
 
 def test_hook_passing_command_returns_ok(tmp_path: Path) -> None:
-    runner = SubprocessHookRunner(tmp_path)
+    runner = SubprocessHookRunner(Workspace.from_path(tmp_path))
     result = runner.run(HookSpec(command="true"), make_state())
     assert result is None
 
 
 def test_hook_failing_command_returns_not_ok_with_output(tmp_path: Path) -> None:
-    runner = SubprocessHookRunner(tmp_path)
+    runner = SubprocessHookRunner(Workspace.from_path(tmp_path))
     result = runner.run(HookSpec(command="echo nope && exit 2"), make_state())
     assert result is not None
     assert result.returncode == 2
@@ -73,7 +73,7 @@ def test_hook_failing_command_returns_not_ok_with_output(tmp_path: Path) -> None
 
 
 def test_hook_timeout_is_reported_as_not_ok(tmp_path: Path) -> None:
-    runner = SubprocessHookRunner(tmp_path)
+    runner = SubprocessHookRunner(Workspace.from_path(tmp_path))
     result = runner.run(HookSpec(command="sleep 5", timeout_seconds=1), make_state())
     assert result is not None
     assert result.returncode == 124
@@ -81,7 +81,7 @@ def test_hook_timeout_is_reported_as_not_ok(tmp_path: Path) -> None:
 
 
 def test_hook_environment_contains_task_id_and_stage(tmp_path: Path) -> None:
-    runner = SubprocessHookRunner(tmp_path)
+    runner = SubprocessHookRunner(Workspace.from_path(tmp_path))
     result = runner.run(
         HookSpec(command='test "$LITEHIVE_TASK_ID:$LITEHIVE_STAGE" = "T-0042:grooming"'),
         make_state(stage=PipelineState.GROOMING, task_id="T-0042"),
@@ -93,7 +93,7 @@ def test_hook_node_with_passing_spec_emits_hook_ok(tmp_path: Path) -> None:
     node = HookNode(
         PipelineState.BEFORE_GROOMING,
         hooks=[HookSpec(command="true")],
-        runner=SubprocessHookRunner(tmp_path),
+        runner=SubprocessHookRunner(Workspace.from_path(tmp_path)),
     )
     event = node.run(make_state())
     assert isinstance(event, HookOk)
@@ -104,7 +104,7 @@ def test_hook_node_with_failing_spec_emits_hook_reject(tmp_path: Path) -> None:
     node = HookNode(
         PipelineState.BEFORE_GROOMING,
         hooks=[HookSpec(command="false")],
-        runner=SubprocessHookRunner(tmp_path),
+        runner=SubprocessHookRunner(Workspace.from_path(tmp_path)),
     )
     event = node.run(make_state())
     assert isinstance(event, Reject)
@@ -124,7 +124,7 @@ def test_hook_node_warning_includes_command_exit_code_and_streams(tmp_path: Path
                 instructions_on_failure="fix the lint issue before retrying",
             )
         ],
-        runner=SubprocessHookRunner(tmp_path),
+        runner=SubprocessHookRunner(Workspace.from_path(tmp_path)),
     )
 
     event = node.run(make_state(stage=PipelineState.AFTER_IMPLEMENTING))
