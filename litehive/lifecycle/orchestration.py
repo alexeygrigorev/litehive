@@ -29,7 +29,7 @@ from litehive.config.engine_models import resolve_task_rejection_loop_limit, res
 from litehive.git.ops import GitError
 from litehive.domain.common import PipelineState
 from litehive.domain.task import TaskRecord
-from litehive.state.locking import runner_heartbeat, workspace_runner_guard
+from litehive.state.locking import runner_heartbeat_for_workspace, workspace_runner_guard
 
 from litehive.roles.base import PromptContext
 from .events import HookOk, Reject
@@ -205,7 +205,7 @@ def run_task_for_workspace(
         )
 
         # 3. Run under the heartbeat so `litehive status` sees the active task.
-        with runner_heartbeat(workspace.root, active_task_id=task.id):
+        with runner_heartbeat_for_workspace(workspace, active_task_id=task.id):
             try:
                 final_state = runner.run_task(task.id)
             except BaseException:

@@ -406,6 +406,19 @@ def runner_heartbeat(
         touch_runner_status(root, active_task_id=None)
 
 
+@contextmanager
+def runner_heartbeat_for_workspace(
+    workspace: Workspace,
+    active_task_id: str | None = None,
+    interval_seconds: float = 1.0,
+):
+    """
+    Run runner heartbeat updates for an injected workspace.
+    """
+    with runner_heartbeat(workspace.root, active_task_id=active_task_id, interval_seconds=interval_seconds):
+        yield
+
+
 def current_thread_owns_runner_guard(root: Path) -> bool:
     """
     Distinguish reentrant calls from foreign threads.
