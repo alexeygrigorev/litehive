@@ -1415,13 +1415,20 @@ Legend:
   Completed 2026-05-07: moved engine-status quota probing and quota
   exception labeling from `cli.engine` into `config.engine_quota`.
   The CLI now only renders the returned status values.
-- [ ] C15. In `pipeline_cli`, get persistence/store through the
+- [x] C15. In `pipeline_cli`, get persistence/store through the
   container or a lightweight sub-container instead of constructing
   `SQLitePersistence` inline.
   Source: note 4, 23:45-24:25.
-- [ ] C16. Replace one-line chained construction in `pipeline_cli`
+  Completed 2026-05-07: added `PipelineContainer` and
+  `build_pipeline_container(...)`, then routed `pipeline_cli` through
+  that lightweight container for workspace, persistence, and journal.
+- [x] C16. Replace one-line chained construction in `pipeline_cli`
   with named locals: workspace, persistence/store, then method call.
   Source: note 4, 24:37-25:21.
+  Completed 2026-05-07: `pipeline reset` now binds the pipeline
+  container and persistence store to named locals before calling
+  `reset_all(...)`; journal and set-state use the same named
+  dependency pattern.
 - [ ] C17. Review state rendering in `pipeline journal`; split the
   many `if` branches into focused functions or object behavior.
   Source: note 4, 25:41-26:19.

@@ -7,6 +7,7 @@ from litehive.agents.report_submission import AgentReportSubmitter
 from litehive.agents.task_mutation import AgentTaskMutator
 from litehive.config.model import LitehiveConfig
 from litehive.domain.agent import SubagentId
+from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.workspace import Workspace
 
@@ -25,6 +26,17 @@ class LitehiveContainer:
     config: LitehiveConfig
 
 
+@dataclass(frozen=True)
+class PipelineContainer:
+    """
+    Pipeline diagnostics and mutation stores for one workspace.
+    """
+
+    workspace: Workspace
+    persistence: SqlitePersistence
+    journal: SqliteJournal
+
+
 def build_container(root: Path) -> LitehiveContainer:
     """
     Convert a raw workspace path into the process-level dependency graph.
@@ -38,6 +50,18 @@ def build_container(root: Path) -> LitehiveContainer:
     return LitehiveContainer(
         workspace=workspace,
         config=workspace.config(),
+    )
+
+
+def build_pipeline_container(root: Path) -> PipelineContainer:
+    """
+    Assemble pipeline persistence dependencies without loading config.
+    """
+    workspace = build_workspace(root)
+    return PipelineContainer(
+        workspace=workspace,
+        persistence=SqlitePersistence(workspace),
+        journal=SqliteJournal(workspace),
     )
 
 
