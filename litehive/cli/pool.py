@@ -1,5 +1,4 @@
 from collections.abc import Mapping
-from pathlib import Path
 
 from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
 from litehive.domain.pool import PoolSummaryReport, PoolTaskReportEntry
@@ -297,7 +296,7 @@ def _ensure_pool_summary_report_fields(report: PoolSummaryReport | Mapping[str, 
 
 
 def _write_pool_summary_report(
-    root: Path,
+    workspace: Workspace,
     report: PoolSummaryReport | Mapping[str, object],
 ) -> None:
     """
@@ -310,6 +309,6 @@ def _write_pool_summary_report(
     operator-facing contract.
     """
     report = _ensure_pool_summary_report_fields(report)
-    report_path = root / ".litehive" / "pool-summary.txt"
+    report_path = workspace.control_dir() / "pool-summary.txt"
     report_lines = _pool_summary_report_lines(report=report)
     report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")

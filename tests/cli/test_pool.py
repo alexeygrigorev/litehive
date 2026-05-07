@@ -47,7 +47,8 @@ def test_pool_summary_writes_operator_text_without_structured_yaml(tmp_path) -> 
         "stop_reason": "queue_exhausted",
     }
 
-    _write_pool_summary_report(root=tmp_path, report=report)
+    workspace = Workspace.from_path(tmp_path)
+    _write_pool_summary_report(workspace=workspace, report=report)
 
     summary_path = tmp_path / ".litehive" / "pool-summary.txt"
     summary_text = summary_path.read_text(encoding="utf-8")
